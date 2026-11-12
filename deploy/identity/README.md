@@ -194,6 +194,31 @@ WORKSTREAM_TOKEN="$(python3 -c 'import json,pathlib; print(json.loads((pathlib.P
 This does not grant Workstream admission or project authority. Garden/MCP uses
 its own resource-scoped browser flow; do not copy this API-only token into MCP.
 
+## First Workstream Access Administrator
+
+After the intended administrator signs in and calls `workstream whoami`, use
+their returned actor UUID with the existing guarded bootstrap. This is separate
+from Keycloak administration. For the default hosted Compose project, run on
+the deployment host:
+
+```sh
+sudo docker exec workstream-api-1 /usr/local/bin/workstream-release-entrypoint \
+  python -m scripts.bootstrap_access_administrator \
+  --actor-profile-id '<actor UUID returned by whoami>' --dry-run
+
+sudo docker exec workstream-api-1 /usr/local/bin/workstream-release-entrypoint \
+  python -m scripts.bootstrap_access_administrator \
+  --actor-profile-id '<actor UUID returned by whoami>' --execute
+```
+
+If the Compose project name differs, select that project's API container. The
+release entrypoint loads its mounted database secret; a bare `docker exec …
+python` does not inherit the running API process's loaded secret environment.
+Do not print or copy database credentials to work around this. Bootstrap grants
+only Access Administrator, refuses repetition, and does not grant project roles.
+Use the normal role-grant APIs afterward. See the
+[bootstrap contract and exit codes](../../docs/operations_authorization_service.md).
+
 ## Verification scope
 
 `scripts/test_identity_provider.py` creates isolated Keycloak/PostgreSQL resources

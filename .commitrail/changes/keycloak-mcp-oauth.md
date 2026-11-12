@@ -79,15 +79,15 @@ file; it does not claim to end browser SSO or invalidate already issued JWTs.
 
 ## Acceptance criteria
 
-- [ ] Exact pinned provider configuration passes real browser, claim, profile,
+- [x] Exact pinned provider configuration passes real browser, claim, profile,
   refresh, exchange, admin-isolation and database-isolation proofs.
-- [ ] MCP discovery/challenges and request-bound exchange reject wrong audiences,
+- [x] MCP discovery/challenges and request-bound exchange reject wrong audiences,
   sources and users before effects; no direct bearer-forwarding fallback remains.
 - [ ] Actual Garden connection performs allowed tools and denies forbidden,
   suspended/revoked and cross-user access, including renewal/reconnect.
-- [ ] Fresh bootstrap/service/project setup uses existing owner APIs; issuer
+- [x] Fresh bootstrap/service/project setup uses existing owner APIs; issuer
   email and local name edit/clear behavior survive direct and exchanged access.
-- [ ] Hosted reset and ordinary restart pass with bounded resources and fresh
+- [x] Hosted reset and ordinary restart pass with bounded resources and fresh
   storage proof; obsolete Rust deployment/scripts/credentials are retired.
 - [ ] Affected tests, docs, required internal reviews and hosted CI pass on the
   exact candidate; evidence distinguishes implementation from deployment.
@@ -146,12 +146,27 @@ creation and thirteen fixed service provisions used public APIs and exact
 replay. The existing administrator bootstrap rejected a second invocation;
 the ordinary self-grant prohibition also remained effective.
 
+A subsequent complete development reset recreated both named databases and
+Redis DB 0 while preserving the qualified S3 namespace, policies and objects.
+Fresh named-administrator MFA/recovery and bootstrap retirement passed. New
+participant subjects and Workstream actors differed from their predecessors;
+the guarded Access Administrator bootstrap, public manager/project/service
+provisioning, exact replay and standalone MCP isolation passed again. A fresh
+public guide-document upload produced the expected server hash and byte count;
+replay retained its document identity and returned `object_confirmed`. Scratch
+was empty afterward. This proof did not request setup inference or repeat the
+separate contribution lifecycle drill.
+
+The expanded pinned-provider CI proof also exercises independent PKCE/requester
+substitutions, registered-scope downscoping with a guard-removal counterexample,
+session expiry, real signing-key rotation and provider outage/recovery. The
+participant helper uses verified credentials and qualified logout cleanup.
+
 These are hosted provider and standalone-client observations, not actual Garden
-integration or execution of every MCP tool. Garden registration/access, the full
-reset/reprovisioning drill and remaining acceptance-matrix proofs still require
-qualification. Private operator receipts contain credentials and are not Git
-artifacts. The subsequent `848f454e7` commit documents recovery configuration;
-it does not alter the qualified runtime.
+integration or execution of every MCP tool. Actual Garden registration/access
+and connector qualification remain required. Private operator credentials and
+raw receipts are not Git artifacts; redacted proof summaries identify their
+runtime source separately from later helper and documentation commits.
 
 ## Review findings
 
