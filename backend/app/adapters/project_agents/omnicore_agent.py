@@ -36,7 +36,7 @@ from app.adapters.project_agents.provider_resilience import ModelCircuitAdmissio
 from app.adapters.project_agents.result_validation import validate_project_guide_runtime_result
 from app.adapters.project_agents.setup_model_proxy import SetupModelProxyUnavailable
 from app.core.project_guide_instructions import project_guide_system_instructions
-from app.interfaces.external_services import ExternalServiceAdapterIdentity
+from workstream_external_services import ExternalServiceAdapterIdentity
 from app.interfaces.project_agents import (
     ProjectAgentRuntimeConfigurationError,
     ProjectAgentRuntimeError,

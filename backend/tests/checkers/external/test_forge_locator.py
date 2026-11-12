@@ -14,7 +14,7 @@ import pytest
 from app.adapters.checkers import external_checker_execution_factory
 from app.adapters.checkers.model_execution import ModelAwareExternalExecution
 from app.interfaces.external_checker_execution import ExternalCheckerMaterialGrant
-from app.interfaces.external_services import ExternalServiceProtocolError
+from workstream_external_services import ExternalServiceProtocolError
 from app.modules.checkers.api.external import (
     ExternalCheckerContractError,
     ExternalCheckerRegistryEntry,

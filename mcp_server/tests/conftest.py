@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import time
 from collections.abc import Callable, Iterator
+from contextlib import asynccontextmanager
 from typing import Any
 
 import httpx2 as httpx
@@ -8,7 +10,32 @@ import pytest
 from starlette.testclient import TestClient
 
 from workstream_mcp.config import Settings
+from workstream_mcp.oauth import McpIdentity
 from workstream_mcp.server import create_app
+
+
+@pytest.fixture
+def credential_fixture(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Tool contract tests use exchanged identities; OAuth has signed-token proof."""
+
+    class Credentials:
+        async def verify(self, token: str) -> McpIdentity:
+            return McpIdentity(
+                token,
+                "fixture-client",
+                int(time.time()) + 300,
+                frozenset({"workstream:access"}),
+                token,
+            )
+
+        async def exchange(self, identity: McpIdentity) -> str:
+            return "Bearer api-" + identity.token
+
+    @asynccontextmanager
+    async def create_credentials(_):
+        yield Credentials()
+
+    monkeypatch.setattr("workstream_mcp.server.create_credentials", create_credentials)
 
 
 def profile_fixture(**overrides: Any) -> dict[str, Any]:
@@ -45,6 +72,7 @@ def authorization_context_fixture(**overrides: Any) -> dict[str, Any]:
 @pytest.fixture
 def adapter(
     monkeypatch: pytest.MonkeyPatch,
+    credential_fixture: None,
 ) -> Iterator[tuple[TestClient, list[httpx.Request], dict[str, Any]]]:
     received: list[httpx.Request] = []
     upstream: dict[str, Any] = {

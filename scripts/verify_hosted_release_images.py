@@ -60,25 +60,27 @@ def file_hash(path: Path) -> str:
         return hashlib.sha256(content).hexdigest()
 
 
-def source_inventory(root: Path) -> dict[str, str]:
+def source_inventory(root: Path, shared_root: Path | None = None) -> dict[str, str]:
     found: dict[str, str] = {}
     total = 0
 
-    def visit(path: Path) -> None:
+    def visit(path: Path, base: Path, prefix: str = "") -> None:
         nonlocal total
         info = path.lstat()
         require(not stat.S_ISLNK(info.st_mode), "source symlink refused")
         if stat.S_ISDIR(info.st_mode):
             for child in sorted(path.iterdir()):
-                visit(child)
+                visit(child, base, prefix)
             return
         require(stat.S_ISREG(info.st_mode), "source special file refused")
         total += info.st_size
         require(len(found) < MAX_FILES and total <= MAX_BYTES, "source inventory limit")
-        found[str(path.relative_to(root))] = file_hash(path)
+        found[prefix + str(path.relative_to(base))] = file_hash(path)
 
     for relative in SOURCE_PATHS:
-        visit(root / relative)
+        visit(root / relative, root)
+    if shared_root is not None:
+        visit(shared_root, shared_root, "shared-adapter/")
     return found
 
 
@@ -144,6 +146,15 @@ def expected_packages(root: Path, sdk_environment: str) -> dict[str, str]:
     project = tomllib.loads((root / "backend/pyproject.toml").read_text())["project"]
     expected = {canonical_name(project["name"]): project["version"]}
     for line in exported.splitlines():
+        path, separator, marker = line.partition(";")
+        if path.strip() == "../packages/external-services":
+            shared = tomllib.loads((root / "packages/external-services/pyproject.toml").read_text())["project"]
+            name, version = canonical_name(shared["name"]), shared["version"]
+            require(name == "workstream-external-services", "shared adapter package identity differs")
+            require(any(entry["name"] == name and entry["version"] == version
+                        and entry.get("source") == {"directory": "../packages/external-services"}
+                        for entry in lock["package"]), "shared adapter lock differs")
+            line = f"{name}=={version}" + (";" + marker if separator else "")
         requirement = Requirement(line)
         if requirement.marker and not requirement.marker.evaluate():
             continue
@@ -208,7 +219,11 @@ def inside_backend() -> dict:
     checked(["/bin/uv", "--no-cache", "pip", "check", "--python", sys.executable])
     sdk_environment = read_sdk_environment_marker()
     return {
-        "source": source_inventory(Path("/workspace/backend")),
+        "source": source_inventory(
+            Path("/workspace/backend"),
+            Path(importlib.metadata.distribution("workstream-external-services").locate_file(
+                "workstream_external_services")),
+        ),
         "loader": file_hash(Path(LOADER)),
         "roles_anywhere_helper": helper_hash,
         "proof_command_timeout": True,
@@ -535,7 +550,7 @@ def main() -> None:
     head = checked(["git", "rev-parse", "HEAD"]).decode().strip()
     require(head == args.expected_head, "proof checkout differs from requested head")
     require(not checked(["git", "status", "--porcelain"]), "proof checkout is dirty")
-    inventory = source_inventory(root / "backend")
+    inventory = source_inventory(root / "backend", root / "packages/external-services/workstream_external_services")
     agents_packages = expected_packages(root, "agents")
     omnicore_packages = expected_packages(root, "omnicore")
     loader = file_hash(root / "docker/backend/release-entrypoint.sh")

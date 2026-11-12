@@ -20,6 +20,11 @@ require product-domain rewrites.
 
 ## Decision
 
+Workstream defines its dependency-free contracts in the shared
+`packages/external-services` distribution, used by the backend and independently
+installed MCP server. Neither consumer imports the other's product modules.
+There is one implementation and no old import alias.
+
 Workstream defines a small central `ExternalServiceAdapter` protocol and a
 generic `ExternalServiceAdapterFactory[TAdapter]` construction convention.
 

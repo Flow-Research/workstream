@@ -416,9 +416,9 @@ def test_concrete_adapter_construction_has_one_composition_path(
 @pytest.mark.parametrize(
     "source",
     [
-        "from app.interfaces.external_services import ExternalServiceAdapterFactory as factory\nfactory[object]('extra')\n",
-        "from app.interfaces.external_services import ExternalServiceAdapterFactory\nfactory: object = ExternalServiceAdapterFactory\nfactory[object]('extra')\n",
-        "import app.interfaces.external_services as external\nexternal.ExternalServiceAdapterFactory[object]('extra')\n",
+        "from workstream_external_services import ExternalServiceAdapterFactory as factory\nfactory[object]('extra')\n",
+        "from workstream_external_services import ExternalServiceAdapterFactory\nfactory: object = ExternalServiceAdapterFactory\nfactory[object]('extra')\n",
+        "import workstream_external_services as external\nexternal.ExternalServiceAdapterFactory[object]('extra')\n",
         "from app.adapters.artifacts.trusted_intake import UnixSocketTrustedIntakeAdapter as runtime\nruntime(configuration)\n",
         "import app.adapters.artifacts.trusted_intake as intake\nintake.UnixSocketTrustedIntakeAdapter(configuration)\n",
         "from app.adapters.project_agents.openai_agent_sdk import OpenAIAgentSdkProjectGuideRuntime as runtime\nruntime(configuration)\n",

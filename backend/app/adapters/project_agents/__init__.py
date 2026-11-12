@@ -26,7 +26,7 @@ from app.adapters.project_agents.openai_workspace import (
     OpenAIGuideRuntimeCleanupAdapter,
     RETAINED_OPENAI_GUIDE_RUNTIME_KEY,
 )
-from app.interfaces.external_services import ExternalServiceAdapterFactory
+from workstream_external_services import ExternalServiceAdapterFactory
 from app.interfaces.project_agents import (
     ProjectAgentRuntimeConfigurationError,
     ProjectGuideAgentRuntime,

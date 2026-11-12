@@ -12,7 +12,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, model_validator
 
 from app.core.hashing import canonical_json_hash
-from app.interfaces.external_services import ExternalServiceAdapter
+from workstream_external_services import ExternalServiceAdapter
 from app.interfaces.guide_document_tools import GuideDocumentMediaType, GuideDocumentToolPort
 from app.interfaces.setup_model_proxy import SetupModelDispatchPort
 

@@ -12,7 +12,7 @@ from opentelemetry.sdk.metrics.export import MetricReader
 from opentelemetry.sdk.metrics.export import InMemoryMetricReader
 from opentelemetry.sdk.trace.export import SpanExporter, SpanExportResult
 
-from app.interfaces.external_services import ExternalServiceAdapterIdentity
+from workstream_external_services import ExternalServiceAdapterIdentity
 from app.interfaces.observability import (
     OBSERVABILITY_EXPORT_CAPABILITY_KEY,
     ObservabilityExporterBundle,

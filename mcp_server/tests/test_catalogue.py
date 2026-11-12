@@ -70,7 +70,10 @@ def test_mcp_tool_listing_exposes_exactly_the_chunk_catalogue(
     client, _, _ = adapter
     response = client.post(
         "/mcp",
-        headers={"accept": "application/json, text/event-stream"},
+        headers={
+            "accept": "application/json, text/event-stream",
+            "authorization": "Bearer fixture-token",
+        },
         json={"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}},
     )
     assert response.status_code == 200
@@ -168,14 +171,11 @@ def test_mcp_tool_listing_exposes_exactly_the_chunk_catalogue(
         *WORKSPACE_READ_INPUT_SCHEMAS.values(),
         *CONTRIBUTION_POLICY_INPUT_SCHEMAS.values(),
         *(guide_lifecycle_input_schema(name) for name in GUIDE_LIFECYCLE_CONTRACT_NAMES),
-        *(
-            checker_artifact_input_schema(name)
-            for name in CHECKER_ARTIFACT_CONTRACT_NAMES
-        ),
+        *(checker_artifact_input_schema(name) for name in CHECKER_ARTIFACT_CONTRACT_NAMES),
         *(TASK_EXECUTION_INPUT_SCHEMAS[name] for name in TASK_EXECUTION_CONTRACT_NAMES),
         *(task_operation_input_schema(name) for name in TASK_OPERATION_CONTRACT_NAMES),
     ]
-    assert [item["outputSchema"] for item in listed[-len(TASK_OPERATION_CONTRACT_NAMES):]] == [
+    assert [item["outputSchema"] for item in listed[-len(TASK_OPERATION_CONTRACT_NAMES) :]] == [
         task_operation_output_schema(name) for name in TASK_OPERATION_CONTRACT_NAMES
     ]
 
@@ -190,6 +190,7 @@ def test_discover_exposes_tools_without_resources_or_prompts(
             "accept": "application/json, text/event-stream",
             "mcp-protocol-version": "2026-07-28",
             "mcp-method": "server/discover",
+            "authorization": "Bearer fixture-token",
         },
         json={
             "jsonrpc": "2.0",

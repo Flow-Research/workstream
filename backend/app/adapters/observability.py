@@ -15,7 +15,7 @@ from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
 
 from app.core.config import Settings
 from app.core.diagnostic_logging import acquire_safe_logging, release_safe_logging
-from app.interfaces.external_services import (
+from workstream_external_services import (
     ExternalServiceAdapterFactory,
     ExternalServiceAdapterIdentity,
     ExternalServiceConfigurationError,

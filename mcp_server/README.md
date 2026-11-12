@@ -76,29 +76,36 @@ An independently installed adapter exposing 132 tools under the caller's authori
   content uses an 8 MiB exact-byte boundary; health routes remain operational
   liveness rather than user tools.
 
-Each call forwards the caller's bearer to its fixed public Workstream operation.
+Each call exchanges the verified MCP credential for an API credential identifying
+the same caller, then invokes its fixed public Workstream operation.
 There are no MCP resources or prompts. Workstream, not the adapter, owns every
 administrative authorization decision and lifecycle effect.
 
 ## Authentication Boundary
 
-This is the maintainer-approved **custom bearer-header integration**, not the
-standard remote MCP OAuth authorization profile. Use a client that can send an
-explicit `Authorization: Bearer <Workstream access token>` header on every tool
-invocation. OAuth discovery and compatibility with hosted clients that require
-that discovery are not provided.
+The adapter exposes protected-resource metadata at
+`/.well-known/oauth-protected-resource/mcp`. Unauthenticated MCP requests receive
+HTTP 401 with a `WWW-Authenticate` metadata reference. Initialization, discovery
+and tool listing require authentication too; resource metadata remains public.
 
-The caller obtains and refreshes its token through the existing identity flow.
-The adapter rejects missing, duplicate or malformed headers, then forwards a
-well-formed bearer unchanged to the configured API. Workstream verifies the
-signature, issuer, audience and expiry and applies its current actor and access
-rules. The adapter does not call Flow, inspect JWT claims, hold refresh tokens,
-calculate grants or perform an extra authentication API call.
+The client signs in through the configured external identity provider using its
+registered authorization-code/PKCE client. It requests `workstream:access` and
+`workstream-mcp-audience`, and owns its refresh credentials. Registration uses
+explicit client IDs and exact callbacks; this service does not offer registration,
+password login or an authorization server. A real client's registration and
+resource-indicator behavior must be qualified before claiming interoperability.
 
-Initialization and tool listing reveal only the static catalogue. They do not
-authenticate a session. Tokens never belong in tool arguments, URLs, logs or
-prompts. An AI client using a human bearer acts as that human; this is not future
-agent registration or delegation.
+MCP verifies the signature, exact issuer, MCP audiences, expiry, human marker and
+scope. For each tool call it uses the confidential `workstream-mcp` client to
+exchange that source token for a short-lived, API-only token with the same subject.
+It checks the exchange response before dispatch. Direct API tokens are not valid
+MCP credentials, and MCP tokens are never forwarded to the API unchanged.
+
+Workstream independently verifies the exchanged token and applies current actor,
+identity-link and project authority. No token, client registration or OAuth scope
+grants a Workstream role. MCP stores no user refresh tokens or shared caller
+credentials. Tokens never belong in tool arguments, URLs, logs or prompts. An AI
+client using a human credential acts as that human; this is not agent delegation.
 
 ## Local Run
 
@@ -106,13 +113,19 @@ Python 3.12 and uv are required. From this directory:
 
 ```bash
 uv sync --frozen --extra dev
-WORKSTREAM_API_URL=http://127.0.0.1:8000 uv run --frozen workstream-mcp
+WORKSTREAM_API_URL=http://127.0.0.1:8000 \
+WORKSTREAM_MCP_EXCHANGE_SECRET_FILE=/absolute/private/mcp-exchange-secret \
+uv run --frozen workstream-mcp
 ```
 
 The endpoint is `http://127.0.0.1:8080/mcp`. The default listener is loopback.
 Configuration is read from environment variables; `.env.example` documents
 the settings but is not loaded automatically. No server-wide caller token is
-configured. A separate Workstream API must already be running.
+configured. A separate Workstream API and configured identity provider must
+already be running. The exchange-secret file must be private, regular and bounded;
+startup refuses a missing or unsafe credential. Its default path is
+`/run/secrets/mcp-exchange-secret`. This application credential belongs only to MCP,
+not browser clients or the Workstream API.
 
 Ordinary JSON responses default to a 64 KiB bound. Guide-document reads and
 submission-bundle uploads use separate 64 MiB bounds and a 120-second operation
@@ -231,10 +244,11 @@ mutation success remains uncertain and is never retried automatically.
 
 ## Deployment Boundary
 
-Build from this directory only:
+Build from the repository root; the image includes only MCP and the shared
+dependency-free adapter contracts:
 
 ```bash
-docker build -t workstream-mcp-foundation:local .
+docker build -f mcp_server/Dockerfile -t workstream-mcp-foundation:local .
 ```
 
 The image contains the adapter and its locked dependencies, not the backend.
@@ -281,13 +295,15 @@ change in the
 
 The [hosted deployment](../deploy/hosted/README.md#managed-private-mcp-service)
 can enable this image through `WORKSTREAM_MCP_IMAGE`. It runs as a bounded,
-non-root service with no credential mounts, alongside the API. Access is private
+non-root service alongside the API, with only its private Keycloak exchange-client
+secret mounted. It receives no database or artifact-storage credentials. Access is private
 host loopback through authenticated SSH until public ingress is qualified.
 The hosted wrapper couples API/MCP recreation so the adapter cannot retain an
-obsolete API namespace. A catalogue health check is separate from authenticated
-live workflow proof.
+obsolete API namespace. Its health check verifies API health, protected-resource
+metadata and the unauthenticated challenge; authenticated live workflow proof
+is still required.
 
-The [managed hosted qualification](../docs/reports/managed-mcp-hosted-2026-11-07.md)
+The historical [managed hosted qualification](../docs/reports/managed-mcp-hosted-2026-11-07.md)
 records actual SDK calls with Rust-issued login tokens, CLI cross-client checks
 and restart behavior. It does not establish all-tool live coverage or native
 connector/OAuth support.

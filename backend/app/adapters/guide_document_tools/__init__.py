@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from app.interfaces.external_services import ExternalServiceAdapterFactory
+from workstream_external_services import ExternalServiceAdapterFactory
 
 from .client import (
     PARSER_SOCKET_GID,

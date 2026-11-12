@@ -248,26 +248,20 @@ not secret values. Select real Flow issuer, audience, JWKS and algorithm values.
 The release profile uses `WORKSTREAM_AUTH_PROVIDER=flow`; local Flow-HMAC and
 development authentication are absent.
 
-For invite-only demo accounts, the optional [external Rust issuer](../../experiments/demo_identity/README.md)
-provides administrator provisioning, login and password change. It stays outside
-Workstream core. Set all `DEMO_IDENTITY_*` essentials in the release environment
-and pin Workstream's issuer, audience, algorithms and JWKS URL to the same
-service. The wrapper validates the issuer's exact image, private mounts,
-UID 12001, network and resource bounds. Initialize its persistent state once;
-then start only the issuer and wait for verified HTTPS readiness:
+For invite-only accounts, the managed [Flow Identity provider](../identity/README.md)
+uses stock Keycloak browser login and OAuth. Set the `FLOW_IDENTITY_*` values and
+pin the backend to `https://IDENTITY_HOST/realms/flow`, audience `workstream-api`,
+RS256 and that realm's JWKS endpoint. The provider uses its own database and role;
+its credentials are never mounted into the API or workers. Follow the provider
+guide for offline first-administrator bootstrap and participant provisioning.
 
-```sh
-python3 deploy/hosted/compose.py --env-file /etc/workstream/release.env start demo-identity
-```
-
-This bootstrap does not start or reconfigure the backend.
-
-The issuer port stays on loopback. Public participants require the chosen DNS
-name, a trusted TLS certificate and a bounded HTTPS ingress; see the
-[Caddy example](demo-identity.Caddyfile) and issuer instructions. Confirm real
-login and token validation before switching the backend. An issuer administrator
-receives no Workstream administrative grant. Preserve retained actor links and
-records during cutover; never substitute identities by matching email.
+The issuer port stays on loopback. The [Caddy ingress](public.Caddyfile) exposes
+only the public realm and login assets; administration uses a separate loopback
+listener. Confirm real login and token validation before switching the backend.
+An issuer administrator receives no Workstream administrative grant. Preserve
+retained actor links and records during any non-disposable cutover; never
+substitute identities by matching email. Explicitly authorized development
+resets use fresh actors and the existing guarded Workstream bootstrap.
 
 Create each secret named by a nonempty configured path as a one-value regular
 file. Make it owned by the runtime UID/GID with mode `0400`. The explicit role loader gives the
@@ -791,17 +785,22 @@ delivery from live qualification and remaining release gates.
 ## Managed private MCP service
 
 Set `WORKSTREAM_MCP_IMAGE` to the qualified MCP image digest to include
-[`compose.mcp.yml`](compose.mcp.yml). Build that image from `mcp_server/`, not the
-repository root. The adapter receives no account password, server-wide bearer,
-database credential or artifact-store key. Each client supplies its own fresh
-Rust-issued Workstream access token; the API retains all authorization decisions.
+[`compose.mcp.yml`](compose.mcp.yml). Build that image from the repository root with
+`docker build -f mcp_server/Dockerfile .`; its build context excludes backend
+product code. The adapter receives no account password, server-wide bearer,
+database credential or artifact-store key. It receives only its private Keycloak
+exchange-client secret through `WORKSTREAM_MCP_EXCHANGE_SECRET_FILE`. Each client
+supplies an MCP-scoped OAuth token; the adapter exchanges it for an API-only
+token for the same user. The API retains all authorization decisions.
 
 The adapter shares API's network namespace and calls only its loopback port 8000.
 Its port 8080 is published on host `127.0.0.1` only. For private access, forward
 local port 8080 to host `127.0.0.1:8080` through authenticated SSH and connect to
-`http://127.0.0.1:8080/mcp`. Preserve that exact Host header. This is custom
-bearer-header MCP, not OAuth discovery or a public browser endpoint. Tokens belong
-in the client's protected header configuration, never tool arguments or URLs.
+`http://127.0.0.1:8080/mcp`. Preserve that exact Host header. The configured OAuth
+resource identity remains the public HTTPS MCP URL, even through a private
+transport. Use the [public ingress](PUBLIC_ACCESS.md) for normal OAuth discovery
+and browser authorization. Tokens belong in the client's protected credential
+storage, never tool arguments or URLs; an API-only login token cannot access MCP.
 
 Use the hosted wrapper for updates. When an `up` operation can replace API, the
 wrapper stops MCP first and force-recreates it after the operation succeeds,
@@ -811,12 +810,12 @@ before API. Direct Docker recreation of API bypasses this coupling and is not a
 supported update procedure. The initial overlay requires a controlled API
 replacement to add the private port; it cannot be hot-attached.
 
-The health probe checks API health and the static MCP catalogue. It does not
-establish a caller's authority: qualification must additionally call tools with
-fresh login tokens and verify both permitted and denied access. API's Docker
+The health probe checks API health, protected-resource metadata and the
+unauthenticated 401 challenge. It does not establish a caller's authority:
+qualification must additionally call tools with fresh MCP-scoped tokens and
+verify both permitted and denied access. API's Docker
 bridge can still reach the listener, so exact Host checks, browser-Origin
-rejection and per-call authentication remain necessary. For public native bearer
-clients, use the [public HTTPS ingress](PUBLIC_ACCESS.md) and run its external
-login/client checks before sharing the URL. It preserves these private listeners
-and browser-Origin denial. Clients requiring OAuth discovery remain unsupported
-by this profile.
+rejection and per-call authentication remain necessary. For public OAuth clients, use the [public HTTPS ingress](PUBLIC_ACCESS.md) and
+qualify the actual client before sharing the URL. It preserves these private
+listeners and browser-Origin denial. Discovery support alone does not prove
+Garden interoperability; that requires its registered client and live flow.

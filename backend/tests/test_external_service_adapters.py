@@ -7,7 +7,7 @@ from typing import cast
 
 import pytest
 
-from app.interfaces.external_services import (
+from workstream_external_services import (
     AdapterConstructor,
     DuplicateExternalServiceProviderError,
     ExternalServiceAdapterError,

@@ -206,7 +206,10 @@ def _bound_response(name: str) -> dict[str, Any]:
 def _catalogue(client: TestClient) -> list[dict[str, Any]]:
     response = client.post(
         "/mcp",
-        headers={"accept": "application/json, text/event-stream"},
+        headers={
+            "accept": "application/json, text/event-stream",
+            "authorization": "Bearer fixture-token",
+        },
         json={"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}},
     )
     assert response.status_code == 200
@@ -357,7 +360,7 @@ def test_caller_token_is_forwarded_and_mcp_headers_cannot_supply_arguments(
     assert result["isError"] is False
     assert result["content"][0]["text"].startswith("Untrusted Workstream data")
     assert len(received) == 1
-    assert received[0].headers["authorization"] == "Bearer operator-token"
+    assert received[0].headers["authorization"] == 'Bearer api-operator-token'
     assert "idempotency-key" not in received[0].headers
     assert "if-match" not in received[0].headers
 

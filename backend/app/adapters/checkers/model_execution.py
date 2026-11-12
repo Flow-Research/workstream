@@ -1,6 +1,6 @@
 """Compose optional project-image model callbacks into the sole POST execution path."""
 
-from app.interfaces.external_services import ExternalServiceUnavailableError
+from workstream_external_services import ExternalServiceUnavailableError
 from app.modules.model_usage.api import (
     ModelCallExecutionFacts,
     ModelCallUnavailable,

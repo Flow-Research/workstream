@@ -25,7 +25,7 @@ from pydantic import (
 
 from app.core.hashing import canonical_json_hash
 from app.modules.projects.api.task_examples import ProjectGuideTaskExamples
-from app.interfaces.external_services import (
+from workstream_external_services import (
     ExternalServiceAdapter,
     ExternalServiceAdapterError,
     ExternalServiceConfigurationError,

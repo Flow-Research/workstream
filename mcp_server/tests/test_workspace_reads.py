@@ -20,7 +20,10 @@ Call = Callable[..., httpx.Response]
 def _catalogue(client: TestClient) -> dict[str, Any]:
     response = client.post(
         "/mcp",
-        headers={"accept": "application/json, text/event-stream"},
+        headers={
+            "accept": "application/json, text/event-stream",
+            "authorization": "Bearer fixture-token",
+        },
         json={"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}},
     )
     return {tool["name"]: tool for tool in response.json()["result"]["tools"]}
@@ -57,7 +60,7 @@ def test_actor_project_read_forwards_only_typed_query_and_bearer(
     assert request.method == "GET"
     assert request.url.path == "/api/v1/actors/me/projects"
     assert dict(request.url.params) == {"limit": "25", "cursor": "opaque+/="}
-    assert request.headers["authorization"] == "Bearer workspace-caller"
+    assert request.headers["authorization"] == 'Bearer api-workspace-caller'
     assert "idempotency-key" not in request.headers
     assert "if-match" not in request.headers
 

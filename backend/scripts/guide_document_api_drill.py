@@ -20,7 +20,7 @@ from app.adapters.guide_document_tools import (
     GuideDocumentParserRequest,
     UnixSocketGuideDocumentParserAdapter,
 )
-from app.interfaces.external_services import (
+from workstream_external_services import (
     ExternalServiceProtocolError,
     ExternalServiceUnavailableError,
 )

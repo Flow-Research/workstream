@@ -755,6 +755,11 @@ wheels = [
 ]
 
 [[package]]
+name = "workstream-external-services"
+version = "0.1.0"
+source = { directory = "../packages/external-services" }
+
+[[package]]
 name = "workstream-mcp-server"
 version = "0.1.0"
 source = { editable = "." }
@@ -762,8 +767,10 @@ dependencies = [
     { name = "httpx" },
     { name = "jsonschema" },
     { name = "mcp" },
+    { name = "pyjwt", extra = ["crypto"] },
     { name = "rfc3339-validator" },
     { name = "uvicorn" },
+    { name = "workstream-external-services" },
 ]
 
 [package.optional-dependencies]
@@ -783,11 +790,13 @@ requires-dist = [
     { name = "jsonschema", specifier = "==4.25.1" },
     { name = "mcp", specifier = "==2.2.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = "==2.3.1" },
+    { name = "pyjwt", extras = ["crypto"], specifier = "==2.15.1" },
     { name = "pytest", marker = "extra == 'dev'", specifier = "==9.1.1" },
     { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = "==1.4.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = "==7.1.0" },
     { name = "rfc3339-validator", specifier = "==0.1.4" },
     { name = "ruff", marker = "extra == 'dev'", specifier = "==0.16.7" },
     { name = "uvicorn", specifier = "==0.35.0" },
+    { name = "workstream-external-services", directory = "../packages/external-services" },
 ]
 provides-extras = ["dev"]

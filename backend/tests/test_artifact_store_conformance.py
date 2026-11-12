@@ -21,7 +21,7 @@ from app.interfaces.artifacts import (
     ArtifactStoreNamespaceClaim,
     ArtifactStoreNamespaceIdentity,
 )
-from app.interfaces.external_services import ExternalServiceAdapterIdentity
+from workstream_external_services import ExternalServiceAdapterIdentity
 from tests.artifact_store_helpers import (
     initialize_local_store,
     minted_source,

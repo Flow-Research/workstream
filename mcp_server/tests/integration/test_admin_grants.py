@@ -12,6 +12,7 @@ from uuid import uuid4
 
 import httpx2 as httpx
 import pytest
+from integration.oauth_fixture import IdentityFixture, IdentityTokens
 from test_profile_flow import (
     _bootstrap_access_administrator,
     _call,
@@ -20,20 +21,20 @@ from test_profile_flow import (
     _stop,
     api_environment,
     find_free_port,
-    flow_settings,
-    issue_flow_token,
 )
 
 
-async def _profile(client: httpx.AsyncClient, token: str) -> dict[str, Any]:
-    response = await client.get("/api/v1/actors/me", headers={"Authorization": f"Bearer {token}"})
+async def _profile(client: httpx.AsyncClient, token: IdentityTokens) -> dict[str, Any]:
+    response = await client.get(
+        "/api/v1/actors/me", headers={"Authorization": f"Bearer {token.api}"}
+    )
     assert response.status_code == 200, response.text
     return response.json()
 
 
 async def _mcp(
     mcp_url: str,
-    token: str,
+    token: IdentityTokens,
     name: str,
     arguments: dict[str, Any],
     *,
@@ -66,11 +67,12 @@ def _restart_mcp(
 
 
 @pytest.mark.asyncio
-async def test_installed_mcp_preserves_admin_grant_authority_and_replay() -> None:
+async def test_installed_mcp_preserves_admin_grant_authority_and_replay(
+    identity: IdentityFixture,
+) -> None:
     env = api_environment()
     executable = os.environ.get("WORKSTREAM_MCP_EXECUTABLE") or shutil.which("workstream-mcp")
     assert executable, "install the workstream-mcp wheel before running integration tests"
-    issuer, audience, secret = flow_settings(env)
     run_id = uuid4().hex
     subjects = {
         "admin": "mcp-admin",
@@ -79,10 +81,7 @@ async def test_installed_mcp_preserves_admin_grant_authority_and_replay() -> Non
         "second_admin": f"mcp-grants-{run_id}-second-admin",
         "second_target": f"mcp-grants-{run_id}-second-target",
     }
-    tokens = {
-        name: issue_flow_token(subject, [], issuer=issuer, audience=audience, secret=secret)
-        for name, subject in subjects.items()
-    }
+    tokens = {name: identity.issue(subject) for name, subject in subjects.items()}
     api_port, mcp_port = find_free_port(), find_free_port()
     while api_port == mcp_port:
         mcp_port = find_free_port()
@@ -98,6 +97,7 @@ async def test_installed_mcp_preserves_admin_grant_authority_and_replay() -> Non
             WORKSTREAM_MCP_PORT=str(mcp_port),
         )
         api, mcp, api_log, mcp_log = _start_processes(
+            identity=identity,
             api_port=api_port,
             api_env=env,
             mcp_port=mcp_port,

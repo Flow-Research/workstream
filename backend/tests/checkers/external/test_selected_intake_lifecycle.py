@@ -27,7 +27,7 @@ from tests.checkers.external.test_selected_pre_submit import (
 @pytest.mark.asyncio
 @pytest.mark.parametrize("cleanup_confirmed", [True, False])
 async def test_intake_cleanup_precedes_both_project_bindings(tmp_path, cleanup_confirmed):
-    from app.interfaces.external_services import ExternalServiceUnavailableError
+    from workstream_external_services import ExternalServiceUnavailableError
 
     request, _, manager, preparation = await _request(tmp_path)
     first = _policy()
@@ -170,7 +170,7 @@ async def test_preparation_deadline_finalizes_only_after_intake_cleanup(tmp_path
 @pytest.mark.parametrize("body_failure", ["deadline", "rejection", "cancellation", None])
 async def test_intake_cleanup_preserves_unresolved_outcome_but_overrides_work_rejection(body_failure):
     import asyncio
-    from app.interfaces.external_services import ExternalServiceUnavailableError
+    from workstream_external_services import ExternalServiceUnavailableError
     from app.modules.artifacts.api.submission_archive import (
         SubmissionArchiveFailureCode, SubmissionArchiveRejectedError,
     )
@@ -219,7 +219,7 @@ async def test_sealed_handoff_failure_drains_real_scratch_without_leaked_reader(
     import asyncio
     from types import SimpleNamespace
     from unittest.mock import AsyncMock
-    from app.interfaces.external_services import ExternalServiceUnavailableError
+    from workstream_external_services import ExternalServiceUnavailableError
     from app.modules.artifacts.preparation import ArtifactPreparationService, ArtifactScratchManager, ArtifactPreparationLimits, ArtifactPreparationDeadlineError
     from app.modules.artifacts.trusted_intake import prepared_trusted_intake
 

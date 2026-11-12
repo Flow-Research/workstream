@@ -19,7 +19,8 @@ RUN groupadd --gid 1000 workstream \
     && useradd --uid 1000 --gid workstream --create-home --shell /bin/bash workstream
 
 WORKDIR /workspace/mcp_server
-COPY . ./
+COPY packages/external-services/ /workspace/packages/external-services/
+COPY mcp_server/ ./
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev \
     && chown -R workstream:workstream /workspace /opt/venv

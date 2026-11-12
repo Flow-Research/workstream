@@ -24,7 +24,7 @@ from app.interfaces.checker_model_provider import (
     CheckerModelResponseReference,
     CheckerModelUsage,
 )
-from app.interfaces.external_services import ExternalServiceAdapterIdentity
+from workstream_external_services import ExternalServiceAdapterIdentity
 
 
 OPENAI_RESPONSES_PROVIDER_KEY = "openai_responses"
