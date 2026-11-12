@@ -210,21 +210,26 @@ def test_python_decodes_shared_production_rust_wire_fixture():
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("case", ["received_failure", "wrong_factory", "cancelled"])
+@pytest.mark.parametrize("case", ["received_failure", "wrong_factory", "wrong_family", "cancelled"])
 async def test_managed_port_retains_receipt_and_enforces_selected_factory(lease, case):
     import asyncio
     from app.interfaces.external_services import ExternalServiceAdapterIdentity
     from app.modules.checkers.api.selected_pre_submit import SelectedPreSubmitInfrastructureUnavailable
     from app.modules.checkers.selected_pre_submit_execution import SelectedPreSubmitProcessor
 
-    body = receipt_body(lease, managed=True,
+    body = receipt_body(lease, managed=case != "wrong_family",
         outcome="cancelled" if case == "cancelled" else "infrastructure_failure",
         reason="cancelled" if case == "cancelled" else "capacity_exceeded")
+    body["adapter_provider_key"] = "managed_test"
     body["cleanup"]["disposition"] = "pending"
     result = SelectedPreSubmitInvocationResult.from_canonical_body(body | {"execution": None})
     grant = object()
 
     class ManagedAdapter:
+        @property
+        def pre_runtime_provider(self):
+            return "managed"
+
         identity = ExternalServiceAdapterIdentity("external_checker_execution",
             "other_provider" if case == "wrong_factory" else "managed_test")
 
@@ -236,7 +241,7 @@ async def test_managed_port_retains_receipt_and_enforces_selected_factory(lease,
     if case == "cancelled":
         with pytest.raises(asyncio.CancelledError):
             await processor.process(grant)
-    elif case == "wrong_factory":
+    elif case in {"wrong_factory", "wrong_family"}:
         with pytest.raises(SelectedPreSubmitInfrastructureUnavailable, match="invalid_output"):
             await processor.process(grant)
     else:

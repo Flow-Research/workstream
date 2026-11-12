@@ -430,6 +430,10 @@ def _source_runtime(payload, tmp_path, runtime_outcome):
 
     runtime_errors = []
     class SourceRuntime:
+        @property
+        def pre_runtime_provider(self):
+            return "smolvm"
+
         identity = ExternalServiceAdapterIdentity(capability_key="external_checker_execution", provider_key="unix_socket")
         async def execute_pre(self, lease, grant):
             try:

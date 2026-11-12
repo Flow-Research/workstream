@@ -52,7 +52,8 @@ class SelectedPreSubmitProcessor:
             if type(result) is not SelectedPreSubmitInvocationResult:
                 raise ValueError("PRE result is invalid")
             result.validate_lease(self._lease)
-            if result.receipt.adapter_provider_key != self._execution.identity.provider_key:
+            if (result.receipt.adapter_provider_key != self._execution.identity.provider_key
+                    or result.receipt.runtime.provider != self._execution.pre_runtime_provider):
                 raise ValueError("PRE provider differs")
             if result.receipt.outcome == "cancelled":
                 raise asyncio.CancelledError

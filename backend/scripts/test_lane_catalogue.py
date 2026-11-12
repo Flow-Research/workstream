@@ -549,6 +549,7 @@ CHECKER_DELIVERY_MODULES = (
     "tests/checkers/default/test_execution.py",
     "tests/checkers/external/test_contracts.py",
     "tests/checkers/external/test_runtime.py",
+    "tests/checkers/external/test_pre_invocation.py",
     "tests/checkers/external/test_migration.py",
     "tests/checkers/external/test_postgresql.py",
     "tests/checkers/external/test_public_api.py",

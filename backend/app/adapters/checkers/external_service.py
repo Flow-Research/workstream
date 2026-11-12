@@ -8,6 +8,7 @@ import hashlib
 from datetime import datetime, timezone
 from pathlib import Path
 import struct
+from typing import Literal
 
 from pydantic import ValidationError
 
@@ -77,6 +78,11 @@ class UnixSocketExternalCheckerAdapter:
     def identity(self) -> ExternalServiceAdapterIdentity:
         """Return the exact explicitly registered provider identity."""
         return self._identity
+
+    @property
+    def pre_runtime_provider(self) -> Literal["smolvm"]:
+        """The native socket factory accepts only Smol runtime evidence."""
+        return "smolvm"
 
     async def execute_pre(
         self, lease: SelectedPreSubmitLeaseFacts, grant: ExternalPreSubmitSourceGrant,

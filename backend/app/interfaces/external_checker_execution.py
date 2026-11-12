@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from collections.abc import AsyncGenerator
 import re
-from typing import Protocol
+from typing import Literal, Protocol
 
 from app.interfaces.external_services import ExternalServiceAdapter
 from app.modules.checkers.api.selected_pre_submit import (
@@ -165,6 +165,11 @@ class ExternalPreSubmitSourceGrant(Protocol):
 
 class ExternalCheckerExecutionAdapter(ExternalServiceAdapter, Protocol):
     """Execute one normalized request through the trusted checker service."""
+
+    @property
+    def pre_runtime_provider(self) -> Literal["smolvm", "managed"]:
+        """Factory-owned expected PRE evidence family; never taken from a response."""
+        ...
 
     async def execute_pre(
         self, lease: SelectedPreSubmitLeaseFacts, grant: ExternalPreSubmitSourceGrant,

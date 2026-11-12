@@ -2306,3 +2306,23 @@ actual bytes emitted by the production Rust serializer in a separate portable
 probe. Structural validation and Markdown links pass. Implementation review
 remains required; public submission/acceptance and native qualification remain
 outstanding parts of the overall objective.
+
+Architecture/security and QA review of `a3748997f` found a selected-adapter
+contract gap: a managed adapter could label self-consistent native receipt facts
+with its own matching factory key. The repair adds a read-only expected PRE
+runtime family to the capability and native adapter, and checks both factory key
+and runtime family before AUTH finalization. A managed-port substitution test
+now rejects native evidence. SQL retains its structural/source/fence/profile/
+digest boundary; it cannot independently select a factory because the immutable
+v2 request carries no trusted provider-selection fact. No test-only key mapping
+is added to product SQL.
+
+QA also found the new receipt module missing from explicit CI ownership. It now
+belongs to the existing checker-delivery family, with the independent project
+membership and ownership fingerprints updated. Actual collection selects all
+36 receipt nodes exactly once across the project lifecycle partitions. The
+36 receipt and 12 socket cases pass; all 59 catalogue tests pass after updating
+the separate exact membership expectation. All six affected PostgreSQL outcome
+cases and structural validation also pass after the family-binding repair.
+These repairs require affected review replay. Documentation review passed the original candidate's scoped
+claims; public acceptance and native qualification remain open.
