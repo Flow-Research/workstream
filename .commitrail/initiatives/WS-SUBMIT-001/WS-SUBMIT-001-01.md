@@ -1601,3 +1601,14 @@ ignoring import placement confirms identical executable statements for the five
 moved tests and the existing terminal-guard helper. Structural validation passed,
 as did its 29 regression tests, new-module undefined/unused-name checks, and
 record/link checks. The ownership partition is byte-for-byte unchanged.
+
+QA/test-delta and CI-integrity review of `38440d466` confirmed assertion fidelity
+but found the extracted module missing from the explicit shared-foundation CI
+catalogue. The existing inventory test reproduced that omission. The repair
+registers the module in that same family and updates its independent membership
+fingerprint from 272 to 273 modules. All 229 ownership/catalogue tests pass.
+Mapping the real 85-node collection through the production lane manifest builder
+selects every node once; the 29 moved cases distribute across the three shared
+foundation lanes as 3, 13 and 13. This proves selection, not another PostgreSQL
+execution. CI review also independently confirmed a corrupted assertion-map
+hash is rejected, with the original mapping as the passing control.
