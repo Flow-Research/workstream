@@ -811,8 +811,25 @@ async def test_foreground_lease_delayed_local_upload_and_longer_pre_lease(intake
 
     async def command(op, owner, generation):
         assert (op, owner, generation) == (operation, lease, 1)
-        return await foreground_upload(intake, store).receive(op, owner, generation,
-            delayed_bytes(), **foreground_limits())
+        limits = dict(foreground_limits(), pre_lease_seconds=2.0)
+        source = await foreground_upload(intake, store).receive(op, owner, generation,
+            delayed_bytes(), **limits)
+        async with intake.factory() as session:
+            sealed = await session.get(SubmissionIntakeOperation, str(op))
+            first_pre_expiry, pre_deadline = sealed.lease_expires_at, sealed.pre_deadline_at
+        # Keep the same foreground command alive in PRE beyond its first PRE lease.
+        while True:
+            async with intake.factory() as session:
+                now = await session.scalar(text("SELECT clock_timestamp()"))
+                observed = await session.get(SubmissionIntakeOperation, str(op))
+                assert observed.state == "pre_checking"
+                assert (observed.lease_id, observed.lease_generation) == (str(owner), generation)
+                assert observed.pre_deadline_at == pre_deadline
+            if now > first_pre_expiry:
+                assert now < observed.lease_expires_at <= pre_deadline
+                break
+            await asyncio.sleep(0.1)
+        return source
 
     source = await foreground_lease(intake).run(operation, lease, 1, command)
     async with intake.factory.begin() as session:
@@ -821,7 +838,7 @@ async def test_foreground_lease_delayed_local_upload_and_longer_pre_lease(intake
         assert row.state == "pre_checking" and row.lease_generation == 1 and row.lease_id == str(lease)
         assert row.lease_expires_at > initial_expiry
         assert row.provider_generation == source.provider_generation
-        await repository(session).heartbeat(operation, lease, 1, lease_duration=timedelta(seconds=2))
+        await repository(session).heartbeat(operation, lease, 1, lease_duration=timedelta(milliseconds=10))
     async with intake.factory() as session:
         row = await session.get(SubmissionIntakeOperation, str(operation))
         assert row.lease_expires_at == pre_expiry

@@ -387,3 +387,12 @@ work. Shared caller authorization, PRE and public handoff remain separate work.
 
 Human review focus: same-owner custody across upload/PRE, cancellation drainage,
 and expiry authority without authorization or acceptance claims.
+
+The private runner now implements the pinned-owner duration renewal and shared
+cancellation drainage. Ten real PostgreSQL/local cases passed at `fc52a1b42`,
+with isolated database/role cleanup, alongside 256 contract/partition and 109
+boundary checks. A completed-command-priority mutation failed its intended test.
+Review finding LEASE-QA-001 identified missing runner proof across the phase
+transition; the delayed-upload case now holds the same callback in PRE beyond
+its initial PRE lease and independently observes unchanged owner and renewed
+expiry. This is private custody proof, not executed PRE or public T1–T4 proof.
