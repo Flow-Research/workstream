@@ -466,29 +466,28 @@ root for the single-session PRE supervisor under development. This command and
 the guest bundle reader do not yet replace the current submission PRE flow or
 establish native runtime qualification.
 
-Live verification found that daemon-exported file contents can differ from the
-verified source archive despite matching image metadata. This development
-provisioner is not ready for execution use; its export step is being replaced
-with construction from the verified layers. The bundle-reader guarantees below
-authenticate bundle bytes, not the daemon's claimed provenance.
-
-The command first verifies the approved local image graph with the existing Smol
-cache provisioner. A trusted offline Docker daemon must already contain that
-exact config image ID. It checks the platform and ordered layer identities,
-creates a container with pulling disabled, verifies its exact image and created
-state, exports without starting it, and removes the owned container. Images with
-volumes are refused. The daemon is build infrastructure; it is not used for PRE
-execution, and no submission bytes enter this provisioning path.
+The command constructs its root directly from the approved local image graph
+validated by the existing Smol cache provisioner. Docker-exported files are not
+used: live verification demonstrated changed file bytes behind an unchanged
+Docker image ID. Ordered layers supply exact content, regular hardlink identities,
+whiteouts and replacements. A restricted platform profile rejects unsupported
+entries and ambiguous link ancestry instead of treating this as a generic image
+extractor. Files are held in a bounded private byte spool, never extracted to
+host paths, and rehashed while writing the final bundle.
 
 Run the module from `backend/` with `--archive`, `--repository`, `--manifest`,
 `--archive-output` and `--config-output` as for the cache command. Also supply
-new `--bundle-output` and `--descriptor-output` paths, `--docker`,
-`--default-behavior-sha256`, `--maximum-export-bytes`, `--maximum-root-bytes`,
-`--maximum-entries`, and `--timeout-seconds`. All bounds and identities are
-explicit; the command does not choose deployment values. Keep the emitted
-bundle and descriptor operator-controlled and pin their identities independently
-before use. Completed cache files may remain if later bundle provisioning fails;
-a partial bundle/descriptor never establishes readiness.
+new `--bundle-output` and `--descriptor-output` paths,
+`--default-behavior-sha256`, `--maximum-layer-bytes`, `--maximum-root-bytes`,
+`--maximum-entries`, and `--timeout-seconds`. Bounds and identities are explicit;
+the command does not choose deployment values. The layer byte limit bounds
+aggregate expansion per verification pass, including both selected and approved
+layer representations; it also bounds the private content spool. Entry limits
+include replaced layer entries and implicit final directories. Temporary storage
+must accommodate the verified cache, one bounded expanded layer, the content
+spool and output bundle. Keep emitted artifacts operator-controlled and pin their
+identities independently before use. Completed cache files may remain if later
+bundle provisioning fails; a partial bundle/descriptor never establishes readiness.
 
 The `WSROOT1` format carries bounded closed JSON records and inline regular-file
 bytes. Hard links become independently charged file content; symlinks are

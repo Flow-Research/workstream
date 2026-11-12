@@ -2554,6 +2554,10 @@
     },
     {
       "group": "artifacts",
+      "target": "backend/scripts/checker_root_layers.py"
+    },
+    {
+      "group": "artifacts",
       "target": "backend/scripts/checker_smol_cache.py"
     },
     {
@@ -2657,7 +2661,7 @@
       "target": "backend/scripts/validate_test_lane_evidence.py"
     }
   ],
-  "authority_digest": "5093f0ae793900f5aacc8dc30f7b7711e405fa8b36c6b8eba758ddecc8b7f147",
+  "authority_digest": "e33f74715c05aa7421172de067b9b199daf6655580361a6eb740d31e8b825aaf",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }

@@ -18,6 +18,7 @@ from pathlib import Path
 import re
 import stat
 import tarfile
+import time
 
 from scripts.checker_image_manifest import DIGEST, verify_platform_manifest
 from scripts.checker_image_process import ImageError
@@ -28,11 +29,22 @@ MAX_HEADERS = 4096
 BLOCK = 512
 
 
-def digest(stream) -> str:
-    value = hashlib.sha256()
+def _counted_digest(stream, maximum_bytes=None, deadline=None):
+    value, count = hashlib.sha256(), 0
     while chunk := stream.read(1024 * 1024):
+        count += len(chunk)
+        if maximum_bytes is not None and count > maximum_bytes:
+            raise ImageError("image verification byte limit exceeded")
+        if deadline is not None and time.monotonic() >= deadline:
+            raise ImageError("image verification deadline exceeded")
         value.update(chunk)
-    return "sha256:" + value.hexdigest()
+    if deadline is not None and time.monotonic() >= deadline:
+        raise ImageError("image verification deadline exceeded")
+    return "sha256:" + value.hexdigest(), count
+
+
+def digest(stream, *, maximum_bytes=None, deadline=None) -> str:
+    return _counted_digest(stream, maximum_bytes, deadline)[0]
 
 
 @dataclass(frozen=True)
@@ -150,7 +162,7 @@ def _json(raw: bytes):
     return json.loads(raw, object_pairs_hook=unique)
 
 
-def _graph(source, members, manifest_digest):
+def _graph(source, members, manifest_digest, *, maximum_layer_bytes=None, deadline=None):
     def regular(name):
         _path(name)
         return MemberReader(source, members[name])
@@ -186,6 +198,7 @@ def _graph(source, members, manifest_digest):
         raise ImageError("rootfs layer count differs")
     expected = {platform_path: manifest_digest, config_path: config_id}
     approved_layers = set()
+    remaining = maximum_layer_bytes
     for name, diff_id, descriptor in zip(layers, diff_ids, descriptors, strict=True):
         if not isinstance(diff_id, str) or DIGEST.fullmatch(diff_id) is None:
             raise ImageError("rootfs digest is invalid")
@@ -201,14 +214,17 @@ def _graph(source, members, manifest_digest):
         for selected, approved_digest in ((approved, descriptor["digest"]), (name, None)):
             if not isinstance(selected, str) or selected == "manifest.json":
                 raise ImageError("invalid selected layer")
-            raw_digest = digest(regular(selected))
+            raw_digest = digest(regular(selected), maximum_bytes=maximum_layer_bytes, deadline=deadline)
             if approved_digest is not None and raw_digest != approved_digest:
                 raise ImageError("approved layer blob digest differs")
             reader = regular(selected)
             magic = reader.read(2)
             reader = regular(selected)
             expanded = gzip.GzipFile(fileobj=reader) if magic == b"\x1f\x8b" else reader
-            if digest(expanded) != diff_id:
+            observed, count = _counted_digest(expanded, remaining, deadline)
+            if remaining is not None:
+                remaining -= count
+            if observed != diff_id:
                 raise ImageError("rootfs layer digest differs")
             if selected in expected and expected[selected] != raw_digest:
                 raise ImageError("image graph path conflicts")
@@ -247,7 +263,8 @@ def _copy_member(bundle, source, name, member, expected_digest):
 
 
 def provision(archive: Path, repository: str, manifest_digest: str, *,
-              archive_output: Path, config_output: Path) -> dict:
+              archive_output: Path, config_output: Path,
+              maximum_layer_bytes=None, deadline=None) -> dict:
     created = []
     try:
         if DIGEST.fullmatch(manifest_digest) is None:
@@ -263,7 +280,8 @@ def provision(archive: Path, repository: str, manifest_digest: str, *,
                 raise ImageError("source archive is not regular")
             identity = _identity(before)
             members = _preflight(source, before.st_size)
-            manifest, config_id, raw_config, wrapper, expected = _graph(source, members, manifest_digest)
+            manifest, config_id, raw_config, wrapper, expected = _graph(
+                source, members, manifest_digest, maximum_layer_bytes=maximum_layer_bytes, deadline=deadline)
             for name in expected:
                 _tar_info(name, members[name].size)
             _unchanged(source, archive, identity)

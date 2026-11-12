@@ -38,7 +38,6 @@ def run(
     data: bytes = b"",
     env: dict[str, str] | None = None,
     budget: ExecutionBudget | None = None,
-    stdout_sink=None,
 ) -> bytes:
     """Drain both pipes within one byte/time budget and kill owned processes on failure."""
     deadline = (
@@ -81,10 +80,7 @@ def run(
                         if consumed > limit:
                             raise ImageError(f"{step}: output limit exceeded")
                         if key.data:
-                            if stdout_sink is None:
-                                output.extend(chunk)
-                            elif stdout_sink.write(chunk) != len(chunk):
-                                raise ImageError(f"{step}: incomplete output write")
+                            output.extend(chunk)
                 code = process.wait(timeout=max(0.001, deadline - time.monotonic()))
                 if code:
                     raise ImageError(f"{step}: command exited {code}")

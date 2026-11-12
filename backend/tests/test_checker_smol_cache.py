@@ -271,16 +271,15 @@ def test_cli_requires_a_distinct_archive_output(tmp_path, monkeypatch, capsys):
     assert not (tmp_path / "config.json").exists()
 
 
-def root_export(entries):
-    """A flattened image export, independent of contributor ZIP handling."""
+def root_layer(entries):
+    """Construct a layer without extracting any image path on the host."""
     output = io.BytesIO()
     with tarfile.open(fileobj=output, mode="w") as archive:
         for name, kind, content in entries:
             item = tarfile.TarInfo(name)
             item.type = kind
             if kind == tarfile.REGTYPE:
-                item.size = len(content)
-                item.mode = 0o4755
+                item.size, item.mode = len(content), 0o4755
                 archive.addfile(item, io.BytesIO(content))
             else:
                 if kind in {tarfile.SYMTYPE, tarfile.LNKTYPE}:
@@ -290,32 +289,53 @@ def root_export(entries):
     return output
 
 
-def test_trusted_root_bundle_normalizes_links_and_keeps_bytes():
-    """Flattened hardlinks retain content; symlinks follow all file records."""
-    import struct
-    from scripts.checker_trusted_root import MAGIC, pack_root
+def layered_root(layers, *, maximum_entries=100):
+    import time
+    from scripts.checker_root_layers import apply_layer
 
-    source = root_export([
-        ("usr/bin/python", tarfile.REGTYPE, b"trusted interpreter"),
-        ("usr/bin/python3", tarfile.LNKTYPE, "usr/bin/python"),
-        ("bin", tarfile.SYMTYPE, "usr/bin"),
+    spool, tree, consumed = io.BytesIO(), {}, 0
+    for layer in layers:
+        consumed += apply_layer(root_layer(layer), spool, tree, maximum_entries=maximum_entries,
+                                remaining_entries=maximum_entries - consumed, deadline=time.monotonic() + 5)
+    return spool, tree
+
+
+def root_contents(spool, tree):
+    result = {}
+    for path, entry in tree.items():
+        if entry.kind == "file":
+            spool.seek(entry.offset)
+            result[path] = spool.read(entry.size)
+    return result
+
+
+def test_layered_root_replacements_preserve_existing_hardlink_content():
+    spool, tree = layered_root([
+        [("a", tarfile.REGTYPE, b"old"), ("alias", tarfile.LNKTYPE, "a")],
+        [("a", tarfile.REGTYPE, b"new")],
     ])
-    output = io.BytesIO()
-    facts = pack_root(source, output, identity={"test": "identity"},
-                      maximum_entries=10, maximum_bytes=100)
-    output.seek(0)
-    assert output.read(len(MAGIC)) == MAGIC
-    records, files = [], {}
-    while raw := output.read(4):
-        value = json.loads(output.read(struct.unpack(">I", raw)[0]))
-        records.append(value)
-        if value["kind"] == "file":
-            files[value["path"]] = output.read(value["byte_count"])
-    assert files == {"usr/bin/python": b"trusted interpreter", "usr/bin/python3": b"trusted interpreter"}
-    assert [item["kind"] for item in records] == ["identity", "directory", "directory", "file", "file", "symlink", "end"]
-    assert all(set(item) == {"kind", "path", "byte_count", "executable"}
-               for item in records if item["kind"] == "file")
-    assert facts == {"expanded_bytes": 38, "entries": 5}
+    assert root_contents(spool, tree) == {"a": b"new", "alias": b"old"}
+
+
+@pytest.mark.parametrize("marker_first", [False, True])
+def test_whiteouts_apply_only_to_lower_layers_regardless_of_tar_order(marker_first):
+    addition = [("d/new", tarfile.REGTYPE, b"new")]
+    markers = [("d/.wh..wh..opq", tarfile.REGTYPE, b""), (".wh.old", tarfile.REGTYPE, b"")]
+    spool, tree = layered_root([
+        [("d/old", tarfile.REGTYPE, b"old"), ("old", tarfile.REGTYPE, b"old"),
+         ("keep", tarfile.REGTYPE, b"keep")],
+        markers + addition if marker_first else addition + markers,
+    ])
+    assert root_contents(spool, tree) == {"d/new": b"new", "keep": b"keep"}
+    assert not any(".wh." in name for name in tree)
+
+
+def test_directory_replacement_removes_old_descendants_and_directory_merge_keeps_them():
+    spool, tree = layered_root([
+        [("d/old", tarfile.REGTYPE, b"old"), ("kept/file", tarfile.REGTYPE, b"keep")],
+        [("d", tarfile.REGTYPE, b"file"), ("kept", tarfile.DIRTYPE, "")],
+    ])
+    assert root_contents(spool, tree) == {"d": b"file", "kept/file": b"keep"}
 
 
 @pytest.mark.parametrize("entries", [
@@ -328,140 +348,140 @@ def test_trusted_root_bundle_normalizes_links_and_keeps_bytes():
     [("device", tarfile.CHRTYPE, "")],
     [("safe/escape", tarfile.SYMTYPE, "../../outside")],
     [("escape", tarfile.SYMTYPE, "/../outside")],
+    [(".wh.", tarfile.REGTYPE, b"")],
+    [(".wh...", tarfile.REGTYPE, b"")],
+    [(".wh.x", tarfile.REGTYPE, b"not empty")],
+    [(".wh.x", tarfile.SYMTYPE, "x")],
 ])
-def test_trusted_root_refuses_paths_special_files_and_link_ancestry(entries):
-    from scripts.checker_trusted_root import pack_root
-
+def test_trusted_layers_refuse_paths_links_whiteouts_and_special_entries(entries):
     with pytest.raises(ImageError):
-        pack_root(root_export(entries), io.BytesIO(), identity={}, maximum_entries=20, maximum_bytes=100)
+        layered_root([entries])
 
 
-def test_trusted_root_charges_hardlink_expansion_and_implicit_directories():
+def test_trusted_root_charges_implicit_directories_and_replaced_entries():
+    with pytest.raises(ImageError, match="implicit directory"):
+        layered_root([[("a/b/c", tarfile.REGTYPE, b"x")]], maximum_entries=2)
+    with pytest.raises(ImageError, match="aggregate entry"):
+        layered_root([[("a", tarfile.REGTYPE, b"old")], [("a", tarfile.REGTYPE, b"new")]], maximum_entries=1)
+
+
+def test_root_bundle_rehashes_spool_and_charges_hardlink_expansion():
+    import time
     from scripts.checker_trusted_root import pack_root
 
-    source = [("a/b/c", tarfile.REGTYPE, b"12345"), ("copy", tarfile.LNKTYPE, "a/b/c")]
-    with pytest.raises(ImageError, match="hardlink expansion"):
-        pack_root(root_export(source), io.BytesIO(), identity={}, maximum_entries=10, maximum_bytes=9)
-    with pytest.raises(ImageError, match="implicit directory"):
-        pack_root(root_export(source), io.BytesIO(), identity={}, maximum_entries=3, maximum_bytes=20)
-
-
-@pytest.mark.parametrize("defect", [None, "image", "container", "container_id", "started", "export"])
-def test_root_export_requires_exact_never_started_container_and_cleans_owned_id(monkeypatch, defect):
-    import time
-    from scripts import checker_trusted_root as root
-
-    config_id, container_id = "sha256:" + "1" * 64, "2" * 64
-    config = {"rootfs": {"diff_ids": ["sha256:" + "3" * 64]}}
-    calls, state = [], {}
-
-    def command(argv, **kwargs):
-        calls.append(argv)
-        if argv[1:3] == ["image", "inspect"]:
-            return json.dumps([{"Id": "other" if defect == "image" else config_id,
-                                "Os": "linux", "Architecture": "amd64",
-                                "RootFS": {"Layers": config["rootfs"]["diff_ids"]}, "Config": {}}]).encode()
-        if argv[1] == "create":
-            assert "--pull=never" in argv and argv[-1] == config_id
-            state["token"] = argv[argv.index("--label") + 1].split("=", 1)[1]
-            return container_id.encode()
-        if argv[1:3] == ["container", "inspect"]:
-            return json.dumps([{"Id": "f" * 64 if defect == "container_id" else container_id,
-                                "Image": "other" if defect == "container" else config_id,
-                                "Config": {"Labels": {"workstream.root-provision": state["token"]}},
-                                "State": {"Status": "running" if defect == "started" else "created", "Running": defect == "started"}}]).encode()
-        if argv[1] == "export":
-            assert 0 < kwargs["timeout"] <= 10
-            if defect == "export":
-                raise ImageError("export failed")
-            kwargs["stdout_sink"].write(b"root bytes")
-        elif argv[1] == "rm":
-            assert argv == ["docker", "rm", container_id]
-        else:
-            pytest.fail(f"unexpected Docker command {argv}")
-        return b""
-
-    monkeypatch.setattr(root, "run", command)
-    output = io.BytesIO()
-    if defect:
-        with pytest.raises(ImageError):
-            root.export_root("docker", config_id, config, output, maximum_bytes=1000, deadline=time.monotonic() + 10)
-    else:
-        root.export_root("docker", config_id, config, output, maximum_bytes=1000, deadline=time.monotonic() + 10)
-        assert output.getvalue() == b"root bytes"
-    assert not any("start" in item or "pull" in item for item in calls)
-    assert any(item[1] == "rm" for item in calls) == (defect in {None, "export"})
-    assert any(item[1] == "export" for item in calls) == (defect in {None, "export"})
+    spool, tree = layered_root([[("a", tarfile.REGTYPE, b"good"), ("b", tarfile.LNKTYPE, "a")]])
+    kwargs = dict(tree=tree, identity={}, deadline=time.monotonic() + 5)
+    with pytest.raises(ImageError, match="expanded byte"):
+        pack_root(spool, io.BytesIO(), maximum_bytes=7, **kwargs)
+    spool.seek(0)
+    spool.write(b"evil")
+    with pytest.raises(ImageError, match="retained file identity"):
+        pack_root(spool, io.BytesIO(), maximum_bytes=8, **kwargs)
 
 
 @pytest.mark.parametrize("failure", [False, True])
-def test_trusted_root_publication_binds_verified_graph_and_removes_partial_bundle(tmp_path, monkeypatch, failure):
-    from scripts import checker_trusted_root as root
+def test_root_publication_uses_only_approved_layers_and_removes_partial_bundle(tmp_path, monkeypatch, failure):
+    import subprocess
+    from scripts.checker_trusted_root import provision_root
 
     archive, manifest, config_id = bundle(tmp_path, volumes=False)
-    def export(docker, selected_id, config, sink, **kwargs):
-        assert selected_id == config_id
-        assert config["rootfs"]["diff_ids"]
-        sink.write(root_export([("python", tarfile.REGTYPE, b"trusted")]).read())
-    monkeypatch.setattr(root, "export_root", export)
+    def no_process(*args, **kwargs):
+        pytest.fail("verified-layer provisioning invoked a filesystem materializer")
+    monkeypatch.setattr(subprocess, "Popen", no_process)
     kwargs = dict(archive_output=tmp_path / "cache.tar", config_output=tmp_path / "config.json",
                   bundle_output=tmp_path / "root.bundle", descriptor_output=tmp_path / "root.json",
-                  docker="docker", default_behavior_sha256=sha(b"behavior"),
-                  maximum_export_bytes=100000, maximum_root_bytes=1 if failure else 100,
-                  maximum_entries=10, timeout_seconds=5)
+                  default_behavior_sha256=sha(b"behavior"), maximum_layer_bytes=100000,
+                  maximum_root_bytes=1 if failure else 100, maximum_entries=10, timeout_seconds=5)
     if failure:
         with pytest.raises(ImageError, match="expanded byte limit"):
-            root.provision_root(archive, "trusted/intake", manifest, **kwargs)
+            provision_root(archive, "trusted/intake", manifest, **kwargs)
         assert not kwargs["bundle_output"].exists()
         assert not kwargs["descriptor_output"].exists()
     else:
-        receipt = root.provision_root(archive, "trusted/intake", manifest, **kwargs)
+        receipt = provision_root(archive, "trusted/intake", manifest, **kwargs)
         assert receipt["config_image_id"] == config_id
         assert receipt["platform_manifest_digest"] == manifest
         assert receipt["bundle_sha256"] == sha(kwargs["bundle_output"].read_bytes())
-        assert receipt["bundle_byte_count"] == kwargs["bundle_output"].stat().st_size
+        assert b"verified filesystem layer" in kwargs["bundle_output"].read_bytes()
         assert json.loads(kwargs["descriptor_output"].read_bytes()) == receipt
         assert kwargs["bundle_output"].stat().st_mode & 0o777 == 0o400
 
 
-def test_uncertain_root_container_creation_discovers_exact_owned_id_for_cleanup(monkeypatch):
+def test_layer_deadline_applies_before_parsing():
     import time
-    from scripts import checker_trusted_root as root
-
-    image_id, container_id = sha(b"image"), "a" * 64
-    diff_ids = [sha(b"layer")]
-    state, calls = {}, []
-    def command(argv, **kwargs):
-        calls.append(argv)
-        if argv[1:3] == ["image", "inspect"]:
-            return json.dumps([{"Id": image_id, "Os": "linux", "Architecture": "amd64",
-                                "RootFS": {"Layers": diff_ids}, "Config": {}}]).encode()
-        if argv[1] == "create":
-            state["token"] = argv[argv.index("--label") + 1].split("=", 1)[1]
-            state["name"] = argv[argv.index("--name") + 1]
-            raise ImageError("create acknowledgement lost")
-        if argv[1] == "ps":
-            assert "name=^/" + state["name"] + "$" in argv
-            assert "label=workstream.root-provision=" + state["token"] in argv
-            return container_id.encode()
-        if argv[1:3] == ["container", "inspect"]:
-            assert argv[-1] == container_id
-            return json.dumps([{"Id": container_id, "Image": image_id, "State": {"Status": "created", "Running": False},
-                                "Config": {"Labels": {"workstream.root-provision": state["token"]}}}]).encode()
-        assert argv == ["docker", "rm", container_id]
-        return b""
-    monkeypatch.setattr(root, "run", command)
-    with pytest.raises(ImageError, match="acknowledgement lost"):
-        root.export_root("docker", image_id, {"rootfs": {"diff_ids": diff_ids}}, io.BytesIO(),
-                         maximum_bytes=100, deadline=time.monotonic() + 10)
-    assert calls[-1] == ["docker", "rm", container_id]
-    assert not any(item[1] == "export" for item in calls)
-
-
-def test_root_pack_cannot_publish_after_deadline():
-    import time
-    from scripts.checker_trusted_root import pack_root
+    from scripts.checker_root_layers import apply_layer
 
     with pytest.raises(ImageError, match="deadline"):
-        pack_root(root_export([("python", tarfile.REGTYPE, b"trusted")]), io.BytesIO(),
-                  identity={}, maximum_entries=10, maximum_bytes=100, deadline=time.monotonic() - 1)
+        apply_layer(root_layer([("python", tarfile.REGTYPE, b"trusted")]), io.BytesIO(), {},
+                    maximum_entries=10, remaining_entries=10, deadline=time.monotonic() - 1)
+
+
+@pytest.mark.parametrize("compressed", [False, True])
+def test_verified_root_is_deterministic_and_layer_expansion_is_bounded(tmp_path, compressed):
+    from scripts.checker_trusted_root import provision_root
+
+    archive, manifest, _ = bundle(tmp_path, compressed=compressed, volumes=False)
+    def build(prefix, maximum=100000):
+        return provision_root(archive, "trusted/intake", manifest,
+                              archive_output=tmp_path / (prefix + ".tar"), config_output=tmp_path / (prefix + ".config"),
+                              bundle_output=tmp_path / (prefix + ".bundle"), descriptor_output=tmp_path / (prefix + ".json"),
+                              default_behavior_sha256=sha(b"behavior"), maximum_layer_bytes=maximum,
+                              maximum_root_bytes=100, maximum_entries=10, timeout_seconds=5)
+    first, second = build("one"), build("two")
+    assert first == second
+    assert (tmp_path / "one.bundle").read_bytes() == (tmp_path / "two.bundle").read_bytes()
+    with pytest.raises(ImageError, match="verification byte limit"):
+        build("limited", maximum=1024)
+    assert not (tmp_path / "limited.bundle").exists()
+    assert not (tmp_path / "limited.tar").exists()
+
+
+def test_trusted_layer_rejects_content_hidden_after_tar_end_and_missing_trailer():
+    import time
+    from scripts.checker_root_layers import apply_layer
+
+    raw = root_layer([("a", tarfile.REGTYPE, b"data")]).getvalue()
+    for changed in [raw + b"hidden", raw[:1024]]:
+        with pytest.raises(ImageError, match="trai|unexpected end"):
+            apply_layer(io.BytesIO(changed), io.BytesIO(), {}, maximum_entries=10,
+                        remaining_entries=10, deadline=time.monotonic() + 5)
+
+
+@pytest.mark.parametrize("mutation", ["layer_spool", "serialized_file"])
+def test_changed_materialization_cannot_be_published_under_the_same_image_identity(tmp_path, monkeypatch, mutation):
+    """The real daemon mismatch must not recur at an intermediate local boundary."""
+    from scripts import checker_root_layers as layers
+    from scripts import checker_trusted_root as root
+
+    archive, manifest, _ = bundle(tmp_path, volumes=False)
+    if mutation == "layer_spool":
+        original = layers.apply_layer
+        def changed(layer, *args, **kwargs):
+            result = original(layer, *args, **kwargs)
+            layer.seek(512)
+            layer.write(b"X")
+            return result
+        monkeypatch.setattr(layers, "apply_layer", changed)
+        reason = "layer spool identity"
+    else:
+        original = root.pack_root
+        def changed(spool, writer, **kwargs):
+            result = original(spool, writer, **kwargs)
+            writer.output.flush()
+            writer.output.seek(0)
+            data = writer.output.read()
+            offset = data.index(b"verified filesystem layer")
+            writer.output.seek(offset)
+            writer.output.write(b"X")
+            writer.output.seek(len(data))
+            return result
+        monkeypatch.setattr(root, "pack_root", changed)
+        reason = "serialized output identity"
+    with pytest.raises(ImageError, match=reason):
+        root.provision_root(archive, "trusted/intake", manifest,
+                            archive_output=tmp_path / "cache.tar", config_output=tmp_path / "config.json",
+                            bundle_output=tmp_path / "root.bundle", descriptor_output=tmp_path / "root.json",
+                            default_behavior_sha256=sha(b"behavior"), maximum_layer_bytes=100000,
+                            maximum_root_bytes=100, maximum_entries=10, timeout_seconds=5)
+    assert not (tmp_path / "root.bundle").exists()
+    assert not (tmp_path / "root.json").exists()

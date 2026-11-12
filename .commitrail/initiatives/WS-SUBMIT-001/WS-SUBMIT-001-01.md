@@ -862,3 +862,33 @@ Read-only inventory of the actual ten-layer intake image found only directories,
 regular files, symlinks and hardlinks, with no duplicate layer paths, whiteouts,
 or writes through nondirectory ancestors. That makes the restricted profile
 concrete; synthetic whiteout/replacement regressions are still required.
+
+Direct verified-layer construction now replaces Docker export completely.
+`checker_root_layers.py` reuses the canonical graph/member index, verifies each
+consumed layer and its temporary spool, and constructs only an in-memory path
+inventory plus bounded content bytes. Lower-layer whiteouts precede same-layer
+additions; directory merges, replacements and immutable regular hardlink content
+are explicit. Unsupported links, special/sparse files, duplicate paths and
+invalid/nonempty whiteouts fail closed. Complete tar trailers are required.
+The graph helper now accepts explicit byte/deadline bounds for this caller, so
+its preliminary decompression cannot bypass the provisioning limit.
+
+The producer rehashes retained file bytes, checks the serialized bundle against
+an independently accumulated write digest, and revalidates its retained cache
+through completion before publishing the descriptor. The Docker flag/export
+budget was replaced by the explicit layer byte bound. The now-unused subprocess
+sink extension and its tests were removed; original image-publisher process
+behavior remains. Docker ownership tests were replaced by layer semantics,
+determinism and a real prohibition on subprocess materialization, while unsafe
+path/link and publication cleanup proof remain.
+
+Focused verification passed 254 tests (84 image/cache/root tests and 170 ownership
+tests), plus Ruff, Commitrail and Markdown links. Two independent constructions
+of the actual pinned ten-layer intake image produced the same bundle digest,
+`sha256:273ca6b9ffa7abed0dd5252d86e35fe0a218d09624cb9921cdbec734ebe049cb`:
+460,208,569 serialized bytes, 457,060,471 expanded bytes and 24,543 entries.
+The unchanged Rust reader staged the complete root; its urllib3 file matches
+the canonical archive's correct hash rather than the daemon's altered bytes.
+This validates the corrected content source, not native PRE isolation. The
+existing single-request integration, combined supervisor and native runtime
+qualification remain outstanding.

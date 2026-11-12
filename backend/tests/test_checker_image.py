@@ -494,25 +494,3 @@ def test_build_and_samples_do_not_inherit_docker_proxy_configuration(monkeypatch
         assert argv[argv.index("--config") + 1] == str(config)
         assert marker not in str(options["env"])
         assert "DOCKER_CONFIG" not in options["env"]
-
-
-def test_binary_sink_streams_output_and_still_charges_stderr():
-    """Root exports use bounded storage without accumulating their bytes in RAM."""
-    import io
-
-    sink = io.BytesIO()
-    command = [sys.executable, "-c", "import os; os.write(1,b'root'); os.write(2,b'noise')"]
-    assert run(command, step="export", stdout_sink=sink, limit=9) == b""
-    assert sink.getvalue() == b"root"
-    with pytest.raises(ImageError, match="output limit"):
-        run(command, step="export", stdout_sink=io.BytesIO(), limit=8)
-
-
-def test_binary_sink_short_write_refuses_success():
-    """A failed sink cannot publish a seemingly complete root export."""
-    class ShortSink:
-        def write(self, data):
-            return len(data) - 1
-
-    with pytest.raises(ImageError, match="incomplete output"):
-        run([sys.executable, "-c", "print('root')"], step="export", stdout_sink=ShortSink())
