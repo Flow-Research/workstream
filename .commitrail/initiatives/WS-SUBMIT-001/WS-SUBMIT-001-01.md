@@ -800,3 +800,55 @@ that whole bundle successfully. The temporary container was removed. These are
 local image/bundle composition facts, not a PRE invocation or native isolation
 qualification. Exact repaired producer replay and staged-interpreter execution
 remain separate final proof checks.
+
+### Live image-content mismatch and corrected provisioning boundary
+
+The repaired candidate's Rust 1.84.0 serial gate passed 216 tests. Its real
+producer completed and cleaned its container, but comparison with the earlier
+bundle disproved the assumption that daemon image metadata proves exported
+filesystem contents. Both bundles have the same pinned config, platform,
+default identity, byte/entry counts and valid self-digests. They differ only in
+`urllib3/connectionpool.py` and its uv-cache hardlink: four bytes at offset 45088
+changed from `try:` to `00 90 01 00`. The later file is not valid UTF-8.
+
+Independent reads from the verified canonical image archive retain the correct
+file digest `6a147869216b94449a053e869d4311cba23294551c83ee20fe5d2f1eaff50a3e`.
+Two fresh never-started containers copied directly through Docker reproduce
+the different digest `9b1a4e8c373fa4abc73c1b9e68cd39c7a6f8cb2ef2a558b4e7363d8f2f0e466e`
+while reporting the same image config ID. Reviewer mutations were in-memory
+only. This establishes a mismatch in the daemon's materialized image contents;
+it does not establish its cause. The producer must not be published as qualified
+or used for execution on this evidence. Runtime staging correctly authenticates
+the bundle it is given, but cannot repair incorrect provenance upstream.
+
+Replace the daemon-export dependency with direct construction from the existing
+verified canonical image archive. Preserve the bundle format and guest reader.
+Build a bounded in-memory final-path inventory from the exact ordered layers,
+with bounded private file-content spooling instead of host path extraction.
+Use the OCI 1.1.1 layer changeset rules: process whiteouts against lower-layer
+entries before same-layer additions, distinguish opaque directory removal,
+merge directories, and replace other paths. Resolve regular hardlinks against
+known file identities; reject unsupported entry types, ambiguous link ancestry,
+duplicates, cycles and root escapes rather than assuming generic image support.
+Preserve executable intent and the existing read-only normalization deliberately.
+Bind every output file's size/hash to its source layer and the closed approved
+graph; verify retained input identity through completion. The trusted platform
+profile must accept the actual pinned intake image before this change qualifies.
+
+Allowed correction scope: the existing cache graph helper, trusted-root producer
+and one cohesive layer-inventory helper if needed, its existing tests and exact
+ownership registration, runtime documentation and this record. Remove the
+superseded Docker create/export path, flags, sink-only helper changes and tests
+once no required consumer remains. No second provisioner, fallback to daemon
+contents, changed guest format, source-image repair/deletion, runtime cutover or
+qualification shortcut. This remains L0 with architecture/security plan and
+implementation review plus QA/test-delta and docs review.
+
+Acceptance: faithful layered replacement/whiteout/hardlink behavior, bounded
+aggregate data/entries/deadline, no host extraction, wrong layer/config refusal,
+deterministic complete root construction, and publication cleanup. The live
+counterexample must yield the canonical archive's correct file bytes without
+consulting the divergent daemon filesystem; two builds from identical approved
+bytes must agree. Then repeat guest staging and trusted-interpreter checks and
+retain the unchanged four-default behavior identity. This correction is a
+prerequisite for the same one-session supervisor, not a separate completion goal.

@@ -466,6 +466,12 @@ root for the single-session PRE supervisor under development. This command and
 the guest bundle reader do not yet replace the current submission PRE flow or
 establish native runtime qualification.
 
+Live verification found that daemon-exported file contents can differ from the
+verified source archive despite matching image metadata. This development
+provisioner is not ready for execution use; its export step is being replaced
+with construction from the verified layers. The bundle-reader guarantees below
+authenticate bundle bytes, not the daemon's claimed provenance.
+
 The command first verifies the approved local image graph with the existing Smol
 cache provisioner. A trusted offline Docker daemon must already contain that
 exact config image ID. It checks the platform and ordered layer identities,
