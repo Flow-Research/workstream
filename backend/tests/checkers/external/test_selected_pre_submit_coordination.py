@@ -162,6 +162,8 @@ async def test_selected_pre_expired_lease_read_keeps_task_first_custody() -> Non
 @pytest.mark.asyncio
 async def test_selected_pre_task_guard_rechecks_exact_locked_lineage(monkeypatch) -> None:
     lineage = SelectedPreSubmitAdmissionLineage(
+        task_size="small", contribution_policy_version_id=new_record_id(),
+        contribution_award_definition_id=None,
         predecessor_submission_id=new_record_id(),
         predecessor_submission_version=2,
         checker_remediation_manifest_id=new_record_id(),
@@ -202,6 +204,9 @@ async def test_selected_pre_task_guard_rechecks_exact_locked_lineage(monkeypatch
         pre_submit_policy_bundle_hash=lineage.pre_submit_policy_sha256,
     )
     context = SimpleNamespace(
+        task_size=lineage.task_size,
+        submitter_contribution_policy_version_id=lineage.contribution_policy_version_id,
+        contribution_award_definition_id=lineage.contribution_award_definition_id,
         task_id=reservation.task_id,
         assignment_id=reservation.assignment_id,
         contributor_id=reservation.actor_profile_id,
@@ -220,6 +225,17 @@ async def test_selected_pre_task_guard_rechecks_exact_locked_lineage(monkeypatch
     monkeypatch.setattr(TaskSubmissionContextService, "lock_submission_context", lock)
     guard = selected_pre_submit_task_guard(SimpleNamespace())
     await guard.lock_selected_pre_submit_scope(reservation)
+
+    for field, replacement in (
+        ("task_size", "medium"),
+        ("submitter_contribution_policy_version_id", new_record_id()),
+        ("contribution_award_definition_id", new_record_id()),
+    ):
+        original = getattr(context, field)
+        setattr(context, field, replacement)
+        with pytest.raises(RuntimeError, match="selected PRE TASK custody changed"):
+            await guard.lock_selected_pre_submit_scope(reservation)
+        setattr(context, field, original)
 
     context.checker_remediation_manifest_id = new_record_id()
     with pytest.raises(RuntimeError, match="selected PRE TASK custody changed"):
@@ -370,6 +386,8 @@ def test_selected_pre_request_binds_complete_later_admission_lineage() -> None:
     manifest = {"schema_version": "submission_manifest.v1", "entries": []}
     digest = canonical_json_hash(manifest)
     lineage = SelectedPreSubmitAdmissionLineage(
+        task_size="small", contribution_policy_version_id=new_record_id(),
+        contribution_award_definition_id=None,
         predecessor_submission_id=None,
         predecessor_submission_version=None,
         checker_remediation_manifest_id=None,

@@ -25,7 +25,7 @@ async def test_projection_reads_actual_immutable_source_and_complete_awards(
             before = {table: await rows(session, table) for table in
                       ("contribution_records", "compensation_awards", "final_acceptances")}
             page = await ContributionReadRepository(
-                session, cursor_codec=ContributionExportCursorCodec(b"r" * 32),
+                session, tasks=contribution_task_evidence_port(session), cursor_codec=ContributionExportCursorCodec(b"r" * 32),
             ).read(ContributionReadRequest(
                 audience="self", actor_profile_id=h.actor_context.actor_profile_id,
             ))
@@ -45,7 +45,7 @@ async def test_projection_reads_actual_immutable_source_and_complete_awards(
             assert acceptance.accepted_at == h.acceptance.accepted_at
             assert acceptance.source_routing_manifest_id == h.acceptance.source_routing_manifest_id
             task, = await contribution_task_evidence_port(session).read_contribution_tasks(
-                ((record.project_id, record.task_id),),
+                ((record.project_id, record.task_id, record.submission_id),),
             )
             assert task.task_id == record.task_id
             assert {table: await rows(session, table) for table in before} == before

@@ -18,6 +18,7 @@ type CompensationAward struct {
 }
 
 type CompensationTerms struct {
+	TaskSize                    string          `json:"task_size"`
 	ContributionPolicyVersionID string          `json:"contribution_policy_version_id"`
 	AcceptedSubmission          json.RawMessage `json:"accepted_submission"`
 	CompletedReview             json.RawMessage `json:"completed_review"`
@@ -83,7 +84,7 @@ func ValidCompensation(value CompensationTerms) bool {
 	_, validID := uuidIdentity(value.ContributionPolicyVersionID)
 	_, validAccepted := compensationAwards(value.AcceptedSubmission)
 	_, validReviewed := compensationAwards(value.CompletedReview)
-	return validID && validAccepted && validReviewed
+	return validID && oneOf(value.TaskSize, "small", "medium", "large") && validAccepted && validReviewed
 }
 
 func CompensationAwards(raw json.RawMessage) ([]CompensationAward, bool) {

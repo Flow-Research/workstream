@@ -4,12 +4,13 @@ from datetime import datetime, timedelta
 import math
 from uuid import UUID
 
-from sqlalchemy import and_, delete, func, select
+from sqlalchemy import and_, or_, delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.identifiers import new_record_id
 from app.db.errors import integrity_constraint_name
+from app.modules.contributions.api.source_reads import ContributionTaskSourceReadPort, ContributionTaskSourceFacts
 from app.modules.contributions.api.records import (
     MAX_EXPORT_MEMBERS, ContributionExportAtCapacity, ContributionExportTooLarge,
     ContributionExportUnavailable, ContributionReadRequest, InvalidContributionCursor,
@@ -42,10 +43,11 @@ def _slot_conflict(error: IntegrityError) -> bool:
 class ContributionReadRepository:
     """Read immutable evidence in the caller's authorized repeatable-read transaction."""
 
-    def __init__(self, session: AsyncSession, *, cursor_codec: ContributionExportCursorCodec) -> None:
+    def __init__(self, session: AsyncSession, *, cursor_codec: ContributionExportCursorCodec, tasks: ContributionTaskSourceReadPort) -> None:
         """Use the response transaction for membership, snapshot and evidence reads."""
         self._session = session
         self._cursor_codec = cursor_codec
+        self._tasks = tasks
 
     async def read(self, request: ContributionReadRequest) -> ContributionReadPage:
         """Prune bounded expired state and return one exact initial/retained page."""
@@ -206,21 +208,39 @@ class ContributionReadRepository:
             raise ContributionExportUnavailable("Contribution evidence unavailable")
         if any(version is None or rule is None or mode is None for _, version, rule, mode in rows):
             raise ContributionExportUnavailable("Contribution evidence unavailable")
-        rule_ids = {rule for _, _, rule, _ in rows}
-        definitions = (await self._session.scalars(select(ContributionAwardDefinition).where(
-            ContributionAwardDefinition.contribution_rule_id.in_(rule_ids),
-        ).order_by(ContributionAwardDefinition.instrument_type))).all()
-        by_rule = {rule_id: [] for rule_id in rule_ids}
-        for definition in definitions:
-            by_rule[definition.contribution_rule_id].append(FrozenContributionAward(
-                id=definition.id, instrument=definition.instrument_type,
-                unit=definition.unit_code, quantity=definition.quantity,
+        selectors = {(UUID(row.project_id),UUID(row.task_id),UUID(row.submission_id)) for row,_,_,_ in rows}
+        sources = {}
+        for item in await self._tasks.read_contribution_tasks(tuple(selectors)):
+            item = ContributionTaskSourceFacts.model_validate(item)
+            key = (item.project_id,item.task_id,item.submission_id)
+            if key not in selectors or key in sources:
+                raise ContributionExportUnavailable("Contribution evidence unavailable")
+            sources[key] = item
+        if set(sources) != selectors:
+            raise ContributionExportUnavailable("Contribution evidence unavailable")
+        reviewer_rules = {rule for row,_,rule,_ in rows if row.contribution_type == "completed_review"}
+        selected_ids = {source.contribution_award_definition_id for source in sources.values()
+                        if source.contribution_award_definition_id is not None}
+        definitions = (await self._session.scalars(select(ContributionAwardDefinition).where(or_(
+            ContributionAwardDefinition.id.in_(selected_ids),
+            ContributionAwardDefinition.contribution_rule_id.in_(reviewer_rules),
+        )))).all()
+        result = []
+        for row, version, rule, mode in rows:
+            source = sources[(UUID(row.project_id),UUID(row.task_id),UUID(row.submission_id))]
+            submitter = row.contribution_type == "accepted_submission"
+            if submitter and source.contribution_policy_version_id != row.contribution_policy_version_id:
+                raise ContributionExportUnavailable("Contribution evidence unavailable")
+            exact = tuple(FrozenContributionAward(
+                id=d.id, instrument=d.instrument_type, unit=d.unit_code, quantity=d.quantity,
+            ) for d in definitions if d.contribution_rule_id == rule and (
+                not submitter or (d.id == source.contribution_award_definition_id and d.task_size == source.task_size)
             ))
-        return tuple(self._facts(row, version, mode, tuple(by_rule[rule]))
-                     for row, version, rule, mode in rows)
+            result.append(self._facts(row, version, mode, exact, source.task_size if submitter else None))
+        return tuple(result)
 
     @staticmethod
-    def _facts(row, version, mode, definitions) -> ContributionReadFacts:
+    def _facts(row, version, mode, definitions, task_size) -> ContributionReadFacts:
         """Validate the exact stored source shape without deriving recognition."""
         return ContributionReadFacts(
             id=row.id, project_id=UUID(row.project_id), task_id=UUID(row.task_id),
@@ -233,5 +253,5 @@ class ContributionReadRepository:
             artifact_hash=row.artifact_hash,
             contribution_policy_version_id=row.contribution_policy_version_id,
             recorded_at=row.created_at, policy_version_number=version,
-            compensation_mode=mode, award_definitions=definitions,
+            compensation_mode=mode, award_definitions=definitions, task_size=task_size,
         )

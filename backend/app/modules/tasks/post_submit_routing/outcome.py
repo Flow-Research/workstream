@@ -36,6 +36,7 @@ class TaskPostSubmitOutcome:
         session,
         *,
         projects,
+        rewards,
         evaluations,
         authorization,
         acceptance,
@@ -48,7 +49,7 @@ class TaskPostSubmitOutcome:
         """Inject existing owner ports into one caller-owned transaction."""
         self._session, self._projects = session, projects
         self._source = TaskRoutingSourcePreparer(
-            session, projects=projects, evaluations=evaluations
+            session, projects=projects, rewards=rewards, evaluations=evaluations
         )
         self._authorization, self._acceptance = authorization, acceptance
         self._observer, self._invocation_fence = observer, invocation_fence
@@ -96,7 +97,7 @@ class TaskPostSubmitOutcome:
                             "submission_id",
                             "submission_version",
                             "contributor_id",
-                            "contribution_policy_version_id",
+                            "contribution_policy_version_id", "task_size", "contribution_award_definition_id",
                             "content_id",
                             "content_sha256",
                         }
@@ -281,7 +282,7 @@ class TaskPostSubmitOutcome:
                         include={
                             "project_id", "task_id", "assignment_id", "submission_id",
                             "submission_version", "contributor_id",
-                            "contribution_policy_version_id", "content_id", "content_sha256",
+                            "contribution_policy_version_id", "task_size", "contribution_award_definition_id", "content_id", "content_sha256",
                         }
                     ),
                     final_acceptance_id=acceptance_id,

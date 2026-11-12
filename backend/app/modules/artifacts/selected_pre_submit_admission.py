@@ -139,6 +139,10 @@ def build_selected_pre_submit_reservation(
         }
     )
     lineage = SelectedPreSubmitAdmissionLineage(
+        task_size=task.task_size,
+        contribution_policy_version_id=UUID(str(task.submitter_contribution_policy_version_id)),
+        contribution_award_definition_id=(UUID(str(task.contribution_award_definition_id))
+                                          if task.contribution_award_definition_id is not None else None),
         predecessor_submission_id=(
             predecessor.submission_id if predecessor is not None else None
         ),

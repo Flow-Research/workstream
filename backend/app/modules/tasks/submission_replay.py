@@ -105,6 +105,8 @@ async def read_creation_replay(
             contributor_id=request.contributor_id, status=receipt.creation_status,
             kind=receipt.creation_kind, predecessor=predecessor,
             submitter_contribution_policy_version_id=submission.contribution_policy_version_id,
+            task_size=submission.task_size,
+            contribution_award_definition_id=submission.contribution_award_definition_id,
             locked_project_context=refs, locked_policy=policy,
             acceptance_criteria=task.acceptance_criteria,
             checker_remediation_manifest_id=receipt.checker_remediation_manifest_id,

@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pytest
+from app.adapters.tasks import contribution_task_evidence_port
 from sqlalchemy import event, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session
@@ -45,7 +46,7 @@ async def test_real_postgres_retains_and_slices_1001_members_across_sessions(
 
         async with h.factory() as session, session.begin():
             snapshot = await ContributionReadRepository(
-                session, cursor_codec=codec,
+                session, tasks=contribution_task_evidence_port(session), cursor_codec=codec,
             )._allocate_snapshot(reader.id, digest, members)
             snapshot_id, expires_at = snapshot.id, snapshot.expires_at
 
@@ -66,7 +67,7 @@ async def test_real_postgres_retains_and_slices_1001_members_across_sessions(
         monkeypatch.setattr(ContributionReadRepository, "_load_records", return_selected_ids)
         async with h.factory() as session, session.begin():
             continuation = await ContributionReadRepository(
-                session, cursor_codec=codec,
+                session, tasks=contribution_task_evidence_port(session), cursor_codec=codec,
             ).read(request.model_copy(update={"cursor": cursor}))
 
         traversed = tuple(stored[:1000]) + continuation.records

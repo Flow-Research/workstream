@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from uuid import UUID
 
 import pytest
+from app.modules.contributions.api import RewardSelectionFacts
 from sqlalchemy import select, text
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -41,7 +42,13 @@ def _paused_row():
         guide_id=new_record_id(), activation_operation_id=new_record_id(),
         activation_generation=1, activated_at=start, lineage=lineage,
     )
+    reward = RewardSelectionFacts(
+        policy_version_id=prior.lineage.locked_contribution_policy_version_id,
+        task_size="small", compensation_mode="unpaid", award_definition_id=None,
+        instrument_type=None, unit_code=None, quantity=None, adapter_binding_id=None,
+    )
     candidate = RevisionCandidate(
+        prior_reward_selection=reward, target_reward_selection=None,
         prior=prior, target=None, max_revision_rounds=2, revision_deadline_hours=24,
     )
     return SimpleNamespace(
@@ -63,6 +70,11 @@ def test_paused_projection_never_spends_allowance_as_wall_time_passes():
     assert later.remaining_microseconds == 86_400_000_000
     assert later.disposition == "context_blocked"
     wire = later.model_dump(mode="json", exclude_none=True)
+    assert wire["target"] is None and wire["target_reward_selection"] is None
+    assert wire["prior_reward_selection"] == {
+        "compensation_mode": "unpaid", "task_size": "small",
+        "instrument": None, "unit": None, "quantity": None,
+    }
     assert wire["deadline_at"] is None
     assert wire["remaining_microseconds"] == row.remaining_microseconds
 
@@ -78,7 +90,7 @@ def test_retained_lower_target_limit_is_setup_blocked_and_respects_running_deadl
         }),
     })
     row.packet["candidate"] = candidate.model_copy(update={
-        "target": target, "target_max_revision_rounds": 1, "target_post_policy_json": "{}",
+        "target": target, "target_reward_selection": candidate.prior_reward_selection, "target_max_revision_rounds": 1, "target_post_policy_json": "{}",
     }).model_dump(mode="json")
     row.next_revision_round = 2
     row.blocked_reason = "revision_limit_reached"

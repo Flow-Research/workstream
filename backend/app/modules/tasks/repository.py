@@ -13,7 +13,7 @@ from uuid import UUID
 from sqlalchemy import Row, Select, and_, func, or_, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.contributions.api import LockedCompensationTermsPort
+from app.modules.contributions.api import LockedCompensationTermsPort, LockedCompensationSelection
 
 from app.modules.audit.repository import AuditRepository
 from app.modules.tasks.api import (
@@ -142,10 +142,10 @@ class TaskRepository:
         return tuple(UUID(str(identifier)) for identifier in identifiers)
 
     async def locked_compensation(
-        self, project_id: UUID, version_ids: tuple[UUID, ...]
-    ) -> dict[UUID, TaskCompensationTerms]:
+        self, project_id: UUID, selections: tuple[LockedCompensationSelection, ...]
+    ) -> dict[LockedCompensationSelection, TaskCompensationTerms]:
         """Resolve every TASK-owned lock through CON's contributor-safe public port."""
-        unique = tuple(dict.fromkeys(version_ids))
+        unique = tuple(dict.fromkeys(selections))
         if not unique:
             return {}
         if self._compensation_terms is None:
@@ -167,8 +167,8 @@ class TaskRepository:
             )
 
         mapped = {
-            item.contribution_policy_version_id: TaskCompensationTerms(
-                item.contribution_policy_version_id,
+            item.selection: TaskCompensationTerms(
+                item.selection.contribution_policy_version_id, item.selection.task_size,
                 response_terms(item.accepted_submission),
                 response_terms(item.completed_review),
             )
@@ -243,12 +243,13 @@ class TaskRepository:
             task.skill_tags,
             task.estimated_time_minutes,
             task.created_at,
-            task.locked_contribution_policy_version_id,
+            task.locked_contribution_policy_version_id, task.task_size, task.locked_submission_award_definition_id,
         ).where(_unassigned_ready_task())
         rows, continuation = await self._read_task_queue_rows(request, statement)
         compensation = await self.locked_compensation(
             request.project_id,
-            tuple(row.locked_contribution_policy_version_id for row in rows),
+            tuple(LockedCompensationSelection(row.locked_contribution_policy_version_id, row.task_size,
+                                              row.locked_submission_award_definition_id) for row in rows),
         )
         items = tuple(
             ReadyTaskSummary(
@@ -260,7 +261,9 @@ class TaskRepository:
                 skill_tags=tuple(row.skill_tags),
                 estimated_time_minutes=row.estimated_time_minutes,
                 created_at=row.created_at,
-                compensation=compensation[row.locked_contribution_policy_version_id],
+                compensation=compensation[LockedCompensationSelection(
+                    row.locked_contribution_policy_version_id,row.task_size,row.locked_submission_award_definition_id
+                )],
             )
             for row in rows
         )
@@ -398,15 +401,19 @@ class TaskRepository:
                 and_(task.assigned_to == str(request.contributor_id), own_assignment),
             )
         )
-        statement = statement.add_columns(task.locked_contribution_policy_version_id)
+        statement = statement.add_columns(task.locked_contribution_policy_version_id,
+                                          task.task_size, task.locked_submission_award_definition_id)
         values = await self._read_task_detail_values(request, statement)
         if values is None:
             return None
         version_id = values.pop("locked_contribution_policy_version_id")
-        compensation = await self.locked_compensation(request.project_id, (version_id,))
+        selection = LockedCompensationSelection(
+            version_id, values.pop("task_size"), values.pop("locked_submission_award_definition_id")
+        )
+        compensation = await self.locked_compensation(request.project_id, (selection,))
         from app.modules.tasks.revision.terminal_read import latest_assignment_outcome
         return ContributorTaskDetail(
-            **values, compensation=compensation[version_id],
+            **values, compensation=compensation[selection],
             last_assignment_outcome=await latest_assignment_outcome(
                 self._session, project_id=request.project_id, task_id=request.task_id,
                 contributor_id=request.contributor_id,
@@ -882,6 +889,9 @@ class TaskRepository:
                 if latest_assignment_submission is not None
                 else None
             )
+            if (assignment.submitter_task_size != task.task_size
+                    or assignment.submitter_award_definition_id != task.locked_submission_award_definition_id):
+                raise ValueError("assignment reward selection differs from task")
             facts = TaskSubmissionContextFacts(
                 task_id=request.task_id,
                 assignment_id=request.assignment_id,
@@ -893,6 +903,8 @@ class TaskRepository:
                 locked_policy=locked_policy,
                 acceptance_criteria=task.acceptance_criteria,
                 submitter_contribution_policy_version_id=assignment.submitter_contribution_policy_version_id,
+                task_size=assignment.submitter_task_size,
+                contribution_award_definition_id=assignment.submitter_award_definition_id,
                 checker_remediation_manifest_id=(
                     UUID(str(remediation.id)) if remediation is not None else None
                 ),

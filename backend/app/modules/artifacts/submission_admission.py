@@ -502,6 +502,9 @@ class SubmissionBundleAdmissionPublisher:
             identity_link_id=str(selected.identity_link_id),
             project_id=str(selected.project_id), task_id=str(selected.task_id),
             assignment_id=str(selected.assignment_id),
+            task_size=lineage.task_size,
+            contribution_policy_version_id=lineage.contribution_policy_version_id,
+            contribution_award_definition_id=lineage.contribution_award_definition_id,
             predecessor_submission_id=(
                 str(lineage.predecessor_submission_id)
                 if lineage.predecessor_submission_id is not None else None

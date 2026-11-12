@@ -1,5 +1,5 @@
 {
-  "canonical_sha256": "6f4f08a9bcd6e29f03b7c5d76d436d341eb9bd80ad9d933d5a7ce740347f04fb",
+  "canonical_sha256": "a0eee4c209d5f7b66b193dd9efef86458730724ef6f833ddc346066391624a88",
   "components": {
     "schemas": {
       "ApiError": {
@@ -163,6 +163,9 @@
           "prior": {
             "$ref": "#/components/schemas/RevisionContextSnapshot"
           },
+          "prior_reward_selection": {
+            "$ref": "#/components/schemas/ContributorRewardSelection"
+          },
           "remaining_microseconds": {
             "anyOf": [
               {
@@ -204,6 +207,16 @@
                 "type": "null"
               }
             ]
+          },
+          "target_reward_selection": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ContributorRewardSelection"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -224,9 +237,80 @@
           "direction",
           "prior",
           "target",
+          "prior_reward_selection",
+          "target_reward_selection",
           "changes"
         ],
         "title": "ContributorRevisionContext",
+        "type": "object"
+      },
+      "ContributorRewardSelection": {
+        "additionalProperties": false,
+        "description": "Exact earned terms for revision acknowledgement, without internal bindings.",
+        "properties": {
+          "compensation_mode": {
+            "enum": [
+              "unpaid",
+              "compensated"
+            ],
+            "title": "Compensation Mode",
+            "type": "string"
+          },
+          "instrument": {
+            "anyOf": [
+              {
+                "enum": [
+                  "money",
+                  "project_points"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Instrument"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quantity"
+          },
+          "task_size": {
+            "enum": [
+              "small",
+              "medium",
+              "large"
+            ],
+            "title": "Task Size",
+            "type": "string"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          }
+        },
+        "required": [
+          "compensation_mode",
+          "task_size",
+          "instrument",
+          "unit",
+          "quantity"
+        ],
+        "title": "ContributorRewardSelection",
         "type": "object"
       },
       "HTTPValidationError": {
@@ -814,7 +898,6 @@
   "source": {
     "method": "POST",
     "openapi_version": "3.1.0",
-    "path": "/api/v1/projects/{project_id}/tasks/{task_id}/revision-context/repair",
-    "repository_sha": "f0431385573eb53353c5ffc3c6cdb6a93d206b73"
+    "path": "/api/v1/projects/{project_id}/tasks/{task_id}/revision-context/repair"
   }
 }

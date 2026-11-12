@@ -45,15 +45,30 @@ LockedContributionTerms: TypeAlias = Literal["unpaid"] | tuple[LockedCompensatio
 
 
 @dataclass(frozen=True, slots=True)
-class LockedCompensationTerms:
-    """The complete contributor-visible graph for one immutable policy version."""
+class LockedCompensationSelection:
+    """One recorded policy/size/definition key; null means unpaid, not unresolved."""
 
     contribution_policy_version_id: UUID
+    task_size: Literal["small", "medium", "large"]
+    award_definition_id: UUID | None
+
+    def __post_init__(self) -> None:
+        if (not isinstance(self.contribution_policy_version_id, UUID)
+                or self.task_size not in {"small", "medium", "large"}
+                or (self.award_definition_id is not None and not isinstance(self.award_definition_id, UUID))):
+            raise ValueError("locked compensation selection is invalid")
+
+
+@dataclass(frozen=True, slots=True)
+class LockedCompensationTerms:
+    """Contributor-visible terms for one recorded policy, size and definition."""
+
+    selection: LockedCompensationSelection
     accepted_submission: LockedContributionTerms
     completed_review: LockedContributionTerms
 
     def __post_init__(self) -> None:
-        if not isinstance(self.contribution_policy_version_id, UUID):
+        if not isinstance(self.selection, LockedCompensationSelection):
             raise ValueError("locked compensation terms are invalid")
         for value in (self.accepted_submission, self.completed_review):
             if value == "unpaid":
@@ -71,5 +86,5 @@ class LockedCompensationTermsPort(Protocol):
     """Read complete terms by exact locked version; the caller owns disclosure authority."""
 
     async def read_locked_compensation_terms(
-        self, project_id: UUID, contribution_policy_version_ids: tuple[UUID, ...]
+        self, project_id: UUID, selections: tuple[LockedCompensationSelection, ...]
     ) -> tuple[LockedCompensationTerms, ...]: ...

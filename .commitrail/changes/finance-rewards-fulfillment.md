@@ -30,7 +30,10 @@ merge, deploy or initiate live payments without the required authorization.
 The branch contains current reward policy authoring, wire validation and
 create-time size work. The replacement removes reward-model markers, old
 graph/response readers, archived replay fixtures and the predecessor-specific
-preflight. Exact Submission selection remains the next acceptance dependency.
+preflight. The selected-acceptance implementation now records exact Task,
+Assignment, admission and immutable Submission selection, uses it for awards and
+reads, and extends existing revision/replay owners. Full migration, concurrency,
+revision/replay and suite qualification remains required.
 No complete Finance runtime or end-to-end fulfillment journey is delivered.
 
 ## Immediate bounded replacement
@@ -273,3 +276,34 @@ Plan-review corrections (SELECTED-PLAN-001/002 and PLAN-SELECT-001–004):
   with no new assignment or economic fact. The durable-worker public failure/
   retry drill remains a later same-PR readiness gate, not proof supplied by this
   selected-acceptance slice's in-process integration tests.
+
+## Selected-acceptance implementation evidence
+
+The implementation replaces policy-wide earning/read enumeration with exact
+recorded selection. Screening and claim retain the existing TASK operation;
+ART carries selection in its immutable PRE reservation/admission; routing and
+REV FinalAcceptance carry immutable Submission facts into CON and COMP. Read
+keys include policy, size and definition. Contributor evidence obtains source
+selection through TASK's existing public port and excludes binding material.
+The current SQL chain independently guards selection equality, immutable
+Submission evidence, revision packet/rebase closure and deferred selected-award
+completeness. No old-format reader or alternate earning operation is retained.
+
+Working-tree public HTTP drills passed automatic and default human-required
+branches, with distinct Small/Medium quantities under one policy and exact
+Submission-derived contribution evidence. The points automatic branch also
+passed with whole-number quantity output. Direct SQL rejected a valid Large
+policy definition substituted into a Medium assignment; immutable Submission
+mutation was rejected without changing stored evidence. The existing real
+revision/acknowledgement drill passed after repairing the deferred closure's
+CASE-expression grouping. These are supporting development results; freeze and
+replay against the final candidate before a readiness claim.
+
+Additional supporting proof: 71 PRE/export cases, 59 financial/size/receipt cases,
+4 revision projection cases, 144 MCP contract/operation cases with live OpenAPI
+comparison, 26 built CLI read/revision/export cases, Go packages, scoped Ruff and
+module-boundary validation. Retain exact execution custody in the PR evidence;
+these counts are not coverage gates or whole-PR qualification. Remaining planned
+migration refusal, independent-session claim/acceptance races, explicit original
+claim/Submission replay after rebase and durable-worker failure/retry proof stay
+required. Finance roots, handoff and execution remain unfinished.

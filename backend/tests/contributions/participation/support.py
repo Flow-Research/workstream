@@ -16,6 +16,8 @@ def request_for(h, *, acceptance_disposition, **changes):
         "task_assignment_id": h.submitter_record.source_task_assignment_id,
         "contributor_id": h.submitter_record.contributor_id,
         "contribution_policy_version_id": (h.submitter_record.contribution_policy_version_id),
+        "task_size": h.source["task_size"],
+        "contribution_award_definition_id": h.source["contribution_award_definition_id"],
         "artifact_hash": h.submitter_record.artifact_hash,
         "correlation_id": h.route_operation_id,
         "expected_generation": 2,

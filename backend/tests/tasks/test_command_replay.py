@@ -106,7 +106,7 @@ async def test_validly_shaped_snapshot_cannot_substitute_identity(task_client, m
     first = await task_client.post(path, headers=headers)
     assert first.status_code == 200, first.text
     original = TaskCommandReplay.recover
-    def substituted(receipt, *args, **kwargs):
+    async def substituted(owner, receipt, *args, **kwargs):
         # Simulate corrupted in-memory custody without relying on DB triggers
         # to reject it first: the application identity assertion must catch it.
         if target == "locked_context":
@@ -120,9 +120,9 @@ async def test_validly_shaped_snapshot_cannot_substitute_identity(task_client, m
             else:
                 snapshot[target]["id"] = str(uuid4())
             set_committed_value(receipt, "response", snapshot)
-        return original(receipt, *args, **kwargs)
+        return await original(owner, receipt, *args, **kwargs)
     with monkeypatch.context() as patch:
-        patch.setattr(TaskCommandReplay, "recover", staticmethod(substituted))
+        patch.setattr(TaskCommandReplay, "recover", substituted)
         rejected = await task_client.post(path, headers=headers)
     assert rejected.status_code == 409, rejected.text
     assert rejected.json()["error"]["code"] == "task_replay_state_changed"

@@ -95,7 +95,7 @@ async def test_repository_materializes_supported_membership_and_refuses_excess(
         audience="self", actor_profile_id=new_record_id(), limit=1000,
     )
     codec = ContributionExportCursorCodec(bytes(range(32)))
-    repository = SelectionRepository(SelectionSession(), cursor_codec=codec)
+    repository = SelectionRepository(SelectionSession(), cursor_codec=codec, tasks=None)
     digest = contribution_export_query_digest(selected)
     if refused:
         with pytest.raises(ContributionExportTooLarge, match="100000"):
@@ -120,6 +120,7 @@ def facts(*, compensated=False):
         source_review_lease_id=None, source_final_acceptance_id=acceptance,
         source_task_assignment_id=new_record_id(), artifact_hash="sha256:" + "a" * 64,
         contribution_policy_version_id=policy, recorded_at=TIME, policy_version_number=1,
+        task_size="medium",
         compensation_mode="compensated" if compensated else "unpaid",
         award_definitions=(definition,) if compensated else (),
     )
@@ -132,7 +133,9 @@ def facts(*, compensated=False):
     ),)
     return SimpleNamespace(
         record=record, awards=awards,
-        task=ContributionTaskSourceFacts(project_id=project, task_id=task, title="Task",
+        task=ContributionTaskSourceFacts(project_id=project, task_id=task, submission_id=submission,
+                                       task_size="medium", contribution_policy_version_id=policy,
+                                       contribution_award_definition_id=definition.id if compensated else None, title="Task",
                                        source_type="manual", source_ref=None, external_task_id=None),
         actor=ContributionActorLabel(actor_profile_id=actor, display_name="Ada"),
         acceptance=ContributionAcceptanceSourceFacts(
@@ -159,7 +162,7 @@ class Ports:
         return self.value.awards
 
     async def read_contribution_tasks(self, selected):
-        assert selected == ((self.value.record.project_id, self.value.record.task_id),)
+        assert selected == ((self.value.record.project_id, self.value.record.task_id, self.value.record.submission_id),)
         return (self.value.task,)
 
     async def read_contribution_labels(self, selected):
@@ -284,7 +287,7 @@ async def test_1001_canonical_shaped_items_cross_page_boundary_without_owner_exp
             "id": identity, "task_id": task_id, "submission_id": submission_id,
             "source_final_acceptance_id": acceptance_id,
         })
-        task = base.task.model_copy(update={"task_id": task_id})
+        task = base.task.model_copy(update={"task_id": task_id, "submission_id": submission_id})
         acceptance = base.acceptance.model_copy(update={
             "id": acceptance_id, "task_id": task_id, "submission_id": submission_id,
         })
@@ -315,7 +318,7 @@ async def test_1001_canonical_shaped_items_cross_page_boundary_without_owner_exp
         async def read_contribution_tasks(self, selected):
             assert len(selected) <= 1000
             by_id = {entry[1].task_id: entry[1] for entry in entries}
-            return tuple(by_id[task_id] for _, task_id in selected)
+            return tuple(by_id[task_id] for _, task_id, _ in selected)
 
         async def read_contribution_labels(self, selected):
             assert selected == (base.record.contributor_id,)
@@ -346,7 +349,7 @@ async def test_completed_review_retains_its_source_without_an_acceptance_time():
     value = facts()
     review_id, lease_id = new_record_id(), new_record_id()
     value.record = value.record.model_copy(update={
-        "contribution_type": "completed_review", "source_review_id": review_id,
+        "contribution_type": "completed_review", "task_size": None, "source_review_id": review_id,
         "source_review_lease_id": lease_id, "source_final_acceptance_id": None,
         "source_task_assignment_id": None,
     })
@@ -364,24 +367,25 @@ async def test_completed_review_retains_its_source_without_an_acceptance_time():
     assert item.acceptance_review_id is item.acceptance_routing_manifest_id is None
 
 
-async def test_complete_money_and_points_set_retains_each_original_identity():
+@pytest.mark.parametrize("instrument", ["money", "project_points"])
+async def test_selected_instrument_retains_original_identity(instrument):
     value = facts(compensated=True)
-    definition = FrozenContributionAward(id=new_record_id(), instrument="project_points",
-                                          unit="FLOW", quantity=Decimal("12345"))
-    value.record = value.record.model_copy(update={
-        "award_definitions": value.record.award_definitions + (definition,),
-    })
-    points = value.awards[0].model_copy(update={
-        "id": new_record_id(), "award_definition_id": definition.id,
-        "instrument_type": CompensationInstrumentType.PROJECT_POINTS,
-        "unit_code": "FLOW", "quantity": definition.quantity,
-    })
-    value.awards += (points,)
+    if instrument == "project_points":
+        definition = FrozenContributionAward(id=new_record_id(), instrument="project_points",
+                                              unit="FLOW", quantity=Decimal("12345"))
+        value.record = value.record.model_copy(update={"award_definitions": (definition,)})
+        value.awards = (value.awards[0].model_copy(update={
+            "id": new_record_id(), "award_definition_id": definition.id,
+            "instrument_type": CompensationInstrumentType.PROJECT_POINTS,
+            "unit_code": "FLOW", "quantity": definition.quantity,
+        }),)
+        value.task = value.task.model_copy(update={"contribution_award_definition_id": definition.id})
     response = await service(Ports(value)).read(request(value))
-    item, = response.items
-    assert {(award.award_id, award.award_definition_id, award.quantity) for award in item.awards} == {
-        (award.id, award.award_definition_id, format(award.quantity, "f")) for award in value.awards
-    }
+    (item,) = response.items
+    (stored,) = value.awards
+    (award,) = item.awards
+    assert (award.award_id,award.award_definition_id,award.quantity) == (
+        stored.id,stored.award_definition_id,format(stored.quantity,"f"))
 
 
 async def test_human_acceptance_review_reference_does_not_replace_contribution_source():

@@ -166,7 +166,7 @@ async def test_ready_queue_detached_projection(task_client):
         expected = ReadyTaskSummary(
             UUID(row.id), UUID(row.project_id), row.title, row.task_type, row.difficulty,
             tuple(row.skill_tags), row.estimated_time_minutes, row.created_at,
-            TaskCompensationTerms(row.locked_contribution_policy_version_id, "unpaid", "unpaid"),
+            TaskCompensationTerms(row.locked_contribution_policy_version_id, "small", "unpaid", "unpaid"),
         )
         assert page.items == (expected,) and page.next_cursor is None
         assert set(asdict(page.items[0])) == {

@@ -54,6 +54,8 @@ async def seed_started_task_for_artifact_test(connection, params):
                 assigned_by=params["actor"],
                 status="active",
                 submitter_contribution_policy_version_id=task.locked_contribution_policy_version_id,
+                submitter_task_size=task.task_size,
+                submitter_award_definition_id=task.locked_submission_award_definition_id,
             )
         )
         task.assigned_to = params["actor"]

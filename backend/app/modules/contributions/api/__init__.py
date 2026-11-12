@@ -68,6 +68,7 @@ from app.modules.contributions.api.participation import (
 from app.modules.contributions.api.published_selection import (
     LockedCompensationAward,
     LockedCompensationTerms,
+    LockedCompensationSelection,
     LockedCompensationTermsPort,
     LockedContributionTerms,
 )
@@ -99,6 +100,7 @@ __all__ = (
     "SubmitterParticipationResult",
     "LockedCompensationAward",
     "LockedCompensationTerms",
+    "LockedCompensationSelection",
     "LockedCompensationTermsPort",
     "LockedContributionTerms",
     "CompensationMode",

@@ -11,7 +11,7 @@ from app.modules.contributions.api import (
 )
 from app.modules.contributions.api.policies import ContributionPolicyVersionListItem
 from app.modules.contributions.models import ContributionPolicy, ContributionPolicyVersion
-from app.modules.contributions.policy_graph import _canonical_quantity
+from app.modules.contributions.api.quantities import format_award_quantity
 
 
 def _rule_views(version: ContributionPolicyVersion) -> tuple[PolicyRuleView, ...]:
@@ -26,7 +26,7 @@ def _rule_views(version: ContributionPolicyVersion) -> tuple[PolicyRuleView, ...
                     definition_id=item.id,
                     instrument_type=CompensationInstrumentType(item.instrument_type),
                     unit_code=item.unit_code,
-                    quantity=_canonical_quantity(item.quantity),
+                    quantity=format_award_quantity(item.quantity),
                     adapter_binding_id=item.adapter_binding_id,
                     task_size=item.task_size,
                 )

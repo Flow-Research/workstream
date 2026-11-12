@@ -54,6 +54,8 @@ def build_submission(
     supersedes_submission_id: str | None,
     contribution_policy_version_id: UUID,
     task_assignment_id: str,
+    task_size: str,
+    contribution_award_definition_id: UUID | None,
     package_uri: str | None = None,
     package_hash: str | None = None,
     artifact_hash_manifest: list[dict[str, Any]] | None = None,
@@ -63,6 +65,8 @@ def build_submission(
     return Submission(
         id=submission_id,
         contribution_policy_version_id=contribution_policy_version_id,
+        task_size=task_size,
+        contribution_award_definition_id=contribution_award_definition_id,
         task_id=task.id,
         task_assignment_id=task_assignment_id,
         contributor_id=contributor_id,
@@ -192,6 +196,8 @@ class TaskSubmissionCreationService:
                 submission_id=str(submission_id), task=task,
                 contribution_policy_version_id=context.submitter_contribution_policy_version_id,
                 task_assignment_id=str(context.assignment_id),
+                task_size=context.task_size,
+                contribution_award_definition_id=context.contribution_award_definition_id,
                 contributor_id=str(request.contributor_id), version=version,
                 summary=request.summary, worker_attestation=request.contributor_attestation,
                 supersedes_submission_id=(str(context.predecessor.submission_id)

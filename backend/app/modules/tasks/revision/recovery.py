@@ -24,11 +24,12 @@ from app.modules.tasks.service import LOCKED_CONTEXT_REQUIRED_FIELDS
 class TaskRevisionRecovery:
     """Caller owns the root transaction; this operation locks TASK before dependents."""
 
-    def __init__(self, session, *, projects, authorization, audit, outbox):
+    def __init__(self, session, *, projects, rewards, authorization, audit, outbox):
         """Share the root transaction across source recovery and all owner ports."""
         self._session = session
         self._repo = TaskRepository(session)
         self._projects, self._authorization = projects, authorization
+        self._rewards = rewards
         self._audit, self._outbox = audit, outbox
 
     async def _missing_root_candidate(self, manifest, latest, task):
@@ -49,7 +50,10 @@ class TaskRevisionRecovery:
             )
         except (ProjectLockedPolicyContextUnavailable, TypeError, ValueError):
             return None
-        candidate = await select_candidate(self._projects, historical)
+        candidate = await select_candidate(
+            self._projects, self._rewards, historical, task_size=latest.task_size,
+            prior_award_definition_id=latest.contribution_award_definition_id,
+        )
         # System discovery may freeze an unchanged active context or a
         # blocked receipt. Only a PM can authorize a changed target.
         task_lineage = TaskPolicyLineage.model_validate_json(json.dumps({
@@ -66,7 +70,7 @@ class TaskRevisionRecovery:
                 or task_lineage != candidate.prior.lineage
                 or not same_post_policy):
             candidate = candidate.model_copy(update={
-                "target": None, "target_post_policy_json": None,
+                "target": None, "target_reward_selection": None, "target_post_policy_json": None,
                 "target_max_revision_rounds": None,
             })
         return candidate

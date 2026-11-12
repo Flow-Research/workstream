@@ -275,6 +275,8 @@ async def test_stored_true_policy_manifest_cannot_prove_automated_source(tmp_pat
             automated = TaskAcceptedEffectsRequest(
                 **{key:UUID(source[key]) for key in ("project_id","task_id","assignment_id","submission_id", "contributor_id","contribution_policy_version_id","content_id")},
                 submission_version=source["submission_version"],content_sha256=source["content_sha256"],
+                task_size=source["task_size"], contribution_award_definition_id=(
+                    UUID(source["contribution_award_definition_id"]) if source["contribution_award_definition_id"] else None),
                 final_acceptance_id=new_record_id(),expected_task_status="evaluation_pending")
             with pytest.raises(TaskAcceptedEffectsUnavailable):
                 await participant(session).require_routing_source(
@@ -332,6 +334,8 @@ async def test_routing_source_rejects_only_substituted_request_hash(tmp_path, is
                     "contributor_id", "contribution_policy_version_id", "content_id",
                 )},
                 submission_version=source["submission_version"],
+                task_size=source["task_size"], contribution_award_definition_id=(
+                    UUID(source["contribution_award_definition_id"]) if source["contribution_award_definition_id"] else None),
                 content_sha256=source["content_sha256"],
                 final_acceptance_id=result.final_acceptance_id,
                 expected_task_status="evaluation_pending",

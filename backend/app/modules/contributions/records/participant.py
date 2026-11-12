@@ -54,7 +54,8 @@ class SubmitterContributionParticipant:
         if checked.acceptance_disposition == "new" and not lifecycle.new_effects_enabled:
             raise ContributionParticipationUnavailable("lifecycle is not live")
         rule = await self._repository.get_frozen_rule(
-            checked.project_id, checked.contribution_policy_version_id
+            checked.project_id, checked.contribution_policy_version_id,
+            checked.task_size, checked.contribution_award_definition_id
         )
         contribution = await self._repository.apply_acceptance_disposition(checked)
         award_request = CompleteAwardSetRequest(

@@ -563,6 +563,8 @@ async def test_each_owner_rejects_manifest_disabled_live_facts(
                         contribution_policy_version_id=(
                             request.task_effects.contribution_policy_version_id
                         ),
+                        task_size=request.task_effects.task_size,
+                        contribution_award_definition_id=request.task_effects.contribution_award_definition_id,
                         artifact_hash=request.task_effects.content_sha256,
                         correlation_id=request.correlation_id,
                         expected_generation=2,
@@ -655,7 +657,9 @@ async def test_each_owner_independently_rejects_new_effects(
                             task_assignment_id=request.task_effects.assignment_id,
                             contributor_id=request.acceptance.accepted_submitter_id,
                             contribution_policy_version_id=request.task_effects.contribution_policy_version_id,
-                            artifact_hash=request.task_effects.content_sha256,
+                            task_size=request.task_effects.task_size,
+                        contribution_award_definition_id=request.task_effects.contribution_award_definition_id,
+                        artifact_hash=request.task_effects.content_sha256,
                             correlation_id=request.correlation_id,
                             expected_generation=generation,
                         )

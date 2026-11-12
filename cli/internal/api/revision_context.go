@@ -11,24 +11,34 @@ import (
 // RevisionContext is the contributor-visible, frozen preparation projection.
 // It contains identities and bounded change summaries, never policy bodies.
 type RevisionContext struct {
-	PreparationID            string            `json:"preparation_id"`
-	PreparationSHA256        string            `json:"preparation_sha256"`
-	PredecessorPreparationID *string           `json:"predecessor_preparation_id"`
-	SourceSubmissionID       string            `json:"source_submission_id"`
-	SourceRoutingManifestID  string            `json:"source_routing_manifest_id"`
-	Sequence                 int64             `json:"sequence"`
-	NextRevisionRound        int64             `json:"next_revision_round"`
-	MaxRevisionRounds        int64             `json:"max_revision_rounds"`
-	RequestedAt              string            `json:"requested_at"`
-	DeadlineAt               *string           `json:"deadline_at"`
-	ClockState               string            `json:"clock_state"`
-	RemainingMicroseconds    *int64            `json:"remaining_microseconds"`
-	Outcome                  string            `json:"outcome"`
-	Disposition              string            `json:"disposition"`
-	Direction                *string           `json:"direction"`
-	Prior                    RevisionSnapshot  `json:"prior"`
-	Target                   *RevisionSnapshot `json:"target"`
-	Changes                  []RevisionChange  `json:"changes"`
+	PreparationID            string                   `json:"preparation_id"`
+	PreparationSHA256        string                   `json:"preparation_sha256"`
+	PredecessorPreparationID *string                  `json:"predecessor_preparation_id"`
+	SourceSubmissionID       string                   `json:"source_submission_id"`
+	SourceRoutingManifestID  string                   `json:"source_routing_manifest_id"`
+	Sequence                 int64                    `json:"sequence"`
+	NextRevisionRound        int64                    `json:"next_revision_round"`
+	MaxRevisionRounds        int64                    `json:"max_revision_rounds"`
+	RequestedAt              string                   `json:"requested_at"`
+	DeadlineAt               *string                  `json:"deadline_at"`
+	ClockState               string                   `json:"clock_state"`
+	RemainingMicroseconds    *int64                   `json:"remaining_microseconds"`
+	Outcome                  string                   `json:"outcome"`
+	Disposition              string                   `json:"disposition"`
+	Direction                *string                  `json:"direction"`
+	Prior                    RevisionSnapshot         `json:"prior"`
+	Target                   *RevisionSnapshot        `json:"target"`
+	PriorRewardSelection     RevisionRewardSelection  `json:"prior_reward_selection"`
+	TargetRewardSelection    *RevisionRewardSelection `json:"target_reward_selection"`
+	Changes                  []RevisionChange         `json:"changes"`
+}
+
+type RevisionRewardSelection struct {
+	CompensationMode string  `json:"compensation_mode"`
+	TaskSize         string  `json:"task_size"`
+	Instrument       *string `json:"instrument"`
+	Unit             *string `json:"unit"`
+	Quantity         *string `json:"quantity"`
 }
 
 type RevisionSnapshot struct {
@@ -72,7 +82,7 @@ func validateRevisionContext(raw json.RawMessage, value *RevisionContext) error 
 		"preparation_id", "preparation_sha256", "source_submission_id", "source_routing_manifest_id",
 		"sequence", "next_revision_round", "max_revision_rounds", "requested_at",
 		"clock_state",
-		"outcome", "disposition", "prior", "changes",
+		"outcome", "disposition", "prior", "changes", "prior_reward_selection",
 	}, nil)
 	if err != nil || !validUUID(value.PreparationID) || !contextPolicyDigest.MatchString(value.PreparationSHA256) ||
 		!validUUID(value.SourceSubmissionID) || !validUUID(value.SourceRoutingManifestID) ||
@@ -124,6 +134,17 @@ func validateRevisionContext(raw json.RawMessage, value *RevisionContext) error 
 		if value.Target == nil || validateRevisionSnapshot(rawTarget, value.Target) != nil {
 			return revisionInvalid()
 		}
+	}
+	if validateRevisionRewardSelection(fields["prior_reward_selection"], &value.PriorRewardSelection) != nil {
+		return revisionInvalid()
+	}
+	targetReward, present := fields["target_reward_selection"]
+	if !present || !requiredNullable(fields, "target") || (value.Target == nil) != (value.TargetRewardSelection == nil) {
+		return revisionInvalid()
+	}
+	if value.TargetRewardSelection != nil && (validateRevisionRewardSelection(targetReward, value.TargetRewardSelection) != nil ||
+		value.TargetRewardSelection.TaskSize != value.PriorRewardSelection.TaskSize) {
+		return revisionInvalid()
 	}
 	var changes []json.RawMessage
 	if jsonv2.Unmarshal(fields["changes"], &changes) != nil || changes == nil || len(changes) != len(value.Changes) {
@@ -180,6 +201,25 @@ func validateRevisionSnapshot(raw json.RawMessage, value *RevisionSnapshot) erro
 		if !contextPolicyDigest.MatchString(digest) {
 			return revisionInvalid()
 		}
+	}
+	return nil
+}
+
+func validateRevisionRewardSelection(raw json.RawMessage, value *RevisionRewardSelection) error {
+	fields, err := contextObject(raw, value, []string{"compensation_mode", "task_size"}, nil)
+	if err != nil || !requiredNullable(fields, "instrument", "unit", "quantity") || !oneOf(value.TaskSize, "small", "medium", "large") {
+		return revisionInvalid()
+	}
+	if value.CompensationMode == "unpaid" {
+		if value.Instrument != nil || value.Unit != nil || value.Quantity != nil {
+			return revisionInvalid()
+		}
+		return nil
+	}
+	if value.CompensationMode != "compensated" || value.Instrument == nil || value.Unit == nil || value.Quantity == nil ||
+		!validCompensationAward(CompensationAward{Instrument: *value.Instrument, Unit: *value.Unit, Quantity: *value.Quantity}) ||
+		!validContributionQuantity(*value.Quantity, *value.Instrument) {
+		return revisionInvalid()
 	}
 	return nil
 }

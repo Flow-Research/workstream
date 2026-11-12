@@ -95,6 +95,7 @@ class ContributionRecordView(BaseModel):
 
     model_config = _STRICT
     contribution_id: UUID
+    task_size: Literal["small", "medium", "large"] | None
     project_id: UUID
     task_id: UUID
     submission_id: UUID
@@ -122,6 +123,8 @@ class ContributionRecordView(BaseModel):
     @model_validator(mode="after")
     def validate_source_and_awards(self) -> Self:
         """Keep reviewer acceptance null and forbid duplicate economic identities."""
+        if (self.task_size is None) != (self.contribution_type == "completed_review"):
+            raise ValueError("contribution size differs from source kind")
         accepted = self.contribution_type == "accepted_submission"
         present = (
             self.source_review_id is not None, self.source_review_lease_id is not None,

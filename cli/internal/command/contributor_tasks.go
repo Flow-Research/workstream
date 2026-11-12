@@ -92,7 +92,7 @@ func addContributorTasks(root *cobra.Command, client func() (*api.Client, error)
 }
 
 func writeCompensation(w io.Writer, terms api.CompensationTerms) error {
-	if _, err := fmt.Fprintf(w, "Contribution policy version: %s\n", safeText(terms.ContributionPolicyVersionID)); err != nil {
+	if _, err := fmt.Fprintf(w, "Contribution policy version: %s\nTask size: %s\n", safeText(terms.ContributionPolicyVersionID), safeText(terms.TaskSize)); err != nil {
 		return err
 	}
 	for _, rule := range []struct {

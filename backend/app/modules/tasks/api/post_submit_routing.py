@@ -36,6 +36,8 @@ class TaskPostSubmitSourceProposal(BaseModel):
     assignment_id: UUID
     contributor_id: UUID
     contribution_policy_version_id: UUID
+    task_size: Literal["small", "medium", "large"]
+    contribution_award_definition_id: UUID | None
     checker_run_id: UUID
     evaluation_request_id: UUID
     request_digest: _Sha256

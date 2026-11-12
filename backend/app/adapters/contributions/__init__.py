@@ -120,6 +120,7 @@ def contribution_export_service(
         authorization=authorization,
         records=ContributionReadRepository(
             session, cursor_codec=ContributionExportCursorCodec(cursor_secret),
+            tasks=contribution_task_evidence_port(session),
         ),
         awards=contribution_award_read_port(session), acceptances=final_acceptance_read_port(session),
         tasks=contribution_task_evidence_port(session), actors=contribution_actor_label_port(session),

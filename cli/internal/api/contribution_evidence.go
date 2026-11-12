@@ -35,6 +35,7 @@ type contributionPage struct {
 }
 
 type ContributionRecord struct {
+	TaskSize           *string             `json:"task_size"`
 	ID                 string              `json:"contribution_id"`
 	Project            string              `json:"project_id"`
 	Task               string              `json:"task_id"`
@@ -70,7 +71,7 @@ type ContributionAward struct {
 }
 
 var contributionRequired = []string{"contribution_id", "project_id", "task_id", "submission_id", "contributor_id", "contribution_type", "artifact_hash", "contribution_policy_version_id", "policy_version_number", "recorded_at", "task_title", "source_type", "awards"}
-var contributionNullable = []string{"contributor_display_name", "source_review_id", "source_review_lease_id", "source_final_acceptance_id", "source_task_assignment_id", "accepted_at", "acceptance_source", "acceptance_review_id", "acceptance_routing_manifest_id", "source_ref", "external_task_id"}
+var contributionNullable = []string{"task_size", "contributor_display_name", "source_review_id", "source_review_lease_id", "source_final_acceptance_id", "source_task_assignment_id", "accepted_at", "acceptance_source", "acceptance_review_id", "acceptance_routing_manifest_id", "source_ref", "external_task_id"}
 var contributionQuantity = regexp.MustCompile(`^[0-9]+(?:\.[0-9]+)?$`)
 
 // The backend owns selection and authority. Normalize time precision to the
@@ -365,6 +366,9 @@ func validateContributionRecords(raw json.RawMessage, filters ContributionFilter
 			}
 		}
 		accepted := r.Type == "accepted_submission"
+		if (r.TaskSize != nil) != accepted || (r.TaskSize != nil && !oneOf(*r.TaskSize, "small", "medium", "large")) {
+			return bad
+		}
 		if (!accepted && r.Type != "completed_review") || (r.Review != nil) != !accepted || (r.Lease != nil) != !accepted ||
 			(r.Acceptance != nil) != accepted || (r.Assignment != nil) != accepted || (r.AcceptedAt != nil) != accepted || (r.AcceptanceSource != nil) != accepted {
 			return bad

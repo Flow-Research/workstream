@@ -13,6 +13,7 @@ from app.modules.contributions.api import (
     ContributionPolicyProjectSelection,
     LockedCompensationAward,
     LockedCompensationTerms,
+    LockedCompensationSelection,
     RewardSelectionFacts,
     RewardSelectionRequest,
     ContributionPolicyUnavailable,
@@ -32,7 +33,7 @@ from app.modules.contributions.models import (
 )
 from app.modules.contributions.units.models import ProjectCompensationUnitCreationEvent
 from app.modules.contributions.policy_eligibility import require_complete_policy_graph
-from app.modules.contributions.policy_graph import _canonical_quantity
+from app.modules.contributions.api.quantities import format_award_quantity
 
 
 def policy_operation_lock_key(operation_id: UUID) -> int:
@@ -72,6 +73,11 @@ class ContributionPolicyRepository:
             )
             .execution_options(populate_existing=True)
         )
+        return self._reward_selection(version, checked)
+
+    @staticmethod
+    def _reward_selection(version, checked: RewardSelectionRequest) -> RewardSelectionFacts:
+        """Validate one complete policy graph and select the exact requested size."""
         if version is None:
             raise ContributionPolicyUnavailable("reward_selection_unavailable")
         rules = list(version.rules)
@@ -103,7 +109,7 @@ class ContributionPolicyRepository:
             award_definition_id=selected.id,
             instrument_type=CompensationInstrumentType(selected.instrument_type),
             unit_code=selected.unit_code,
-            quantity=_canonical_quantity(selected.quantity),
+            quantity=format_award_quantity(selected.quantity),
             adapter_binding_id=selected.adapter_binding_id,
         )
 
@@ -210,93 +216,44 @@ class ContributionPolicyRepository:
         return PublishedContributionPolicySelection(UUID(project), policy, version)
 
     async def read_locked_compensation_terms(
-        self, project_id: UUID, contribution_policy_version_ids: tuple[UUID, ...]
+        self, project_id: UUID, selections: tuple[LockedCompensationSelection, ...]
     ) -> tuple[LockedCompensationTerms, ...]:
-        """Project complete terms for exact published or retired version selectors."""
-        if (
-            not isinstance(project_id, UUID)
-            or type(contribution_policy_version_ids) is not tuple
-            or not 1 <= len(contribution_policy_version_ids) <= 100
-            or any(not isinstance(value, UUID) for value in contribution_policy_version_ids)
-            or len(set(contribution_policy_version_ids)) != len(contribution_policy_version_ids)
-        ):
+        """Batch exact recorded selections; two sizes under one policy remain distinct."""
+        if (not isinstance(project_id, UUID) or type(selections) is not tuple
+                or not 1 <= len(selections) <= 100
+                or any(type(item) is not LockedCompensationSelection for item in selections)
+                or len(set(selections)) != len(selections)):
             raise ValueError("locked compensation selectors are invalid")
-        version, rule, definition = (
-            ContributionPolicyVersion,
-            ContributionRule,
-            ContributionAwardDefinition,
-        )
-        rows = (
-            await self._session.execute(
-                select(
-                    version.id.label("version_id"),
-                    rule.id.label("rule_id"),
-                    rule.contribution_type,
-                    rule.compensation_mode,
-                    definition.instrument_type,
-                    definition.unit_code,
-                    definition.quantity,
-                )
-                .join(
-                    rule,
-                    and_(
-                        rule.contribution_policy_version_id == version.id,
-                        rule.project_id == version.project_id,
-                    ),
-                )
-                .outerjoin(
-                    definition,
-                    and_(
-                        definition.contribution_rule_id == rule.id,
-                        definition.contribution_policy_version_id == version.id,
-                        definition.project_id == version.project_id,
-                        definition.contribution_type == rule.contribution_type,
-                    ),
-                )
-                .where(
-                    version.project_id == str(project_id),
-                    version.id.in_(contribution_policy_version_ids),
-                    version.status.in_(("published", "retired")),
-                )
-                .order_by(version.id, rule.contribution_type, definition.instrument_type)
+        versions = (await self._session.scalars(select(ContributionPolicyVersion).where(
+            ContributionPolicyVersion.project_id == str(project_id),
+            ContributionPolicyVersion.id.in_({item.contribution_policy_version_id for item in selections}),
+            ContributionPolicyVersion.status.in_(("published", "retired")),
+        ).options(selectinload(ContributionPolicyVersion.rules).selectinload(
+            ContributionRule.award_definitions,
+        )).execution_options(populate_existing=True))).all()
+        by_id = {version.id: version for version in versions}
+        result = []
+        for key in selections:
+            version = by_id.get(key.contribution_policy_version_id)
+            selected = self._reward_selection(version, RewardSelectionRequest(
+                project_id=project_id, policy_version_id=key.contribution_policy_version_id,
+                task_size=key.task_size,
+            ))
+            if selected.award_definition_id != key.award_definition_id:
+                raise ValueError("locked compensation selection differs")
+            reviewer = next(rule for rule in version.rules if rule.contribution_type == "completed_review")
+            reviewer_terms = "unpaid" if reviewer.compensation_mode == "unpaid" else tuple(
+                LockedCompensationAward(CompensationInstrumentType(d.instrument_type),
+                                        d.unit_code, format_award_quantity(d.quantity))
+                for d in reviewer.award_definitions
             )
-        ).all()
-        grouped: dict[UUID, dict[str, tuple[str, list[LockedCompensationAward]]]] = {}
-        for row in rows:
-            rules = grouped.setdefault(row.version_id, {})
-            current = rules.setdefault(row.contribution_type, (row.compensation_mode, []))
-            if current[0] != row.compensation_mode:
-                raise ValueError("locked compensation graph is invalid")
-            if row.instrument_type is not None:
-                current[1].append(
-                    LockedCompensationAward(
-                        instrument=CompensationInstrumentType(row.instrument_type),
-                        unit=row.unit_code,
-                        quantity=format(row.quantity, "f"),
-                    )
-                )
-
-        result: list[LockedCompensationTerms] = []
-        for version_id in contribution_policy_version_ids:
-            rules = grouped.get(version_id)
-            if rules is None or set(rules) != {"accepted_submission", "completed_review"}:
-                continue
-
-            def exposed(contribution_type: str):
-                mode, awards = rules[contribution_type]
-                if mode == "unpaid" and not awards:
-                    return "unpaid"
-                if mode == "compensated" and len(awards) == 1:
-                    return tuple(awards)
-                raise ValueError("locked compensation graph is invalid")
-
-            result.append(
-                LockedCompensationTerms(
-                    contribution_policy_version_id=version_id,
-                    accepted_submission=exposed("accepted_submission"),
-                    completed_review=exposed("completed_review"),
-                )
-            )
+            result.append(LockedCompensationTerms(
+                selection=key,
+                accepted_submission="unpaid" if selected.compensation_mode == "unpaid" else (
+                    LockedCompensationAward(selected.instrument_type, selected.unit_code, selected.quantity),
+                ),
+                completed_review=reviewer_terms,
+            ))
         return tuple(result)
 
     async def lock_operation(self, operation_id: UUID) -> None:

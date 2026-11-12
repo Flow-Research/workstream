@@ -7,12 +7,14 @@ from uuid import UUID
 from sqlalchemy import func, select, text, tuple_
 
 from app.core.hashing import canonical_json_hash
+from app.modules.contributions.api import ContributionPolicyUnavailable
+from app.modules.contributions.api.reward_selection import RewardSelectionRequest
 from app.core.identifiers import new_record_id
 from app.modules.projects.api.locked_policy import ProjectLockedPolicyContextUnavailable
 from app.modules.projects.api.policy_lineage import RevisionPolicySemantics
 from app.modules.tasks.submission_attempts import COVERAGE_RETURN_REASON
 from app.modules.tasks.api.revision import (
-    ContributorRevisionContext, RevisionCandidate, RevisionContextChange, RevisionContextSnapshot,
+    ContributorRevisionContext, ContributorRewardSelection, RevisionCandidate, RevisionContextChange, RevisionContextSnapshot,
 )
 from app.modules.tasks.api.authorization import TaskAuthorityDecision
 from app.modules.tasks.api.submission_context import TaskSubmissionContextUnavailable
@@ -65,15 +67,29 @@ def candidate_from_packet(packet: dict) -> RevisionCandidate:
     return RevisionCandidate.model_validate_json(json.dumps(packet["candidate"]))
 
 
-async def select_candidate(projects, prior) -> RevisionCandidate:
+async def select_candidate(projects, rewards, prior, *, task_size, prior_award_definition_id) -> RevisionCandidate:
     """Lock PROJECT before CHECKERS; missing current context is an explicit block."""
     policy = RevisionPolicySemantics.model_validate_json(prior.revision_policy.value)
+    prior_selection = await rewards.resolve_reward_selection(RewardSelectionRequest(
+        project_id=prior.project_id,
+        policy_version_id=snapshot(prior).lineage.locked_contribution_policy_version_id,
+        task_size=task_size,
+    ))
+    if prior_selection.award_definition_id != prior_award_definition_id:
+        raise ValueError("revision prior reward selection differs")
+    target_selection = None
     try:
         target = await projects.lock_active_policy_context(prior.project_id)
-    except ProjectLockedPolicyContextUnavailable:
+        target_selection = await rewards.resolve_reward_selection(RewardSelectionRequest(
+            project_id=prior.project_id,
+            policy_version_id=snapshot(target).lineage.locked_contribution_policy_version_id,
+            task_size=task_size,
+        ))
+    except (ProjectLockedPolicyContextUnavailable, ContributionPolicyUnavailable):
         target = None
     return RevisionCandidate(
         prior=snapshot(prior), target=snapshot(target) if target else None,
+        prior_reward_selection=prior_selection, target_reward_selection=target_selection,
         target_post_policy_json=target.compiled_post_submit_policy.value if target else None,
         max_revision_rounds=policy.max_revision_rounds,
         revision_deadline_hours=policy.revision_deadline_hours,
@@ -146,6 +162,11 @@ async def prepare_revision(session, *, manifest, candidate, audit_event_id, pred
         "next_revision_round": source_round, "max_revision_rounds": limit,
         "outcome": outcome, "blocked_reason": reason,
         "candidate": candidate.model_dump(mode="json"),
+        "previous_task_reward_selection": {
+            "task_size": task.task_size,
+            "award_definition_id": str(task.locked_submission_award_definition_id)
+            if task.locked_submission_award_definition_id is not None else None,
+        },
         "previous_task_lineage": {
             name: str(getattr(task, name)) if name.endswith("_id") else getattr(task, name)
             for name in TaskPolicyLineage.model_fields
@@ -181,7 +202,13 @@ async def prepare_revision(session, *, manifest, candidate, audit_event_id, pred
         for name, value in candidate.target.lineage.model_dump(mode="json").items():
             setattr(task, name, UUID(value) if name == "locked_contribution_policy_version_id" else value)
         task.locked_post_submit_checker_policy_body = json.loads(candidate.target_post_policy_json)
+        selection = candidate.target_reward_selection
+        if selection is None or selection.task_size != task.task_size:
+            raise TaskSubmissionContextUnavailable("revision_context_changed")
+        task.locked_submission_award_definition_id = selection.award_definition_id
         assignment.submitter_contribution_policy_version_id = candidate.target.lineage.locked_contribution_policy_version_id
+        assignment.submitter_task_size = selection.task_size
+        assignment.submitter_award_definition_id = selection.award_definition_id
         await session.flush()
     return row
 
@@ -210,6 +237,13 @@ def project_revision(row, now) -> ContributorRevisionContext:
         "kept" if prior == target else
         "forward" if target.activated_at >= prior.activated_at else "backward"
     )
+    def reward_view(selection):
+        return ContributorRewardSelection(
+            compensation_mode=selection.compensation_mode, task_size=selection.task_size,
+            instrument=selection.instrument_type.value if selection.instrument_type else None,
+            unit=selection.unit_code, quantity=selection.quantity,
+        ) if selection is not None else None
+
     return ContributorRevisionContext(
         preparation_id=UUID(str(row.id)), preparation_sha256=row.preparation_sha256,
         predecessor_preparation_id=(UUID(str(row.predecessor_id)) if row.predecessor_id is not None else None),
@@ -220,6 +254,8 @@ def project_revision(row, now) -> ContributorRevisionContext:
         clock_state="paused" if row.deadline_at is None else "running",
         remaining_microseconds=row.remaining_microseconds if row.deadline_at is None else None,
         disposition=disposition, direction=direction, prior=prior, target=target, changes=tuple(changes),
+        prior_reward_selection=reward_view(candidate.prior_reward_selection),
+        target_reward_selection=reward_view(candidate.target_reward_selection),
     )
 
 

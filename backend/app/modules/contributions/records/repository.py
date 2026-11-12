@@ -27,7 +27,7 @@ from app.modules.contributions.records.models import ContributionRecord
 
 @dataclass(frozen=True, slots=True)
 class FrozenSubmitterRule:
-    """The one accepted-submission rule and its complete definition set."""
+    """The accepted-submission rule and its recorded zero-or-one definition."""
 
     compensation_mode: Literal["unpaid", "compensated"]
     definitions: tuple[AwardDefinitionFacts, ...]
@@ -40,9 +40,10 @@ class SubmitterContributionRepository:
         self._session = session
 
     async def get_frozen_rule(
-        self, project_id: UUID, contribution_policy_version_id: UUID
+        self, project_id: UUID, contribution_policy_version_id: UUID,
+        task_size: str, contribution_award_definition_id: UUID | None,
     ) -> FrozenSubmitterRule:
-        """Read only the exact published or retired accepted-submission rule."""
+        """Read the rule and only the definition recorded by immutable Submission."""
         rule = (
             await self._session.execute(
                 select(ContributionRule.id, ContributionRule.compensation_mode)
@@ -75,6 +76,8 @@ class SubmitterContributionRepository:
                     ContributionAwardDefinition.adapter_binding_id,
                 )
                 .where(
+                    ContributionAwardDefinition.id == contribution_award_definition_id,
+                    ContributionAwardDefinition.task_size == task_size,
                     ContributionAwardDefinition.contribution_rule_id == rule.id,
                     ContributionAwardDefinition.project_id == str(project_id),
                     ContributionAwardDefinition.contribution_policy_version_id
@@ -103,11 +106,10 @@ class SubmitterContributionRepository:
                 "contribution_participation_unavailable"
             ) from exc
 
-        instruments = {item.instrument_type for item in definitions}
-        complete = (rule.compensation_mode == "unpaid" and not definitions) or (
+        complete = (rule.compensation_mode == "unpaid" and contribution_award_definition_id is None and not definitions) or (
             rule.compensation_mode == "compensated"
             and len(definitions) == 1
-            and len(instruments) == len(definitions)
+            and definitions[0].id == contribution_award_definition_id
         )
         if not complete:
             raise ContributionParticipationUnavailable("contribution_participation_unavailable")

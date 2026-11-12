@@ -72,8 +72,8 @@ class PolicyWorld:
                             "compensation_mode": "compensated",
                             "quantities": {
                                 "small": quantity,
-                                "medium": quantity,
-                                "large": quantity,
+                                "medium": "4.250000000000000002" if instrument == "money" else "14",
+                                "large": "6.375000000000000003" if instrument == "money" else "21",
                             },
                         }
                         if paid

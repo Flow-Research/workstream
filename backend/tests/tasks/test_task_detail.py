@@ -99,7 +99,7 @@ def test_task_detail_contracts():
     values = dict(task_id=task, project_id=project, title="Title", description="Instructions", task_type=None,
                   difficulty=None, skill_tags=("tag",), estimated_time_minutes=None, status="ready",
                   acceptance_criteria=None, rejection_criteria=None, deadline_at=None, created_at=now, updated_at=now)
-    compensation = TaskCompensationTerms(new_record_id(), "unpaid", "unpaid")
+    compensation = TaskCompensationTerms(new_record_id(), "small", "unpaid", "unpaid")
     for item in (ContributorTaskDetail(**values, compensation=compensation), ManagementTaskDetail(
         **values, source_type="manual", source_ref=None, source_payload_hash=None, import_batch_id=None,
         external_task_id=None, created_by="creator", assigned_to=None,
@@ -279,7 +279,7 @@ async def test_task_detail_projection(task_client, method):
         else:
             expected["compensation"] = asdict(
                 TaskCompensationTerms(
-                    row.locked_contribution_policy_version_id, "unpaid", "unpaid"
+                    row.locked_contribution_policy_version_id, row.task_size, "unpaid", "unpaid"
                 )
             )
         execute = session.execute

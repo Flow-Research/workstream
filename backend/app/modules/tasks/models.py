@@ -288,6 +288,9 @@ class WorkstreamTask(Base):
 
     id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True)
     task_size: Mapped[str] = mapped_column(String(8), nullable=False)
+    locked_submission_award_definition_id: Mapped[UUID | None] = mapped_column(
+        Uuid(), ForeignKey("contribution_award_definitions.id", name="fk_task_selected_reward")
+    )
     project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), nullable=False, index=True)
     locked_contribution_policy_version_id: Mapped[UUID | None] = mapped_column(Uuid())
     locked_guide_version: Mapped[str | None] = mapped_column(String(50))
@@ -355,6 +358,7 @@ class TaskAssignment(Base):
 
     __tablename__ = "task_assignments"
     __table_args__ = (
+        CheckConstraint("submitter_task_size in ('small','medium','large')", name="reward_size"),
         CheckConstraint("(get_byte(uuid_send(id), 6) >> 4) = 7 and (get_byte(uuid_send(id), 8) & 192) = 128", name="id_uuid7"),
         ForeignKeyConstraint(
             ["task_id", "project_id"], ["workstream_tasks.id", "workstream_tasks.project_id"],
@@ -380,6 +384,10 @@ class TaskAssignment(Base):
     id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True)
     project_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), nullable=False)
     submitter_contribution_policy_version_id: Mapped[UUID] = mapped_column(Uuid(), nullable=False)
+    submitter_task_size: Mapped[str] = mapped_column(String(8), nullable=False)
+    submitter_award_definition_id: Mapped[UUID | None] = mapped_column(
+        Uuid(), ForeignKey("contribution_award_definitions.id", name="fk_assignment_selected_reward")
+    )
     task_id: Mapped[str] = mapped_column(
         ForeignKey("workstream_tasks.id"),
         nullable=False,
@@ -414,6 +422,7 @@ class Submission(Base):
 
     __tablename__ = "submissions"
     __table_args__ = (
+        CheckConstraint("task_size in ('small','medium','large')", name="reward_size"),
         CheckConstraint("(get_byte(uuid_send(id), 6) >> 4) = 7 and (get_byte(uuid_send(id), 8) & 192) = 128", name="id_uuid7"),
         CheckConstraint(
             "attempt_status in ('evaluation_pending','review_pending','accepted',"
@@ -537,6 +546,10 @@ class Submission(Base):
 
     id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True)
     contribution_policy_version_id: Mapped[UUID] = mapped_column(Uuid(), nullable=False)
+    task_size: Mapped[str] = mapped_column(String(8), nullable=False)
+    contribution_award_definition_id: Mapped[UUID | None] = mapped_column(
+        Uuid(), ForeignKey("contribution_award_definitions.id", name="fk_submission_selected_reward")
+    )
     task_assignment_id: Mapped[str] = mapped_column(
         ForeignKey("task_assignments.id"), nullable=False, index=True
     )

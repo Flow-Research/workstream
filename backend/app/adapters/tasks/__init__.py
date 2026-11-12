@@ -84,6 +84,9 @@ class _SelectedPreSubmitTaskGuard:
             or context.checker_remediation_manifest_id
             != lineage.checker_remediation_manifest_id
             or references.project_id != reservation.project_id
+            or context.task_size != lineage.task_size
+            or context.submitter_contribution_policy_version_id != lineage.contribution_policy_version_id
+            or context.contribution_award_definition_id != lineage.contribution_award_definition_id
             or references.guide_version != lineage.guide_version
             or references.source_snapshot_id != lineage.source_snapshot_id
             or references.source_snapshot_hash != lineage.source_snapshot_sha256
@@ -228,8 +231,11 @@ def task_service(session: AsyncSession, *, settings: Settings) -> TaskService:
     """Compose exact PROJECTS custody at the existing TASK transaction root."""
     from app.adapters.projects import project_locked_policy_context_port
 
+    from app.adapters.contributions import reward_selection_port
+
     return TaskService(
         session,
+        rewards=reward_selection_port(session),
         project_contexts=project_locked_policy_context_port(session),
     )
 
@@ -240,10 +246,12 @@ def task_revision_recovery(session: AsyncSession):
     from app.adapters.auth import revision_recovery_authorization
     from app.adapters.outbox import outbox_append
     from app.adapters.projects import project_locked_policy_context_port
+    from app.adapters.contributions import reward_selection_port
     from app.modules.tasks.revision.recovery import TaskRevisionRecovery
 
     return TaskRevisionRecovery(
         session, projects=project_locked_policy_context_port(session),
+        rewards=reward_selection_port(session),
         authorization=revision_recovery_authorization(session),
         audit=task_transition_audit(session), outbox=outbox_append(session),
     )
@@ -499,12 +507,14 @@ def routing_source_preparer(session):
     """Compose exact hidden source preparation through existing owner ports."""
     from app.adapters.checkers import evaluation_coordinator
     from app.adapters.projects import project_locked_policy_context_port
+    from app.adapters.contributions import reward_selection_port
     from app.modules.tasks.post_submit_routing.source import TaskRoutingSourcePreparer
 
     return TaskRoutingSourcePreparer(
         session,
         evaluations=evaluation_coordinator(session),
         projects=project_locked_policy_context_port(session),
+        rewards=reward_selection_port(session),
     )
 
 
@@ -582,11 +592,13 @@ def task_post_submit_outcome(session, sessions):
     from app.adapters.auth import task_routing_authorization
     from app.adapters.checkers import evaluation_coordinator
     from app.adapters.projects import project_locked_policy_context_port
+    from app.adapters.contributions import reward_selection_port
     from app.modules.tasks.post_submit_routing.outcome import TaskPostSubmitOutcome
 
     return TaskPostSubmitOutcome(
         session,
         projects=project_locked_policy_context_port(session),
+        rewards=reward_selection_port(session),
         evaluations=evaluation_coordinator(session),
         authorization=task_routing_authorization(session),
         acceptance=RoutingAcceptanceAdapter(session),
@@ -613,12 +625,14 @@ def reconciliation_task_post_submit_outcome(
     from app.adapters.checkers import evaluation_coordinator
     from app.adapters.outbox import outbox_append
     from app.adapters.projects import project_locked_policy_context_port
+    from app.adapters.contributions import reward_selection_port
     from app.adapters.tasks.routing_acceptance import RoutingAcceptanceAdapter
     from app.modules.tasks.post_submit_routing.outcome import TaskPostSubmitOutcome
 
     return _post_submit_delivery_outcome_adapter(TaskPostSubmitOutcome(
         session,
         projects=project_locked_policy_context_port(session),
+        rewards=reward_selection_port(session),
         evaluations=evaluation_coordinator(session),
         authorization=task_routing_authorization(session),
         acceptance=RoutingAcceptanceAdapter(session),

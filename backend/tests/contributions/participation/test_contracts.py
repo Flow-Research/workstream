@@ -30,6 +30,7 @@ def request():
         task_assignment_id=new_record_id(),
         contributor_id=new_record_id(),
         contribution_policy_version_id=new_record_id(),
+        task_size="small", contribution_award_definition_id=None,
         artifact_hash="sha256:" + "a" * 64,
         correlation_id=new_record_id(),
         expected_generation=0,
@@ -40,6 +41,9 @@ def request():
     "change",
     [
         {"acceptance_disposition": "repair"},
+        {"task_size": None},
+        {"task_size": "Medium"},
+        {"contribution_award_definition_id": str(new_record_id())},
         {"project_id": "01900000-0000-7000-8000-000000000001"},
         {"expected_generation": True},
         {"expected_generation": -1},

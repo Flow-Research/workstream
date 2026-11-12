@@ -40,6 +40,7 @@ SOURCE_COLUMNS = (
     "assignment_id",
     "contributor_id",
     "contribution_policy_version_id",
+    "task_size", "contribution_award_definition_id",
     "checker_run_id",
     "evaluation_request_id",
     "request_digest",
@@ -111,6 +112,8 @@ async def source_values(h, run_id=None) -> dict:
         "contribution_policy_version_id": as_uuid(
             submission.contribution_policy_version_id
         ),
+        "task_size": submission.task_size,
+        "contribution_award_definition_id": submission.contribution_award_definition_id,
         "checker_run_id": as_uuid(run.id),
         "evaluation_request_id": as_uuid(run.evaluation_request_id),
         "request_digest": run.request_digest,

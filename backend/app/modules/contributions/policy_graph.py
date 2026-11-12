@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from decimal import Decimal
 from uuid import UUID
 
 from app.core.hashing import canonical_json_hash
+from app.modules.contributions.api.quantities import format_award_quantity
 from app.modules.contributions.models import ContributionPolicyVersion
 
 
@@ -31,7 +31,7 @@ def publication_graph_facts(version: ContributionPolicyVersion) -> tuple[str, tu
                 "adapter_binding_id": str(item.adapter_binding_id),
                 "definition_id": str(item.id),
                 "instrument_type": item.instrument_type,
-                "quantity": _canonical_quantity(item.quantity),
+                "quantity": format_award_quantity(item.quantity),
                 "unit_code": item.unit_code,
             }
             definition["task_size"] = item.task_size
@@ -51,11 +51,3 @@ def publication_graph_facts(version: ContributionPolicyVersion) -> tuple[str, tu
         "adapter_binding_id": str(version.adapter_binding_id) if version.adapter_binding_id else None,
     }
     return canonical_json_hash(graph), tuple(sorted(binding_ids, key=str))
-
-
-def _canonical_quantity(value: Decimal) -> str:
-    """Render an exact stored decimal without exponent or redundant zeros."""
-    rendered = format(value, "f")
-    if "." in rendered:
-        rendered = rendered.rstrip("0").rstrip(".")
-    return rendered

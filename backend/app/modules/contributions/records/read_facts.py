@@ -24,9 +24,10 @@ class FrozenContributionAward(BaseModel):
 
 
 class ContributionReadFacts(ContributionRecordInput):
-    """Stored immutable source and exact frozen rule for complete-set validation."""
+    """Stored immutable source and selected terms for exact award validation."""
 
     model_config = _STRICT
+    task_size: Literal["small", "medium", "large"] | None
     recorded_at: AwareDatetime
     policy_version_number: int = Field(gt=0)
     compensation_mode: Literal["unpaid", "compensated"]
@@ -34,7 +35,7 @@ class ContributionReadFacts(ContributionRecordInput):
 
     @model_validator(mode="after")
     def validate_frozen_set(self) -> Self:
-        """An unpaid rule has no definitions; compensated rules have one per instrument."""
+        """An unpaid rule has no definition; compensated work has one selected definition."""
         count = len(self.award_definitions)
         if len({item.id for item in self.award_definitions}) != count or len({
             item.instrument for item in self.award_definitions
