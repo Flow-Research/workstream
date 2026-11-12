@@ -285,11 +285,14 @@ fn create_capability_socket(path: &str, uid: u32, gid: u32) -> Result<UnixListen
 }
 
 fn write_guest_header(header: &GuestIoHeader) -> Result<()> {
+    write_guest_header_to(header, &mut std::io::stdout().lock())
+}
+
+fn write_guest_header_to(header: &GuestIoHeader, output: &mut impl Write) -> Result<()> {
     let bytes = serde_json::to_vec(header)?;
     if bytes.is_empty() || bytes.len() > 4096 {
         return Err("guest I/O header invalid".into());
     }
-    let mut output = std::io::stdout().lock();
     output.write_all(&(bytes.len() as u32).to_be_bytes())?;
     output.write_all(&bytes)?;
     output.flush()?;
@@ -617,6 +620,25 @@ fn drop_privileges(uid: u32, gid: u32) -> Result<()> {
     syscall_ok(unsafe { libc::prctl(libc::PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) })?;
     Ok(())
 }
+fn seal_exec_descriptors() -> Result<()> {
+    // Mark every non-stdio descriptor close-on-exec in the forked child. The
+    // command's intended stdin/stdout/stderr are duplicated onto 0/1/2 by exec.
+    // This also covers future trusted-worker pipes held by the PRE supervisor.
+    let result = unsafe {
+        libc::syscall(
+            libc::SYS_close_range,
+            3u32,
+            u32::MAX,
+            libc::CLOSE_RANGE_CLOEXEC,
+        )
+    };
+    if result == 0 {
+        Ok(())
+    } else {
+        Err(std::io::Error::last_os_error().into())
+    }
+}
+
 fn supervised_exit(status: i32, oom_kills: u64) -> i32 {
     if oom_kills > 0 {
         CAPACITY_EXIT_CODE
@@ -647,6 +669,45 @@ fn finish_workload_cgroup() -> Result<u64> {
     Err("workload descendants did not stop".into())
 }
 
+/// Captured child evidence. Returning it leaves the trusted supervisor alive
+/// for combined PRE validation; ordinary project execution emits its wire frame.
+struct ProjectOutcome {
+    status: i32,
+    oom_kills: u64,
+    output_exceeded: bool,
+    stdout: Vec<u8>,
+    stderr: Vec<u8>,
+}
+
+impl ProjectOutcome {
+    fn exit_code(&self) -> i32 {
+        if self.output_exceeded && self.oom_kills == 0 {
+            125
+        } else {
+            supervised_exit(self.status, self.oom_kills)
+        }
+    }
+
+    fn write_completion(&self, output: &mut impl Write) -> Result<()> {
+        write_guest_header_to(
+            &GuestIoHeader::Completed {
+                protocol_version: GUEST_IO_PROTOCOL.into(),
+                exit_code: libc::WIFEXITED(self.status).then(|| libc::WEXITSTATUS(self.status)),
+                signal: libc::WIFSIGNALED(self.status).then(|| libc::WTERMSIG(self.status)),
+                oom_kills: self.oom_kills,
+                output_exceeded: self.output_exceeded,
+                stdout_bytes: u32::try_from(self.stdout.len())?,
+                stderr_bytes: u32::try_from(self.stderr.len())?,
+            },
+            output,
+        )?;
+        output.write_all(&self.stdout)?;
+        output.write_all(&self.stderr)?;
+        output.flush()?;
+        Ok(())
+    }
+}
+
 fn run_project(
     job: GuestJob,
     capabilities: GuestCapabilities,
@@ -655,7 +716,7 @@ fn run_project(
     cpu: u64,
     memory: u64,
     maximum_output_bytes: usize,
-) -> Result<()> {
+) -> Result<ProjectOutcome> {
     bind_project_materials(&staged)?;
     let model = capabilities
         .model
@@ -697,6 +758,7 @@ fn run_project(
         }
         drop(stdout_child);
         drop(stderr_child);
+        seal_exec_descriptors().map_err(|error| format!("descriptor policy: {error}"))?;
         install_workload_filter().map_err(|error| format!("syscall policy: {error}"))?;
         let mut command = Command::new(&job.command[0]);
         command
@@ -806,32 +868,131 @@ fn run_project(
     } else {
         (stdout, stderr)
     };
-    let exit_code = libc::WIFEXITED(status).then(|| libc::WEXITSTATUS(status));
-    let signal = libc::WIFSIGNALED(status).then(|| libc::WTERMSIG(status));
-    write_guest_header(&GuestIoHeader::Completed {
-        protocol_version: GUEST_IO_PROTOCOL.into(),
-        exit_code,
-        signal,
+    Ok(ProjectOutcome {
+        status,
         oom_kills,
         output_exceeded,
-        stdout_bytes: stdout.len() as u32,
-        stderr_bytes: stderr.len() as u32,
-    })?;
-    let mut output = std::io::stdout().lock();
-    output.write_all(&stdout)?;
-    output.write_all(&stderr)?;
-    output.flush()?;
-    std::process::exit(if output_exceeded && oom_kills == 0 {
-        125
-    } else {
-        supervised_exit(status, oom_kills)
-    });
+        stdout,
+        stderr,
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::time::Instant;
+    #[test]
+    fn captured_project_output_stays_payload_under_trusted_completion() {
+        let untrusted = br#"{"kind":"completed","oom_kills":0,"exit_code":0}"#.to_vec();
+        let outcome = ProjectOutcome {
+            status: 7 << 8,
+            oom_kills: 0,
+            output_exceeded: false,
+            stdout: untrusted.clone(),
+            stderr: b"diagnostic".to_vec(),
+        };
+        let mut bytes = Vec::new();
+        outcome.write_completion(&mut bytes).unwrap();
+        let length = u32::from_be_bytes(bytes[..4].try_into().unwrap()) as usize;
+        let header: GuestIoHeader = serde_json::from_slice(&bytes[4..4 + length]).unwrap();
+        let GuestIoHeader::Completed {
+            exit_code,
+            signal,
+            oom_kills,
+            output_exceeded,
+            stdout_bytes,
+            stderr_bytes,
+            ..
+        } = header
+        else {
+            panic!("wrong control frame")
+        };
+        assert_eq!(exit_code, Some(7));
+        assert_eq!(signal, None);
+        assert_eq!(oom_kills, 0);
+        assert!(!output_exceeded);
+        assert_eq!(stdout_bytes as usize, untrusted.len());
+        assert_eq!(stderr_bytes, 10);
+        assert_eq!(
+            &bytes[4 + length..],
+            [untrusted, b"diagnostic".to_vec()].concat()
+        );
+        assert_eq!(outcome.exit_code(), 125);
+        // Capturing/writing the outcome returns instead of exiting the supervisor.
+        assert_eq!(outcome.stdout.len(), stdout_bytes as usize);
+    }
+
+    #[test]
+    fn captured_project_exit_preserves_trusted_oom_and_output_classification() {
+        for (status, oom_kills, output_exceeded, expected) in [
+            (0, 0, false, 0),
+            (0, 0, true, 125),
+            (CAPACITY_EXIT_CODE << 8, 0, false, 125),
+            (libc::SIGKILL, 1, false, CAPACITY_EXIT_CODE),
+            (libc::SIGKILL, 1, true, CAPACITY_EXIT_CODE),
+        ] {
+            let outcome = ProjectOutcome {
+                status,
+                oom_kills,
+                output_exceeded,
+                stdout: Vec::new(),
+                stderr: Vec::new(),
+            };
+            assert_eq!(outcome.exit_code(), expected);
+        }
+    }
+
+    #[test]
+    fn exec_descriptor_sealing_is_child_local_and_keeps_stdio() {
+        let source = File::open("/dev/null").unwrap();
+        // Deliberately inheritable, unlike Rust's normal CLOEXEC file opens.
+        let descriptor = unsafe { libc::fcntl(source.as_raw_fd(), libc::F_DUPFD, 200) };
+        assert!(descriptor >= 200);
+        let owned = unsafe { File::from_raw_fd(descriptor) };
+        assert_eq!(
+            unsafe { libc::fcntl(descriptor, libc::F_GETFD) } & libc::FD_CLOEXEC,
+            0
+        );
+        let (mut output, child_output) = UnixStream::pair().unwrap();
+        output
+            .set_read_timeout(Some(Duration::from_secs(5)))
+            .unwrap();
+        let mut command = Command::new("/bin/sh");
+        command
+            .arg("-c")
+            .arg(format!(
+                "test ! -e /proc/self/fd/{descriptor} && printf 'sealed'"
+            ))
+            .stdin(source)
+            .stdout(std::process::Stdio::from(File::from(
+                std::os::fd::OwnedFd::from(child_output),
+            )))
+            .stderr(std::process::Stdio::null());
+        let child = unsafe { libc::fork() };
+        assert!(child >= 0);
+        if child == 0 {
+            if seal_exec_descriptors().is_err() {
+                unsafe { libc::_exit(1) };
+            }
+            // Same Command::exec stdio setup used by the workload path. The
+            // high inherited descriptor must disappear, while stdout survives.
+            let _error = command.exec();
+            unsafe { libc::_exit(2) };
+        }
+        drop(command);
+        let mut status = 0;
+        assert_eq!(unsafe { libc::waitpid(child, &mut status, 0) }, child);
+        assert!(libc::WIFEXITED(status));
+        assert_eq!(libc::WEXITSTATUS(status), 0);
+        let mut bytes = Vec::new();
+        output.read_to_end(&mut bytes).unwrap();
+        assert_eq!(bytes, b"sealed");
+        assert_eq!(
+            unsafe { libc::fcntl(owned.as_raw_fd(), libc::F_GETFD) } & libc::FD_CLOEXEC,
+            0
+        );
+    }
+
     #[test]
     fn mount_targets_reject_image_symlinks_and_non_directories() {
         let root = std::env::temp_dir().join(format!("ws-guest-mounts-{}", std::process::id()));
@@ -1176,7 +1337,7 @@ fn run() -> Result<()> {
     }
     if let GuestPurpose::Project { capabilities, .. } = &purpose {
         let request = parse_request(&serde_json::to_vec(&job.request)?)?;
-        return run_project(
+        let outcome = run_project(
             job,
             *capabilities,
             staged,
@@ -1184,7 +1345,9 @@ fn run() -> Result<()> {
             cpu,
             memory,
             request.maximum_output_bytes,
-        );
+        )?;
+        outcome.write_completion(&mut std::io::stdout().lock())?;
+        std::process::exit(outcome.exit_code());
     }
     drop(input);
     bind_material_root(&staged, "archive", INPUT_ROOT)?;
@@ -1242,6 +1405,7 @@ fn run() -> Result<()> {
         )?;
     }
     drop_privileges(job.uid, job.gid).map_err(|e| format!("privileges: {e}"))?;
+    seal_exec_descriptors().map_err(|e| format!("descriptor policy: {e}"))?;
     install_workload_filter().map_err(|e| format!("syscall policy: {e}"))?;
     let mut command = Command::new(&job.command[0]);
     command.args(&job.command[1..]).env_clear();

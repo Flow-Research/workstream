@@ -1797,3 +1797,30 @@ same-length SHA negative control against the discriminating mutation logs.
 Record/link checks pass. The next connected implementation is the native
 single-guest supervisor/service path with the reviewed storage, FD, profile and
 cleanup boundaries; the portable worker does not complete that path.
+
+The native guest's existing project runner now returns captured child evidence
+instead of writing completion and exiting the trusted supervisor itself. Its
+ordinary Project entry still emits the same completion header, opaque stdout/
+stderr bytes and classified exit code. This lets the combined PRE caller consume
+the result in a later phase of the same guest without duplicating confinement or
+starting another VM. Kernel OOM evidence remains authoritative; a project-chosen
+capacity exit code still becomes infrastructure failure rather than forged OOM.
+
+Both existing workload exec sites now mark every non-stdio descriptor
+close-on-exec in the forked child before the syscall filter and exec. Intended
+stdio is installed by the existing `Command::exec` setup. This closes the future
+trusted-worker/control descriptor inheritance boundary for PRE while preserving
+the parent's live descriptors. Unsupported close-range enforcement fails closed.
+A real local fork/exec test creates a deliberately inheritable high descriptor,
+proves it is absent after exec, confirms redirected stdout still works, and
+checks the parent descriptor remains inheritable. Replacing the guard with a
+no-op makes that test fail; production code was restored. Separate framing tests
+keep project-written fake completion JSON opaque under the trusted header and
+preserve OOM/output-overflow classification.
+
+The guest crate passes 12 library and 27 binary tests; 38 shared Smol service
+unit tests also pass. These are host-process/kernel and contract checks, not
+native guest isolation qualification. The PRE service handler, two-child guest
+orchestration, bounded root/source staging, resource/profile/cleanup envelope and
+public cutover remain the connected implementation work. This supporting guest
+refactor is not a new readiness or merge milestone.
