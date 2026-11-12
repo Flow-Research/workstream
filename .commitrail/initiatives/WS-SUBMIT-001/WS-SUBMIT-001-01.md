@@ -1961,3 +1961,14 @@ configured pins and lease admission, the invocation/profile/cleanup response
 envelope, trusted-root rebuild, native qualification and public cutover remain
 required. This is a connected guest code path, not a runnable end-to-end service
 or accepted-submission claim.
+
+Architecture/security passed the guest bootstrap scope at clean `7ad19cb35`,
+with no concrete defect found. QA passed the exercised local bootstrap contracts
+at that same candidate while explicitly retaining a separate proof gap: run a
+real Python `PreSubmitWorker` with a real ZIP through the Rust supervisor socket
+dialogue, checking the exact project frame and typed completion. Synthetic
+frames and phase sentinels do not establish that cross-language compatibility.
+Neither verdict establishes privileged chroot/cgroup/UID behavior, a one-VM
+provider run, host pin/lease authority or the complete PRE service. The next
+connected proof is that portable real-worker exchange, followed by the native
+host dispatch and full runtime/profile/cleanup envelope.
