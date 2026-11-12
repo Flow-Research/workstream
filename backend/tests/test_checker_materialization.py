@@ -455,3 +455,52 @@ async def test_pre_source_grant_refuses_expiry_after_issuance(monkeypatch, alrea
         assert value.events[-2:] == ["close_source", "close_authority"]
     else:
         assert "open_source" not in value.events
+
+
+@pytest.mark.asyncio
+async def test_pre_source_grant_is_consumed_by_production_processor_in_foreground():
+    from app.modules.checkers.selected_pre_submit_execution import SelectedPreSubmitProcessor
+    from app.modules.checkers.api.selected_pre_submit import SelectedPreSubmitInfrastructureUnavailable
+
+    value = _source_read_fixture()
+    class Execution:
+        async def execute_pre(self, lease, grant):
+            assert b"".join([chunk async for chunk in grant.open_source(lease=lease)]) == value.payload
+            raise SelectedPreSubmitInfrastructureUnavailable("capacity_exceeded")
+    processor = SelectedPreSubmitProcessor(lease=value.lease, execution=Execution())
+    async with value.issuer.issue(lease=value.lease, execution_authority=value.capability) as grant:
+        with pytest.raises(SelectedPreSubmitInfrastructureUnavailable) as error:
+            await processor.process(grant)
+        assert error.value.code == "capacity_exceeded"
+    assert value.events[-2:] == ["close_source", "close_authority"]
+
+
+@pytest.mark.asyncio
+async def test_pre_source_processor_abort_unwinds_foreground_and_closes_provider():
+    import asyncio
+    from app.modules.checkers.selected_pre_submit_execution import SelectedPreSubmitProcessor
+
+    value = _source_read_fixture()
+    started = asyncio.Event()
+    class Execution:
+        async def execute_pre(self, lease, grant):
+            reader = grant.open_source(lease=lease)
+            assert await anext(reader) == value.payload
+            started.set()
+            await asyncio.Event().wait()
+    processor = SelectedPreSubmitProcessor(lease=value.lease, execution=Execution())
+    async def foreground():
+        async with value.issuer.issue(lease=value.lease, execution_authority=value.capability) as grant:
+            await processor.process(grant)
+    task = asyncio.create_task(foreground())
+    try:
+        async with asyncio.timeout(5):
+            await started.wait()
+            processor.abort()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+        assert value.events[-2:] == ["close_source", "close_authority"]
+    finally:
+        if not task.done():
+            task.cancel()
+        await asyncio.gather(task, return_exceptions=True)

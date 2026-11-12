@@ -45,8 +45,10 @@ class SelectedPreSubmitProcessor:
             raise SelectedPreSubmitInfrastructureUnavailable("material_unavailable")
         self._started = True
         try:
-            self._active = asyncio.create_task(self._execution.execute_pre(self._lease, grant))
-            result = await self._active
+            # The source grant belongs to this foreground callback task.
+            # Track it for abort without delegating source custody to a child.
+            self._active = asyncio.current_task()
+            result = await self._execution.execute_pre(self._lease, grant)
             if type(result) is not SelectedPreSubmitExecutionFacts:
                 raise ValueError("PRE result is invalid")
             result.validate_lease(self._lease)

@@ -1555,3 +1555,14 @@ extraction and exact ledger/assertion-map reconciliation, not a new exception.
 A full native workspace baseline reached the service tests: 114 passed and five
 failed on removed prepared-generation fields in old fixtures. Those failures
 remain required work in the native/public cutover; no full-suite pass is claimed.
+
+The first task-binding repair was rejected on review: although the Unix client
+reads inline, its CHECKERS processor created a child task. The earlier assertion
+that task binding matched the complete existing call path was incorrect. A new
+issuer-plus-production-processor regression failed with `material_unavailable`
+before provider access. The processor now awaits execution inline and tracks the
+foreground task for abort; a cancellation test proves abort unwinds the issuer
+and closes the provider. Twelve focused source-grant/composition cases pass.
+A broader old selected-PRE test module still fails 13 cases on the removed
+`semantic_manifest_id` prepared-lineage argument; these remain pending connected
+replacement, alongside the separately recorded Rust old-fixture failures.
