@@ -695,3 +695,49 @@ not just collection of its fixtures. This checkout currently has neither a Smol
 executable on PATH nor `/dev/kvm`; portable proof can proceed, but cannot establish
 native runtime qualification. Human review focuses on platform-code provenance,
 the supervisor/project boundary and durable evidence binding before T4.
+
+### Trusted platform provisioning and guest ingestion plan
+
+The architecture review selected project-image boot with an independently pinned
+trusted Python root as the smaller viable change. Provision the root offline,
+before runtime admission, using the already approved intake image graph. The
+provisioning Docker daemon is trusted build infrastructure, never a PRE runtime
+or a source of submission bytes. Validate the local Docker-save graph through
+the existing cache provisioner, require the exact config image ID already loaded
+in the daemon, and verify its platform and rootfs diff IDs. Create an isolated
+container with pulling disabled; never start it or invoke its entrypoint. Export
+its root filesystem through bounded storage, then remove only that invocation's
+container. Docker's documented create/export operations support this without
+executing the image. Reject image-declared volumes for this trusted profile.
+
+Produce a closed, length-framed root bundle rather than asking the guest to
+interpret OCI layers or arbitrary tar extensions. Normalize a bounded export
+into directories, regular files and symlinks; resolve hard links to regular file
+content without host extraction. Reject duplicate paths, traversal, special
+files, link-parent ancestry, invalid link targets and excessive bytes/entries.
+Directories precede files; symlinks are installed last. File permissions are
+read-only, preserving only executable intent; set-ID bits, ownership, devices,
+xattrs and host identities confer no authority. A canonical descriptor binds
+the bundle digest/count, platform manifest, config, default behavior and bounds.
+Outputs are exclusive, sealed and fsynced; failure removes only owned partial
+files. No implicit image pull, image registration or policy change occurs.
+
+The static guest verifies the complete bundle before writing into its fresh
+private root, then validates the closed framing and bounds during staging. It
+must never follow a link while writing. Absolute symlink targets are meaningful
+only inside the eventual chroot, never during host/guest unpack. The trusted
+worker uses that root's interpreter/libraries and a separate protected workspace;
+project execution remains disabled until the combined-purpose supervisor exists.
+The bundle is a necessary executable dependency for that supervisor, not proof
+that the one-session PRE path is complete.
+
+Allowed first implementation files: the existing cache provisioner and a cohesive
+trusted-root provisioning module, its existing test family, guest bundle reader
+and focused tests, exact test registration if needed, this record and runtime
+documentation. Risk L0; architecture/security plan and implementation review,
+QA/test-delta review and affected documentation review. Prove source-image
+substitution refusal, no-start/no-pull behavior, bounded export and cleanup,
+hardlink/symlink/path attacks, truncation/digest/bounds refusal and a valid Python
+root round trip. Native mount/chroot isolation remains a subsequent guest
+integration gate. No backend public cutover, second PRE guest, deployment default
+or provider qualification is included in this provisioning step.
