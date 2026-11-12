@@ -15,20 +15,18 @@ import struct
 import threading
 import zipfile
 
-from pydantic import TypeAdapter
 import pytest
 
 from app.adapters.artifacts.trusted_intake import UnixSocketTrustedIntakeAdapter
 from app.core.identifiers import new_record_id
 from app.interfaces.external_services import ExternalServiceProtocolError
-from app.interfaces.trusted_submission_intake import TrustedDefaultBinding, TrustedIntakePreparation
+from app.interfaces.trusted_submission_intake import TrustedIntakePreparation
 from app.modules.artifacts.api.submission_archive import SubmissionArchiveLimits
 from app.modules.artifacts.submission_archive import SubmissionArchiveInspector
 from app.modules.artifacts.submission_manifest import build_submission_manifest
 from app.modules.checkers.api.default_checker import (
     WORKSTREAM_DEFAULT_BEHAVIOR_SHA256,
     WorkstreamDefaultCheckerInput,
-    workstream_default_input_sha256,
 )
 from app.modules.checkers.api.material import SubmissionMaterialEntry
 from app.modules.checkers.api.pre_submit_material import SubmissionPacketView
@@ -91,28 +89,7 @@ def _default(data: bytes) -> WorkstreamDefaultCheckerInput:
     )
 
 
-def _binding(value: WorkstreamDefaultCheckerInput) -> TrustedDefaultBinding:
-    return TrustedDefaultBinding(
-        new_record_id(),
-        _POLICY,
-        _POLICY,
-        value.semantic_manifest_sha256,
-        workstream_default_input_sha256(value),
-    )
-
-
-def _default_command(value, binding=None):
-    binding = binding or _binding(value)
-    return _command(
-        "default",
-        {
-            "binding": {**asdict(binding), "attempt_id": str(binding.attempt_id)},
-            "input": TypeAdapter(WorkstreamDefaultCheckerInput).dump_python(value, mode="json"),
-        },
-    )
-
-
-def _run(tmp_path, data, commands=b"", phase="pre_submit"):
+def _run(tmp_path, data, commands=b"", phase="post_submit"):
     archive = tmp_path / "archive.zip"
     archive.write_bytes(data)
     workspace = tmp_path / "workspace"
@@ -142,17 +119,6 @@ def _export_result(output, expected: bytes):
     assert _read(output)["operation"] == "export"
 
 
-def test_worker_inspects_exports_and_runs_canonical_default_once(tmp_path):
-    data = _archive()
-    value = _default(data)
-    worker, output = _run(tmp_path, data, _command("export", {}) + _default_command(value) * 2)
-    with pytest.raises(ValueError, match="out of sequence"):
-        worker.run()
-    _export_result(output, b"finished work")
-    result = _read(output)
-    assert result["operation"] == "default"
-    assert all(check["status"] == "passed" for check in result["payload"]["checks"])
-    assert output.read() == b""  # No second default response can be accepted.
 
 
 @pytest.mark.parametrize(
@@ -173,35 +139,6 @@ def test_worker_preserves_canonical_zip_rejection_without_export(tmp_path, data,
     assert not (tmp_path / "escape").exists()
 
 
-@pytest.mark.parametrize(
-    "mutation", ["before_export", "post", "policy", "manifest", "packet", "lease"]
-)
-def test_default_requires_export_and_exact_pre_custody(tmp_path, mutation):
-    data = _archive()
-    value = _default(data)
-    binding = _binding(value)
-    prefix = _command("export", {})
-    if mutation == "before_export":
-        prefix = b""
-    elif mutation == "policy":
-        binding = replace(binding, policy_sha256=_IMAGE)
-    elif mutation == "manifest":
-        binding = replace(binding, semantic_manifest_sha256=_IMAGE)
-    elif mutation == "packet":
-        value = replace(value, packet=SubmissionPacketView("Substituted", "Authorized"))
-    command = _default_command(value, binding)
-    if mutation == "lease":
-        command = command.replace(_LEASE.encode(), b"f" * 128)
-    worker, output = _run(
-        tmp_path,
-        data,
-        prefix + command,
-        phase="post_submit" if mutation == "post" else "pre_submit",
-    )
-    with pytest.raises(ValueError):
-        worker.run()
-    assert b'"operation": "default"' not in output.getvalue()
-    assert b'"operation":"default"' not in output.getvalue()
 
 
 @pytest.mark.asyncio
@@ -468,25 +405,193 @@ def test_worker_rejects_preparation_size_substitution_before_inspection(tmp_path
     assert output.read() == b""
 
 
-def test_worker_rejects_rehashed_entries_before_default_evaluation(tmp_path, monkeypatch):
-    """Consistent supplied hashes cannot replace the guest's observed inventory."""
+
+
+def _pre_worker(tmp_path, data, *, extra_startup=None, stored_data=None, result_change=None, reservation_change=None):
+    """Real ZIP/worker with simulated supervisor project result; no VM claim."""
+    from app.modules.checkers.api.external import make_external_checker_execution_result
+    from app.modules.checkers.api.selected_pre_submit import SelectedPreSubmitLeaseFacts
+    from tests.checkers.external.test_selected_pre_submit_coordination import _source_reservation, _retained_v1
+
+    reservation = _source_reservation()
+    reservation = replace(reservation, source=reservation.source.model_copy(update={
+        "raw_sha256": "sha256:" + hashlib.sha256(data).hexdigest(), "raw_byte_count": len(data),
+    }))
+    if reservation_change:
+        reservation = reservation_change(reservation)
+    lease = SelectedPreSubmitLeaseFacts(reservation, new_record_id(), 1, reservation.pre_deadline_at)
+    startup = {"operation": "execute_pre", "request": {
+        "protocol_version": "external_checker_service.v1", "operation": "execute_pre",
+        "reservation": reservation.canonical_body(), "request_digest": reservation.request_digest,
+        "lease_id": str(lease.lease_id), "lease_generation": 1,
+        "lease_expires_at": lease.lease_expires_at.isoformat(),
+    }, "isolation": _retained_v1("selected_pre_v1_completed")["terminal"]["execution"]["external_members"][0]["isolation"] | {
+        "platform_manifest_digest": reservation.policy.entries[0].registry.image_digest,
+    }}
+    if extra_startup:
+        startup["request"].update(extra_startup)
+    archive = tmp_path / "pre.zip"
+    archive.write_bytes(data if stored_data is None else stored_data)
+    workspace = tmp_path / "pre-tree"
+    workspace.mkdir(mode=0o700)
+    output = BytesIO()
+    class ProjectReply:
+        def __init__(self):
+            self.reply = None
+            self.calls = 0
+        def read(self, count):
+            if self.reply is None:
+                self.calls += 1
+                # This simulated supervisor responds only to the worker's own
+                # derived project request; it cannot supply a manifest/default.
+                framed = BytesIO(output.getvalue())
+                message = _read(framed)
+                assert message["operation"] == "project"
+                from app.modules.checkers.api.external import ExternalCheckerExecutionRequest
+                request = ExternalCheckerExecutionRequest.model_validate_json(json.dumps(message["payload"]["request"]))
+                selected = reservation.policy.entries[0].registry
+                result = make_external_checker_execution_result(
+                    request_digest=request.request_digest, registry_entry_id=selected.registry_entry_id,
+                    registry_entry_digest=selected.entry_digest, phase="pre_submit", outcome="completed",
+                    verdict="passed", findings=(), infrastructure_failure_code=None,
+                ).model_dump(mode="json")
+                body = {"request_digest": reservation.request_digest, "lease_id": str(lease.lease_id),
+                        "lease_generation": 1, "result": result}
+                if result_change:
+                    result_change(body)
+                self.reply = BytesIO(_frame(body))
+            return self.reply.read(count)
+    reply = ProjectReply()
+    worker = _WORKER.PreSubmitWorker(startup=startup, archive=archive, workspace=workspace, reader=reply, writer=output)
+    return worker, output, reply, lease
+
+
+def test_pre_worker_derives_source_manifest_defaults_and_project_request(tmp_path):
+    from app.core.hashing import canonical_json_hash
+    from app.modules.checkers.api.selected_pre_submit import SelectedPreSubmitExecutionFacts
     data = _archive()
-    original = _default(data)
-    forged = replace(
-        original,
-        entries=(replace(original.entries[0], executable=not original.entries[0].executable),),
-    )
-    assert workstream_default_input_sha256(forged) != workstream_default_input_sha256(original)
-    worker, output = _run(
-        tmp_path, data,
-        _command("export", {}) + _default_command(forged, _binding(forged)),
-    )
+    worker, output, reply, lease = _pre_worker(tmp_path, data)
+    worker.run()
+    output.seek(0)
+    project, completed = _read(output), _read(output)
+    assert project["operation"] == "project" and completed["operation"] == "completed"
+    assert output.read() == b"" and reply.calls == 1
+    execution = SelectedPreSubmitExecutionFacts.from_canonical_body(completed["payload"])
+    execution.validate_lease(lease)
+    assert execution.eligible
+    expected_manifest = {"schema_version": "workstream.submission_bundle_manifest.v1", "entries": [{
+        "normalized_path": "work.txt", "entry_type": "file", "byte_count": 13,
+        "sha256": "sha256:" + hashlib.sha256(b"finished work").hexdigest(), "executable": False,
+    }]}
+    assert execution.manifest_body == expected_manifest
+    assert execution.manifest_sha256 == canonical_json_hash(expected_manifest)
+    assert execution.observed_source.raw_sha256 == "sha256:" + hashlib.sha256(data).hexdigest()
+    assert project["payload"]["request"]["input"]["manifest"] == expected_manifest["entries"]
+    with pytest.raises(ValueError, match="already consumed"):
+        worker.run()
 
-    def must_not_evaluate(*args):
-        pytest.fail("substituted observed entries reached the default evaluator")
 
-    monkeypatch.setattr(_WORKER, "evaluate_verified_archive", must_not_evaluate)
-    with pytest.raises(ValueError, match="default custody differs"):
+@pytest.mark.parametrize("data", [b"not a zip", _archive("../escape"), _archive(content=b"-----BEGIN RSA PRIVATE KEY-----\nsecret")])
+def test_pre_worker_default_blocker_never_requests_project(tmp_path, data):
+    worker, output, reply, lease = _pre_worker(tmp_path, data)
+    worker.run()
+    output.seek(0)
+    result = _read(output)
+    assert result["operation"] == "completed" and result["payload"]["eligible"] is False
+    assert reply.calls == 0 and result["payload"]["external_members"] == []
+    assert output.read() == b"" and not (tmp_path / "escape").exists()
+
+
+@pytest.mark.parametrize("field", ["manifest", "default_input", "prepared_generation_id"])
+def test_pre_worker_refuses_host_derived_inputs(tmp_path, field):
+    with pytest.raises(ValueError, match="protocol invalid"):
+        _pre_worker(tmp_path, _archive(), extra_startup={field: {}})
+
+
+@pytest.mark.parametrize("stored", [b"different", b"", _archive() + b"extra"])
+def test_pre_worker_refuses_source_substitution_before_inspection(tmp_path, monkeypatch, stored):
+    worker, output, reply, _ = _pre_worker(tmp_path, _archive(), stored_data=stored)
+    def forbidden(*args):
+        raise AssertionError("substituted source reached ZIP inspector")
+    monkeypatch.setattr(_WORKER, "SubmissionArchiveInspector", forbidden)
+    with pytest.raises(ValueError, match="source identity differs"):
+        worker.run()
+    assert output.getvalue() == b"" and reply.calls == 0
+
+
+def test_post_worker_export_remains_available_and_prepared_pre_is_refused(tmp_path):
+    worker, output = _run(tmp_path, _archive(), _command("export", {}))
+    with pytest.raises(EOFError):
         worker.run()
     _export_result(output, b"finished work")
-    assert output.read() == b""
+    other = tmp_path / "pre"
+    other.mkdir()
+    with pytest.raises(ValueError, match="POST-only"):
+        _run(other, _archive(), phase="pre_submit")
+
+
+@pytest.mark.parametrize("changed", ["lease_id", "lease_generation", "request_digest", "result_request", "export"])
+def test_pre_worker_refuses_rebound_project_result(tmp_path, changed):
+    from app.modules.checkers.api.external import external_checker_json_hash
+    def mutate(body):
+        if changed == "result_request":
+            body["result"]["request_digest"] = _POLICY
+            body["result"]["result_digest"] = external_checker_json_hash({
+                k: v for k, v in body["result"].items() if k != "result_digest"
+            })
+        elif changed == "export":
+            body["operation"] = "export"
+        else:
+            body[changed] = {"lease_id": str(new_record_id()), "lease_generation": 2, "request_digest": _POLICY}[changed]
+    worker, output, reply, _ = _pre_worker(tmp_path, _archive(), result_change=mutate)
+    with pytest.raises(ValueError):
+        worker.run()
+    output.seek(0)
+    assert _read(output)["operation"] == "project"
+    assert output.read() == b"" and reply.calls == 1
+
+
+@pytest.mark.parametrize("blocker", ["secret", "unchanged"])
+def test_pre_worker_blocker_bypasses_incompatible_selected_schema(tmp_path, blocker):
+    from app.modules.checkers.api.default_checker import WorkstreamDefaultPredecessor
+    from app.modules.checkers.api.external import external_checker_json_hash
+    from app.modules.checkers.api.external_policy import LockedExternalPreSubmitPolicy
+    from tests.checkers.external.support import registry_entry
+    data = _archive(content=b"-----BEGIN RSA PRIVATE KEY-----\nsecret") if blocker == "secret" else _archive()
+    def changed(reservation):
+        binding = reservation.policy.entries[0].model_copy(update={"registry": registry_entry()})
+        body = reservation.policy.model_dump(mode="json", exclude={"policy_sha256"})
+        body["entries"] = [binding.model_dump(mode="json")]
+        policy = LockedExternalPreSubmitPolicy.model_validate_json(json.dumps(body | {"policy_sha256": external_checker_json_hash(body)}))
+        reservation = replace(reservation, policy=policy, admission_lineage=replace(
+            reservation.admission_lineage, effective_plan_sha256=policy.policy_sha256,
+        ))
+        if blocker == "unchanged":
+            manifest = build_submission_manifest(SubmissionArchiveInspector(SubmissionArchiveLimits()).inspect(BytesIO(data)))
+            predecessor = WorkstreamDefaultPredecessor(new_record_id(), 1, reservation.source.raw_sha256, manifest.sha256)
+            reservation = replace(reservation, default_context=replace(
+                reservation.default_context, predecessor=predecessor, current_predecessor=predecessor,
+                predecessor_exists=True, predecessor_rules_sha256=reservation.default_context.current_rules_sha256,
+            ), admission_lineage=replace(reservation.admission_lineage,
+                predecessor_submission_id=predecessor.submission_id, predecessor_submission_version=1,
+                checker_remediation_manifest_id=new_record_id(),
+            ))
+        return reservation
+    worker, output, reply, _ = _pre_worker(tmp_path, data, reservation_change=changed)
+    worker.run()
+    output.seek(0)
+    completed = _read(output)
+    assert completed["operation"] == "completed" and reply.calls == 0
+    checks = completed["payload"]["workstream_default"]["checks"]
+    expected = "high_confidence_secret_detected" if blocker == "secret" else "submission_archive_unchanged"
+    assert any(check["failure_code"] == expected for check in checks)
+    assert completed["payload"]["external_members"] == [] and output.read() == b""
+
+
+def test_pre_worker_expired_budget_never_reads_source_or_requests_project(tmp_path, monkeypatch):
+    worker, output, reply, _ = _pre_worker(tmp_path, _archive())
+    monkeypatch.setattr(_WORKER.time, "monotonic", lambda: worker._deadline + 1)
+    worker._archive.unlink()
+    with pytest.raises(TimeoutError, match="deadline"):
+        worker.run()
+    assert reply.calls == 0 and output.getvalue() == b""

@@ -1748,3 +1748,34 @@ The native plan review required the following concrete decisions before code:
   manifest/default-input/export/prepared-generation commands. Native Smol/KVM
   qualification remains unavailable locally and must not be relabeled portable
   proof. Existing shared POST/trial fixtures retain their own behavior coverage.
+
+Architecture/security and QA plan replay passed `e47c89a48` for implementation,
+not runtime qualification. The first implementation replaces the trusted worker's
+PRE export/default dialogue with a closed source-reservation `execute_pre` entry.
+The old prepared worker now accepts POST only and retains its archive export.
+The PRE worker checks source byte count/hash, uses canonical ZIP inspection and
+default evaluation, derives the manifest/default input/project request itself,
+and never requests a project result after a blocker. Its private supervisor
+control exchange binds the lease and request; a project result is schema-,
+registry- and request-validated before combined source evidence is emitted.
+Expiry is checked against both monotonic budget and the absolute lease. The
+supervisor must still enforce interruption during blocking pipe reads and guest
+work; these checks alone are not physical preemption.
+
+The focused worker module passes 45 tests, including real ZIP independent
+manifest/hash expectations, unsafe archives, source substitution before parsing,
+host-derived input refusal, rebound project results, one-use execution and POST
+export retention. Secret and unchanged-work blockers use an incompatible selected
+project schema and a project-request sentinel. Removing the blocker branch made
+both controls fail; the production branch was restored. Ownership/catalogue
+checks passed 229 tests, the protected partition is unchanged, and undefined/
+unused-name checks pass. Removed worker tests exercised the superseded PRE
+export/default dialogue; their required source/default identity and no-repeat
+invariants are covered by the source-derived and one-use replacements.
+
+This is an intermediate worker candidate. The Rust native handler/supervisor,
+protected tree handoff, actual runtime/profile/cleanup envelope, old ART/public
+caller removal, trusted image/root rebuild and actual Smol/KVM qualification are
+still required. The existing old PRE controller cannot use the now POST-only
+prepared worker and must be replaced, not shimmed. No runnable public cutover or
+T4/accepted result authority is claimed by these portable worker tests.
