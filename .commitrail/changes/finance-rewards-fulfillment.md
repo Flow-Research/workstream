@@ -317,3 +317,10 @@ masked contributor receipt fields with private source coordinates. The repair
 keeps full immutable-context hash validation and compares captured public fields
 through the canonical contributor projection instead of weakening lineage or
 adding another receipt format.
+
+The actual migration drill exposed a stale Alembic preflight revision list that
+stopped at `0068_issuer_profile_email`. It now recognizes the current migration
+chain through `0071_selected_task_reward`; unsupported starting states still
+refuse. The new migration tests use actual Alembic installation and upgrade,
+exact retained row snapshots and the existing full schema manifest collector.
+They assert that incompatible screened work refuses before changing data or DDL.
