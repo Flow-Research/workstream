@@ -10,48 +10,14 @@ use workstream_checker_guest::trusted_root::stage_root;
 const CONTROL: &str = "/sys/fs/cgroup/workstream-pre-control";
 const WORKER: &str = "/sys/fs/cgroup/workstream-pre-default";
 
-fn validate_limits(limits: PreBootstrapLimits) -> Result<()> {
-    for partition in [limits.control, limits.worker, limits.project] {
-        if partition.cpu_millis == 0
-            || partition.cpu_millis.checked_mul(100).is_none()
-            || partition.memory_bytes == 0
-            || partition.processes == 0
-        {
-            return Err("PRE partition invalid".into());
-        }
-    }
-    if limits.control.processes < 3
-        || limits.worker_uid == 0
-        || limits.worker_gid == 0
-        || limits.worker_scratch_bytes == 0
-        || limits.maximum_source_bytes == 0
-        || limits.project_scratch_bytes == 0
-        || limits.maximum_control_bytes == 0
-        || limits.maximum_control_bytes > 64 * 1024 * 1024
-        || limits.maximum_control_bytes as u64 > limits.control.memory_bytes
-        || limits.maximum_output_bytes == 0
-        || limits.maximum_log_bytes == 0
-        || u32::try_from(limits.maximum_output_bytes).is_err()
-        || u32::try_from(limits.maximum_log_bytes).is_err()
-        || limits.timeout_ms == 0
-        || limits.timeout_ms > 14_400_000
-        || limits.cleanup_timeout_ms < limits.timeout_ms
-        || limits.cleanup_timeout_ms > 14_400_000
-        || limits.overlay_bytes == 0
-        || limits.filesystem_overhead_bytes == 0
-    {
-        return Err("PRE bootstrap bounds invalid".into());
-    }
-    Ok(())
-}
-
 fn parse_limits(mut arguments: impl Iterator<Item = OsString>) -> Result<PreBootstrapLimits> {
     let value = arguments.next().ok_or("PRE bootstrap limits missing")?;
     if value.len() > PRE_LIMITS_MAXIMUM_BYTES || arguments.next().is_some() {
         return Err("PRE bootstrap limits unbounded".into());
     }
-    let limits = serde_json::from_str(value.to_str().ok_or("PRE limits encoding invalid")?)?;
-    validate_limits(limits)?;
+    let limits: PreBootstrapLimits =
+        serde_json::from_str(value.to_str().ok_or("PRE limits encoding invalid")?)?;
+    limits.validate()?;
     Ok(limits)
 }
 
@@ -82,7 +48,7 @@ struct Envelope {
 }
 impl Envelope {
     fn prepare(limits: PreBootstrapLimits) -> Result<Self> {
-        validate_limits(limits)?;
+        limits.validate()?;
         let started = Instant::now();
         let result = Self {
             limits,
@@ -848,7 +814,7 @@ mod tests {
                 ..valid
             },
         ] {
-            assert!(validate_limits(invalid).is_err());
+            assert!(invalid.validate().is_err());
         }
     }
     #[test]

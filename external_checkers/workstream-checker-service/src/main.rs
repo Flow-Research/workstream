@@ -83,6 +83,8 @@ struct ServiceConfig {
     smol: Option<smol::SmolConfig>,
     #[serde(default)]
     trusted_intake: Option<smol::IntakeConfig>,
+    #[serde(default)]
+    pre: Option<smol::PreConfig>,
     runtime: String,
     isolation_mode: String,
     operating_system: String,
@@ -3166,6 +3168,7 @@ mod tests {
         let config = ServiceConfig {
             smol: None,
             trusted_intake: None,
+            pre: None,
             smol_admission: None,
             container_owner: Some(
                 load_container_owner(&File::open(&socket_root).unwrap()).unwrap(),

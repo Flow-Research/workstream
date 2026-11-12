@@ -36,6 +36,7 @@ pub(super) use intake::{serve as serve_intake, IntakeConfig};
 mod io;
 mod pre;
 pub(super) use io::{ProjectCallbacks, ProjectMaterials};
+pub(super) use pre::admission::Config as PreConfig;
 
 #[derive(Clone, Copy)]
 struct Resources {
@@ -322,18 +323,45 @@ pub(super) fn validate(config: &ServiceConfig) -> Result<(), String> {
     Ok(())
 }
 pub(super) fn inspect_image(image: &CacheEntry) -> Result<(), String> {
+    image_configuration(image).map(|_| ())
+}
+fn image_configuration(image: &CacheEntry) -> Result<Value, String> {
     let source = image.smol.as_ref().ok_or("Smol image missing")?;
-    hash_file(&source.image_config, &image.config_image_id)?;
-    let value: Value =
-        serde_json::from_slice(&read_bounded_file(&source.image_config, MAX_REQUEST_BYTES)?)
-            .map_err(|_| "image configuration invalid")?;
+    if !source.image_config.is_absolute() || !valid_digest(&image.config_image_id) {
+        return Err("image configuration identity invalid".into());
+    }
+    let mut file = OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC | libc::O_NONBLOCK)
+        .open(&source.image_config)
+        .map_err(|_| "image configuration unavailable")?;
+    let metadata = file
+        .metadata()
+        .map_err(|_| "image configuration unavailable")?;
+    if !metadata.is_file()
+        || metadata.mode() & 0o022 != 0
+        || metadata.len() > MAX_REQUEST_BYTES as u64
+    {
+        return Err("image configuration custody invalid".into());
+    }
+    let mut bytes = Vec::new();
+    Read::by_ref(&mut file)
+        .take(MAX_REQUEST_BYTES as u64 + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|_| "image configuration unavailable")?;
+    if bytes.len() > MAX_REQUEST_BYTES
+        || format!("sha256:{:x}", Sha256::digest(&bytes)) != image.config_image_id
+    {
+        return Err("image configuration identity differs".into());
+    }
+    let value: Value = serde_json::from_slice(&bytes).map_err(|_| "image configuration invalid")?;
     if value["os"].as_str() != Some(&image.operating_system)
         || value["architecture"].as_str() != Some(&image.architecture)
     {
         return Err("image platform differs".into());
     }
     image_command(&value)?;
-    Ok(())
+    Ok(value)
 }
 fn image_command(value: &Value) -> Result<Vec<String>, String> {
     let mut command = Vec::new();
@@ -964,10 +992,7 @@ impl Machine {
                     .map_err(|_| "material_unavailable")?,
             );
         }
-        let source = cache.smol.as_ref().ok_or("Smol image missing")?;
-        let value: Value =
-            serde_json::from_slice(&read_bounded_file(&source.image_config, MAX_REQUEST_BYTES)?)
-                .map_err(|_| "image configuration invalid")?;
+        let value = image_configuration(cache)?;
         let environment = match value["config"]["Env"].as_array() {
             Some(items) => items
                 .iter()

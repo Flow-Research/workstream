@@ -1,5 +1,6 @@
 //! Host-owned PRE invocation and durable cleanup custody.
 use super::*;
+pub(super) mod admission;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]

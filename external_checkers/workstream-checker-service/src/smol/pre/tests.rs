@@ -15,7 +15,7 @@ fn invocation() -> Invocation {
     }
 }
 
-fn fixture() -> (PathBuf, ServiceConfig, Lease, Journal) {
+pub(super) fn fixture() -> (PathBuf, ServiceConfig, Lease, Journal) {
     let (root, mut config) = super::super::super::tests::test_config();
     let leases = root.join("leases");
     fs::create_dir(&leases).unwrap();

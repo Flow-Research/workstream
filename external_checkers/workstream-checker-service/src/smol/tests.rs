@@ -234,6 +234,31 @@ fn cached_image_config_must_match_its_pinned_digest_and_platform() {
     fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
     fs::write(&path, b"{}").unwrap();
     assert!(inspect_image(cache).is_err());
+    fs::write(&path, raw).unwrap();
+    assert_eq!(
+        image_configuration(cache).unwrap()["config"]["Cmd"],
+        serde_json::json!(["--json"])
+    );
+    OpenOptions::new()
+        .write(true)
+        .open(&path)
+        .unwrap()
+        .set_len(MAX_REQUEST_BYTES as u64 + 1)
+        .unwrap();
+    assert_eq!(
+        inspect_image(cache).unwrap_err(),
+        "image configuration custody invalid"
+    );
+    fs::write(&path, raw).unwrap();
+    fs::set_permissions(&path, fs::Permissions::from_mode(0o666)).unwrap();
+    assert_eq!(
+        inspect_image(cache).unwrap_err(),
+        "image configuration custody invalid"
+    );
+    fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
+    fs::rename(&path, root.join("retained-image")).unwrap();
+    std::os::unix::fs::symlink(root.join("retained-image"), &path).unwrap();
+    assert!(inspect_image(cache).is_err());
     fs::remove_dir_all(root).unwrap();
 }
 

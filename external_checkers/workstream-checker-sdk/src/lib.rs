@@ -489,7 +489,12 @@ pub fn completed_result(
     Ok(value)
 }
 
-fn validate_registry(registry: &Map<String, Value>, phase: &str) -> Result<(), ContractError> {
+/// Validate the immutable selection without requiring source-derived input.
+/// PRE admission uses this before the guest can produce that input.
+pub fn validate_registry(registry: &Map<String, Value>, phase: &str) -> Result<(), ContractError> {
+    if !matches!(phase, "pre_submit" | "post_submit") || string(registry, "phase")? != phase {
+        return Err(ContractError("registry phase differs"));
+    }
     exact_map(
         registry,
         &[

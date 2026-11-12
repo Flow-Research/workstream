@@ -2072,3 +2072,45 @@ metadata custody. No additional mutation was claimed. Invocation validation is
 structural only: the host handler must still compare it to locked source,
 selection and configured runtime/profile facts. Successful PRE guardian recovery,
 public dispatch, provider execution and native qualification are not proved.
+
+### Host PRE admission and configured envelope
+
+Continue the reviewed native host plan by binding the closed PRE header to the
+exact configured runtime/profile/root and selected cached image before resource
+allocation or source reads. Allowed files are the existing Rust service PRE
+module/configuration/tests, shared image configuration reader, guest bootstrap
+limits library/caller/tests, SDK registry validator and this record. Reuse the
+SDK's registry check without inventing source input or evaluating an unrun
+project's input schema. Reuse one early bootstrap limits validator on host and
+guest. Shared image configuration parsing must consume the exact bounded bytes
+whose digest was verified. No new deployment default, authority source, provider
+qualification claim, host source spool, second VM or compatibility PRE path is
+permitted. Host stream dispatch and the complete runtime response remain required.
+
+Acceptance for this architecture/security-sensitive L1 boundary is refusal of
+mismatched request/source/configured pins, stale UTC deadlines, ambiguous selected
+cache entries and unchecked capacity arithmetic before create; exact reservation
+attempt/run identity; separate GiB rounding of storage and overlay; and bounded
+bootstrap job construction with no project capabilities or fabricated input.
+Tests must start from a passing control before each adverse mutation and retain
+shared Smol/guest/SDK coverage. Architecture/security and QA/test-delta reviews
+focus on configured-versus-self-consistent identities, refusal ordering, integer
+arithmetic and the distinction between local admission proof and actual native
+qualification. Structural configuration alone does not qualify a provider.
+
+The final portable checks pass 45 selected Smol tests, 52 guest tests and eight
+SDK tests. Admission's 21 adverse cases each first pass an unchanged control;
+mutation requests recompute registry/policy/request digests where necessary so
+internally consistent rebinding reaches the relevant configured-pin checks.
+UTC tests reject calendar normalization, leap seconds, unsupported offsets and
+excess precision, flooring submillisecond expiry conservatively. Shared image
+checks retain digest/platform and hardlink coverage and add bounded-size,
+unsafe-mode and symlink refusal. The held root descriptor checks regular-file
+custody and exact byte count; full root bytes remain verified by the guest's
+existing WSROOT loader. No source bytes or provider calls occur in these tests.
+An initial fixture inherited group-write permissions and failed before the
+intended checks; that failed run is excluded, and fixtures now set explicit
+permissions and require passing controls. Formatting, diff, record and link
+checks pass. Host dispatch still does not call admission or stream the source;
+these checks do not establish provider qualification, authorization independent
+of the trusted caller, or a complete execution response.
