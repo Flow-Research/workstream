@@ -570,6 +570,7 @@
   "source": {
     "method": "GET",
     "openapi_version": "3.1.0",
-    "path": "/api/v1/projects/{project_id}/contribution-policies/{policy_id}"
+    "path": "/api/v1/projects/{project_id}/contribution-policies/{policy_id}",
+    "repository_sha": "9757e57dd4d942fdbbc7f10a166a9c2cfd109316"
   }
 }
