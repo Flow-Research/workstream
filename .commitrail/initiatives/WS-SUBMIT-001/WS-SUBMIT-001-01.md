@@ -3373,3 +3373,53 @@ and Markdown links passed. Hosted results for the next push remain unverified.
 The next product boundary is the durable source cleanup claim/tombstone and
 exact eligible deletion, followed by confirmed charge release; the observation
 port by itself intentionally grants none of those operations.
+
+## Durable sealed-source cleanup custody
+
+Implement the next cleanup boundary in existing ART intake ownership: a retained
+claim/tombstone for an exact sealed terminal source, generation-fenced retries,
+and atomic confirmed charge release. Claim under existing TASK/operation locks;
+require at least two hours since terminal/seal activity and reject every accepted,
+retained, active or ambiguous source. Provider deletion will consume this exact
+claim outside transactions; confirmation must compare the current generation.
+Unsealed/uncertain upload reconciliation remains conservative until its outstanding
+write obligations are resolved, and cannot use this sealed-source path.
+
+Allowed scope: intake models/repository/capacity and cohesive cleanup owner/API,
+next migration0078, canonical model/identifier/reset registries, existing custody
+fixtures plus a selected cleanup test module, provider adapter integration and
+architecture guards, this record. No accepted-evidence deletion, generic key-only
+admin deletion, schema guard bypass in production, invented business/admin retry
+capability or quota release on abort ACK. Risk L0: retention, resource accounting
+and concurrency. Required reviews architecture/security, QA/test delta, and CI
+integrity/docs for affected guards/evidence. Human review focus: exact target,
+current ownership, retained-reference barriers, late writes, once-only release.
+Acceptance: positive eligible cleanup plus recent/live/accepted/retained denial,
+SQL forgery/immutability, stale claim and concurrent replay, uncertain delete
+retains charge, confirmed absence releases once. Verify with real PostgreSQL and
+Local/MinIO; any historical timestamp fixture is setup only, never a disabled
+cleanup guard. Public cleanup scheduling/authority and orphan reconciliation
+remain required for full feature completion.
+
+Initial custody candidate: migration 0078 adds one operation-owned cleanup table,
+its pending index, three cleanup functions/three triggers, extends the two existing
+charge/accounting guards and three charge constraints. No retained rows are
+rewritten. The fresh PostgreSQL migration completed; the observed schema fingerprint
+is `8dd976d22e0ea2e8c65a0ee47f0bc418a6315ddb67786876b16afbf92eecad5e`.
+The canonical expectation and model/reset/identifier registries are updated for
+that intended delta; model parity is part of the real database test run.
+
+The flush-only cleanup owner remains private and uncomposed. Its confirmation
+inputs must come from the forthcoming trusted provider coordinator; they are not
+public client assertions or a deletion capability. No scheduler, AUTH service
+boundary, provider deletion or unsealed reclamation is claimed by this candidate.
+Historical fixture aging is restricted to the isolated `workstream_test_` database
+and restores the foreground immutability trigger in the same setup transaction;
+cleanup/charge guards are never disabled. Positive owner accounting tests therefore
+prove database custody, not external deletion. Add the stalled accepted denial
+probe to the existing admission module that already owns its real AUTH/T4 fixture.
+
+Ruff, initial structure, migration application and whitespace checks passed.
+The first custody run began before two additional cleanup tests were added;
+its collection/output and the final focused rerun will be reported distinctly.
+Do not use that initial launch as frozen final test evidence.

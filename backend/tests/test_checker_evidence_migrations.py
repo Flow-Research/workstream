@@ -81,7 +81,7 @@ async def _assert_exact_0062_schema(database_url: str, monkeypatch) -> None:
         if table not in {
             "checker_trial_evidence", "submission_intake_operations",
             "submission_source_capacity_profiles", "submission_source_charges",
-            "submission_source_upload_receipts",
+            "submission_source_upload_receipts", "submission_source_cleanup_claims",
         }
     )
     with monkeypatch.context() as patch:

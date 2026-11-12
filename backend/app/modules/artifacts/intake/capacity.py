@@ -82,6 +82,19 @@ class SubmissionSourceCapacity:
         await self._session.flush()
         return row
 
+    async def release_confirmed(self, operation: SubmissionIntakeOperation) -> None:
+        """Release only against the same transaction's confirmed cleanup tombstone."""
+        from app.modules.artifacts.intake.models import SubmissionSourceCleanupClaim
+        await self._profile(operation, None)
+        claim = await self._session.get(SubmissionSourceCleanupClaim, operation.id)
+        charge = await self._session.scalar(select(SubmissionSourceCharge).where(
+            SubmissionSourceCharge.operation_id == operation.id,
+        ).with_for_update().execution_options(populate_existing=True))
+        if claim is None or claim.confirmed_at is None or charge is None or charge.state not in {"sealed", "released"}:
+            raise SubmissionSourceCapacityConflict("source_cleanup_unconfirmed")
+        charge.state, charge.accounted_bytes = "released", 0
+        await self._session.flush()
+
     async def seal(self, operation: SubmissionIntakeOperation) -> None:
         """Convert only unused allowance; terminal failures never reclaim bytes."""
         await self._profile(operation, None)

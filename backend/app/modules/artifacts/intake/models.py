@@ -144,12 +144,13 @@ class SubmissionSourceCharge(Base):
     __table_args__ = (
         ForeignKeyConstraint(["operation_id"], ["submission_intake_operations.id"],
                              name="fk_submission_source_charge_operation"),
-        CheckConstraint("reserved_bytes>0 and accounted_bytes>0 and accounted_bytes<=reserved_bytes",
+        CheckConstraint("reserved_bytes>0 and accounted_bytes>=0 and accounted_bytes<=reserved_bytes",
                         name="positive_charge"),
         CheckConstraint("declared_raw_bytes is null or declared_raw_bytes=reserved_bytes", name="declared_reservation"),
-        CheckConstraint("state in ('reserved','sealed')", name="charge_state"),
+        CheckConstraint("state in ('reserved','sealed','released')", name="charge_state"),
         CheckConstraint("(state='reserved' and accounted_bytes=reserved_bytes and sealed_at is null) "
-                        "or (state='sealed' and sealed_at is not null)", name="charge_shape"),
+                        "or (state='sealed' and sealed_at is not null and accounted_bytes>0) "
+                        "or (state='released' and sealed_at is not null and accounted_bytes=0)", name="charge_shape"),
     )
 
     operation_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True)
@@ -158,6 +159,29 @@ class SubmissionSourceCharge(Base):
     accounted_bytes: Mapped[int] = mapped_column(BigInteger)
     state: Mapped[str] = mapped_column(String(20))
     sealed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class SubmissionSourceCleanupClaim(Base):
+    """Retained exact-source claim; confirmation and charge release commit together."""
+
+    __tablename__ = "submission_source_cleanup_claims"
+    __table_args__ = (
+        ForeignKeyConstraint(["operation_id"], ["submission_intake_operations.id"],
+                             name="fk_source_cleanup_operation"),
+        CheckConstraint("generation>0 and lease_expires_at>claimed_at", name="claim_bounds"),
+        CheckConstraint("jsonb_typeof(source)='object'", name="source_shape"),
+        CheckConstraint("(get_byte(uuid_send(claim_id),6)>>4)=7 and (get_byte(uuid_send(claim_id),8)&192)=128",
+                        name="claim_uuid7"),
+        Index("ix_source_cleanup_pending", "lease_expires_at", postgresql_where=text("confirmed_at is null")),
+    )
+
+    operation_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True)
+    claim_id: Mapped[str] = mapped_column(Uuid(as_uuid=False))
+    generation: Mapped[int] = mapped_column(BigInteger)
+    source: Mapped[dict] = mapped_column(JSONB)
+    claimed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    lease_expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class SubmissionSourceUploadReceipt(Base):

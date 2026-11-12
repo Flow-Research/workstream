@@ -30,6 +30,24 @@ from tests.authorization.admin_access.fixtures import (
 )
 
 
+async def test_stalled_accepted_source_is_protected_from_cleanup(recovery_intake):
+    """Exhausted finalizer delivery never turns accepted input into garbage."""
+    from sqlalchemy.exc import DBAPIError
+    from sqlalchemy import text
+    from app.adapters.tasks import intake_task_custody_port
+    from app.modules.artifacts.intake.cleanup import SealedSourceCleanup
+    f, operation = recovery_intake.f, recovery_intake.owner.operation_id
+    with pytest.raises(DBAPIError, match="cleanup is protected"):
+        async with f.factory.begin() as session:
+            await SealedSourceCleanup(session, intake_task_custody_port(session)).claim(
+                operation, new_record_id(), lease_duration=timedelta(minutes=5))
+    async with f.factory() as session:
+        assert await session.scalar(text("SELECT state FROM submission_intake_operations WHERE id=:id"),
+                                    {"id": operation}) == "finalization_pending"
+        assert await session.scalar(text("SELECT accounted_bytes FROM submission_source_charges WHERE operation_id=:id"),
+                                    {"id": operation}) > 0
+
+
 @pytest.fixture
 async def admission_intake(tmp_path, isolated_database_env, admin_access, request):
     from app.adapters.outbox import outbox_append, finalized_unknown_deliveries

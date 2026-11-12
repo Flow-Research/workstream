@@ -363,7 +363,7 @@ async def test_recorded_source_identity_is_immutable(intake):
 async def test_intake_model_matches_installed_schema(isolated_database_env):
     from sqlalchemy import inspect
     from app.modules.artifacts.intake.models import (
-        SubmissionIntakeOperation, SubmissionSourceCapacityProfile, SubmissionSourceCharge,
+        SubmissionIntakeOperation, SubmissionSourceCapacityProfile, SubmissionSourceCharge, SubmissionSourceCleanupClaim,
     )
 
     engine = create_async_engine(isolated_database_env)
@@ -372,7 +372,7 @@ async def test_intake_model_matches_installed_schema(isolated_database_env):
             def compare(sync):
                 inspector = inspect(sync)
                 for owner in (SubmissionIntakeOperation, SubmissionSourceCapacityProfile, SubmissionSourceCharge,
-                              SubmissionSourceUploadReceipt):
+                              SubmissionSourceUploadReceipt, SubmissionSourceCleanupClaim):
                     table = owner.__table__
                     assert {
                         (c["name"], str(c["type"].compile(dialect=sync.dialect)), c["nullable"])
