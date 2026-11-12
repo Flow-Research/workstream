@@ -913,3 +913,121 @@ retained the same canonical bundle digest and counts; no daemon materialization
 or deployment configuration default was added. The unchanged guest reader and
 in-chroot Python successfully load the canonical urllib3, archive inspector and
 the existing default behavior identity from that root.
+
+## Next bounded change: source-bound single-session PRE
+
+Risk: L0 (untrusted archive/project code, process isolation, immutable execution
+identity). This change connects the verified platform root to the execution
+path. It is not complete when only new types or a standalone worker pass tests.
+Its reviewable outcome is one typed `execute_pre` call that streams one sealed
+source into one guest, runs canonical defaults there, conditionally runs the
+selected project there, and returns independently verifiable combined evidence.
+The public submission cutover and accepted transaction remain later work in this
+same PR; no intermediate implementation is a merge milestone.
+
+### Inspected constraints and replacement decisions
+
+- `SelectedPreSubmitReservationFacts` and its database row currently require
+  prepared generation, manifest and default-input digests before execution.
+  They cannot represent T3's source-first reservation. Evolve this existing
+  CHECKERS owner and row; never substitute an operation UUID into a prepared
+  generation field or create a second PRE job owner.
+- Python external identity/material contracts and the Rust SDK both require
+  prepared generation today. Replace that PRE custody with operation/run/source
+  identity together with affected builders, validators and fixtures. POST's
+  submission/binding identity remains distinct. Retained historical row values
+  remain data; they are not authority for new source-bound invocations.
+- `IntakeWorker` currently requires inspect -> host export -> default. Replace
+  its PRE sequence with guest-local inspect -> derive -> default. Trace and
+  preserve POST's currently shared inspection/export consumer until its own
+  retained-source replacement; do not add an alternative PRE export path.
+- ART's `_projected_tree` closes its sealed in-memory content at context exit;
+  the projected directory is separate from that content snapshot. Keep the
+  trusted projection lifetime through project execution and let the supervisor
+  own workspace teardown. Do not infer byte identity from directory existence.
+- The current guest mounts the project image as root and has one hard-coded
+  workload cgroup. A combined purpose must stage the approved platform bundle
+  in a private supervisor directory, chroot the platform worker into it, and
+  keep project execution in the approved project root. Separate mount namespaces,
+  users, cgroups and descriptors are mandatory. The project must not see the
+  platform root, raw archive, staging directories or trusted control endpoints.
+
+### Allowed files and owners
+
+- Existing CHECKERS `api/selected_pre_submit.py`, `api/external.py`,
+  `selected_pre_submit*` implementation, `models.py`, corresponding migration
+  and exact owner tests: source-first reservation and independent result binding.
+- `backend/app/interfaces/external_checker_execution.py`, existing checker
+  adapters/factory composition, and ART's public source/read grant boundary:
+  one typed source-based PRE call and separately supplied expiring delivery.
+- `external_checkers/intake/worker.py`, the existing guest `lib.rs`, `main.rs`
+  and cohesive PRE helper, service `smol.rs`, `smol/intake.rs`, transport and
+  SDK: combined guest purpose, streaming, protected worker/project sequencing.
+- Canonical ART manifest/archive and CHECKERS default APIs only where an
+  owner-public entry point or shared derivation is required; reuse their
+  semantics, do not copy inspection/default algorithms into Rust.
+- Existing affected tests, new focused PRE tests, exact behavior ownership and
+  lane registrations, SDK fixtures, this record and affected current docs.
+
+Prohibited: host/API whole-ZIP spool or verified-tree export for PRE; another
+PRE VM/runner; project-selected platform code; manufactured manifests, default
+input or prepared-generation IDs; changed default behavior; acceptance before
+T4; deletion of retained evidence; POST semantic changes; capabilities/network
+expansion; fabricated runtime limits or provider qualification.
+
+### Execution and authority sequence
+
+1. Reserve existing CHECKERS run under TASK/operation/fence custody after T2.
+   Persist immutable source descriptor, locked task/packet/rules/predecessor,
+   exact approved image/config/default/profile and explicit budgets. Manifest
+   and default-input evidence are absent until observed, not placeholder hashes.
+2. Record discoverable runtime invocation/cleanup obligation before create;
+   use existing guardian/capacity ownership. Deliver exact authorized source
+   with bounded reads over the existing transport, outside database locks.
+   The platform bundle and guest spool/expanded workspace remain explicitly
+   charged. No caller path is part of the provider-neutral request.
+3. In the guest, stage the trusted root with the verified reader, validate raw
+   SHA/count, inspect/extract and derive canonical manifest/default input from
+   locked facts. Run the unchanged four defaults. A source mismatch is an
+   infrastructure failure; unsafe ZIP can be a default rejection with no
+   manifest. Blocking defaults produce project `not_run`.
+4. On default pass, supervisor permits exactly the registered project command
+   with verified input read-only and a separately bounded writable workspace.
+   The nested request is derived in trusted code after inspection. Project
+   output is bounded data on separate pipes, never a trusted response frame.
+   Close inherited control/source/root descriptors before project exec; forbid
+   mount/ptrace/signal access to the supervisor and keep it outside workload OOM.
+5. CHECKERS validates the manifest and reconstructs expected nested request and
+   default-input digests from its persisted locked facts. Matching echoed
+   digests alone cannot establish eligibility. Validate every operation/run,
+   source generation, image/config/default/profile and fence before persistence.
+   Capture evidence independently of cleanup; uncertain destruction retains its
+   obligation and charged capacity, not a fabricated checker failure.
+
+### Acceptance, verification and review focus
+
+Future implementation tests must exercise the connected call, not only parsing:
+valid ZIP -> four defaults -> exactly one selected project invocation; malformed
+ZIP and secret/unchanged rejection -> no project invocation; source SHA/count
+mismatch -> infrastructure failure; swapped image/config/run/fence or manifest
+-> rejection; forged project stdout -> cannot supply trusted facts; deadline,
+EOF, output excess, cancellation and uncertain create/destroy -> bounded terminal
+behavior with retained cleanup custody. Revision/current-predecessor checks and
+warning-only packet omissions preserve canonical behavior.
+
+Use existing real PostgreSQL harness for T3 reservation/replay/fence/rollback and
+migration parity, existing Rust workspace checks under pinned 1.84.0, and real
+Python canonical inspector/default fixtures for derived evidence. Include a
+portable guest composition drill with the actual approved root, plus a mutation
+that bypasses defaults and a mutation that trusts echoed request digests; both
+must fail meaningful assertions. Namespace/cgroup/Smol isolation needs native
+qualification and cannot be established by mocks or the portable drill. This
+host currently has neither Smol nor `/dev/kvm`; retain that explicit evidence gap
+and do not enable unqualified production execution as a fallback.
+
+Architecture/security review the plan and frozen implementation, specifically
+source-first ownership, SDK replacement and supervisor privilege separation.
+QA/test-delta review assertion reachability and discriminating mutations.
+Documentation review reconciles exposure and qualification claims. Lead owns
+shared checks, exact CI handles and the same PR; human review focus is the
+source-to-result authority chain and confinement evidence, not test counts.
