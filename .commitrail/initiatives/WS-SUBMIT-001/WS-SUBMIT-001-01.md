@@ -1620,3 +1620,60 @@ collected nodes once, including all 29 moved cases; this remains selection proof
 not a second database execution. Record/link checks pass. The structural repair
 is complete within its scope. Native one-session execution, obsolete prepared
 callers/fixtures, SQL result custody and T4/public delivery remain unfinished.
+
+### Native combined PRE implementation boundary
+
+The next runtime change replaces the PRE branch of trusted intake plus exported
+host tree plus separate project execution with one `execute_pre` handler on the
+existing checker socket/factory. It is L0 security-sensitive work. Allowed files
+are the existing Rust service/Smol lifecycle, guest/bootstrap/confinement code,
+trusted Python worker/image, CHECKERS result/profile contracts and existing
+adapter composition, their tests/fixtures, and affected ownership/lane/docs
+records. Shared POST/trial behavior and retained evidence must remain intact.
+No second PRE VM, host ZIP/tree spool, compatibility PRE grant, general egress,
+new adapter factory, invented qualification or deployment resource defaults are
+allowed. Architecture/security and QA/test-delta plan and implementation reviews
+are required; human review should focus on trusted/project separation and
+uncertain-create/destroy custody, not only completed-result shape.
+
+The existing Smol `Machine` writes a private lease and starts its guardian before
+provider creation. Extend that same custody with exact PRE operation/run/request
+and execution fence, and retain unsettled capacity through its existing admission
+quarantine. Boot the selected approved project image once with the independent
+static Workstream bootstrap. Inject the independently pinned platform root using
+the existing verified root-bundle reader, then stream the sealed source with
+bounded frames directly into protected guest storage. Runtime/profile matching
+must precede allocation and byte admission; all quantities remain explicit.
+
+Inside that guest, the protected supervisor invokes the canonical Python archive
+and default-checker owners from the independent platform root. The worker derives
+the manifest, default input and nested project request from the locked source
+reservation and inspected tree. A default blocker returns without starting project
+code. Otherwise the supervisor launches exactly the selected project command in
+its own user/mount/cgroup boundary with a read-only verified input view and
+separate writable scratch. Trusted worker/control descriptors must not survive
+into project code; project stdout/stderr cannot become trusted framing. The
+supervisor remains outside the project OOM group. The existing project runner
+should be refactored where needed rather than copied into a second confinement
+implementation. The trusted worker validates the bounded project result and
+constructs the combined evidence; CHECKERS independently validates it again.
+
+Extend the same response to carry actual invocation identity, exact runtime/profile
+and typed conformance evidence, stage timing and cleanup obligation/disposition.
+Source/member results alone remain insufficient for T4. Cleanup uncertainty may
+retain a captured valid result only with its independently persisted obligation;
+it must not release unsettled capacity. Native handler errors and disconnects
+must unwind the same lease/guardian path. Remove obsolete PRE export/grant/default
+commands and their consumers as the connected replacement lands, preserving the
+separate POST archive consumer rather than adding a compatibility PRE branch.
+
+Proof must include real ZIP/default/request derivation; default rejection without
+project start; wrong source/root/profile/fence refusal; bounded source/output and
+aggregate deadline; cancellation during receive/default/project/cleanup; exact
+pre-create lease and uncertain-destroy accounting; and adversarial project attempts
+to alter input, signal the supervisor or forge control output. Shared POST/trial
+regressions remain required. Portable workers/socket fakes and Rust tests prove
+only their exercised contracts. This workspace currently has neither a Smol
+binary nor `/dev/kvm`, and hosted backend CI only collects native qualification
+fixtures; actual one-guest isolation qualification remains a required distinct
+execution prerequisite, not an inferred pass from portable tests.
