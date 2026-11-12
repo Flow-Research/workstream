@@ -254,7 +254,7 @@ real public API/durable-worker drill remain final PR requirements.
 | Target behavior | Specification sections 20–21 and focused existing owner tests | Required proof defined; implementation pending | No payment/deployment qualification yet |
 | Obligation wire validation | Focused COMP/FIN contract suite and Ruff | 76 cases passed; lint passed | Pure input proof only; no source authority, runtime activation or payment proof |
 | Full-award reports and exceptions | Both owner contract paths, shared positive/negative fixtures | 164 combined contract cases passed; scoped lint and module boundaries passed | No receipt persistence, source authority or provider-finality proof |
-| Retained-reward preflight | Isolated PostgreSQL runner, 15 diagnostic tests | All passed, including live work, dual awards, read-only DML rejection, seeded corruption and unknown schema | Supports the pinned pre-v2 schema only; no actual migration fence or cutover proof |
+| Retained-reward preflight | Isolated PostgreSQL runner: initial 15-test suite plus 4 affected-source repair tests | Passed, including live work, dual awards, read-only DML rejection, seeded corruption, unsupported human evidence and unknown schema; cleanup confirmed | Supports the pinned pre-v2 schema only; no actual migration fence or cutover proof |
 
 ## Review findings
 
@@ -279,8 +279,9 @@ The focused contract-fix replay passed at `c64d4f218`, including an independent
 wheel extraction and permissive-schema counterexample. Preflight plan review
 then closed missing import-member inventory, incomplete acceptance-source
 predicates, an imprecise artifact-hash path and unreachable anomaly controls.
-The corrected plan passed at `130148fe0`. Its diagnostic is implemented; real
-PostgreSQL proof is required before its implementation review or qualification.
+The corrected plan passed at `130148fe0`. Its diagnostic passed the initial
+15-test PostgreSQL suite and the four affected tests after source-qualification
+repair, using runner-owned temporary databases with confirmed cleanup.
 
 Implementation review identified that native human acceptance has no canonical
 decision-receipt owner at the supported baseline: Review stores no authorization
@@ -293,8 +294,13 @@ real-PostgreSQL regressions cover these escaped false negatives. Task-route
 acceptance retains its complete existing receipt validation. This refines the
 planned human-source checks above rather than enabling human acceptance.
 
+The source-qualification repair passed focused security/QA/test-delta replay at
+`70a60846b`. The next v2 policy/selection plan passed at `629149638` after adding
+explicit retained TASK create/import digest, response and membership handling;
+new defaults must not rewrite historical canonical field sets.
+
 ## Reconciliation
 
 - Current-source reconciliation: baseline matches the specification; no newer merged owners found.
-- Next usable boundary: executable contracts and safe read-only retained-data preflight, with financial activation closed.
+- Next usable boundary: v2 policy/task/revision selection and its forward migration; contracts and pinned-baseline preflight are implemented, with financial activation closed.
 - Remaining risks: broad single-PR review surface explicitly selected by user; commit boundaries aid inspection but do not establish runtime rollback safety.
