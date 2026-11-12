@@ -466,3 +466,27 @@ def test_worker_rejects_preparation_size_substitution_before_inspection(tmp_path
     output.seek(0)
     assert _read(output)["operation"] == "ready"
     assert output.read() == b""
+
+
+def test_worker_rejects_rehashed_entries_before_default_evaluation(tmp_path, monkeypatch):
+    """Consistent supplied hashes cannot replace the guest's observed inventory."""
+    data = _archive()
+    original = _default(data)
+    forged = replace(
+        original,
+        entries=(replace(original.entries[0], executable=not original.entries[0].executable),),
+    )
+    assert workstream_default_input_sha256(forged) != workstream_default_input_sha256(original)
+    worker, output = _run(
+        tmp_path, data,
+        _command("export", {}) + _default_command(forged, _binding(forged)),
+    )
+
+    def must_not_evaluate(*args):
+        pytest.fail("substituted observed entries reached the default evaluator")
+
+    monkeypatch.setattr(_WORKER, "evaluate_verified_archive", must_not_evaluate)
+    with pytest.raises(ValueError, match="default custody differs"):
+        worker.run()
+    _export_result(output, b"finished work")
+    assert output.read() == b""

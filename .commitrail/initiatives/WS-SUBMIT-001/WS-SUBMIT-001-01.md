@@ -1104,3 +1104,14 @@ predecessor, trusted-worker and selected-PRE tests pass, including late binding
 and digest sensitivity to locked facts and observed input. This is an internal
 step in the reviewed replacement: the worker still has its old command sequence,
 and source-first reservation, combined guest and T4 are not implemented yet.
+
+Scoped architecture/security passed the default-context step at `517370267`.
+QA's in-memory stale-binding mutation failed the new digest-sensitivity test.
+Both tracks independently rejected forged executable metadata with a recomputed
+supplied input/binding digest before the worker evaluator; that case is now a
+permanent worker regression. The ownership partition regenerated identically,
+and 229 ownership/lane-catalogue checks passed. These checks do not qualify a
+rebuilt platform image or the still-unimplemented combined guest path.
+The repaired focused suite passes 81 tests. Disabling only the worker's observed
+input comparison in memory makes the new regression fail at its evaluator-entry
+sentinel, confirming the assertion reaches and distinguishes that boundary.
