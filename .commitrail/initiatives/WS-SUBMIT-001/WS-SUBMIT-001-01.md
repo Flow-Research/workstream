@@ -25,8 +25,9 @@ MinIO tests do not qualify AWS. Detailed evidence below belongs to its stated
 commit or worktree, not automatically to every later head.
 
 Finalization now has production OUTBOX registration and invocation fencing, with
-real PostgreSQL recovery proof. Full Celery/provider execution, independent worker
-capacity, stalled-operation projection and operator recovery remain unfinished.
+real PostgreSQL recovery proof. A dedicated local worker queue and internal
+authorized stall projection are implemented. Full Celery/provider execution,
+independent worker capacity, public progress and operator recovery remain unfinished.
 Next: close those durable-worker gaps, then complete cleanup and public API/CLI/MCP
 cutover, real revision/review/ContributionRecord journeys, policy cardinality and
 the A01–A35/C01–C07 completion audit. No public end-to-end readiness is claimed.
@@ -3033,3 +3034,23 @@ contracts and ART architecture checks passed (`/tmp/t5-progress-static.log`:
 **94 passed**). Evidence is for the working tree based on `cb09fd84c`; it does
 not prove public operation reads or operator retry. Ruff passed for all changed
 Python files.
+
+Scoped architecture/security and QA/test-delta reviews passed on clean
+`82452d5f314d163b44c43fa6063ac44a6f60b033`, against `cb09fd84c`. Reviewers checked
+current authorization before observer construction, exact immutable event custody,
+finalized precedence, refusal of inconsistent terminal delivery, and absence of
+provider/retry effects. Structure, Commitrail and Markdown-link checks also passed.
+A fresh fetch found no missing `origin/main` commits.
+
+Recovery follow-up must reuse the registered, currently planned
+`operations.submission_gate.repair` action only for its narrow recovery purpose.
+Current AUTH specifications require a system Operator grant, exact resource,
+reason and append-only evidence. Existing POST delivery reconciliation is a
+reference for retaining the original terminal attempt and authorizing a bounded
+child; its current UNKNOWN-only contract cannot simply be relabelled as general
+finalization recovery. Any implementation must qualify exact accepted operation,
+source, event and current retry ownership, preserve original outcomes, and reuse
+T5 rather than create another Submission path. In particular, finalizer lease
+expiry currently uses the original envelope: a recovery child must supply its
+verified live lease bound while retaining the original accepted event identity.
+No recovery action has been activated by this checkpoint.
