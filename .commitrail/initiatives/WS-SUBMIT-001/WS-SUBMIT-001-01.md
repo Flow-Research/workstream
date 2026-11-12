@@ -2062,3 +2062,13 @@ are journal/admission proofs, not successful guardian recovery or VM execution.
 Formatting, diff, Commitrail and Markdown link checks pass. The new PRE entry
 methods are not yet called by the public host dispatch; compiler dead-code
 warnings reflect that unfinished integration rather than a runtime proof.
+
+Architecture/security and QA/test-delta review passed clean `9292eec4e` for
+this custody scope. Reviewers inspected creation ordering and the exact
+filesystem counterexamples; source/fence reserialization changes both the
+in-memory expected lease and the on-disk body, thereby discriminating the
+captured digest check. Replacement and link cases discriminate inode and
+metadata custody. No additional mutation was claimed. Invocation validation is
+structural only: the host handler must still compare it to locked source,
+selection and configured runtime/profile facts. Successful PRE guardian recovery,
+public dispatch, provider execution and native qualification are not proved.
