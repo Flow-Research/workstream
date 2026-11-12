@@ -119,6 +119,21 @@ scripts/run_isolated_tests.py -- .venv/bin/python -m pytest -q
 tests/finance/test_reward_preflight.py`; `.venv/bin/ruff check
 scripts/finance_reward_preflight.py tests/finance/test_reward_preflight.py`.
 
+### Independent contract continuation: reports and exceptions
+
+While preflight is reviewed, extend only the existing COMP/FIN public contract
+entry points, shared canonical-format primitives, portable schemas/fixtures and
+focused tests. Reports must match an explicitly supplied immutable obligation's
+source/root/award/project/binding/route/instrument/unit/correlation and full
+quantity. Validate closed fulfilled/failed shapes and receiver-time bounds;
+late delivery remains valid. Exceptions must identify the exact prior fulfilled
+event under the same obligation and use the prescribed time bounds. These pure
+validators supply no source authority and perform no persistence or effects.
+Both owners validate each fixture independently, including wrong-binding and
+partial-quantity negatives. No routes, receipt store, new policy writer or
+provider implementation is introduced by this continuation. Verification is
+the focused contract suite plus canonicalization and shape adversarial controls.
+
 ## Acceptance criteria
 
 - [ ] Positive/negative contract fixtures reproduce canonical digest vectors and reject altered evidence.
