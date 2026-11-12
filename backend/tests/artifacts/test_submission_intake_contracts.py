@@ -489,6 +489,10 @@ async def test_non_yielding_ingress_cannot_escape_deadline(path, deadline, stall
     import time
     from app.modules.artifacts.intake.streaming import hash_submission_replay
 
+    class NoWrites:
+        async def upload_source_part(self, *args, **kwargs):
+            pytest.fail("expired ingress reader reached provider storage")
+
     async def chunks():
         if not stall_at_eof:
             time.sleep(0.05)
@@ -504,7 +508,7 @@ async def test_non_yielding_ingress_cannot_escape_deadline(path, deadline, stall
                                          idle_timeout_seconds=idle, deadline_at=expires)
         else:
             # This small body must not reach a provider when its reader expires.
-            await receive_submission_source(object(), upload_value(
+            await receive_submission_source(NoWrites(), upload_value(
                 idle_timeout_seconds=idle, upload_deadline_at=expires,
             ), chunks())
 

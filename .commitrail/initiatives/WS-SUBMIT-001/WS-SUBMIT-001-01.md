@@ -610,8 +610,9 @@ snapshot lacked the two new ActionId values. Repair scope includes Alembic env
 and its existing graph/resume tests, plus that exact generated MCP snapshot and
 its canonical digest. It preserves the allowed historical revisions and refusal
 of unknown revisions, and changes no MCP tool or product route. Targeted repeated
-upgrade/downgrade/historical-resume checks and real OpenAPI comparison must pass
-before the next review candidate is frozen.
+upgrade/downgrade/historical-resume checks and real OpenAPI comparison gate
+publication/readiness. Source may be frozen for conditional review while a long
+integration run finishes; a live run is not passing evidence.
 
 The selected MCP contract checks now pass all 144 tests against actual backend
 OpenAPI (58.94s). The snapshot delta is exactly the two intake action values,
@@ -623,3 +624,15 @@ fell just below its unchanged threshold after the new admission class; documenti
 its constructor, transaction ownership, reservation validation and authorized-read
 contracts restores the check (80.1%). This is documentation of the actual owner
 boundaries, with no behavior or threshold change.
+
+
+The historical migration repair run completed: 35 passed, 33 deselected in
+1524.15s; migration head 0070 and database/role cleanup were confirmed. The
+receipt records HEAD `dfdcfa181` because it ran the repair worktree before freeze;
+architecture/security inspected the narrow code delta on clean `3e9157ce` and
+ran the exact-head migration graph check. Its independent total/idle deadline
+probes now reject the formerly accepted late reads. Documentation review found
+and corrected the earlier freeze/publication sequencing sentence. Upload deadline
+regressions now use an explicit forbidden-write assertion instead of relying on
+a missing provider method; replay and late-part regressions retain their direct
+late-success assertions. No full public API or T1–T5 readiness is inferred.
