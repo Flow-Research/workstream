@@ -27,10 +27,10 @@ merge, deploy or initiate live payments without the required authorization.
 
 ## Current behavior and concrete gap
 
-The branch contains reward policy authoring, wire validation and create-time
-size work. It also contains rejected reward-model markers, old graph/response
-readers, archived replay fixtures and a predecessor-specific preflight. Those
-must be removed before continuing the selection/acceptance/Finance journey.
+The branch contains current reward policy authoring, wire validation and
+create-time size work. The replacement removes reward-model markers, old
+graph/response readers, archived replay fixtures and the predecessor-specific
+preflight. Exact Submission selection remains the next acceptance dependency.
 No complete Finance runtime or end-to-end fulfillment journey is delivered.
 
 ## Immediate bounded replacement
@@ -153,3 +153,9 @@ Assess and update affected roadmap summaries, scoreboard, diagram, gates and
 references in this PR. Run stale-wording and Markdown-link checks. Local sheet
 exports, when present, follow repository rules. Keep PR #709 draft until the full
 scope and applicable reviews are complete; merge remains a specific human action.
+
+Review repairs remove the remaining enrollment CLI command, historical-credit
+authorization branch and orphan admission discriminator from the current
+specification/ADR. Current points credit follows its exact active arrangement;
+bank transfers retain their separate human authorization and prior-fulfillment
+checks. Duplicate-award storage proof names the actual single-award constraint.

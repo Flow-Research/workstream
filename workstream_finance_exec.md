@@ -726,7 +726,7 @@ DESTINATION_UNAVAILABLE
 UNSUPPORTED_CURRENCY
 UNSUPPORTED_PRECISION
 AMOUNT_OUT_OF_RANGE
-HISTORICAL_PAYMENT_UNRESOLVED
+PRIOR_FULFILLMENT_UNRESOLVED
 AUTHORITY_REVOKED
 PROVIDER_APPROVAL_REQUIRED
 ~~~
@@ -829,7 +829,7 @@ Require an existing admitted root and the exact original service binding. Return
 - The immutable source-award fields used by source_award_digest and that digest.
 - contribution_record_id/type, task_id, submission_id, final_acceptance_id or review_id.
 - Exact selected task_size for submitter work; null for fixed reviewer work.
-- fulfillment_root_id, admission_kind and obligation_digest.
+- fulfillment_root_id and obligation_digest.
 - The current normalized fulfillment status, attention flag, fulfilled external_event_id if recorded, and exact receipt evidence.
 
 
@@ -1113,13 +1113,13 @@ Example: 3 FLOW at NGN 1.005 per FLOW gives exact NGN 3.015, rounded once to NGN
 
 ### 12.3 Points credit
 
-For a new points_credit obligation, an active arrangement authorizes the worker to atomically:
+For a points_credit obligation, an active arrangement authorizes the worker to atomically:
 
 - Insert its unique immutable point_credit entry.
 - Mark the obligation fulfilled.
 - Create one immutable Finance fulfillment event and append its callback selector/digest through shared `OutboxAppendPort` in that same local transaction.
 
-No per-obligation human authorization or Paystack call is involved for new points_credit. The worker checks that the source/project execution configuration and exact payee profile/arrangement remain eligible. The credit entry records external fulfillment of this award; it does not create another Workstream earning, a transferable wallet balance or a redemption right.
+No per-obligation human authorization or Paystack call is involved for points_credit. The worker checks that the source/project execution configuration and exact payee profile/arrangement remain eligible. The credit entry records external fulfillment of this award; it does not create another Workstream earning, a transferable wallet balance or a redemption right.
 
 
 ### 12.4 Finance authorization
@@ -1131,7 +1131,7 @@ Bank-transfer plans start awaiting_authorization. One eligible human with financ
 3. For a bank transfer, require the manager to attest that the plan's referenced signed agreement applies to this payee, amount/arrangement and accepted work. The request's agreement reference and digest must equal the pinned plan.
 4. Require prior_payment_checked=true, prior_payment_result=not_fulfilled and verification_reference. An already_fulfilled or unknown result returns 422 PRIOR_FULFILLMENT_UNRESOLVED without creating an authorization or execution intent. Performing a check alone is insufficient. These findings must receive this explicit error rather than a generic schema error.
 5. Begin a fresh shared transaction and reacquire canonical AUTH actor/link/grant custody first, compensation source/binding/root currentness second, then Finance’s obligation/current-plan and execution/configuration locks in the documented order. Recheck the expected hash and HTTP source evidence against the current owner-returned facts, the same actor’s exact current grant, source/binding/project execution, payee profile, pinned arrangement and destination eligibility. Recheck fulfillment history and the exact previous attempt under the same lock. No fulfilled credit/transfer, post-success exception, unresolved provider attempt or conflicting authorized credit intent may exist.
-6. For the first transfer attempt, require expected_previous_attempt_id=null. For a replacement, require the UUID of the latest conclusively failed attempt or an attempt conclusively canceled before dispatch under section 12.6; unknown, pending, OTP, successful or reversed attempts never qualify. Historical points_credit always requires null and must not have a prior credit or transfer effect.
+6. For the first transfer attempt, require expected_previous_attempt_id=null. For a replacement, require the UUID of the latest conclusively failed attempt or an attempt conclusively canceled before dispatch under section 12.6; unknown, pending, OTP, successful or reversed attempts never qualify.
 7. Within one local Finance transaction, insert the immutable fulfillment_authorization, operation and audit evidence. For a bank transfer, also allocate the next attempt ordinal, persist its unique provider reference and exact request intent, link it to this authorization and stage its durable execution job. Commit all these records together or none of them, then return the section-11.6 HTTP 202 response.
 
 A source-read outage returns a retryable failure without recording authorization or execution intent. A changed plan, lost authority, disabled execution or ineligible destination cannot be bypassed by evidence fetched before the change. Do not retain a database transaction or locks while reading Workstream, and do not call Paystack or commit a point credit in this admin HTTP operation.
@@ -1485,7 +1485,6 @@ Add a Workstream CLI compensation command group:
 workstream compensation show AWARD_ID
 workstream compensation equivalent AWARD_ID
 workstream compensation reconcile PROJECT_ID AWARD_ID --idempotency-key UUID
-workstream compensation enroll PROJECT_ID AWARD_ID --input FILE --idempotency-key UUID
 ~~~
 
 Use existing authentication, error, output=json and concealment behavior. Mutations must not silently generate a new idempotency key when resuming an unknown operation.
@@ -1683,7 +1682,7 @@ Worker readiness also verifies broker access. General workers and Beat never req
 7. Configure current contribution quantities, publish policy and activate the appropriate guide. Qualify contract/digest parity without live effects.
 8. Run real-HTTP/shared-PostgreSQL worker drills with deterministic provider/issuer fixtures, followed by Paystack sandbox qualification. Prove unknown outcomes, callback response loss, current-authority races and both worker profiles.
 9. Activate the reviewed Workstream fulfillment manifest through existing Operator authority.
-10. Enable the selected Finance project after its actual payment setup is complete. Each bank-transfer attempt still requires one eligible Finance human’s explicit authorization. Historical credit retains its distinct attestation gate.
+10. Enable the selected Finance project after its actual payment setup is complete. Each bank-transfer attempt still requires one eligible Finance human’s explicit authorization.
 11. Conduct a separately authorized live-payment qualification with the named project/task/contributor/amount and retain bounded evidence. This specification does not itself authorize spending money.
 
 ### 18.4 Finance pause and Workstream drain
@@ -1816,7 +1815,7 @@ Use outcomes and failure boundaries. Avoid tests that only assert a field exists
 | T43 | Module boundary and extraction inventory | Whole-application boundary check permits only owner public APIs/exact composition roots; no private SQL/ORM joins or direct fulfillment write; inventory covers owned tables, shared custody, host files/adapters and future controlled migration |
 | T44 | Restart/queue loss | Postgres intents recover correctly; no lost obligation or duplicate effect |
 | T45 | Same contributor in two projects | One source/contributor identity; project manager cannot read, suspend or change another project's profile/destination/arrangement |
-| T46 | Historical points authorization | Same project-authorized Finance human may enroll and authorize through distinct owner actions with the same existing AUTH grant; null agreement/attempt fields, exact source and explicit not_fulfilled attestation required before one credit; new points_credit has no per-obligation authorization step |
+| T46 | Points credit execution | The active exact arrangement authorizes one atomic credit and fulfillment event; no per-obligation human authorization, agreement or transfer attempt is created; duplicate delivery creates no second credit |
 | T47 | Prior-fulfillment finding | Unknown/already_fulfilled cannot authorize credit or bank transfer; checked=true alone is insufficient |
 | T48 | Disabled Workstream after acknowledged handoff | Finance can authorize/execute its existing obligation; source reads and late reports work, while no new Workstream root/PUT is admitted |
 | T49 | Real HTTP with no open sending transaction | Instrument both adapters and DB transaction state; admission/source reads/callbacks traverse the live authenticated router; no in-process fallback or callback inside Finance commit; dropped response recovers exact original IDs |

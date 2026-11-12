@@ -212,7 +212,7 @@ async def test_reviewer_award_definition_substitution(tmp_path, isolated_databas
                 await insert_award(session, money)
                 await session.commit()
         async with h.factory() as session, session.begin():
-            await reject_award(session, money, "uq_compensation_awards", id=new_record_id())
+            await reject_award(session, money, "uq_compensation_award_contribution", id=new_record_id())
 
 
 async def test_unpaid_routed_contribution_rejects_award(

@@ -164,9 +164,9 @@ financial writes. Points conversion fulfills the original points award and
 creates no additional money award.
 
 One eligible human with the existing scoped `finance_authority` role authorizes
-each initial or replacement bank-transfer attempt. New configured points credit
-has no per-obligation human authorization; historical credit requires explicit
-prior-fulfillment attestation. Unknown provider outcomes reconcile the same
+each initial or replacement bank-transfer attempt. Configured points credit
+has no per-obligation human authorization. Bank-transfer authorization requires
+explicit prior-fulfillment attestation. Unknown provider outcomes reconcile the same
 reference and never authorize a replacement payment.
 
 The shared outbox dispatcher owns only outbox mechanics. Every protected
