@@ -419,7 +419,7 @@ operation identity-link provenance. ART must narrow by actor and key/operation
 before invoking read authority; the read grant alone cannot select another owner.
 
 Allowed files: AUTH public intake contract and adapter, typed domain resources,
-existing prepared/task-authority and contributor-read dispatch, action catalogue
+existing prepared/project-submitter and contributor-read dispatch, action catalogue
 and definitions, audit vocabulary migration/model-derived schema fingerprint,
 focused AUTH tests and exact partition registration, affected current records.
 No role/permission expansion, acceptance/finalization authority, data rewrite,
@@ -437,3 +437,6 @@ existing TASK prepared and contributor-read tests. Extend the closed catalogue
 and audit migration together and verify migrated schema equality. Full T1
 currentness/cardinality/readiness, actor-key concurrency, body discard replay and
 public concealment proof remain the next composition work, not this AUTH proof.
+
+Reservation extends the existing project-submitter evaluator with its own exact
+resource and prepared binding; TASK claim/manager/read guards stay unchanged.
