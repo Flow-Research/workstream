@@ -21,6 +21,7 @@ use workstream_checker_guest::{
 };
 use workstream_checker_sdk::parse_request;
 
+mod pre;
 mod trial;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;

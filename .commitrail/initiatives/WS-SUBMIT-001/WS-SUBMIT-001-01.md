@@ -1862,3 +1862,33 @@ guard-removal mutation. The child-side pre-exec check is code-inspected; this
 is not hard real-time preemption or native cgroup qualification. The parent
 still rejects late evidence. Record validation passes. Combined PRE guest
 orchestration and service dispatch remain the next connected implementation.
+
+The PRE guest module now implements the worker-to-project phase. It validates
+the closed worker frame and the shared SDK request, binds source/lease/request/
+image/registry/configuration and manifest digest to bootstrap facts, then seals
+the exact projected tree through anchored no-follow descriptors. It rejects
+links, extra/missing entries, file-byte changes and expansion bounds; production
+sealing transfers ownership to root and sets public read/execute modes under a
+root-owned private parent. The mount source retains the verified directory FD.
+The request is reopened read-only before being passed as project stdin.
+
+The phase calls the existing confined project runner with the tighter selected
+and profile limits, validates only its opaque stdout as a registered result, and
+returns a lease-bound private response for the trusted worker. No project bytes
+construct default/profile/cleanup evidence. This module is compiled but still
+needs its PRE bootstrap caller: trusted-root/source staging, worker launch and
+control dialogue, service dispatch and runtime result envelope remain pending.
+The dead-code annotation identifies that missing connection, not completion.
+
+Portable guest verification passes 12 library and 34 binary tests. Real local
+filesystem tests cover readable exact content, readonly modes, same-length
+content substitution, size changes, file/directory symlinks, hard links, extra
+and missing files, missing manifest parents, ordering, bounds and deadline
+refusal. Tests use the local owner for inode changes, not a simulated root
+authority. This environment refuses unprivileged UID mapping and has no
+passwordless privilege elevation; distinct project-UID chmod/rename denial and
+actual readonly mounts remain native qualification work. Closed frame tests
+include a positive shared SDK vector and rehashed foreign source requests.
+Removing file hashing accepts a same-length substitution and fails its test;
+removing the raw-source binding accepts a rehashed foreign request and fails its
+test. Both mutations were restored. Formatting and whitespace checks pass.
