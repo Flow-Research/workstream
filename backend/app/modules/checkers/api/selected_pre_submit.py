@@ -3,13 +3,20 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from contextlib import AbstractAsyncContextManager
 from typing import Literal, Protocol
 from uuid import UUID
 
+import json
+
+from pydantic import BaseModel, ConfigDict, Field
+
 from app.core.hashing import canonical_json_hash
-from app.modules.checkers.api.default_checker import WORKSTREAM_DEFAULT_BEHAVIOR_SHA256
+from app.modules.artifacts.api.submission_intake import SealedSubmissionSource
+from app.modules.artifacts.api.submission_archive import SubmissionArchiveLimits
+from app.modules.checkers.api.default_checker import WorkstreamDefaultContext
+from app.modules.checkers.api.external_policy import LockedExternalPreSubmitPolicy
 from app.modules.checkers.api.default_checker import WorkstreamDefaultCheckerResult
 from app.modules.checkers.api.external import ExternalCheckerExecutionResult
 from app.modules.checkers.api.historical_selected_pre_submit import HistoricalSelectedPreSubmitTerminal
@@ -17,7 +24,7 @@ from app.modules.checkers.api.historical_selected_pre_submit import HistoricalSe
 
 @dataclass(frozen=True, slots=True)
 class SelectedPreSubmitAdmissionLineage:
-    """Immutable TASK, PROJECT, packet and manifest facts needed after verification."""
+    """Immutable TASK, PROJECT and packet facts known before source inspection."""
 
     predecessor_submission_id: UUID | None
     predecessor_submission_version: int | None
@@ -37,8 +44,6 @@ class SelectedPreSubmitAdmissionLineage:
     post_submit_policy_sha256: str
     post_submit_policy_body: dict[str, object]
     locked_policy_context_hash: str
-    semantic_manifest_id: UUID
-    semantic_manifest_body: dict[str, object]
     packet_sha256: str
     storage_scheme: str
     revision_preparation_id: UUID | None = None
@@ -50,7 +55,6 @@ class SelectedPreSubmitAdmissionLineage:
             self.source_snapshot_id,
             self.effective_policy_id,
             self.pre_submit_policy_id,
-            self.semantic_manifest_id,
         )
         digests = (
             self.source_snapshot_sha256,
@@ -103,7 +107,6 @@ class SelectedPreSubmitAdmissionLineage:
                 type(value) is not str or len(value) != 71 or not value.startswith("sha256:")
                 for value in digests
             )
-            or type(self.semantic_manifest_body) is not dict
             or type(self.post_submit_policy_body) is not dict
             or canonical_json_hash(
                 {
@@ -147,8 +150,6 @@ class SelectedPreSubmitAdmissionLineage:
             "post_submit_policy_sha256": self.post_submit_policy_sha256,
             "post_submit_policy_body": self.post_submit_policy_body,
             "locked_policy_context_hash": self.locked_policy_context_hash,
-            "semantic_manifest_id": str(self.semantic_manifest_id),
-            "semantic_manifest_body": self.semantic_manifest_body,
             "packet_sha256": self.packet_sha256,
             "storage_scheme": self.storage_scheme,
         }
@@ -181,8 +182,6 @@ class SelectedPreSubmitAdmissionLineage:
             "post_submit_policy_sha256",
             "post_submit_policy_body",
             "locked_policy_context_hash",
-            "semantic_manifest_id",
-            "semantic_manifest_body",
             "packet_sha256",
             "storage_scheme",
         }
@@ -219,8 +218,6 @@ class SelectedPreSubmitAdmissionLineage:
             post_submit_policy_sha256=body["post_submit_policy_sha256"],
             post_submit_policy_body=body["post_submit_policy_body"],
             locked_policy_context_hash=body["locked_policy_context_hash"],
-            semantic_manifest_id=UUID(str(body["semantic_manifest_id"])),
-            semantic_manifest_body=body["semantic_manifest_body"],
             packet_sha256=body["packet_sha256"],
             storage_scheme=body["storage_scheme"],
             revision_preparation_id=(
@@ -378,9 +375,25 @@ class SelectedPreSubmitExecutionFacts:
         return canonical_json_hash(self.canonical_body())
 
 
+class SelectedPreSubmitRuntimeProfile(BaseModel):
+    """Explicit deployment bounds; structural validity is not qualification."""
+
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+    profile_id: str = Field(min_length=1, max_length=100, pattern=r"^[a-z0-9_-]+$")
+    platform_root_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    cpu_millis: int = Field(gt=0)
+    memory_bytes: int = Field(gt=0)
+    temporary_disk_bytes: int = Field(gt=0)
+    maximum_processes: int = Field(gt=0)
+    maximum_output_bytes: int = Field(gt=0)
+    maximum_log_bytes: int = Field(gt=0)
+    aggregate_deadline_ms: int = Field(ge=100, le=14_400_000)
+    archive_limits: SubmissionArchiveLimits
+
+
 @dataclass(frozen=True, slots=True)
 class SelectedPreSubmitReservationFacts:
-    """Complete durable PRE request reserved before any external work starts."""
+    """T3 request containing only facts known before guest source inspection."""
 
     actor_profile_id: UUID
     identity_link_id: UUID
@@ -389,147 +402,138 @@ class SelectedPreSubmitReservationFacts:
     assignment_id: UUID
     attempt_id: UUID
     idempotency_key: UUID
-    attempt_request_digest: str
-    prepared_generation_id: UUID
-    policy_sha256: str
-    default_behavior_sha256: str
-    default_input_sha256: str
-    archive_sha256: str
-    archive_byte_count: int
-    semantic_manifest_sha256: str
-    execution_budget_ms: int
-    admission_lineage: SelectedPreSubmitAdmissionLineage | None = None
+    source: SealedSubmissionSource
+    metadata_sha256: str
+    locked_context_sha256: str
+    foreground_lease_id: UUID
+    foreground_lease_generation: int
+    pre_deadline_at: datetime
+    policy: LockedExternalPreSubmitPolicy
+    default_context: WorkstreamDefaultContext
+    runtime_profile: SelectedPreSubmitRuntimeProfile
+    admission_lineage: SelectedPreSubmitAdmissionLineage
 
     def __post_init__(self) -> None:
-        """Reject partial authority, material, policy or default-input custody."""
-        identifiers = (
-            self.actor_profile_id,
-            self.identity_link_id,
-            self.project_id,
-            self.task_id,
-            self.assignment_id,
-            self.attempt_id,
-            self.idempotency_key,
-            self.prepared_generation_id,
-        )
-        digests = (
-            self.attempt_request_digest,
-            self.policy_sha256,
-            self.default_behavior_sha256,
-            self.default_input_sha256,
-            self.archive_sha256,
-            self.semantic_manifest_sha256,
-        )
+        """Reject missing source, locked context, selected image or fence facts."""
+        identifiers = (self.actor_profile_id, self.identity_link_id, self.project_id,
+                       self.task_id, self.assignment_id, self.attempt_id,
+                       self.idempotency_key, self.foreground_lease_id)
+        digests = (self.metadata_sha256, self.locked_context_sha256)
         if (
             any(type(value) is not UUID for value in identifiers)
-            or any(
-                type(value) is not str or len(value) != 71 or not value.startswith("sha256:")
-                for value in digests
-            )
-            or self.default_behavior_sha256 != WORKSTREAM_DEFAULT_BEHAVIOR_SHA256
-            or type(self.archive_byte_count) is not int
-            or self.archive_byte_count < 0
-            or type(self.execution_budget_ms) is not int
-            or not 100 <= self.execution_budget_ms <= 14_400_000
-            or (
-                self.admission_lineage is not None
-                and type(self.admission_lineage) is not SelectedPreSubmitAdmissionLineage
-            )
-            or (
-                self.admission_lineage is not None
-                and (
-                    canonical_json_hash(self.admission_lineage.semantic_manifest_body)
-                    != self.semantic_manifest_sha256
-                    or self.admission_lineage.effective_plan_sha256 != self.policy_sha256
-                )
-            )
+            or any(type(value) is not str or len(value) != 71
+                   or not value.startswith("sha256:")
+                   or any(char not in "0123456789abcdef" for char in value[7:])
+                   for value in digests)
+            or type(self.source) is not SealedSubmissionSource
+            or type(self.policy) is not LockedExternalPreSubmitPolicy
+            or type(self.default_context) is not WorkstreamDefaultContext
+            or type(self.runtime_profile) is not SelectedPreSubmitRuntimeProfile
+            or type(self.admission_lineage) is not SelectedPreSubmitAdmissionLineage
+            or type(self.foreground_lease_generation) is not int
+            or self.foreground_lease_generation < self.source.sealed_upload_fence
+            or type(self.pre_deadline_at) is not datetime
+            or self.pre_deadline_at.utcoffset() is None
         ):
             raise ValueError("selected PRE reservation facts are invalid")
+        lineage = self.admission_lineage
+        predecessor = self.default_context.predecessor
+        if (
+            len(self.policy.entries) != 1
+            or lineage.effective_plan_sha256 != self.policy_sha256
+            or lineage.rules_sha256 != self.default_context.current_rules_sha256
+            or lineage.packet_sha256 != self.default_context.packet.sha256
+            or lineage.predecessor_submission_id != (
+                predecessor.submission_id if predecessor else None)
+            or lineage.predecessor_submission_version != (
+                predecessor.submission_version if predecessor else None)
+            or self.runtime_profile.archive_limits.maximum_inspection_seconds * 1000
+            > self.execution_budget_ms
+        ):
+            raise ValueError("selected PRE locked context differs")
+        resources = self.policy.entries[0].registry.resources
+        if (resources.cpu_millis > self.runtime_profile.cpu_millis
+                or resources.memory_bytes > self.runtime_profile.memory_bytes
+                or resources.maximum_output_bytes > self.runtime_profile.maximum_output_bytes):
+            raise ValueError("selected PRE runtime cannot support selected policy")
+
+    @property
+    def policy_sha256(self) -> str:
+        """Return the validated exact selected policy digest."""
+        return self.policy.policy_sha256
+
+    @property
+    def default_behavior_sha256(self) -> str:
+        """Return the locked code-owned default identity."""
+        return self.policy.workstream_default.behavior_sha256
+
+    @property
+    def archive_sha256(self) -> str:
+        """Return the sealed original ZIP identity, never a semantic digest."""
+        return self.source.raw_sha256
+
+    @property
+    def archive_byte_count(self) -> int:
+        """Return the sealed original ZIP byte count."""
+        return self.source.raw_byte_count
+
+    @property
+    def execution_budget_ms(self) -> int:
+        """Return the aggregate ceiling; the absolute deadline may shorten it."""
+        return self.runtime_profile.aggregate_deadline_ms
 
     def canonical_body(self) -> dict[str, object]:
-        """Bind the actual contributor, task, ART generation, policy and bytes."""
+        """Bind source, operation, fence and immutable context without credentials."""
         return {
-            "schema_version": "workstream.selected_pre_submit_reservation.v1",
-            "actor_profile_id": str(self.actor_profile_id),
-            "identity_link_id": str(self.identity_link_id),
-            "project_id": str(self.project_id),
-            "task_id": str(self.task_id),
-            "assignment_id": str(self.assignment_id),
-            "attempt_id": str(self.attempt_id),
-            "idempotency_key": str(self.idempotency_key),
-            "attempt_request_digest": self.attempt_request_digest,
-            "prepared_generation_id": str(self.prepared_generation_id),
-            "policy_sha256": self.policy_sha256,
-            "default_behavior_sha256": self.default_behavior_sha256,
-            "default_input_sha256": self.default_input_sha256,
-            "archive_sha256": self.archive_sha256,
-            "archive_byte_count": self.archive_byte_count,
-            "semantic_manifest_sha256": self.semantic_manifest_sha256,
-            "execution_budget_ms": self.execution_budget_ms,
-            "admission_lineage": (
-                self.admission_lineage.canonical_body()
-                if self.admission_lineage is not None
-                else None
-            ),
+            "schema_version": "workstream.selected_pre_submit_reservation.v2",
+            **{name: str(getattr(self, name)) for name in (
+                "actor_profile_id", "identity_link_id", "project_id", "task_id",
+                "assignment_id", "attempt_id", "idempotency_key", "foreground_lease_id")},
+            "source": self.source.model_dump(mode="json"),
+            "source_sha256": self.source.source_sha256(),
+            "metadata_sha256": self.metadata_sha256,
+            "locked_context_sha256": self.locked_context_sha256,
+            "foreground_lease_generation": self.foreground_lease_generation,
+            "pre_deadline_at": self.pre_deadline_at.astimezone(timezone.utc).isoformat(),
+            "policy": self.policy.model_dump(mode="json"),
+            "default_context": self.default_context.canonical_body(),
+            "runtime_profile": self.runtime_profile.model_dump(mode="json"),
+            "admission_lineage": self.admission_lineage.canonical_body(),
         }
 
     @classmethod
     def from_canonical_body(cls, body: object) -> SelectedPreSubmitReservationFacts:
-        """Recover and validate the durable request snapshot at ART publication."""
-        if (
-            type(body) is not dict
-            or set(body)
-            != {
-                "schema_version",
-                "actor_profile_id",
-                "identity_link_id",
-                "project_id",
-                "task_id",
-                "assignment_id",
-                "attempt_id",
-                "idempotency_key",
-                "attempt_request_digest",
-                "prepared_generation_id",
-                "policy_sha256",
-                "default_behavior_sha256",
-                "default_input_sha256",
-                "archive_sha256",
-                "archive_byte_count",
-                "semantic_manifest_sha256",
-                "execution_budget_ms",
-                "admission_lineage",
-            }
-            or body["schema_version"] != "workstream.selected_pre_submit_reservation.v1"
+        """Decode only the live source-first schema; historical data is read-only."""
+        if type(body) is not dict or body.get("schema_version") != (
+            "workstream.selected_pre_submit_reservation.v2"
         ):
             raise ValueError("selected PRE reservation facts are invalid")
-        lineage_body = body["admission_lineage"]
-        return cls(
-            actor_profile_id=UUID(str(body["actor_profile_id"])),
-            identity_link_id=UUID(str(body["identity_link_id"])),
-            project_id=UUID(str(body["project_id"])),
-            task_id=UUID(str(body["task_id"])),
-            assignment_id=UUID(str(body["assignment_id"])),
-            attempt_id=UUID(str(body["attempt_id"])),
-            idempotency_key=UUID(str(body["idempotency_key"])),
-            attempt_request_digest=body["attempt_request_digest"],
-            prepared_generation_id=UUID(str(body["prepared_generation_id"])),
-            policy_sha256=body["policy_sha256"],
-            default_behavior_sha256=body["default_behavior_sha256"],
-            default_input_sha256=body["default_input_sha256"],
-            archive_sha256=body["archive_sha256"],
-            archive_byte_count=body["archive_byte_count"],
-            semantic_manifest_sha256=body["semantic_manifest_sha256"],
-            execution_budget_ms=body["execution_budget_ms"],
-            admission_lineage=(
-                SelectedPreSubmitAdmissionLineage.from_canonical_body(lineage_body)
-                if lineage_body is not None
-                else None
-            ),
-        )
+        try:
+            value = cls(
+                **{name: UUID(body[name]) for name in (
+                    "actor_profile_id", "identity_link_id", "project_id", "task_id",
+                    "assignment_id", "attempt_id", "idempotency_key", "foreground_lease_id")},
+                source=SealedSubmissionSource.model_validate_json(json.dumps(body["source"])),
+                metadata_sha256=body["metadata_sha256"],
+                locked_context_sha256=body["locked_context_sha256"],
+                foreground_lease_generation=body["foreground_lease_generation"],
+                pre_deadline_at=datetime.fromisoformat(body["pre_deadline_at"]),
+                policy=LockedExternalPreSubmitPolicy.model_validate_json(json.dumps(body["policy"])),
+                default_context=WorkstreamDefaultContext.from_canonical_body(body["default_context"]),
+                runtime_profile=SelectedPreSubmitRuntimeProfile.model_validate_json(
+                    json.dumps(body["runtime_profile"])),
+                admission_lineage=SelectedPreSubmitAdmissionLineage.from_canonical_body(
+                    body["admission_lineage"]),
+            )
+            if value.canonical_body() != body:
+                raise ValueError("selected PRE reservation facts are not canonical")
+            return value
+        except (KeyError, TypeError, AttributeError) as exc:
+            raise ValueError("selected PRE reservation facts are invalid") from exc
 
     @property
     def request_digest(self) -> str:
-        """Return the immutable request identity used by reserve and replay."""
+        """Return the exact immutable source-first execution request identity."""
         return canonical_json_hash(self.canonical_body())
 
 
@@ -549,7 +553,9 @@ class SelectedPreSubmitLeaseFacts:
             or type(self.lease_id) is not UUID
             or type(self.lease_generation) is not int
             or self.lease_generation < 1
-            or self.lease_expires_at.tzinfo is None
+            or type(self.lease_expires_at) is not datetime
+            or self.lease_expires_at.utcoffset() is None
+            or self.lease_expires_at > self.reservation.pre_deadline_at
         ):
             raise ValueError("selected PRE lease facts are invalid")
 
@@ -597,7 +603,7 @@ class SelectedPreSubmitExecuteFacts:
         """Bind reservation, lease generation and database expiry."""
         return canonical_json_hash(
             {
-                "schema_version": "workstream.selected_pre_submit_execute.v1",
+                "schema_version": "workstream.selected_pre_submit_execute.v2",
                 "reservation": self.lease.reservation.canonical_body(),
                 "lease_id": str(self.lease.lease_id),
                 "lease_generation": self.lease.lease_generation,
@@ -632,7 +638,7 @@ class SelectedPreSubmitFinalizeFacts:
         """Bind the lease to either exact results or one closed infrastructure code."""
         return canonical_json_hash(
             {
-                "schema_version": "workstream.selected_pre_submit_finalize.v1",
+                "schema_version": "workstream.selected_pre_submit_finalize.v2",
                 "execute_facts_digest": SelectedPreSubmitExecuteFacts(self.lease).facts_digest,
                 "execution": (
                     self.execution.canonical_body() if self.execution is not None else None
@@ -772,19 +778,20 @@ class SelectedPreSubmitTerminalFacts:
                 or self.execution.policy_sha256 != self.lease.reservation.policy_sha256
             ):
                 raise ValueError("selected PRE completed outcome is invalid")
-        elif self.execution is not None or self.infrastructure_failure_code not in {
+        elif (self.outcome != "infrastructure_failed" or self.execution is not None
+              or self.infrastructure_failure_code not in {
             "capacity_exceeded",
             "deadline_exceeded",
             "material_unavailable",
             "implementation_unavailable",
             "invalid_output",
-        }:
+        }):
             raise ValueError("selected PRE infrastructure outcome is invalid")
 
     def canonical_body(self) -> dict[str, object]:
         """Return persisted latency, lease and terminal facts without private paths."""
         return {
-            "schema_version": "workstream.selected_pre_submit_terminal.v1",
+            "schema_version": "workstream.selected_pre_submit_terminal.v2",
             "reservation": self.lease.reservation.canonical_body(),
             "request_digest": self.lease.reservation.request_digest,
             "lease_id": str(self.lease.lease_id),
@@ -824,7 +831,7 @@ class SelectedPreSubmitTerminalFacts:
                 "queue_latency_ms",
                 "execution_latency_ms",
             }
-            or body["schema_version"] != "workstream.selected_pre_submit_terminal.v1"
+            or body["schema_version"] != "workstream.selected_pre_submit_terminal.v2"
         ):
             raise ValueError("selected PRE terminal facts are invalid")
         reservation = SelectedPreSubmitReservationFacts.from_canonical_body(body["reservation"])

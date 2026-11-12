@@ -714,3 +714,10 @@ def project_work_reader(session: AsyncSession):
         session, compensation_terms=locked_compensation_terms_port(session),
         finding_counts=checker_history_repository(session),
     )
+
+
+def intake_task_custody_port(session):
+    """Compose TASK-first active intake pointer custody for ART participation."""
+    from app.modules.tasks.intake_custody import IntakeTaskCustody
+
+    return IntakeTaskCustody(session)

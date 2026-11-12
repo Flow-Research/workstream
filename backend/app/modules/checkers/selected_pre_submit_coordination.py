@@ -13,6 +13,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.identifiers import new_record_id
+from app.modules.artifacts.api.submission_intake import SubmissionIntakePreSourcePort
 from app.modules.checkers.api.selected_pre_submit import (
     PreparedSelectedPreSubmitExecution,
     PreparedSelectedPreSubmitFinalization,
@@ -193,13 +194,14 @@ def _matches(row: SelectedPreSubmitRun, facts: SelectedPreSubmitReservationFacts
         and row.task_id == str(facts.task_id)
         and row.assignment_id == str(facts.assignment_id)
         and row.idempotency_key == str(facts.idempotency_key)
-        and row.prepared_generation_id == str(facts.prepared_generation_id)
+        and row.source_operation_id == str(facts.source.location.operation_id)
+        and row.prepared_generation_id is None
         and row.policy_sha256 == facts.policy_sha256
         and row.default_behavior_sha256 == facts.default_behavior_sha256
-        and row.default_input_sha256 == facts.default_input_sha256
+        and row.default_input_sha256 is None
         and row.archive_sha256 == facts.archive_sha256
         and row.archive_byte_count == facts.archive_byte_count
-        and row.semantic_manifest_sha256 == facts.semantic_manifest_sha256
+        and row.semantic_manifest_sha256 is None
         and row.execution_budget_ms == facts.execution_budget_ms
     )
 
@@ -212,9 +214,11 @@ class SelectedPreSubmitCoordinator:
         session: AsyncSession,
         *,
         tasks: SelectedPreSubmitTaskGuard,
+        sources: SubmissionIntakePreSourcePort,
     ) -> None:
         self._session = session
         self._tasks = tasks
+        self._sources = sources
         self._capability: SelectedPreSubmitAdmissionCapability | None = None
         self._execution_capability: SelectedPreSubmitExecutionCapability | None = None
 
@@ -225,7 +229,7 @@ class SelectedPreSubmitCoordinator:
         _require_root(self._session)
         if type(facts) is not SelectedPreSubmitReservationFacts:
             raise TypeError("selected PRE reservation facts are invalid")
-        await self._tasks.lock_selected_pre_submit_scope(facts)
+        await self._lock_source(facts)
         row = await self._session.scalar(
             select(SelectedPreSubmitRun)
             .where(
@@ -239,6 +243,8 @@ class SelectedPreSubmitCoordinator:
         )
         if row is None:
             return None
+        if row.request_json.get("schema_version") != "workstream.selected_pre_submit_reservation.v2":
+            raise SelectedPreSubmitRequestConflict("selected_pre_submit_request_conflict")
         try:
             stored = SelectedPreSubmitReservationFacts.from_canonical_body(
                 row.request_json
@@ -246,7 +252,6 @@ class SelectedPreSubmitCoordinator:
             normalized = replace(
                 facts,
                 attempt_id=stored.attempt_id,
-                prepared_generation_id=stored.prepared_generation_id,
             )
             terminal = (
                 SelectedPreSubmitTerminalFacts.from_canonical_body(row.terminal_json)
@@ -286,7 +291,7 @@ class SelectedPreSubmitCoordinator:
         _require_root(self._session)
         if type(facts) is not SelectedPreSubmitReservationFacts:
             raise TypeError("selected PRE reservation facts are invalid")
-        await self._tasks.lock_selected_pre_submit_scope(facts)
+        await self._lock_source(facts)
         await self._session.execute(
             text("select pg_advisory_xact_lock(hashtextextended(:key,0))"),
             {
@@ -321,15 +326,16 @@ class SelectedPreSubmitCoordinator:
             task_id=str(facts.task_id),
             assignment_id=str(facts.assignment_id),
             idempotency_key=str(facts.idempotency_key),
-            prepared_generation_id=str(facts.prepared_generation_id),
+            source_operation_id=str(facts.source.location.operation_id),
+            prepared_generation_id=None,
             request_json=facts.canonical_body(),
             request_digest=facts.request_digest,
             policy_sha256=facts.policy_sha256,
             default_behavior_sha256=facts.default_behavior_sha256,
-            default_input_sha256=facts.default_input_sha256,
+            default_input_sha256=None,
             archive_sha256=facts.archive_sha256,
             archive_byte_count=facts.archive_byte_count,
-            semantic_manifest_sha256=facts.semantic_manifest_sha256,
+            semantic_manifest_sha256=None,
             execution_budget_ms=facts.execution_budget_ms,
             status="queued",
             lease_generation=0,
@@ -354,11 +360,15 @@ class SelectedPreSubmitCoordinator:
             raise SelectedPreSubmitUnavailable("selected_pre_submit_lease_unavailable")
         now = await self._session.scalar(select(func.clock_timestamp()))
         assert now is not None
+        if now >= facts.pre_deadline_at:
+            raise SelectedPreSubmitUnavailable("selected_pre_submit_deadline_expired")
         lease = SelectedPreSubmitLeaseFacts(
             reservation=facts,
             lease_id=new_record_id(),
             lease_generation=row.lease_generation + 1,
-            lease_expires_at=now + timedelta(milliseconds=facts.execution_budget_ms),
+            lease_expires_at=min(
+                facts.pre_deadline_at, now + timedelta(milliseconds=facts.execution_budget_ms)
+            ),
         )
         execute_facts = SelectedPreSubmitExecuteFacts(lease)
         evidence = await authority.consume(execute_facts)
@@ -472,15 +482,31 @@ class SelectedPreSubmitCoordinator:
         row.finalize_evidence_id = str(evidence.evidence_id)
         row.completed_at = completed_at
         await self._session.flush()
-        capability = (
-            SelectedPreSubmitAdmissionCapability._issued(
-                owner=self, run_id=run_id, terminal=terminal
-            )
-            if execution is not None and execution.eligible
-            else None
+        # Source-bound evidence cannot mint the removed prepared-bundle handoff.
+        # Acceptance is the separate fresh-fenced T4 transaction.
+        return SelectedPreSubmitCompletion(terminal=terminal, capability=None)
+
+    async def _lock_source(self, facts: SelectedPreSubmitReservationFacts) -> None:
+        """Hold TASK then exact live ART custody before any CHECKERS row lock."""
+        await self._tasks.lock_selected_pre_submit_scope(facts)
+        current = await self._sources.lock_pre_source(
+            source=facts.source, lease_id=facts.foreground_lease_id,
+            generation=facts.foreground_lease_generation,
         )
-        self._capability = capability
-        return SelectedPreSubmitCompletion(terminal=terminal, capability=capability)
+        if (
+            current.source != facts.source
+            or current.project_id != facts.project_id
+            or current.task_id != facts.task_id
+            or current.assignment_id != facts.assignment_id
+            or current.actor_profile_id != facts.actor_profile_id
+            or current.identity_link_id != facts.identity_link_id
+            or current.metadata_sha256 != facts.metadata_sha256
+            or current.locked_context_sha256 != facts.locked_context_sha256
+            or current.lease_id != facts.foreground_lease_id
+            or current.lease_generation != facts.foreground_lease_generation
+            or current.pre_deadline_at != facts.pre_deadline_at
+        ):
+            raise SelectedPreSubmitUnavailable("selected_pre_submit_source_changed")
 
     async def _lock(
         self, *, run_id: UUID, facts: SelectedPreSubmitReservationFacts
@@ -488,7 +514,7 @@ class SelectedPreSubmitCoordinator:
         _require_root(self._session)
         if not isinstance(run_id, UUID) or type(facts) is not SelectedPreSubmitReservationFacts:
             raise SelectedPreSubmitUnavailable("selected_pre_submit_run_unavailable")
-        await self._tasks.lock_selected_pre_submit_scope(facts)
+        await self._lock_source(facts)
         row = await self._session.scalar(
             select(SelectedPreSubmitRun)
             .where(

@@ -151,6 +151,53 @@ class WorkstreamDefaultContext:
         if self.predecessor_rules_sha256 is not None:
             _require_sha256(self.predecessor_rules_sha256)
 
+    def canonical_body(self) -> dict[str, object]:
+        """Serialize locked inputs without claiming an inspected current source."""
+        def predecessor_body(value: WorkstreamDefaultPredecessor | None):
+            if value is None:
+                return None
+            return {
+                "submission_id": str(value.submission_id),
+                "submission_version": value.submission_version,
+                "archive_sha256": value.archive_sha256,
+                "semantic_manifest_sha256": value.semantic_manifest_sha256,
+            }
+        return {
+            "predecessor": predecessor_body(self.predecessor),
+            "predecessor_exists": self.predecessor_exists,
+            "current_predecessor": predecessor_body(self.current_predecessor),
+            "current_rules_sha256": self.current_rules_sha256,
+            "predecessor_rules_sha256": self.predecessor_rules_sha256,
+            "packet": {"summary": self.packet.summary,
+                       "contributor_attestation": self.packet.contributor_attestation},
+        }
+
+    @classmethod
+    def from_canonical_body(cls, body: object) -> WorkstreamDefaultContext:
+        """Decode a closed locked context independently of derived default input."""
+        def predecessor(value):
+            if value is None:
+                return None
+            return WorkstreamDefaultPredecessor(
+                **(value | {"submission_id": UUID(value["submission_id"])})
+            )
+        if type(body) is not dict:
+            raise ValueError("default checker context is invalid")
+        try:
+            value = cls(
+                predecessor=predecessor(body["predecessor"]),
+                predecessor_exists=body["predecessor_exists"],
+                current_predecessor=predecessor(body["current_predecessor"]),
+                current_rules_sha256=body["current_rules_sha256"],
+                predecessor_rules_sha256=body["predecessor_rules_sha256"],
+                packet=SubmissionPacketView(**body["packet"]),
+            )
+            if value.canonical_body() != body:
+                raise ValueError("default checker context is not canonical")
+            return value
+        except (KeyError, TypeError, AttributeError) as exc:
+            raise ValueError("default checker context is invalid") from exc
+
     def bind_verified_input(
         self, *, archive_sha256: str, archive_byte_count: int,
         archive_media_type: str, semantic_manifest_sha256: str,

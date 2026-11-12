@@ -260,6 +260,7 @@ def external_checker_registry_service(session, authority):
 def selected_pre_submit_coordinator(session):
     """Compose selected PRE custody through CHECKERS' public adapter root."""
     from app.adapters.tasks import selected_pre_submit_task_guard
+    from app.adapters.artifacts import submission_intake_pre_source_port
     from app.modules.checkers.selected_pre_submit_coordination import (
         SelectedPreSubmitCoordinator,
     )
@@ -267,6 +268,7 @@ def selected_pre_submit_coordinator(session):
     return SelectedPreSubmitCoordinator(
         session,
         tasks=selected_pre_submit_task_guard(session),
+        sources=submission_intake_pre_source_port(session),
     )
 
 

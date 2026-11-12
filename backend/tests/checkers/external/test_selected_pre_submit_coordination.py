@@ -542,11 +542,13 @@ async def test_historical_pre_values_cannot_become_live_reservation_or_lease():
     from sqlalchemy.ext.asyncio import AsyncSession
 
     tasks = SimpleNamespace(lock_selected_pre_submit_scope=AsyncMock())
+    sources = SimpleNamespace(lock_pre_source=AsyncMock())
     async with AsyncSession() as session, session.begin():
-        coordinator = SelectedPreSubmitCoordinator(session, tasks=tasks)
+        coordinator = SelectedPreSubmitCoordinator(session, tasks=tasks, sources=sources)
         with pytest.raises(TypeError, match="reservation facts are invalid"):
             await coordinator.reserve(request)
     tasks.lock_selected_pre_submit_scope.assert_not_awaited()
+    sources.lock_pre_source.assert_not_awaited()
     with pytest.raises(ValueError, match="lease facts are invalid"):
         SelectedPreSubmitLeaseFacts(request, new_record_id(), 1, datetime.now(UTC))
 
@@ -623,3 +625,199 @@ def test_historical_completed_pre_rejects_changed_nested_evidence(changed):
         body["execution"]["workstream_default"]["checks"].pop()
     with pytest.raises(ValueError):
         HistoricalSelectedPreSubmitTerminal.from_canonical_body(body)
+
+
+def _source_reservation() -> SelectedPreSubmitReservationFacts:
+    """Build a source-first request with explicit test-only execution limits."""
+    from app.modules.artifacts.api.submission_archive import SubmissionArchiveLimits
+    from app.modules.artifacts.api.submission_intake import (
+        SealedSubmissionSource, SubmissionSourceLocation,
+    )
+    from app.modules.checkers.api.default_checker import WorkstreamDefaultContext
+    from app.modules.checkers.api.pre_submit_material import SubmissionPacketView
+    from app.modules.checkers.api.selected_pre_submit import SelectedPreSubmitRuntimeProfile
+    from tests.checkers.external.test_selected_pre_submit import _policy
+
+    policy = _policy()
+    packet = SubmissionPacketView(summary="", contributor_attestation="")
+    retained = _retained_v1("selected_pre_v1_completed")
+    lineage_body = dict(retained["request"]["admission_lineage"])
+    for name in ("semantic_manifest_id", "semantic_manifest_body"):
+        lineage_body.pop(name)
+    lineage_body.update(
+        predecessor_submission_id=None, predecessor_submission_version=None,
+        checker_remediation_manifest_id=None, effective_plan_sha256=policy.policy_sha256,
+        packet_sha256=packet.sha256,
+    )
+    lineage = SelectedPreSubmitAdmissionLineage.from_canonical_body(lineage_body)
+    return SelectedPreSubmitReservationFacts(
+        actor_profile_id=new_record_id(), identity_link_id=new_record_id(),
+        project_id=new_record_id(), task_id=new_record_id(), assignment_id=new_record_id(),
+        attempt_id=new_record_id(), idempotency_key=new_record_id(),
+        source=SealedSubmissionSource(
+            location=SubmissionSourceLocation(
+                operation_id=new_record_id(), namespace_id="primary",
+                namespace_fingerprint=SHA, provider_profile="local-v2",
+            ), provider_generation="test-generation", raw_sha256=SHA,
+            raw_byte_count=1024, sealed_upload_fence=1,
+        ),
+        metadata_sha256=SHA, locked_context_sha256=SHA,
+        foreground_lease_id=new_record_id(), foreground_lease_generation=1,
+        pre_deadline_at=datetime.now(UTC) + timedelta(seconds=120),
+        policy=policy,
+        default_context=WorkstreamDefaultContext(
+            predecessor=None, predecessor_exists=False, current_predecessor=None,
+            current_rules_sha256=lineage.rules_sha256, predecessor_rules_sha256=None,
+            packet=packet,
+        ),
+        runtime_profile=SelectedPreSubmitRuntimeProfile(
+            profile_id="test-only", platform_root_sha256=SHA, cpu_millis=2000,
+            memory_bytes=2 * 1024**3, temporary_disk_bytes=4 * 1024**3,
+            maximum_processes=64, maximum_output_bytes=1024 * 1024,
+            maximum_log_bytes=1024 * 1024, aggregate_deadline_ms=120_000,
+            archive_limits=SubmissionArchiveLimits(maximum_inspection_seconds=60),
+        ), admission_lineage=lineage,
+    )
+
+
+def test_source_first_reservation_round_trip_without_derived_inputs() -> None:
+    request = _source_reservation()
+    body = request.canonical_body()
+    assert SelectedPreSubmitReservationFacts.from_canonical_body(body) == request
+    assert body["source_sha256"] == request.source.source_sha256()
+    assert not {"prepared_generation_id", "default_input_sha256", "semantic_manifest_sha256"} & body.keys()
+    assert "semantic_manifest_body" not in body["admission_lineage"]
+    assert "lease_expires_at" not in body
+
+
+@pytest.mark.parametrize("field", [
+    "provider_generation", "raw_sha256", "raw_byte_count", "sealed_upload_fence",
+])
+def test_source_first_reservation_rejects_substituted_source(field: str) -> None:
+    request = _source_reservation()
+    body = request.canonical_body()
+    body["source"][field] = {
+        "provider_generation": "other", "raw_sha256": "sha256:" + "1" * 64,
+        "raw_byte_count": 1025, "sealed_upload_fence": 2,
+    }[field]
+    with pytest.raises(ValueError):
+        SelectedPreSubmitReservationFacts.from_canonical_body(body)
+
+
+@pytest.mark.parametrize("field", [
+    "prepared_generation_id", "default_input_sha256", "semantic_manifest_sha256",
+    "lease_expires_at",
+])
+def test_source_first_reservation_rejects_unobserved_or_mutable_facts(field: str) -> None:
+    body = _source_reservation().canonical_body()
+    body[field] = SHA
+    with pytest.raises(ValueError):
+        SelectedPreSubmitReservationFacts.from_canonical_body(body)
+
+
+def test_source_first_reservation_binds_packet_and_hard_deadline() -> None:
+    request = _source_reservation()
+    assert replace(request, pre_deadline_at=request.pre_deadline_at + timedelta(seconds=1)).request_digest != request.request_digest
+    with pytest.raises(ValueError):
+        replace(request, pre_deadline_at=datetime.now())
+    from app.modules.checkers.api.pre_submit_material import SubmissionPacketView
+    with pytest.raises(ValueError):
+        replace(request, default_context=replace(
+            request.default_context, packet=SubmissionPacketView("substituted", ""),
+        ))
+
+
+def _source_guard(request):
+    from app.modules.artifacts.api.submission_intake import SubmissionIntakePreSourceFacts
+    return SimpleNamespace(lock_pre_source=AsyncMock(return_value=SubmissionIntakePreSourceFacts(
+        source=request.source, project_id=request.project_id, task_id=request.task_id,
+        assignment_id=request.assignment_id, actor_profile_id=request.actor_profile_id,
+        identity_link_id=request.identity_link_id, metadata_sha256=request.metadata_sha256,
+        locked_context_sha256=request.locked_context_sha256,
+        lease_id=request.foreground_lease_id, lease_generation=request.foreground_lease_generation,
+        lease_expires_at=request.pre_deadline_at, pre_deadline_at=request.pre_deadline_at,
+    )))
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("field", [
+    "metadata_sha256", "locked_context_sha256", "actor_profile_id", "identity_link_id",
+    "assignment_id", "project_id", "task_id", "lease_id", "lease_generation",
+    "pre_deadline_at",
+])
+async def test_source_first_reserve_checks_live_custody_before_checker_rows(field) -> None:
+    request = _source_reservation()
+    sources = _source_guard(request)
+    current = sources.lock_pre_source.return_value
+    changed = ("sha256:" + "b" * 64 if field.endswith("sha256") else
+               2 if field == "lease_generation" else
+               request.pre_deadline_at + timedelta(seconds=1) if field == "pre_deadline_at"
+               else new_record_id())
+    sources.lock_pre_source.return_value = current.model_copy(update={field: changed})
+    session = SimpleNamespace(
+        sync_session=SimpleNamespace(get_transaction=lambda: SimpleNamespace(is_active=True)),
+        in_nested_transaction=lambda: False, scalar=AsyncMock(), execute=AsyncMock(),
+    )
+    tasks = SimpleNamespace(lock_selected_pre_submit_scope=AsyncMock())
+    coordinator = SelectedPreSubmitCoordinator(session, tasks=tasks, sources=sources)
+    with pytest.raises(SelectedPreSubmitUnavailable, match="source_changed"):
+        await coordinator.reserve(request)
+    tasks.lock_selected_pre_submit_scope.assert_awaited_once_with(request)
+    session.execute.assert_not_awaited()
+    session.scalar.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_source_first_claim_caps_lease_at_existing_hard_deadline() -> None:
+    request = _source_reservation()
+    now = request.pre_deadline_at - timedelta(seconds=2)
+    row = SimpleNamespace(
+        **{name: str(getattr(request, name)) for name in (
+            "actor_profile_id", "identity_link_id", "project_id", "task_id",
+            "assignment_id", "idempotency_key")},
+        id=str(request.attempt_id), source_operation_id=str(request.source.location.operation_id),
+        prepared_generation_id=None, default_input_sha256=None, semantic_manifest_sha256=None,
+        policy_sha256=request.policy_sha256, default_behavior_sha256=request.default_behavior_sha256,
+        archive_sha256=request.archive_sha256, archive_byte_count=request.archive_byte_count,
+        execution_budget_ms=request.execution_budget_ms, request_json=request.canonical_body(),
+        request_digest=request.request_digest, status="queued", lease_generation=0,
+    )
+    session = SimpleNamespace(
+        sync_session=SimpleNamespace(get_transaction=lambda: SimpleNamespace(is_active=True)),
+        in_nested_transaction=lambda: False, scalar=AsyncMock(side_effect=[row, now]),
+        flush=AsyncMock(),
+    )
+    async def consume(facts):
+        return SimpleNamespace(facts_digest=facts.facts_digest, evidence_id=new_record_id())
+    coordinator = SelectedPreSubmitCoordinator(
+        session, tasks=SimpleNamespace(lock_selected_pre_submit_scope=AsyncMock()),
+        sources=_source_guard(request),
+    )
+    authority = SimpleNamespace(consume=AsyncMock(side_effect=consume))
+    lease = await coordinator.claim(run_id=request.attempt_id, facts=request, authority=authority)
+    assert lease.lease_expires_at == request.pre_deadline_at
+    assert row.started_at == now
+
+
+def test_source_first_lease_cannot_extend_aggregate_deadline() -> None:
+    request = _source_reservation()
+    with pytest.raises(ValueError, match="lease facts"):
+        SelectedPreSubmitLeaseFacts(
+            reservation=request, lease_id=new_record_id(), lease_generation=1,
+            lease_expires_at=request.pre_deadline_at + timedelta(microseconds=1),
+        )
+
+
+def test_source_first_policy_requires_exactly_one_project_image() -> None:
+    from tests.checkers.external.test_selected_pre_submit import _empty_policy
+    with pytest.raises(ValueError, match="locked context"):
+        replace(_source_reservation(), policy=_empty_policy())
+
+
+def test_source_first_profile_rejects_archive_time_beyond_aggregate() -> None:
+    from app.modules.artifacts.api.submission_archive import SubmissionArchiveLimits
+    request = _source_reservation()
+    with pytest.raises(ValueError, match="locked context"):
+        replace(request, runtime_profile=request.runtime_profile.model_copy(update={
+            "archive_limits": SubmissionArchiveLimits(maximum_inspection_seconds=121),
+        }))

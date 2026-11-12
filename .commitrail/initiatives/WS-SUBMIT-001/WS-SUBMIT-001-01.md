@@ -1222,3 +1222,42 @@ mutations are rejected. All 270 focused checks pass. The four PostgreSQL
 read-consistency tests also passed with cleanup, but their fixture produced no
 completed selected PRE row, so that run is not credited as historical payload
 coverage. The reader's direct frozen-row tests establish that narrower claim.
+
+### Live source-first replacement in progress
+
+The live reservation now uses schema v2 with exact sealed source and source hash,
+metadata/locked-context hashes, foreground lease ID/generation, immutable PRE
+hard deadline, complete selected policy, default context and explicit runtime
+profile. Prepared-generation/current-manifest/default-input facts are removed
+from this request and its live lineage. The frozen v1 decoder is unchanged.
+Runtime profile values have no deployment defaults and do not assert provider
+or isolation qualification. Exactly one selected PRE image is required here;
+policy-approval cardinality enforcement remains part of the wider cutover.
+
+The existing coordinator now requires ART's public source-custody port after
+TASK checks and before CHECKERS locks. It compares exact source, actor/link,
+project/task/assignment, metadata/context and foreground fence/deadline. Claim
+expiry is capped at the existing absolute deadline. Finalization no longer
+mints the old prepared-bundle capability. ORM source-operation linkage and
+nullable historical derived-input columns are drafted; execute/finalize/terminal
+facts use v2. A type-only import in ART's preparation feedback contract removes
+an eager API import cycle exposed by the source dependency.
+
+This is an unfinished coordinated replacement, not a passing review candidate.
+The matching SQL migration/guards, source-first ART producer, old capability and
+consumer removal, derived result envelope, v2 read projection, SDK/runtime and
+remaining affected fixtures still require implementation. Do not push or treat
+this checkpoint as deployable. The last pushed branch remains unchanged.
+
+Twenty-four focused source-first tests pass, including source substitution,
+forbidden derived/mutable fields, packet/deadline binding, ten current ART
+custody substitutions refused before CHECKERS queries, claim deadline capping,
+lease overrun and exact-one policy. These use controlled owner ports, not real
+PostgreSQL migration or native execution. The full coordination module exposed
+eight transition failures: seven obsolete live fixtures/capability expectations
+and the historical rejection test's newly required source port. The historical
+test now supplies that port and asserts neither owner is called. Remaining
+failures must be replaced alongside the corresponding live callers, not hidden
+by narrowing CI. Scoped Ruff and diff whitespace checks passed. Freshly fetched
+main remains an ancestor of the branch. Remote CI for the prior pushed commit
+was still running when polled; no green outcome is inferred.
