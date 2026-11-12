@@ -3348,3 +3348,11 @@ external-checker-runtime job and counting its installer twice. Extend scope to
 that existing test's extraction delimiter only, ending at the actual next job.
 Keep all exact installer/cache assertions and workflow files unchanged. Verify
 all108 lightweight/stale-review tests; CI-integrity reviewer checks this repair.
+
+The first targeted gate rerun (35 tests) exposed the same stale assumption in
+workflow-wide totals after fixing job extraction. Include the actual fourth
+installer/lock-check and third agents frozen sync in those exact totals, and
+add explicit one-each/order assertions for the independent runtime job. The
+three cached jobs' exact cache/install assertions remain unchanged. This is a
+complete test-model correction for the existing fourth job, not permission to
+skip or loosen installs. Run the workflow's complete six-module108-test command.

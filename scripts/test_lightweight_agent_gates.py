@@ -668,10 +668,16 @@ class LightweightAgentGateTests(unittest.TestCase):
             self.assertLess(job.index("Restore exact backend uv downloads"), job.index(cache_env))
             self.assertLess(job.index(cache_env), job.index(tool_install))
             self.assertLess(job.index(tool_install), job.index(frozen_install))
-        self.assertEqual(workflow.count(tool_install), 3)
-        self.assertEqual(workflow.count(lock_check), 3)
+        runtime_job = workflow.split("\n  external-checker-runtime:\n", 1)[1].split("\n  lanes:\n", 1)[0]
+        self.assertEqual(runtime_job.count(tool_install), 1)
+        self.assertEqual(runtime_job.count(lock_check), 1)
+        self.assertEqual(runtime_job.count("uv sync --frozen --extra agents --extra dev"), 1)
+        self.assertLess(runtime_job.index(tool_install), runtime_job.index(lock_check))
+        self.assertLess(runtime_job.index(lock_check), runtime_job.index("uv sync --frozen"))
+        self.assertEqual(workflow.count(tool_install), 4)
+        self.assertEqual(workflow.count(lock_check), 4)
         self.assertEqual(
-            workflow.count("uv sync --frozen --extra agents --extra dev"), 2
+            workflow.count("uv sync --frozen --extra agents --extra dev"), 3
         )
         self.assertEqual(
             workflow.count(
