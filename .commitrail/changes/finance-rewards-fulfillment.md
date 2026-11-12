@@ -205,6 +205,18 @@ Implementation decisions to review before runtime edits:
   submission facts and creates exactly one v2 award or zero for unpaid. Replace
   the old all-definitions new-write path. Historical v1 read/replay result types
   still represent two instruments; no global one-award validator may erase them.
+- Historical TASK create and import replay selects its digest, manifest and
+  response decoder from the exact immutable stored receipt/response format,
+  before applying new defaults or new model fields. Recognize only the closed
+  genuine v1 stored shape; do not try old hashes as a fallback after new hash
+  failure. A missing current receipt always uses the new v2 writer. Keep raw
+  input field presence so an explicitly changed task size cannot masquerade as
+  the old omitted-size request. Preserve old import manifest/member/command
+  bodies and their original canonical field set during membership reads;
+  never rebuild an old digest from current `TaskImportRow.model_fields`.
+  Archived pre-v2 create and import receipts must replay unchanged after the
+  upgrade; changed payload under the same key must conflict and no historical
+  branch may originate a new v1 task, submission, acceptance or award.
 
 Required proof: focused policy shape/graph/AUTH tests, direct-SQL version/tier
 and copy-chain rejection, complete public sized-task flow, exact first-submission
@@ -269,6 +281,17 @@ then closed missing import-member inventory, incomplete acceptance-source
 predicates, an imprecise artifact-hash path and unreachable anomaly controls.
 The corrected plan passed at `130148fe0`. Its diagnostic is implemented; real
 PostgreSQL proof is required before its implementation review or qualification.
+
+Implementation review identified that native human acceptance has no canonical
+decision-receipt owner at the supported baseline: Review stores no authorization
+decision ID, and the shared participant refuses human effects. The preflight
+therefore blocks every retained human FinalAcceptance as unqualified evidence,
+preserving its ID for owner reconciliation. It does not invent a human receipt
+format or accept a same-actor unrelated AUDIT row. The same rule blocks retained
+completed-review contributions without supported decision authority. Dedicated
+real-PostgreSQL regressions cover these escaped false negatives. Task-route
+acceptance retains its complete existing receipt validation. This refines the
+planned human-source checks above rather than enabling human acceptance.
 
 ## Reconciliation
 
