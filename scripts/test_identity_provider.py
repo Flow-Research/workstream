@@ -246,6 +246,29 @@ class IdentityProviderTests(unittest.TestCase):
         self.assertLessEqual(actual["exp"], source["exp"])
         self.assertLessEqual(actual["exp"] - actual["iat"], 120)
         self.assertNotIn("refresh_token", result)
+        # A fresh five-minute source cannot discriminate the source-expiry
+        # ceiling from the exchange client's independent two-minute limit.
+        source_client = next(c for c in clients if c["clientId"] == "workstream-mcp-proof")
+        source_path = f"/admin/realms/flow/clients/{source_client['id']}"
+        original_client = self.probe.request(source_path, token=self.operator)
+        short_client = json.loads(json.dumps(original_client))
+        short_client.setdefault("attributes", {})["access.token.lifespan"] = "60"
+        try:
+            self.probe.request(source_path, short_client, token=self.operator, method="PUT")
+            short_login = self.probe.login(
+                "workstream-mcp-proof", "workstream-mcp-audience", email, password,
+            )
+            short_source = claims(short_login["access_token"], realm_config.MCP_RESOURCE)
+            self.assertGreater(short_source["exp"] - time.time(), 0)
+            self.assertLess(short_source["exp"] - time.time(), 120)
+            short_status, short_result = exchange(short_login["access_token"])
+            self.assertEqual(short_status, 200)
+            short_actual = claims(short_result["access_token"], "workstream-api")
+            self.assertEqual(short_actual["sub"], short_source["sub"])
+            self.assertLessEqual(short_actual["exp"], short_source["exp"])
+            self.assertNotIn("refresh_token", short_result)
+        finally:
+            self.probe.request(source_path, original_client, token=self.operator, method="PUT")
         for override in (
             {"audience": "workstream-mcp"}, {"scope": "workstream:access workstream:admin"},
             {"requested_token_type": "urn:ietf:params:oauth:token-type:refresh_token"},

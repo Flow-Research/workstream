@@ -9,7 +9,7 @@ from uuid import uuid4
 
 import httpx2 as httpx
 import pytest
-from oauth_fixture import IdentityFixture
+from integration.oauth_fixture import IdentityFixture
 from test_profile_flow import (
     _bootstrap_access_administrator,
     _ready,

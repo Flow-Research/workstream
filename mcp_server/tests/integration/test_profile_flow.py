@@ -13,9 +13,9 @@ from uuid import uuid4
 
 import httpx2 as httpx
 import pytest
+from integration.oauth_fixture import IdentityFixture, IdentityTokens
 from mcp import Client
 from mcp.client.streamable_http import streamable_http_client
-from oauth_fixture import IdentityFixture, IdentityTokens
 
 from workstream_mcp.tools.profile import normalize_update_input
 

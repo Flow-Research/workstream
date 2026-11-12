@@ -1,7 +1,7 @@
 from collections.abc import Iterator
 
 import pytest
-from oauth_fixture import IdentityFixture
+from integration.oauth_fixture import IdentityFixture
 
 
 @pytest.fixture(scope="session")

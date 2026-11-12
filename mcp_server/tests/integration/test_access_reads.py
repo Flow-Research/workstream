@@ -23,7 +23,7 @@ from uuid import uuid4
 
 import httpx2 as httpx
 import pytest
-from oauth_fixture import IdentityFixture, IdentityTokens
+from integration.oauth_fixture import IdentityFixture, IdentityTokens
 from test_profile_flow import (
     _admin_transition,
     _bootstrap_access_administrator,
