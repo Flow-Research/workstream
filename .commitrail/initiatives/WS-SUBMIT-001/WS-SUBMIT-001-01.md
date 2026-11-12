@@ -1115,3 +1115,24 @@ rebuilt platform image or the still-unimplemented combined guest path.
 The repaired focused suite passes 81 tests. Disabling only the worker's observed
 input comparison in memory makes the new regression fail at its evaluator-entry
 sentinel, confirming the assertion reaches and distinguishes that boundary.
+
+The T3 source-first reservation dependency is now an explicit ART public port:
+`SubmissionIntakePreSourcePort.lock_pre_source` uses the current TASK-first
+repository lock, checks the live foreground lease, requires TASK's exact active
+operation, and compares every sealed-source field before returning detached
+actor/task/assignment/context and deadline facts. `IntakeTaskCustody.require_active`
+owns the pointer comparison. These values grant neither AUTH nor provider I/O;
+they must be consumed within the same root before CHECKERS locks. Source
+reconstruction is shared with sealing. Existing upload/terminal behavior is not
+replaced by this port, and CHECKERS reservation wiring remains the next step.
+Thirteen real PostgreSQL controls passed for valid source custody and altered
+source generation/hash/count/namespace/profile, lease/fence, cleared/foreign
+pointer, expiry, terminal and unsealed source. The pointer tests exercise an
+uncommitted state before deferred constraints, proving the in-root check matters.
+
+CI for `592959410` reported one shared-foundations-b failure among 2,118 tests:
+`test_handler_suppressing_cancellation_cannot_ack_after_deadline` timed out waiting
+two seconds for finalization after cancellation was observed. This is unresolved
+failure evidence, not a passed run or grounds to relax the assertion. Exact
+job 131093141927 and its lane artifact were inspected; diagnosis/reproduction
+remains required. Other jobs were still running at that observation.

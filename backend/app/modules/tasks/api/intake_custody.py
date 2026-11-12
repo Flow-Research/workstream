@@ -27,6 +27,10 @@ class IntakeTaskCustodyPort(Protocol):
         """Acquire TASK first and return its project without asserting eligibility."""
         ...
 
+    async def require_active(self, task_id: UUID, operation_id: UUID) -> UUID:
+        """Lock TASK and require its exact active operation; return the project."""
+        ...
+
     async def release(self, task_id: UUID, operation_id: UUID) -> None:
         """Clear only this operation's pointer inside the terminal transaction."""
         ...

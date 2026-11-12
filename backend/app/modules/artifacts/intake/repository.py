@@ -18,6 +18,7 @@ from app.core.hashing import canonical_json_hash
 from app.core.identifiers import new_record_id
 from app.modules.artifacts.api.submission_intake import (
     SealedSubmissionSource, SubmissionIntakeMetadata, SubmissionSourceLocation,
+    SubmissionIntakePreSourceFacts,
     SubmissionSourceCapacityLimits,
     SubmissionSourceCompletion, SubmissionSourceUpload, SubmissionSourceUploadIntent,
 )
@@ -119,6 +120,38 @@ class SubmissionIntakeRepository:
             raise IntakeCustodyConflict("intake_owner_stale")
         return row
 
+    async def lock_pre_source(
+        self, *, source: SealedSubmissionSource, lease_id: UUID, generation: int,
+    ) -> SubmissionIntakePreSourceFacts:
+        """Hold TASK/ART custody for an exact, live sealed source; never grant I/O."""
+        source = SealedSubmissionSource.model_validate(source)
+        if type(lease_id) is not UUID or type(generation) is not int or generation < 1:
+            raise IntakeCustodyConflict("intake_owner_stale")
+        row = await self._owned(source.location.operation_id, lease_id, generation)
+        project_id = await self._tasks.require_active(UUID(row.task_id), UUID(row.id))
+        if (row.state != "pre_checking" or project_id != UUID(row.project_id)
+                or row.provider_generation is None or self._sealed_source(row) != source):
+            raise IntakeCustodyConflict("intake_pre_source_changed")
+        return SubmissionIntakePreSourceFacts(
+            source=source, project_id=project_id, task_id=UUID(row.task_id),
+            assignment_id=UUID(row.assignment_id), actor_profile_id=UUID(row.actor_profile_id),
+            identity_link_id=UUID(row.identity_link_id), metadata_sha256=row.metadata_sha256,
+            locked_context_sha256=row.locked_context_sha256, lease_id=UUID(row.lease_id),
+            lease_generation=row.lease_generation, lease_expires_at=row.lease_expires_at,
+            pre_deadline_at=row.pre_deadline_at,
+        )
+
+    @staticmethod
+    def _sealed_source(row: SubmissionIntakeOperation) -> SealedSubmissionSource:
+        """Recover the exact source from durable columns after sealing."""
+        return SealedSubmissionSource(
+            location=SubmissionSourceLocation(
+                operation_id=UUID(row.id), namespace_id=row.namespace_id,
+                namespace_fingerprint=row.namespace_fingerprint, provider_profile=row.provider_profile,
+            ), provider_generation=row.provider_generation, raw_sha256=row.raw_sha256,
+            raw_byte_count=row.raw_byte_count, sealed_upload_fence=row.sealed_upload_fence,
+        )
+
     async def _upload_intent(
         self, row: SubmissionIntakeOperation, receipt: SubmissionSourceUploadReceipt,
     ) -> SubmissionSourceUploadIntent:
@@ -205,13 +238,7 @@ class SubmissionIntakeRepository:
         await self._session.flush()
         await self._session.refresh(row)
         await self._capacity.seal(row)
-        return SealedSubmissionSource(
-            location=SubmissionSourceLocation(
-                operation_id=operation_id, namespace_id=row.namespace_id,
-                namespace_fingerprint=row.namespace_fingerprint, provider_profile=row.provider_profile,
-            ), provider_generation=row.provider_generation, raw_sha256=row.raw_sha256,
-            raw_byte_count=row.raw_byte_count, sealed_upload_fence=row.sealed_upload_fence,
-        )
+        return self._sealed_source(row)
 
     async def heartbeat(self, operation_id: UUID, lease_id: UUID, generation: int,
                         *, lease_duration: timedelta) -> float:

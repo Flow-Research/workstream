@@ -48,6 +48,14 @@ class IntakeTaskCustody:
             json.dumps(snapshot, sort_keys=True, separators=(",", ":")),
         )
 
+    async def require_active(self, task_id: UUID, operation_id: UUID) -> UUID:
+        """Retain TASK custody while refusing a foreign or cleared operation."""
+        project_id = await self.lock(task_id)
+        task = await self._tasks.get_task(str(task_id), for_update=True)
+        if task.active_submission_operation_id != str(operation_id):
+            raise TaskSubmissionContextUnavailable("task_submission_context_invalid")
+        return project_id
+
     async def release(self, task_id: UUID, operation_id: UUID) -> None:
         """Never clear a different operation's ownership."""
         await self.lock(task_id)

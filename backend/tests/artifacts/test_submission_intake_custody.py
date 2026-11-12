@@ -965,3 +965,85 @@ async def test_foreground_lease_exhausted_commit_response_budget_does_not_start(
     with pytest.raises(IntakeCustodyConflict, match="renewal_expired"):
         await runner.run(operation, lease, 1, command)
     assert not called
+
+
+async def test_pre_source_custody_returns_exact_locked_facts(intake):
+    async with intake.factory.begin() as session:
+        row = await reserve(intake, session)
+        operation, lease = UUID(row.id), UUID(row.lease_id)
+        await record_eof(session, operation, lease, 1, raw_sha256=SHA, raw_byte_count=100)
+        deadline = datetime.now(UTC) + timedelta(minutes=2)
+        source = await repository(session).seal(
+            operation, lease, 1, provider_generation="pre-source-generation",
+            pre_deadline_at=deadline, lease_expires_at=deadline,
+        )
+    async with intake.factory.begin() as session:
+        facts = await repository(session).lock_pre_source(source=source, lease_id=lease, generation=1)
+        assert facts.source == source
+        assert facts.task_id == intake.task and facts.assignment_id == intake.assignment
+        assert facts.actor_profile_id == intake.actor.actor_profile_id
+        assert facts.identity_link_id == intake.actor.identity_link_id
+        assert facts.lease_id == lease and facts.lease_generation == 1
+        assert facts.lease_expires_at == facts.pre_deadline_at == deadline
+        assert facts.metadata_sha256 == row.metadata_sha256
+        assert facts.locked_context_sha256 == row.locked_context_sha256
+
+
+@pytest.mark.parametrize("changed", [
+    "generation", "raw_sha", "raw_count", "namespace", "profile", "lease", "fence",
+    "cleared_pointer", "foreign_pointer", "expired", "terminal", "unsealed",
+])
+async def test_pre_source_custody_rejects_substitution_or_stale_owner(intake, changed):
+    async with intake.factory.begin() as session:
+        row = await reserve(intake, session)
+        operation, lease = UUID(row.id), UUID(row.lease_id)
+        await record_eof(session, operation, lease, 1, raw_sha256=SHA, raw_byte_count=100)
+        deadline = datetime.now(UTC) + timedelta(minutes=2)
+        if changed == "unsealed":
+            from app.modules.artifacts.api.submission_intake import SealedSubmissionSource, SubmissionSourceLocation
+            source = SealedSubmissionSource(
+                location=SubmissionSourceLocation(
+                    operation_id=operation, namespace_id=row.namespace_id,
+                    namespace_fingerprint=row.namespace_fingerprint, provider_profile=row.provider_profile,
+                ), provider_generation="pre-source-generation", raw_sha256=SHA,
+                raw_byte_count=100, sealed_upload_fence=1,
+            )
+        else:
+            source = await repository(session).seal(
+                operation, lease, 1, provider_generation="pre-source-generation",
+                pre_deadline_at=deadline, lease_expires_at=deadline,
+            )
+    values = source.model_dump(mode="python")
+    if changed == "generation":
+        values["provider_generation"] = "another-generation"
+    elif changed == "raw_sha":
+        values["raw_sha256"] = "sha256:" + "b" * 64
+    elif changed == "raw_count":
+        values["raw_byte_count"] += 1
+    elif changed == "namespace":
+        values["location"]["namespace_fingerprint"] = "sha256:" + "b" * 64
+    elif changed == "profile":
+        values["location"]["provider_profile"] = "unqualified-profile"
+    supplied = type(source).model_validate(values)
+    async with intake.factory() as session:
+        await session.begin()
+        try:
+            if changed in {"cleared_pointer", "foreign_pointer"}:
+                # Deferrable SQL constraints do not replace the in-root owner
+                # check before another participant can consume custody.
+                await session.execute(text(
+                    "UPDATE workstream_tasks SET active_submission_operation_id=:active WHERE id=:task"
+                ), {"active": None if changed == "cleared_pointer" else new_record_id(), "task": intake.task})
+            elif changed == "expired":
+                await session.execute(text(
+                    "UPDATE submission_intake_operations SET lease_expires_at=clock_timestamp()-interval '1 second' WHERE id=:id"
+                ), {"id": operation})
+            elif changed == "terminal":
+                await repository(session).terminalize(operation, lease, 1, state="rejected", failure_code="pre_failed")
+            with pytest.raises((IntakeCustodyConflict, TaskSubmissionContextUnavailable)):
+                await repository(session).lock_pre_source(
+                    source=supplied, lease_id=new_record_id() if changed == "lease" else lease,
+                    generation=2 if changed == "fence" else 1,
+                )
+        finally:
+            await session.rollback()

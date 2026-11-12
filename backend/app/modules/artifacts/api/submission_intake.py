@@ -8,7 +8,7 @@ Delivery credentials and semantic-manifest evidence are deliberately separate.
 
 from __future__ import annotations
 
-from typing import Annotated, Literal, Self
+from typing import Annotated, Literal, Protocol, Self
 from uuid import UUID
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -134,6 +134,45 @@ class SealedSubmissionSource(_IntakeValue):
             "schema_version": "workstream.sealed_submission_source.v1",
             **self.model_dump(mode="json"),
         })
+
+
+class SubmissionIntakePreSourceFacts(_IntakeValue):
+    """Detached current T3 custody, not AUTH or a provider read capability.
+
+    Valid only for comparisons in the caller's still-open root transaction.
+    Copying this value cannot extend its lease or authorize later source access.
+    """
+
+    source: SealedSubmissionSource
+    project_id: UUID
+    task_id: UUID
+    assignment_id: UUID
+    actor_profile_id: UUID
+    identity_link_id: UUID
+    metadata_sha256: Sha256
+    locked_context_sha256: Sha256
+    lease_id: UUID
+    lease_generation: int = Field(ge=1)
+    lease_expires_at: AwareDatetime
+    pre_deadline_at: AwareDatetime
+
+    @model_validator(mode="after")
+    def bounded_lease(self) -> Self:
+        """Reject structurally contradictory lease and immutable upload facts."""
+        if (self.lease_expires_at > self.pre_deadline_at
+                or self.lease_generation < self.source.sealed_upload_fence):
+            raise ValueError("PRE source lease bounds differ")
+        return self
+
+
+class SubmissionIntakePreSourcePort(Protocol):
+    """ART exact source participation in an authorized, caller-owned T3 root."""
+
+    async def lock_pre_source(
+        self, *, source: SealedSubmissionSource, lease_id: UUID, generation: int,
+    ) -> SubmissionIntakePreSourceFacts:
+        """Check TASK pointer and live ART source/fence before CHECKERS locks."""
+        ...
 
 
 class SubmissionSourceCapacityLimits(_IntakeValue):
