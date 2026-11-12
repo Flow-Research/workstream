@@ -49,6 +49,10 @@ def bootstrap(environment_path: Path, password_path: Path) -> None:
     # This one-off container has no listener or restart policy. The ordinary
     # Compose file never receives its bootstrap environment or secret mount.
     temporary = copy.deepcopy(config)
+    # Compose validates dependencies even for services not selected by `run`.
+    # This offline operation needs only identity and its existing network;
+    # unrelated profiled runtime services must not participate in bootstrap.
+    temporary["services"] = {"identity": temporary["services"]["identity"]}
     service = temporary["services"]["identity"]
     service["ports"] = []
     service["restart"] = "no"

@@ -55,6 +55,11 @@ class IdentityBootstrapTests(unittest.TestCase):
         self.assertIn("label=com.docker.compose.service=identity", run.call_args.args[0])
 
     def test_one_off_container_gets_only_scoped_bootstrap_secret(self):
+        self.config["services"].update({
+            "worker": {"image": "example.invalid/worker", "depends_on": ["model-proxy"]},
+            "model-proxy": {"image": "example.invalid/proxy", "profiles": ["model-proxy"]},
+        })
+        self.config["networks"] = {"default": {"name": "owned-fixture_default"}}
         original = copy.deepcopy(self.config)
         commands = []
 
@@ -62,6 +67,8 @@ class IdentityBootstrapTests(unittest.TestCase):
             commands.append(command)
             if command[1] == "compose":
                 config = json.loads(Path(command[command.index("--file") + 1]).read_text())
+                self.assertEqual(set(config["services"]), {"identity"})
+                self.assertEqual(config["networks"], original["networks"])
                 identity = config["services"]["identity"]
                 self.assertEqual(identity["ports"], [])
                 self.assertEqual(identity["restart"], "no")
