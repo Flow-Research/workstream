@@ -1612,3 +1612,11 @@ selects every node once; the 29 moved cases distribute across the three shared
 foundation lanes as 3, 13 and 13. This proves selection, not another PostgreSQL
 execution. CI review also independently confirmed a corrupted assertion-map
 hash is rejected, with the original mapping as the passing control.
+
+QA/test-delta and CI-integrity replay passed the repaired selection at clean
+`83467c478`. The source tests and assertion map are unchanged from the reviewed
+extraction. A fresh manifest build on that exact head also selects the same 85
+collected nodes once, including all 29 moved cases; this remains selection proof,
+not a second database execution. Record/link checks pass. The structural repair
+is complete within its scope. Native one-session execution, obsolete prepared
+callers/fixtures, SQL result custody and T4/public delivery remain unfinished.
