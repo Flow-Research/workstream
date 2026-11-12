@@ -820,6 +820,7 @@ LANES = (
             "tests/test_openai_agents_sdk_unavailable.py",
             "tests/test_project_agent_sdk_installation.py",
             "tests/test_s3_artifact_store.py",
+            "tests/artifacts/test_sealed_source_observation.py",
         ),
         sdk_environment="omnicore",
     ),

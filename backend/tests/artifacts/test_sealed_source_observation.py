@@ -25,7 +25,16 @@ async def test_local_observation_uses_seal_and_inode_without_body_read(tmp_path,
         source = await store.complete_source_upload(completion)
         def forbid_body(*args, **kwargs):
             pytest.fail("metadata observation read source bytes")
+        path = tmp_path / "store" / "objects" / source.location.object_ref
+        bundle_stat = path.stat()
+        original_read = os.read
+        def guarded_read(descriptor, size):
+            info = os.fstat(descriptor)
+            if (info.st_dev, info.st_ino) == (bundle_stat.st_dev, bundle_stat.st_ino):
+                pytest.fail("metadata observation read source bytes")
+            return original_read(descriptor, size)
         monkeypatch.setattr(os, "pread", forbid_body)
+        monkeypatch.setattr(os, "read", guarded_read)
         observed = await store.observe_sealed_source(source)
         assert observed == SealedSourceObservation(
             source.location, source.provider_generation, len(b"original"), source.sealed_upload_fence,
@@ -91,3 +100,20 @@ async def test_s3_observation_refuses_inconsistent_version_metadata(source_store
     monkeypatch.setattr(store, "_client", changed_client)
     with pytest.raises(ArtifactIntegrityError, match="custody"):
         await store.observe_sealed_source(source)
+
+
+@pytest.mark.parametrize("field,value", [
+    ("location", {}), ("provider_generation", ""), ("provider_generation", "null"),
+    ("provider_generation", 1), ("raw_byte_count", True), ("raw_byte_count", 0),
+    ("raw_byte_count", 2**64), ("sealed_upload_fence", True), ("sealed_upload_fence", 0),
+])
+async def test_observation_rejects_malformed_metadata(tmp_path, field, value):
+    store = initialize_local_store(root=tmp_path / "store")
+    try:
+        fields = dict(location=local_source_intent(store).location,
+                      provider_generation="version", raw_byte_count=8, sealed_upload_fence=1)
+        fields[field] = value
+        with pytest.raises(ValueError):
+            SealedSourceObservation(**fields)
+    finally:
+        store.close()

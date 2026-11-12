@@ -17,6 +17,7 @@ from app.interfaces.external_services import (
 from app.modules.artifacts.sources import ArtifactCommitment, CommittedArtifactSource
 from app.modules.artifacts.api.submission_intake import (
     SealedSubmissionSource,
+    MAXIMUM_SUBMISSION_ZIP_BYTES,
     SubmissionSourceLocation,
     SubmissionSourceCompletion,
     SubmissionSourcePart,
@@ -380,6 +381,19 @@ class SealedSourceObservation:
     provider_generation: str
     raw_byte_count: int
     sealed_upload_fence: int
+
+    def __post_init__(self) -> None:
+        if type(self.location) is not SubmissionSourceLocation:
+            raise ValueError("sealed observation location is invalid")
+        SubmissionSourceLocation.model_validate(self.location)
+        if (type(self.provider_generation) is not str
+                or not 1 <= len(self.provider_generation) <= 2048
+                or self.provider_generation == "null"
+                or type(self.raw_byte_count) is not int
+                or not 1 <= self.raw_byte_count <= MAXIMUM_SUBMISSION_ZIP_BYTES
+                or type(self.sealed_upload_fence) is not int
+                or self.sealed_upload_fence < 1):
+            raise ValueError("sealed observation metadata is invalid")
 
 
 class ArtifactStore(ExternalServiceAdapter, Protocol):

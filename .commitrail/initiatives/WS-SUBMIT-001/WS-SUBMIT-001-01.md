@@ -2687,3 +2687,18 @@ worktree evidence, not a complete T4 or exact frozen-head suite. The observation
 implementation still needs its test result and focused review; it has no T5 caller
 until accepted continuation, retained registration and atomic Submission/POST
 composition are implemented. Full original acceptance requirements remain open.
+
+Observation verification: `/tmp/t5-source-observation.log` completed with 51 passed
+and 12 failed. All five new actual Local/MinIO observation cases passed; the failures
+were the source-PRE grant absent from the exact provider-owner inventory and two
+removed PRE consumers still listed as POST materialization importers (the latter
+also failed ten inventory mutation probes). Repairs name only the exact source
+reader/path and `open_source`, and remove only those obsolete POST imports; no
+broad provider allowance is added. The full affected command is being replayed.
+
+Focused architecture/security review found no new observation defect. QA identified
+that the Local test trapped only `pread`, and the frozen observation lacked runtime
+shape validation. Repairs add a descriptor-aware `read` trap while permitting seal
+metadata reads, strict generation/count/fence/location validation with malformed
+value cases, and explicit registration in the existing MinIO-enabled test lane.
+T5 integration remains open; this provider checkpoint does not complete finalization.

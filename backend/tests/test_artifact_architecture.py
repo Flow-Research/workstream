@@ -262,7 +262,9 @@ def test_only_artifact_custody_services_own_provider_execution() -> None:
                 "ScopedGuideDocumentGrant",
                 "PostSubmissionMaterializer",
             } or (node.name == "ForegroundSourceUpload"
-                  and path == APP_ROOT / "modules/artifacts/intake/foreground_upload.py"))
+                  and path == APP_ROOT / "modules/artifacts/intake/foreground_upload.py")
+                or (node.name == "_PreSubmitSourceGrant"
+                    and path == APP_ROOT / "modules/artifacts/selected_pre_submit_execution.py"))
         }
         for node in ast.walk(tree):
             if (
@@ -292,7 +294,7 @@ def test_only_artifact_custody_services_own_provider_execution() -> None:
                     and node.func.attr != "open"
                 ) or (owner.name == "ForegroundSourceUpload" and node.func.attr not in {
                     "begin_source_upload", "complete_source_upload", "observe_source_upload",
-                }):
+                }) or (owner.name == "_PreSubmitSourceGrant" and node.func.attr != "open_source"):
                     violations.append(f"{path.relative_to(BACKEND_ROOT)} calls {node.func.attr}")
     assert violations == []
 
@@ -819,11 +821,9 @@ def _assert_checker_custody_consumers(
             "app/adapters/artifacts/__init__.py",
             "app/modules/artifacts/post_submit_materialization.py",
             "app/modules/artifacts/post_submit_selection.py",
-            "app/modules/artifacts/selected_pre_submit_admission.py",
             "app/modules/artifacts/submission_materialization.py",
             "app/modules/checkers/default_checker.py",
             "app/modules/checkers/execution.py",
-            "app/modules/checkers/selected_pre_submit_execution.py",
         },
     }
     actual = {module: set() for module in expected}
