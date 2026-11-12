@@ -61,16 +61,19 @@ async def selected_public_work(tmp_path, database_url, monkeypatch, *, human_rev
         )
         async with _client(h, monkeypatch, database_url) as client:
             h.client = client
-            created = await client.post(f"/api/v1/projects/{project}/tasks",
-                headers={"Idempotency-Key": str(new_record_id())},
-                json={"title": "Medium work", "description": "Complete the approved work.", "task_size": "medium"})
+            create_path = f"/api/v1/projects/{project}/tasks"
+            create_headers = {"Idempotency-Key": str(new_record_id())}
+            create_body = {"title": "Medium work", "description": "Complete the approved work.", "task_size": "medium"}
+            created = await client.post(create_path, headers=create_headers, json=create_body)
             assert created.status_code == 201, created.text
             task = created.json()
+            h.manager_commands = [(create_path, create_headers, create_body, 201, task)]
             h.task_id = UUID(task["id"])
             for operation, body in (("screen", {}), ("release", {"reason": "Approved exact reward selection"})):
-                response = await client.post(f"/api/v1/tasks/{h.task_id}/{operation}",
-                    headers={"Idempotency-Key": str(new_record_id())}, json=body)
+                path, headers = f"/api/v1/tasks/{h.task_id}/{operation}", {"Idempotency-Key": str(new_record_id())}
+                response = await client.post(path, headers=headers, json=body)
                 assert response.status_code == 200, response.text
+                h.manager_commands.append((path, headers, body, 200, response.json()))
             # A second size under the same policy must retain a distinct lookup key.
             small = await client.post(f"/api/v1/projects/{project}/tasks",
                 headers={"Idempotency-Key": str(new_record_id())},
@@ -116,6 +119,13 @@ async def selected_public_work(tmp_path, database_url, monkeypatch, *, human_rev
                     project_id=project, task_id=h.task_id, submission_id=h.created.submission_id,
                     request_id=h.created.evaluation_request_id,
                 )).request
+            async with factory() as session:
+                sql_hash = await session.scalar(text("SELECT public.revision_task_context_digest(t) "
+                    "FROM public.workstream_tasks t WHERE id=:id"), {"id": h.task_id})
+                receipt_hash = await session.scalar(text("SELECT locked_context_hash FROM public.task_command_receipts "
+                    "WHERE task_id=:id AND action_id='task.claim' AND idempotency_key=:key"),
+                    {"id": h.task_id, "key": UUID(h.claim_headers["Idempotency-Key"])})
+                assert sql_hash == receipt_hash
             yield h
     finally:
         manager.close()
@@ -231,6 +241,12 @@ async def test_original_claim_replay_after_rebase(tmp_path, isolated_database_en
             decisions = await session.scalar(text("SELECT count(*) FROM public.audit_events WHERE action_id='task.claim' "
                 "AND event_type='SensitiveAuthorizationAllowed' AND actor_id=:actor"),
                 {"actor": str(h.actor_context.actor_profile_id)})
+        for path, headers, body, expected_status, expected_result in h.manager_commands:
+            recorded = await h.client.post(path, headers=headers, json=body)
+            assert recorded.status_code == expected_status and recorded.json() == expected_result, recorded.text
+            changed_body = body | ({"title": "Changed creation"} if expected_status == 201 else {"reason": "Changed transition"})
+            changed_command = await h.client.post(path, headers=headers, json=changed_body)
+            assert changed_command.status_code == 409, changed_command.text
         replay = await h.client.post(f"/api/v1/tasks/{h.task_id}/claim", headers=h.claim_headers, json=h.claim_body)
         assert replay.status_code == 200 and replay.json() == h.claim_response, replay.text
         changed = await h.client.post(f"/api/v1/tasks/{h.task_id}/claim", headers=h.claim_headers,

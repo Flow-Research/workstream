@@ -18,7 +18,7 @@ from app.modules.tasks.post_submit_routing.requests import TaskRoutingRequestUna
 from app.modules.tasks.revision.exhaustion import commit_exhaustion
 from app.modules.tasks.revision.exhaustion_event import revision_exhausted_event
 from app.modules.tasks.revision.models import TaskRevisionExhaustion
-from app.modules.tasks.service import LOCKED_CONTEXT_REQUIRED_FIELDS
+from app.modules.tasks.service import LOCKED_CONTEXT_HASH_FIELDS
 
 
 async def recover_exhausted_assignment(session, *, projects, authorization, audit, outbox,
@@ -58,7 +58,7 @@ async def recover_exhausted_assignment(session, *, projects, authorization, audi
     })
     context_hash = canonical_json_hash({
         field: str(getattr(task, field)) if isinstance(getattr(task, field), UUID)
-        else getattr(task, field) for field in LOCKED_CONTEXT_REQUIRED_FIELDS
+        else getattr(task, field) for field in LOCKED_CONTEXT_HASH_FIELDS
     })
     actor_id, decision = await authorization.authorize(TaskRevisionRecoveryFacts(
         project_id=UUID(task.project_id), task_id=UUID(task.id),

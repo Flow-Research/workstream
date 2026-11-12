@@ -54,6 +54,19 @@ def upgrade() -> None:
           REFERENCES public.contribution_policy_versions(id,project_id)""")
 
     op.execute("""
+CREATE OR REPLACE FUNCTION public.revision_task_context_digest(t public.workstream_tasks) RETURNS text
+LANGUAGE sql IMMUTABLE SET search_path=pg_catalog,public,pg_temp AS $$
+ SELECT 'sha256:'||pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(
+   public.project_guide_projection_canonical_json(
+     public.revision_task_lineage(to_jsonb(t)) || jsonb_build_object(
+       'locked_post_submit_checker_policy_body',t.locked_post_submit_checker_policy_body::jsonb,
+       'task_size',t.task_size,
+       'locked_submission_award_definition_id',t.locked_submission_award_definition_id::text)),
+   'UTF8')),'hex');
+$$;
+    """)
+
+    op.execute("""
 CREATE FUNCTION public.reward_selection_matches(project uuid, policy uuid, size text, definition uuid)
 RETURNS boolean LANGUAGE sql STABLE SET search_path=pg_catalog,public,pg_temp AS $$
  SELECT EXISTS (

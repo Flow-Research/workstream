@@ -5,7 +5,6 @@ from datetime import UTC, datetime
 import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
-from uuid import UUID
 
 import pytest
 from fastapi import FastAPI
@@ -13,7 +12,8 @@ from httpx import ASGITransport, AsyncClient
 from pydantic import ValidationError
 
 from app.core.identifiers import new_record_id
-from app.modules.tasks.api.authorization import TaskAuthorityFacts, TaskAuthorityOperation
+from app.modules.tasks.api.authorization import TaskAuthorityOperation
+from app.modules.tasks.authorized_commands import AuthorizedTaskCommands
 from app.modules.tasks.command_replay import TaskCommandReplay, TaskReplayConflict
 from app.modules.tasks.models import TaskAssignment, TaskCommandReceipt, WorkstreamTask
 from app.modules.tasks.schemas import AssignmentResponse, TaskClaimResponse, TaskResponse, TaskWithAssignmentResponse
@@ -35,9 +35,9 @@ def _command_receipt(operation, status):
             contributor_id=str(contributor), assigned_by=str(actor), assigned_at=now, status="active",
             submitter_contribution_policy_version_id=new_record_id(),
             submitter_task_size=task.task_size, submitter_award_definition_id=None)
-    facts = TaskAuthorityFacts(operation, task_id, project_id, actor, status,
-        contributor if assignment else None, UUID(assignment.id) if assignment else None,
-        contributor if assignment else None, "sha256:" + "a" * 64)
+    facts = AuthorizedTaskCommands._facts(
+        SimpleNamespace(_actor_id=actor), task, assignment, operation, None,
+    )
     captured_task = TaskResponse.model_validate(task).model_copy(update={"assigned_to": None})
     response = (TaskWithAssignmentResponse(task=captured_task, assignment=AssignmentResponse.model_validate(assignment))
                 if operation is TaskAuthorityOperation.CLAIM else captured_task)

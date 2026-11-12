@@ -61,3 +61,26 @@ def test_current_creation_hash_normalizes_omission_and_explicit_small():
     assert canonical_json_hash(omitted.model_dump(mode="json")) != canonical_json_hash(
         medium.model_dump(mode="json")
     )
+
+
+def test_authority_hash_binds_size_and_exact_selected_definition():
+    from types import SimpleNamespace
+    from app.core.identifiers import new_record_id
+    from app.modules.tasks.api.authorization import TaskAuthorityOperation
+    from app.modules.tasks.authorized_commands import AuthorizedTaskCommands
+    from app.modules.tasks.models import WorkstreamTask
+
+    task = WorkstreamTask(id=str(new_record_id()), project_id=str(new_record_id()),
+                         status="ready", task_size="medium",
+                         locked_submission_award_definition_id=new_record_id())
+    owner = SimpleNamespace(_actor_id=new_record_id())
+    def digest():
+        return AuthorizedTaskCommands._facts(owner, task, None, TaskAuthorityOperation.CLAIM, None).locked_context_hash
+    original = digest()
+    task.locked_submission_award_definition_id = new_record_id()
+    assert digest() != original
+    task.locked_submission_award_definition_id = None
+    unpaid = digest()
+    assert unpaid != original
+    task.task_size = "large"
+    assert digest() != unpaid

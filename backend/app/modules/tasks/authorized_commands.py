@@ -63,7 +63,7 @@ from app.modules.tasks.schemas import (
     TaskWithAssignmentResponse,
 )
 from app.modules.tasks.service import (
-    LOCKED_CONTEXT_REQUIRED_FIELDS,
+    LOCKED_CONTEXT_HASH_FIELDS,
     LockedTaskContext,
     TaskAssignmentConflict,
     TaskNotFound,
@@ -173,7 +173,7 @@ class AuthorizedTaskCommands:
             assignment_contributor_id=UUID(assignment.contributor_id) if assignment else None,
             locked_context_hash=canonical_json_hash(
                 {field: (str(getattr(task, field)) if isinstance(getattr(task, field), UUID)
-                         else getattr(task, field)) for field in LOCKED_CONTEXT_REQUIRED_FIELDS}
+                         else getattr(task, field)) for field in LOCKED_CONTEXT_HASH_FIELDS}
             ),
             reason=reason,
             idempotency_key=idempotency_key,

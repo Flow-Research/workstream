@@ -331,3 +331,44 @@ nonlocking proof; assertions tied to the superseded scalar reward query and its
 query count are removed. Existing independent-session claim and acceptance race
 tests additionally compare the committed selection with the Task or immutable
 Submission. No required behavior is replaced with an end-to-end-only assertion.
+
+
+## Remaining command replay and authority hash repair
+
+The selected-copy chain is implemented, but TASK authority hashes still enumerate
+only guide/policy fields, and manager receipt replay still requires the present
+Task state. Replace the hash input with one current field set including immutable
+size and exact selected definition; use it in command, invalidation and revision
+recovery owners. Keep non-null policy requirements distinct because an unpaid
+selection legitimately has no definition. No earlier hash reader is retained.
+
+Within the same allowed TASK/AUTH scope, replay original manager create, screen
+and release responses after continuing work advances or rebases, under fresh
+same-actor authority and the exact immutable receipt namespace/request. Validate
+original captured identity, size, operation state and policy coordinates against
+the original immutable source; do not authorize a new transition or rewrite the
+receipt. Creation has its exact unscreened null-policy source. Screen/release use
+the immutable original Submission when continuing context differs. Missing or
+substituted source stays a conflict. Add focused hash substitution proof and
+extend the existing public rebase drill to replay recorded manager commands and
+reject changed bodies. Existing AUTH guards and database receipt immutability
+remain required. Risk and reviewer tracks remain L0 as declared above.
+
+
+Supporting repair evidence: the new selected-definition hash regression failed
+on the preceding implementation because distinct selections had the same hash;
+32 focused contract/receipt cases pass after replacement. The real public
+paid-to-unpaid drill passed original create, screen, release, claim and Submission
+responses, with changed requests rejected and no new work/economic records.
+PostgreSQL's existing revision digest now hashes the same selection facts;
+its installed schema fingerprint was obtained from an actual isolated migration.
+The public helper compares that SQL digest with the actual claim receipt hash.
+Final clean-candidate execution remains required; these are development results.
+
+Migration safety passed actual installation/upgrade/idempotency and atomic
+retained-data refusal. Seven existing independent-session, rollback, incomplete
+award and unpaid rejection cases passed. The read-fixture batch passed 49 cases
+before a fixture tried to access an intentionally private definition ID through
+public JSON. That fixture now loads the exact stored Task instead; rerun the
+remaining focused cases. None of these results qualifies full-suite, durable
+worker, S3 or Finance execution completion.

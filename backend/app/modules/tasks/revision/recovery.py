@@ -18,7 +18,7 @@ from app.modules.tasks.revision.expiry_event import revision_preparation_event
 from app.modules.tasks.revision.exhaustion_recovery import recover_exhausted_assignment
 from app.modules.tasks.revision.models import TaskRevisionPreparation
 from app.modules.tasks.revision.service import RevisionRepairReceipt, candidate_from_packet, head_for_source, prepare_revision, select_candidate
-from app.modules.tasks.service import LOCKED_CONTEXT_REQUIRED_FIELDS
+from app.modules.tasks.service import LOCKED_CONTEXT_HASH_FIELDS
 
 
 class TaskRevisionRecovery:
@@ -130,7 +130,7 @@ class TaskRevisionRecovery:
                 return False
         context_hash = canonical_json_hash({
             field: str(getattr(task, field)) if isinstance(getattr(task, field), UUID)
-            else getattr(task, field) for field in LOCKED_CONTEXT_REQUIRED_FIELDS
+            else getattr(task, field) for field in LOCKED_CONTEXT_HASH_FIELDS
         })
         request_digest = canonical_json_hash({
             "routing_manifest_id": str(manifest_id),

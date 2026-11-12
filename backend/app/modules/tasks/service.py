@@ -74,6 +74,10 @@ LOCKED_CONTEXT_REQUIRED_FIELDS = (
 )
 
 
+# Unpaid selection permits a null definition; it still belongs in authority.
+LOCKED_CONTEXT_HASH_FIELDS = (*LOCKED_CONTEXT_REQUIRED_FIELDS, "task_size",
+                              "locked_submission_award_definition_id")
+
 class TaskServiceError(Exception):
     """Base error for task service failures mapped to API responses."""
 
