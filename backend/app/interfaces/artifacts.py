@@ -448,6 +448,16 @@ class ArtifactStore(ExternalServiceAdapter, Protocol):
     ) -> None:
         """Request scoped abort; acknowledgement alone never releases a charge."""
 
+    async def source_upload_parts_absent(
+        self, upload: SubmissionSourceUpload, *,
+        operation_evidence: ArtifactProviderOperationEvidence | None = None,
+    ) -> bool:
+        """Observe exact handle reclamation, not settlement of late calls or objects.
+
+        True alone never authorizes charge release. The owner must also reconcile
+        outstanding writes and any exact generation produced by completion.
+        """
+
     async def put(
         self,
         source: CommittedArtifactSource,

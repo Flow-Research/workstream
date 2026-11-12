@@ -91,7 +91,7 @@ class TestMinioArtifactStoreConformance(ArtifactStoreConformanceTests):
     )
     expected_source_operations = frozenset({
         "begin_source_upload", "upload_source_part", "complete_source_upload",
-        "open_source", "observe_source_upload", "observe_sealed_source", "discover_source_uploads", "request_source_abort",
+        "open_source", "observe_source_upload", "observe_sealed_source", "discover_source_uploads", "request_source_abort", "source_upload_parts_absent",
     })
 
     def make_store(self, root: Path) -> ArtifactStore:
@@ -1169,8 +1169,13 @@ async def test_submission_source_lost_begin_ack_discovers_and_aborts_only_owned_
     monkeypatch.setattr(store, "_client", original_client)
     discovered = await store.discover_source_uploads(intent)
     assert len(discovered) == 1
+    assert await store.source_upload_parts_absent(discovered[0]) is False
+    await store.upload_source_part(discovered[0], 1, b"retained-part")
+    assert await store.source_upload_parts_absent(discovered[0]) is False
     await store.request_source_abort(discovered[0])
     await store.request_source_abort(discovered[0])  # NoSuchUpload is safe to repeat.
+    assert await store.source_upload_parts_absent(discovered[0]) is True
+    assert await store.source_upload_parts_absent(other) is False
     assert await store.discover_source_uploads(intent) == ()
     assert await store.discover_source_uploads(other.intent) == (other,)
     await store.request_source_abort(other)

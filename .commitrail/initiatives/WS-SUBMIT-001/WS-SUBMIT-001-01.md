@@ -3282,3 +3282,54 @@ The post-sync actual Docker run passed all seven samples with confirmed cleanup
 passed (`/tmp/image-cleanup-sync-structure.log`), and Commitrail passed. An
 unacknowledged daemon create remains an explicit unresolved receipt obligation;
 this engineering command still does not supply an automatic daemon reaper.
+
+## Source cleanup observation prerequisite
+
+Existing adapters can request abort, but cannot confirm the exact multipart
+handle's absence. Add a read-only `source_upload_parts_absent` capability to the
+ArtifactStore interface, Local helper/adapter and S3 adapter; update existing
+adapter conformance declarations and source tests. This observation is a necessary
+input to the durable cleanup owner, never charge-release authority: it says
+nothing about outstanding calls or an object produced by completion. Only exact
+NoSuchUpload may confirm S3 handle absence; an empty successful ListParts keeps a
+live handle unresolved, and bucket/access/transport errors fail closed. Local
+abort currently retains bundle bytes, so it cannot be called reclaimed.
+
+Allowed scope: those interface/adapters, existing Local/S3/conformance test
+modules, and this record. No deletion, quota release, IAM broadening or public
+route is introduced in this prerequisite. Acceptance: live empty and populated
+handles remain unresolved; exact aborted handle confirms absence on real MinIO;
+other handle remains untouched; malformed/foreign/provider failures never count
+as absence; Local abort with retained bundle remains unresolved. Verification:
+focused Local/MinIO behavior, existing conformance coverage, Ruff and structure.
+Risk: storage cleanup proof boundary. Reviewers: architecture/security and
+QA/test delta. Human focus: distinction between absence of multipart parts and
+settlement of all writes/completed objects. The full cleanup owner, tombstones,
+exact deletion and charge release remain required immediately after this port.
+
+Place provider failure/namespace probes in existing selected
+`backend/tests/artifacts/test_sealed_source_observation.py` alongside the current
+exact-source observation proofs. This avoids growing the near-limit S3 test
+module or introducing a new test lane; its existing MinIO selection is retained.
+
+Extend the existing architecture proof's exact provider-method set for the new
+observation and permit `ListParts` only inside that typed source method. Keep
+all deletion/copy/global-list prohibitions and cross-owner call restrictions.
+This requires the existing `backend/tests/test_artifact_architecture.py` file;
+review includes CI integrity for this exact allowlist extension.
+
+First isolated integration run: 89 passed, one Local fixture failure; database
+and MinIO cleanup both completed (`/tmp/source-cleanup-observation.json`). Lost
+initiation was injected after metadata publication but before staging-file
+creation, so uploading into that fixture was invalid. Corrected it to assert
+confirmed absent parts after abort; a separate successful-initiation test writes
+real staging bytes and proves abort does not reclaim them. A direct focused run
+passed the corrected initiation case but the other module's MinIO autouse fixture
+used the wrong default port (9000), so that run is excluded from green evidence.
+The full corrected run uses the isolated runner and explicit59043 endpoint.
+
+Architecture tests passed48 cases (`/tmp/source-cleanup-architecture.log`);
+structure validation and Ruff passed before the final small Local test repair.
+The initial fixture edits overlapped the first integration run, so that receipt
+is not frozen-head proof. The corrected run and final review establish the
+candidate evidence separately; no cleanup or charge-release readiness is claimed.

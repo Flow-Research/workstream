@@ -4,17 +4,77 @@ import os
 
 import pytest
 
-from app.interfaces.artifacts import ArtifactIntegrityError, SealedSourceObservation
+from app.interfaces.artifacts import (
+    ArtifactIntegrityError, ArtifactObjectMissingError, ArtifactOperationConflictError,
+    ArtifactStoreUnavailableError, SealedSourceObservation,
+)
+from app.modules.artifacts.api.submission_intake import SubmissionSourceUpload
 from tests.test_local_artifact_store import (
     initialize_local_store, local_source_completion, local_source_intent,
 )
 from tests.test_s3_artifact_store import (
-    MINIO_BUCKET, source_completion,
+    MINIO_BUCKET, source_completion, source_intent, _client_error,
     source_store as source_store,
     provision_minio_bucket as provision_minio_bucket,
 )
 
 pytestmark = pytest.mark.asyncio
+
+
+async def test_local_abort_does_not_confirm_retained_staging_bytes(tmp_path):
+    root = tmp_path / "store"
+    store = initialize_local_store(root=root)
+    try:
+        upload = await store.begin_source_upload(local_source_intent(store))
+        await store.upload_source_part(upload, 1, b"retained-part")
+        await store.request_source_abort(upload)
+        assert await store.source_upload_parts_absent(upload) is False
+        assert (root / "objects" / upload.intent.location.object_ref).read_bytes() == b"retained-part"
+        foreign = upload.model_copy(update={"provider_upload_id": "foreign"})
+        with pytest.raises(ArtifactOperationConflictError):
+            await store.source_upload_parts_absent(foreign)
+    finally:
+        store.close()
+
+
+@pytest.mark.parametrize("code,status,expected", [
+    ("NoSuchUpload", 404, True),
+    ("NoSuchUpload", 403, ArtifactStoreUnavailableError),
+    ("NoSuchBucket", 404, ArtifactStoreUnavailableError),
+    ("NoSuchKey", 404, ArtifactObjectMissingError),
+    ("AccessDenied", 403, ArtifactStoreUnavailableError),
+    (None, None, False),
+])
+async def test_parts_absence_requires_exact_upload_missing(source_store, monkeypatch, code, status, expected):
+    store = source_store
+    upload = SubmissionSourceUpload(intent=source_intent(store), provider_upload_id="owned-upload")
+    seen = []
+
+    class PartsOnly:
+        async def list_parts(self, **kwargs):
+            seen.append(kwargs)
+            if code:
+                raise _client_error(code, status)
+            return {"Parts": [], "IsTruncated": False}
+
+    @asynccontextmanager
+    async def client():
+        yield PartsOnly()
+
+    monkeypatch.setattr(store, "_client", client)
+    if isinstance(expected, type):
+        with pytest.raises(expected):
+            await store.source_upload_parts_absent(upload)
+    else:
+        assert await store.source_upload_parts_absent(upload) is expected
+    assert seen == [dict(Bucket=MINIO_BUCKET, Key=store._source_key(upload.intent.location),
+                         UploadId="owned-upload", MaxParts=1)]
+    foreign = upload.model_copy(update={"intent": upload.intent.model_copy(update={
+        "location": upload.intent.location.model_copy(update={"namespace_fingerprint": "sha256:" + "0" * 64}),
+    })})
+    with pytest.raises(ArtifactOperationConflictError):
+        await store.source_upload_parts_absent(foreign)
+    assert len(seen) == 1
 
 
 async def test_local_observation_uses_seal_and_inode_without_body_read(tmp_path, monkeypatch):

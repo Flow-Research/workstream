@@ -93,7 +93,7 @@ RETIRED_CONTRIBUTOR_INTAKE_NAMES = {
 }
 PROVIDER_METHODS = {"put", "observe_put_result", "open", "head", "begin_source_upload",
                     "upload_source_part", "complete_source_upload", "open_source",
-                    "observe_source_upload", "observe_sealed_source", "discover_source_uploads", "request_source_abort"}
+                    "observe_source_upload", "observe_sealed_source", "discover_source_uploads", "request_source_abort", "source_upload_parts_absent"}
 CONCRETE_ADAPTER_MODULES = {
     "app.adapters.artifacts.local",
     "app.adapters.artifacts.s3_compatible",
@@ -464,7 +464,7 @@ def test_s3_adapter_exposes_only_required_immutable_object_operations() -> None:
     """Permit multipart only at typed source methods; preserve unrelated objects."""
     allowed = {"get_object", "head_object", "put_object", "get_bucket_versioning",
                "create_multipart_upload", "upload_part", "complete_multipart_upload",
-               "list_multipart_uploads", "abort_multipart_upload"}
+               "list_multipart_uploads", "abort_multipart_upload", "list_parts"}
     forbidden = {
         "copy_object",
         "delete_object",
@@ -494,9 +494,10 @@ def test_s3_adapter_exposes_only_required_immutable_object_operations() -> None:
         "observe_sealed_source": {"head_object"},
         "discover_source_uploads": {"list_multipart_uploads"},
         "request_source_abort": {"abort_multipart_upload"},
+        "source_upload_parts_absent": {"list_parts"},
     }
     source_only = {"get_bucket_versioning", "create_multipart_upload", "upload_part",
-                   "complete_multipart_upload", "list_multipart_uploads", "abort_multipart_upload"}
+                   "complete_multipart_upload", "list_multipart_uploads", "abort_multipart_upload", "list_parts"}
     store = next(node for node in _tree(S3_ADAPTER_MODULE).body
                  if isinstance(node, ast.ClassDef) and node.name == "S3CompatibleArtifactStore")
     for method in store.body:

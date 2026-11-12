@@ -218,7 +218,7 @@ class TestLocalArtifactStoreConformance(ArtifactStoreConformanceTests):
 
     expected_source_operations = frozenset({
         "begin_source_upload", "upload_source_part", "complete_source_upload",
-        "open_source", "observe_source_upload", "observe_sealed_source", "discover_source_uploads", "request_source_abort",
+        "open_source", "observe_source_upload", "observe_sealed_source", "discover_source_uploads", "request_source_abort", "source_upload_parts_absent",
     })
 
     expected_identity = ExternalServiceAdapterIdentity("artifact_store", "local")
@@ -402,5 +402,5 @@ def test_artifact_store_protocol_declares_only_v2_operations() -> None:
     assert methods == {
         "head", "identity", "observe_put_result", "open", "put",
         "begin_source_upload", "upload_source_part", "complete_source_upload",
-        "open_source", "observe_source_upload", "observe_sealed_source", "discover_source_uploads", "request_source_abort",
+        "open_source", "observe_source_upload", "observe_sealed_source", "discover_source_uploads", "request_source_abort", "source_upload_parts_absent",
     }

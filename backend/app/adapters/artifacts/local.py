@@ -256,6 +256,10 @@ class LocalStorageAdapter:
                                    operation_evidence: ArtifactProviderOperationEvidence | None = None) -> None:
         await self._source_io(LocalSubmissionSource(self).abort, upload)
 
+    async def source_upload_parts_absent(self, upload: SubmissionSourceUpload, *,
+                                        operation_evidence: ArtifactProviderOperationEvidence | None = None) -> bool:
+        return await self._source_io(LocalSubmissionSource(self).parts_absent, upload)
+
     def open_source(self, source: SealedSubmissionSource, *, operation_evidence: ArtifactProviderOperationEvidence | None = None, maximum_chunk_bytes: int = 64 * 1024) -> AsyncGenerator[bytes, None]:
         if type(maximum_chunk_bytes) is not int or not 1 <= maximum_chunk_bytes <= 64 * 1024:
             raise ValueError("source read chunk bound is invalid")

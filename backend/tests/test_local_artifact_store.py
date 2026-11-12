@@ -1087,7 +1087,9 @@ async def test_local_submission_lost_begin_ack_keeps_discoverable_abort_ownershi
     try:
         uploads = await store.discover_source_uploads(intent)
         assert len(uploads) == 1 and uploads[0].intent == intent
+        assert await store.source_upload_parts_absent(uploads[0]) is False
         await store.request_source_abort(uploads[0])
+        assert await store.source_upload_parts_absent(uploads[0]) is True
         assert await store.discover_source_uploads(intent) == ()
         with pytest.raises(ArtifactPreconditionFailedError):
             await store.begin_source_upload(intent)

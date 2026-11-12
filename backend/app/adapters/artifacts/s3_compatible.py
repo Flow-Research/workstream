@@ -711,6 +711,25 @@ class S3CompatibleArtifactStore:
         except ArtifactObjectMissingError:
             return
 
+    async def source_upload_parts_absent(
+        self, upload: SubmissionSourceUpload, *,
+        operation_evidence: ArtifactProviderOperationEvidence | None = None,
+    ) -> bool:
+        """Only exact NoSuchUpload confirms absence; an empty live handle cannot."""
+        upload = SubmissionSourceUpload.model_validate(upload)
+        evidence = operation_evidence or ArtifactProviderOperationEvidence()
+        async with self._source_client(upload.intent.location, evidence) as client:
+            try:
+                await client.list_parts(
+                    Bucket=self._bucket, Key=self._source_key(upload.intent.location),
+                    UploadId=upload.provider_upload_id, MaxParts=1,
+                )
+            except ClientError as error:
+                if _provider_http_status(error) == 404 and _provider_error_code(error) == "NoSuchUpload":
+                    return True
+                raise
+        return False
+
     async def complete_source_upload(
         self, completion: SubmissionSourceCompletion, *,
         operation_evidence: ArtifactProviderOperationEvidence | None = None,

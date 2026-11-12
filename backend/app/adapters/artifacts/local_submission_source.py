@@ -318,6 +318,18 @@ class LocalSubmissionSource:
         except FileNotFoundError:
             return
 
+    def parts_absent(self, upload: SubmissionSourceUpload) -> bool:
+        """An abort marker alone does not reclaim the local staging inode."""
+        upload = SubmissionSourceUpload.model_validate(upload)
+        try:
+            with self.locked(upload.intent.location) as directory:
+                self.upload(directory, upload)
+                return (self.exists(directory, "aborted.json")
+                        and not self.exists(directory, "bundle.zip"))
+        except FileNotFoundError:
+            # A missing metadata file is not proof the staging bytes are gone.
+            return False
+
     def seal(self, directory: int) -> tuple[SubmissionSourceCompletion, SealedSubmissionSource]:
         value = json.loads(self.read(directory, "seal.json"))
         if not isinstance(value, dict) or set(value) != {"completion", "source"}:
