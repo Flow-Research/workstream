@@ -187,6 +187,7 @@ the focused contract suite plus canonicalization and shape adversarial controls.
 | Existing acceptance owner inspected | REV acceptance participant and compensation award participant | Existing caller-owned atomic composition confirmed | Full runtime suite not yet executed |
 | Target behavior | Specification sections 20–21 and focused existing owner tests | Required proof defined; implementation pending | No payment/deployment qualification yet |
 | Obligation wire validation | Focused COMP/FIN contract suite and Ruff | 76 cases passed; lint passed | Pure input proof only; no source authority, runtime activation or payment proof |
+| Full-award reports and exceptions | Both owner contract paths, shared positive/negative fixtures | 164 combined contract cases passed; scoped lint and module boundaries passed | No receipt persistence, source authority or provider-finality proof |
 
 ## Review findings
 
@@ -206,6 +207,13 @@ loader uses a static package-relative path because the existing boundary
 scanner rejects importlib surfaces; no scanner exception is added. A built
 wheel extracted outside the checkout successfully loads the schema and validates
 the known fixture through both owners. Exact-head replay remains required.
+
+The focused contract-fix replay passed at `c64d4f218`, including an independent
+wheel extraction and permissive-schema counterexample. Preflight plan review
+then closed missing import-member inventory, incomplete acceptance-source
+predicates, an imprecise artifact-hash path and unreachable anomaly controls.
+The corrected plan passed at `130148fe0`. Its diagnostic is implemented; real
+PostgreSQL proof is required before its implementation review or qualification.
 
 ## Reconciliation
 
