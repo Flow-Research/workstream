@@ -251,6 +251,39 @@ fn pre_admission_refuses_rebound_pins_fences_and_bounds_before_allocation() {
 }
 
 #[test]
+fn source_cap_rejects_self_consistent_bytes_above_the_configured_maximum() {
+    let (root, config, mut header) = fixture();
+    let maximum = config.pre.as_ref().unwrap().limits.maximum_source_bytes;
+    for (count, accepted) in [(maximum, true), (maximum + 1, false)] {
+        header["reservation"]["source"]["raw_byte_count"] = json!(count);
+        let mut source = header["reservation"]["source"].as_object().unwrap().clone();
+        source.insert(
+            "schema_version".into(),
+            json!("workstream.sealed_submission_source.v1"),
+        );
+        header["reservation"]["source_sha256"] = json!(hash(&Value::Object(source)).unwrap());
+        header["request_digest"] = json!(hash(&header["reservation"]).unwrap());
+        let result = prepare(&config, &serde_json::to_vec(&header).unwrap());
+        if accepted {
+            let prepared = result.expect("the exact configured source maximum is admitted");
+            assert_eq!(
+                prepared.job.startup["request"]["reservation"]["source"]["raw_byte_count"],
+                count
+            );
+        } else {
+            assert!(matches!(result, Err(ref error) if error == "PRE configured identity differs"));
+        }
+        assert!(!config
+            .socket_path
+            .parent()
+            .unwrap()
+            .join("smol-leases")
+            .exists());
+    }
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn utc_deadlines_refuse_normalization_and_floor_submillisecond_expiry() {
     assert_eq!(utc_millis("2024-02-29T00:00:00Z").unwrap(), 1709164800000);
     assert_eq!(

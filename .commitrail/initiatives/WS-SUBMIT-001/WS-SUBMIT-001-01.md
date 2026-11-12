@@ -2114,3 +2114,19 @@ permissions and require passing controls. Formatting, diff, record and link
 checks pass. Host dispatch still does not call admission or stream the source;
 these checks do not establish provider qualification, authorization independent
 of the trusted caller, or a complete execution response.
+
+Architecture/security review passed clean `2f8eb812b` for admission and the shared
+image reader. The broader service binary run passes 121 tests and retains the
+same five obsolete prepared-PRE fixture failures as the earlier source-cutover
+baseline; the full service suite is not green. The host's returned absolute
+deadline must govern reservation, journal/create, streaming and reads. At actual
+guest launch, the caller must shorten guest run/cleanup ceilings to the remaining
+budget (and retain guardian lifetime enforcement); configured phase ceilings do
+not independently establish the current lease's remaining lifetime.
+
+QA identified that the original source mutation proved stale-digest refusal,
+not the configured source-count cap. A separate boundary test now recomputes
+source and request digests: the exact configured maximum passes, one byte above
+it fails, and neither allocates a lease. All 46 selected Smol tests pass after
+this test-only repair. Guest/SDK implementation is unchanged from the 52/eight
+passing run. No production guard or test expectation was weakened.
