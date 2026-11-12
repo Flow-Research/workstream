@@ -154,7 +154,9 @@ class ExternalPreSubmitSourceGrant(Protocol):
     """ART-issued expiring read authority, separate from durable request identity.
 
     The issuer must consume the exact committed lease and authorize the immutable
-    source generation before returning this process-local capability.
+    source generation before returning this process-local capability. Reads stay
+    in the issuing foreground task; the capability cannot be delegated to a
+    detached task beyond that callback lifetime.
     """
 
     def open_source(self, *, lease: SelectedPreSubmitLeaseFacts) -> AsyncGenerator[bytes, None]:

@@ -83,10 +83,12 @@ class _PreSubmitSourceGrant:
         value._claimed = False
         value._revoked = False
         value._reader = None
+        value._task = asyncio.current_task()
         return value
 
     def _require_current(self) -> None:
-        if (self._revoked or self._issuer._session.in_transaction()
+        if (asyncio.current_task() is not self._task
+                or self._revoked or self._issuer._session.in_transaction()
                 or asyncio.get_running_loop().time() >= self._deadline
                 or datetime.now(UTC) >= self._expires_at):
             raise SelectedPreSubmitInfrastructureUnavailable("material_unavailable")

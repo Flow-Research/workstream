@@ -414,3 +414,44 @@ async def test_pre_source_grant_cannot_start_escaped_reader_after_callback():
     with pytest.raises((StopAsyncIteration, SelectedPreSubmitInfrastructureUnavailable)):
         await anext(reader)
     assert "open_source" not in value.events
+
+
+@pytest.mark.asyncio
+async def test_pre_source_grant_refuses_reader_transferred_to_detached_task():
+    import asyncio
+    from app.modules.checkers.api.selected_pre_submit import SelectedPreSubmitInfrastructureUnavailable
+
+    value = _source_read_fixture()
+    async with value.issuer.issue(lease=value.lease, execution_authority=value.capability) as grant:
+        reader = grant.open_source(lease=value.lease)
+        detached = asyncio.create_task(anext(reader))
+        with pytest.raises(SelectedPreSubmitInfrastructureUnavailable):
+            await detached
+        assert "open_source" not in value.events
+    assert detached.done()
+    assert value.events[-1] == "close_authority"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("already_started", [False, True])
+async def test_pre_source_grant_refuses_expiry_after_issuance(monkeypatch, already_started):
+    from datetime import datetime, timedelta
+    from app.modules.artifacts import selected_pre_submit_execution as execution
+    from app.modules.checkers.api.selected_pre_submit import SelectedPreSubmitInfrastructureUnavailable
+
+    value = _source_read_fixture()
+    async with value.issuer.issue(lease=value.lease, execution_authority=value.capability) as grant:
+        reader = grant.open_source(lease=value.lease)
+        if already_started:
+            assert await anext(reader) == value.payload
+        class ExpiredClock(datetime):
+            @classmethod
+            def now(cls, tz=None):
+                return value.lease.lease_expires_at + timedelta(seconds=1)
+        monkeypatch.setattr(execution, "datetime", ExpiredClock)
+        with pytest.raises(SelectedPreSubmitInfrastructureUnavailable):
+            await anext(reader)
+    if already_started:
+        assert value.events[-2:] == ["close_source", "close_authority"]
+    else:
+        assert "open_source" not in value.events

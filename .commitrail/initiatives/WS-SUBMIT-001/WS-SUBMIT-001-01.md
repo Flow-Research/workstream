@@ -1535,3 +1535,23 @@ with cancellation-resistant cleanup before closing the authority adapter.
 Owner/lane checks passed 229 tests. This source-read work remains pending scoped
 review, and the native handler and obsolete public caller replacement remain
 required before the coordinated cutover can be published.
+
+Review of source-read candidate `951627305` passed architecture/security but QA
+reproduced a concurrent-reader cleanup defect: a detached task could remain in a
+provider read while callback exit attempted to close its running generator.
+The repair binds grant consumption and every read resume to the issuing
+foreground task. This matches the existing client's inline backpressured reads
+and refuses detached consumption before provider I/O. Tests cover transferring
+an already-created reader to a child task and expiry both before first read and
+after the first chunk. All ten focused grant cases pass after the repair.
+
+The earlier integration receipt used the dirty tree's base SHA. A fresh isolated
+run on clean `951627305` passed five PostgreSQL/local/AUTH cases and confirmed
+cleanup; it does not cover the subsequent task-binding repair. Authorization
+import validation and record/link checks passed. Structural validation separately
+found new oversize custody-test debt and stale spans/hashes for the shrinking
+existing authorization test file. These must be repaired by cohesive test
+extraction and exact ledger/assertion-map reconciliation, not a new exception.
+A full native workspace baseline reached the service tests: 114 passed and five
+failed on removed prepared-generation fields in old fixtures. Those failures
+remain required work in the native/public cutover; no full-suite pass is claimed.
