@@ -41,6 +41,12 @@ def validate_outbox_worker(sender, **_kwargs):
     _validated_parent = os.getpid()
 
 
+def is_finalization_worker_process() -> bool:
+    """Identify only a child of the validated exclusive finalization consumer."""
+    return (_validated_finalization and _validated_parent is not None
+            and os.getppid() == _validated_parent)
+
+
 def require_outbox_worker(task, *, finalization=False):
     """Reject direct/eager delivery and consumers not validated for this queue."""
     if (

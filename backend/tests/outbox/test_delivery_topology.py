@@ -208,3 +208,30 @@ def test_scan_routes_each_event_group_without_acknowledging(monkeypatch):
                              for kind, item in zip(("post", "final"), items, strict=True)]
     finally:
         get_settings.cache_clear()
+
+
+@pytest.mark.parametrize("finalization", [False, True])
+def test_finalization_child_defers_provider_startup_for_sql_only_replay(monkeypatch, finalization):
+    import importlib
+    from app.core.config import get_settings
+    monkeypatch.setenv("WORKSTREAM_CELERY_TASK_ALWAYS_EAGER", "true")
+    get_settings.cache_clear()
+    module = importlib.import_module("app.workers.celery_app")
+    configured = worker(queues=(topology.FINALIZATION_QUEUE if finalization else topology.OUTBOX_QUEUE,))
+    topology.validate_outbox_worker(configured)
+    monkeypatch.setattr(topology.os, "getppid", os.getpid)
+    calls = []
+    def unavailable(callback):
+        calls.append(callback)
+        raise RuntimeError("provider startup unavailable")
+    monkeypatch.setattr(module, "run_async_task", unavailable)
+    try:
+        if finalization:
+            module.initialize_artifact_runtime_for_process()
+            assert calls == []
+        else:
+            with pytest.raises(RuntimeError, match="provider startup unavailable"):
+                module.initialize_artifact_runtime_for_process()
+            assert calls == [module.initialize_artifact_internal_runtime]
+    finally:
+        get_settings.cache_clear()

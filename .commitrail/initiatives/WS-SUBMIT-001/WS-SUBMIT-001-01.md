@@ -2991,3 +2991,14 @@ expanded short-queue-option refusal passed a further focused rerun. These prove
 configuration/owner boundaries, not finalization saturation or live broker delivery.
 Changed-file Ruff and Markdown links passed; structure validation is recorded with
 the candidate checks. All test receipts are worktree evidence based on `cc38dc34f`.
+
+Architecture/security and documentation review passed clean `263393c34`; QA passed
+the queue split and identified a provider-startup dependency in the existing global
+Celery child initialization hook. A validated exclusive finalization child now
+defers that hook; unfinalized work still initializes the canonical provider on
+demand, while finalized replay can reach SQL without provider startup. General
+workers retain their original initialization. Two discriminating startup cases
+prove provider unavailability prevents general startup but is not consulted by the
+finalization child. The combined static rerun passed **83 tests**, with the same
+existing no-broker observability skip (`/tmp/t5-queues-startup.log`). This repairs
+the identified hook dependency without claiming a live broker/provider replay drill.
