@@ -1378,3 +1378,16 @@ The repaired migration applies with measured fingerprint
 `3b71e6b86dea2b6b525fc1fdc3a130b83c070e74e826ef65f4cf6976d1e58d01`.
 Exact-head repaired proof and focused re-review are pending. The broader caller,
 capability, completed result and one-session runtime replacement remains open.
+
+The `63d025b19` native run was red: twelve source cases reached a syntax error
+in the new PL/pgSQL IF expression; two audit-digest cases passed. Migration
+installation alone did not compile the exercised body. A minimal real-PostgreSQL
+DO block reproduced the unparenthesized CASE/THEN parsing failure and passed
+with the CASE parenthesized. The guard now uses that correction, without changing
+its policy. A structurally revalidated `aws-s3-v1` source descriptor is also
+submitted to the producer's explicit unsupported-profile refusal in the positive
+fixture; this is data-validation proof, never AWS provider qualification.
+The corrected fresh migration fingerprint is
+`41e1b52d8d9807e8ca3c1d1975b73f1e338a519ab5b73ee40bfe1e086eb2700d`.
+Native re-execution and renewed scoped reviews remain required before recording
+the scheme fix as proven.

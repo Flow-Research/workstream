@@ -1122,6 +1122,15 @@ async def test_selected_pre_sql_requires_exact_live_source(intake, changed):
             for replacement in substitutions:
                 with pytest.raises(ValueError, match="selected PRE .* context differs"):
                     build_selected_pre_submit_reservation(**(build_values | replacement))
+            from app.modules.artifacts.api.submission_intake import SealedSubmissionSource, SubmissionIntakePreSourceFacts
+            unsupported_source = SealedSubmissionSource.model_validate(guarded.source.model_copy(update={
+                "location": guarded.source.location.model_copy(update={"provider_profile": "aws-s3-v1"}),
+            }))
+            unsupported_facts = SubmissionIntakePreSourceFacts.model_validate(
+                guarded.model_copy(update={"source": unsupported_source})
+            )
+            with pytest.raises(ValueError, match="selected PRE source profile is unavailable"):
+                build_selected_pre_submit_reservation(**(build_values | {"source": unsupported_facts}))
         body = request.canonical_body()
         if changed == "source":
             body["source"]["provider_generation"] = "substituted"

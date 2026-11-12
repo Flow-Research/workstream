@@ -57,7 +57,7 @@ BEGIN
    'media_type','application/zip');
  IF o.provider_profile NOT IN ('local-v2','minio-v1')
     OR request->'admission_lineage'->>'storage_scheme' IS DISTINCT FROM
-       CASE o.provider_profile WHEN 'local-v2' THEN 'local' WHEN 'minio-v1' THEN 's3' END
+       (CASE o.provider_profile WHEN 'local-v2' THEN 'local' WHEN 'minio-v1' THEN 's3' END)
     OR request->'source' IS DISTINCT FROM source
     OR request->>'source_sha256' IS DISTINCT FROM public.external_checker_registry_digest(
       source||jsonb_build_object('schema_version','workstream.sealed_submission_source.v1'))
