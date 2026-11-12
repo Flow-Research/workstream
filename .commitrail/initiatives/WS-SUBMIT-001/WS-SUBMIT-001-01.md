@@ -1566,3 +1566,11 @@ and closes the provider. Twelve focused source-grant/composition cases pass.
 A broader old selected-PRE test module still fails 13 cases on the removed
 `semantic_manifest_id` prepared-lineage argument; these remain pending connected
 replacement, alongside the separately recorded Rust old-fixture failures.
+
+Architecture/security and QA/test-delta passed the repaired source-task scope at
+clean `d9d635199`. The exact-head isolated PostgreSQL/local/AUTH replay passed
+five cases with database and overall cleanup confirmed on migration 0071. Ten
+single-PRE transport cases passed. QA's independent blocked-provider abort probe
+also confirmed cancellation closes both provider and authority. This resolves
+the concurrent-reader and processor-task findings; it does not resolve the
+structural gate, obsolete native fixtures, public cutover or T4 requirements.
