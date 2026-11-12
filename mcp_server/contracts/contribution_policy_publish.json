@@ -503,6 +503,7 @@
   "source": {
     "method": "POST",
     "openapi_version": "3.1.0",
-    "path": "/api/v1/projects/{project_id}/contribution-policies/{policy_id}/versions/{version_id}/publication"
+    "path": "/api/v1/projects/{project_id}/contribution-policies/{policy_id}/versions/{version_id}/publication",
+    "repository_sha": "3c847262030009b416a46d12d2838f2c2ce460ee"
   }
 }
