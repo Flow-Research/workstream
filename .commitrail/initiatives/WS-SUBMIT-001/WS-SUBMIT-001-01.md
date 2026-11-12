@@ -1432,3 +1432,12 @@ registry before selection/schema/size checks. New controls exercise rejection
 before both finalization and terminal construction; the expanded focused suite
 passes 90 cases. The earlier QA pass did not cover this reviewer-reproduced
 integrity path. Renewed review of the repaired candidate is required.
+
+Both renewed scoped reviews passed the clean repaired candidate `1e151a388`.
+Architecture/security replayed the original forged-digest probe and observed
+rejection at finalization and terminal construction. QA independently substituted
+the exact pre-repair helper in memory: both new boundary controls failed as
+expected, then the helper was restored. Ownership/lane checks passed 229 cases;
+the ownership partition is unchanged, and record/link checks pass. These reviews
+close the selection/digest findings only, not the remaining combined-execution
+or accepted-handoff requirements.
