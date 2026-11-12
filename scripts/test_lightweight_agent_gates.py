@@ -691,21 +691,23 @@ class LightweightAgentGateTests(unittest.TestCase):
         self.assertNotIn("runner.", root_env)
         uv_save = workflow.split(
             "      - name: Save verified backend uv downloads to trusted cache\n", 1
-        )[1].split("\n  lanes:\n", 1)[0]
+        )[1].split("\n  external-checker-runtime:\n", 1)[0]
         self.assertIn(
             "if: github.event_name == 'push' && github.ref == 'refs/heads/main' "
             "&& steps.uv-cache.outputs.cache-hit != 'true'",
             uv_save,
         )
         preflight = workflow.split("\n  auth-boundary-preflight:\n", 1)[1].split(
-            "\n  lanes:\n", 1
+            "\n  external-checker-runtime:\n", 1
         )[0]
         self.assertLess(
             preflight.index("      - name: Validate module, AUTH, and test boundaries"),
             preflight.index("      - name: Save verified backend uv downloads to trusted cache"),
         )
         self.assertNotIn("restore-keys:", workflow)
-        self.assertNotIn(".venv", workflow)
+        for step in workflow.split("\n      - "):
+            if "uses: actions/cache/" in step:
+                self.assertNotIn(".venv", step)
 
     def test_backend_python_commands_stay_in_the_frozen_uv_environment(self) -> None:
         workflow = Path(".github/workflows/backend.yml").read_text(encoding="utf-8")

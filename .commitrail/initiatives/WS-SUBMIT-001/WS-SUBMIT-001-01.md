@@ -3356,3 +3356,11 @@ add explicit one-each/order assertions for the independent runtime job. The
 three cached jobs' exact cache/install assertions remain unchanged. This is a
 complete test-model correction for the existing fourth job, not permission to
 skip or loosen installs. Run the workflow's complete six-module108-test command.
+
+The complete gate run exposed the final outdated global assertion: `.venv` was
+forbidden anywhere in the workflow, including the runtime job's legitimate
+frozen interpreter path. Restrict that prohibition to every cache restore/save
+step (the behavior this cache test owns), preserving the ban on cached virtual
+environments. Correct the remaining preflight/save extraction boundaries too.
+No workflow or production command changes. Earlier failed35/108-test runs remain
+failed evidence; only the final rerun can establish the repair.
