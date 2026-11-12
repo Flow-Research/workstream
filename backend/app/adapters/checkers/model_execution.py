@@ -1,5 +1,7 @@
 """Compose optional project-image model callbacks into the sole POST execution path."""
 
+from typing import Literal
+
 from app.interfaces.external_services import ExternalServiceUnavailableError
 from app.modules.model_usage.api import (
     ModelCallExecutionFacts,
@@ -39,6 +41,11 @@ class ModelAwareExternalExecution:
     def identity(self):
         """Keep the same fixed Rust provider identity."""
         return self._execution.identity
+
+    @property
+    def pre_runtime_provider(self) -> Literal["smolvm", "managed"]:
+        """Preserve the selected execution adapter's PRE evidence family."""
+        return self._execution.pre_runtime_provider
 
     async def health(self):
         """Use the existing external execution health contract."""

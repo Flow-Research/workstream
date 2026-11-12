@@ -1,5 +1,7 @@
 """CHECKER-owned composition adapters."""
 
+from typing import Literal
+
 from app.adapters.checkers.external_service import (
     EXTERNAL_CHECKER_CAPABILITY_KEY,
     EXTERNAL_CHECKER_PROVIDER_KEY,
@@ -166,6 +168,11 @@ class _ConfiguredExternalCheckerExecution:
     def identity(self) -> ExternalServiceAdapterIdentity:
         """Expose the sole provider identity without constructing its transport."""
         return self._identity
+
+    @property
+    def pre_runtime_provider(self) -> Literal["smolvm", "managed"]:
+        """The explicitly selected socket factory supplies native Smol evidence."""
+        return "smolvm"
 
     def _resolve(self) -> ExternalCheckerExecutionAdapter:
         """Create the fixed provider or report absent runtime configuration."""

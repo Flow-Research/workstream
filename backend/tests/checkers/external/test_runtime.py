@@ -1119,12 +1119,39 @@ async def test_public_trace_preserves_execution_arguments(monkeypatch, tmp_path,
     ]
 
 
+def _pre_transport_processor(lease, socket, changed):
+    """Exercise direct transport and both real production composition wrappers."""
+    from app.modules.checkers.selected_pre_submit_execution import SelectedPreSubmitProcessor
+    adapter = UnixSocketExternalCheckerAdapter(
+        socket_path=socket, timeout_seconds=0.2 if changed == "slow_decode" else 5.0,
+    )
+    if changed in {"configured", "model_wrapper"}:
+        from app.adapters.checkers import (
+            selected_pre_submit_checker_execution, configured_post_submit_external_execution,
+            SelectedPreSubmitCheckerExecutionAdapter,
+        )
+        settings = Settings(
+            external_checker_service_socket=socket,
+            external_checker_material_root=socket.parent / "scratch",
+            artifact_scratch_root=socket.parent / "scratch",
+        )
+        if changed == "configured":
+            processor = selected_pre_submit_checker_execution(settings=settings).build(lease)
+        else:
+            def forbidden_sessions():
+                raise AssertionError("PRE must not request model authority")
+            wrapped = configured_post_submit_external_execution(settings, sessions=forbidden_sessions)
+            processor = SelectedPreSubmitCheckerExecutionAdapter(external_execution=wrapped).build(lease)
+    else:
+        processor = SelectedPreSubmitProcessor(lease=lease, execution=adapter)
+    return processor
+
+
 @pytest.mark.asyncio
-@pytest.mark.parametrize("changed", [None, "source_hash", "source_short", "source_long", "result_fence", "trailing", "chunk_oversized", "slow_decode", "managed_runtime", "provider_from_wire"])
+@pytest.mark.parametrize("changed", [None, "source_hash", "source_short", "source_long", "result_fence", "trailing", "chunk_oversized", "slow_decode", "managed_runtime", "provider_from_wire", "configured", "model_wrapper"])
 async def test_single_pre_transport_streams_source_and_validates_combined_result(tmp_path, monkeypatch, changed):
     from dataclasses import replace
     from app.modules.checkers.api.selected_pre_submit import SelectedPreSubmitLeaseFacts
-    from app.modules.checkers.selected_pre_submit_execution import SelectedPreSubmitProcessor
     from app.modules.checkers.api.selected_pre_submit import SelectedPreSubmitInfrastructureUnavailable
     from tests.checkers.external.test_selected_pre_submit_coordination import (
         _source_reservation, _source_completed_execution,
@@ -1208,12 +1235,9 @@ async def test_single_pre_transport_streams_source_and_validates_combined_result
     grant = Grant()
     socket = tmp_path / "pre.sock"
     server = await asyncio.start_unix_server(handle, socket)
-    adapter = UnixSocketExternalCheckerAdapter(
-        socket_path=socket, timeout_seconds=0.2 if changed == "slow_decode" else 5.0,
-    )
-    processor = SelectedPreSubmitProcessor(lease=lease, execution=adapter)
+    processor = _pre_transport_processor(lease, socket, changed)
     try:
-        if changed is None:
+        if changed in {None, "configured", "model_wrapper"}:
             assert (await processor.process(grant)).execution == execution
             assert bytes(received) == payload
             assert sizes and max(sizes) <= 64 * 1024

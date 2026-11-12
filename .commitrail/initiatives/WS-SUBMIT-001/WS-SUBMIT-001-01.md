@@ -2326,3 +2326,12 @@ the separate exact membership expectation. All six affected PostgreSQL outcome
 cases and structural validation also pass after the family-binding repair.
 These repairs require affected review replay. Documentation review passed the original candidate's scoped
 claims; public acceptance and native qualification remain open.
+
+Replay at `ceeccaaa6` found the expected-family property was missing from the
+configured execution wrapper and its model-aware wrapper. Both now preserve the
+family, and the socket proof builds the processor through the actual selected
+PRE factory and the configured model-aware factory, refusing any PRE model
+session. All 14 affected socket cases pass after fixture extraction; the earlier
+combined wrapper/receipt run passed 50 cases. Documentation independently ran all
+36 receipt cases on clean `ceeccaaa6`. The composition repair requires affected
+review replay before scoped readiness.
