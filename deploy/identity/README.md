@@ -59,6 +59,9 @@ machine. Keep the master realm's `frontendUrl` set to that exact private origin;
 `KC_HOSTNAME_ADMIN` alone does not set master-realm login URLs. Preserve other
 master-realm attributes when setting it. The flow realm inherits the fixed public
 origin and must have no `frontendUrl` override.
+After changing the master realm's frontend URL, authenticate again before
+continuing administrative API calls: a token issued under the previous master
+issuer is rejected after the change. Do not relax issuer validation to reuse it.
 
 Establish a named administrator with MFA, verify recovery access, delete the
 temporary `workstream-bootstrap` account, and remove its password file. This
