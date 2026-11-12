@@ -2860,8 +2860,12 @@ the missing-original path persisted infrastructure failure with zero checker
 invocations. Each made exactly one version-qualified GET; POST and finalization
 replay added no reads. This proves real MinIO storage behavior with controlled
 checker execution, not native Smol or AWS qualification. CI lane/catalogue checks
-pass **76 tests** after updating the independent shared-family fingerprint for
-the one newly registered module.
+pass **76 tests** after correcting a pre-existing stale shared-family fingerprint.
+The new MinIO module belongs only to `omnicore_sdk`; it did not change shared-family
+membership. Scoped QA and CI integrity review of `06fe9027e` found no blocking
+defect and confirmed both cases are collected; removing the module from the lane
+triggers `missing_lane_modules`. The provider run is worktree evidence based on
+`15c8945f0`, not an exact-head rerun of `06fe9027e`.
 
 The next implementation boundary is durable delivery of the already committed
 `SubmissionFinalizationRequested` event. Allowed scope: ART finalization and its
