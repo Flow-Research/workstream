@@ -756,6 +756,7 @@
   "source": {
     "method": "POST",
     "openapi_version": "3.1.0",
-    "path": "/api/v1/tasks/{task_id}/claim"
+    "path": "/api/v1/tasks/{task_id}/claim",
+    "repository_sha": "e555aea7cc698f8119a01b0c5e0bd2f2b87c55db"
   }
 }
