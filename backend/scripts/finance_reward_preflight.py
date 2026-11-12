@@ -77,8 +77,6 @@ BLOCKERS = {
         LEFT JOIN public.artifact_contents content ON content.id=s.artifact_content_id
         LEFT JOIN public.audit_events audit ON audit.id=f.source_authorization_decision_id
         LEFT JOIN public.task_post_submit_routing_manifests m ON m.id=f.source_routing_manifest_id
-        LEFT JOIN public.reviews r ON r.id=f.source_review_id
-        LEFT JOIN public.review_leases lease ON lease.id=r.review_lease_id
         WHERE s.id IS NULL OR t.id IS NULL OR content.id IS NULL OR audit.id IS NULL
            OR ROW(f.project_id,f.task_id,f.accepted_submitter_id,f.policy_context_ref)
               IS DISTINCT FROM ROW(t.project_id,s.task_id,s.contributor_id,s.locked_review_policy_id)
@@ -92,18 +90,10 @@ BLOCKERS = {
               OR f.policy_context_ref::text IS DISTINCT FROM
                  m.authority_context#>>'{source,locked_policy,locked_review_policy_id}'
               OR NOT public.task_routing_receipt_valid(m)))
-           OR (f.acceptance_source='human_review' AND (
-                 r.id IS NULL OR lease.id IS NULL OR r.decision<>'accept'
-              OR f.source_routing_manifest_id IS NOT NULL
-              OR ROW(r.project_id,r.task_id,r.submission_id,r.task_assignment_id,
-                     r.reviewer_id,r.locked_review_policy_id,r.artifact_hash)
-                 IS DISTINCT FROM ROW(f.project_id,f.task_id,f.submission_id,s.task_assignment_id,
-                     f.recorded_by,f.policy_context_ref,content.sha256)
-              OR ROW(lease.project_id,lease.task_id,lease.submission_id,lease.reviewer_id,
-                     lease.reviewer_contribution_policy_version_id)
-                 IS DISTINCT FROM ROW(r.project_id,r.task_id,r.submission_id,r.reviewer_id,
-                     r.reviewer_contribution_policy_version_id)
-              OR audit.actor_id IS DISTINCT FROM f.recorded_by::text))
+           -- This supported baseline has no authorized human FinalAcceptance
+           -- writer or canonical human decision receipt. A Review and an AUDIT
+           -- row by the same actor cannot establish that missing authority.
+           OR f.acceptance_source='human_review'
     """,
     "acceptance_contribution_gaps": """
         SELECT f.id FROM public.final_acceptances f
@@ -123,8 +113,6 @@ BLOCKERS = {
         LEFT JOIN public.artifact_bindings binding ON binding.id=s.artifact_binding_id
         LEFT JOIN public.contribution_policy_versions p ON p.id=c.contribution_policy_version_id
         LEFT JOIN public.final_acceptances f ON f.id=c.source_final_acceptance_id
-        LEFT JOIN public.reviews r ON r.id=c.source_review_id
-        LEFT JOIN public.review_leases lease ON lease.id=c.source_review_lease_id
         WHERE s.id IS NULL OR t.id IS NULL OR a.id IS NULL OR content.id IS NULL
            OR binding.id IS NULL OR p.id IS NULL OR p.status NOT IN ('published','retired')
            OR ROW(c.project_id,c.task_id,c.artifact_hash)
@@ -146,16 +134,8 @@ BLOCKERS = {
                  IS DISTINCT FROM ROW(c.project_id,c.task_id,c.submission_id,c.contributor_id,
                      c.source_task_assignment_id,c.contribution_policy_version_id,
                      c.contribution_policy_version_id)))
-           OR (c.contribution_type='completed_review' AND (
-                 r.id IS NULL OR lease.id IS NULL OR c.source_final_acceptance_id IS NOT NULL
-              OR ROW(r.project_id,r.task_id,r.submission_id,r.reviewer_id,r.review_lease_id,
-                     r.reviewer_contribution_policy_version_id,r.artifact_hash)
-                 IS DISTINCT FROM ROW(c.project_id,c.task_id,c.submission_id,c.contributor_id,
-                     c.source_review_lease_id,c.contribution_policy_version_id,c.artifact_hash)
-              OR ROW(lease.project_id,lease.task_id,lease.submission_id,lease.reviewer_id,
-                     lease.reviewer_contribution_policy_version_id)
-                 IS DISTINCT FROM ROW(c.project_id,c.task_id,c.submission_id,c.contributor_id,
-                     c.contribution_policy_version_id)))
+           -- Review storage is not an authorized reviewer-contribution writer.
+           OR c.contribution_type='completed_review'
     """,
     "award_source_anomalies": """
         SELECT w.id FROM public.compensation_awards w

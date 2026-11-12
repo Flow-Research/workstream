@@ -1,10 +1,13 @@
 """Read-only diagnostics over real owner effects and isolated retained corruption."""
 
 import pytest
-from sqlalchemy import text
+from sqlalchemy import insert, text
 from sqlalchemy.exc import DBAPIError
 
 from app.db import session as db_session
+from app.core.identifiers import new_record_id
+from app.modules.reviews.acceptance.models import FinalAcceptance
+from app.modules.tasks.models import AuditEvent
 from scripts.finance_reward_preflight import (
     BLOCKERS,
     PreflightUnavailable,
@@ -12,7 +15,11 @@ from scripts.finance_reward_preflight import (
     read_only_snapshot,
     reward_preflight,
 )
-from tests.contributions.records.support import authorized_submitter_source
+from tests.contributions.records.support import (
+    authorized_submitter_source,
+    insert_record,
+    reviewer_contribution_source,
+)
 from tests.tasks.post_submit_routing.outcome_support import (
     apply_outcome,
     authorized_routing_source,
@@ -174,3 +181,65 @@ async def test_unknown_schema_is_not_a_clean_bill_of_health(isolated_database_en
         await connection.execute(text("UPDATE public.alembic_version SET version_num='unknown'"))
     with pytest.raises(PreflightUnavailable, match="unsupported_schema_revision"):
         await report()
+
+
+@pytest.mark.postgres_schema_contract
+async def test_same_reviewer_unrelated_audit_cannot_qualify_human_acceptance(
+    tmp_path,
+    isolated_database_env,
+):
+    # Review storage exists; native human FinalAcceptance authority does not.
+    # Model corrupt retained evidence with valid physical references and coherent
+    # source facts. The unrelated same-actor AUDIT must not make it trustworthy.
+    async with reviewer_contribution_source(tmp_path, isolated_database_env) as h:
+        audit_id, acceptance_id = new_record_id(), new_record_id()
+        async with h.factory() as session, session.begin():
+            await session.execute(text("ALTER TABLE public.audit_events DISABLE TRIGGER USER"))
+            await session.execute(
+                insert(AuditEvent).values(
+                    id=str(audit_id),
+                    entity_type="review",
+                    entity_id=str(h.review.id),
+                    event_type="UnrelatedRecordedEvent",
+                    actor_id=str(h.review.reviewer_id),
+                    auth_source="local_lifecycle",
+                    external_subject="fixture-unrelated-event",
+                    external_issuer="https://fixture.invalid",
+                    event_payload={},
+                )
+            )
+            await session.execute(text("ALTER TABLE public.audit_events ENABLE TRIGGER USER"))
+            await session.execute(text("ALTER TABLE public.final_acceptances DISABLE TRIGGER USER"))
+            await session.execute(
+                insert(FinalAcceptance).values(
+                    id=acceptance_id,
+                    project_id=str(h.review.project_id),
+                    task_id=str(h.review.task_id),
+                    submission_id=str(h.review.submission_id),
+                    acceptance_source="human_review",
+                    source_review_id=h.review.id,
+                    source_routing_manifest_id=None,
+                    accepted_submitter_id=str(h.submitter_id),
+                    recorded_by=str(h.review.reviewer_id),
+                    policy_context_ref=str(h.review.locked_review_policy_id),
+                    source_authorization_decision_id=str(audit_id),
+                )
+            )
+            await session.execute(text("ALTER TABLE public.final_acceptances ENABLE TRIGGER USER"))
+        result = await report()
+        anomaly = result["categories"]["acceptance_source_anomalies"]
+        assert anomaly["sample_ids"] == [str(acceptance_id)]
+        assert anomaly["blocks_cutover"] is True
+
+
+async def test_coherent_review_storage_does_not_qualify_reviewer_contribution(
+    tmp_path,
+    isolated_database_env,
+):
+    async with reviewer_contribution_source(tmp_path, isolated_database_env) as h:
+        async with h.factory() as session, session.begin():
+            await insert_record(session, h.reviewer_record)
+        result = await report()
+        anomaly = result["categories"]["contribution_source_anomalies"]
+        assert anomaly["sample_ids"] == [str(h.reviewer_record.id)]
+        assert anomaly["blocks_cutover"] is True

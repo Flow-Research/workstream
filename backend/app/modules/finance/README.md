@@ -36,6 +36,14 @@ supported-schema predicates and inventory before that schema is qualified.
 Unknown or unexpectedly modified schemas fail closed. No startup sweep
 enrolls or pays historical awards.
 
+The supported baseline has Review storage but no authorized human
+FinalAcceptance writer or canonical human decision receipt. Any retained human
+acceptance therefore appears as an unqualified source anomaly and blocks
+cutover pending owner reconciliation. A same-actor AUDIT row cannot substitute
+for that missing authority. The same qualification limit applies to reviewer
+ContributionRecords without a supported authorized creation path. The
+diagnostic preserves those records.
+
 ## Contract proof
 
 See [wire contracts](contracts/README.md) for portable schemas and fixtures.
