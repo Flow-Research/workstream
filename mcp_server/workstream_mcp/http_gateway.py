@@ -1788,7 +1788,17 @@ class WorkstreamGateway:
                 data, {"project_id": project_id}, unique="task_id"
             )
         if name == "management_task_create":
-            return cls._same_uuid(data.get("project_id"), project_id)
+            body = arguments.get("body")
+            if not isinstance(body, dict):
+                return False
+            size = body.get("task_size", "small")
+            size_matches = (
+                "task_size" not in body and "task_size" not in data
+            ) or data.get("task_size") == size
+            return (
+                size in ("small", "medium", "large") and size_matches
+                and cls._same_uuid(data.get("project_id"), project_id)
+            )
         if name in {"task_import_batch_screen", "task_import_batch_release"}:
             return cls._fields_match(
                 data, {"project_id": project_id, "batch_id": batch_id}

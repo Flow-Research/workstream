@@ -1598,7 +1598,29 @@ def task_operation_output_schema(name: str) -> dict[str, Any]:
         raise ContractError("unknown task operation contract")
     if name == "task_import_source_content_get":
         return TASK_IMPORT_SOURCE_CONTENT_OUTPUT_SCHEMA
-    return _contract_output_schema(name)
+    schema = _contract_output_schema(name)
+    if name in {"task_import_batch_create", "task_import_batch_get"}:
+        # One immutable batch has one recorded format. The general TaskResponse
+        # also represents terminal history, but new import receipts never have
+        # null sizes and cannot mix sized rows with pre-size archived rows.
+        batch_schema = schema["properties"]["creation"] if name.endswith("get") else schema
+        task_schema = batch_schema["properties"]["tasks"]["items"]
+        recorded_fields = sorted(set(task_schema["properties"]) - {"task_size"})
+        formats: dict[str, Any] = {
+            "oneOf": [
+                {"properties": {"tasks": {"items": {
+                    "required": recorded_fields, "not": {"required": ["task_size"]},
+                }}}},
+                {"properties": {"tasks": {"items": {
+                    "required": [*recorded_fields, "task_size"],
+                    "properties": {"task_size": {"enum": ["small", "medium", "large"]}},
+                }}}},
+            ]
+        }
+        if name == "task_import_batch_get":
+            formats = {"properties": {"creation": formats}}
+        return {"type": "object", "allOf": [schema, formats]}
+    return schema
 
 
 def task_operation_output_validator(name: str) -> Draft202012Validator:

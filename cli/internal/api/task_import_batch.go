@@ -246,7 +246,8 @@ func (c *Client) decodeTaskImportBatch(raw json.RawMessage, project, batch strin
 	for _, row := range envelope.Tasks {
 		task, err := c.decodeImportedTask(row, value)
 		id, valid := uuidIdentity(task.ID)
-		if err != nil || !valid || seen[id] || external[task.ExternalTaskID] {
+		if err != nil || !valid || seen[id] || external[task.ExternalTaskID] ||
+			(len(value.Tasks) > 0 && (task.TaskSize == nil) != (value.Tasks[0].TaskSize == nil)) {
 			return value, &Failure{Code: "invalid_api_response"}
 		}
 		seen[id], external[task.ExternalTaskID] = true, true

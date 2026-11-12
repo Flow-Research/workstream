@@ -244,7 +244,7 @@ new hash fails. Proof uses pure input/format controls and real signed public
 PostgreSQL/MinIO create/import/history controls, including direct-SQL immutable
 size and missing-size receipt rejection. Review focus is AUTH/replay isolation,
 preserved hashes and complete source/receipt custody; matching security,
-architecture, QA/test-delta, reuse and docs tracks remain required. No new
+architecture, QA/test-delta, reuse and docs tracks remain required. No historical
 writer, resizing endpoint, amount override or altered immutable JSON is allowed.
 
 - [ ] Positive/negative contract fixtures reproduce canonical digest vectors and reject altered evidence.
@@ -255,6 +255,27 @@ writer, resizing endpoint, amount override or altered immutable JSON is allowed.
 - [ ] Real PostgreSQL and public HTTP/durable-worker drills meet specification section 20; client/export contracts agree.
 - [ ] Forward migration rehearsal preserves v1 evidence and refuses unsafe cutover.
 - [ ] Current documentation, roadmap and operational claims match delivered proof; required reviews and repository checks pass.
+
+### Authoring consumer repair
+
+`QA-TASKSIZE-001` and `TEST-TASKSIZE-001` identified consumer gaps in the
+first authoring candidate: import results must use one complete stored format
+throughout a batch, and created size must equal the explicit request (or Small
+for an omitted-size new result). MCP now layers this batch-only constraint over
+its frozen general TaskResponse schema and binds creation size in the existing
+gateway matcher. CLI retains its per-row enum/null checks and adds batch-wide
+format equality. Genuine all-omitted archived results remain valid; null,
+partial and mixed rows are refused. Manual omitted-size historical replay keeps
+its absent field. No runtime writer, owner authority or frozen server contract
+is changed by this repair.
+
+Keep the original assignment/action/state/FK assertions in the SQL receipt
+regression. Supply its unrelated size precondition from the actual successful
+receipt, rather than accepting the new size error as a substitute for those
+assertions. Its focused PostgreSQL replay passed with all original assertions.
+Client proof includes real MCP validator/gateway calls over genuine archived
+responses and built CLI import/status cases; review replay must also execute
+the archived public create/import upgrade case on a clean committed target.
 
 ## Risk and review routing
 
