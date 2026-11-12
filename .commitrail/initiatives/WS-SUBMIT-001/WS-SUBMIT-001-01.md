@@ -2021,3 +2021,11 @@ or duplicate selection, missing results and ignored execution. Existing backend/
 checker/workflow changes already select full scope, so no selection policy was
 changed. Formatting, name checks, record and link checks pass. This closes the
 live dialogue proof gap, not native isolation or host/public integration.
+
+QA/test-delta, CI-integrity and documentation review passed this portable proof
+at clean `d6387472b`. Reviewers confirmed the live Python/Rust exchange, the
+corrected after-one-project-call mutation, exact CI selection/result guards and
+required-status propagation. Hosted CI has not run on this unpushed cutover.
+Native host `execute_pre` dispatch, independent configured pins and persisted
+invocation custody, the runtime/profile/timing/cleanup response, public handoff
+and actual VM qualification remain the next implementation and proof boundaries.
