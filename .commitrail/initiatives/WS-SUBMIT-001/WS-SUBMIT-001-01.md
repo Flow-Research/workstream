@@ -2702,3 +2702,16 @@ shape validation. Repairs add a descriptor-aware `read` trap while permitting se
 metadata reads, strict generation/count/fence/location validation with malformed
 value cases, and explicit registration in the existing MinIO-enabled test lane.
 T5 integration remains open; this provider checkpoint does not complete finalization.
+
+The repaired observation/architecture/conformance command completed with **72
+passed** (`/tmp/t5-observation-repair.log`); CI lane checks completed with **17
+passed** (`/tmp/t5-observation-lanes.log`). Structure validation, Commitrail and
+Markdown-link checks passed. Scoped ARCH/SEC and QA reviews passed at clean
+`1f328b545777751f63f984528626f112f6bc723e`. QA independently inserted an in-memory
+`os.read(bundle_fd, 1)` mutation and the targeted Local test failed specifically at
+its body-read trap; no repository mutation remained. An earlier unconfigured
+probe failed during MinIO setup and is excluded from evidence. The shared tests
+began on the corresponding worktree before freeze; do not attribute them as a new
+exact-commit full-suite execution. The next required change is accepted continuation
+and atomic retained registration/Submission/POST composition, not additional
+observation scaffolding. This checkpoint leaves the end-to-end goal incomplete.
