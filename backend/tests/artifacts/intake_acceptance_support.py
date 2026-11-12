@@ -29,7 +29,8 @@ async def completed_source(f, tmp_path):
     payload = _archive()
     async def body():
         yield payload
-    store = initialize_local_store(root=tmp_path / "durable", buffer_bytes=256 * 1024)
+    store = (f.source_store_factory() if getattr(f, "source_store_factory", None) else
+             initialize_local_store(root=tmp_path / "durable", buffer_bytes=256 * 1024))
     try:
         source = await foreground_upload(f, store).receive(
             owner.operation_id, owner.lease_id, owner.generation, body(), **foreground_limits())

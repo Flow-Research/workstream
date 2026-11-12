@@ -2836,3 +2836,42 @@ actual POST; real source-backed revision routing/preparation/POST; rollback/lost
 acknowledgement/concurrency expansions; durable finalization outbox/Celery wiring
 and operational stall projection; public API/CLI/MCP cutover and the complete
 A01–A35/C01–C07 audit. No merge or overall readiness is claimed by this checkpoint.
+
+Scoped ARCH/SEC and QA review passed for committed `15c8945f0`, including the
+content/adapter repairs, exact source POST path, lease ceiling and generation-2
+recovery. Reviewers inspected the frozen commit; later parent-authored MinIO test
+edits did not enter that verdict. No native or complete-goal qualification follows.
+
+The provider integration extension reuses the same T1/PRE/T5/POST owners with a
+versioned real MinIO namespace. After T5 it writes different invalid ZIP bytes to
+the same key. The positive case must GET the recorded VersionId and complete POST;
+the negative removes that recorded version and must retain infrastructure failure
+without invoking the checker or falling back to the newer version. Both must replay
+without another read. The test is registered in the existing MinIO-enabled lane.
+The first local launch collided with that lane's fixed bucket before tests started;
+read-only health/credential probes established a healthy provider and existing
+bucket. The rerun uses the runner's unique-bucket mode rather than deleting shared
+storage. This setup failure is excluded from behavioral evidence.
+
+The MinIO rerun passed both scenarios (**2 passed**, `/tmp/post-source-minio2.log`;
+metadata `/tmp/post-source-minio2.json` records database and bucket cleanup).
+The positive path executed POST against the original version after replacement;
+the missing-original path persisted infrastructure failure with zero checker
+invocations. Each made exactly one version-qualified GET; POST and finalization
+replay added no reads. This proves real MinIO storage behavior with controlled
+checker execution, not native Smol or AWS qualification. CI lane/catalogue checks
+pass **76 tests** after updating the independent shared-family fingerprint for
+the one newly registered module.
+
+The next implementation boundary is durable delivery of the already committed
+`SubmissionFinalizationRequested` event. Allowed scope: ART finalization and its
+delivery adapter, existing OUTBOX composition/worker routing, focused integration
+tests and this record. Preserve the single T5 operation and existing delivery
+owner; prohibit provider-body I/O in finalization, contributor-token reuse,
+publication-only acknowledgement and fabricated deployment defaults. Acceptance
+requires committed invocation observation, exact event/evidence matching, a
+transactional invocation fence on claim and effect, bounded continuation custody,
+and replay after committed T5 without another provider observation. Worker routing
+and stalled progress must subsequently be proved through the durable owners.
+This is high-risk workflow/authorization work requiring architecture/security and
+QA review, with human review focused on lock order, expiry and acknowledgement.

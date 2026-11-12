@@ -26,7 +26,7 @@ class ExactSourceStore:
         return self.store.open_source(source, **kwargs)
 
 
-async def exercise_source_post(f, created, store, source, tmp_path):
+async def exercise_source_post(f, created, store, source, tmp_path, *, missing=False):
     """Execute and retain POST with fresh AUTH, exact source I/O and replay."""
     await provision_post_submit_service(f.factory, ServiceIdentity.CHECKER_POST_SUBMIT)
     await provision_post_submit_service(f.factory, ServiceIdentity.ARTIFACT_MATERIALIZER)
@@ -45,14 +45,17 @@ async def exercise_source_post(f, created, store, source, tmp_path):
         harness = SimpleNamespace(factory=f.factory, service=service, request=reserved.request)
         executor = live_executor(harness, selected_execution=runtime)
         result = await executor.evaluate_post_submission(reserved.request)
-        assert result.outcome == "completed"
-        assert len(counted.opens) == len(runtime.requests) == 1
-        material = runtime.requests[0].materials[0]
-        assert material.source_operation_id == source.location.operation_id
-        assert material.verification_receipt_id is None
-        assert "verification_receipt_id" not in material.model_dump(mode="json")
+        assert result.outcome == ("infrastructure_failed" if missing else "completed")
+        assert len(counted.opens) == 1
+        assert len(runtime.requests) == (0 if missing else 1)
+        if not missing:
+            material = runtime.requests[0].materials[0]
+            assert material.source_operation_id == source.location.operation_id
+            assert material.verification_receipt_id is None
+            assert "verification_receipt_id" not in material.model_dump(mode="json")
         assert await executor.evaluate_post_submission(reserved.request) == result
-        assert len(counted.opens) == len(runtime.requests) == 1
+        assert len(counted.opens) == 1
+        assert len(runtime.requests) == (0 if missing else 1)
     finally:
         scratch.close()
 
@@ -81,3 +84,26 @@ async def leave_expired_finalizer_claim(f, finalizer, operation_id):
                 break
             await asyncio.sleep(min(remaining + 0.02, 0.25))
     finalizer._duration = timedelta(seconds=60)
+
+
+async def minio_source_fixture():
+    """Create a versioned test namespace and a reopenable provider factory."""
+    from app.adapters.artifacts import create_artifact_store_bootstrap
+    from app.core.identifiers import new_record_id
+    from app.interfaces.artifacts import ArtifactStoreNamespaceClaim
+    from app.modules.artifacts.service import artifact_storage_namespace_spec
+    from tests.test_s3_artifact_store import MINIO_BUCKET, minio_settings, provision_minio_bucket
+    await provision_minio_bucket.__wrapped__()
+    settings = minio_settings(private_prefix=f"post-source/{new_record_id()}", buffer_bytes=65536)
+    bootstrap = create_artifact_store_bootstrap(settings, activation_guard=None)
+    namespace = artifact_storage_namespace_spec(settings, bootstrap)
+    def factory():
+        return bootstrap.initialize_after_namespace_claim(ArtifactStoreNamespaceClaim(
+            bootstrap.identity, bootstrap.namespace_identity, namespace.namespace_fingerprint))
+    store = factory()
+    try:
+        async with store._client() as client:
+            await client.put_bucket_versioning(Bucket=MINIO_BUCKET, VersioningConfiguration={"Status": "Enabled"})
+    finally:
+        store.close()
+    return namespace, factory

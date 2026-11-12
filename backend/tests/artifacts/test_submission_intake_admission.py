@@ -39,6 +39,10 @@ async def admission_intake(tmp_path, isolated_database_env, admin_access, reques
     engine = create_async_engine(isolated_database_env)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     namespace = _namespace(_settings(tmp_path))
+    source_store_factory = None
+    if getattr(request, "param", None) == "minio":
+        from tests.artifacts.intake_post_support import minio_source_fixture
+        namespace, source_store_factory = await minio_source_fixture()
     if getattr(request, "param", None) == "aws":
         from app.interfaces.artifacts import ArtifactStoreNamespaceIdentity, artifact_store_namespace_material
         from app.interfaces.external_services import ExternalServiceAdapterIdentity
@@ -77,7 +81,8 @@ async def admission_intake(tmp_path, isolated_database_env, admin_access, reques
         )
         yield SimpleNamespace(factory=factory, actor=actor, task=task, assignment=assignment,
                               admission=admission, project=project, namespace=namespace,
-                              access=admin_access, manager=manager, grant_id=grant_id)
+                              access=admin_access, manager=manager, grant_id=grant_id,
+                              source_store_factory=source_store_factory)
     finally:
         await engine.dispose()
 

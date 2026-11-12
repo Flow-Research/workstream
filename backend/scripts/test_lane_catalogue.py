@@ -822,6 +822,7 @@ LANES = (
             "tests/test_project_agent_sdk_installation.py",
             "tests/test_s3_artifact_store.py",
             "tests/artifacts/test_sealed_source_observation.py",
+            "tests/artifacts/test_submission_source_post_minio.py",
         ),
         sdk_environment="omnicore",
     ),
