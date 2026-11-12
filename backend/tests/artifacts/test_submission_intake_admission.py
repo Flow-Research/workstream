@@ -425,3 +425,314 @@ async def test_t1_replay_reauthorizes_after_body_read(admission_intake):
     async with f.factory() as session:
         row = await session.get(SubmissionIntakeOperation, str(owner.operation_id))
         assert row.state == "receiving" and row.lease_generation == owner.generation
+
+
+async def test_t4_accepts_exact_source_and_replays_one_receipt(admission_intake, tmp_path):
+    """T1/upload/PRE through the real atomic T4 owner; no formal Submission yet."""
+    from sqlalchemy import text
+    from app.adapters.checkers import selected_pre_submit_coordinator
+    from app.adapters.outbox import outbox_append
+    from tests.artifacts.intake_acceptance_support import completed_source
+    f = admission_intake
+    owner, request, terminal = await completed_source(f, tmp_path)
+    kwargs = dict(checkers=selected_pre_submit_coordinator, outbox=outbox_append)
+    receipt = await f.admission.accept(owner, request, terminal.terminal_digest, **kwargs)
+    assert receipt["status"] == "accepted" and receipt["replayed"] is False
+    assert receipt["operation_id"] == str(owner.operation_id)
+    assert receipt["pre_submission_results"]
+    assert await f.admission.accept(owner, request, terminal.terminal_digest, **kwargs) == dict(receipt, replayed=True)
+    async with f.factory.begin() as session:
+        row = await session.get(SubmissionIntakeOperation, str(owner.operation_id))
+        assert row.state == "finalization_pending" and row.acceptance_receipt == receipt
+        task = (await session.execute(text(
+            "SELECT status, active_submission_operation_id FROM workstream_tasks WHERE id=:id"), {"id": f.task})).one()
+        assert task.status == "evaluation_pending" and task.active_submission_operation_id == owner.operation_id
+        assert await session.scalar(text("SELECT count(*) FROM submissions WHERE task_id=:id"), {"id": f.task}) == 0
+        assert await session.scalar(text("SELECT count(*) FROM outbox_events WHERE aggregate_id=:id "
+                                         "AND event_type='SubmissionFinalizationRequested'"), {"id": owner.operation_id}) == 1
+        assert await session.scalar(text("SELECT count(*) FROM submission_source_charges WHERE operation_id=:id"),
+                                    {"id": owner.operation_id}) == 1
+
+
+@pytest.mark.parametrize("boundary", ["outbox", "task"])
+async def test_t4_rolls_back_all_participants_and_can_retry(admission_intake, tmp_path, boundary):
+    from sqlalchemy import text
+    from app.adapters.checkers import selected_pre_submit_coordinator
+    from app.adapters.outbox import outbox_append
+    from tests.artifacts.intake_acceptance_support import completed_source
+    f = admission_intake
+    owner, request, terminal = await completed_source(f, tmp_path)
+    original_tasks = f.admission._tasks
+
+    class FailedOutbox:
+        def __init__(self, session):
+            self.delegate = outbox_append(session)
+        async def append(self, event):
+            await self.delegate.append(event)
+            raise RuntimeError("injected handoff failure")
+
+    class FailedTask(IntakeTaskCustody):
+        async def accept(self, task_id, operation_id, expected_status):
+            await super().accept(task_id, operation_id, expected_status)
+            raise RuntimeError("injected handoff failure")
+
+    if boundary == "task":
+        f.admission._tasks = lambda session: FailedTask(session, task_submission_context_port(session))
+    try:
+        with pytest.raises(RuntimeError, match="injected handoff failure"):
+            await f.admission.accept(owner, request, terminal.terminal_digest,
+                checkers=selected_pre_submit_coordinator, outbox=FailedOutbox if boundary == "outbox" else outbox_append)
+    finally:
+        f.admission._tasks = original_tasks
+    async with f.factory.begin() as session:
+        row = await session.get(SubmissionIntakeOperation, str(owner.operation_id))
+        assert row.state == "pre_checking" and row.accepted_at is None and row.finalization_event_id is None
+        assert await session.scalar(text("SELECT status FROM workstream_tasks WHERE id=:id"), {"id": f.task}) == "in_progress"
+        assert await session.scalar(text("SELECT count(*) FROM outbox_events WHERE aggregate_id=:id"),
+                                    {"id": owner.operation_id}) == 0
+        assert await session.scalar(text("SELECT count(*) FROM audit_events WHERE resource_id=:id AND action_id='submission.create'"),
+                                    {"id": str(owner.operation_id)}) == 0
+    receipt = await f.admission.accept(owner, request, terminal.terminal_digest,
+        checkers=selected_pre_submit_coordinator, outbox=outbox_append)
+    assert receipt["status"] == "accepted" and receipt["replayed"] is False
+
+
+@pytest.mark.parametrize("case", ["concurrent", "lost_acknowledgement"])
+async def test_t4_resolves_one_acceptance_under_duplicate_or_lost_response(admission_intake, tmp_path, case):
+    from sqlalchemy import text
+    from sqlalchemy.ext.asyncio import AsyncSession
+    from app.adapters.checkers import selected_pre_submit_coordinator
+    from app.adapters.outbox import outbox_append
+    from tests.artifacts.intake_acceptance_support import completed_source
+    f = admission_intake
+    owner, request, terminal = await completed_source(f, tmp_path)
+    kwargs = dict(checkers=selected_pre_submit_coordinator, outbox=outbox_append)
+    if case == "concurrent":
+        receipts = await asyncio.wait_for(asyncio.gather(*(
+            f.admission.accept(owner, request, terminal.terminal_digest, **kwargs) for _ in range(2))), 20)
+        assert sorted(receipt["replayed"] for receipt in receipts) == [False, True]
+        assert dict(receipts[0], replayed=False) == dict(receipts[1], replayed=False)
+    else:
+        lost = False
+        class LostAcknowledgement(AsyncSession):
+            async def commit(self):
+                nonlocal lost
+                await super().commit()
+                if not lost:
+                    lost = True
+                    raise ConnectionError("committed acceptance acknowledgement lost")
+        f.admission._sessions = async_sessionmaker(f.factory.kw["bind"], class_=LostAcknowledgement, expire_on_commit=False)
+        receipt = await f.admission.accept(owner, request, terminal.terminal_digest, **kwargs)
+        assert lost and receipt["status"] == "accepted" and receipt["replayed"] is True
+    async with f.factory.begin() as session:
+        assert await session.scalar(text("SELECT count(*) FROM outbox_events WHERE aggregate_id=:id "
+                                         "AND event_type='SubmissionFinalizationRequested'"), {"id": owner.operation_id}) == 1
+        assert await session.scalar(text("SELECT count(*) FROM audit_events WHERE resource_id=:id AND action_id='submission.create'"),
+                                    {"id": str(owner.operation_id)}) == 1
+
+
+async def test_t4_accepted_custody_cannot_be_mutated_or_abandoned(admission_intake, tmp_path):
+    from sqlalchemy import text
+    from sqlalchemy.exc import DBAPIError
+    from app.adapters.checkers import selected_pre_submit_coordinator
+    from app.adapters.outbox import outbox_append
+    from tests.artifacts.intake_acceptance_support import completed_source
+    f = admission_intake
+    owner, request, terminal = await completed_source(f, tmp_path)
+    receipt = await f.admission.accept(owner, request, terminal.terminal_digest,
+        checkers=selected_pre_submit_coordinator, outbox=outbox_append)
+    async with f.factory.begin() as session:
+        assert await repository(session).abandon_expired(owner.operation_id) is False
+    for sql in (
+        "UPDATE submission_intake_operations SET state='abandoned' WHERE id=:id",
+        "UPDATE submission_intake_operations SET acceptance_receipt='{}'::jsonb WHERE id=:id",
+        "UPDATE submission_intake_operations SET acceptance_decision_id=NULL WHERE id=:id",
+        "UPDATE submission_intake_operations SET lease_expires_at=clock_timestamp()-interval '1 second' WHERE id=:id",
+        "DELETE FROM submission_source_charges WHERE operation_id=:id",
+        "UPDATE workstream_tasks SET active_submission_operation_id=NULL WHERE active_submission_operation_id=:id",
+        "UPDATE workstream_tasks SET status='in_progress' WHERE active_submission_operation_id=:id",
+    ):
+        with pytest.raises(DBAPIError):
+            async with f.factory.begin() as session:
+                await session.execute(text(sql), {"id": owner.operation_id})
+    assert await f.admission.accept(owner, request, terminal.terminal_digest,
+        checkers=selected_pre_submit_coordinator, outbox=outbox_append) == dict(receipt, replayed=True)
+
+
+@pytest.mark.parametrize("when", ["before", "after"])
+async def test_t4_revocation_blocks_new_acceptance_but_preserves_accepted_custody(admission_intake, tmp_path, when):
+    from sqlalchemy import text
+    from app.adapters.checkers import selected_pre_submit_coordinator
+    from app.adapters.outbox import outbox_append
+    from app.modules.authorization.api.submission_intake import IntakeAuthorityDenied
+    from tests.artifacts.intake_acceptance_support import completed_source
+    f = admission_intake
+    owner, request, terminal = await completed_source(f, tmp_path)
+    if when == "after":
+        await f.admission.accept(owner, request, terminal.terminal_digest,
+            checkers=selected_pre_submit_coordinator, outbox=outbox_append)
+    response = await f.access.signed.client.post(
+        f"/api/v1/projects/{f.project}/role-grants/{f.grant_id}/revoke",
+        headers=f.manager.headers | {"Idempotency-Key": str(new_record_id())},
+        json={"reason": "Withdraw grant before accepted handoff"})
+    assert response.status_code == 200, response.text
+    with pytest.raises(IntakeAuthorityDenied):
+        await f.admission.accept(owner, request, terminal.terminal_digest,
+            checkers=selected_pre_submit_coordinator, outbox=outbox_append)
+    async with f.factory.begin() as session:
+        row = await session.get(SubmissionIntakeOperation, str(owner.operation_id))
+        if when == "before":
+            assert row.state == "pre_checking" and row.acceptance_decision_id is None and row.finalization_event_id is None
+        else:
+            assert row.state == "finalization_pending" and row.acceptance_receipt["status"] == "accepted"
+            await session.execute(text("SELECT public.require_submission_acceptance(o) "
+                "FROM submission_intake_operations o WHERE id=:id"), {"id": owner.operation_id})
+            assert await repository(session).abandon_expired(owner.operation_id) is False
+
+
+@pytest.mark.parametrize("winner", ["acceptance", "abandonment"])
+async def test_t4_and_expiry_serialize_both_winner_orders(admission_intake, tmp_path, winner):
+    from sqlalchemy import text
+    from app.adapters.checkers import selected_pre_submit_coordinator
+    from app.adapters.outbox import outbox_append
+    from tests.artifacts.intake_acceptance_support import completed_source
+    f = admission_intake
+    owner, request, terminal = await completed_source(f, tmp_path)
+    attempted, held, release = asyncio.Event(), asyncio.Event(), asyncio.Event()
+    original_tasks = f.admission._tasks
+
+    class ObservedTasks(IntakeTaskCustody):
+        async def lock(self, task_id):
+            attempted.set()
+            return await super().lock(task_id)
+
+    if winner == "abandonment":
+        async with f.factory.begin() as session:
+            await session.execute(text("UPDATE submission_intake_operations SET lease_expires_at="
+                "clock_timestamp()-interval '1 second' WHERE id=:id"), {"id": owner.operation_id})
+        f.admission._tasks = lambda session: ObservedTasks(session, task_submission_context_port(session))
+        async with f.factory() as session:
+            await session.begin()
+            assert await repository(session).abandon_expired(owner.operation_id)
+            command = asyncio.create_task(f.admission.accept(owner, request, terminal.terminal_digest,
+                checkers=selected_pre_submit_coordinator, outbox=outbox_append))
+            try:
+                await asyncio.wait_for(attempted.wait(), 10)
+                assert not command.done()
+                await session.commit()
+                with pytest.raises(IntakeCustodyConflict):
+                    await asyncio.wait_for(command, 10)
+            finally:
+                command.cancel()
+                await asyncio.gather(command, return_exceptions=True)
+                f.admission._tasks = original_tasks
+        expected = "abandoned"
+    else:
+        async with f.factory.begin() as session:
+            await session.execute(text("UPDATE submission_intake_operations SET lease_expires_at="
+                "clock_timestamp()+interval '5 seconds' WHERE id=:id"), {"id": owner.operation_id})
+        class PausedOutbox:
+            def __init__(self, session):
+                self.delegate = outbox_append(session)
+            async def append(self, event):
+                result = await self.delegate.append(event)
+                held.set()
+                await release.wait()
+                return result
+        async def expire():
+            from app.modules.artifacts.intake.repository import SubmissionIntakeRepository
+            async with f.factory.begin() as session:
+                tasks = ObservedTasks(session, task_submission_context_port(session))
+                await tasks.lock(f.task)
+                from tests.artifacts.intake_acceptance_support import wait_foreground_expired
+                await wait_foreground_expired(session, owner.operation_id)
+                return await SubmissionIntakeRepository(session, tasks).abandon_expired(owner.operation_id)
+        command = asyncio.create_task(f.admission.accept(owner, request, terminal.terminal_digest,
+            checkers=selected_pre_submit_coordinator, outbox=PausedOutbox))
+        recovery = None
+        try:
+            await asyncio.wait_for(held.wait(), 10)
+            recovery = asyncio.create_task(expire())
+            await asyncio.wait_for(attempted.wait(), 10)
+            assert not recovery.done()
+            release.set()
+            assert (await asyncio.wait_for(command, 10))["status"] == "accepted"
+            assert await asyncio.wait_for(recovery, 10) is False
+        finally:
+            release.set()
+            command.cancel()
+            if recovery is not None:
+                recovery.cancel()
+            await asyncio.gather(command, *( [recovery] if recovery is not None else []), return_exceptions=True)
+        expected = "finalization_pending"
+    async with f.factory.begin() as session:
+        row = await session.get(SubmissionIntakeOperation, str(owner.operation_id))
+        assert row.state == expected
+        assert (row.acceptance_receipt is not None) == (winner == "acceptance")
+        assert await session.scalar(text("SELECT count(*) FROM outbox_events WHERE aggregate_id=:id"),
+                                    {"id": owner.operation_id}) == int(winner == "acceptance")
+
+
+async def test_t4_rejects_lease_expiry_at_commit_boundary(admission_intake, tmp_path):
+    from sqlalchemy import text
+    from sqlalchemy.ext.asyncio import AsyncSession
+    from app.adapters.checkers import selected_pre_submit_coordinator
+    from app.adapters.outbox import outbox_append
+    from tests.artifacts.intake_acceptance_support import completed_source
+    f = admission_intake
+    owner, request, terminal = await completed_source(f, tmp_path)
+    async with f.factory.begin() as session:
+        await session.execute(text("UPDATE submission_intake_operations SET lease_expires_at="
+            "clock_timestamp()+interval '5 seconds' WHERE id=:id"), {"id": owner.operation_id})
+    delayed = False
+    class ExpiredCommit(AsyncSession):
+        async def commit(self):
+            nonlocal delayed
+            if not delayed:
+                delayed = True
+                from tests.artifacts.intake_acceptance_support import wait_foreground_expired
+                await wait_foreground_expired(self, owner.operation_id)
+            await super().commit()
+    f.admission._sessions = async_sessionmaker(f.factory.kw["bind"], class_=ExpiredCommit, expire_on_commit=False)
+    with pytest.raises(IntakeCustodyConflict, match="intake_acceptance_conflict"):
+        await f.admission.accept(owner, request, terminal.terminal_digest,
+            checkers=selected_pre_submit_coordinator, outbox=outbox_append)
+    assert delayed
+    async with f.factory.begin() as session:
+        row = await session.get(SubmissionIntakeOperation, str(owner.operation_id))
+        assert row.state == "pre_checking" and row.acceptance_receipt is None
+        assert await session.scalar(text("SELECT status FROM workstream_tasks WHERE id=:id"), {"id": f.task}) == "in_progress"
+        assert await session.scalar(text("SELECT count(*) FROM outbox_events WHERE aggregate_id=:id"),
+                                    {"id": owner.operation_id}) == 0
+
+
+async def test_t4_cancellation_drains_commit_and_keeps_accepted_custody(admission_intake, tmp_path):
+    from sqlalchemy.ext.asyncio import AsyncSession
+    from app.adapters.checkers import selected_pre_submit_coordinator
+    from app.adapters.outbox import outbox_append
+    from tests.artifacts.intake_acceptance_support import completed_source
+    f = admission_intake
+    owner, request, terminal = await completed_source(f, tmp_path)
+    committed, release = asyncio.Event(), asyncio.Event()
+    class DelayedAcknowledgement(AsyncSession):
+        async def commit(self):
+            await super().commit()
+            committed.set()
+            await release.wait()
+    f.admission._sessions = async_sessionmaker(f.factory.kw["bind"], class_=DelayedAcknowledgement, expire_on_commit=False)
+    kwargs = dict(checkers=selected_pre_submit_coordinator, outbox=outbox_append)
+    command = asyncio.create_task(f.admission.accept(owner, request, terminal.terminal_digest, **kwargs))
+    try:
+        await asyncio.wait_for(committed.wait(), 10)
+        command.cancel()
+        await asyncio.sleep(0)
+        assert not command.done()
+        release.set()
+        with pytest.raises(asyncio.CancelledError):
+            await asyncio.wait_for(command, 10)
+    finally:
+        release.set()
+        command.cancel()
+        await asyncio.gather(command, return_exceptions=True)
+    receipt = await f.admission.accept(owner, request, terminal.terminal_digest, **kwargs)
+    assert receipt["status"] == "accepted" and receipt["replayed"] is True

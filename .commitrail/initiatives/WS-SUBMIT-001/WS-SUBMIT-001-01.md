@@ -2511,3 +2511,128 @@ T4 CHECKERS participation checkpoint:
   to source contracts during the cutover; the wider suite is not green.
 - Accepted-state persistence, composed TASK/ART/outbox commit and T4 race/rollback
   proof remain unfinished. No public acceptance or continuation is exposed here.
+
+### Composed accepted handoff implementation and remaining proof
+
+The existing foreground admission owner now composes T4 under its root transaction:
+current own-read/Submitter authority, canonical TASK/PROJECT/revision context,
+exact locked eligible PRE, operation-scoped acceptance consumption, identifier-only
+finalization event, immutable receipt/context and the direct TASK pending transition.
+Replay validates the retained decision, receipt, PRE and event without rechecking
+foreground eligibility. Connection/acknowledgement uncertainty resolves the same
+operation in a fresh root. A PostgreSQL constraint rejection is a known rollback,
+not a transport-unknown outcome.
+
+Migration 0073 extends active custody to `finalization_pending`, retains unique
+PRE/decision/event references, and adds deferred exact context, receipt, authority,
+event and TASK closure. Only transition into accepted custody checks the current
+foreground deadline. Revision head/acknowledgement, cap, predecessor and deadline
+are also checked at that transition; accepted reads do not reapply them. Source
+charge and accepted fields remain immutable. No formal Submission, retained binding
+or POST event is created by T4.
+
+Evidence for this worktree:
+
+- `/tmp/t4-transaction-proofs.log`: five composed initial acceptance/replay,
+  outbox/TASK rollback, concurrent duplicate and lost-acknowledgement cases passed.
+- `/tmp/t4-all-admission.log`: 25 passed, including existing T1/replay behavior and
+  accepted mutation/cleanup refusal, revoked authority, both independent-session
+  acceptance/abandonment winner orders and expiry at the deferred commit boundary.
+- `/tmp/t4-lifetime-final.log`: six passed after adding cancellation/late revocation
+  and changing expiry fixtures to observe database time rather than infer it from
+  a host sleep. These replay the changed race/deadline cases as well.
+- Earlier runs exposed multi-statement asyncpg execution and deferred PL/pgSQL
+  expression errors in the draft migration; both were repaired before the above
+  passing runs. One composed run was rejected during sealing because observed
+  `sealed_at` preceded EOF. The guard was retained; subsequent composed runs
+  passed. None of this is native-provider qualification.
+
+The current schema fingerprint is
+`5a1f343869d5599158b74372e1a150fe913659313b03f71185a4360c8163e186`.
+The original seven obsolete prepared-coordination fixture failures remain open;
+these passing runs do not claim a green full backend suite.
+
+T4 is not declared complete: a real revision handoff, the foreground heartbeat
+across the whole composed command, all planned denial/SQL substitution cases and
+focused implementation review remain required. Current revision fixture setup
+calls the removed prepared-source producer (`submission_admission.py` still passes
+`commitment`/`manifest` and prepared-generation selectors to source-only builders).
+Restoring that obsolete execution path would move away from the requested contract.
+The new T5 path must create the predecessor for the actual revision proof. This
+changes proof sequencing, not the required revision behavior or completion bar.
+No public accepted route or live finalization handler is exposed by this checkpoint.
+
+### Durable accepted finalization (T5) plan
+
+Close the concrete remaining gap: an accepted source currently holds TASK/capacity
+and an outbox event but cannot become a formal Submission or start POST. Extend
+existing ART custody, TASK Submission construction and CHECKERS evaluation dispatch;
+do not implement a second independent Submission writer or restore prepared PRE.
+
+Required behavior:
+
+1. Register `SubmissionFinalizationRequested` with the existing durable outbox
+   composition and fixed-service authority. Claim a separately fenced accepted
+   continuation in a short transaction. Recognize and validate an already finalized
+   operation before requiring a pending TASK pointer or a new lease.
+2. Observe only the recorded immutable source generation/size outside TASK locks
+   through the existing typed ART provider composition. Combine observation with
+   committed ingress and exact PRE hash/manifest evidence; metadata alone cannot
+   authorize adopting an arbitrary object. Do not upload/copy/read the ZIP again
+   merely to create a retained identity; register the exact already stored object.
+3. Under TASK → operation owner locks, consume narrow service continuation
+   authority over immutable acceptance and the current continuation fence. Do not
+   call ordinary contributor creation with an `evaluation_pending` exception or
+   recheck the original bearer token, grant, revision cap/deadline or foreground
+   lease. Preserve accepted initial/revision status as historical dispatch evidence.
+4. Reuse logical ART content only for exact SHA/count identity, record a replica
+   for the actual source key/generation with trusted verification provenance, and
+   bind it to the actual newly allocated Submission. Reuse existing ART owners and
+   binding rules. Required schema extensions must distinguish source custody from
+   retained prepared receipts without fake put, prepared-generation or verifier IDs.
+5. Reuse `build_submission`, existing policy snapshots, global version allocation,
+   assignment revision-round accounting, selected POST request construction and
+   outbox append. One transaction commits formal Submission, exact ART binding,
+   evaluation/dispatch/reservation, POST event, finalized operation association and
+   pointer release. Retries return that immutable association; no duplicate version,
+   binding, revision round, dispatch or event is permitted.
+6. Keep the source retained/protected through failure, retry, lease loss and provider
+   uncertainty. Only separately authorized cleanup may later delete eligible data.
+   Do not invent administrative cancellation or silently reopen/reassign accepted
+   work on later grant changes.
+
+Allowed scope: ART intake/source/API/models/repository and retained material/binding
+owners; TASK Submission API/composition/participants/replay/dispatch and affected
+lineage readers; AUTH closed continuation/binding contracts and adapters/catalogue;
+existing CHECKERS POST content/reservation adapters; outbox handler registration;
+new forward migration 0074 and affected schema fingerprint; tests/CI selection and
+direct contracts/this record. Inspect shared consumers before changing retained
+admission/verification fields. Retained rows remain readable; new execution must
+use accepted source custody. Public raw-ZIP/API/CLI/MCP replacement remains required
+in this same PR after a real finalization handler is available.
+
+Prohibited: fresh human submission authorization in T5, renewed PRE or a second PRE
+VM, host ZIP inspection/spooling, whole-source re-upload/copy to a new key, arbitrary
+locator/hash adoption, fake legacy identifiers, parallel provider factories,
+replacing POST routing/review/contribution owners, source cleanup before retained
+custody, defaulting unqualified C-values, deployment or merge.
+
+Risk: L0/L1 authority, workflow and immutable evidence. Required review: ARCH/SEC
+for plan/continuation and storage closure, QA for transaction/race/public-journey
+proof, DOCS for exact exposure and qualification claims. Human merge review should
+focus on accepted authority lifetime, source-to-retained provenance, replay before
+currentness, revision accounting, and removal of superseded public producers.
+
+Verification: real PostgreSQL plus actual Local/MinIO source ownership where the
+provider behavior is claimed; actual ZIP and worker proof with explicitly simulated
+runtime observations until native qualification is available. Exercise accepted
+T4 → finalization → reserved POST and existing POST completion/routing, then create
+a real governed revision source and exercise T4/T5 again. Test rollback between
+participants, duplicate deliveries and claims, lease fencing, lost commit response,
+broker/observation failure and retry, exact finalized replay after TASK advances,
+and successful continuation after original foreground/revision windows and grants
+expire. Probe SQL association/provenance substitution and source deletion refusal.
+Run affected retained-reader and POST policy branches, including default human
+review and configured automatic final acceptance/contribution evidence. Finish the
+public API/CLI/MCP drill and A01–A35/C01–C07 audit before overall completion; internal
+T4/T5 tests alone cannot close the goal.

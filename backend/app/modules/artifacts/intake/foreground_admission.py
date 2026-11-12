@@ -1,16 +1,18 @@
-"""Authorized T1 reservation and exact replay, without body/provider writes.
+"""Authorized T1 reservation, T4 accepted handoff and exact replay.
 
 Only a positively acknowledged reservation returns a foreground owner. A raced
 key or uncertain commit resolves the stored operation through current read
 authority and cannot acquire a replacement lease or start a second upload.
 """
+import json
+
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -28,6 +30,8 @@ from app.modules.authorization.api.submission_intake import (
     IntakeReservationAuthorityFacts, IntakeReservationPreflightFacts,
 )
 from app.modules.checkers.api.external_policy import LockedExternalCheckerPolicies
+from app.modules.checkers.api.selected_pre_submit import SelectedPreSubmitCoordinationPort, SelectedPreSubmitReservationFacts
+from app.modules.outbox.api import OutboxAppendPort
 from app.modules.projects.api.locked_policy import ProjectLockedPolicyContextPort, ProjectLockedPolicyContextRequest
 from app.modules.projects.api.policy_lineage import RevisionPolicySemantics
 from app.modules.tasks.api.intake_custody import IntakeTaskCustodyPort
@@ -64,7 +68,7 @@ class _ExistingKey(RuntimeError):
 
 
 class ForegroundIntakeAdmission:
-    """Reserve one authorized foreground owner or resolve its immutable retry key."""
+    """Own reservation and acceptance roots without body or provider I/O."""
     def __init__(
         self, sessions: async_sessionmaker[AsyncSession], *,
         tasks: Callable[[AsyncSession], IntakeTaskCustodyPort],
@@ -102,6 +106,10 @@ class ForegroundIntakeAdmission:
             else:
                 try:
                     await await_completion_preserving_cancellation(session.commit())
+                except IntegrityError:
+                    # PostgreSQL rejected this transaction; unlike transport loss,
+                    # a constraint failure positively proves no acceptance commit.
+                    raise
                 except Exception as exc:
                     raise IntakeCommitUnknown("intake commit acknowledgement unavailable") from exc
         finally:
@@ -185,6 +193,98 @@ class ForegroundIntakeAdmission:
             raise IntakeCustodyConflict("intake_namespace_unavailable")
         if namespace.provider_profile not in {"local-v2", "minio-v1"}:
             raise IntakeCustodyConflict("intake_source_provider_unqualified")
+        return task, project
+
+    async def accept(
+        self, owner: IntakeReservationOwner, request: SelectedPreSubmitReservationFacts, terminal_digest: str, *,
+        checkers: Callable[[AsyncSession], SelectedPreSubmitCoordinationPort],
+        outbox: Callable[[AsyncSession], OutboxAppendPort],
+    ) -> dict:
+        """Commit T4 or resolve an uncertain acknowledgement by the same operation.
+
+        checkers/outbox are transaction-local owner ports supplied by composition.
+        The surrounding foreground lease must continue heartbeating through here.
+        """
+        try:
+            async with self._root() as (session, authority):
+                repository = SubmissionIntakeRepository(session, self._tasks(session))
+                row = await repository._lock(owner.operation_id)
+                await authority.authorize_read(IntakeOperationReadFacts(
+                    UUID(row.id), UUID(row.project_id), UUID(row.task_id), UUID(row.actor_profile_id)))
+                self._match_acceptance_command(row, request, terminal_digest, accepted=row.state == "finalization_pending")
+                if row.state == "finalization_pending":
+                    return await self._accepted_receipt(session, authority, row)
+                receipt = await self._accept_new(session, authority, repository, row, owner,
+                                                 request, terminal_digest, checkers, outbox)
+            return receipt
+        except IntegrityError as exc:
+            raise IntakeCustodyConflict("intake_acceptance_conflict") from exc
+        except IntakeCommitUnknown:
+            async with self._root() as (session, authority):
+                row = await SubmissionIntakeRepository(session, self._tasks(session))._lock(owner.operation_id)
+                await authority.authorize_read(IntakeOperationReadFacts(
+                    UUID(row.id), UUID(row.project_id), UUID(row.task_id), UUID(row.actor_profile_id)))
+                if row.state != "finalization_pending":
+                    raise IntakeCommitUnknown("submission acceptance outcome is unresolved")
+                self._match_acceptance_command(row, request, terminal_digest, accepted=True)
+                return await self._accepted_receipt(session, authority, row)
+
+    @staticmethod
+    def _match_acceptance_command(row, request, terminal_digest, *, accepted):
+        if (row.id != str(request.source.location.operation_id)
+                or row.actor_profile_id != str(request.actor_profile_id)
+                or row.idempotency_key != str(request.idempotency_key)
+                or row.metadata_sha256 != request.metadata_sha256
+                or row.locked_context_sha256 != request.locked_context_sha256
+                or (accepted and (row.selected_pre_submit_run_id != str(request.attempt_id)
+                    or row.selected_pre_submit_request_sha256 != request.request_digest
+                    or row.selected_pre_submit_terminal_sha256 != terminal_digest))):
+            raise IntakeCustodyConflict("intake_acceptance_conflict")
+
+    async def _accepted_receipt(self, session, authority, row):
+        from app.modules.artifacts.intake.acceptance import authority_facts
+        await authority.validate_acceptance_receipt(authority_facts(row), UUID(row.acceptance_decision_id))
+        await session.execute(text("SELECT public.require_submission_acceptance(o) "
+                                   "FROM public.submission_intake_operations o WHERE id=:id"), {"id": UUID(row.id)})
+        return dict(row.acceptance_receipt, replayed=True)
+
+    async def _accept_new(self, session, authority, repository, row, owner,
+                          request, terminal_digest, checkers, outbox):
+        from types import SimpleNamespace
+        from app.modules.artifacts.intake.acceptance import authority_facts, finalization_event, stage_acceptance
+        row = await repository._owned(owner.operation_id, owner.lease_id, owner.generation)
+        if row.state != "pre_checking":
+            raise IntakeCustodyConflict("intake_acceptance_conflict")
+        await authority.lock_actor(UUID(row.actor_profile_id), UUID(row.identity_link_id))
+        await authority.preflight(IntakeReservationPreflightFacts(
+            UUID(row.id), UUID(row.project_id), UUID(row.task_id), UUID(row.assignment_id),
+            UUID(row.actor_profile_id), UUID(row.identity_link_id), UUID(row.idempotency_key), row.metadata_sha256))
+        metadata = SubmissionIntakeMetadata.model_validate_json(json.dumps(row.command_metadata))
+        task, project = await self._validate_context(session, metadata, UUID(row.actor_profile_id))
+        lineage = request.admission_lineage
+        predecessor = task.predecessor
+        if (task.status != row.eligible_task_status
+                or (predecessor.submission_id if predecessor else None) != lineage.predecessor_submission_id
+                or (predecessor.version if predecessor else None) != lineage.predecessor_submission_version
+                or task.checker_remediation_manifest_id != lineage.checker_remediation_manifest_id
+                or LockedExternalCheckerPolicies.model_validate_json(project.external_checker_policies.value).pre_submit != request.policy):
+            raise IntakeCustodyConflict("intake_acceptance_context_changed")
+        terminal = await checkers(session).lock_acceptance(
+            run_id=request.attempt_id, facts=request, terminal_digest=terminal_digest)
+        draft = SimpleNamespace(**{name: getattr(row, name) for name in (
+            "id", "project_id", "task_id", "assignment_id", "actor_profile_id", "identity_link_id",
+            "idempotency_key", "metadata_sha256", "locked_context_sha256", "eligible_task_status",
+            "lease_id", "lease_generation")})
+        stage_acceptance(draft, terminal, await session.scalar(select(func.clock_timestamp())))
+        facts = authority_facts(draft)
+        draft.acceptance_decision_id = str(await authority.consume_acceptance(
+            await authority.prepare_acceptance(facts), facts))
+        draft.finalization_event_id = str((await outbox(session).append(finalization_event(draft))).event_id)
+        for name, value in vars(draft).items():
+            setattr(row, name, value)
+        row.state = "finalization_pending"
+        await self._tasks(session).accept(UUID(row.task_id), UUID(row.id), row.eligible_task_status)
+        return dict(row.acceptance_receipt)
 
     async def _read(self, metadata, actor_id, key, *, expected_operation_id=None):
         """Authorize the stored operation before comparing metadata or returning its state."""

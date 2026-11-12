@@ -17,7 +17,7 @@ class IntakeTaskSnapshot:
 
 
 class IntakeTaskCustodyPort(Protocol):
-    """Maintain the task pointer only; caller must supply authorized owner work."""
+    """Maintain the pointer and T4 pending state inside authorized owner work."""
 
     async def claim(self, request: TaskSubmissionContextRequest, operation_id: UUID) -> IntakeTaskSnapshot:
         """Lock canonical submission context and install its unique operation pointer."""
@@ -33,4 +33,8 @@ class IntakeTaskCustodyPort(Protocol):
 
     async def release(self, task_id: UUID, operation_id: UUID) -> None:
         """Clear only this operation's pointer inside the terminal transaction."""
+        ...
+
+    async def accept(self, task_id: UUID, operation_id: UUID, expected_status: str) -> None:
+        """T4-only direct transition; deferred custody requires exact accepted AUTH/event."""
         ...

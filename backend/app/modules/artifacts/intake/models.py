@@ -1,4 +1,4 @@
-"""ART-owned durable foreground custody before submission acceptance."""
+"""ART-owned durable foreground and accepted source custody."""
 
 from datetime import datetime
 
@@ -16,8 +16,8 @@ from app.db.base import Base
 class SubmissionIntakeOperation(Base):
     """One immutable command/source with a fenced, non-resumable foreground owner.
 
-    Accepted states are deliberately unavailable until the accepted-authority
-    and outbox transaction is installed. This table grants no provider capability.
+    Accepted custody retains the source and task pointer for durable finalization.
+    This table grants no provider capability.
     """
 
     __tablename__ = "submission_intake_operations"
@@ -30,7 +30,7 @@ class SubmissionIntakeOperation(Base):
         ForeignKeyConstraint(["assignment_id", "task_id", "actor_profile_id"], ["task_assignments.id", "task_assignments.task_id", "task_assignments.contributor_id"], name="fk_submission_intake_assignment", deferrable=True, initially="DEFERRED"),
         ForeignKeyConstraint(["identity_link_id", "actor_profile_id"], ["actor_identity_links.id", "actor_identity_links.actor_profile_id"], name="fk_submission_intake_identity", deferrable=True, initially="DEFERRED"),
         ForeignKeyConstraint(["namespace_id", "namespace_fingerprint"], ["artifact_storage_namespaces.id", "artifact_storage_namespaces.namespace_fingerprint"], name="fk_submission_intake_namespace"),
-        CheckConstraint("state in ('receiving','pre_checking','rejected','failed','abandoned','cancelled')", name="foreground_state"),
+        CheckConstraint("state in ('receiving','pre_checking','finalization_pending','rejected','failed','abandoned','cancelled')", name="foreground_state"),
         CheckConstraint("eligible_task_status in ('in_progress','needs_revision')", name="eligible_status"),
         CheckConstraint("metadata_sha256 ~ '^sha256:[0-9a-f]{64}$' and locked_context_sha256 ~ '^sha256:[0-9a-f]{64}$'", name="identity_digests"),
         CheckConstraint("jsonb_typeof(command_metadata)='object' and jsonb_typeof(locked_task_context)='object'", name="command_shape"),
@@ -39,9 +39,16 @@ class SubmissionIntakeOperation(Base):
         CheckConstraint("lease_generation>0 and lease_expires_at<=coalesce(pre_deadline_at,upload_deadline_at) and upload_deadline_at>created_at", name="lease_bounds"),
         CheckConstraint("(raw_sha256 is null and raw_byte_count is null and eof_at is null) or (raw_sha256 is not null and raw_sha256 ~ '^sha256:[0-9a-f]{64}$' and raw_byte_count is not null and raw_byte_count between 1 and maximum_raw_bytes and eof_at is not null)", name="eof_identity"),
         CheckConstraint("(provider_generation is null and sealed_upload_fence is null and sealed_at is null and pre_deadline_at is null) or (provider_generation is not null and sealed_upload_fence is not null and sealed_upload_fence>0 and length(provider_generation)>0 and raw_sha256 is not null and sealed_at is not null and sealed_at>=eof_at and pre_deadline_at is not null and pre_deadline_at>sealed_at and (provider_profile<>'aws-s3-v1' or provider_generation<>'null'))", name="sealed_identity"),
-        CheckConstraint("state<>'pre_checking' or sealed_at is not null", name="pre_requires_source"),
-        CheckConstraint("(state in ('receiving','pre_checking') and terminal_at is null and failure_code is null) or (state in ('rejected','failed','abandoned','cancelled') and terminal_at is not null and failure_code is not null)", name="terminal_shape"),
-        Index("uq_submission_intake_active_task", "task_id", unique=True, postgresql_where=text("state in ('receiving','pre_checking')")),
+        CheckConstraint("state not in ('pre_checking','finalization_pending') or sealed_at is not null", name="pre_requires_source"),
+        CheckConstraint("(state in ('receiving','pre_checking','finalization_pending') and terminal_at is null and failure_code is null) or (state in ('rejected','failed','abandoned','cancelled') and terminal_at is not null and failure_code is not null)", name="terminal_shape"),
+        ForeignKeyConstraint(["acceptance_decision_id"], ["audit_events.id"], name="fk_intake_acceptance_decision", deferrable=True, initially="DEFERRED"),
+        ForeignKeyConstraint(["selected_pre_submit_run_id"], ["selected_pre_submit_runs.id"], name="fk_intake_accepted_pre_run", deferrable=True, initially="DEFERRED"),
+        ForeignKeyConstraint(["finalization_event_id"], ["outbox_events.event_id"], name="fk_intake_finalization_event", deferrable=True, initially="DEFERRED"),
+        CheckConstraint("(state='finalization_pending' and accepted_at is not null and acceptance_decision_id is not null and selected_pre_submit_run_id is not null and selected_pre_submit_request_sha256 is not null and selected_pre_submit_terminal_sha256 is not null and accepted_source_sha256 is not null and accepted_manifest_sha256 is not null and accepted_context is not null and accepted_context_sha256 is not null and acceptance_receipt is not null and acceptance_receipt_sha256 is not null and finalization_event_id is not null) or (state<>'finalization_pending' and accepted_at is null and acceptance_decision_id is null and selected_pre_submit_run_id is null and selected_pre_submit_request_sha256 is null and selected_pre_submit_terminal_sha256 is null and accepted_source_sha256 is null and accepted_manifest_sha256 is null and accepted_context is null and accepted_context_sha256 is null and acceptance_receipt is null and acceptance_receipt_sha256 is null and finalization_event_id is null)", name="acceptance_shape"),
+        UniqueConstraint("selected_pre_submit_run_id", name="uq_intake_accepted_pre_run"),
+        UniqueConstraint("acceptance_decision_id", name="uq_intake_acceptance_decision"),
+        UniqueConstraint("finalization_event_id", name="uq_intake_finalization_event"),
+        Index("uq_submission_intake_active_task", "task_id", unique=True, postgresql_where=text("state in ('receiving','pre_checking','finalization_pending')")),
         Index("ix_submission_intake_expiry", "lease_expires_at", "id", postgresql_where=text("state in ('receiving','pre_checking')")),
     )
 
@@ -76,6 +83,18 @@ class SubmissionIntakeOperation(Base):
     sealed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     terminal_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     failure_code: Mapped[str | None] = mapped_column(String(100))
+    accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    acceptance_decision_id: Mapped[str | None] = mapped_column(Uuid(as_uuid=False))
+    selected_pre_submit_run_id: Mapped[str | None] = mapped_column(Uuid(as_uuid=False))
+    selected_pre_submit_request_sha256: Mapped[str | None] = mapped_column(String(71))
+    selected_pre_submit_terminal_sha256: Mapped[str | None] = mapped_column(String(71))
+    accepted_source_sha256: Mapped[str | None] = mapped_column(String(71))
+    accepted_manifest_sha256: Mapped[str | None] = mapped_column(String(71))
+    accepted_context: Mapped[dict | None] = mapped_column(JSONB(none_as_null=True))
+    accepted_context_sha256: Mapped[str | None] = mapped_column(String(71))
+    acceptance_receipt: Mapped[dict | None] = mapped_column(JSONB(none_as_null=True))
+    acceptance_receipt_sha256: Mapped[str | None] = mapped_column(String(71))
+    finalization_event_id: Mapped[str | None] = mapped_column(Uuid(as_uuid=False))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.clock_timestamp())
 
 

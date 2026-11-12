@@ -64,3 +64,16 @@ class IntakeTaskCustody:
             raise TaskSubmissionContextUnavailable("task_submission_context_invalid")
         task.active_submission_operation_id = None
         await self._session.flush()
+
+    async def accept(self, task_id: UUID, operation_id: UUID, expected_status: str) -> None:
+        """Keep the pointer while accepted source work awaits formal finalization.
+
+        The deferred acceptance/custody constraints require the same transaction's
+        exact ART, AUTH, PRE and event records. This is not a generic transition.
+        """
+        await self.require_active(task_id, operation_id)
+        task = await self._tasks.get_task(str(task_id), for_update=True)
+        if expected_status not in {"in_progress", "needs_revision"} or task.status != expected_status:
+            raise TaskSubmissionContextUnavailable("task_submission_context_invalid")
+        task.status = "evaluation_pending"
+        await self._session.flush()
