@@ -349,3 +349,41 @@ passed; none establish the still-missing public foreground lifecycle.
 DOC-UPLOAD-01 corrected summary wording to distinguish intent before begin,
 handle before parts and EOF before completion; receipts do not all precede
 every provider call.
+
+## Shared foreground lease stage
+
+Add one private runner for the same foreground command across upload and PRE.
+Renew the existing operation lease from database time in short TASK-first owner
+transactions, bounded by the persisted phase deadline. Renewal must never shorten
+a live lease, including a longer PRE lease installed by sealing: use the greater
+of current expiry and the deadline-capped database-now plus duration. Replace the unused
+absolute-expiry heartbeat input with a positive duration; preserve its stale-owner
+proof. Explicit heartbeat interval must be positive and shorter than lease duration.
+No defaults, new lease identity, generation takeover, background continuation,
+acceptance, automatic terminalization or charge release are allowed.
+
+The runner renews before invoking the callback, then runs one renewal task beside
+that callback, passing the pinned operation/lease/generation tuple to its factory.
+Subtract whole-transaction monotonic elapsed time from the database remaining
+lease measured after flush; reject an exhausted post-commit budget before invoking
+work. Sleep at most half the remaining budget and at most the explicit interval.
+A renewal failure cancels and drains callback work; caller
+cancellation cancels both children before draining them together with
+`gather(..., return_exceptions=True)` under the existing cancellation-preserving
+helper. Repeated cancellation must not return while provider writes remain live.
+A completed callback's
+already-known result takes precedence if it finishes alongside a renewal failure.
+The full lifecycle must return only committed owner results and resolve uncertain
+handoff before choosing an API response; this helper does not infer rollback.
+
+Allowed files: intake lease runner/repository, existing custody and contract suites,
+exact protected partition registration and affected current records. L0 review
+routes remain architecture/security and QA/test-delta/CI. Prove real delayed local
+upload success beyond the initial lease, unchanged owner identity/generation,
+immutable phase deadline caps, non-shortening PRE renewal, exhausted commit budget,
+stale/terminal/wrong-lease/wrong-generation startup without callback invocation,
+fencing during blocked foreground work, and cancellation without surviving child
+work. Shared caller authorization, PRE and public handoff remain separate work.
+
+Human review focus: same-owner custody across upload/PRE, cancellation drainage,
+and expiry authority without authorization or acceptance claims.
