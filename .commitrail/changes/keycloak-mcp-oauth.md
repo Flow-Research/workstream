@@ -113,6 +113,39 @@ new state. No reset or deployment is implied by merely rendering configuration.
 | Release shared-package custody | `scripts.test_hosted_release_images` plus actual frozen dependency exports for both SDK environments | 21 tests passed; both exports include the exact shared package; same-permission shared-code substitution is rejected | Fresh image inspection remains hosted CI work |
 | Delivery | Acceptance matrix in approved plan | Implementation underway | Hosted qualification and final reviews remain |
 
+## Hosted qualification boundary
+
+The deployed runtime at `0be4e46ec` passed public Keycloak discovery/JWKS,
+administrator MFA and recovery login, two participant browser password changes
+and code/PKCE exchanges, and API actor creation with stable, distinct identities.
+The temporary administrator was removed and its password and issued token denied.
+Rust runtime/account/signing state and obsolete local onboarding credentials were
+retired. Public old issuer, master administration and client-registration routes
+return 404.
+
+The authorized reset recreated only the named `workstream` database and cleared
+Redis database 0. It preserved `flow_identity` and all S3 objects; owned scratch
+and native leases were verified empty. Schema initialization, AWS storage proof
+and scheduled proof renewal passed. The renewal script was reconciled to the
+new release, rather than retaining its obsolete source path.
+
+A standalone MCP client executed real public tools using Keycloak exchange.
+Concurrent callers retained their own actor/email facts, existing administrator
+reads succeeded, unauthorized participant reads failed, and API/MCP audience
+substitutions failed in both directions. Consumer-first shutdown and restart
+retained signing keys, accounts and four participant API/MCP sessions; renewed
+credentials passed the same MCP checks afterward. Fresh manager grants, project
+creation and thirteen fixed service provisions used public APIs and exact
+replay. The existing administrator bootstrap rejected a second invocation;
+the ordinary self-grant prohibition also remained effective.
+
+These are hosted provider and standalone-client observations, not actual Garden
+integration or execution of every MCP tool. Garden registration/access, the full
+reset/reprovisioning drill and remaining acceptance-matrix proofs still require
+qualification. Private operator receipts contain credentials and are not Git
+artifacts. The subsequent `848f454e7` commit documents recovery configuration;
+it does not alter the qualified runtime.
+
 ## Review findings
 
 Plan correction preserves email claims, includes actual Garden OAuth delivery,

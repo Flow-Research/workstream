@@ -782,8 +782,11 @@ cannot be reused as post-submission review-gate evidence. See the
 - MCP verifies its resource-scoped token and exchanges it for a short-lived API
   token for the same user; an API-only bearer is rejected by MCP. Real local
   provider proof covers password change, login, exchange, renewal/reuse denial,
-  restart and database isolation. Hosted Keycloak cutover, named-administrator
-  recovery and the actual Garden session remain required qualification. See the
+  restart and database isolation. Hosted qualification additionally proves the
+  Keycloak cutover, administrator MFA/recovery, participant browser login,
+  authenticated MCP allowance/denial and caller isolation, and retained sessions
+  after service restart. The actual Garden connector and complete reset/retry
+  qualification remain outstanding; a standalone MCP client is not Garden proof. See the
   [replacement record](../.commitrail/changes/keycloak-mcp-oauth.md).
 - Earlier [Rust-hosted account](reports/demo-identity-hosted-2026-11-06.md),
   [login-based client](reports/demo-identity-clients-2026-11-07.md),
