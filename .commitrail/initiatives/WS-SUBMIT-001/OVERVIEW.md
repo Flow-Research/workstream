@@ -14,8 +14,10 @@ contracts and hidden pre-handoff database custody with TASK/source/lease guards.
 Hidden S3-compatible source methods and a backpressured receiver now provide
 bounded parts, conditional completion, exact-version reads and scoped uncertain
 upload discovery. Local source methods keep one ZIP inode through sealing, verify
-exact generations and preserve completed bytes on late abort. Durable upload
-orchestration, confirmed physical reclamation, AWS qualification and accepted authority remain
+exact generations and preserve completed bytes on late abort. Private upload
+composition now commits intent, handle and EOF before provider I/O, and binds
+known source facts before fenced sealing. Full foreground authorization/heartbeat
+integration, confirmed physical reclamation, AWS qualification and accepted authority remain
 to implement and integrate.
 The existing public flow stays active until coordinated cutover.
 

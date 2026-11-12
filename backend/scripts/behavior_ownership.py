@@ -937,6 +937,7 @@ SUBMISSION_INTAKE_TARGETS = frozenset({
     "backend/app/modules/artifacts/intake/models.py",
     "backend/app/modules/artifacts/intake/capacity.py",
     "backend/app/modules/artifacts/intake/streaming.py",
+    "backend/app/modules/artifacts/intake/foreground_upload.py",
     "backend/app/adapters/artifacts/local_submission_source.py",
     "backend/app/modules/artifacts/intake/repository.py",
     "backend/app/modules/tasks/api/intake_custody.py",

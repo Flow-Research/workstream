@@ -301,3 +301,41 @@ descriptor leak when parent fsync failed before cleanup registration. The focuse
 regression reproduced the open descriptor on that failure. Register the child
 immediately after opening it, before any failing fsync; the failure path must
 close it before releasing the operation lock.
+
+## Foreground upload composition stage
+
+Connect an already committed T1 operation to the existing provider and bounded
+receiver through one private ART orchestrator. Inject the existing async session
+factory, a factory for the public TASK custody port, and ArtifactStore. Commit
+intent before begin, handle before parts, and EOF/completion before external
+completion. No provider call may retain SQL row locks. Bind the returned source
+to original namespace/location, raw digest/count and upload fence before sealing
+under the live database owner fence. Compute explicit PRE deadline/initial lease
+from database time; no default profile values are introduced.
+
+A single exact observation may resolve unavailable completion acknowledgement
+within the immutable upload deadline. Never retry complete blindly, adopt a
+precondition conflict, continue on cancellation, or start background PRE. Errors
+retain operation/physical ownership for the shared foreground lifecycle and
+cleanup owner. This stage does not replace that lifecycle's heartbeat, authorize
+T1, expose a route, accept work or release a charge. Long-upload readiness remains
+unproven until the common lifecycle heartbeat is connected.
+
+Allowed files: one cohesive private intake foreground uploader, existing custody
+suite and fixture, exact protected partition registration, and affected capability
+records. Keep repositories flush-only and module edges through public ports.
+Risk remains L0; architecture/security plan and implementation review plus QA
+proof review are required. Real PostgreSQL plus real local storage must prove
+cross-transaction visibility and NOWAIT row locks at provider calls, rollback
+before any initiation, lost begin/complete acknowledgement, cancellation and
+false source identity rejection. Provider generation truth comes from qualified
+adapter complete/observe/read behavior; comparing a returned generation with its
+own newly persisted copy is not independent physical-version verification.
+
+Hosted local-stage CI exposed a type-only concrete adapter import in the private
+filesystem helper and two unclassified UUID generation sites. Remove the
+unnecessary concrete adapter type dependency; the helper still receives the
+existing adapter's private filesystem operations and creates no adapter/factory.
+Use cryptographic opaque tokens for provider upload handles and temporary names,
+which are not Workstream surrogate record IDs. Existing composition and UUID
+inventory guards reproduced both failures and remain unchanged.

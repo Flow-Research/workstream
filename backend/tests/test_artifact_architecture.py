@@ -256,12 +256,13 @@ def test_only_artifact_custody_services_own_provider_execution() -> None:
             node.name: node
             for node in tree.body
             if isinstance(node, ast.ClassDef)
-            and node.name in {
+            and (node.name in {
                 "ArtifactStorageOrchestrator",
                 "CheckerArtifactOutputService",
                 "ScopedGuideDocumentGrant",
                 "PostSubmissionMaterializer",
-            }
+            } or (node.name == "ForegroundSourceUpload"
+                  and path == APP_ROOT / "modules/artifacts/intake/foreground_upload.py"))
         }
         for node in ast.walk(tree):
             if (
@@ -289,7 +290,9 @@ def test_only_artifact_custody_services_own_provider_execution() -> None:
                         "PostSubmissionMaterializer",
                     }
                     and node.func.attr != "open"
-                ):
+                ) or (owner.name == "ForegroundSourceUpload" and node.func.attr not in {
+                    "begin_source_upload", "complete_source_upload", "observe_source_upload",
+                }):
                     violations.append(f"{path.relative_to(BACKEND_ROOT)} calls {node.func.attr}")
     assert violations == []
 

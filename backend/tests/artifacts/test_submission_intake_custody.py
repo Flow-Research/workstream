@@ -58,7 +58,7 @@ async def intake(tmp_path, isolated_database_env, capacity_limits):
                 project=str(plan.lineage.project_id), actor=str(actor.actor_profile_id),
             ))
         yield SimpleNamespace(engine=engine, factory=factory, actor=actor, task=task, assignment=assignment,
-                              capacity_limits=capacity_limits)
+                              capacity_limits=capacity_limits, durable_root=tmp_path / "durable")
     finally:
         await engine.dispose()
 
@@ -655,3 +655,131 @@ async def test_invalid_declared_size_rolls_back_all_custody(intake, declared):
         assert await session.scalar(text("SELECT count(*) FROM submission_intake_operations")) == 0
         assert await session.scalar(text("SELECT count(*) FROM submission_source_charges")) == 0
         assert await session.scalar(text("SELECT active_submission_operation_id FROM workstream_tasks WHERE id=:id"), {"id": intake.task}) is None
+
+
+def foreground_upload(intake, store):
+    from app.modules.artifacts.intake.foreground_upload import ForegroundSourceUpload
+    return ForegroundSourceUpload(intake.factory,
+        lambda session: IntakeTaskCustody(session, task_submission_context_port(session)), store)
+
+
+async def foreground_bytes():
+    yield b"original source bytes"
+
+
+def foreground_limits():
+    """Explicit fixture limits, never approved production settings."""
+    return dict(part_bytes=5 * 1024 * 1024, idle_timeout_seconds=20.0,
+                pre_timeout_seconds=60.0, pre_lease_seconds=30.0)
+
+
+@pytest.mark.parametrize("scenario", ["success", "lost_complete", "lost_begin", "cancel_part", "precondition",
+                                     "fence_begin", "fence_part", "fence_complete", "foreign_source"])
+async def test_foreground_upload_committed_boundaries_and_retained_uncertainty(intake, monkeypatch, scenario):
+    from app.interfaces.artifacts import ArtifactIntegrityError, ArtifactPreconditionFailedError, ArtifactStoreUnavailableError
+    from tests.artifact_store_helpers import initialize_local_store
+    store = initialize_local_store(root=intake.durable_root, buffer_bytes=7)
+    async with intake.factory.begin() as session:
+        row = await reserve(intake, session, with_upload=False)
+        operation, lease = UUID(row.id), UUID(row.lease_id)
+    seen, handles = [], []
+
+    async def committed(stage):
+        async with intake.factory.begin() as session:
+            # Independent real locks prove SQL locks are not retained during I/O.
+            for sql, parameters in (
+                ("SELECT id FROM workstream_tasks WHERE id=:id FOR UPDATE NOWAIT", {"id": intake.task}),
+                ("SELECT id FROM submission_intake_operations WHERE id=:id FOR UPDATE NOWAIT", {"id": operation}),
+                ("SELECT namespace_id FROM submission_source_capacity_profiles WHERE namespace_id=:id FOR UPDATE NOWAIT", {"id": "primary"}),
+            ):
+                assert (await session.execute(text(sql), parameters)).one()
+            stored = await session.get(SubmissionIntakeOperation, str(operation))
+            receipt = await session.get(SubmissionSourceUploadReceipt, str(operation))
+            assert receipt is not None and stored.state == "receiving"
+            if stage == "begin":
+                assert receipt.provider_upload_id is None and stored.raw_sha256 is None
+            elif stage == "part":
+                assert receipt.provider_upload_id and stored.raw_sha256 is None
+            else:
+                assert stored.raw_byte_count == len(b"original source bytes")
+                assert receipt.completion_parts and receipt.completion_recorded_at is not None
+        seen.append(stage)
+
+    def checked(stage, original):
+        async def call(*args, **kwargs):
+            await committed(stage)
+            if stage == "observe":
+                assert scenario == "lost_complete", "unexpected source observation"
+            result = await original(*args, **kwargs)
+            if stage == "begin":
+                handles.append(result)
+            if scenario == "fence_" + stage:
+                async with intake.factory.begin() as session:
+                    await repository(session).terminalize(operation, lease, 1, state="failed", failure_code="owner_ended")
+            if (stage, scenario) in {("begin", "lost_begin"), ("complete", "lost_complete")}:
+                raise ArtifactStoreUnavailableError("lost acknowledgement")
+            if stage == "part" and scenario == "cancel_part":
+                raise asyncio.CancelledError
+            if stage == "complete" and scenario == "precondition":
+                raise ArtifactPreconditionFailedError("conditional completion conflict")
+            if stage == "complete" and scenario == "foreign_source":
+                return result.model_copy(update={"location": result.location.model_copy(update={"operation_id": new_record_id()})})
+            return result
+        return call
+
+    for stage, name in (("begin", "begin_source_upload"), ("part", "upload_source_part"),
+                        ("complete", "complete_source_upload"), ("observe", "observe_source_upload")):
+        monkeypatch.setattr(store, name, checked(stage, getattr(store, name)))
+    failures = dict(lost_begin=ArtifactStoreUnavailableError, cancel_part=asyncio.CancelledError,
+                    precondition=ArtifactPreconditionFailedError, foreign_source=ArtifactIntegrityError,
+                    fence_begin=IntakeCustodyConflict, fence_part=IntakeCustodyConflict, fence_complete=IntakeCustodyConflict)
+    try:
+        command = foreground_upload(intake, store).receive(operation, lease, 1,
+            foreground_bytes(), **foreground_limits())
+        if scenario in failures:
+            with pytest.raises(failures[scenario]):
+                await command
+        else:
+            source = await command
+            assert seen == ["begin", "part", "complete"] + (["observe"] if scenario == "lost_complete" else [])
+            assert b"".join([chunk async for chunk in store.open_source(source)]) == b"original source bytes"
+        async with intake.factory() as session:
+            stored = await session.get(SubmissionIntakeOperation, str(operation))
+            charge = (await session.execute(text(
+                "SELECT state,accounted_bytes FROM submission_source_charges WHERE operation_id=:id"
+            ), {"id": operation})).one()
+            if scenario in failures:
+                assert stored.provider_generation is None
+                assert stored.state == ("failed" if scenario.startswith("fence_") else "receiving")
+                assert charge == ("reserved", 1024)
+            else:
+                assert stored.state == "pre_checking" and stored.provider_generation == source.provider_generation
+                assert stored.raw_sha256 == source.raw_sha256 and stored.sealed_upload_fence == 1
+                assert charge == ("sealed", len(b"original source bytes"))
+            if scenario in {"lost_begin", "cancel_part", "fence_begin", "fence_part"}:
+                assert stored.raw_sha256 is None
+        if scenario == "lost_begin":
+            assert await store.discover_source_uploads(handles[0].intent) == tuple(handles)
+    finally:
+        store.close()
+
+
+async def test_foreground_upload_rolled_back_reservation_cannot_start_provider(intake, monkeypatch):
+    from tests.artifact_store_helpers import initialize_local_store
+    store = initialize_local_store(root=intake.durable_root)
+    async with intake.factory() as session:
+        async with session.begin():
+            row = await reserve(intake, session, with_upload=False)
+            operation, lease = UUID(row.id), UUID(row.lease_id)
+            await session.rollback()
+
+    async def forbidden(*args, **kwargs):
+        pytest.fail("provider called without committed T1")
+
+    monkeypatch.setattr(store, "begin_source_upload", forbidden)
+    try:
+        with pytest.raises(IntakeCustodyConflict, match="unavailable"):
+            await foreground_upload(intake, store).receive(operation, lease, 1,
+                foreground_bytes(), **foreground_limits())
+    finally:
+        store.close()

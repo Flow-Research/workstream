@@ -334,3 +334,27 @@ async def test_source_stream_total_deadline_cancels_an_inflight_part_without_com
     with pytest.raises(ArtifactStoreUnavailableError):
         await receive_submission_source(SlowStore(), upload, ingress())
     assert stopped.is_set()
+
+
+@pytest.mark.parametrize("field,value", [
+    ("raw_sha256", "sha256:" + "f" * 64), ("raw_byte_count", 2), ("sealed_upload_fence", 2),
+])
+def test_foreground_upload_source_must_match_committed_receipt_facts(field, value):
+    from app.interfaces.artifacts import ArtifactIntegrityError
+    from app.modules.artifacts.intake.foreground_upload import ForegroundSourceUpload
+    upload = upload_value()
+    completion = SubmissionSourceCompletion(upload=upload,
+        parts=(SubmissionSourcePart(number=1, byte_count=1, provider_etag="part"),),
+        raw_sha256="sha256:" + "a" * 64, raw_byte_count=1)
+    original = SealedSubmissionSource(location=upload.intent.location, provider_generation="version",
+        raw_sha256=completion.raw_sha256, raw_byte_count=1, sealed_upload_fence=upload.intent.upload_fence)
+    assert ForegroundSourceUpload._bind_source(completion, original) == original
+    with pytest.raises(ArtifactIntegrityError, match="identity mismatch"):
+        ForegroundSourceUpload._bind_source(completion, original.model_copy(update={field: value}))
+
+
+@pytest.mark.parametrize("seconds", [0, -1, float("inf"), float("nan"), True, "60", 1e30])
+def test_foreground_upload_rejects_unbounded_or_coercive_deadlines(seconds):
+    from app.modules.artifacts.intake.foreground_upload import _duration
+    with pytest.raises(ValueError):
+        _duration(seconds)

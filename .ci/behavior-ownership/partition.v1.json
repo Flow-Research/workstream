@@ -606,6 +606,10 @@
     },
     {
       "group": "artifacts",
+      "target": "backend/app/modules/artifacts/intake/foreground_upload.py"
+    },
+    {
+      "group": "artifacts",
       "target": "backend/app/modules/artifacts/intake/models.py"
     },
     {
@@ -2625,7 +2629,7 @@
       "target": "backend/scripts/validate_test_lane_evidence.py"
     }
   ],
-  "authority_digest": "84602ecd36037090ed183474d7020b1a046c316f77ea4963ef6be9e64d80d481",
+  "authority_digest": "c998d25cd6131292cb0dff169ed651698c2b84daaebe2e6761cf5333cb094545",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }
