@@ -640,6 +640,6 @@
     "method": "GET",
     "openapi_version": "3.1.0",
     "path": "/api/v1/tasks/{task_id}",
-    "repository_sha": "b0f4d7189192c5aa21cf30a1ec34baddbe4903ba"
+    "repository_sha": "f5d795910be6f5e8256d7261857de1ce82f2fa39"
   }
 }
