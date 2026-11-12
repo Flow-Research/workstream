@@ -9,7 +9,7 @@ from typing import Protocol
 
 from app.interfaces.external_services import ExternalServiceAdapter
 from app.modules.checkers.api.selected_pre_submit import (
-    SelectedPreSubmitLeaseFacts, SelectedPreSubmitExecutionFacts,
+    SelectedPreSubmitLeaseFacts, SelectedPreSubmitInvocationResult,
 )
 from app.modules.checkers.api.forge_locator import ExternalCheckerForgeLocator
 from app.modules.checkers.api.external import (
@@ -168,7 +168,7 @@ class ExternalCheckerExecutionAdapter(ExternalServiceAdapter, Protocol):
 
     async def execute_pre(
         self, lease: SelectedPreSubmitLeaseFacts, grant: ExternalPreSubmitSourceGrant,
-    ) -> SelectedPreSubmitExecutionFacts:
+    ) -> SelectedPreSubmitInvocationResult:
         """Run source verification, defaults and selected project in one session."""
 
     async def locate_forge_change(

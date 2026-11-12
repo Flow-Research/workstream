@@ -37,7 +37,7 @@ from app.modules.checkers.api.external import (
 )
 
 from app.modules.checkers.api.selected_pre_submit import (
-    SelectedPreSubmitLeaseFacts, SelectedPreSubmitExecutionFacts,
+    SelectedPreSubmitLeaseFacts, SelectedPreSubmitInvocationResult,
     SelectedPreSubmitInfrastructureUnavailable,
 )
 
@@ -80,7 +80,7 @@ class UnixSocketExternalCheckerAdapter:
 
     async def execute_pre(
         self, lease: SelectedPreSubmitLeaseFacts, grant: ExternalPreSubmitSourceGrant,
-    ) -> SelectedPreSubmitExecutionFacts:
+    ) -> SelectedPreSubmitInvocationResult:
         """Stream authorized source bytes into one PRE call without a host spool."""
         try:
             if type(lease) is not SelectedPreSubmitLeaseFacts:
@@ -133,7 +133,13 @@ class UnixSocketExternalCheckerAdapter:
                 finally:
                     writer.close()
                     await await_cancellation_resistant(writer.wait_closed())
-            result = SelectedPreSubmitExecutionFacts.from_canonical_body(json.loads(raw))
+            body = json.loads(raw)
+            if type(body) is not dict or "adapter_provider_key" in body:
+                raise ValueError("PRE provider context is invalid")
+            body["adapter_provider_key"] = self.identity.provider_key
+            result = SelectedPreSubmitInvocationResult.from_canonical_body(body)
+            if result.receipt.runtime.provider != "smolvm":
+                raise ValueError("PRE runtime provider differs")
             result.validate_lease(lease)
             if (asyncio.get_running_loop().time() >= deadline
                     or datetime.now(timezone.utc) >= lease.lease_expires_at):

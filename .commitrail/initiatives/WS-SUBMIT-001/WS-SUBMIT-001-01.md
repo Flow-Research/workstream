@@ -2283,3 +2283,26 @@ Plan-review resolutions:
   the serializer/test fixture files to scope; no fake native Machine creation
   or qualification is claimed. A received infrastructure receipt with pending
   cleanup must be retained, not collapsed into a code-only exception.
+
+Receipt implementation now carries typed provider observations through the PRE
+adapter, processor, ART foreground owner and AUTH-bound terminal v3. Migration
+0072 adds a locked in-flight drain check, receipt guards and version-sensitive
+finalization digest; 0071 is unchanged. Source-first coordination contract tests
+pass (51), as do receipt substitution/timing/outcome, retained-read and managed
+port tests (35), and single-PRE socket tests (12). These are portable contract proofs, not native qualification.
+The migration applies to isolated PostgreSQL; all 12 SQL digest-parity and
+receipt-substitution probes pass. The broader source integration run passes
+41 cases, with a six-case affected replay after fixture extraction and addition
+of received-failure retention. The actual migration entry refuses queued and running source
+runs without row changes. A shared synthetic fixture matches the production Rust
+response serializer and Python decoder; 53 selected Smol tests and the live
+Python/Rust worker dialogue pass. None of these portable checks qualifies native
+VM operation. The real-ZIP database test initially expected a removed prepared
+handoff capability; source finalization correctly supplies no such capability.
+The corrected proof checks eligible worker facts and exact retained receipts,
+leaving T4 acceptance explicitly open. The six-case replay proves both completed real-ZIP receipt persistence and
+received infrastructure receipts with pending cleanup. Python also decodes the
+actual bytes emitted by the production Rust serializer in a separate portable
+probe. Structural validation and Markdown links pass. Implementation review
+remains required; public submission/acceptance and native qualification remain
+outstanding parts of the overall objective.

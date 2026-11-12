@@ -1120,7 +1120,7 @@ async def test_public_trace_preserves_execution_arguments(monkeypatch, tmp_path,
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("changed", [None, "source_hash", "source_short", "source_long", "result_fence", "trailing", "chunk_oversized", "slow_decode"])
+@pytest.mark.parametrize("changed", [None, "source_hash", "source_short", "source_long", "result_fence", "trailing", "chunk_oversized", "slow_decode", "managed_runtime", "provider_from_wire"])
 async def test_single_pre_transport_streams_source_and_validates_combined_result(tmp_path, monkeypatch, changed):
     from dataclasses import replace
     from app.modules.checkers.api.selected_pre_submit import SelectedPreSubmitLeaseFacts
@@ -1140,9 +1140,14 @@ async def test_single_pre_transport_streams_source_and_validates_combined_result
     lease = SelectedPreSubmitLeaseFacts(
         reservation, execution.lease_id, execution.lease_generation, reservation.pre_deadline_at,
     )
-    body = execution.canonical_body()
+    from tests.checkers.external.test_pre_invocation import receipt_body
+    body = receipt_body(lease, managed=changed == "managed_runtime")
+    body.pop("adapter_provider_key")
+    if changed == "provider_from_wire":
+        body["adapter_provider_key"] = "unix_socket"
+    body["execution"] = execution.canonical_body()
     if changed == "result_fence":
-        body["lease_generation"] += 1
+        body["invocation"]["lease_generation"] += 1
     received = bytearray()
     sizes = []
     finished = asyncio.Event()
@@ -1209,7 +1214,7 @@ async def test_single_pre_transport_streams_source_and_validates_combined_result
     processor = SelectedPreSubmitProcessor(lease=lease, execution=adapter)
     try:
         if changed is None:
-            assert await processor.process(grant) == execution
+            assert (await processor.process(grant)).execution == execution
             assert bytes(received) == payload
             assert sizes and max(sizes) <= 64 * 1024
             with pytest.raises(SelectedPreSubmitInfrastructureUnavailable, match="material_unavailable"):

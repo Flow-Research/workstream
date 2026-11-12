@@ -13,7 +13,7 @@ from app.interfaces.external_services import (
     ExternalServiceUnavailableError,
 )
 from app.modules.checkers.api.selected_pre_submit import (
-    SelectedPreSubmitExecutionFacts,
+    SelectedPreSubmitInvocationResult,
     SelectedPreSubmitInfrastructureUnavailable,
     SelectedPreSubmitLeaseFacts,
 )
@@ -37,7 +37,7 @@ class SelectedPreSubmitProcessor:
         if self._active is not None:
             self._active.cancel()
 
-    async def process(self, grant: ExternalPreSubmitSourceGrant) -> SelectedPreSubmitExecutionFacts:
+    async def process(self, grant: ExternalPreSubmitSourceGrant) -> SelectedPreSubmitInvocationResult:
         """Validate returned source, fence and derived requests before finalization."""
         if self._aborted:
             raise asyncio.CancelledError
@@ -49,9 +49,13 @@ class SelectedPreSubmitProcessor:
             # Track it for abort without delegating source custody to a child.
             self._active = asyncio.current_task()
             result = await self._execution.execute_pre(self._lease, grant)
-            if type(result) is not SelectedPreSubmitExecutionFacts:
+            if type(result) is not SelectedPreSubmitInvocationResult:
                 raise ValueError("PRE result is invalid")
             result.validate_lease(self._lease)
+            if result.receipt.adapter_provider_key != self._execution.identity.provider_key:
+                raise ValueError("PRE provider differs")
+            if result.receipt.outcome == "cancelled":
+                raise asyncio.CancelledError
             return result
         except ExternalServiceUnavailableError as exc:
             raise SelectedPreSubmitInfrastructureUnavailable("implementation_unavailable") from exc

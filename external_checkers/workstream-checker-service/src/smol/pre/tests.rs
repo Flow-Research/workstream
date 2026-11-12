@@ -247,3 +247,30 @@ fn pre_creation_persists_binding_before_guardian_or_runtime() {
     );
     fs::remove_dir_all(root).unwrap();
 }
+
+#[test]
+fn production_serializer_matches_python_receipt_fixture() {
+    // Synthetic provider observations: this proves the shared wire contract,
+    // not Machine creation, isolation, or cleanup on this host.
+    let document: Value = serde_json::from_str(include_str!(
+        "../../../tests/fixtures/pre_invocation.json"
+    )).unwrap();
+    let expected = &document["wire"];
+    let (root, _config, mut lease, _journal) = fixture();
+    lease.name = expected["provider_invocation_id"].as_str().unwrap().into();
+    lease.runtime.binary_sha256 = expected["runtime"]["binary_sha256"].as_str().unwrap().into();
+    lease.runtime.guest_sha256 = expected["runtime"]["guest_sha256"].as_str().unwrap().into();
+    let invocation: Invocation = serde_json::from_value(expected["invocation"].clone()).unwrap();
+    let bytes = serialize_response(
+        &invocation, &lease, &expected["runtime"]["profile"],
+        ("completed", Value::Null, expected["execution"].clone()),
+        [1, 2, 3, 4, 10],
+        (expected["cleanup"]["journal_sha256"].as_str().unwrap(), true),
+    ).unwrap();
+    assert_eq!(serde_json::from_slice::<Value>(&bytes).unwrap(), *expected);
+    if let Some(path) = std::env::var_os("WORKSTREAM_PRE_RECEIPT_WIRE_FILE") {
+        // Explicit local cross-language proof consumes these actual Rust bytes.
+        fs::write(path, &bytes).unwrap();
+    }
+    fs::remove_dir_all(root).unwrap();
+}

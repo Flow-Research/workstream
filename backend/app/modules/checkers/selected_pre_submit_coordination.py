@@ -21,6 +21,7 @@ from app.modules.checkers.api.selected_pre_submit import (
     SelectedPreSubmitCurrentFacts,
     SelectedPreSubmitExecuteFacts,
     SelectedPreSubmitExecutionFacts,
+    SelectedPreSubmitInvocationReceipt,
     SelectedPreSubmitFinalizeFacts,
     SelectedPreSubmitLeaseFacts,
     SelectedPreSubmitReservationFacts,
@@ -29,6 +30,7 @@ from app.modules.checkers.api.selected_pre_submit import (
     SelectedPreSubmitUnavailable,
 )
 from app.modules.checkers.models import SelectedPreSubmitRun
+from app.modules.checkers.selected_pre_submit_records import matches_source_request
 
 
 class SelectedPreSubmitTaskGuard(Protocol):
@@ -183,27 +185,6 @@ def _require_root(session: AsyncSession) -> None:
         raise RuntimeError("selected PRE coordination requires one root transaction")
 
 
-def _matches(row: SelectedPreSubmitRun, facts: SelectedPreSubmitReservationFacts) -> bool:
-    return (
-        row.request_json == facts.canonical_body()
-        and row.request_digest == facts.request_digest
-        and row.id == str(facts.attempt_id)
-        and row.actor_profile_id == str(facts.actor_profile_id)
-        and row.identity_link_id == str(facts.identity_link_id)
-        and row.project_id == str(facts.project_id)
-        and row.task_id == str(facts.task_id)
-        and row.assignment_id == str(facts.assignment_id)
-        and row.idempotency_key == str(facts.idempotency_key)
-        and row.source_operation_id == str(facts.source.location.operation_id)
-        and row.prepared_generation_id is None
-        and row.policy_sha256 == facts.policy_sha256
-        and row.default_behavior_sha256 == facts.default_behavior_sha256
-        and row.default_input_sha256 is None
-        and row.archive_sha256 == facts.archive_sha256
-        and row.archive_byte_count == facts.archive_byte_count
-        and row.semantic_manifest_sha256 is None
-        and row.execution_budget_ms == facts.execution_budget_ms
-    )
 
 
 class SelectedPreSubmitCoordinator:
@@ -245,6 +226,8 @@ class SelectedPreSubmitCoordinator:
             return None
         if row.request_json.get("schema_version") != "workstream.selected_pre_submit_reservation.v2":
             raise SelectedPreSubmitRequestConflict("selected_pre_submit_request_conflict")
+        if row.terminal_json is not None and row.terminal_json.get("schema_version") != "workstream.selected_pre_submit_terminal.v3":
+            raise SelectedPreSubmitRequestConflict("selected_pre_submit_request_conflict")
         try:
             stored = SelectedPreSubmitReservationFacts.from_canonical_body(
                 row.request_json
@@ -264,7 +247,7 @@ class SelectedPreSubmitCoordinator:
             ) from None
         if (
             normalized != stored
-            or not _matches(row, stored)
+            or not matches_source_request(row, stored)
             or row.request_digest != stored.request_digest
             or (
                 terminal is not None
@@ -315,7 +298,7 @@ class SelectedPreSubmitCoordinator:
             .execution_options(populate_existing=True)
         )
         if row is not None:
-            if not _matches(row, facts):
+            if not matches_source_request(row, facts):
                 raise SelectedPreSubmitUnavailable("selected_pre_submit_request_conflict")
             return UUID(row.id)
         row = SelectedPreSubmitRun(
@@ -441,6 +424,7 @@ class SelectedPreSubmitCoordinator:
         lease: SelectedPreSubmitLeaseFacts,
         authority: PreparedSelectedPreSubmitFinalization,
         execution: SelectedPreSubmitExecutionFacts | None,
+        invocation_receipt: SelectedPreSubmitInvocationReceipt | None,
         infrastructure_failure_code: str | None,
     ) -> SelectedPreSubmitCompletion:
         """Fence the lease and persist one exact terminal value under fresh TASK custody."""
@@ -461,6 +445,7 @@ class SelectedPreSubmitCoordinator:
         finalize_facts = SelectedPreSubmitFinalizeFacts(
             lease=lease,
             execution=execution,
+            invocation_receipt=invocation_receipt,
             infrastructure_failure_code=infrastructure_failure_code,
         )
         evidence = await authority.consume(finalize_facts)
@@ -470,6 +455,7 @@ class SelectedPreSubmitCoordinator:
             lease=lease,
             outcome=outcome,
             execution=execution,
+            invocation_receipt=invocation_receipt,
             infrastructure_failure_code=infrastructure_failure_code,
             queued_at=row.queued_at,
             started_at=row.started_at,
@@ -526,7 +512,7 @@ class SelectedPreSubmitCoordinator:
             .with_for_update()
             .execution_options(populate_existing=True)
         )
-        if row is None or not _matches(row, facts):
+        if row is None or not matches_source_request(row, facts):
             raise SelectedPreSubmitUnavailable("selected_pre_submit_run_unavailable")
         return row
 

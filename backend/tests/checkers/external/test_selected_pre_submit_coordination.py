@@ -825,6 +825,14 @@ def test_source_first_profile_rejects_archive_time_beyond_aggregate() -> None:
         }))
 
 
+def _source_receipt(lease):
+    import json
+    from app.modules.checkers.api.selected_pre_submit import SelectedPreSubmitInvocationReceipt
+    from tests.checkers.external.test_pre_invocation import receipt_body
+
+    return SelectedPreSubmitInvocationReceipt.model_validate_json(json.dumps(receipt_body(lease)))
+
+
 def _source_completed_execution(reservation):
     """Build structural result evidence; this fixture does not attest a runtime."""
     from app.modules.checkers.api.selected_pre_submit import (
@@ -863,7 +871,8 @@ def _source_completed_execution(reservation):
             registry_entry_digest=selected.registry.entry_digest, request_digest=request.request_digest,
             result=result, isolation=ExternalPreSubmitIsolationFacts(**(
                 old["external_members"][0]["isolation"] |
-                {"platform_manifest_digest": selected.registry.image_digest}
+                {"platform_manifest_digest": selected.registry.image_digest,
+                 "runtime": "smolvm", "isolation_mode": "smol-microvm"}
             )),
         ),),
     )
@@ -905,9 +914,9 @@ def test_source_first_finalization_binds_actual_selected_member(changed):
         lease_expires_at=reservation.pre_deadline_at,
     )
     def finalize():
-        return SelectedPreSubmitFinalizeFacts(lease, execution, None)
+        return SelectedPreSubmitFinalizeFacts(lease, execution, _source_receipt(lease), None)
     def terminal():
-        return SelectedPreSubmitTerminalFacts(lease, "completed", execution, None, now, now, now)
+        return SelectedPreSubmitTerminalFacts(lease, "completed", execution, _source_receipt(lease), None, now, now, now)
     if changed is None:
         assert finalize().execution == execution
         value = terminal()
@@ -938,7 +947,7 @@ def test_source_first_default_rejection_does_not_require_project_result():
     lease = SelectedPreSubmitLeaseFacts(
         reservation, execution.lease_id, execution.lease_generation, reservation.pre_deadline_at,
     )
-    assert SelectedPreSubmitFinalizeFacts(lease, execution, None).execution == execution
+    assert SelectedPreSubmitFinalizeFacts(lease, execution, _source_receipt(lease), None).execution == execution
 
 
 @pytest.mark.parametrize("boundary", ["finalization", "terminal"])
@@ -956,9 +965,9 @@ def test_source_first_result_digest_revalidated_before_terminal_write(boundary):
     now = datetime.now(UTC)
     with pytest.raises(ValueError, match="result digest mismatch"):
         if boundary == "finalization":
-            SelectedPreSubmitFinalizeFacts(lease, execution, None)
+            SelectedPreSubmitFinalizeFacts(lease, execution, _source_receipt(lease), None)
         else:
-            SelectedPreSubmitTerminalFacts(lease, "completed", execution, None, now, now, now)
+            SelectedPreSubmitTerminalFacts(lease, "completed", execution, _source_receipt(lease), None, now, now, now)
 
 
 @pytest.mark.parametrize("changed", [
@@ -1012,7 +1021,7 @@ def test_source_first_completed_evidence_rejects_substitution(changed):
             member, request_digest=result.request_digest, result=result,
         ),))
     with pytest.raises(ValueError):
-        SelectedPreSubmitFinalizeFacts(lease, execution, None)
+        SelectedPreSubmitFinalizeFacts(lease, execution, _source_receipt(lease), None)
 
 
 @pytest.mark.parametrize("limit", ["maximum_entries", "maximum_path_bytes", "maximum_entry_bytes"])
@@ -1090,4 +1099,4 @@ def test_source_first_default_blocker_does_not_validate_unrun_project_schema(fai
         workstream_default=WorkstreamDefaultCheckerResult.model_validate(default),
         default_input_sha256=workstream_default_input_sha256(default_input), external_members=(), eligible=False,
     )
-    assert SelectedPreSubmitFinalizeFacts(lease, execution, None).execution == execution
+    assert SelectedPreSubmitFinalizeFacts(lease, execution, _source_receipt(lease), None).execution == execution

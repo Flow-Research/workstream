@@ -7,12 +7,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.checkers.api.selected_pre_submit import (
     SelectedPreSubmitRunStatus, SelectedPreSubmitRunView,
-    SelectedPreSubmitUnavailable,
+    SelectedPreSubmitUnavailable, SelectedPreSubmitReservationFacts,
+    SelectedPreSubmitTerminalFacts, HistoricalSourcePreSubmitTerminal, SelectedPreSubmitLeaseFacts,
 )
 from app.modules.checkers.api.historical_selected_pre_submit import (
     HistoricalSelectedPreSubmitReservation, HistoricalSelectedPreSubmitTerminal,
 )
 from app.modules.checkers.models import SelectedPreSubmitRun
+from app.modules.checkers.selected_pre_submit_records import matches_source_request
 
 
 def _request_matches(row: SelectedPreSubmitRun, request: HistoricalSelectedPreSubmitReservation) -> bool:
@@ -39,6 +41,20 @@ def _request_matches(row: SelectedPreSubmitRun, request: HistoricalSelectedPreSu
 def _terminal_matches(row: SelectedPreSubmitRun, request, terminal) -> bool:
     """Check retained outcome/lease/timing without conferring current liveness."""
     if terminal is None:
+        if type(request) is SelectedPreSubmitReservationFacts:
+            if row.finalize_evidence_id is not None:
+                return False
+            if row.status == "queued":
+                if (row.lease_id is not None or row.lease_generation != 0
+                        or row.lease_expires_at is not None or row.started_at is not None
+                        or row.execute_evidence_id is not None):
+                    return False
+            elif row.status == "running":
+                SelectedPreSubmitLeaseFacts(request, UUID(str(row.lease_id)),
+                                            row.lease_generation, row.lease_expires_at)
+                if (row.execute_evidence_id is None or row.started_at is None
+                        or not row.queued_at <= row.started_at <= row.lease_expires_at):
+                    return False
         return (
             row.status in {"queued", "running"} and row.terminal_digest is None
             and row.eligible is None and row.completed_at is None
@@ -58,14 +74,25 @@ def _terminal_matches(row: SelectedPreSubmitRun, request, terminal) -> bool:
 
 
 def _view(row: SelectedPreSubmitRun) -> SelectedPreSubmitRunView:
-    """Refuse any divergence between read selectors and retained v1 evidence."""
+    """Decode each retained schema and bind it to the indexed row without issuing authority."""
     try:
-        request = HistoricalSelectedPreSubmitReservation.from_canonical_body(row.request_json)
-        terminal = (
-            HistoricalSelectedPreSubmitTerminal.from_canonical_body(row.terminal_json)
-            if row.terminal_json is not None else None
-        )
-        if not _request_matches(row, request) or not _terminal_matches(row, request, terminal):
+        if (type(row.request_json) is not dict
+                or (row.terminal_json is not None and type(row.terminal_json) is not dict)):
+            raise ValueError("retained PRE body is invalid")
+        if row.request_json.get("schema_version") == "workstream.selected_pre_submit_reservation.v1":
+            request = HistoricalSelectedPreSubmitReservation.from_canonical_body(row.request_json)
+            terminal = HistoricalSelectedPreSubmitTerminal.from_canonical_body(row.terminal_json) if row.terminal_json is not None else None
+            request_matches = _request_matches(row, request)
+        else:
+            request = SelectedPreSubmitReservationFacts.from_canonical_body(row.request_json)
+            if row.terminal_json is None:
+                terminal = None
+            elif row.terminal_json.get("schema_version") == "workstream.selected_pre_submit_terminal.v2":
+                terminal = HistoricalSourcePreSubmitTerminal.from_canonical_body(row.terminal_json)
+            else:
+                terminal = SelectedPreSubmitTerminalFacts.from_canonical_body(row.terminal_json)
+            request_matches = matches_source_request(row, request)
+        if not request_matches or not _terminal_matches(row, request, terminal):
             raise ValueError("retained PRE columns differ")
     except (KeyError, TypeError, ValueError):
         raise SelectedPreSubmitUnavailable("selected_pre_submit_stored_facts_invalid") from None

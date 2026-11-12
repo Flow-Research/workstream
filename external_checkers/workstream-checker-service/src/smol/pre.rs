@@ -120,16 +120,13 @@ pub(crate) fn serve(
     };
     // Host custody stays outside the worker payload. The backend must retain
     // this invocation envelope along with the typed checker facts at T4.
-    let response = serde_json::json!({
-        "schema_version":"workstream.pre_submit_invocation.v1", "operation":"execute_pre", "phase":"pre_submit",
-        "invocation":prepared.invocation,"provider_invocation_id":machine.lease.name,
-        "outcome":outcome,"reason":reason,"execution":execution,
-        "runtime":{"provider":"smolvm","version":VERSION,"binary_sha256":machine.lease.runtime.binary_sha256,
-            "guest_sha256":machine.lease.runtime.guest_sha256,"profile":prepared.job.startup["request"]["reservation"]["runtime_profile"]},
-        "timings_ms":{"admission":admission_ms,"preparation":preparation_ms,"execution":execution_ms,"cleanup":cleanup_ms,"total":started.elapsed().as_millis() as u64},
-        "cleanup":{"obligation_id":machine.lease.name,"journal_sha256":journal_sha256,"disposition":if destroyed {"destroyed"} else {"pending"}}
-    });
-    let response = serde_json::to_vec(&response).map_err(|_| "PRE response invalid")?;
+    let response = serialize_response(
+        &prepared.invocation, &machine.lease,
+        &prepared.job.startup["request"]["reservation"]["runtime_profile"],
+        (outcome, reason, execution),
+        [admission_ms, preparation_ms, execution_ms, cleanup_ms, started.elapsed().as_millis() as u64],
+        (&journal_sha256, destroyed),
+    )?;
     let sent = if response.len() <= 64 * 1024 * 1024
         && Instant::now() < deadline
         && client_is_connected(&client)
@@ -145,6 +142,27 @@ pub(crate) fn serve(
     } else {
         sent
     }
+}
+
+/// Keep provider custody outside worker facts; portable wire proof uses this serializer.
+fn serialize_response(
+    invocation: &Invocation,
+    lease: &Lease,
+    profile: &Value,
+    result: (&str, Value, Value),
+    timings: [u64; 5],
+    cleanup: (&str, bool),
+) -> Result<Vec<u8>, String> {
+    let response = serde_json::json!({
+        "schema_version":"workstream.pre_submit_invocation.v1", "operation":"execute_pre", "phase":"pre_submit",
+        "invocation":invocation,"provider_invocation_id":lease.name,
+        "outcome":result.0,"reason":result.1,"execution":result.2,
+        "runtime":{"provider":"smolvm","version":VERSION,"binary_sha256":lease.runtime.binary_sha256,
+            "guest_sha256":lease.runtime.guest_sha256,"profile":profile},
+        "timings_ms":{"admission":timings[0],"preparation":timings[1],"execution":timings[2],"cleanup":timings[3],"total":timings[4]},
+        "cleanup":{"obligation_id":lease.name,"journal_sha256":cleanup.0,"disposition":if cleanup.1 {"destroyed"} else {"pending"}}
+    });
+    serde_json::to_vec(&response).map_err(|_| "PRE response invalid".into())
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]

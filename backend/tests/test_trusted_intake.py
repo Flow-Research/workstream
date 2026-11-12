@@ -407,27 +407,35 @@ def test_worker_rejects_preparation_size_substitution_before_inspection(tmp_path
 
 
 
-def _pre_worker(tmp_path, data, *, extra_startup=None, stored_data=None, result_change=None, reservation_change=None):
+def _pre_worker(tmp_path, data, *, extra_startup=None, stored_data=None, result_change=None, reservation_change=None, lease=None, isolation_override=None):
     """Real ZIP/worker with simulated supervisor project result; no VM claim."""
     from app.modules.checkers.api.external import make_external_checker_execution_result
     from app.modules.checkers.api.selected_pre_submit import SelectedPreSubmitLeaseFacts
     from tests.checkers.external.test_selected_pre_submit_coordination import _source_reservation, _retained_v1
 
-    reservation = _source_reservation()
-    reservation = replace(reservation, source=reservation.source.model_copy(update={
-        "raw_sha256": "sha256:" + hashlib.sha256(data).hexdigest(), "raw_byte_count": len(data),
-    }))
-    if reservation_change:
-        reservation = reservation_change(reservation)
-    lease = SelectedPreSubmitLeaseFacts(reservation, new_record_id(), 1, reservation.pre_deadline_at)
+    if lease is None:
+        reservation = _source_reservation()
+        reservation = replace(reservation, source=reservation.source.model_copy(update={
+            "raw_sha256": "sha256:" + hashlib.sha256(data).hexdigest(), "raw_byte_count": len(data),
+        }))
+        if reservation_change:
+            reservation = reservation_change(reservation)
+        lease = SelectedPreSubmitLeaseFacts(reservation, new_record_id(), 1, reservation.pre_deadline_at)
+    else:
+        assert reservation_change is None
+        reservation = lease.reservation
+        assert reservation.source.raw_sha256 == "sha256:" + hashlib.sha256(data).hexdigest()
+        assert reservation.source.raw_byte_count == len(data)
     startup = {"operation": "execute_pre", "request": {
         "protocol_version": "external_checker_service.v1", "operation": "execute_pre",
         "reservation": reservation.canonical_body(), "request_digest": reservation.request_digest,
-        "lease_id": str(lease.lease_id), "lease_generation": 1,
+        "lease_id": str(lease.lease_id), "lease_generation": lease.lease_generation,
         "lease_expires_at": lease.lease_expires_at.isoformat(),
     }, "isolation": _retained_v1("selected_pre_v1_completed")["terminal"]["execution"]["external_members"][0]["isolation"] | {
         "platform_manifest_digest": reservation.policy.entries[0].registry.image_digest,
     }}
+    if isolation_override:
+        startup["isolation"].update(isolation_override)
     if extra_startup:
         startup["request"].update(extra_startup)
     archive = tmp_path / "pre.zip"
@@ -456,7 +464,7 @@ def _pre_worker(tmp_path, data, *, extra_startup=None, stored_data=None, result_
                     verdict="passed", findings=(), infrastructure_failure_code=None,
                 ).model_dump(mode="json")
                 body = {"request_digest": reservation.request_digest, "lease_id": str(lease.lease_id),
-                        "lease_generation": 1, "result": result}
+                        "lease_generation": lease.lease_generation, "result": result}
                 if result_change:
                     result_change(body)
                 self.reply = BytesIO(_frame(body))

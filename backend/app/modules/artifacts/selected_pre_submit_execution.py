@@ -26,7 +26,7 @@ from app.modules.tasks.api.submission_context import TaskSubmissionContextUnavai
 from app.modules.checkers.api.selected_pre_submit import (
     SelectedPreSubmitAuthorityPort, SelectedPreSubmitCompletion,
     SelectedPreSubmitCoordinationPort, SelectedPreSubmitExecutionAuthority,
-    SelectedPreSubmitExecutionFacts, SelectedPreSubmitFinalizeFacts,
+    SelectedPreSubmitInvocationResult, SelectedPreSubmitFinalizeFacts,
     SelectedPreSubmitInfrastructureUnavailable, SelectedPreSubmitLeaseFacts,
     SelectedPreSubmitReservationFacts,
 )
@@ -43,7 +43,7 @@ class PreSubmitSourceReadAuthorization(Protocol):
 class PreSubmitProcessor(Protocol):
     """CHECKERS processor composed through its existing adapter factory."""
 
-    async def process(self, grant: ExternalPreSubmitSourceGrant) -> SelectedPreSubmitExecutionFacts: ...
+    async def process(self, grant: ExternalPreSubmitSourceGrant) -> SelectedPreSubmitInvocationResult: ...
 
 
 class PreSubmitExecutionFactory(Protocol):
@@ -208,19 +208,25 @@ class SelectedPreSubmitExecutionService:
             async with self._authority.prepare_execution(reservation) as prepared:
                 lease = await self._coordinator.claim(run_id=run_id, facts=reservation, authority=prepared)
         execution = None
+        receipt = None
         failure = None
         try:
             capability = await self._coordinator.committed_execution(run_id=run_id, lease=lease)
             async with self._source_reads.issue(lease=lease, execution_authority=capability) as grant:
-                execution = await self._execution.build(lease).process(grant)
+                result = await self._execution.build(lease).process(grant)
+                result.validate_lease(lease)
+                if result.receipt.outcome == "cancelled":
+                    raise asyncio.CancelledError
+                execution, receipt = result.execution, result.receipt
+                failure = receipt.reason if execution is None else None
         except SelectedPreSubmitInfrastructureUnavailable as exc:
             failure = exc.code
-        facts = SelectedPreSubmitFinalizeFacts(lease=lease, execution=execution, infrastructure_failure_code=failure)
+        facts = SelectedPreSubmitFinalizeFacts(lease=lease, execution=execution, invocation_receipt=receipt, infrastructure_failure_code=failure)
         async with self._session.begin():
             async with self._authority.prepare_finalization(facts) as prepared:
                 return await self._coordinator.finalize(
                     run_id=run_id, lease=lease, authority=prepared, execution=execution,
-                    infrastructure_failure_code=failure,
+                    infrastructure_failure_code=failure, invocation_receipt=receipt,
                 )
 
 

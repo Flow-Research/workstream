@@ -5,12 +5,12 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta, timezone
 from contextlib import AbstractAsyncContextManager
-from typing import Literal, Protocol
+from typing import Annotated, Literal, Protocol
 from uuid import UUID
 
 import json
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.core.hashing import canonical_json_hash
 from app.modules.artifacts.api.submission_intake import SealedSubmissionSource
@@ -246,6 +246,24 @@ class ExternalPreSubmitIsolationFacts:
 
 
 @dataclass(frozen=True, slots=True)
+class ExternalPreSubmitManagedIsolationFacts:
+    """Managed provider observation without local sandbox identifiers."""
+
+    provider: Literal["managed"]
+    platform_manifest_digest: str
+    config_image_id: str
+    deployment_sha256: str
+
+    def __post_init__(self) -> None:
+        if self.provider != "managed" or any(
+            type(value) is not str or len(value) != 71 or not value.startswith("sha256:")
+            or any(character not in "0123456789abcdef" for character in value[7:])
+            for value in (self.platform_manifest_digest, self.config_image_id, self.deployment_sha256)
+        ):
+            raise ValueError("managed PRE isolation is invalid")
+
+
+@dataclass(frozen=True, slots=True)
 class ExternalPreSubmitMemberFacts:
     """One completed required project PRE image in canonical policy order."""
 
@@ -255,7 +273,7 @@ class ExternalPreSubmitMemberFacts:
     registry_entry_digest: str
     request_digest: str
     result: ExternalCheckerExecutionResult
-    isolation: ExternalPreSubmitIsolationFacts
+    isolation: ExternalPreSubmitIsolationFacts | ExternalPreSubmitManagedIsolationFacts
 
     def __post_init__(self) -> None:
         if (
@@ -447,7 +465,9 @@ class SelectedPreSubmitExecutionFacts:
                         item["result"]
                         | {"registry_entry_id": UUID(str(item["result"]["registry_entry_id"]))}
                     ),
-                    isolation=ExternalPreSubmitIsolationFacts(**item["isolation"]),
+                    isolation=(ExternalPreSubmitManagedIsolationFacts(**item["isolation"])
+                               if item["isolation"].get("provider") == "managed"
+                               else ExternalPreSubmitIsolationFacts(**item["isolation"])),
                 )
                 for item in members
             ),
@@ -723,6 +743,168 @@ def derive_selected_pre_submit_input(
     return value, request
 
 
+_ReceiptDigest = Annotated[str, Field(pattern=r"^sha256:[0-9a-f]{64}$")]
+_ReceiptId = Annotated[str, Field(pattern=r"^[a-zA-Z0-9][a-zA-Z0-9._:/-]{0,254}$")]
+_ReceiptUUID = Annotated[str, Field(pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")]
+_ReceiptMilliseconds = Annotated[int, Field(ge=0, le=14_400_000)]
+
+
+class _PreReceiptValue(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+
+
+class _PreInvocationIdentity(_PreReceiptValue):
+    operation: Literal["execute_pre"]
+    run_id: _ReceiptUUID
+    source_operation_id: _ReceiptUUID
+    request_digest: _ReceiptDigest
+    source_sha256: _ReceiptDigest
+    profile_sha256: _ReceiptDigest
+    image_digest: _ReceiptDigest
+    config_image_id: _ReceiptDigest
+    lease_id: _ReceiptUUID
+    lease_generation: int = Field(gt=0)
+
+
+class _NativePreRuntime(_PreReceiptValue):
+    provider: Literal["smolvm"]
+    version: str = Field(min_length=1, max_length=100)
+    binary_sha256: _ReceiptDigest
+    guest_sha256: _ReceiptDigest
+    profile: SelectedPreSubmitRuntimeProfile
+
+
+class _ManagedPreRuntime(_PreReceiptValue):
+    provider: Literal["managed"]
+    version: str = Field(min_length=1, max_length=100)
+    deployment_sha256: _ReceiptDigest
+    profile: SelectedPreSubmitRuntimeProfile
+
+
+class _NativePreCleanup(_PreReceiptValue):
+    obligation_id: _ReceiptId
+    journal_sha256: _ReceiptDigest
+    disposition: Literal["destroyed", "pending"]
+
+
+class _ManagedPreCleanup(_PreReceiptValue):
+    obligation_id: _ReceiptId
+    provider_receipt_sha256: _ReceiptDigest
+    disposition: Literal["destroyed", "pending"]
+
+
+class _PreStageTimings(_PreReceiptValue):
+    admission: _ReceiptMilliseconds
+    preparation: _ReceiptMilliseconds
+    execution: _ReceiptMilliseconds
+    cleanup: _ReceiptMilliseconds
+    total: _ReceiptMilliseconds
+
+
+class SelectedPreSubmitInvocationReceipt(_PreReceiptValue):
+    """Bound provider observations; structural validity is not qualification."""
+
+    schema_version: Literal["workstream.pre_submit_invocation.v1"]
+    adapter_provider_key: str = Field(pattern=r"^[a-z][a-z0-9_]{0,63}$")
+    operation: Literal["execute_pre"]
+    phase: Literal["pre_submit"]
+    invocation: _PreInvocationIdentity
+    provider_invocation_id: _ReceiptId
+    outcome: Literal["completed", "infrastructure_failure", "deadline_exceeded", "cancelled"]
+    reason: Literal["capacity_exceeded", "deadline_exceeded", "material_unavailable",
+                    "implementation_unavailable", "invalid_output", "cancelled"] | None
+    runtime: Annotated[_NativePreRuntime | _ManagedPreRuntime, Field(discriminator="provider")]
+    timings_ms: _PreStageTimings
+    cleanup: _NativePreCleanup | _ManagedPreCleanup
+
+    @model_validator(mode="after")
+    def validate_observations(self):
+        if ((self.outcome == "completed" and self.reason is not None)
+                or (self.outcome == "infrastructure_failure" and self.reason not in {
+                    "capacity_exceeded", "material_unavailable", "implementation_unavailable", "invalid_output"})
+                or (self.outcome in {"deadline_exceeded", "cancelled"} and self.reason != self.outcome)):
+            raise ValueError("PRE invocation outcome differs")
+        if ((self.runtime.provider == "smolvm") != (type(self.cleanup) is _NativePreCleanup)
+                or (self.runtime.provider == "smolvm" and self.cleanup.obligation_id != self.provider_invocation_id)):
+            raise ValueError("PRE cleanup authority differs")
+        timings = self.timings_ms
+        if (timings.admission + timings.preparation + timings.execution + timings.cleanup > timings.total
+                or timings.total > self.runtime.profile.aggregate_deadline_ms
+                or self.invocation.profile_sha256 != canonical_json_hash(self.runtime.profile.model_dump(mode="json"))):
+            raise ValueError("PRE invocation profile or timing differs")
+        return self
+
+    def canonical_body(self) -> dict[str, object]:
+        """Retain all provider and cleanup facts without transport credentials."""
+        return self.model_dump(mode="json")
+
+    def validate_lease(self, lease: SelectedPreSubmitLeaseFacts) -> None:
+        """Revalidate even adapter-created model instances before trusting them."""
+        checked = type(self).model_validate_json(json.dumps(self.canonical_body(), allow_nan=False))
+        request, identity = lease.reservation, checked.invocation
+        if (identity.run_id != str(request.attempt_id)
+                or identity.source_operation_id != str(request.source.location.operation_id)
+                or identity.request_digest != request.request_digest
+                or identity.source_sha256 != request.source.source_sha256()
+                or identity.lease_id != str(lease.lease_id) or identity.lease_generation != lease.lease_generation
+                or identity.image_digest != request.policy.entries[0].registry.image_digest
+                or checked.runtime.profile != request.runtime_profile):
+            raise ValueError("PRE invocation lease differs")
+
+
+@dataclass(frozen=True, slots=True)
+class SelectedPreSubmitInvocationResult:
+    """A provider receipt paired with worker facts only for completed checks."""
+
+    receipt: SelectedPreSubmitInvocationReceipt
+    execution: SelectedPreSubmitExecutionFacts | None
+
+    def __post_init__(self) -> None:
+        if (type(self.receipt) is not SelectedPreSubmitInvocationReceipt
+                or (self.receipt.outcome == "completed") != (type(self.execution) is SelectedPreSubmitExecutionFacts)
+                or (self.execution is not None and type(self.execution) is not SelectedPreSubmitExecutionFacts)):
+            raise ValueError("PRE invocation result differs")
+
+    def validate_lease(self, lease: SelectedPreSubmitLeaseFacts) -> None:
+        self.__post_init__()
+        self.receipt.validate_lease(lease)
+        if self.execution is None:
+            return
+        self.execution.validate_lease(lease)
+        for member in self.execution.external_members:
+            isolation = member.isolation
+            if isolation.config_image_id != self.receipt.invocation.config_image_id:
+                raise ValueError("PRE observed image configuration differs")
+            if self.receipt.runtime.provider == "smolvm":
+                if (type(isolation) is not ExternalPreSubmitIsolationFacts
+                        or isolation.runtime != "smolvm" or isolation.isolation_mode != "smol-microvm"
+                        or type(isolation.sandbox_uid) is not int or isolation.sandbox_uid <= 0
+                        or type(isolation.sandbox_gid) is not int or isolation.sandbox_gid <= 0):
+                    raise ValueError("PRE observed runtime differs")
+            elif (type(isolation) is not ExternalPreSubmitManagedIsolationFacts
+                  or isolation.deployment_sha256 != self.receipt.runtime.deployment_sha256):
+                raise ValueError("PRE observed managed runtime differs")
+
+    def canonical_body(self) -> dict[str, object]:
+        return self.receipt.canonical_body() | {
+            "execution": self.execution.canonical_body() if self.execution is not None else None,
+        }
+
+    @classmethod
+    def from_canonical_body(cls, body: object) -> SelectedPreSubmitInvocationResult:
+        if type(body) is not dict or "execution" not in body:
+            raise ValueError("PRE invocation body is invalid")
+        receipt = dict(body)
+        execution = receipt.pop("execution")
+        value = cls(
+            receipt=SelectedPreSubmitInvocationReceipt.model_validate_json(json.dumps(receipt, allow_nan=False)),
+            execution=SelectedPreSubmitExecutionFacts.from_canonical_body(execution) if execution is not None else None,
+        )
+        if value.canonical_body() != body:
+            raise ValueError("PRE invocation body is not canonical")
+        return value
+
+
 class SelectedPreSubmitExecutionAuthority(Protocol):
     """Process-local capability for one committed durable PRE lease."""
 
@@ -781,6 +963,7 @@ class SelectedPreSubmitFinalizeFacts:
 
     lease: SelectedPreSubmitLeaseFacts
     execution: SelectedPreSubmitExecutionFacts | None
+    invocation_receipt: SelectedPreSubmitInvocationReceipt | None
     infrastructure_failure_code: str | None
 
     def __post_init__(self) -> None:
@@ -791,20 +974,26 @@ class SelectedPreSubmitFinalizeFacts:
         if self.execution is not None:
             if type(self.execution) is not SelectedPreSubmitExecutionFacts:
                 raise ValueError("selected PRE finalize execution is invalid")
-            self.execution.validate_lease(self.lease)
+            SelectedPreSubmitInvocationResult(self.invocation_receipt, self.execution).validate_lease(self.lease)
         else:
             SelectedPreSubmitInfrastructureUnavailable(self.infrastructure_failure_code or "")
+            if self.invocation_receipt is not None:
+                SelectedPreSubmitInvocationResult(self.invocation_receipt, None).validate_lease(self.lease)
+                if (self.invocation_receipt.outcome not in {"infrastructure_failure", "deadline_exceeded"}
+                        or self.invocation_receipt.reason != self.infrastructure_failure_code):
+                    raise ValueError("PRE infrastructure receipt differs")
 
     @property
     def facts_digest(self) -> str:
         """Bind the lease to either exact results or one closed infrastructure code."""
         return canonical_json_hash(
             {
-                "schema_version": "workstream.selected_pre_submit_finalize.v2",
+                "schema_version": "workstream.selected_pre_submit_finalize.v3",
                 "execute_facts_digest": SelectedPreSubmitExecuteFacts(self.lease).facts_digest,
                 "execution": (
                     self.execution.canonical_body() if self.execution is not None else None
                 ),
+                "invocation_receipt": self.invocation_receipt.canonical_body() if self.invocation_receipt is not None else None,
                 "infrastructure_failure_code": self.infrastructure_failure_code,
             }
         )
@@ -903,6 +1092,7 @@ class SelectedPreSubmitCoordinationPort(Protocol):
         lease: SelectedPreSubmitLeaseFacts,
         authority: PreparedSelectedPreSubmitFinalization,
         execution: SelectedPreSubmitExecutionFacts | None,
+        invocation_receipt: SelectedPreSubmitInvocationReceipt | None,
         infrastructure_failure_code: str | None,
     ) -> SelectedPreSubmitCompletion:
         """Persist one terminal result and return pass authority when eligible."""
@@ -911,6 +1101,130 @@ class SelectedPreSubmitCoordinationPort(Protocol):
 @dataclass(frozen=True, slots=True)
 class SelectedPreSubmitTerminalFacts:
     """Exact terminal value finalized under a fresh TASK-first transaction."""
+
+    lease: SelectedPreSubmitLeaseFacts
+    outcome: Literal["completed", "infrastructure_failed"]
+    execution: SelectedPreSubmitExecutionFacts | None
+    invocation_receipt: SelectedPreSubmitInvocationReceipt | None
+    infrastructure_failure_code: str | None
+    queued_at: datetime
+    started_at: datetime
+    completed_at: datetime
+
+    def __post_init__(self) -> None:
+        """Keep work findings separate from recoverable infrastructure outcomes."""
+        if type(self.lease) is not SelectedPreSubmitLeaseFacts:
+            raise ValueError("selected PRE terminal lease is invalid")
+        if any(
+            value.tzinfo is None
+            for value in (
+                self.queued_at,
+                self.started_at,
+                self.completed_at,
+            )
+        ) or not (self.queued_at <= self.started_at <= self.completed_at):
+            raise ValueError("selected PRE terminal timing is invalid")
+        SelectedPreSubmitFinalizeFacts(self.lease, self.execution, self.invocation_receipt, self.infrastructure_failure_code)
+        if self.outcome == "completed":
+            if (
+                type(self.execution) is not SelectedPreSubmitExecutionFacts
+                or self.infrastructure_failure_code is not None
+                or self.execution.policy_sha256 != self.lease.reservation.policy_sha256
+            ):
+                raise ValueError("selected PRE completed outcome is invalid")
+            self.execution.validate_lease(self.lease)
+        elif (self.outcome != "infrastructure_failed" or self.execution is not None
+              or self.infrastructure_failure_code not in {
+            "capacity_exceeded",
+            "deadline_exceeded",
+            "material_unavailable",
+            "implementation_unavailable",
+            "invalid_output",
+        }):
+            raise ValueError("selected PRE infrastructure outcome is invalid")
+
+    def canonical_body(self) -> dict[str, object]:
+        """Return persisted latency, lease and terminal facts without private paths."""
+        return {
+            "schema_version": "workstream.selected_pre_submit_terminal.v3",
+            "reservation": self.lease.reservation.canonical_body(),
+            "request_digest": self.lease.reservation.request_digest,
+            "lease_id": str(self.lease.lease_id),
+            "lease_generation": self.lease.lease_generation,
+            "lease_expires_at": self.lease.lease_expires_at.isoformat(),
+            "outcome": self.outcome,
+            "execution": self.execution.canonical_body() if self.execution else None,
+            "invocation_receipt": self.invocation_receipt.canonical_body() if self.invocation_receipt is not None else None,
+            "infrastructure_failure_code": self.infrastructure_failure_code,
+            "queued_at": self.queued_at.isoformat(),
+            "started_at": self.started_at.isoformat(),
+            "completed_at": self.completed_at.isoformat(),
+            "queue_latency_ms": (self.started_at - self.queued_at) // timedelta(milliseconds=1),
+            "execution_latency_ms": (self.completed_at - self.started_at) // timedelta(milliseconds=1),
+        }
+
+    @classmethod
+    def from_canonical_body(cls, body: object) -> SelectedPreSubmitTerminalFacts:
+        """Parse and revalidate every persisted lease, result and timing fact."""
+        if (
+            type(body) is not dict
+            or set(body)
+            != {
+                "schema_version",
+                "reservation",
+                "request_digest",
+                "lease_id",
+                "lease_generation",
+                "lease_expires_at",
+                "outcome",
+                "execution",
+                "invocation_receipt",
+                "infrastructure_failure_code",
+                "queued_at",
+                "started_at",
+                "completed_at",
+                "queue_latency_ms",
+                "execution_latency_ms",
+            }
+            or body["schema_version"] != "workstream.selected_pre_submit_terminal.v3"
+        ):
+            raise ValueError("selected PRE terminal facts are invalid")
+        reservation = SelectedPreSubmitReservationFacts.from_canonical_body(body["reservation"])
+        if body["request_digest"] != reservation.request_digest:
+            raise ValueError("selected PRE terminal request is invalid")
+        execution_body = body["execution"]
+        value = cls(
+            lease=SelectedPreSubmitLeaseFacts(
+                reservation=reservation,
+                lease_id=UUID(str(body["lease_id"])),
+                lease_generation=body["lease_generation"],
+                lease_expires_at=datetime.fromisoformat(body["lease_expires_at"]),
+            ),
+            outcome=body["outcome"],
+            execution=(
+                SelectedPreSubmitExecutionFacts.from_canonical_body(execution_body)
+                if execution_body is not None
+                else None
+            ),
+            invocation_receipt=(SelectedPreSubmitInvocationReceipt.model_validate_json(json.dumps(body["invocation_receipt"], allow_nan=False)) if body["invocation_receipt"] is not None else None),
+            infrastructure_failure_code=body["infrastructure_failure_code"],
+            queued_at=datetime.fromisoformat(body["queued_at"]),
+            started_at=datetime.fromisoformat(body["started_at"]),
+            completed_at=datetime.fromisoformat(body["completed_at"]),
+        )
+        if value.canonical_body() != body:
+            raise ValueError("selected PRE terminal facts are invalid")
+        return value
+
+    @property
+    def terminal_digest(self) -> str:
+        """Bind the exact terminal body used by replay and admission."""
+        return canonical_json_hash(self.canonical_body())
+
+
+@dataclass(frozen=True, slots=True)
+class HistoricalSourcePreSubmitTerminal:
+    """Read-only source-v2 terminal evidence; never current finalization authority."""
 
     lease: SelectedPreSubmitLeaseFacts
     outcome: Literal["completed", "infrastructure_failed"]
@@ -971,7 +1285,7 @@ class SelectedPreSubmitTerminalFacts:
         }
 
     @classmethod
-    def from_canonical_body(cls, body: object) -> SelectedPreSubmitTerminalFacts:
+    def from_canonical_body(cls, body: object) -> HistoricalSourcePreSubmitTerminal:
         """Parse and revalidate every persisted lease, result and timing fact."""
         if (
             type(body) is not dict
@@ -1105,7 +1419,7 @@ class SelectedPreSubmitRunView:
     archive_byte_count: int
     queued_at: datetime
     completed_at: datetime | None
-    terminal: SelectedPreSubmitTerminalFacts | HistoricalSelectedPreSubmitTerminal | None
+    terminal: SelectedPreSubmitTerminalFacts | HistoricalSourcePreSubmitTerminal | HistoricalSelectedPreSubmitTerminal | None
 
 
 class SelectedPreSubmitRunReadPort(Protocol):
@@ -1130,6 +1444,10 @@ __all__ = (
     "derive_selected_pre_submit_default_input",
     "derive_selected_pre_submit_input",
     "ExternalPreSubmitIsolationFacts",
+    "ExternalPreSubmitManagedIsolationFacts",
+    "HistoricalSourcePreSubmitTerminal",
+    "SelectedPreSubmitInvocationReceipt",
+    "SelectedPreSubmitInvocationResult",
     "ExternalPreSubmitMemberFacts",
     "PreparedSelectedPreSubmitExecution",
     "PreparedSelectedPreSubmitFinalization",

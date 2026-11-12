@@ -263,16 +263,20 @@ async def test_selected_pre_sql_requires_exact_live_source(intake, changed):
         await _assert_pre_terminal_guards(intake, request)
 
 
-@pytest.mark.parametrize("version", ["v1", "v2"])
+@pytest.mark.parametrize("version", ["v1", "v2", "v3"])
 async def test_selected_pre_sql_audit_digest_keeps_versioned_custody(isolated_database_env, version):
     from app.core.hashing import canonical_json_hash
     from tests.checkers.external.test_selected_pre_submit_coordination import _retained_v1, _source_reservation
 
     retained = _retained_v1()
     request = retained["request"] if version == "v1" else _source_reservation().canonical_body()
-    terminal = retained["terminal"]
+    terminal = dict(retained["terminal"])
+    if version == "v3":
+        terminal["schema_version"] = "workstream.selected_pre_submit_terminal.v3"
+        # Digest parity is independent of receipt validation, tested by the write guards.
+        terminal["invocation_receipt"] = {"provider_invocation_id": "digest-sensitivity-probe"}
     execute = {
-        "schema_version": f"workstream.selected_pre_submit_execute.{version}",
+        "schema_version": f"workstream.selected_pre_submit_execute.{'v1' if version == 'v1' else 'v2'}",
         "reservation": request, "lease_id": terminal["lease_id"],
         "lease_generation": terminal["lease_generation"], "lease_expires_at": terminal["lease_expires_at"],
     }
@@ -282,7 +286,7 @@ async def test_selected_pre_sql_audit_digest_keeps_versioned_custody(isolated_da
         "execute_facts_digest": expected_execute,
         "execution": terminal["execution"],
         "infrastructure_failure_code": terminal["infrastructure_failure_code"],
-    })
+    } | ({"invocation_receipt": terminal["invocation_receipt"]} if version == "v3" else {}))
     value = {
         "request_json": request, "lease_id": execute["lease_id"],
         "lease_generation": execute["lease_generation"], "lease_expires_at": execute["lease_expires_at"],
@@ -300,6 +304,32 @@ async def test_selected_pre_sql_audit_digest_keeps_versioned_custody(isolated_da
         await engine.dispose()
 
 
+async def _assert_receipt_migration_refuses_inflight(intake, request, expected_status):
+    """Run the actual migration entry before its DDL over an existing live run."""
+    from pathlib import Path
+    import runpy
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+
+    def upgrade(connection):
+        migration = runpy.run_path(str(Path(__file__).resolve().parents[2] /
+                                      "alembic/versions/0072_pre_invocation_receipts.py"))
+        with Operations.context(MigrationContext.configure(connection)):
+            migration["upgrade"]()
+
+    async with intake.factory.begin() as session:
+        before = await session.scalar(text("SELECT to_jsonb(r) FROM selected_pre_submit_runs r WHERE id=:id"),
+                                      {"id": request.attempt_id})
+        assert before["status"] == expected_status
+        with pytest.raises(DBAPIError, match="drain source PRE runs"):
+            async with session.begin_nested():
+                connection = await session.connection()
+                await connection.run_sync(upgrade)
+        after = await session.scalar(text("SELECT to_jsonb(r) FROM selected_pre_submit_runs r WHERE id=:id"),
+                                     {"id": request.attempt_id})
+        assert after == before
+
+
 async def _assert_pre_terminal_guards(intake, request):
     """Claim with real AUTH, reject rebound terminal updates, then finalize once."""
     from app.modules.actors.api import ServiceIdentity
@@ -311,13 +341,15 @@ async def _assert_pre_terminal_guards(intake, request):
     from app.modules.checkers.models import SelectedPreSubmitRun
 
     await provision_post_submit_service(intake.factory, ServiceIdentity.CHECKER_PRE_SUBMIT)
+    await _assert_receipt_migration_refuses_inflight(intake, request, "queued")
     async with intake.factory.begin() as session:
         async with selected_pre_submit_authority(session).prepare_execution(request) as authority:
             lease = await selected_pre_submit_coordinator(session).claim(
                 run_id=request.attempt_id, facts=request, authority=authority,
             )
+    await _assert_receipt_migration_refuses_inflight(intake, request, "running")
     finalize = SelectedPreSubmitFinalizeFacts(
-        lease=lease, execution=None, infrastructure_failure_code="capacity_exceeded",
+        lease=lease, execution=None, invocation_receipt=None, infrastructure_failure_code="capacity_exceeded",
     )
     for changed in ("lease_id", "lease_expires_at", "started_at", "execute_evidence_id",
                     "schema_version", "reservation", "request_digest", "outcome", "terminal_digest", "extra"):
@@ -327,7 +359,7 @@ async def _assert_pre_terminal_guards(intake, request):
                 row = await session.get(SelectedPreSubmitRun, str(request.attempt_id))
                 now = await session.scalar(text("select clock_timestamp()"))
                 terminal = SelectedPreSubmitTerminalFacts(
-                    lease=lease, outcome="infrastructure_failed", execution=None,
+                    lease=lease, outcome="infrastructure_failed", execution=None, invocation_receipt=None,
                     infrastructure_failure_code="capacity_exceeded", queued_at=row.queued_at,
                     started_at=row.started_at, completed_at=now,
                 ).canonical_body()
@@ -371,16 +403,72 @@ async def _assert_pre_terminal_guards(intake, request):
         async with selected_pre_submit_authority(session).prepare_finalization(finalize) as authority:
             completion = await selected_pre_submit_coordinator(session).finalize(
                 run_id=request.attempt_id, lease=lease, authority=authority,
-                execution=None, infrastructure_failure_code="capacity_exceeded",
+                execution=None, invocation_receipt=None, infrastructure_failure_code="capacity_exceeded",
             )
             assert completion.terminal.outcome == "infrastructure_failed"
             assert completion.capability is None
 
 
+async def _assert_stored_receipt(factory, run_id, terminal):
+    from app.modules.checkers.models import SelectedPreSubmitRun
+    async with factory() as verify:
+        stored = await verify.get(SelectedPreSubmitRun, str(run_id))
+        assert stored.terminal_json == terminal.canonical_body()
+        assert stored.terminal_digest == terminal.terminal_digest
+        assert stored.finalize_evidence_id is not None
+
+
+def _source_runtime(payload, tmp_path, runtime_outcome):
+    """Real intake worker with an explicit simulated project reply or capacity failure."""
+    from contextlib import aclosing
+    from app.interfaces.external_services import ExternalServiceAdapterIdentity
+    from app.modules.checkers.api.selected_pre_submit import (
+        SelectedPreSubmitInfrastructureUnavailable, SelectedPreSubmitInvocationResult,
+    )
+    from tests.checkers.external.test_pre_invocation import receipt_body
+    from tests.test_trusted_intake import _pre_worker, _read
+
+    runtime_errors = []
+    class SourceRuntime:
+        identity = ExternalServiceAdapterIdentity(capability_key="external_checker_execution", provider_key="unix_socket")
+        async def execute_pre(self, lease, grant):
+            try:
+                return await self.run(lease, grant)
+            except Exception:
+                if runtime_outcome == "completed":
+                    import traceback
+                    runtime_errors.append(traceback.format_exc())
+                raise
+
+        async def run(self, lease, grant):
+            async with aclosing(grant.open_source(lease=lease)) as reader:
+                assert b"".join([chunk async for chunk in reader]) == payload
+            if runtime_outcome == "received_failure":
+                body = receipt_body(lease, outcome="infrastructure_failure", reason="capacity_exceeded")
+                body["cleanup"]["disposition"] = "pending"
+                return SelectedPreSubmitInvocationResult.from_canonical_body(body | {"execution": None})
+            if runtime_outcome == "completed":
+                worker, output, reply, actual_lease = _pre_worker(
+                    tmp_path, payload, lease=lease,
+                    isolation_override={"runtime": "smolvm", "isolation_mode": "smol-microvm"},
+                )
+                assert actual_lease is lease
+                worker.run()
+                output.seek(0)
+                project_frame, completion = _read(output), _read(output)
+                assert project_frame["operation"] == "project" and reply.calls == 1
+                assert completion["operation"] == "completed" and output.read() == b""
+                response = receipt_body(lease) | {"execution": completion["payload"]}
+                return SelectedPreSubmitInvocationResult.from_canonical_body(response)
+            raise SelectedPreSubmitInfrastructureUnavailable("capacity_exceeded")
+    return SourceRuntime(), runtime_errors
+
+
 @pytest.mark.parametrize("intake", [True], indirect=True)
 @pytest.mark.parametrize("materializer_enabled", [True, False])
-async def test_source_pre_execution_uses_committed_authorized_local_read(intake, materializer_enabled):
-    """Real source/SQL/AUTH composition with an explicitly failing runtime double."""
+@pytest.mark.parametrize("runtime_outcome", ["transport_failure", "completed", "received_failure"])
+async def test_source_pre_execution_uses_committed_authorized_local_read(intake, materializer_enabled, runtime_outcome, tmp_path):
+    """Real source/SQL/AUTH composition with a worker and simulated project runtime."""
     from contextlib import aclosing
     from app.adapters.artifacts import submission_intake_pre_source_port
     from app.adapters.auth import selected_pre_submit_authority
@@ -396,13 +484,18 @@ async def test_source_pre_execution_uses_committed_authorized_local_read(intake,
     )
     from app.modules.authorization.catalogue import ActionId
     from app.modules.checkers.api.pre_submit_material import SubmissionPacketView
-    from app.modules.checkers.api.selected_pre_submit import SelectedPreSubmitInfrastructureUnavailable
     from app.modules.projects.api.locked_policy import ProjectLockedPolicyContextRequest
     from app.modules.tasks.api.submission_context import TaskSubmissionContextRequest
     from tests.artifact_store_helpers import initialize_local_store
     from tests.authorization.test_pre_submit_attempt_authority import _seed_materializer
     from tests.checkers.execution.support import provision_post_submit_service
     from tests.checkers.external.test_selected_pre_submit_coordination import _source_reservation
+
+    from tests.test_trusted_intake import _archive
+
+    payload = _archive() if runtime_outcome == "completed" else b"original source bytes"
+    async def upload_bytes():
+        yield payload
 
     store = initialize_local_store(root=intake.durable_root, buffer_bytes=256 * 1024)
     async with intake.factory.begin() as session:
@@ -411,7 +504,7 @@ async def test_source_pre_execution_uses_committed_authorized_local_read(intake,
         metadata = SubmissionIntakeMetadata.model_validate_json(json.dumps(row.command_metadata))
         key = UUID(row.idempotency_key)
     source = await foreground_upload(intake, store).receive(
-        operation, foreground_lease, 1, foreground_bytes(), **foreground_limits(),
+        operation, foreground_lease, 1, upload_bytes(), **foreground_limits(),
     )
     async with intake.factory.begin() as session:
         task = await task_submission_context_port(session).lock_submission_context(
@@ -463,11 +556,7 @@ async def test_source_pre_execution_uses_committed_authorized_local_read(intake,
                             observed.append(chunk)
                             yield chunk
                 return chunks()
-        class RuntimeFailure:
-            async def execute_pre(self, lease, grant):
-                async with aclosing(grant.open_source(lease=lease)) as reader:
-                    assert b"".join([chunk async for chunk in reader]) == b"original source bytes"
-                raise SelectedPreSubmitInfrastructureUnavailable("capacity_exceeded")
+        runtime, runtime_errors = _source_runtime(payload, tmp_path, runtime_outcome)
         authority = PreparedPreSubmitMaterializationAuthorization(
             session, request_id=new_record_id(), correlation_id=new_record_id(),
         )
@@ -477,12 +566,74 @@ async def test_source_pre_execution_uses_committed_authorized_local_read(intake,
             source_reads=SelectedPreSubmitSourceReads(
                 session=session, sources=submission_intake_pre_source_port(session),
                 authority=authority, store=ObservedStore(),
-            ), execution=SelectedPreSubmitCheckerExecutionAdapter(external_execution=RuntimeFailure()),
+            ), execution=SelectedPreSubmitCheckerExecutionAdapter(external_execution=runtime),
         )
         result = await service.execute(reservation=request)
-        assert result.capability is None and result.terminal.outcome == "infrastructure_failed"
-        assert result.terminal.infrastructure_failure_code == (
-            "capacity_exceeded" if materializer_enabled else "material_unavailable"
-        )
+        assert not runtime_errors, "\n".join(runtime_errors)
+        if runtime_outcome == "completed" and materializer_enabled:
+            assert result.terminal.outcome == "completed", result.terminal.infrastructure_failure_code
+            # Source receipt retention does not issue the removed prepared-bundle handoff.
+            assert result.capability is None
+            assert result.terminal.execution.eligible
+            assert result.terminal.invocation_receipt is not None
+            await _assert_stored_receipt(intake.factory, request.attempt_id, result.terminal)
+        else:
+            assert result.capability is None and result.terminal.outcome == "infrastructure_failed"
+            assert result.terminal.infrastructure_failure_code == (
+                "capacity_exceeded" if materializer_enabled else "material_unavailable"
+            )
+            if runtime_outcome == "received_failure" and materializer_enabled:
+                assert result.terminal.invocation_receipt.cleanup.disposition == "pending"
+                await _assert_stored_receipt(intake.factory, request.attempt_id, result.terminal)
     assert bool(observed) == materializer_enabled
     store.close()
+
+
+@pytest.mark.parametrize("changed", [None, "source", "fence", "profile", "outcome", "timing", "cleanup", "extra", "missing"])
+async def test_selected_pre_sql_validates_received_failure_receipt(isolated_database_env, changed):
+    """Exercise the SQL receipt guard directly; this is not a real worker proof."""
+    from app.core.identifiers import new_record_id
+    from app.modules.checkers.api.selected_pre_submit import SelectedPreSubmitLeaseFacts
+    from tests.checkers.external.test_selected_pre_submit_coordination import _source_reservation
+    from tests.checkers.external.test_pre_invocation import receipt_body
+
+    request = _source_reservation()
+    lease = SelectedPreSubmitLeaseFacts(request, new_record_id(), 1, request.pre_deadline_at)
+    receipt = receipt_body(lease, outcome="infrastructure_failure", reason="capacity_exceeded")
+    if changed == "source":
+        receipt["invocation"]["source_sha256"] = "sha256:" + "f" * 64
+    elif changed == "fence":
+        receipt["invocation"]["lease_generation"] = 2
+    elif changed == "profile":
+        receipt["runtime"]["profile"]["aggregate_deadline_ms"] += 1
+    elif changed == "outcome":
+        receipt["outcome"] = None
+    elif changed == "timing":
+        receipt["timings_ms"]["total"] = 9
+    elif changed == "cleanup":
+        receipt["cleanup"]["obligation_id"] = "other-invocation"
+    elif changed == "extra":
+        receipt["cleanup"]["host_path"] = "/private"
+    terminal = {"invocation_receipt": receipt, "infrastructure_failure_code": "capacity_exceeded"}
+    if changed == "missing":
+        terminal.pop("invocation_receipt")
+    value = {
+        "id": str(request.attempt_id), "source_operation_id": str(request.source.location.operation_id),
+        "request_json": request.canonical_body(), "request_digest": request.request_digest,
+        "lease_id": str(lease.lease_id), "lease_generation": lease.lease_generation,
+        "status": "infrastructure_failed", "terminal_json": terminal,
+    }
+    engine = create_async_engine(isolated_database_env)
+    try:
+        async with engine.connect() as connection:
+            async def invoke():
+                await connection.execute(text("""SELECT public.require_selected_pre_invocation(
+                    jsonb_populate_record(NULL::public.selected_pre_submit_runs, CAST(:value AS jsonb)))"""),
+                    {"value": json.dumps(value)})
+            if changed is None:
+                await invoke()
+            else:
+                with pytest.raises(DBAPIError, match="selected PRE invocation"):
+                    await invoke()
+    finally:
+        await engine.dispose()
