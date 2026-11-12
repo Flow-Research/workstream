@@ -554,3 +554,73 @@ It does not explain or erase the earlier four-case no-receipt failure. Rerun the
 complete matrix from a clean candidate with bounded no-receipt state diagnostics;
 keep the matrix unqualified until that result is examined. Do not add a delivery
 retry or fallback merely to make the assertion pass.
+
+## Next required implementation: atomic award fulfillment custody
+
+Concrete gap: the current COMP award participant returns an immutable award but
+creates no fulfillment root or durable handoff event. Finance cannot admit an
+earned obligation without that exact Workstream source. Extend the existing
+FinalAcceptance -> CON -> COMP transaction; do not add a second acceptance path.
+This is the next dependency in the full specification, not a substitute goal.
+
+Allowed scope: existing COMP award API/participant/composition, a cohesive COMP
+fulfillment API/model/service, CON participation scalar forwarding/composition,
+REV's current manifest description/predicate, `core/config.py` source-instance
+setting, model discovery, one new0072 migration, supported-head/schema/ownership
+metadata, focused and affected current fixtures/tests, current capability docs.
+No Finance provider/HTTP handler, separate lifecycle controller, generic job
+engine, retained-row deletion, old request reader/default or live effect.
+
+Plan:
+- Require current award input to carry Task/Submission/FinalAcceptance/size and
+  expected lifecycle generation as exact scalar facts supplied by CON. Propagate
+  these from the existing request and immutable contribution; no cross-owner ORM
+  join or substitute IDs. Update every current caller/fixture together.
+- Inject the same held REV fence and existing session-bound OutboxAppendPort into
+  the COMP participant through existing composition. Require the canonical live
+  generation before a new root; exact replay reads existing root/event only.
+- Use configured `WORKSTREAM_SOURCE_INSTANCE_ID` (canonical UUIDv7), shared with
+  later Finance registration. Never generate a deployment identity per request
+  or derive a record ID from a hash/token. Missing source configuration refuses
+  compensated admission atomically; unpaid outcomes create no root/event. Add
+  activation readiness validation so deployment misconfiguration is found before
+  new compensated work can be accepted, rather than losing an earned obligation.
+- Persist one immutable CompensationFulfillmentRoot per award: owner-generated
+  UUIDv7, unique increasing ordinal, exact admission generation, source instance,
+  original binding/route, complete canonical envelope and both digests, source
+  FinalAcceptance authority reference and exact initial outbox event identity.
+  Allocate max ordinal+1 only while holding the canonical global REV fence; a
+  unique constraint and native source/closure guards independently enforce it.
+  No new counter/controller or clock-derived business ordering is introduced.
+- Append a selector/digest-only `compensation.fulfillment.requested` event through
+  the shared outbox in the same transaction. No amount, payee/provider data,
+  broker publish or external I/O. Replay must require exact stored event custody,
+  never append/repair/reallocate missing roots on replay.
+- Native PostgreSQL guards enforce immutable root/body, exact award/contribution/
+  Submission/acceptance/binding lineage and canonical digests, live generation,
+  contiguous new ordinal under the fence, and deferred award/root/event closure.
+  Missing root or altered/missing event makes the entire earning transaction fail.
+-0072 installs only while disabled and refuses existing awards without roots
+  atomically, retaining every row; no synthetic historical envelope or ordinal.
+  Fresh install, actual0071 upgrade, repeated head and refusal/rollback need proof.
+- The current manifest names actual internal award/root/outbox participation.
+  Finance admission/payment delivery remain unavailable until their real runtime,
+  receipts, AUTH, phase/cutoff handlers and deployment qualification are delivered.
+  Source reads, callbacks, cutoff/drain and Finance execution remain required
+  following work in this same PR; no root-only readiness claim.
+
+Acceptance/proof: paid public automatic acceptance commits one exact root/event;
+unpaid and true-human-review branches create none; replay preserves IDs/ordinal/
+body/counts; omitted or wrong root/event rolls back acceptance/contribution/award;
+independent sessions cannot allocate duplicates; closed/stale/nested fence and
+non-live generations deny before new effects; immutable root alteration and raw
+SQL incomplete earning fail; suspension retains the original binding/earned
+facts rather than repricing them; actual migration/refusal preserves data.
+Use the existing public journey and native transaction/race fixtures plus
+focused pure canonical-envelope tests. No claim of Finance HTTP/worker/S3 proof.
+
+Risk remainsL0. Obtain plan review on transaction/custody/configuration and test
+reachability before implementation; then replay affected security, architecture,
+product/reuse/senior and QA/test-delta/CI/docs reviewers on a clean candidate.
+Human focus: source identity setup, same-transaction closure, exact replay,
+original-binding preservation and no activation of unimplemented delivery.
