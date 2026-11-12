@@ -1,11 +1,24 @@
 """Exact accepted continuation selectors; values confer no authority themselves."""
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
 # Existing durable OUTBOX lease convention, shared with the worker hard bound.
 # Deployment qualification and independent admission sizing remain separate.
 SUBMISSION_FINALIZATION_DELIVERY_LEASE_SECONDS = 300
+
+
+@dataclass(frozen=True, slots=True)
+class SubmissionFinalizationProgress:
+    """Internal owner facts; not the complete public operation-read response."""
+
+    operation_id: UUID
+    finalized: bool
+    operationally_stalled: bool
+    stalled_at: datetime | None
+    next_retry_at: datetime | None
+    attempt_count: int
 
 
 @dataclass(frozen=True, slots=True)

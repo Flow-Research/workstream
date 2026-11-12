@@ -3002,3 +3002,34 @@ prove provider unavailability prevents general startup but is not consulted by t
 finalization child. The combined static rerun passed **83 tests**, with the same
 existing no-broker observability skip (`/tmp/t5-queues-startup.log`). This repairs
 the identified hook dependency without claiming a live broker/provider replay drill.
+
+### Owner-backed finalization stall observation
+
+Expose exact delivery progress from the existing OUTBOX append/custody participant,
+requiring the same immutable event facts as `require_existing`. Extend ART's
+authorized own-operation read with finalization progress. A pending accepted
+operation is stalled only when its exact durable event is dead-lettered; age and
+lease expiry alone do not imply a stall. Finalized operation facts take precedence
+over delayed transport acknowledgement. Reads do not release source charges,
+change task/operation state, invoke storage, or grant retry authority.
+
+Allowed scope: OUTBOX public observation value/port and its existing service;
+ART finalization progress value/reader and the existing foreground read owner;
+focused real PostgreSQL/auth and custody tests. Preserve exact event binding,
+current contributor read authorization and sanitized errors. Verify pending,
+claimed, exhausted and finalized states, substitution refusal and no read effects.
+This is an internal read boundary for the pending public cutover, not the full
+API progress contract. The existing `operations.submission_gate.repair` action is
+registered but planned/unavailable; its applicability to finalization recovery
+needs assessment before activation. C05 requires a concrete authority decision
+before inventing a new business/admin capability. Risk remains authorization/workflow;
+architecture/security and QA review are required.
+
+The exact exhausted/finalized progress cases passed on real PostgreSQL
+(`/tmp/t5-progress2.log`: **2 passed**, isolated database/role cleanup confirmed).
+Exact OUTBOX identity substitution and pending/claimed/acknowledged observation
+passed separately (`/tmp/t5-progress-custody.log`: **1 passed**). Related OUTBOX
+contracts and ART architecture checks passed (`/tmp/t5-progress-static.log`:
+**94 passed**). Evidence is for the working tree based on `cb09fd84c`; it does
+not prove public operation reads or operator retry. Ruff passed for all changed
+Python files.

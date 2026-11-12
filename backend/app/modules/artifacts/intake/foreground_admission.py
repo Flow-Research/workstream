@@ -22,6 +22,8 @@ from app.db.errors import integrity_constraint_name
 from app.modules.artifacts.api.submission_archive import MAXIMUM_SUBMISSION_ZIP_BYTES
 from app.modules.artifacts.api.submission_intake import SubmissionIntakeMetadata, SubmissionSourceCapacityLimits
 from app.modules.artifacts.intake.repository import IntakeCustodyConflict, SubmissionIntakeRepository
+from app.modules.artifacts.intake.progress import finalization_progress
+from app.modules.artifacts.api.submission_finalization import SubmissionFinalizationProgress
 from app.modules.artifacts.intake.streaming import hash_submission_replay
 from app.modules.artifacts.models import ArtifactStorageNamespace
 from app.modules.artifacts.service import ArtifactStorageNamespaceSpec
@@ -57,6 +59,7 @@ class IntakeReplay:
     maximum_raw_bytes: int
     raw_sha256: str | None
     raw_byte_count: int | None
+    finalization: SubmissionFinalizationProgress | None
 
 
 class IntakeCommitUnknown(RuntimeError):
@@ -75,6 +78,7 @@ class ForegroundIntakeAdmission:
         task_contexts: Callable[[AsyncSession], TaskSubmissionContextPort],
         projects: Callable[[AsyncSession], ProjectLockedPolicyContextPort],
         authorization: Callable[[AsyncSession], IntakeAuthorizationPort],
+        events: Callable[[AsyncSession], OutboxAppendPort],
         namespace: ArtifactStorageNamespaceSpec, capacity_limits: SubmissionSourceCapacityLimits,
         maximum_raw_bytes: int, upload_duration: timedelta, lease_duration: timedelta,
     ) -> None:
@@ -85,6 +89,7 @@ class ForegroundIntakeAdmission:
             raise ValueError("intake reservation limits are invalid")
         self._sessions, self._tasks, self._contexts = sessions, tasks, task_contexts
         self._projects, self._authorization = projects, authorization
+        self._events = events
         self._namespace = namespace
         self._capacity = SubmissionSourceCapacityLimits.model_validate(capacity_limits)
         self._maximum, self._upload_duration, self._lease_duration = maximum_raw_bytes, upload_duration, lease_duration
@@ -302,7 +307,8 @@ class ForegroundIntakeAdmission:
             if expected_operation_id is not None and UUID(row.id) != expected_operation_id:
                 raise IntakeCustodyConflict("submission_idempotency_conflict")
             result = IntakeReplay(UUID(row.id), row.state, row.failure_code,
-                                  row.maximum_raw_bytes, row.raw_sha256, row.raw_byte_count)
+                                  row.maximum_raw_bytes, row.raw_sha256, row.raw_byte_count,
+                                  await finalization_progress(row, self._events(session)))
         return result
 
     async def replay(

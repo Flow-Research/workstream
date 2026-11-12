@@ -493,9 +493,24 @@ class OutboxAppendResult(BaseModel):
     occurred_at: datetime
 
 
+class OutboxDeliveryObservation(DeliveryValue):
+    """Detached operational facts for an exactly matched feature-owned event."""
+
+    event_id: UUID
+    state: Literal["pending", "claimed", "retryable", "acknowledged", "dead_letter", "cancelled"]
+    attempt_count: int = Field(ge=0)
+    next_attempt_at: datetime | None
+    finalized_at: datetime | None
+    error_code: str | None = Field(pattern=r"^[A-Z][A-Z0-9_]{0,79}$")
+
+
 class OutboxAppendPort(Protocol):
     async def require_existing(self, event_id: UUID | None, value: OutboxAppendInput) -> UUID:
         """Require exact retained custody by logical key and optional record ID."""
+        ...
+
+    async def observe_delivery(self, event_id: UUID, value: OutboxAppendInput) -> OutboxDeliveryObservation:
+        """Read delivery facts only after exact immutable feature custody matches."""
         ...
 
     async def append(self, value: OutboxAppendInput) -> OutboxAppendResult:

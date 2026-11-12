@@ -31,6 +31,7 @@ from tests.authorization.admin_access.fixtures import (
 
 @pytest.fixture
 async def admission_intake(tmp_path, isolated_database_env, admin_access, request):
+    from app.adapters.outbox import outbox_append
     from app.adapters.projects import project_locked_policy_context_port
     from app.modules.artifacts.intake.foreground_admission import ForegroundIntakeAdmission
     from app.modules.authorization.submission_intake import SubmissionIntakeAuthorization
@@ -76,6 +77,7 @@ async def admission_intake(tmp_path, isolated_database_env, admin_access, reques
             factory, tasks=lambda session: IntakeTaskCustody(session, task_submission_context_port(session)),
             task_contexts=task_submission_context_port, projects=project_locked_policy_context_port,
             authorization=lambda session: SubmissionIntakeAuthorization(session, actor), namespace=namespace,
+            events=outbox_append,
             capacity_limits=SubmissionSourceCapacityLimits(maximum_total_bytes=1_000_000), maximum_raw_bytes=1024,
             upload_duration=timedelta(seconds=300), lease_duration=timedelta(seconds=60),
         )
@@ -934,5 +936,85 @@ async def test_finalization_outbox_recovers_lost_ack_without_provider_replay(adm
         assert len(observations) == (1 if lost_at == "after_commit" else 2)
         assert len(invocations) == 2
         assert await handler(invocations[0]) == HandlerOutcome.REJECT
+    finally:
+        store.close()
+
+
+@pytest.mark.parametrize("effect_committed", [False, True])
+async def test_authorized_progress_reports_exact_exhaustion_without_reopening_intake(
+    admission_intake, tmp_path, monkeypatch, effect_committed,
+):
+    import json
+    from uuid import UUID
+    from sqlalchemy import select, func
+    from app.adapters.artifacts.finalization import submission_finalization_handler
+    from app.adapters.auth import outbox_dispatch_authorization
+    from app.adapters.checkers import selected_pre_submit_coordinator
+    from app.adapters.outbox import outbox_append, outbox_delivery
+    from app.modules.actors.api import ServiceIdentity
+    from app.modules.authorization.api.submission_intake import IntakeAuthorityDenied
+    from app.modules.outbox.api import DeliveryOptions
+    from app.modules.outbox.models import OutboxEvent, OutboxDeliveryAttempt
+    from app.modules.outbox.registry import HandlerRegistry
+    from app.modules.tasks.models import WorkstreamTask
+    from tests.artifact_store_helpers import initialize_local_store
+    from tests.artifacts.intake_acceptance_support import completed_source
+    from tests.checkers.execution.support import provision_post_submit_service
+
+    f = admission_intake
+    owner, request, terminal = await completed_source(f, tmp_path)
+    await f.admission.accept(owner, request, terminal.terminal_digest,
+        checkers=selected_pre_submit_coordinator, outbox=outbox_append)
+    for identity in (ServiceIdentity.ARTIFACT_BINDING, ServiceIdentity.OUTBOX_DISPATCHER):
+        await provision_post_submit_service(f.factory, identity)
+    async with f.factory() as session:
+        row = await session.get(SubmissionIntakeOperation, str(owner.operation_id))
+        key, event_id = UUID(row.idempotency_key), UUID(row.finalization_event_id)
+        metadata = SubmissionIntakeMetadata.model_validate_json(json.dumps(row.command_metadata))
+    async def read():
+        return await f.admission._read(metadata, f.actor.actor_profile_id, key)
+    initial = await read()
+    assert initial.finalization.attempt_count == 0 and not initial.finalization.operationally_stalled
+    store = initialize_local_store(root=tmp_path / "durable", buffer_bytes=256 * 1024)
+    handler = submission_finalization_handler(sessions=f.factory, settings=_settings(tmp_path),
+        store=store, lease_duration=timedelta(seconds=30))
+    async def fail(envelope):
+        active = await read()
+        assert active.finalization.attempt_count == 1 and not active.finalization.operationally_stalled
+        if effect_committed:
+            await handler(envelope)
+        raise RuntimeError("simulated worker loss")
+    kind = "SubmissionFinalizationRequested"
+    delivery = outbox_delivery(f.factory, authorization_factory=outbox_dispatch_authorization,
+        registry=HandlerRegistry([(kind, 1, fail)], replay_safe=frozenset({(kind, 1)})),
+        options=DeliveryOptions(lease_seconds=30, handler_timeout_seconds=25, max_attempts=1))
+    try:
+        assert await delivery.deliver(event_id, f.project, "exhausted-worker") is not None
+        progress = await read()
+        assert progress.failure_code is None
+        assert progress.state == ("finalized" if effect_committed else "finalization_pending")
+        assert progress.finalization.finalized is effect_committed
+        assert progress.finalization.operationally_stalled is not effect_committed
+        assert progress.finalization.next_retry_at is None and progress.finalization.attempt_count == 1
+        assert (await read()).finalization == progress.finalization
+        async with f.factory() as session:
+            event = await session.get(OutboxEvent, event_id)
+            task = await session.get(WorkstreamTask, str(f.task))
+            assert event.delivery_state == "dead_letter" and event.last_error_code == "INVOKE_OUTCOME_UNKNOWN"
+            assert progress.finalization.stalled_at == (None if effect_committed else event.finalized_at)
+            assert task.status == "evaluation_pending"
+            assert task.active_submission_operation_id == (None if effect_committed else str(owner.operation_id))
+            assert await session.scalar(select(func.count()).select_from(OutboxDeliveryAttempt)) == 1
+        revoked = await f.access.signed.client.post(
+            f"/api/v1/projects/{f.project}/role-grants/{f.grant_id}/revoke",
+            headers=f.manager.headers | {"Idempotency-Key": str(new_record_id())},
+            json={"reason": "Withdraw progress read grant"},
+        )
+        assert revoked.status_code == 200, revoked.text
+        def forbidden(_session):
+            pytest.fail("denied read consulted delivery facts")
+        monkeypatch.setattr(f.admission, "_events", forbidden)
+        with pytest.raises(IntakeAuthorityDenied):
+            await read()
     finally:
         store.close()
