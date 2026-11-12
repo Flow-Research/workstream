@@ -800,6 +800,13 @@ fn stop_project(child: libc::pid_t, group: &Path, deadline: Instant) -> Result<i
     }
 }
 
+fn exec_workload(setup: impl FnOnce() -> Result<()>) -> ! {
+    let _ = setup();
+    // Failed exec/setup belongs only to this child. Do not unwind into the
+    // PRE supervisor's worker guard or emit a trusted supervisor completion.
+    unsafe { libc::_exit(125) }
+}
+
 fn run_project(
     job: GuestJob,
     capabilities: GuestCapabilities,
@@ -829,47 +836,49 @@ fn run_project(
     // workload receives separate output pipes, so it cannot forge mux frames.
     let child = limits.fork_project()?;
     if child == 0 {
-        drop(stdout_parent);
-        drop(stderr_parent);
-        drop(model);
-        drop(execution);
-        drop(input);
-        private_mounts().map_err(|error| format!("workload mount namespace: {error}"))?;
-        fs::write(
-            "/sys/fs/cgroup/workstream-checker/cgroup.procs",
-            std::process::id().to_string(),
-        )?;
-        confined_devices().map_err(|error| format!("devices: {error}"))?;
-        readonly_filesystem(limits.scratch_bytes)
-            .map_err(|error| format!("filesystem: {error}"))?;
-        drop_privileges(job.uid, job.gid).map_err(|error| format!("privileges: {error}"))?;
-        // SAFETY: both streams are live child-owned descriptors and dup2
-        // atomically replaces the conventional output descriptors.
-        if unsafe { libc::dup2(stdout_child.as_raw_fd(), 1) } < 0
-            || unsafe { libc::dup2(stderr_child.as_raw_fd(), 2) } < 0
-        {
-            return Err(std::io::Error::last_os_error().into());
-        }
-        drop(stdout_child);
-        drop(stderr_child);
-        seal_exec_descriptors().map_err(|error| format!("descriptor policy: {error}"))?;
-        install_workload_filter().map_err(|error| format!("syscall policy: {error}"))?;
-        let mut command = Command::new(&job.command[0]);
-        command
-            .args(&job.command[1..])
-            .env_clear()
-            .stdin(staged.request);
-        for entry in &job.environment {
-            let (key, value) = entry.split_once('=').ok_or("invalid image environment")?;
-            command.env(key, value);
-        }
-        command.current_dir(if job.working_directory.is_empty() {
-            "/"
-        } else {
-            &job.working_directory
+        exec_workload(|| {
+            drop(stdout_parent);
+            drop(stderr_parent);
+            drop(model);
+            drop(execution);
+            drop(input);
+            private_mounts().map_err(|error| format!("workload mount namespace: {error}"))?;
+            fs::write(
+                "/sys/fs/cgroup/workstream-checker/cgroup.procs",
+                std::process::id().to_string(),
+            )?;
+            confined_devices().map_err(|error| format!("devices: {error}"))?;
+            readonly_filesystem(limits.scratch_bytes)
+                .map_err(|error| format!("filesystem: {error}"))?;
+            drop_privileges(job.uid, job.gid).map_err(|error| format!("privileges: {error}"))?;
+            // SAFETY: both streams are live child-owned descriptors and dup2
+            // atomically replaces the conventional output descriptors.
+            if unsafe { libc::dup2(stdout_child.as_raw_fd(), 1) } < 0
+                || unsafe { libc::dup2(stderr_child.as_raw_fd(), 2) } < 0
+            {
+                return Err(std::io::Error::last_os_error().into());
+            }
+            drop(stdout_child);
+            drop(stderr_child);
+            seal_exec_descriptors().map_err(|error| format!("descriptor policy: {error}"))?;
+            install_workload_filter().map_err(|error| format!("syscall policy: {error}"))?;
+            let mut command = Command::new(&job.command[0]);
+            command
+                .args(&job.command[1..])
+                .env_clear()
+                .stdin(staged.request);
+            for entry in &job.environment {
+                let (key, value) = entry.split_once('=').ok_or("invalid image environment")?;
+                command.env(key, value);
+            }
+            command.current_dir(if job.working_directory.is_empty() {
+                "/"
+            } else {
+                &job.working_directory
+            });
+            limits.check_run_deadline()?;
+            Err(command.exec().into())
         });
-        limits.check_run_deadline()?;
-        return Err(command.exec().into());
     }
     drop(stdout_child);
     drop(stderr_child);
@@ -1190,6 +1199,37 @@ mod tests {
         ] {
             assert!(limits.validate(closed).is_err());
         }
+    }
+
+    #[test]
+    fn failed_child_setup_cannot_unwind_supervisor_custody() {
+        struct Guard(i32);
+        impl Drop for Guard {
+            fn drop(&mut self) {
+                unsafe {
+                    libc::write(self.0, b"x".as_ptr().cast(), 1);
+                }
+            }
+        }
+        let (mut parent, child_pipe) = socket_pair().unwrap();
+        let child = unsafe { libc::fork() };
+        assert!(child >= 0);
+        if child == 0 {
+            drop(parent);
+            let _guard = Guard(child_pipe.as_raw_fd());
+            exec_workload(|| Err("controlled setup failure".into()));
+        }
+        drop(child_pipe);
+        let mut status = 0;
+        assert_eq!(unsafe { libc::waitpid(child, &mut status, 0) }, child);
+        let mut marker = [0];
+        assert_eq!(
+            parent.read(&mut marker).unwrap(),
+            0,
+            "child ran supervisor destructor"
+        );
+        assert!(libc::WIFEXITED(status));
+        assert_eq!(libc::WEXITSTATUS(status), 125);
     }
 
     #[test]
@@ -1542,7 +1582,15 @@ fn main() {
     }
 }
 fn run() -> Result<()> {
-    let bootstrap_limits = trial::parse_bootstrap_limits(std::env::args_os().skip(1))?;
+    let mut arguments = std::env::args_os().skip(1).peekable();
+    if arguments
+        .peek()
+        .is_some_and(|value| value == workstream_checker_guest::pre_bootstrap::PRE_LIMITS_ARGUMENT)
+    {
+        arguments.next();
+        return pre::bootstrap::run(arguments);
+    }
+    let bootstrap_limits = trial::parse_bootstrap_limits(arguments)?;
     let trial_envelope = bootstrap_limits
         .map(trial::TrialEnvelope::prepare)
         .transpose()?;

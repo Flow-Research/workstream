@@ -2,6 +2,7 @@
 use serde::{Deserialize, Serialize};
 
 pub mod confinement;
+pub mod pre_bootstrap;
 pub mod trusted_root;
 
 pub const MAX_JOB_BYTES: usize = 4 * 1024 * 1024;
@@ -68,7 +69,7 @@ pub enum GuestPurpose {
     },
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct GuestJob {
     pub purpose: GuestPurpose,

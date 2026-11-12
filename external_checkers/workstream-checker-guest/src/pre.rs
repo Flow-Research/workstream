@@ -1,6 +1,7 @@
 //! In-guest PRE handoff. The source-derived worker owns defaults; only this
 //! supervisor can turn its manifest into a project mount and launch a project.
 use super::*;
+pub(super) mod bootstrap;
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::os::unix::fs::MetadataExt;
@@ -8,13 +9,13 @@ use workstream_checker_sdk::{canonical_hash, infrastructure_result, validate_res
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct WorkerFrame {
+struct WorkerFrame<T> {
     protocol_version: String,
     operation: String,
     request_digest: String,
     lease_id: String,
     lease_generation: u64,
-    payload: ProjectPayload,
+    payload: T,
 }
 
 #[derive(Deserialize)]
@@ -234,7 +235,7 @@ fn project_request(
     if frame.is_empty() || frame.len() > binding.maximum_control_bytes.min(64 * 1024 * 1024) {
         return Err("PRE worker control frame unbounded".into());
     }
-    let frame: WorkerFrame = serde_json::from_slice(frame)?;
+    let frame: WorkerFrame<ProjectPayload> = serde_json::from_slice(frame)?;
     if frame.protocol_version != "workstream.pre_submit_worker.v1"
         || frame.operation != "project"
         || frame.request_digest != binding.request_digest
@@ -303,7 +304,6 @@ fn project_request(
 /// The worker is waiting on its private control pipe when this phase runs.
 /// `workspace` is the supervisor's private directory containing its projection;
 /// the caller retains that directory until the project and worker are stopped.
-#[allow(dead_code)] // PRE bootstrap dispatch is the remaining caller; ordinary Project is unchanged.
 pub(super) fn run_project_phase(
     binding: &ProjectBinding<'_>,
     frame: &[u8],

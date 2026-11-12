@@ -1,6 +1,6 @@
 //! Independently pinned platform-root staging. This does not execute a workload.
 //! The caller owns a private bounded spool and charges spool plus expanded root.
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashSet;
 use std::fs::{self, File, OpenOptions};
@@ -13,7 +13,7 @@ const MAGIC: &[u8] = b"WSROOT1\n";
 const MAX_HEADER: usize = 16384;
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
-#[derive(Clone, Debug, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct RootDescriptor {
     pub schema_version: String,
@@ -26,6 +26,8 @@ pub struct RootDescriptor {
     pub bundle_byte_count: u64,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct RootLimits {
     pub maximum_bundle_bytes: u64,
     pub maximum_root_bytes: u64,

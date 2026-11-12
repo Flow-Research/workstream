@@ -1915,3 +1915,49 @@ The PRE bootstrap caller, early control envelope, staged trusted-root worker,
 service/profile/cleanup envelope and native qualification remain necessary.
 A fresh fetch confirms current main `94334ccf4` is already an ancestor; the
 single draft PR remains the only PR, and this cutover has not been pushed.
+
+The PRE guest bootstrap now calls the reviewed project handoff. A separate
+`--pre-limits` entry uses closed explicit control/default/project partitions,
+source/control/output/log/scratch bounds, distinct worker UID/GID and paired
+deadlines. It charges the supervisor to its own cgroup before allocating the job
+body, verifies the repeated limits and canonical source/request/profile binding,
+and refuses resource sums outside the locked profile. All quantities remain
+explicit; no qualified deployment values or compatibility PRE path are added.
+
+The guest spools the bounded WSROOT1 bundle and invokes `stage_root`, then stages
+the exact-count source and a closed transfer marker in a supervisor-private
+directory. It runs the fixed trusted Python worker in the verified readonly
+chroot with private source/request and extraction workspace, separate cgroup,
+non-root identity, descriptor sealing and the existing syscall filter. After
+defaults it permits at most one project request, calls the existing handoff/
+runner, and returns only its validated result on the private worker pipe. A
+default blocker invokes no project phase. Worker frames/logs, source reads,
+result writes and cleanup have finite bounds; completion requires worker exit,
+empty cgroup, no worker OOM and no trailing control bytes. Final VM destruction
+and quarantine remain the host lease guardian's responsibility.
+
+Connecting these scopes exposed a child-error unwinding hazard: a failed project
+setup could return into the inherited supervisor worker guard. Both forked exec
+paths now exit directly on setup/exec failure. A real fork regression places a
+destructor sentinel outside the exec helper and proves that failed setup exits
+125 without running supervisor cleanup. Ordinary POST still uses its existing
+limits, framing and result classification; the PRE flag does not change trial
+argument parsing.
+
+The guest passes 12 library and 40 binary tests, and 38 shared Smol tests pass.
+New portable tests exercise the Python-owner-generated `pre_startup.json`
+canonical source vector (schema-tagged source hashing), closed scalar limits,
+profile/source/root/identity rejection before input, exact-count spool reads,
+stalled input deadlines, truncated/oversized frames, log limits, foreign fences,
+default blockers and repeat-project refusal. Removing source-digest binding or
+forcing a project phase after default rejection makes its focused test fail;
+both mutations were restored. The fixture is synthetic and its timestamp does
+not prove live lease validity. The dialogue tests use local socket peers and a
+project-phase sentinel; they are not a privileged worker or VM execution test.
+
+Formatting/whitespace checks pass. The environment still cannot run privileged
+mount/cgroup/chroot or Smol/KVM qualification. Host `execute_pre` dispatch, exact
+configured pins and lease admission, the invocation/profile/cleanup response
+envelope, trusted-root rebuild, native qualification and public cutover remain
+required. This is a connected guest code path, not a runnable end-to-end service
+or accepted-submission claim.
