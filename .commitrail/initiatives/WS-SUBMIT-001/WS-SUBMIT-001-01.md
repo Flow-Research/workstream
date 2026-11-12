@@ -2247,3 +2247,39 @@ outcome/timing refusal, AUTH digest sensitivity, actual PostgreSQL terminal
 retention/guard rejection, native wire decoding and a managed-style no-host-access
 contract test. Public T4, finalization/POST, qualification and full acceptance
 scenarios remain required subsequent work, not completion claims for this step.
+
+Plan-review resolutions:
+
+- Completed responses carry both receipt and typed worker facts. Received
+  `infrastructure_failure` and `deadline_exceeded` responses carry their receipt
+  through finalization with the corresponding closed infrastructure code;
+  transport failure before receipt delivery may carry none. Native `cancelled`
+  and task cancellation propagate `CancelledError`, without manufacturing QC or
+  a finalization decision. Independent runtime cleanup ownership still applies;
+  abandoned execution leases use the existing owner recovery path.
+- Migration 0072 takes the run-table lock and refuses upgrade if any source-v2
+  run is queued/running. Deployment must quiesce/drain those runs through their
+  current owner before migration; no migration fabricates a terminal outcome or
+  rewrites an immutable request. After upgrade, new source-v2 reservations still
+  use the current request contract but can finalize only to the receipt-bearing
+  terminal schema. Read dispatch explicitly handles prepared-v1, historical
+  source-v2 terminal, current source-v3 terminal, and source-v2 nonterminal rows.
+  Historical terminal evidence never enters current finalization/acceptance.
+- The concrete Unix-socket adapter accepts only native runtime/cleanup evidence.
+  It attaches its trusted factory `provider_key` to the retained receipt; that
+  key is not accepted from the native wire. The processor independently compares
+  it with the selected adapter identity. The managed-style test adapter uses its
+  own explicit factory key, configured deployment identity, provider invocation
+  and provider cleanup acknowledgement; native journal fields are not required
+  of it and it cannot substitute for a Unix-socket/Smol invocation.
+- Completed PostgreSQL proof uses a separate actual-ZIP source admitted through
+  ART and builds worker facts from the exact claimed database lease/source.
+  Existing non-ZIP infrastructure fixtures stay as failure-boundary coverage;
+  synthetic worker leases are never transplanted into real DB rows. Tests cover
+  retained queued/running/completed/infrastructure source-v2 reads and the
+  migration's refusal to proceed over in-flight v2 work.
+- Extract the native host's existing response serializer and emit a portable
+  Rust fixture through that same function for Python wire-decoding proof. Add
+  the serializer/test fixture files to scope; no fake native Machine creation
+  or qualification is claimed. A received infrastructure receipt with pending
+  cleanup must be retained, not collapsed into a code-only exception.
