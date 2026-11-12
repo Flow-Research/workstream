@@ -808,6 +808,7 @@
   "source": {
     "method": "GET",
     "openapi_version": "3.1.0",
-    "path": "/api/v1/actors/me/contributions"
+    "path": "/api/v1/actors/me/contributions",
+    "repository_sha": "b0f4d7189192c5aa21cf30a1ec34baddbe4903ba"
   }
 }
