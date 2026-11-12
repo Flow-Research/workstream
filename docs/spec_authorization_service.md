@@ -558,7 +558,12 @@ request event commit together. New requests require the exact current terminal
 `infrastructure_failed` run; fresh-authorized replay validates the historical
 TASK/Submission and original receipt even after later routing. This is neither a
 public route nor a registered production handler. `task_setup_blocked` is not
-eligible for this retry, and `operations.submission_gate.repair` remains planned.
+eligible for checker retry. `operations.submission_gate.repair` now has an internal
+accepted-finalization recovery owner: a current system Operator may authorize one
+reason-bound recovery child for an exact exhausted UNKNOWN finalization event.
+The child retains the same operation, accepted PRE/source evidence and original
+attempt; T5 remains the sole Submission writer. Replay rechecks current authority.
+This supplies no public repair endpoint or checker-content override.
 
 The v0.1 baseline is availability-neutral for this surface. PostgreSQL enforces the closed
 ActionId set, authorization-decision event shape, exact ActionId-to-PermissionId

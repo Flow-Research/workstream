@@ -172,7 +172,7 @@ Recovery is a separate, reasoned, audited path.
 | Operation | Permission | Actor |
 |---|---|---|
 | Normal covered task/setup repair | `project.task.manage` | Covered Project Manager |
-| Submission gate repair (planned; unavailable) | `operations.submission_gate.repair` | Operator |
+| Accepted-finalization recovery (internal owner; no public endpoint) | `operations.submission_gate.repair` | Operator |
 | Checker recovery-source discovery (active public read) | `operations.status.read` via `operations.checker_retry_source.list` | System Operator for one exact project |
 | Checker terminal-failure retry (active public operation) | `operations.checker.retry` | System Operator under exact terminal-failure guards |
 | Immutable project model profile provisioning | `project.model_profile.manage` via `project.model_profile.provision` | System Operator for the exact project; approved POST policy separately binds the registered image |

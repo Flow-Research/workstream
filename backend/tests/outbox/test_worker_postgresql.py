@@ -199,6 +199,7 @@ async def test_production_registry_claims_only_registered_features(delivery_harn
     production = production_outbox_delivery(h.factory)
     assert production._registry.keys == (
         ("SubmissionFinalizationRequested", 1),
+        ("SubmissionFinalizationRecoveryRequested", 1),
         ("TaskAssignmentAuthorityInvalidationRequested", 1),
         ("TaskRevisionExpiryRequested", 1),
         ("TaskRevisionExpired", 1),
@@ -365,7 +366,7 @@ async def test_finalization_worker_cannot_deliver_or_recover_post_event(delivery
         async with h.factory() as session:
             await session.execute(text("select pg_sleep(3.05)"))
     finalization = production_outbox_delivery(h.factory, finalization_worker=True)
-    assert finalization._registry.keys == (("SubmissionFinalizationRequested", 1),)
+    assert finalization._registry.keys == (("SubmissionFinalizationRequested", 1), ("SubmissionFinalizationRecoveryRequested", 1))
     assert await finalization.deliver(event.event_id, h.project, "wrong-worker", registered_only=True) is None
     async with h.factory() as session:
         stored = await session.get(OutboxEvent, event.event_id)

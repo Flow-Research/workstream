@@ -50,9 +50,11 @@ and legacy-close actions remain unavailable until their owning hidden behavior,
 AUTH activation and release. REV-12A4A activates internal lifecycle control for
 live system Operators, binding the exact singleton, generation and manifest.
 It supplies no public endpoint, human-review, acceptance or payment authority. Claim starts work atomically; no Operator start action exists. Submission-gate repair
-(`operations.submission_gate.repair`) and checker retry
-(`operations.checker.retry`) are planned and unavailable; their old routes and
-Celery worker were removed. Review lease release remains governed by the separately
+(`operations.submission_gate.repair`) has an internal, reason-bound recovery owner
+for the same accepted finalization operation and exact exhausted UNKNOWN delivery.
+It authorizes one bounded recovery child under a current system Operator grant;
+child exhaustion remains held. Checker retry (`operations.checker.retry`) has its
+separate current owner. Neither grants a checker-content override. Review lease release remains governed by the separately
 owned WS-REV contract.
 
 Recovery requires exact resource scope, a reason, matched grant/permission, and

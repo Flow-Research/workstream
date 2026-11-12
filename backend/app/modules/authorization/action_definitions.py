@@ -395,7 +395,7 @@ ACTION_DEFINITIONS = (
         PermissionId.PROJECT_TASK_MANAGE,
         ActionOwner.TASK_PROJECT_GRANT,
     ),
-    _planned(
+    _active(
         ActionId.OPERATIONS_SUBMISSION_GATE_REPAIR,
         PermissionId.OPERATIONS_SUBMISSION_GATE_REPAIR,
         ActionOwner.AUTH_14,

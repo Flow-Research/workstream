@@ -958,7 +958,7 @@ their canonical 401/503 and 429/503 behavior before private lookup.
 | Operation | Authority | Required controls |
 |---|---|---|
 | Normal covered task/setup repair | Covered Project Manager `project.task.manage` | Exact project, lifecycle guard, reason/evidence where mutation is corrective. |
-| Submission gate repair (planned; unavailable) | Operator `operations.submission_gate.repair` | No submission/review rewrite; reason, matched authority, immutable checker evidence. |
+| Accepted-finalization recovery (internal owner; no public endpoint) | Operator `operations.submission_gate.repair` | Exact accepted operation and exhausted UNKNOWN event; reason and current system grant; one audited recovery child, preserving original attempts and PRE/source evidence. |
 | Checker retry (planned; unavailable) | Operator `operations.checker.retry` | New attempt/supersession evidence; no prior result deletion. |
 | Review lease force release | Operator `review.lease.force_release` under WS-REV-001 | Review-owned lease guards and evidence; no review decision. |
 

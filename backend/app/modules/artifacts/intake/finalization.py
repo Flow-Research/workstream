@@ -114,7 +114,7 @@ class AcceptedSubmissionFinalization:
             row.continuation_lease_id, row.continuation_generation = str(lease_id), generation
             expires_at = now + self._duration
             if self._delivery is not None:
-                expires_at = min(expires_at, self._delivery.envelope.claim.claim_expires_at)
+                expires_at = min(expires_at, self._delivery.lease_expires_at)
             row.continuation_expires_at, row.continuation_decision_id = expires_at, str(decision)
             await session.flush()
             return AcceptedContinuation(SubmissionIntakeRepository._sealed_source(row), lease_id, generation)

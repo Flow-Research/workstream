@@ -620,3 +620,17 @@ class _PreparedTaskRoutingAdapter:
 def task_routing_authorization(session):
     """Compose canonical router AUTH through the designated AUTH composition root."""
     return _TaskRoutingAuthorizationAdapter(session)
+
+
+def submission_recovery_authorization(session: AsyncSession, context: AuthorizationContext):
+    """Compose exact finalization gate repair under current system Operator authority."""
+    from app.modules.authorization.submission_recovery import SubmissionRecoveryAuthorization
+    repository = AdminAuthorizationRepository(session)
+    kernel = AuthorizationService(session, context, admin_repository=repository)
+    return SubmissionRecoveryAuthorization(session, context, kernel)
+
+
+def submission_recovery_cause_authorization(session: AsyncSession):
+    """Validate retained recovery cause; grants no fresh human authority."""
+    from app.modules.authorization.submission_recovery import SubmissionRecoveryAuthorization
+    return SubmissionRecoveryAuthorization(session, None, None)

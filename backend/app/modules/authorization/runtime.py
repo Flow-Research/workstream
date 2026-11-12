@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
 
 from app.modules.artifacts.api.submission_intake import PreSubmitSourceReadFacts
 from app.modules.authorization.domain.submission_finalization import SubmissionFinalizationResourceContext
+from app.modules.authorization.domain.submission_recovery import SubmissionRecoveryResourceContext
 from app.modules.authorization.domain.guide_compilation import ProjectGuideCompilationExecuteResourceContext, ProjectGuideCompilationRequestResourceContext
 from app.modules.authorization.domain.resource_digest import authorization_resource_digest as authorization_resource_digest
 from app.modules.authorization.domain.guide_proposals import GuideProposalResourceContext
@@ -1114,6 +1115,7 @@ AuthorizationResourceContext = (
     | ArtifactOperatorRetryResourceContext
     | GuideSourceReadResourceContext
     | SubmissionFinalizationResourceContext
+    | SubmissionRecoveryResourceContext
     | SubmissionCreationResourceContext | SubmissionBindingResourceContext | IntakeAcceptanceResourceContext
     | PreSubmitCheckerInputResourceContext
     | SubmissionBundlePreparationPreflightResourceContext

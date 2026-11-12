@@ -33,7 +33,7 @@ from app.modules.authorization.api.submission_intake import (
 )
 from app.modules.checkers.api.external_policy import LockedExternalCheckerPolicies
 from app.modules.checkers.api.selected_pre_submit import SelectedPreSubmitCoordinationPort, SelectedPreSubmitReservationFacts
-from app.modules.outbox.api import OutboxAppendPort
+from app.modules.outbox.api import OutboxAppendPort, FinalizedUnknownDeliveryPort
 from app.modules.projects.api.locked_policy import ProjectLockedPolicyContextPort, ProjectLockedPolicyContextRequest
 from app.modules.projects.api.policy_lineage import RevisionPolicySemantics
 from app.modules.tasks.api.intake_custody import IntakeTaskCustodyPort
@@ -79,6 +79,7 @@ class ForegroundIntakeAdmission:
         projects: Callable[[AsyncSession], ProjectLockedPolicyContextPort],
         authorization: Callable[[AsyncSession], IntakeAuthorizationPort],
         events: Callable[[AsyncSession], OutboxAppendPort],
+        deliveries: Callable[[AsyncSession], FinalizedUnknownDeliveryPort],
         namespace: ArtifactStorageNamespaceSpec, capacity_limits: SubmissionSourceCapacityLimits,
         maximum_raw_bytes: int, upload_duration: timedelta, lease_duration: timedelta,
     ) -> None:
@@ -89,7 +90,7 @@ class ForegroundIntakeAdmission:
             raise ValueError("intake reservation limits are invalid")
         self._sessions, self._tasks, self._contexts = sessions, tasks, task_contexts
         self._projects, self._authorization = projects, authorization
-        self._events = events
+        self._events, self._deliveries = events, deliveries
         self._namespace = namespace
         self._capacity = SubmissionSourceCapacityLimits.model_validate(capacity_limits)
         self._maximum, self._upload_duration, self._lease_duration = maximum_raw_bytes, upload_duration, lease_duration
@@ -308,7 +309,7 @@ class ForegroundIntakeAdmission:
                 raise IntakeCustodyConflict("submission_idempotency_conflict")
             result = IntakeReplay(UUID(row.id), row.state, row.failure_code,
                                   row.maximum_raw_bytes, row.raw_sha256, row.raw_byte_count,
-                                  await finalization_progress(row, self._events(session)))
+                                  await finalization_progress(row, self._events(session), self._deliveries(session)))
         return result
 
     async def replay(

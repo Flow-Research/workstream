@@ -46,7 +46,10 @@ def outbox_delivery(
 def production_outbox_delivery(session_factory, *, finalization_worker: bool | None = None):
     """Compose all handlers for discovery, or one explicit worker group for delivery."""
     from app.adapters.artifacts import worker_post_submission_materialization
-    from app.adapters.artifacts.finalization import worker_submission_finalization_handler
+    from app.adapters.artifacts.finalization import (
+        worker_submission_finalization_handler, worker_submission_finalization_recovery_handler,
+    )
+    from app.modules.artifacts.api.submission_recovery import FINALIZATION_RECOVERY_EVENT
     from app.modules.artifacts.api.submission_finalization import SUBMISSION_FINALIZATION_DELIVERY_LEASE_SECONDS
     from app.adapters.auth import (
         outbox_dispatch_authorization,
@@ -84,6 +87,13 @@ def production_outbox_delivery(session_factory, *, finalization_worker: bool | N
                 "SubmissionFinalizationRequested",
                 1,
                 worker_submission_finalization_handler(
+                    sessions=session_factory, delivery_options=finalization_options,
+                ),
+            ),
+            (
+                FINALIZATION_RECOVERY_EVENT,
+                1,
+                worker_submission_finalization_recovery_handler(
                     sessions=session_factory, delivery_options=finalization_options,
                 ),
             ),
@@ -155,17 +165,18 @@ def production_outbox_delivery(session_factory, *, finalization_worker: bool | N
                 ),
             ),
         ],
-        replay_safe=frozenset({("SubmissionFinalizationRequested", 1), (REVISION_EXPIRY_EVENT, 1), (REVISION_EXPIRED_EVENT, 1), (REVISION_CONTEXT_BLOCKED_EVENT, 1), (REVISION_EXHAUSTED_EVENT, 1)}),
+        replay_safe=frozenset({("SubmissionFinalizationRequested", 1), (FINALIZATION_RECOVERY_EVENT, 1), (REVISION_EXPIRY_EVENT, 1), (REVISION_EXPIRED_EVENT, 1), (REVISION_CONTEXT_BLOCKED_EVENT, 1), (REVISION_EXHAUSTED_EVENT, 1)}),
     )
     if finalization_worker is not None:
         keys = tuple(key for key in registry.keys
-                     if (key[0] == "SubmissionFinalizationRequested") == finalization_worker)
+                     if (key[0] in {"SubmissionFinalizationRequested", FINALIZATION_RECOVERY_EVENT}) == finalization_worker)
         registry = HandlerRegistry(
             [(kind, version, registry.get(kind, version)) for kind, version in keys],
             replay_safe=frozenset(key for key in keys if registry.can_retry_unknown(*key)),
         )
     event_options = {
         ("SubmissionFinalizationRequested", 1): finalization_options,
+        (FINALIZATION_RECOVERY_EVENT, 1): finalization_options,
         (REQUEST_EVENT, 1): DeliveryOptions(
             lease_seconds=SELECTED_POST_DELIVERY_LEASE_SECONDS,
             handler_timeout_seconds=SELECTED_POST_HANDLER_TIMEOUT_SECONDS,

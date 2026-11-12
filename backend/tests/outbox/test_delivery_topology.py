@@ -195,7 +195,7 @@ def test_scan_routes_each_event_group_without_acknowledging(monkeypatch):
     get_settings.cache_clear()
     from app.workers import outbox
     items = tuple(DeliveryCandidate(event_id=new_record_id(), project_id=new_record_id(), event_type=kind)
-                  for kind in ("PostSubmissionEvaluationRequested", "SubmissionFinalizationRequested"))
+                  for kind in ("PostSubmissionEvaluationRequested", "SubmissionFinalizationRequested", "SubmissionFinalizationRecoveryRequested"))
     async def candidates(_after):
         return DeliveryCandidatePage(items=items, next_after=None)
     published = []
@@ -203,9 +203,9 @@ def test_scan_routes_each_event_group_without_acknowledging(monkeypatch):
     monkeypatch.setattr(outbox.deliver_event, "apply_async", lambda **kwargs: published.append(("post", kwargs)))
     monkeypatch.setattr(outbox.finalize_submission, "apply_async", lambda **kwargs: published.append(("final", kwargs)))
     try:
-        assert outbox.scan_pending.apply(task_id=str(new_record_id()), throw=True).get() == {"selected": 2, "published": 2}
+        assert outbox.scan_pending.apply(task_id=str(new_record_id()), throw=True).get() == {"selected": 3, "published": 3}
         assert published == [(kind, {"args": (str(item.event_id), str(item.project_id))})
-                             for kind, item in zip(("post", "final"), items, strict=True)]
+                             for kind, item in zip(("post", "final", "final"), items, strict=True)]
     finally:
         get_settings.cache_clear()
 

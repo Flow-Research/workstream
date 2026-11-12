@@ -31,7 +31,7 @@ from tests.authorization.admin_access.fixtures import (
 
 @pytest.fixture
 async def admission_intake(tmp_path, isolated_database_env, admin_access, request):
-    from app.adapters.outbox import outbox_append
+    from app.adapters.outbox import outbox_append, finalized_unknown_deliveries
     from app.adapters.projects import project_locked_policy_context_port
     from app.modules.artifacts.intake.foreground_admission import ForegroundIntakeAdmission
     from app.modules.authorization.submission_intake import SubmissionIntakeAuthorization
@@ -77,7 +77,7 @@ async def admission_intake(tmp_path, isolated_database_env, admin_access, reques
             factory, tasks=lambda session: IntakeTaskCustody(session, task_submission_context_port(session)),
             task_contexts=task_submission_context_port, projects=project_locked_policy_context_port,
             authorization=lambda session: SubmissionIntakeAuthorization(session, actor), namespace=namespace,
-            events=outbox_append,
+            events=outbox_append, deliveries=finalized_unknown_deliveries,
             capacity_limits=SubmissionSourceCapacityLimits(maximum_total_bytes=1_000_000), maximum_raw_bytes=1024,
             upload_duration=timedelta(seconds=300), lease_duration=timedelta(seconds=60),
         )
@@ -840,6 +840,120 @@ async def test_t5_finalizes_same_source_with_one_submission_and_post_dispatch(ad
                         await session.execute(text(statement), {"id": identity})
         from tests.artifacts.intake_post_support import exercise_source_post
         await exercise_source_post(f, result, store, request.source, tmp_path)
+    finally:
+        store.close()
+
+
+async def test_operator_recovers_same_accepted_finalization_once(admission_intake, tmp_path):
+    import asyncio
+    import json
+    from uuid import UUID
+    from sqlalchemy import select, func, text
+    from sqlalchemy.exc import IntegrityError
+    from app.core.hashing import canonical_json_hash
+    from app.adapters.artifacts.finalization import submission_finalization_recovery_handler
+    from app.adapters.auth import outbox_dispatch_authorization, submission_recovery_authorization
+    from app.adapters.checkers import selected_pre_submit_coordinator
+    from app.adapters.outbox import outbox_append, outbox_delivery, finalized_unknown_deliveries
+    from app.modules.actors.api import ServiceIdentity
+    from app.modules.artifacts.api.submission_recovery import (
+        FINALIZATION_RECOVERY_EVENT, SubmissionRecoveryCommand, SubmissionRecoveryUnavailable,
+    )
+    from app.modules.artifacts.intake.recovery import SubmissionFinalizationRecovery
+    from app.modules.outbox.api import DeliveryOptions
+    from app.modules.outbox.models import OutboxEvent
+    from app.modules.outbox.registry import HandlerRegistry
+    from app.modules.tasks.models import Submission
+    from tests.artifact_store_helpers import initialize_local_store
+    from tests.artifacts.intake_acceptance_support import completed_source
+    from tests.checkers.execution.support import provision_post_submit_service
+
+    f = admission_intake
+    owner, request, terminal = await completed_source(f, tmp_path)
+    await f.admission.accept(owner, request, terminal.terminal_digest,
+        checkers=selected_pre_submit_coordinator, outbox=outbox_append)
+    for identity in (ServiceIdentity.ARTIFACT_BINDING, ServiceIdentity.OUTBOX_DISPATCHER):
+        await provision_post_submit_service(f.factory, identity)
+    async with f.factory() as session:
+        row = await session.get(SubmissionIntakeOperation, str(owner.operation_id))
+        event_id = UUID(row.finalization_event_id)
+        metadata = SubmissionIntakeMetadata.model_validate_json(json.dumps(row.command_metadata))
+        intake_key = UUID(row.idempotency_key)
+    async def lost(_envelope):
+        raise RuntimeError("lost original finalizer")
+    options = DeliveryOptions(lease_seconds=30, handler_timeout_seconds=25, max_attempts=1)
+    delivery = outbox_delivery(f.factory, authorization_factory=outbox_dispatch_authorization,
+        registry=HandlerRegistry([("SubmissionFinalizationRequested", 1, lost)],
+            replay_safe=frozenset({("SubmissionFinalizationRequested", 1)})),
+        options=DeliveryOptions(lease_seconds=5, handler_timeout_seconds=4, max_attempts=1))
+    await delivery.deliver(event_id, f.project, "lost-finalizer")
+    await asyncio.sleep(5.05)  # Recovery must use its live child, not this expired original lease.
+    key = new_record_id()
+    context = f.actor.model_copy(update={"request_id": key, "correlation_id": key})
+    command = SubmissionRecoveryCommand(operation_id=owner.operation_id, project_id=f.project,
+        actor_profile_id=f.actor.actor_profile_id, request_id=key, reason="Restore unavailable finalizer")
+    async def recover(value=command):
+        async with f.factory.begin() as session:
+            return await SubmissionFinalizationRecovery(session,
+                tasks=IntakeTaskCustody(session, task_submission_context_port(session)),
+                events=outbox_append(session), deliveries=finalized_unknown_deliveries(session),
+                authorization=submission_recovery_authorization(session, context)).request(value)
+    with pytest.raises(SubmissionRecoveryUnavailable):
+        await recover()
+    grant_id = await f.access.signed.grant(f.access.admin, f.access.target)
+    created, raced = await asyncio.gather(recover(), recover())
+    assert raced == created and await recover() == created
+    with pytest.raises(SubmissionRecoveryUnavailable, match="submission_recovery_conflict"):
+        await recover(command.model_copy(update={"reason": "Different recovery reason"}))
+    async with f.factory() as session:
+        original_payload = (await session.get(OutboxEvent, created.recovery_event_id)).payload
+    for field, value, message in (
+        ("reason", "Forged reason", "recovery authority shape differs"),
+        ("decision_id", str(new_record_id()), "recovery retained Operator cause differs"),
+    ):
+        forged = json.loads(json.dumps(original_payload))
+        forged["command" if field == "reason" else "authority"][field] = value
+        with pytest.raises(IntegrityError, match=message):
+            async with f.factory.begin() as session:
+                await session.execute(text("""INSERT INTO outbox_events(event_id,event_type,event_version,
+                    aggregate_type,aggregate_id,project_id,correlation_id,causation_event_id,
+                    idempotency_key,payload,payload_digest)
+                    SELECT :id,event_type,event_version,aggregate_type,aggregate_id,project_id,
+                    correlation_id,causation_event_id,idempotency_key,cast(:payload as jsonb),:digest
+                    FROM outbox_events WHERE event_id=:original"""),
+                    {"id": new_record_id(), "payload": json.dumps(forged),
+                     "digest": canonical_json_hash(forged), "original": created.recovery_event_id})
+    progress = await f.admission._read(metadata, f.actor.actor_profile_id, intake_key)
+    assert not progress.finalization.operationally_stalled and progress.finalization.next_retry_at is not None
+    store = initialize_local_store(root=tmp_path / "durable", buffer_bytes=256 * 1024)
+    try:
+        handler = submission_finalization_recovery_handler(sessions=f.factory,
+            settings=_settings(tmp_path), store=store, lease_duration=timedelta(seconds=30))
+        invocations = []
+        async def invoke(envelope):
+            invocations.append(envelope)
+            return await handler(envelope)
+        retry = outbox_delivery(f.factory, authorization_factory=outbox_dispatch_authorization,
+            registry=HandlerRegistry([(FINALIZATION_RECOVERY_EVENT, 1, invoke)]), options=options)
+        await retry.deliver(created.recovery_event_id, f.project, "recovery-finalizer")
+        with pytest.raises(SubmissionRecoveryUnavailable, match="submission_recovery_stale"):
+            await handler(invocations[0])
+        replayed = await recover()
+        assert replayed.recovery_event_id == created.recovery_event_id and replayed.state == "acknowledged"
+        async with f.factory() as session:
+            row = await session.get(SubmissionIntakeOperation, str(owner.operation_id))
+            assert row.state == "finalized" and row.finalization_event_id == str(event_id)
+            assert await session.scalar(select(func.count()).select_from(Submission).where(
+                Submission.task_id == str(f.task))) == 1
+            assert await session.scalar(select(func.count()).select_from(OutboxEvent).where(
+                OutboxEvent.event_type == "PostSubmissionEvaluationRequested")) == 1
+            assert (await session.get(OutboxEvent, event_id)).delivery_state == "dead_letter"
+            assert await session.scalar(select(func.count()).select_from(OutboxEvent).where(
+                OutboxEvent.event_type == FINALIZATION_RECOVERY_EVENT)) == 1
+        revoked = await f.access.signed.revoke(f.access.admin, grant_id)
+        assert revoked.status_code == 200, revoked.text
+        with pytest.raises(SubmissionRecoveryUnavailable):
+            await recover()
     finally:
         store.close()
 

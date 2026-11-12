@@ -3054,3 +3054,72 @@ T5 rather than create another Submission path. In particular, finalizer lease
 expiry currently uses the original envelope: a recovery child must supply its
 verified live lease bound while retaining the original accepted event identity.
 No recovery action has been activated by this checkpoint.
+
+### Accepted-finalization operator recovery
+
+Close C05's recovery gap using existing `operations.submission_gate.repair` and
+OUTBOX finalized-UNKNOWN reconciliation custody. The first recovery uses the
+existing one-child-per-original convention: a failed child remains visibly held;
+there is no implicit new contributor command or unlimited retry loop. The original
+accepted event and completed attempts remain immutable. Recovery must invoke the
+same T5, retain its current service authority, and bind its lease to the live
+child rather than the expired original.
+
+Allowed scope: ART recovery values, owner and existing finalizer/handler; AUTH
+resource/action activation and audit verification; existing OUTBOX reconciliation
+ports; composition, worker routing, narrow SQL custody migration, corresponding
+real PostgreSQL tests and current recovery documentation. No broadening of
+Operator authority, QC override, source rewrite, new Submission writer, retained
+data deletion or deployment defaults. Risk is authorization/workflow (L0).
+
+Acceptance evidence: authorized exact retry and replay after revoked grant;
+concurrent commands produce one child; reason/key/source substitutions fail;
+failed authority rolls back child creation; worker verifies retained decision and
+live child fence; successful recovery creates exactly one Submission/dispatch;
+expired or substituted child cannot act; exhausted child is visible and keeps
+source protection. Required reviews: architecture/security and QA/test delta,
+plus documentation for public exposure claims. Human review focus is the exact
+recovery authority and preservation of accepted evidence. This scope remains
+unexposed until its composed behavior and custody checks pass.
+
+The broader intake regression run completed: `/tmp/t5-progress-full.log` reports
+**36 passed in 705.07s**; metadata records launch head `82452d5f3` and successful
+database/role cleanup. Recovery development overlapped the tail of this run, so
+this is regression evidence for the progress work, not a frozen recovery proof.
+
+Recovery implementation is in progress. The first focused run caught the closed
+active-action catalogue boundary; the second reached the command but caught the
+missing authorization-decision resource literal. Both were repaired without
+weakening either registry. Migration execution caught a multi-statement prepared
+query; function and trigger creation now use separate statements. No successful
+recovery end-to-end claim is made until the composed PostgreSQL test passes.
+
+The composed recovery run `/tmp/t5-recovery4.log` passed **4 PostgreSQL tests**
+(92.90s; isolated database/role cleanup confirmed). It covers current Operator
+authority, concurrent requests producing one child, exact replay, reason conflict,
+direct-SQL forged reason/decision refusal, revoked-grant denial, live recovery
+progress, one Submission and POST event, and production worker registration and
+group isolation. The original delivery remains dead-lettered and immutable.
+
+Related static checks passed **84 tests**; the sole stale active/planned-count
+assertion was updated from 168/25 to 169/24 for activation of the existing action,
+and its focused rerun passed (`/tmp/t5-recovery-catalogue.log`). No action or
+permission was added. OUTBOX rejected the initial `request_key` payload field
+under its existing privacy guard; recovery now names its persisted command
+identity `request_id`, with no guard exception or compatibility alias.
+
+Migration 0077 adds one unique recovery-parent index, one custody function and
+one insert trigger, and extends only the existing exact UNKNOWN-retry allowlist.
+The PostgreSQL-observed schema fingerprint is
+`1d0060750a195d348606ae5eaf9ae9a47462e1cf6062f278c9f2b408b707f8b2`
+(`/tmp/t5-recovery-schema3.log`); the subsequent passing run validated it. The
+structure ledger updates only the two-line source offset for unchanged
+`AuthorizationService._require_prelocked`; its size and hash are preserved and
+structure validation passed. No new debt or exception was introduced.
+
+Additional regression in progress explicitly waits for the original delivery
+lease to expire before successful recovery and rejects a stale child invocation
+after acknowledgement. This must complete before claiming the recovery checkpoint
+verified. The one-child limit follows existing reconciliation: exhaustion remains
+held, not an automatic contributor retry. Public operator discovery/command
+routes and the full public operation progress contract remain outstanding.

@@ -81,6 +81,10 @@ def _model_administration_target(resource):
 
 
 def _submission_operation_target(resource):
+    from app.modules.authorization.domain.submission_recovery import SubmissionRecoveryResourceContext
+    if type(resource) is SubmissionRecoveryResourceContext:
+        return (str(resource.scope_project_id), "submission_operation", str(resource.resource_id),
+                "submission_operation", str(resource.resource_id))
     if type(resource) in {IntakeAcceptanceResourceContext, SubmissionFinalizationResourceContext}:
         project_id = str(getattr(resource, "scope_project_id", None) or resource.project_id)
         return project_id, "submission_operation", str(resource.operation_id), "project", project_id

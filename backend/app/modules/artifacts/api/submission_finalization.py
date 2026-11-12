@@ -17,6 +17,7 @@ class SubmissionFinalizationProgress:
     finalized: bool
     operationally_stalled: bool
     stalled_at: datetime | None
+    stalled_reason: str | None
     next_retry_at: datetime | None
     attempt_count: int
 

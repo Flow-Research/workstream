@@ -603,6 +603,7 @@ AUDIT_ALLOWED_ACTION_VALUES = {
     "checker.pre_submit.execute",
     "checker.pre_submit.finalize",
     "operations.checker.retry",
+    "operations.submission_gate.repair",
     "operations.checker_retry_source.list",
     "operations.artifact_storage_admission.read",
     "operations.post_submit_delivery.list",

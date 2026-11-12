@@ -1,6 +1,7 @@
 """Deny-by-default request-scoped authorization kernel."""
 from __future__ import annotations
 from app.modules.authorization.domain.submission_finalization import SubmissionFinalizationResourceContext
+from app.modules.authorization.domain.submission_recovery import SubmissionRecoveryResourceContext
 from app.modules.authorization.domain.guide_proposals import GUIDE_PROPOSAL_RESOURCE_BY_ACTION
 from app.modules.authorization.catalogue import POST_POLICY_ACTION_IDS
 from app.modules.authorization.domain.post_policy import PostPolicyResourceContext
@@ -208,6 +209,7 @@ _ADMIN_EXPECTED_RESOURCES = MappingProxyType(
         **checker_registry.CHECKER_REGISTRY_RESOURCE_BY_ACTION,
         **checker_models.MODEL_ADMIN_RESOURCE_BY_ACTION,
         ActionId.OPERATIONS_CHECKER_RETRY: checker_retry.CheckerRetryResourceContext,
+        ActionId.OPERATIONS_SUBMISSION_GATE_REPAIR: SubmissionRecoveryResourceContext,
         **post_submit_deliveries.POST_SUBMIT_DELIVERY_RESOURCE_BY_ACTION,
         **artifact_operator.ARTIFACT_OPERATOR_RESOURCE_BY_ACTION,
         **PROJECT_MUTATION_RESOURCE_BY_ACTION,
@@ -867,7 +869,7 @@ class AuthorizationService:
                 return lifecycle, context, None, None, True
 
         project_id = self._resource_project_id(resource)
-        system_only = project_id is None
+        system_only = project_id is None or action.action_id is ActionId.OPERATIONS_SUBMISSION_GATE_REPAIR
         grant_filters: dict[str, object] = {}
         if action.action_id is ActionId.PROJECT_ACTIVE_GUIDE_READ:
             grant_filters["allowed_roles"] = ACTIVE_GUIDE_ADMIN_ROLES
@@ -879,7 +881,7 @@ class AuthorizationService:
                 **checker_registry.checker_registry_grant_filters(action.action_id),
             }
         )
-        if action.action_id in checker_retry.CHECKER_RETRY_ACTIONS | post_submit_deliveries.POST_SUBMIT_DELIVERY_MUTATION_ACTIONS | checker_models.MODEL_ADMIN_ACTIONS | artifact_operator.ARTIFACT_OPERATOR_ACTIONS:
+        if action.action_id in {ActionId.OPERATIONS_SUBMISSION_GATE_REPAIR} | checker_retry.CHECKER_RETRY_ACTIONS | post_submit_deliveries.POST_SUBMIT_DELIVERY_MUTATION_ACTIONS | checker_models.MODEL_ADMIN_ACTIONS | artifact_operator.ARTIFACT_OPERATOR_ACTIONS:
             grant_filters["allowed_roles"] = (AdminRole.OPERATOR,)
         matched = await self._admin.find_effective_grant(
             context.actor_profile_id,
@@ -967,6 +969,14 @@ class AuthorizationService:
             if resource.resource_id == context.identity_link_id and resource.transition == "revoke":
                 return AuthorizationDenialCode.RESOURCE_GUARD_DENIED
             if await self._admin.lock_identity_link_lifecycle_target(resource.resource_id) is None:
+                return AuthorizationDenialCode.RESOURCE_NOT_FOUND
+        elif type(resource) is SubmissionRecoveryResourceContext:
+            if (resource.command.actor_profile_id != context.actor_profile_id
+                    or resource.identity_link_id != context.identity_link_id
+                    or resource.command.request_id != context.request_id
+                    or context.request_id != context.correlation_id):
+                return AuthorizationDenialCode.RESOURCE_GUARD_DENIED
+            if not await self._admin.project_exists(resource.scope_project_id, for_update=True):
                 return AuthorizationDenialCode.RESOURCE_NOT_FOUND
         elif type(resource) is post_submit_deliveries.PostSubmitDeliveryResourceContext and not await self._admin.project_exists(resource.scope_project_id, for_update=True):
             return AuthorizationDenialCode.RESOURCE_NOT_FOUND

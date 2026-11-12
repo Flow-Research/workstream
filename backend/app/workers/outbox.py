@@ -92,7 +92,7 @@ def scan_pending(self, after=None):
     published = 0
     for candidate in page.items:
         try:
-            task = finalize_submission if candidate.event_type == "SubmissionFinalizationRequested" else deliver_event
+            task = finalize_submission if candidate.event_type in {"SubmissionFinalizationRequested", "SubmissionFinalizationRecoveryRequested"} else deliver_event
             task.apply_async(args=(str(candidate.event_id), str(candidate.project_id)))
             published += 1
         except Exception:
