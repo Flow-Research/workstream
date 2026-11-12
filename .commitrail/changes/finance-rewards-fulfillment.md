@@ -35,6 +35,14 @@ Rejected alternatives: separate app/database, duplicate workflow engines, direct
 
 Commit sequence follows specification section 19.2: (1) executable contracts/digests and retained-data preflight; (2) policy/task/revision propagation; (3) atomic award/root/handoff and callback custody; (4) Finance/AUTH/machine identity and runtime partition; (5) configuration/plans/credit/authorized transfer; (6) HTTP/client/recovery integration; (7) operational qualification and documentation. Split stages into smaller cohesive commits as needed. Reverting code is not a data rollback: preserve durable financial evidence and use the specification's coordinated cutover/restore procedure.
 
+### First commit boundary: obligation wire contract
+
+Allowed: `backend/app/modules/compensation/api/fulfillment_contracts.py`, `backend/app/modules/finance/api/`, `backend/app/modules/finance/contracts/`, narrowly scoped core wire-format primitives, and focused COMP/FIN contract tests. Excluded: models, migrations, module registry, routes, workers, AUTH activation, provider calls and financial effects. The next preflight commit requires its own concrete query/report plan before implementation; it is excluded from this contract-only commit.
+
+Both owners independently validate the portable closed JSON Schema and canonical digests through their own public entry paths. Neither owner's decoder calls the other's decoder. Reuse the existing core hash and route-token primitive; avoid duplicated manually maintained field rules. Decode raw bytes before ordinary request parsing: enforce 64 KiB, strict UTF-8, duplicate-member rejection, object-only envelopes and unknown-member rejection. Tests exercise both entry paths against the same fixtures, including changed quantity with old digests and recomputed digests over an invalid source shape. Pure wire validation proves no source authority or database identity.
+
+First-commit verification: `cd backend && .venv/bin/python -m pytest -q tests/finance/test_obligation_contracts.py`; `.venv/bin/ruff check app/core/financial_wire.py app/modules/compensation/api/fulfillment_contracts.py app/modules/finance/api tests/finance/test_obligation_contracts.py`. These are planned new tests/files, not executed proof. Schema fixtures include the exact specification vector, money and historical controls, plus negative canonicalization/shape/digest cases. Source-authority and runtime HTTP assertions remain later integration proof.
+
 ## Acceptance criteria
 
 - [ ] Positive/negative contract fixtures reproduce canonical digest vectors and reject altered evidence.
