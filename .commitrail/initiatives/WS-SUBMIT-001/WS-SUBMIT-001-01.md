@@ -27,7 +27,9 @@ commit or worktree, not automatically to every later head.
 Finalization now has production OUTBOX registration and invocation fencing, with
 real PostgreSQL recovery proof. A dedicated local worker queue and internal
 authorized stall projection are implemented. Full Celery/provider execution,
-independent worker capacity, public progress and operator recovery remain unfinished.
+independent worker capacity and public progress/operator endpoints remain unfinished.
+Internal audited finalization recovery now reuses the existing Operator gate-repair
+action, preserves the original delivery and runs the same T5 under a live child lease.
 Next: close those durable-worker gaps, then complete cleanup and public API/CLI/MCP
 cutover, real revision/review/ContributionRecord journeys, policy cardinality and
 the A01–A35/C01–C07 completion audit. No public end-to-end readiness is claimed.
@@ -3163,3 +3165,11 @@ changing any guard. The focused `/tmp/t5-recovery7.log` run passed (**1 passed**
 41.18s), exercising all nine SQL forgeries plus valid-child positive control;
 isolated database/role cleanup completed for both runs. Ruff, structure and link
 checks passed. Frozen repair review remains pending.
+
+Frozen repair review on clean `852fbf326c25e828d9d408185e55fa994c122eee` passed
+architecture/security, QA/test-delta, documentation and CI integrity. Reviewers
+confirmed the three SQL findings and both QA proof gaps were closed; architecture
+independently compared the explicit SQL whitespace set with Python's 29 whitespace
+code points. Evidence remains the declared worktree runs, not an exact-head native
+or public-API drill. Public operator routes, cleanup and single-request API/client
+cutover remain required for the full goal.
