@@ -720,4 +720,4 @@ def intake_task_custody_port(session):
     """Compose TASK-first active intake pointer custody for ART participation."""
     from app.modules.tasks.intake_custody import IntakeTaskCustody
 
-    return IntakeTaskCustody(session)
+    return IntakeTaskCustody(session, task_submission_context_port(session))

@@ -1261,3 +1261,34 @@ failures must be replaced alongside the corresponding live callers, not hidden
 by narrowing CI. Scoped Ruff and diff whitespace checks passed. Freshly fetched
 main remains an ancestor of the branch. Remote CI for the prior pushed commit
 was still running when polled; no green outcome is inferred.
+
+The source-first SQL transition now adds migration 0071: nullable historical
+columns, unique source-operation/composite TASK linkage, TASK/ART source checks,
+exact approved PRE and POST policy comparisons, closed v2 request keys and
+versioned execute/finalize audit digests. Existing revision-expiry/exhaustion
+lineage logic is retained by exact guarded function replacements. Historical v1
+run updates are refused and old prepared-bundle admission joins are v1-only.
+No retained row is rewritten or terminalized. The TASK adapter now supplies the
+existing context port required by `IntakeTaskCustody`; its missing constructor
+argument was found while tracing the real composition path.
+
+Fresh PostgreSQL migration succeeded. Schema setup correctly refused the old
+fingerprint; the new fingerprint was measured from the migrated database as
+`dead223f93cd881dc9710b44c91a146bbba890073c857b88ff11b137a778460b`.
+The first source-guard fixture had an approved policy with no selected PRE image
+and failed at the new exact-one constructor, before SQL. The test now requests
+one registered image through the genuine approval fixture; production cardinality
+was not relaxed. Its positive control passes the composed ART source port and
+inserts a queued v2 row through the real SQL insert and deferred receipt guards.
+Two separate PostgreSQL tests prove Python/SQL execute/finalize digest agreement
+for both the frozen v1 vector and a v2 request. Database cleanup was confirmed.
+The full eight source substitution/control cases plus those two digest tests are
+running for the frozen SQL candidate; pending results are not a pass.
+
+This remains part of the unfinished live replacement: production source-first
+producer/callers, result envelope, v2 read dispatch, old capability removal and
+native one-session runtime remain outstanding. Full retained-row upgrade and
+new receipt lifecycle proof are still needed; the frozen-vector digest checks
+are narrower evidence. The full earlier pushed Backend run at `d8677d2f8` has
+now completed successfully; it does not qualify these local changes. Scoped
+Ruff/whitespace checks pass and the protected ownership partition is unchanged.

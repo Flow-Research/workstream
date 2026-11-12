@@ -41,12 +41,14 @@ def capacity_limits(request):
 
 
 @pytest.fixture
-async def intake(tmp_path, isolated_database_env, capacity_limits):
+async def intake(tmp_path, isolated_database_env, capacity_limits, request):
     engine = create_async_engine(isolated_database_env)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     try:
+        from tests.checkers.external.support import pre_registry_spec
         plan, _ = await approved_selected_policy_fixture(
             factory, _namespace(_settings(tmp_path)), guide_version="v1",
+            pre_submit_registry_spec=pre_registry_spec() if getattr(request, "param", False) else None,
         )
         actor = _context()
         async with factory.begin() as session:
@@ -1047,3 +1049,141 @@ async def test_pre_source_custody_rejects_substitution_or_stale_owner(intake, ch
                 )
         finally:
             await session.rollback()
+
+
+@pytest.mark.parametrize("intake", [True], indirect=True)
+@pytest.mark.parametrize("changed", [None, "source", "packet", "policy", "post_policy", "fence", "deadline", "actor"])
+async def test_selected_pre_sql_requires_exact_live_source(intake, changed):
+    """Exercise the SQL source participant; not full PRE execution or T4 proof."""
+    from dataclasses import replace
+    from app.modules.checkers.api.external_policy import LockedExternalCheckerPolicies
+    from tests.checkers.external.test_selected_pre_submit_coordination import _source_reservation
+
+    async with intake.factory.begin() as session:
+        row = await reserve(intake, session)
+        operation, lease = UUID(row.id), UUID(row.lease_id)
+        await record_eof(session, operation, lease, 1, raw_sha256=SHA, raw_byte_count=100)
+        deadline = datetime.now(UTC) + timedelta(minutes=2)
+        source = await repository(session).seal(
+            operation, lease, 1, provider_generation="pre-source-generation",
+            pre_deadline_at=deadline, lease_expires_at=deadline,
+        )
+        from app.adapters.artifacts import submission_intake_pre_source_port
+        guarded = await submission_intake_pre_source_port(session).lock_pre_source(
+            source=source, lease_id=lease, generation=1,
+        )
+        assert guarded.source == source
+        policy_body = await session.scalar(text("""
+            SELECT a.effective_pre_submit_plan FROM project_guide_proposal_approvals a
+            JOIN workstream_tasks t ON t.locked_pre_submit_checker_policy_id=a.pre_submit_policy_id
+            WHERE t.id=:task
+        """), {"task": intake.task})
+        policies = LockedExternalCheckerPolicies.model_validate_json(json.dumps(policy_body))
+        base = _source_reservation()
+        locked = await session.scalar(text("""
+            SELECT jsonb_build_object('task',to_jsonb(t),'guide_id',g.id)
+            FROM workstream_tasks t JOIN project_guides g
+              ON g.project_id=t.project_id AND g.version=t.locked_guide_version
+            WHERE t.id=:task
+        """), {"task": intake.task})
+        task = locked["task"]
+        lineage = replace(
+            base.admission_lineage, effective_plan_sha256=policies.pre_submit.policy_sha256,
+            guide_id=UUID(locked["guide_id"]), guide_version=task["locked_guide_version"],
+            source_snapshot_id=UUID(task["locked_guide_source_snapshot_id"]),
+            source_snapshot_sha256=task["locked_guide_source_snapshot_hash"],
+            effective_policy_id=UUID(task["locked_effective_project_submission_artifact_policy_id"]),
+            effective_policy_sha256=task["locked_effective_project_submission_artifact_policy_hash"],
+            pre_submit_policy_id=UUID(task["locked_pre_submit_checker_policy_id"]),
+            pre_submit_policy_sha256=task["locked_pre_submit_checker_bundle_hash"],
+            external_checker_policies_sha256=policies.policies_sha256,
+            post_submit_policy_body=policies.post_submit.model_dump(mode="json"),
+            post_submit_policy_sha256=policies.post_submit.policy_sha256,
+        )
+        request = replace(
+            base, actor_profile_id=UUID(row.actor_profile_id), identity_link_id=UUID(row.identity_link_id),
+            project_id=UUID(row.project_id), task_id=intake.task, assignment_id=intake.assignment,
+            idempotency_key=UUID(row.idempotency_key), source=source,
+            metadata_sha256=row.metadata_sha256, locked_context_sha256=row.locked_context_sha256,
+            foreground_lease_id=lease, foreground_lease_generation=1, pre_deadline_at=deadline,
+            policy=policies.pre_submit, admission_lineage=lineage,
+        )
+        body = request.canonical_body()
+        if changed == "source":
+            body["source"]["provider_generation"] = "substituted"
+        elif changed == "packet":
+            body["default_context"]["packet"]["summary"] = "substituted"
+        elif changed == "policy":
+            body["policy"]["entries"] = []
+        elif changed == "post_policy":
+            body["admission_lineage"]["post_submit_policy_body"] = {}
+        elif changed == "fence":
+            body["foreground_lease_generation"] += 1
+        elif changed == "deadline":
+            body["pre_deadline_at"] = (deadline + timedelta(seconds=1)).isoformat()
+        value = {
+            "source_operation_id": str(operation), "task_id": str(intake.task),
+            "project_id": row.project_id, "assignment_id": str(intake.assignment),
+            "actor_profile_id": str(new_record_id()) if changed == "actor" else row.actor_profile_id,
+            "identity_link_id": row.identity_link_id, "idempotency_key": row.idempotency_key,
+            "request_json": body, "archive_sha256": source.raw_sha256,
+            "archive_byte_count": source.raw_byte_count, "policy_sha256": request.policy_sha256,
+        }
+    async with intake.factory.begin() as session:
+        statement = text("""SELECT public.require_selected_pre_source(
+            jsonb_populate_record(NULL::public.selected_pre_submit_runs, CAST(:value AS jsonb)))""")
+        if changed is None:
+            await session.execute(statement, {"value": json.dumps(value)})
+            from app.modules.checkers.models import SelectedPreSubmitRun
+            session.add(SelectedPreSubmitRun(
+                id=str(request.attempt_id), source_operation_id=str(operation),
+                actor_profile_id=row.actor_profile_id, identity_link_id=row.identity_link_id,
+                project_id=row.project_id, task_id=str(intake.task), assignment_id=str(intake.assignment),
+                idempotency_key=row.idempotency_key, request_json=request.canonical_body(),
+                request_digest=request.request_digest, policy_sha256=request.policy_sha256,
+                default_behavior_sha256=request.default_behavior_sha256,
+                archive_sha256=source.raw_sha256, archive_byte_count=source.raw_byte_count,
+                execution_budget_ms=request.execution_budget_ms, status="queued", lease_generation=0,
+            ))
+            await session.flush()
+        else:
+            with pytest.raises(DBAPIError, match="selected PRE"):
+                await session.execute(statement, {"value": json.dumps(value)})
+            await session.rollback()
+
+
+@pytest.mark.parametrize("version", ["v1", "v2"])
+async def test_selected_pre_sql_audit_digest_keeps_versioned_custody(isolated_database_env, version):
+    from app.core.hashing import canonical_json_hash
+    from tests.checkers.external.test_selected_pre_submit_coordination import _retained_v1, _source_reservation
+
+    retained = _retained_v1()
+    request = retained["request"] if version == "v1" else _source_reservation().canonical_body()
+    terminal = retained["terminal"]
+    execute = {
+        "schema_version": f"workstream.selected_pre_submit_execute.{version}",
+        "reservation": request, "lease_id": terminal["lease_id"],
+        "lease_generation": terminal["lease_generation"], "lease_expires_at": terminal["lease_expires_at"],
+    }
+    expected_execute = canonical_json_hash(execute)
+    expected_finalize = canonical_json_hash({
+        "schema_version": f"workstream.selected_pre_submit_finalize.{version}",
+        "execute_facts_digest": expected_execute,
+        "execution": terminal["execution"],
+        "infrastructure_failure_code": terminal["infrastructure_failure_code"],
+    })
+    value = {
+        "request_json": request, "lease_id": execute["lease_id"],
+        "lease_generation": execute["lease_generation"], "lease_expires_at": execute["lease_expires_at"],
+        "terminal_json": terminal,
+    }
+    engine = create_async_engine(isolated_database_env)
+    try:
+        async with engine.connect() as connection:
+            for phase, expected in (("execute", expected_execute), ("finalize", expected_finalize)):
+                actual = await connection.scalar(text("""SELECT public.selected_pre_submit_facts_digest(
+                    jsonb_populate_record(NULL::public.selected_pre_submit_runs, CAST(:value AS jsonb)),
+                    :phase)"""), {"value": json.dumps(value), "phase": phase})
+                assert actual == expected
+    finally:
+        await engine.dispose()
