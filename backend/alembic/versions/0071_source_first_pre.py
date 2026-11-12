@@ -24,6 +24,8 @@ CREATE FUNCTION public.require_selected_pre_source(r public.selected_pre_submit_
 RETURNS void LANGUAGE plpgsql SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE t public.workstream_tasks%ROWTYPE; o public.submission_intake_operations%ROWTYPE;
  source jsonb; request jsonb:=r.request_json; observed timestamptz;
+ predecessor jsonb:='null'::jsonb; predecessor_rules text; policy_lineage jsonb;
+ rules text; expected_context jsonb; predecessor_id uuid;
 BEGIN
  SELECT * INTO t FROM public.workstream_tasks WHERE id=r.task_id FOR UPDATE;
  IF NOT FOUND OR t.active_submission_operation_id IS DISTINCT FROM r.source_operation_id
@@ -33,6 +35,7 @@ BEGIN
  observed:=clock_timestamp();
  IF NOT FOUND OR o.state IS DISTINCT FROM 'pre_checking'
     OR o.lease_expires_at<=observed OR o.pre_deadline_at<=observed
+    OR t.status IS DISTINCT FROM o.eligible_task_status
     OR o.project_id IS DISTINCT FROM r.project_id
     OR o.assignment_id IS DISTINCT FROM r.assignment_id
     OR o.actor_profile_id IS DISTINCT FROM r.actor_profile_id
@@ -80,6 +83,46 @@ BEGIN
     OR r.policy_sha256 IS DISTINCT FROM public.external_checker_registry_digest(
        (request->'policy')-'policy_sha256')
  THEN RAISE EXCEPTION 'selected PRE policy custody mismatch' USING ERRCODE='23514'; END IF;
+ SELECT jsonb_object_agg(key,value) INTO policy_lineage FROM jsonb_each(to_jsonb(t))
+ WHERE key=ANY(ARRAY[
+   'locked_guide_version','locked_guide_source_snapshot_id','locked_guide_source_snapshot_hash',
+   'locked_effective_project_submission_artifact_policy_id',
+   'locked_effective_project_submission_artifact_policy_hash','locked_pre_submit_checker_policy_id',
+   'locked_pre_submit_checker_bundle_hash','locked_post_submit_checker_policy_id',
+   'locked_post_submit_checker_policy_version','locked_post_submit_checker_policy_hash',
+   'locked_review_policy_id','locked_review_policy_generation','locked_review_policy_hash',
+   'locked_revision_policy_id','locked_revision_policy_generation','locked_revision_policy_hash',
+   'locked_contribution_policy_version_id']);
+ rules:=public.external_checker_registry_digest(jsonb_build_object(
+   'schema_version','workstream.task_checker_rules.v1','task_policy',policy_lineage,
+   'external_checker_policies_sha256',request->'admission_lineage'->>'external_checker_policies_sha256'));
+ predecessor_id:=(request->'admission_lineage'->>'predecessor_submission_id')::uuid;
+ IF predecessor_id IS NOT NULL THEN
+   SELECT jsonb_build_object('submission_id',s.id::text,'submission_version',s.version,
+       'archive_sha256',a.archive_sha256,'semantic_manifest_sha256',a.semantic_manifest_sha256),
+       a.selected_rules_sha256 INTO predecessor,predecessor_rules
+   FROM public.submissions s JOIN public.submission_bundle_admissions a
+     ON a.consumed_by_submission_id=s.id AND a.status='consumed'
+   WHERE s.id=predecessor_id AND s.task_id=r.task_id AND a.project_id=r.project_id
+     AND a.task_id=s.task_id AND a.assignment_id=r.assignment_id
+     AND s.task_assignment_id=r.assignment_id AND s.contributor_id=r.actor_profile_id
+     AND s.version=(request->'admission_lineage'->>'predecessor_submission_version')::integer
+     AND a.selected_pre_submit_run_id IS NOT NULL AND a.pre_submit_evidence_set_id IS NULL
+     AND a.selected_rules_sha256 IS NOT NULL
+     AND NOT EXISTS(SELECT 1 FROM public.submissions later
+       WHERE later.task_id=s.task_id AND later.version>s.version);
+   IF NOT FOUND THEN
+     RAISE EXCEPTION 'selected PRE predecessor custody mismatch' USING ERRCODE='23514';
+   END IF;
+ END IF;
+ expected_context:=jsonb_build_object('predecessor',predecessor,
+   'current_predecessor',predecessor,'predecessor_exists',predecessor_id IS NOT NULL,
+   'predecessor_rules_sha256',predecessor_rules,'current_rules_sha256',rules,
+   'packet',jsonb_build_object('summary',o.command_metadata->>'summary',
+      'contributor_attestation',o.command_metadata->>'contributor_attestation'));
+ IF request->'default_context' IS DISTINCT FROM expected_context THEN
+   RAISE EXCEPTION 'selected PRE default context mismatch' USING ERRCODE='23514';
+ END IF;
 END $$
 """)
 
@@ -124,7 +167,46 @@ def _update_guard():
   raise exception 'selected PRE source is immutable' using errcode='55000';
  end if;
  if row(old.id,""")
-    _replace(signature, " return new;", " perform public.require_selected_pre_source(new);\n return new;")
+    _replace(signature, " return new;", """
+ if old.status='running' then
+  if row(old.lease_id,old.lease_generation,old.lease_expires_at,old.started_at,old.execute_evidence_id)
+     is distinct from
+     row(new.lease_id,new.lease_generation,new.lease_expires_at,new.started_at,new.execute_evidence_id)
+  then raise exception 'selected PRE committed claim is immutable' using errcode='55000'; end if;
+  if new.terminal_json-ARRAY['schema_version','reservation','request_digest','lease_id',
+       'lease_generation','lease_expires_at','outcome','execution','infrastructure_failure_code',
+       'queued_at','started_at','completed_at','queue_latency_ms','execution_latency_ms'] <> '{}'::jsonb
+     or new.terminal_json->>'schema_version' is distinct from 'workstream.selected_pre_submit_terminal.v2'
+     or new.terminal_digest is distinct from public.external_checker_registry_digest(new.terminal_json)
+     or new.terminal_json->'reservation' is distinct from new.request_json
+     or new.terminal_json->>'request_digest' is distinct from new.request_digest
+     or new.terminal_json->>'outcome' is distinct from new.status
+     or (new.terminal_json->>'lease_id')::uuid is distinct from new.lease_id
+     or (new.terminal_json->>'lease_generation')::bigint is distinct from new.lease_generation
+     or (new.terminal_json->>'lease_expires_at')::timestamptz is distinct from new.lease_expires_at
+     or (new.terminal_json->>'queued_at')::timestamptz is distinct from new.queued_at
+     or (new.terminal_json->>'started_at')::timestamptz is distinct from new.started_at
+     or (new.terminal_json->>'completed_at')::timestamptz is distinct from new.completed_at
+     or new.completed_at<new.started_at or new.started_at<new.queued_at
+     or (new.terminal_json->>'queue_latency_ms')::bigint is distinct from
+        trunc(extract(epoch from new.started_at-new.queued_at)*1000)::bigint
+     or (new.terminal_json->>'execution_latency_ms')::bigint is distinct from
+        trunc(extract(epoch from new.completed_at-new.started_at)*1000)::bigint
+  then raise exception 'selected PRE terminal binding mismatch' using errcode='23514'; end if;
+  if new.status='completed' then
+    if jsonb_typeof(new.terminal_json->'execution') is distinct from 'object'
+       or new.terminal_json->'infrastructure_failure_code' is distinct from 'null'::jsonb
+       or new.terminal_json->'execution'->>'policy_sha256' is distinct from new.policy_sha256
+       or (new.terminal_json->'execution'->>'eligible')::boolean is distinct from new.eligible
+       or new.completed_at>new.lease_expires_at
+    then raise exception 'selected PRE terminal result mismatch' using errcode='23514'; end if;
+  elsif new.terminal_json->'execution' is distinct from 'null'::jsonb
+     or coalesce(new.terminal_json->>'infrastructure_failure_code','') not in
+        ('capacity_exceeded','deadline_exceeded','material_unavailable','implementation_unavailable','invalid_output')
+  then raise exception 'selected PRE terminal result mismatch' using errcode='23514'; end if;
+ end if;
+ perform public.require_selected_pre_source(new);
+ return new;""")
     signature = "public.selected_pre_submit_facts_digest(public.selected_pre_submit_runs,text)"
     for phase in ("execute", "finalize"):
         old = f"'workstream.selected_pre_submit_{phase}.v1'"

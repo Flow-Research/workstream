@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from contextlib import AbstractAsyncContextManager
 from typing import Literal, Protocol
 from uuid import UUID
@@ -803,10 +803,8 @@ class SelectedPreSubmitTerminalFacts:
             "queued_at": self.queued_at.isoformat(),
             "started_at": self.started_at.isoformat(),
             "completed_at": self.completed_at.isoformat(),
-            "queue_latency_ms": int((self.started_at - self.queued_at).total_seconds() * 1000),
-            "execution_latency_ms": int(
-                (self.completed_at - self.started_at).total_seconds() * 1000
-            ),
+            "queue_latency_ms": (self.started_at - self.queued_at) // timedelta(milliseconds=1),
+            "execution_latency_ms": (self.completed_at - self.started_at) // timedelta(milliseconds=1),
         }
 
     @classmethod

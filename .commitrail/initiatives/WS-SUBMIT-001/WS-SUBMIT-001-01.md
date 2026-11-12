@@ -1292,3 +1292,30 @@ new receipt lifecycle proof are still needed; the frozen-vector digest checks
 are narrower evidence. The full earlier pushed Backend run at `d8677d2f8` has
 now completed successfully; it does not qualify these local changes. Scoped
 Ruff/whitespace checks pass and the protected ownership partition is unchanged.
+
+Scoped architecture/security and QA held `d8de93372`: terminal updates could
+rebind committed lease/execute receipt fields; separate default predecessor
+facts lacked authoritative comparison; terminal outer JSON lacked row/hash
+binding; and Alembic's accepted starting-revision list omitted 0071. QA also
+required recomputed-hash forgeries and negative INSERT coverage. The 10 prior
+PostgreSQL tests passed with cleanup, but their receipt records base `a99d05036`
+and dirty-tree code later committed as `d8de93372`; credit them as compatible
+scope proof, not exact-head execution.
+
+The repair freezes committed claim fields, binds closed terminal outer facts and
+canonical digest to row identity/timing/outcome, and derives the entire default
+context from locked TASK policy identities, approved policy hash, original packet
+and exact consumed predecessor admission. The predecessor lookup uses existing
+Submission TASK/assignment ownership plus ART admission project/source/rules
+custody. Live latency arithmetic now uses integer milliseconds to agree exactly
+with SQL; frozen historical serialization is unchanged. Alembic accepts both
+0070 upgrades and already-current 0071. Tests recompute source/packet/request
+hashes, send negative INSERTs, and use real fixed-service AUTH claim/finalize with
+attempted claim/terminal substitutions. The existing repeat-upgrade test is reused.
+
+Forty-nine source-first/historical contract tests pass. The repaired migration
+applies with measured schema fingerprint
+`d12af28660d6d712d4c97828a39831c34e7c7bf2aec96efe0ba104cee1512b2a`.
+The repaired PostgreSQL lifecycle/negative/repeat-upgrade command will run after
+this candidate is committed, so its receipt can identify the actual head.
+Required re-review and full live caller/result/read/runtime cutover remain open.

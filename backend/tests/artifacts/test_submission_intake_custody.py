@@ -1052,10 +1052,12 @@ async def test_pre_source_custody_rejects_substitution_or_stale_owner(intake, ch
 
 
 @pytest.mark.parametrize("intake", [True], indirect=True)
-@pytest.mark.parametrize("changed", [None, "source", "packet", "policy", "post_policy", "fence", "deadline", "actor"])
+@pytest.mark.parametrize("changed", [None, "source", "packet", "policy", "post_policy", "fence", "deadline", "actor", "rules", "predecessor", "predecessor_identity"])
 async def test_selected_pre_sql_requires_exact_live_source(intake, changed):
     """Exercise the SQL source participant; not full PRE execution or T4 proof."""
     from dataclasses import replace
+    from app.core.hashing import canonical_json_hash
+    from app.modules.tasks.api.transition_audit import TaskPolicyLineage
     from app.modules.checkers.api.external_policy import LockedExternalCheckerPolicies
     from tests.checkers.external.test_selected_pre_submit_coordination import _source_reservation
 
@@ -1087,8 +1089,16 @@ async def test_selected_pre_sql_requires_exact_live_source(intake, changed):
             WHERE t.id=:task
         """), {"task": intake.task})
         task = locked["task"]
+        locked_policy = TaskPolicyLineage.model_validate_json(json.dumps({
+            key: task[key] for key in TaskPolicyLineage.model_fields
+        }))
+        rules = canonical_json_hash({
+            "schema_version": "workstream.task_checker_rules.v1",
+            "task_policy": locked_policy.model_dump(mode="json"),
+            "external_checker_policies_sha256": policies.policies_sha256,
+        })
         lineage = replace(
-            base.admission_lineage, effective_plan_sha256=policies.pre_submit.policy_sha256,
+            base.admission_lineage, rules_sha256=rules, effective_plan_sha256=policies.pre_submit.policy_sha256,
             guide_id=UUID(locked["guide_id"]), guide_version=task["locked_guide_version"],
             source_snapshot_id=UUID(task["locked_guide_source_snapshot_id"]),
             source_snapshot_sha256=task["locked_guide_source_snapshot_hash"],
@@ -1107,12 +1117,17 @@ async def test_selected_pre_sql_requires_exact_live_source(intake, changed):
             metadata_sha256=row.metadata_sha256, locked_context_sha256=row.locked_context_sha256,
             foreground_lease_id=lease, foreground_lease_generation=1, pre_deadline_at=deadline,
             policy=policies.pre_submit, admission_lineage=lineage,
+            default_context=replace(base.default_context, current_rules_sha256=rules),
         )
         body = request.canonical_body()
         if changed == "source":
             body["source"]["provider_generation"] = "substituted"
+            body["source_sha256"] = canonical_json_hash({
+                "schema_version": "workstream.sealed_submission_source.v1", **body["source"],
+            })
         elif changed == "packet":
             body["default_context"]["packet"]["summary"] = "substituted"
+            body["admission_lineage"]["packet_sha256"] = canonical_json_hash(body["default_context"]["packet"])
         elif changed == "policy":
             body["policy"]["entries"] = []
         elif changed == "post_policy":
@@ -1121,6 +1136,15 @@ async def test_selected_pre_sql_requires_exact_live_source(intake, changed):
             body["foreground_lease_generation"] += 1
         elif changed == "deadline":
             body["pre_deadline_at"] = (deadline + timedelta(seconds=1)).isoformat()
+        elif changed == "rules":
+            body["default_context"]["current_rules_sha256"] = "sha256:" + "f" * 64
+            body["admission_lineage"]["rules_sha256"] = "sha256:" + "f" * 64
+        elif changed == "predecessor":
+            body["default_context"]["predecessor_exists"] = True
+        elif changed == "predecessor_identity":
+            body["admission_lineage"]["predecessor_submission_id"] = str(new_record_id())
+            body["admission_lineage"]["predecessor_submission_version"] = 1
+            body["admission_lineage"]["checker_remediation_manifest_id"] = str(new_record_id())
         value = {
             "source_operation_id": str(operation), "task_id": str(intake.task),
             "project_id": row.project_id, "assignment_id": str(intake.assignment),
@@ -1134,22 +1158,30 @@ async def test_selected_pre_sql_requires_exact_live_source(intake, changed):
             jsonb_populate_record(NULL::public.selected_pre_submit_runs, CAST(:value AS jsonb)))""")
         if changed is None:
             await session.execute(statement, {"value": json.dumps(value)})
-            from app.modules.checkers.models import SelectedPreSubmitRun
-            session.add(SelectedPreSubmitRun(
-                id=str(request.attempt_id), source_operation_id=str(operation),
-                actor_profile_id=row.actor_profile_id, identity_link_id=row.identity_link_id,
-                project_id=row.project_id, task_id=str(intake.task), assignment_id=str(intake.assignment),
-                idempotency_key=row.idempotency_key, request_json=request.canonical_body(),
-                request_digest=request.request_digest, policy_sha256=request.policy_sha256,
-                default_behavior_sha256=request.default_behavior_sha256,
-                archive_sha256=source.raw_sha256, archive_byte_count=source.raw_byte_count,
-                execution_budget_ms=request.execution_budget_ms, status="queued", lease_generation=0,
-            ))
-            await session.flush()
         else:
             with pytest.raises(DBAPIError, match="selected PRE"):
                 await session.execute(statement, {"value": json.dumps(value)})
             await session.rollback()
+    from app.modules.checkers.models import SelectedPreSubmitRun
+    async with intake.factory.begin() as session:
+        session.add(SelectedPreSubmitRun(
+            id=str(request.attempt_id), source_operation_id=str(operation),
+            actor_profile_id=value["actor_profile_id"], identity_link_id=row.identity_link_id,
+            project_id=row.project_id, task_id=str(intake.task), assignment_id=str(intake.assignment),
+            idempotency_key=row.idempotency_key, request_json=body,
+            request_digest=canonical_json_hash(body), policy_sha256=request.policy_sha256,
+            default_behavior_sha256=request.default_behavior_sha256,
+            archive_sha256=source.raw_sha256, archive_byte_count=source.raw_byte_count,
+            execution_budget_ms=request.execution_budget_ms, status="queued", lease_generation=0,
+        ))
+        if changed is None:
+            await session.flush()
+        else:
+            with pytest.raises(DBAPIError, match="selected PRE"):
+                await session.flush()
+            await session.rollback()
+    if changed is None:
+        await _assert_pre_terminal_guards(intake, request)
 
 
 @pytest.mark.parametrize("version", ["v1", "v2"])
@@ -1187,3 +1219,77 @@ async def test_selected_pre_sql_audit_digest_keeps_versioned_custody(isolated_da
                 assert actual == expected
     finally:
         await engine.dispose()
+
+
+async def _assert_pre_terminal_guards(intake, request):
+    """Claim with real AUTH, reject rebound terminal updates, then finalize once."""
+    from app.adapters.auth import selected_pre_submit_authority
+    from app.adapters.checkers import selected_pre_submit_coordinator
+    from app.core.hashing import canonical_json_hash
+    from app.modules.checkers.api.selected_pre_submit import SelectedPreSubmitFinalizeFacts, SelectedPreSubmitTerminalFacts
+    from app.modules.checkers.models import SelectedPreSubmitRun
+
+    async with intake.factory.begin() as session:
+        async with selected_pre_submit_authority(session).prepare_execution(request) as authority:
+            lease = await selected_pre_submit_coordinator(session).claim(
+                run_id=request.attempt_id, facts=request, authority=authority,
+            )
+    finalize = SelectedPreSubmitFinalizeFacts(
+        lease=lease, execution=None, infrastructure_failure_code="capacity_exceeded",
+    )
+    for changed in ("lease_id", "lease_expires_at", "started_at", "execute_evidence_id",
+                    "schema_version", "reservation", "request_digest", "outcome", "terminal_digest", "extra"):
+        async with intake.factory.begin() as session:
+            async with selected_pre_submit_authority(session).prepare_finalization(finalize) as authority:
+                evidence = await authority.consume(finalize)
+                row = await session.get(SelectedPreSubmitRun, str(request.attempt_id))
+                now = await session.scalar(text("select clock_timestamp()"))
+                terminal = SelectedPreSubmitTerminalFacts(
+                    lease=lease, outcome="infrastructure_failed", execution=None,
+                    infrastructure_failure_code="capacity_exceeded", queued_at=row.queued_at,
+                    started_at=row.started_at, completed_at=now,
+                ).canonical_body()
+                values = dict(
+                    id=request.attempt_id, lease_id=lease.lease_id,
+                    lease_expires_at=lease.lease_expires_at, started_at=row.started_at,
+                    execute_evidence_id=UUID(row.execute_evidence_id), completed_at=now,
+                    finalize_evidence_id=evidence.evidence_id,
+                )
+                claim_change = changed in {"lease_id", "lease_expires_at", "started_at", "execute_evidence_id"}
+                if changed in {"lease_id", "execute_evidence_id"}:
+                    values[changed] = new_record_id()
+                    if changed == "lease_id":
+                        terminal[changed] = str(values[changed])
+                elif changed in {"lease_expires_at", "started_at"}:
+                    values[changed] -= timedelta(microseconds=1)
+                    terminal[changed] = values[changed].isoformat()
+                elif changed == "schema_version":
+                    terminal[changed] = "workstream.selected_pre_submit_terminal.v1"
+                elif changed == "reservation":
+                    terminal[changed] = terminal[changed] | {"metadata_sha256": "sha256:" + "f" * 64}
+                elif changed == "request_digest":
+                    terminal[changed] = "sha256:" + "f" * 64
+                elif changed == "outcome":
+                    terminal[changed] = "completed"
+                elif changed == "extra":
+                    terminal["unexpected"] = True
+                values["terminal_json"] = json.dumps(terminal)
+                values["terminal_digest"] = ("sha256:" + "f" * 64 if changed == "terminal_digest"
+                                             else canonical_json_hash(terminal))
+                message = "committed claim is immutable" if claim_change else "terminal binding mismatch"
+                with pytest.raises(DBAPIError, match=message):
+                    await session.execute(text("""UPDATE selected_pre_submit_runs SET
+                        status='infrastructure_failed', lease_id=:lease_id, lease_expires_at=:lease_expires_at,
+                        started_at=:started_at, execute_evidence_id=:execute_evidence_id,
+                        completed_at=:completed_at, finalize_evidence_id=:finalize_evidence_id,
+                        terminal_json=CAST(:terminal_json AS jsonb), terminal_digest=:terminal_digest
+                        WHERE id=:id"""), values)
+                await session.rollback()
+    async with intake.factory.begin() as session:
+        async with selected_pre_submit_authority(session).prepare_finalization(finalize) as authority:
+            completion = await selected_pre_submit_coordinator(session).finalize(
+                run_id=request.attempt_id, lease=lease, authority=authority,
+                execution=None, infrastructure_failure_code="capacity_exceeded",
+            )
+            assert completion.terminal.outcome == "infrastructure_failed"
+            assert completion.capability is None
