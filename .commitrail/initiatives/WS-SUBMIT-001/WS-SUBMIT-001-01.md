@@ -2347,3 +2347,88 @@ its reviewed repairs; it does not complete the initiative. The next concrete
 journey gap is the authorized T4 source-pass handoff, followed by accepted
 finalization/POST and the coordinated public API, CLI and MCP replacement.
 Native qualification/conformance and full acceptance verification remain open.
+
+### Atomic accepted source handoff (T4) plan
+
+The reviewed PRE path now ends in an immutable, eligible source-bound terminal,
+but no owner can accept that work: ART permits only foreground/terminal failure
+states, TASK has no authorized intake-to-evaluation transition, and no durable
+finalization event exists. Close that concrete gap with one short composed T4
+transaction. This is a prerequisite for the required single public submission
+command, not a second contributor workflow or an acceptance-by-checker shortcut.
+T5 finalization and the coordinated public/CLI/MCP cutover remain required next
+steps in this same PR; this internal transaction is not exposed until its
+continuation is wired.
+
+Plan and owner boundaries:
+
+- Extend the existing ART intake owner with `finalization_pending`, immutable
+  accepted evidence and a stable accepted receipt. Preserve operation/source
+  identity, the original ZIP generation/SHA/count, command metadata, actor,
+  assignment, predecessor, frozen policies and capacity charges. No placeholder
+  Submission, retained artifact binding or POST dispatch is created at T4.
+- Acquire TASK, intake operation, then CHECKERS run custody in the established
+  order. Add a narrow CHECKERS port to lock and validate the exact current v3
+  completed/eligible run for this source and its lease. It returns immutable
+  facts for T4; raw detached terminal objects and historical v1/v2 evidence
+  cannot confer acceptance. Bind ART's source/manifest identity to those facts.
+- Revalidate current contributor/link/grant authority, task/assignment status,
+  active operation pointer, foreground lease/fence/deadline, predecessor,
+  revision acknowledgement/deadline/cap, locked TASK/PROJECT context and one
+  selected image per phase. Reuse existing canonical context and revision
+  checks; no alternate eligibility calculator or renewed foreground owner.
+- Retain action/permission identity `submission.create`, with a closed
+  operation-scoped acceptance resource and prepared/consumed AUTH facts. Extend
+  the existing AUTH exact-resource dispatch for this lifecycle boundary; do not
+  invent a submission UUID to satisfy the old creation resource. The old
+  prepared-admission public producer is superseded by the later coordinated
+  cutover in this PR, not preserved as a supported compatibility API. Its
+  retained audit/evidence decoding must remain valid.
+- TASK's existing intake custody participant gains a narrowly authorized
+  transition from `in_progress`/`needs_revision` to `evaluation_pending` while
+  preserving the exact pending operation pointer. ART writes accepted state,
+  receipt and authorization provenance; the existing outbox append port writes
+  one unique identifier/digest-only finalization event. These effects and the
+  exact CHECKERS terminal reference must commit or roll back together.
+- Already accepted replay validates immutable operation/evidence/receipt/event
+  associations under current own-operation read authority before returning the
+  stable receipt. It does not require the task to remain contributor-eligible,
+  mint new acceptance, rerun PRE, refresh a lease or consume another revision.
+  Lost commit acknowledgement resolves the same operation in a fresh root;
+  unresolved outcome remains unknown and cannot be reported as known failure.
+- Add migration 0073 without editing 0069–0072. Extend active-owner uniqueness,
+  deferred TASK/intake/assignment closure, state-transition guards and AUTH/
+  outbox closure to protect accepted pending work. Foreground expiration and
+  cleanup must not terminalize or release accepted work. Accepted source,
+  context, receipt, PRE reference and provenance are immutable. Finalizer lease
+  and actual Submission registration belong to T5, not a fabricated T4 result.
+
+Allowed files: ART intake APIs/owner/models/repository/replay and composition;
+TASK intake custody/context/lifecycle ports and composition; CHECKERS exact
+terminal-consumption API/coordinator; AUTH operation-scoped resource, evaluator,
+prepared-handle/audit integration and adapters; outbox event contract/append
+composition; migration 0073; affected real PostgreSQL/owner/AUTH tests and explicit
+CI catalogue/schema fingerprint; this record and directly affected contracts.
+No storage re-upload, host ZIP inspection, new checker factory, POST execution
+redesign, new public alias, retained-row rewrite, qualification default or
+provider deployment is allowed. The finalization event is an internal durable
+contract; registration of its real T5 handler and public exposure must occur
+before this PR is ready.
+
+Risk is L0 authorization/workflow/atomicity. Plan review precedes implementation;
+architecture/security and QA/test-delta review follow deterministic proof, with
+CI-integrity review for catalogue changes and docs review for capability claims.
+Human focus: fresh acceptance authority versus durable accepted continuation,
+exact source/run ownership, rollback/commit uncertainty and revision accounting.
+
+Acceptance proof uses actual ZIP upload, actual CHECKERS claim and receipt-bearing
+worker completion through the existing portable fixture, then T4 on PostgreSQL.
+Require one accepted receipt/event, task `evaluation_pending`, protected source
+and capacity, and no Submission/binding/POST rows. Probe forged/stale or consumed
+run/source/lease, historical terminal, changed packet/context, revoked authority,
+wrong assignment/predecessor/revision acknowledgement, expired deadline, rollback
+at participant boundaries, same-key replay, concurrent acceptance and lost commit
+acknowledgement. Direct SQL probes must reject detached accepted state, missing
+or mismatched decision/event/PRE evidence, accepted mutation and foreground
+cleanup of accepted work. Keep native-provider qualification and public journey
+completion explicitly unproven by these internal portable tests.
