@@ -502,9 +502,29 @@ private parent without following its final symlink and anchors staging through
 that held directory descriptor. The caller must provide the private parent,
 aggregate deadline/cancellation checks, and capacity for both
 the spool and expanded root, then mount the root read-only before executing a
-trusted child. Combined supervisor wiring and native isolation proof remain
-required; this library alone does not authorize project execution.
+trusted child. The PRE guest bootstrap calls this verifier; host dispatch and
+native isolation proof remain required. This library alone does not authorize
+project execution.
 Cleanup restores owned directory permissions after late staging failures; an
 underlying filesystem cleanup error is propagated and cannot establish released
 capacity. Relative and absolute symlink targets that traverse above the root are
 refused before installation.
+
+### Portable PRE dialogue proof
+
+With the frozen backend environment installed, run from the repository root:
+
+```bash
+WORKSTREAM_PRE_WORKER_PYTHON="$PWD/backend/.venv/bin/python" \
+  cargo +1.84.0 test --manifest-path external_checkers/Cargo.toml --locked \
+  -p workstream-checker-guest --bin workstream-checker-guest \
+  --features pre-dialogue-proof \
+  pre::bootstrap::dialogue_proof::live_python_worker_dialogue -- --exact --test-threads=1
+```
+
+This test runs the real Python worker on ZIP bytes through the Rust supervisor's
+socket dialogue and validates the received completion with Python's typed owner
+contract. The project result is a protocol sentinel; this does not qualify native
+mounts, cgroups, root images or one-VM execution. The checker CI job requires this
+test and rejects empty selection or ignored execution. The Cargo feature affects
+only test code and introduces no runtime entry point.

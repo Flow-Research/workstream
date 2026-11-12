@@ -717,7 +717,7 @@ mod tests {
     use workstream_checker_guest::trusted_root::{RootDescriptor, RootLimits};
     static NEXT: AtomicU64 = AtomicU64::new(0);
 
-    fn limits() -> PreBootstrapLimits {
+    pub(super) fn limits() -> PreBootstrapLimits {
         // Test-only quantities: no provider qualification or deployment defaults.
         PreBootstrapLimits {
             control: PrePartition {
@@ -1075,3 +1075,7 @@ mod tests {
             .contains("deadline"));
     }
 }
+
+#[cfg(all(test, feature = "pre-dialogue-proof"))]
+#[path = "dialogue_proof.rs"]
+mod dialogue_proof;

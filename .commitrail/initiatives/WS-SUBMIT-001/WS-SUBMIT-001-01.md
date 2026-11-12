@@ -1972,3 +1972,52 @@ Neither verdict establishes privileged chroot/cgroup/UID behavior, a one-VM
 provider run, host pin/lease authority or the complete PRE service. The next
 connected proof is that portable real-worker exchange, followed by the native
 host dispatch and full runtime/profile/cleanup envelope.
+
+The next proof closes the review's real-worker dialogue gap without claiming
+privileged isolation. Allowed scope is guest test-only Cargo feature/test module,
+a portable Python proof driver under external checker tests, the existing
+checker CI job and its necessary scope selection, the matching README command,
+and this record. It launches
+the actual `PreSubmitWorker` on real ZIPs over Rust-owned sockets, invokes the
+production Rust terminal/request validators, returns an SDK-constructed project
+result, and validates the received completion with Python's typed owner contract.
+Use a passing directory/file ZIP and canonical rejection cases with a project
+start sentinel. Project execution is intentionally a protocol-test result, not
+a substitute VM or confinement implementation.
+
+A test-only Cargo feature separates the backend Python dependency from ordinary
+Rust unit tests. The existing checker CI job must explicitly install the frozen
+backend dependencies and execute the exact feature test, with no ignored failure
+or empty selection. Preserve existing gates, timeout and authority. Acceptance
+requires actual exchange, typed completion, a discriminating mutation and traced
+CI selection/exit propagation. QA/test-delta and CI-integrity review apply; no
+new runtime mode, deployment default, public route or native qualification claim
+is allowed. Human review focus is actual process/protocol custody and proof
+selection rather than synthetic frame counts.
+
+The feature proof now runs the real Python worker and Rust terminal/request
+validators over live sockets for passing, secret-bearing and malformed ZIPs.
+The passing input includes an explicit directory and file; Rust checks their
+exact projected input fields. The secret case uses an incompatible project
+schema and both blockers assert zero project calls. Rust supplies a typed SDK
+protocol result, and a separate Python process validates the exact received
+completion through `SelectedPreSubmitExecutionFacts.validate_lease`, including
+source bytes, independent expected manifest, default status and member count.
+The helper's simulated reply is explicitly unused. Child guards own termination
+and reaping; fixture cleanup begins only after successful directory creation.
+
+The live proof passes, along with the ordinary 12 library/40 binary guest tests
+and 47 CI-scope tests. Rebinding the Rust reply's lease generation makes the
+live passing case fail after exactly one project call; production transport was
+restored. An earlier negative probe used a resolved base interpreter and failed
+test-helper import before startup; it is excluded from mutation evidence. The
+corrected probe preserves the frozen virtualenv interpreter path.
+
+The existing checker job now installs its frozen Python dependencies and runs
+the feature proof. One shared exact Cargo selection is checked through `--list`,
+then its result must report one passed and zero ignored tests. Local execution
+of that workflow step passes. Executing the exact guard snippets rejects zero
+or duplicate selection, missing results and ignored execution. Existing backend/
+checker/workflow changes already select full scope, so no selection policy was
+changed. Formatting, name checks, record and link checks pass. This closes the
+live dialogue proof gap, not native isolation or host/public integration.
