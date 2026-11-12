@@ -707,7 +707,13 @@ the existing cache provisioner, require the exact config image ID already loaded
 in the daemon, and verify its platform and rootfs diff IDs. Create an isolated
 container with pulling disabled; never start it or invoke its entrypoint. Export
 its root filesystem through bounded storage, then remove only that invocation's
-container. Docker's documented create/export operations support this without
+container. Before export, inspect the returned container ID and require its exact
+image ID and never-started created state. Use that ID for cleanup; uncertain
+creation retains a unique invocation label/name for discovery and exact-owner
+cleanup. Reuse the existing bounded subprocess runner with a binary stdout sink,
+preserving aggregate output/time limits and process-group termination rather
+than exporting to an unbounded Docker output path.
+Docker's documented create/export operations support this without
 executing the image. Reject image-declared volumes for this trusted profile.
 
 Produce a closed, length-framed root bundle rather than asking the guest to
@@ -722,8 +728,12 @@ the bundle digest/count, platform manifest, config, default behavior and bounds.
 Outputs are exclusive, sealed and fsynced; failure removes only owned partial
 files. No implicit image pull, image registration or policy change occurs.
 
-The static guest verifies the complete bundle before writing into its fresh
-private root, then validates the closed framing and bounds during staging. It
+The static guest receives the bundle into a private bounded guest spool and
+verifies its complete digest/count before writing into its fresh private root,
+then validates the closed framing and bounds during staging. Charge both the
+bundle spool and expanded root against guest disk capacity and clean both on
+cancellation or failure. Recheck the consumed digest while staging so a changed
+spool cannot authorize execution. It
 must never follow a link while writing. Absolute symlink targets are meaningful
 only inside the eventual chroot, never during host/guest unpack. The trusted
 worker uses that root's interpreter/libraries and a separate protected workspace;
