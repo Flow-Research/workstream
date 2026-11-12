@@ -159,3 +159,63 @@ authorization branch and orphan admission discriminator from the current
 specification/ADR. Current points credit follows its exact active arrangement;
 bank transfers retain their separate human authorization and prior-fulfillment
 checks. Duplicate-award storage proof names the actual single-award constraint.
+
+## Selected reward copy chain within this PR
+
+Concrete gap: current policy-wide definition enumeration fails closed for a
+three-tier submitter rule. It must be replaced with the one exact immutable
+Submission selection; no parallel reader or compatibility implementation remains.
+
+Allowed files: TASK models, existing screening/claim/context/admission/replay,
+revision preparation/recovery/routing and read owners; CON reward-selection and
+published-terms APIs/repository, contribution source/repository/participant;
+existing composition roots and their affected callers; one forward migration in
+the current chain replacing affected guards; affected public schemas, CLI/MCP
+contracts, fixtures/tests and current documentation. No new workflow owner,
+policy lineage type, storage engine or authorization path is introduced.
+All earlier prohibited changes remain prohibited.
+
+Implementation sequence:
+1. Persist Task locked definition, Assignment size/definition and immutable
+   Submission size/definition. Resolve through the existing transaction-bound
+   CON RewardSelectionPort at screening; validate at release and copy at claim
+   and submission admission. Update every direct constructor explicitly; no
+   optional dependency fallback or inferred first-tier selection.
+2. Extend existing revision candidates/packets with distinct prior/target reward
+   facts alongside activation snapshots, canonical packet hash and contributor
+   projection without internal bindings. Keep TaskPolicyLineage unchanged.
+   Select the same immutable size under the chosen target policy; missing or
+   invalid target follows existing blocked/repair handling. Existing revision
+   operation alone rebases continuing Task/Assignment; old Submission is immutable.
+3. Replace policy-only terms requests/caches with exact recorded selection keys.
+   Replace submitter contribution all-definition enumeration with immutable
+   Submission-selected definition. Preserve fixed reviewer and unpaid branches.
+   Replace SQL completeness with selected zero/one definition equality.
+4. Extend existing SQL guards for exact project/policy/rule/size/definition
+   equality, immutable copied evidence, and governed revision authorization.
+   Upgrade refuses incompatible retained facts atomically without rewriting them.
+   Committed replay retains fresh AUTH and returns the original exact result
+   after a later continuing-context rebase, without new claim authority.
+5. Update current callers/contracts/fixtures together; remove superseded query,
+   receipt and fixture assumptions. Run pure guard/selection tests followed by
+   real PostgreSQL public API/worker acceptance and failure/retry drills.
+
+Acceptance/proof: small/medium/large select distinct configured quantities;
+unpaid selects no definition/award; fixed reviewer remains one independent
+award. Reject cross-project/policy/size/definition substitutions in owner code
+and direct SQL. Preserve assignment/submission equality, old-submission evidence
+after upward/downward/unpaid/instrument-changing revision, blocked-target repair,
+acknowledgement hash, concurrent claim, rollback and exact replay. Both human
+review and automatic acceptance use shared final acceptance with selected awards
+committed atomically. Cache/batch reads must distinguish two sizes under one
+policy and never expose bindings to contributors. Live-drill defects require
+focused regressions. Existing pure proof and baseline migration-data proof
+remain unless replaced by meaningful current proof. Full-suite and real
+integration checks remain required before PR readiness.
+
+Risk remains L0. Plan review must trace owner order and one feasible positive and
+negative fixture before implementation. Security, architecture, product/ops,
+QA/test delta, reuse and docs/CI reviewers inspect their affected boundaries;
+shared checks run once per frozen candidate. Human focus is exact selection,
+AUTH, immutable lineage, revision/replay and transaction atomicity. This boundary
+qualifies selected acceptance only; it does not claim Finance runtime delivery.
