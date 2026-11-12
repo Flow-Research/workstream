@@ -2194,3 +2194,12 @@ child writes exactly its 4 MiB allowance and completes successfully. All 52
 selected Smol tests pass after repair. The earlier 42 trial tests and 127-pass/
 five-failure full service run remain compatible prior evidence, not relabeled
 exact-head runs. Backend receipt retention and native qualification remain open.
+
+Architecture/security and QA/test-delta replay passed clean `3ba1cdf64`, resolving
+the log-retention and inner-deadline finding. Reviewers confirmed fixed scratch
+space, checked byte counting, bounded per-pipe passes and the actual-process
+controls. Documentation review of `d5a4a9ffb` remains compatible with the repair's
+scope and limitations. The next required composition is Python adapter parsing
+and CHECKERS/AUTH-bound durable retention of invocation/runtime/timing/cleanup
+facts; returning only the worker payload would discard required ownership
+ evidence. Native qualification and the public submission cutover remain open.
