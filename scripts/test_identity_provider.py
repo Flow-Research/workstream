@@ -516,6 +516,12 @@ class IdentityProviderTests(unittest.TestCase):
             asyncio.run(boundary())
         finally:
             if component_id is not None:
+                # Restart can outlive the short master-admin access token.
+                # Authenticate cleanup freshly; keep provider expiry unchanged.
+                self.operator = self.probe.request("/realms/master/protocol/openid-connect/token", {
+                    "grant_type": "password", "client_id": "admin-cli", "username": "fixture-operator",
+                    "password": self.admin_password,
+                }, form=True)["access_token"]
                 self.probe.request("/admin/realms/flow/components/" + component_id,
                                    token=self.operator, method="DELETE")
 
