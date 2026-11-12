@@ -1154,3 +1154,15 @@ fails, and that the original CI timeout is not called a confirmed production
 root cause merely because this scheduling defect is reproducible. The original
 focused test is already running unchanged in the full custody command; do not
 restart it or misattribute its eventual result to the repair.
+
+The source-custody boundary passed scoped architecture/security and QA at
+`3cee7cc5f`; 371 contract/ownership/lane/architecture tests also passed, with an
+unchanged ownership partition. Its full PostgreSQL custody run remains separate
+from the focused evidence until the exact running command completes.
+
+The outbox observation repair passed two focused real-PostgreSQL tests and QA
+at `16704ddd6`. Mutating only `invoke` in memory to await the cancelled handler
+before finalization made the repaired test fail at the two-second finalization
+entry event. The mutation receipt records the exact commit and successful database
+cleanup. This proves the test retains the cancellation-ordering boundary; it is
+not a production outbox change or a claim that the original full CI run passed.
