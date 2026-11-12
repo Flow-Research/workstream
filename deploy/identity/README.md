@@ -129,26 +129,52 @@ for the same subject. Its secret is mounted only into MCP through
 ## Participant terminal login
 
 Run the helper on the computer where you will open the browser, not on the
-hosted server. It uses only Python's standard library and listens temporarily on
+hosted server. Run its locked PyJWT/cryptography environment with `uv`; it listens temporarily on
 `127.0.0.1:17843`. Password entry and the mandatory initial password change happen
 on Keycloak's HTTPS page. The helper never asks for or saves a password.
 
+By default credentials stay in memory. Launch the existing CLI without a saved
+credential file:
+
+```sh
+uv run --locked --script scripts/identity_login.py --exec workstream whoami
+```
+
+This child receives the verified API token and the trusted
+`https://workstream.flowresearch.tech` origin, overriding inherited token/URL
+values. No shell is involved. For an explicit saved login:
+
 ```sh
 install -d -m 700 "$HOME/.local/share/workstream"
-python3 scripts/identity_login.py \
+uv run --locked --script scripts/identity_login.py \
   --output "$HOME/.local/share/workstream/credentials.json"
 ```
 
-The file is mode `0600` and contains access/refresh credentials. Do not share it.
-The helper refuses to overwrite an existing login. Renew that file with:
+The file is mode `0600` and contains access/refresh credentials. Do not share it
+or store it in a repository. Signed RS256 issuer, audience, subject, scope and
+lifetime checks run before publishing credentials or launching the CLI. The
+helper refuses to overwrite an existing login. Renew that file with:
 
 ```sh
-python3 scripts/identity_login.py --refresh \
+uv run --locked --script scripts/identity_login.py --refresh \
   --output "$HOME/.local/share/workstream/credentials.json"
 ```
 
-If the refresh session has expired or was revoked, remove only that private
-credential file and sign in again. For a deployment with another identity host,
+Publication, refresh and logout share a persistent private sibling `.lock` file.
+A concurrent operation fails before reading or rotating credentials; retry only
+after the first operation finishes. Do not remove the lock file during use.
+To revoke the saved refresh credential and remove the local file:
+
+```sh
+uv run --locked --script scripts/identity_login.py --logout \
+  --output "$HOME/.local/share/workstream/credentials.json"
+```
+
+This does not end browser SSO or immediately invalidate already issued API
+access tokens. If remote revocation cannot be confirmed, the helper still removes
+the local credential and reports a nonzero result with that limitation. If the
+refresh session has expired or was revoked, remove only that private credential
+file and sign in again. For a deployment with another identity host,
 pass its exact `--issuer https://IDENTITY_HOST/realms/flow` on both commands.
 Discovery must match that issuer and the expected endpoints; redirects and
 ambient proxies are not used for credential requests.

@@ -9,6 +9,7 @@ on:
       - 'mcp_server/workstream_mcp/adapters/keycloak.py'
       - 'scripts/identity_protocol_probe.py'
       - 'scripts/identity_login.py'
+      - 'scripts/identity_login.py.lock'
       - 'scripts/test_identity_login.py'
       - 'scripts/test_identity_provider.py'
       - 'scripts/test_keycloak_configuration.py'
@@ -54,10 +55,19 @@ jobs:
           python -m pip install 'uv==0.10.7'
           uv lock --check
           uv sync --frozen --extra dev
+      - name: Verify participant helper in its frozen script environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv export --locked --script scripts/identity_login.py --format requirements-txt > "$RUNNER_TEMP/identity-helper.txt"
+          uv venv "$RUNNER_TEMP/identity-helper"
+          uv pip sync --python "$RUNNER_TEMP/identity-helper/bin/python" --require-hashes "$RUNNER_TEMP/identity-helper.txt"
+          "$RUNNER_TEMP/identity-helper/bin/python" -m unittest scripts.test_identity_login -q
+          uv run --locked --script scripts/identity_login.py --help
       - name: Build pinned Keycloak identity image
         run: docker build --file deploy/identity/Dockerfile --tag workstream-keycloak:test .
       - name: Verify configuration and deployment boundaries
-        run: python3 -m unittest scripts.test_keycloak_configuration scripts.test_identity_bootstrap scripts.test_identity_login scripts.test_hosted_release_config scripts.test_hosted_local_data_initialization.HostedLocalDataInitializationTests -q
+        run: backend/.venv/bin/python -m unittest scripts.test_keycloak_configuration scripts.test_identity_bootstrap scripts.test_hosted_release_config scripts.test_hosted_local_data_initialization.HostedLocalDataInitializationTests -q
       - name: Prove real provider login, exchange, renewal and restart
         env:
           PYTHONPATH: .:backend:mcp_server

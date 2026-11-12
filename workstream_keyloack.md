@@ -465,9 +465,9 @@ The coding agent must produce an executable runbook using actual discovered reso
 
 ### 8.2 Identify the exact reset scope
 
-Record the selected Compose project/release, database endpoint and database names, exclusively owned queue/state resources, artifact namespace, scratch paths, and obsolete Rust identity state. This inventory identifies what to reset, not what to migrate.
+Record the selected Compose project/release, database endpoint and database names, exclusively owned queue/state resources, qualified artifact namespace and policies, scratch paths, and obsolete Rust identity state. This inventory identifies what to reset, not what to migrate.
 
-Use named database reset when PostgreSQL is shared. An entire PostgreSQL volume can be recreated only when all its contents belong to this disposable development environment. Do not run blanket `docker compose down --volumes`, volume pruning, `FLUSHALL` on shared Redis, or deletion of a shared artifact bucket. Use a fresh private artifact namespace or delete only this environment's verified disposable objects. [W1, W8, W11]
+Use named database reset when PostgreSQL is shared. An entire PostgreSQL volume can be recreated only when all its contents belong to this disposable development environment. Do not run blanket `docker compose down --volumes`, volume pruning, `FLUSHALL` on shared Redis, or deletion of a shared artifact bucket. Preserve the qualified S3 bucket, private prefix, IAM policies, retained objects and immutability protections. ART's closed policy validation binds those protections to the configured prefix; changing it for an identity reset would expand the storage-security scope and could leave retained keys without their deny protections. [W1, W8, W11]
 
 If an exact resource cannot be identified, finish the implementation and name that specific missing deployment fact. Do not guess a deletion target. No old-data backup, identity export, or migration manifest is a gate for this authorized disposable reset.
 
@@ -479,7 +479,7 @@ Follow the repository's existing deployment owners:
 2. Remove the Rust issuer service and obsolete routes/configuration. There is no parallel old/new preparation mode.
 3. If the hosted shutdown also stopped local PostgreSQL/Redis, start only the required backing services using the supported `start local-data` path before administrative reset. An externally managed database server can remain available.
 4. Drop/recreate the named disposable Workstream database using its administrative owner; create/reset the separate `flow_identity` database and restricted runtime role. Do not rerun a fresh-root initializer against an existing shared data root.
-5. Reset only this deployment's stale queues and owned runtime scratch. Select the fresh artifact namespace so stale jobs and old artifact references cannot reappear in the new setup.
+5. Reset only this deployment's stale queues, owned runtime scratch and disposable database admission/reference state. Requalify storage activation and prove fresh work uses newly created product lineage without restoring prior admissions, submissions or grants. Existing identical bytes may be reused only through the normal verified content-addressed admission path; retained bytes confer no product authority.
 6. Apply the repository's current schema to the empty Workstream database through the supported hosted wrapper:
 
    ```sh

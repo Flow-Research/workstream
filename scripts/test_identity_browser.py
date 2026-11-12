@@ -113,7 +113,7 @@ class IdentityBrowserTests(provider.IdentityProviderTests):
         })
         path = self.root / "browser-credentials.json"
         issuer = self.origin + "/realms/flow"
-        login.save_credentials(login.private_path(path), issuer, result, replace=False)
+        login.save_credentials(login.private_path(path), issuer, result, login.validate_tokens(result, issuer, self.context), replace=False)
         saved = login.read_credentials(path, issuer)
         keys = self.probe.request("/realms/flow/protocol/openid-connect/certs")["keys"]
         key = next(k for k in keys if k["kid"] == jwt.get_unverified_header(saved["access_token"])["kid"])
@@ -125,7 +125,7 @@ class IdentityBrowserTests(provider.IdentityProviderTests):
             "grant_type": "refresh_token", "client_id": login.CLIENT,
             "refresh_token": saved["refresh_token"],
         })
-        login.save_credentials(path, issuer, renewed, replace=True)
+        login.save_credentials(path, issuer, renewed, login.validate_tokens(renewed, issuer, self.context, expected_subject=claims["sub"]), replace=True)
         self.assertNotEqual(login.read_credentials(path, issuer)["refresh_token"], saved["refresh_token"])
 
 

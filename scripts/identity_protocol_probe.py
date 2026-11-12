@@ -110,7 +110,16 @@ class IdentityProtocolProbe:
             raise ProviderRejected(error.code) from None
 
     def login(self, client: str, audience_scope: str, email: str, password: str,
-              *, new_password: str | None = None, profile_changes: dict | None = None) -> dict:
+              *, new_password: str | None = None, profile_changes: dict | None = None,
+              scopes: str | None = None) -> dict:
+        form = self.authorization_code(client, audience_scope, email, password,
+            new_password=new_password, profile_changes=profile_changes, scopes=scopes)
+        return self.request("/realms/flow/protocol/openid-connect/token", form, form=True)
+
+    def authorization_code(self, client: str, audience_scope: str, email: str, password: str,
+                           *, new_password: str | None = None,
+                           profile_changes: dict | None = None, scopes: str | None = None) -> dict:
+        """Complete login but retain the unredeemed code for binding-failure proofs."""
         callback = {
             "workstream-cli-login": "http://127.0.0.1:17843/callback",
             "workstream-mcp-proof": "http://127.0.0.1:17844/callback",
@@ -119,7 +128,7 @@ class IdentityProtocolProbe:
         challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode()
         query = urlencode({
             "client_id": client, "redirect_uri": callback, "response_type": "code",
-            "scope": "openid workstream:access " + audience_scope, "state": state,
+            "scope": scopes if scopes is not None else "openid workstream:access " + audience_scope, "state": state,
             "code_challenge": challenge, "code_challenge_method": "S256",
         })
         browser = build_opener(
@@ -160,15 +169,15 @@ class IdentityProtocolProbe:
                     fields.update({"password-new": new_password, "password-confirm": new_password})
                 else:
                     fields["accept"] = "Yes"
-                data = urlencode(fields).encode()
+                data = urlencode(fields, doseq=True).encode()
         except _Callback as callback_result:
             result = parse_qs(urlsplit(callback_result.url).query)
             if result.get("state") != [state] or len(result.get("code", [])) != 1:
                 raise RuntimeError("authorization callback failed validation") from None
-            return self.request("/realms/flow/protocol/openid-connect/token", {
+            return {
                 "grant_type": "authorization_code", "client_id": client,
                 "redirect_uri": callback, "code_verifier": verifier, "code": result["code"][0],
-            }, form=True)
+            }
         except HTTPError as error:
             error.close()
             raise ProviderRejected(error.code) from None

@@ -40,7 +40,7 @@ Hosted `compose.py`/`preflight.py` own exact deployment topology and boot order.
 - `backend/app/core/config.py`, external-authentication adapter/contracts and
   their tests only where real provider claims require correction. Existing
   actor/bootstrap/authorization owners are reused, not redesigned.
-- `scripts/identity_*.py` and focused tests: browser OAuth client and redacted
+- `scripts/identity_*.py`, `scripts/identity_login.py.lock` and focused tests: browser OAuth client and redacted
   qualification; existing exact CI test catalogues/workflows only to replace
   retired issuer proof and execute required new proof without weakening gates.
 - Explicitly inventoried disposable hosted database/queue/scratch/identity state
@@ -69,6 +69,13 @@ Administrator bootstrap remain distinct; retire only the Rust-specific bootstrap
 Reset only the approved disposable development resources, keeping runtime
 immutability/authorization guards intact for fresh data. Ordinary restart retains
 new state. No reset or deployment is implied by merely rendering configuration.
+
+The participant helper verifies signed API claims before saving credentials or
+launching the existing CLI. Its default is memory-only; explicit credential files
+use a persistent private lock across refresh and logout, and renewal must retain
+the saved subject. Its script dependencies are frozen independently of the
+backend environment. Logout revokes the refresh credential and removes the local
+file; it does not claim to end browser SSO or invalidate already issued JWTs.
 
 ## Acceptance criteria
 

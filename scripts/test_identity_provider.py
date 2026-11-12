@@ -31,7 +31,7 @@ from app.interfaces.auth import AuthVerificationError
 from deploy.identity import realm_config
 from scripts.identity_protocol_probe import IdentityProtocolProbe, ProviderRejected, LoginRejected
 from workstream_mcp.adapters.keycloak import KeycloakCredentials
-from workstream_mcp.oauth import InvalidCredential, OAuthSettings
+from workstream_mcp.oauth import IdentityUnavailable, InvalidCredential, OAuthSettings
 
 ROOT = Path(__file__).resolve().parents[1]
 POSTGRES = "postgres@sha256:5264710be20f409750ac6dc4e5706dcef929c87e241605463f0f9aefa932a8d9"
@@ -195,8 +195,8 @@ class IdentityProviderTests(unittest.TestCase):
         # and attribute-prefixed submissions of the admin-only marker.
         unmarked = self.probe.login("workstream-mcp-proof", "workstream-mcp-audience", email,
             password, profile_changes={"firstName": "Edited", "lastName": "Participant",
-                "email": email, "workstream_subject_kind": "human",
-                "user.attributes.workstream_subject_kind": "human"})
+                "email": email, "workstream_subject_kind": ["human", "service"],
+                "user.attributes.workstream_subject_kind": ["human", "human"]})
         stored = self.probe.request(user_path, token=self.operator)
         self.assertEqual(stored["firstName"], "Edited")
         self.assertFalse(stored.get("attributes", {}).get("workstream_subject_kind"))
@@ -213,7 +213,7 @@ class IdentityProviderTests(unittest.TestCase):
 
         self.assertNotIn("subject_kind", claims(unmarked["access_token"], realm_config.MCP_RESOURCE))
 
-        def exchange(source, **overrides):
+        def exchange(source, *, authentication=("workstream-mcp", secret), **overrides):
             data = {"grant_type": "urn:ietf:params:oauth:grant-type:token-exchange",
                 "subject_token_type": "urn:ietf:params:oauth:token-type:access_token",
                 "subject_token": source, "audience": "workstream-api",
@@ -221,7 +221,7 @@ class IdentityProviderTests(unittest.TestCase):
                 "scope": "workstream:access", **overrides}
             with httpx.Client(verify=self.context, trust_env=False, timeout=15) as http:
                 response = http.post(self.origin + "/realms/flow/protocol/openid-connect/token",
-                                     data=data, auth=("workstream-mcp", secret))
+                                     data=data, auth=authentication)
             body = response.json()
             return response.status_code, body
 
@@ -246,6 +246,53 @@ class IdentityProviderTests(unittest.TestCase):
         self.assertLessEqual(actual["exp"], source["exp"])
         self.assertLessEqual(actual["exp"] - actual["iat"], 120)
         self.assertNotIn("refresh_token", result)
+        denied(*exchange(human["access_token"], authentication=("workstream-mcp", "wrong-secret")))
+        denied(*exchange(human["access_token"], authentication=None, client_id="workstream-mcp"))
+        denied(*exchange(human["access_token"], authentication=None, client_id="workstream-mcp-proof"))
+        direct_source = self.probe.login("workstream-cli-login", "workstream-api-audience", email, password)
+        denied(*exchange(direct_source["access_token"]))  # requester absent from source audience
+        for invalid in ("not-a-token", human["access_token"][:-12] + "tampered0000", human["id_token"]):
+            denied(*exchange(invalid))
+        missing_scope = self.probe.login("workstream-mcp-proof", "workstream-mcp-audience", email, password,
+            scopes="openid workstream-mcp-audience")
+        missing_claims = claims(missing_scope["access_token"], realm_config.MCP_RESOURCE)
+        self.assertEqual(missing_claims["sub"], source["sub"])
+        self.assertEqual(missing_claims["subject_kind"], "human")
+        self.assertNotIn("workstream:access", missing_claims["scope"].split())
+        denied(*exchange(missing_scope["access_token"]))
+        # An assigned, valid scope is required here: an unknown scope can be
+        # rejected before the actual assertion-grant downscope policy runs.
+        extra_scope = "fixture-extra-permission"
+        self.probe.request("/admin/realms/flow/client-scopes",
+            realm_config.client_scope(extra_scope, [], visible=True), token=self.operator)
+        scopes = self.probe.request("/admin/realms/flow/client-scopes", token=self.operator)
+        scope_id = next(scope["id"] for scope in scopes if scope["name"] == extra_scope)
+        scope_path = f"/admin/realms/flow/clients/{client['id']}/optional-client-scopes/{scope_id}"
+        profiles, _ = realm_config.exchange_policy()
+        try:
+            self.probe.request(scope_path, {}, token=self.operator, method="PUT")
+            self.assertNotIn(extra_scope, source["scope"].split())
+            requested_scope = "workstream:access " + extra_scope
+            denied(*exchange(human["access_token"], scope=requested_scope))
+            without_downscope = json.loads(json.dumps(profiles))
+            without_downscope["profiles"][0]["executors"] = [
+                executor for executor in without_downscope["profiles"][0]["executors"]
+                if executor["executor"] != "downscope-assertion-grant-enforcer"
+            ]
+            try:
+                self.probe.request("/admin/realms/flow/client-policies/profiles", without_downscope,
+                                   token=self.operator, method="PUT")
+                widened_status, widened = exchange(human["access_token"], scope=requested_scope)
+                self.assertEqual(widened_status, 200, "counterexample did not reach downscope guard")
+                self.assertIn(extra_scope, claims(widened["access_token"], "workstream-api")["scope"].split())
+            finally:
+                self.probe.request("/admin/realms/flow/client-policies/profiles", profiles,
+                                   token=self.operator, method="PUT")
+            denied(*exchange(human["access_token"], scope=requested_scope))
+        finally:
+            self.probe.request(scope_path, token=self.operator, method="DELETE")
+            self.probe.request("/admin/realms/flow/client-scopes/" + scope_id,
+                               token=self.operator, method="DELETE")
         # A fresh five-minute source cannot discriminate the source-expiry
         # ceiling from the exchange client's independent two-minute limit.
         source_client = next(c for c in clients if c["clientId"] == "workstream-mcp-proof")
@@ -269,6 +316,33 @@ class IdentityProviderTests(unittest.TestCase):
             self.assertNotIn("refresh_token", short_result)
         finally:
             self.probe.request(source_path, original_client, token=self.operator, method="PUT")
+        expiring_client = json.loads(json.dumps(original_client))
+        expiring_client.setdefault("attributes", {}).update({
+            "access.token.lifespan": "2", "client.session.max.lifespan": "2",
+        })
+        try:
+            self.probe.request(source_path, expiring_client, token=self.operator, method="PUT")
+            expiring = self.probe.login("workstream-mcp-proof", "workstream-mcp-audience", email, password)
+            time.sleep(3)
+            denied(*exchange(expiring["access_token"]))
+            with self.assertRaises(ProviderRejected) as expired_session:
+                self.probe.request("/realms/flow/protocol/openid-connect/token", {
+                    "grant_type": "refresh_token", "client_id": "workstream-mcp-proof",
+                    "refresh_token": expiring["refresh_token"],
+                }, form=True)
+            self.assertEqual(expired_session.exception.status, 400)
+        finally:
+            # Keycloak merges the attributes map. Explicitly remove this
+            # fixture-only override instead of leaving a two-second session
+            # limit on the shared browser client for subsequent tests.
+            restored_client = json.loads(json.dumps(original_client))
+            restored_client.setdefault("attributes", {})["client.session.max.lifespan"] = (
+                original_client.get("attributes", {}).get("client.session.max.lifespan")
+            )
+            self.probe.request(source_path, restored_client, token=self.operator, method="PUT")
+            persisted_client = self.probe.request(source_path, token=self.operator)
+            self.assertEqual(persisted_client.get("attributes", {}).get("client.session.max.lifespan"),
+                             original_client.get("attributes", {}).get("client.session.max.lifespan"))
         for override in (
             {"audience": "workstream-mcp"}, {"scope": "workstream:access workstream:admin"},
             {"requested_token_type": "urn:ietf:params:oauth:token-type:refresh_token"},
@@ -336,6 +410,115 @@ class IdentityProviderTests(unittest.TestCase):
         restored = self.probe.login("workstream-mcp-proof", "workstream-mcp-audience", email, password)
         self.assertEqual(claims(restored["access_token"], realm_config.MCP_RESOURCE)["sub"], source["sub"])
 
+    def test_authorization_code_requires_exact_verifier_callback_and_single_redemption(self):
+        password = secrets.token_urlsafe(24)
+        email = "code-binding@example.invalid"
+        self.probe.request("/admin/realms/flow/users", {
+            "username": "code-binding", "email": email, "enabled": True,
+            "firstName": "Code", "lastName": "Binding",
+            "attributes": {"workstream_subject_kind": ["human"]},
+            "credentials": [{"type": "password", "value": password, "temporary": False}],
+        }, token=self.operator)
+        endpoint = "/realms/flow/protocol/openid-connect/token"
+        def code():
+            return self.probe.authorization_code(
+                "workstream-cli-login", "workstream-api-audience", email, password,
+            )
+        valid = code()
+        self.assertIn("access_token", self.probe.request(endpoint, valid, form=True))
+        with self.assertRaises(ProviderRejected) as replay:
+            self.probe.request(endpoint, valid, form=True)
+        self.assertEqual(replay.exception.status, 400)
+        for changed in ("wrong_verifier", "missing_verifier", "wrong_callback"):
+            with self.subTest(changed=changed):
+                form = code()
+                if changed == "wrong_verifier":
+                    form["code_verifier"] = secrets.token_urlsafe(48)
+                elif changed == "missing_verifier":
+                    del form["code_verifier"]
+                else:
+                    form["redirect_uri"] = "http://127.0.0.1:17843/foreign"
+                with self.assertRaises(ProviderRejected) as rejected:
+                    self.probe.request(endpoint, form, form=True)
+                self.assertEqual(rejected.exception.status, 400)
+
+    def test_signing_rotation_unexpected_audience_and_provider_outage(self):
+        email, password = "rotation@example.invalid", secrets.token_urlsafe(24)
+        self.probe.request("/admin/realms/flow/users", {
+            "username": "rotation", "email": email, "enabled": True,
+            "firstName": "Rotation", "lastName": "Participant",
+            "attributes": {"workstream_subject_kind": ["human"]},
+            "credentials": [{"type": "password", "value": password, "temporary": False}],
+        }, token=self.operator)
+        source = self.probe.login("workstream-mcp-proof", "workstream-mcp-audience", email, password)
+        clients = self.probe.request("/admin/realms/flow/clients", token=self.operator)
+        requester = next(c for c in clients if c["clientId"] == "workstream-mcp")
+        browser = next(c for c in clients if c["clientId"] == "workstream-mcp-proof")
+        secret = self.probe.request(f"/admin/realms/flow/clients/{requester['id']}/client-secret", token=self.operator)["value"]
+        browser_path = f"/admin/realms/flow/clients/{browser['id']}"
+        original = self.probe.request(browser_path, token=self.operator)
+        original.setdefault("protocolMappers", [])
+        changed = json.loads(json.dumps(original))
+        changed.setdefault("protocolMappers", []).append(
+            realm_config.audience_mapper("unexpected-fixture-audience", resource="https://foreign.example"))
+        try:
+            self.probe.request(browser_path, changed, token=self.operator, method="PUT")
+            extra = self.probe.login("workstream-mcp-proof", "workstream-mcp-audience", email, password)
+        finally:
+            self.probe.request(browser_path, original, token=self.operator, method="PUT")
+            restored = self.probe.request(browser_path, token=self.operator)
+            self.assertFalse(any(mapper.get("name") == "unexpected-fixture-audience"
+                                 for mapper in restored.get("protocolMappers", [])))
+        realm = self.probe.request("/admin/realms/flow", token=self.operator)
+        component = {"name": "rotation-fixture", "parentId": realm["id"],
+            "providerId": "rsa-generated", "providerType": "org.keycloak.keys.KeyProvider",
+            "config": {"priority": ["200"], "enabled": ["true"], "active": ["true"],
+                       "algorithm": ["RS256"], "keySize": ["2048"]}}
+        component_id = None
+        async def boundary():
+            nonlocal component_id
+            async with httpx.AsyncClient(verify=self.context, trust_env=False, timeout=5) as http:
+                provider = KeycloakCredentials(OAuthSettings(self.origin + "/realms/flow",
+                    realm_config.MCP_RESOURCE, self.root / "unused"), http, secret)
+                # Populate the actual adapter cache before the provider rotates,
+                # so accepting the new kid must refresh that cached key set.
+                old_identity = await provider.verify(source["access_token"])
+                self.probe.request("/admin/realms/flow/components", component, token=self.operator)
+                components = self.probe.request("/admin/realms/flow/components", token=self.operator)
+                component_id = next(c["id"] for c in components if c.get("name") == "rotation-fixture")
+                rotated = self.probe.login("workstream-mcp-proof", "workstream-mcp-audience", email, password)
+                self.assertNotEqual(jwt.get_unverified_header(source["access_token"])["kid"],
+                                    jwt.get_unverified_header(rotated["access_token"])["kid"])
+                # Respect the adapter's existing five-second unknown-kid
+                # refresh throttle instead of changing production timing.
+                await asyncio.sleep(5.1)
+                new_identity = await provider.verify(rotated["access_token"])
+                self.assertEqual(old_identity.subject, new_identity.subject)
+                with self.assertRaises(InvalidCredential):
+                    await provider.verify(extra["access_token"])
+                await provider.exchange(new_identity)
+                self.docker("stop", self.identity)
+                try:
+                    self.assertEqual((await provider.verify(source["access_token"])).subject, old_identity.subject)
+                    with self.assertRaises(IdentityUnavailable):
+                        await provider.exchange(new_identity)
+                    with self.assertRaises(URLError):
+                        self.probe.request("/realms/flow/protocol/openid-connect/token", {
+                            "grant_type": "refresh_token", "client_id": "workstream-mcp-proof",
+                            "refresh_token": rotated["refresh_token"],
+                        }, form=True)
+                finally:
+                    self.docker("start", self.identity)
+                    self.wait_ready()
+                self.assertEqual((await provider.verify(rotated["access_token"])).subject, new_identity.subject)
+                await provider.exchange(new_identity)
+        try:
+            asyncio.run(boundary())
+        finally:
+            if component_id is not None:
+                self.probe.request("/admin/realms/flow/components/" + component_id,
+                                   token=self.operator, method="DELETE")
+
     def test_real_login_exchange_renewal_restart_and_database_isolation(self):
         container = json.loads(self.docker("inspect", self.identity))[0]
         self.assertFalse(any(value.startswith("KC_BOOTSTRAP_ADMIN") for value in container["Config"]["Env"]))
@@ -357,7 +540,7 @@ class IdentityProviderTests(unittest.TestCase):
         secret = self.probe.request(f"/admin/realms/flow/clients/{client['id']}/client-secret",
                                     token=self.operator)["value"]
 
-        async def boundaries():
+        async def boundaries(source_token=mcp["access_token"]):
             settings = Settings(_env_file=None, environment="test", auth_provider="flow",
                 flow_auth_local_hmac_secret=None, token_issuer=self.origin + "/realms/flow",
                 token_audience="workstream-api", token_algorithms="RS256",
@@ -368,7 +551,7 @@ class IdentityProviderTests(unittest.TestCase):
             async with httpx.AsyncClient(verify=self.context, trust_env=False, timeout=10) as http:
                 provider = KeycloakCredentials(OAuthSettings(self.origin + "/realms/flow",
                     realm_config.MCP_RESOURCE, self.root / "unused"), http, secret)
-                identity = await provider.verify(mcp["access_token"])
+                identity = await provider.verify(source_token)
                 exchanged = await provider.exchange(identity)
                 direct_facts = (await verifier.verify(direct["access_token"])).token
                 facts = (await verifier.verify(exchanged[7:])).token
@@ -389,6 +572,7 @@ class IdentityProviderTests(unittest.TestCase):
             "refresh_token": mcp["refresh_token"],
         }, form=True)
         self.assertNotEqual(refreshed["refresh_token"], mcp["refresh_token"])
+        self.assertEqual(asyncio.run(boundaries(refreshed["access_token"])), subject)
         with self.assertRaises(ProviderRejected) as denied:
             self.probe.request("/realms/flow/protocol/openid-connect/token", {
                 "grant_type": "refresh_token", "client_id": "workstream-mcp-proof",
