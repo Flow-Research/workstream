@@ -1,6 +1,7 @@
 """Normalized external-checker contracts; values never grant execution authority."""
 
 from __future__ import annotations
+from app.modules.checkers.api.post_material_custody import PostSubmitArtifactCustody
 
 import json
 import hashlib
@@ -380,7 +381,7 @@ class PreSubmitExternalCheckerMaterial(ExternalCheckerValue):
     ]
 
 
-class PostSubmitExternalCheckerMaterial(ExternalCheckerValue):
+class PostSubmitExternalCheckerMaterial(PostSubmitArtifactCustody, ExternalCheckerValue):
     """Verified native Submission and ART ancestry selected for POST execution."""
 
     phase: Literal["post_submit"] = "post_submit"
@@ -396,9 +397,6 @@ class PostSubmitExternalCheckerMaterial(ExternalCheckerValue):
         StrictStr, Field(min_length=1, max_length=255, pattern=r"^[^\s/]+/[^\s/]+$")
     ]
     evidence_id: UUID = Field(strict=True)
-    verification_receipt_id: UUID = Field(strict=True)
-    verification_job_id: UUID = Field(strict=True)
-    verification_generation: Annotated[StrictInt, Field(ge=1)]
     namespace_fingerprint: Sha256
     semantic_manifest_sha256: Sha256
 

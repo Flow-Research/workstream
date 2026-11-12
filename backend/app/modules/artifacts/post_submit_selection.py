@@ -3,10 +3,13 @@
 from dataclasses import dataclass
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.interfaces.artifacts import ArtifactStore, artifact_provider_object_ref
+from app.modules.artifacts.api.submission_intake import SealedSubmissionSource
+from app.modules.artifacts.intake.models import SubmissionIntakeOperation
+from app.modules.artifacts.intake.repository import SubmissionIntakeRepository
 from app.modules.checkers.api.materialization import PostSubmissionMaterializationUnavailable
 from app.modules.artifacts.models import (
     ArtifactBinding, ArtifactContent, ArtifactReplica, ArtifactStorageNamespace,
@@ -37,9 +40,9 @@ class PostSubmissionMaterialSelection:
     submission: SubmittedBundleFacts
     evidence_id: UUID
     replica_id: UUID
-    verification_receipt_id: UUID
-    verification_job_id: UUID
-    verification_generation: int
+    verification_receipt_id: UUID | None
+    verification_job_id: UUID | None
+    verification_generation: int | None
     namespace_fingerprint: str
     adapter: str
     provider_profile: str
@@ -51,6 +54,9 @@ class PostSubmissionMaterialSelection:
     semantic_manifest_sha256: str
     revision_preparation_id: UUID | None
     revision_preparation_sha256: str | None
+    sealed_source: SealedSubmissionSource | None = None
+    acceptance_receipt_sha256: str | None = None
+    accepted_source_sha256: str | None = None
 
 
 async def read_post_submission_facts(
@@ -172,8 +178,8 @@ async def select_admitted_post_material(
         .join(ArtifactBinding, ArtifactBinding.id == str(facts.binding_id))
         .join(ArtifactContent, ArtifactContent.id == SubmissionBundleAdmission.artifact_content_id)
         .join(ArtifactReplica, ArtifactReplica.id == SubmissionBundleAdmission.verified_replica_id)
-        .join(ArtifactVerificationReceipt, ArtifactVerificationReceipt.id == SubmissionBundleAdmission.verification_receipt_id)
-        .join(ArtifactVerificationJob, ArtifactVerificationJob.id == ArtifactVerificationReceipt.verification_job_id)
+        .outerjoin(ArtifactVerificationReceipt, ArtifactVerificationReceipt.id == SubmissionBundleAdmission.verification_receipt_id)
+        .outerjoin(ArtifactVerificationJob, ArtifactVerificationJob.id == ArtifactVerificationReceipt.verification_job_id)
         .join(ArtifactStorageNamespace, ArtifactStorageNamespace.id == ArtifactReplica.storage_namespace_id)
         .where(SubmissionBundleAdmission.id == str(facts.admission_id),
                SubmissionBundleAdmission.project_id == str(facts.project_id),
@@ -211,25 +217,20 @@ async def select_admitted_post_material(
         and replica.content_id == content.id
         and (replica.verification_state, replica.availability_state, replica.integrity_state)
         == ("verified", "available", "valid")
-        and receipt.outcome == "verified"
-        and receipt.observed_sha256 == content.sha256
-        and receipt.observed_byte_count == content.byte_count
-        and job.replica_id == replica.id
-        and job.originating_put_attempt_id == admission.put_attempt_id
     ):
         raise PostSubmissionMaterializationUnavailable("post_submit_material_identity_mismatch")
     validate_artifact_replica_execution_namespace(
         replica=replica, persisted=persisted, namespace=namespace, store=store,
     )
-    commitment = ArtifactCommitment(content.sha256, content.byte_count, content.media_type)
-    if replica.provider_object_ref != artifact_provider_object_ref(commitment):
-        raise PostSubmissionMaterializationUnavailable("post_submit_material_identity_mismatch")
+    source, accepted_source, acceptance_receipt = await _read_material_custody(
+        session, admission, content, replica, receipt, job,
+    )
     return PostSubmissionMaterialSelection(
         submission=facts,
         evidence_id=UUID(admission.selected_pre_submit_run_id),
         replica_id=UUID(replica.id),
-        verification_receipt_id=UUID(receipt.id), verification_job_id=UUID(job.id),
-        verification_generation=receipt.execution_generation,
+        verification_receipt_id=UUID(receipt.id) if receipt else None, verification_job_id=UUID(job.id) if job else None,
+        verification_generation=receipt.execution_generation if receipt else None,
         namespace_fingerprint=persisted.namespace_fingerprint, adapter=replica.adapter,
         provider_profile=replica.provider_profile, provider_object_ref=replica.provider_object_ref,
         sha256=content.sha256, byte_count=content.byte_count, media_type=content.media_type,
@@ -237,4 +238,34 @@ async def select_admitted_post_material(
         semantic_manifest_sha256=admission.semantic_manifest_sha256,
         revision_preparation_id=admission.revision_preparation_id,
         revision_preparation_sha256=admission.revision_preparation_sha256,
+        sealed_source=source, accepted_source_sha256=accepted_source, acceptance_receipt_sha256=acceptance_receipt,
     )
+
+
+async def _read_material_custody(session, admission, content, replica, receipt, job):
+    """Resolve exact retained source generation or verified-put evidence."""
+    invalid = PostSubmissionMaterializationUnavailable("post_submit_material_identity_mismatch")
+    if admission.source_operation_id is None:
+        commitment = ArtifactCommitment(content.sha256, content.byte_count, content.media_type)
+        if (receipt is None or job is None or replica.source_operation_id is not None
+                or receipt.outcome != "verified" or receipt.observed_sha256 != content.sha256
+                or receipt.observed_byte_count != content.byte_count or job.replica_id != replica.id
+                or job.originating_put_attempt_id != admission.put_attempt_id
+                or replica.provider_object_ref != artifact_provider_object_ref(commitment)):
+            raise invalid
+        return None, None, None
+    operation = await session.get(SubmissionIntakeOperation, admission.source_operation_id,
+                                  populate_existing=True)
+    if (receipt is not None or job is not None or operation is None or operation.state != "finalized"
+            or operation.finalized_admission_id != admission.id
+            or operation.finalized_submission_id != admission.consumed_by_submission_id
+            or replica.source_operation_id != operation.id):
+        raise invalid
+    await session.execute(text("SELECT public.require_source_submission_admission(a) "
+        "FROM public.submission_bundle_admissions a WHERE id=:id"), {"id": admission.id})
+    valid = await session.scalar(text("SELECT public.submission_finalization_authority_valid(o,'commit') "
+        "FROM public.submission_intake_operations o WHERE id=:id"), {"id": operation.id})
+    if valid is not True:
+        raise invalid
+    return (SubmissionIntakeRepository._sealed_source(operation), operation.accepted_source_sha256,
+            operation.acceptance_receipt_sha256)

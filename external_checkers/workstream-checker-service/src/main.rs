@@ -1724,33 +1724,9 @@ fn validate_post_grant_material(item: &PostGrantMaterial) -> Result<&str, String
         .material
         .as_object()
         .ok_or("POST grant material invalid")?;
-    let expected: std::collections::BTreeSet<_> = [
-        "phase",
-        "role",
-        "submission_id",
-        "submission_version",
-        "binding_id",
-        "content_id",
-        "replica_id",
-        "content_sha256",
-        "byte_count",
-        "media_type",
-        "evidence_id",
-        "verification_receipt_id",
-        "verification_job_id",
-        "verification_generation",
-        "namespace_fingerprint",
-        "semantic_manifest_sha256",
-    ]
-    .into_iter()
-    .collect();
-    if material
-        .keys()
-        .map(String::as_str)
-        .collect::<std::collections::BTreeSet<_>>()
-        != expected
-        || material.get("phase").and_then(Value::as_str) != Some("post_submit")
-    {
+    workstream_checker_sdk::validate_post_material_custody(material)
+        .map_err(|_| "POST grant material custody invalid")?;
+    if material.get("phase").and_then(Value::as_str) != Some("post_submit") {
         return Err("POST grant material invalid".into());
     }
     let role = material
@@ -1759,10 +1735,6 @@ fn validate_post_grant_material(item: &PostGrantMaterial) -> Result<&str, String
         .ok_or("POST grant material role invalid")?;
     if !matches!(role, CURRENT_ARCHIVE_ROLE | PREDECESSOR_ARCHIVE_ROLE)
         || material.get("submission_version").and_then(Value::as_u64) == Some(0)
-        || material
-            .get("verification_generation")
-            .and_then(Value::as_u64)
-            == Some(0)
         || !material
             .get("byte_count")
             .and_then(Value::as_u64)
@@ -1780,8 +1752,6 @@ fn validate_post_grant_material(item: &PostGrantMaterial) -> Result<&str, String
         "content_id",
         "replica_id",
         "evidence_id",
-        "verification_receipt_id",
-        "verification_job_id",
     ] {
         if !material
             .get(field)
@@ -4895,6 +4865,47 @@ exit 2
             grant_id: manifest.grant_id.clone(),
             binding_digest: manifest.binding_digest.clone(),
         }
+    }
+
+    #[test]
+    fn post_grant_source_custody_rejects_mixed_or_missing_evidence() {
+        let (_, mut manifest) = post_grant_fixture(false, false, false);
+        let item = &mut manifest.materials[0];
+        let material = item.material.as_object_mut().unwrap();
+        for key in [
+            "verification_receipt_id",
+            "verification_job_id",
+            "verification_generation",
+        ] {
+            material.remove(key);
+        }
+        material.insert(
+            "source_operation_id".into(),
+            Value::String("018f6f49-66b8-7d2a-bf4d-0e2eeaa00001".into()),
+        );
+        material.insert(
+            "accepted_source_sha256".into(),
+            Value::String(format!("sha256:{}", "a".repeat(64))),
+        );
+        material.insert(
+            "acceptance_receipt_sha256".into(),
+            Value::String(format!("sha256:{}", "b".repeat(64))),
+        );
+        assert_eq!(
+            validate_post_grant_material(item).unwrap(),
+            CURRENT_ARCHIVE_ROLE
+        );
+        item.material["verification_generation"] = Value::from(1);
+        assert!(validate_post_grant_material(item).is_err());
+        item.material
+            .as_object_mut()
+            .unwrap()
+            .remove("verification_generation");
+        item.material
+            .as_object_mut()
+            .unwrap()
+            .remove("accepted_source_sha256");
+        assert!(validate_post_grant_material(item).is_err());
     }
 
     #[test]

@@ -98,6 +98,9 @@ _POST_MATERIAL_FIELDS = frozenset(
         "semantic_manifest_sha256",
     }
 )
+_POST_SOURCE_MATERIAL_FIELDS = (_POST_MATERIAL_FIELDS - {
+    "verification_receipt_id", "verification_job_id", "verification_generation",
+}) | {"source_operation_id", "accepted_source_sha256", "acceptance_receipt_sha256"}
 
 
 class PreparedSubmissionProcessor(Protocol[_InspectionResultCo]):
@@ -274,9 +277,10 @@ class PostExternalMaterialGrantItem:
 
     def __post_init__(self) -> None:
         """Validate canonical role custody and the inventory before grant publication."""
+        source_backed = getattr(self.material, "source_operation_id", None) is not None
         material = _external_grant_json(
             self.material,
-            expected_fields=_POST_MATERIAL_FIELDS,
+            expected_fields=_POST_SOURCE_MATERIAL_FIELDS if source_backed else _POST_MATERIAL_FIELDS,
             label="material",
         )
         identifiers = (
@@ -285,17 +289,19 @@ class PostExternalMaterialGrantItem:
             "content_id",
             "replica_id",
             "evidence_id",
-            "verification_receipt_id",
-            "verification_job_id",
-        )
+        ) + (("source_operation_id",) if source_backed else ("verification_receipt_id", "verification_job_id"))
+        if source_backed:
+            custody_valid = all(_valid_sha256(material[field]) for field in (
+                "accepted_source_sha256", "acceptance_receipt_sha256"))
+        else:
+            custody_valid = type(material["verification_generation"]) is int and material["verification_generation"] > 0
         if (
             material["phase"] != "post_submit"
             or material["role"] not in {"submission_archive", "predecessor_submission_archive"}
             or any(not _valid_resource_id(material[field]) for field in identifiers)
             or type(material["submission_version"]) is not int
             or material["submission_version"] <= 0
-            or type(material["verification_generation"]) is not int
-            or material["verification_generation"] <= 0
+            or not custody_valid
             or type(material["byte_count"]) is not int
             or not 0 <= material["byte_count"] <= HARD_MAXIMUM_ARTIFACT_BYTES
             or type(material["media_type"]) is not str

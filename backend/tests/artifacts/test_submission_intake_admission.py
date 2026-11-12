@@ -748,7 +748,8 @@ async def test_t4_cancellation_drains_commit_and_keeps_accepted_custody(admissio
     assert receipt["status"] == "accepted" and receipt["replayed"] is True
 
 
-async def test_t5_finalizes_same_source_with_one_submission_and_post_dispatch(admission_intake, tmp_path):
+@pytest.mark.parametrize("expired_claim", [False, True])
+async def test_t5_finalizes_same_source_with_one_submission_and_post_dispatch(admission_intake, tmp_path, expired_claim):
     from datetime import timedelta
     from sqlalchemy import text
     from app.adapters.artifacts import submission_admission_consumption_port
@@ -779,6 +780,9 @@ async def test_t5_finalizes_same_source_with_one_submission_and_post_dispatch(ad
             session, request_id=new_record_id(), correlation_id=owner.operation_id),
     )
     try:
+        if expired_claim:
+            from tests.artifacts.intake_post_support import leave_expired_finalizer_claim
+            await leave_expired_finalizer_claim(f, finalizer, owner.operation_id)
         result = await finalizer.run(owner.operation_id)
         assert await finalizer.run(owner.operation_id) == result
         assert await f.admission.accept(owner, request, terminal.terminal_digest,
@@ -786,6 +790,7 @@ async def test_t5_finalizes_same_source_with_one_submission_and_post_dispatch(ad
         async with f.factory() as session:
             row = await session.get(SubmissionIntakeOperation, str(owner.operation_id))
             assert row.state == "finalized" and row.finalized_submission_id == str(result.submission_id)
+            assert row.continuation_generation == (2 if expired_claim else 1)
             task = (await session.execute(text("SELECT status, active_submission_operation_id "
                 "FROM workstream_tasks WHERE id=:id"), {"id": f.task})).one()
             assert task.status == "evaluation_pending" and task.active_submission_operation_id is None
@@ -811,5 +816,30 @@ async def test_t5_finalizes_same_source_with_one_submission_and_post_dispatch(ad
                 async with session.begin():
                     await session.execute(text("UPDATE artifact_replicas SET source_operation_id=NULL "
                         "WHERE source_operation_id=:id"), {"id": owner.operation_id})
+        substitutions = (
+            ("UPDATE artifact_contents SET sha256='sha256:' || repeat('f',64) WHERE id=:id",
+             result.artifact_content_id, "accepted source content is immutable"),
+            ("UPDATE artifact_contents SET byte_count=byte_count+1 WHERE id=:id",
+             result.artifact_content_id, "accepted source content is immutable"),
+            ("UPDATE artifact_contents SET media_type='application/octet-stream' WHERE id=:id",
+             result.artifact_content_id, "accepted source content is immutable"),
+            ("UPDATE artifact_replicas SET adapter='substituted' WHERE source_operation_id=:id",
+             owner.operation_id, "source admission provenance mismatch"),
+        )
+        for statement, identity, message in substitutions:
+            async with f.factory() as session:
+                with pytest.raises(IntegrityError, match=message):
+                    async with session.begin():
+                        await session.execute(text(statement), {"id": identity})
+        from tests.artifacts.intake_post_support import exercise_source_post
+        await exercise_source_post(f, result, store, request.source, tmp_path)
     finally:
         store.close()
+
+
+@pytest.mark.parametrize("duration", [timedelta(0), timedelta(days=3650), timedelta(hours=1, microseconds=1)])
+def test_finalization_rejects_unbounded_or_empty_lease(duration):
+    from app.modules.artifacts.intake.finalization import AcceptedSubmissionFinalization
+    with pytest.raises(ValueError, match="at most one hour"):
+        AcceptedSubmissionFinalization(None, tasks=None, authorization=None, submissions=None,
+            checkers=None, store=None, lease_duration=duration)

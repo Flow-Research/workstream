@@ -366,3 +366,44 @@ def test_pre_request_refuses_prepared_bundle_identity():
     value = identity.model_dump() | {"prepared_generation_id": uuid4()}
     with pytest.raises(ValueError, match="prepared_generation_id"):
         type(identity).model_validate(value)
+
+
+def test_post_source_custody_preserves_retained_material_and_closes_new_witness():
+    import json
+    from pathlib import Path
+    from app.modules.checkers.api.external import PostSubmitExternalCheckerMaterial
+    from app.modules.checkers.api.post_material_custody import PostSubmitArtifactCustody
+
+    fixture = Path(__file__).resolve().parents[4] / "external_checkers/fixtures/post_request.json"
+    retained = json.loads(fixture.read_text())["materials"][0]
+    original = PostSubmitExternalCheckerMaterial.model_validate_json(json.dumps(retained))
+    assert original.model_dump(mode="json") == retained
+    source = {k: v for k, v in retained.items() if not k.startswith("verification_")}
+    source.update(source_operation_id=str(new_record_id()), accepted_source_sha256=SHA,
+                  acceptance_receipt_sha256="sha256:" + "b" * 64)
+    material = PostSubmitExternalCheckerMaterial.model_validate_json(json.dumps(source))
+    assert material.model_dump(mode="json") == source
+    assert PostSubmitExternalCheckerMaterial.model_validate_json(material.model_dump_json()) == material
+    witness = {k: v for k, v in source.items() if k in PostSubmitArtifactCustody.model_fields}
+    assert PostSubmitArtifactCustody.model_validate_json(json.dumps(witness)).model_dump(mode="json") == witness
+    for field in witness:
+        with pytest.raises(ValidationError):
+            PostSubmitExternalCheckerMaterial.model_validate_json(json.dumps({k: v for k, v in source.items() if k != field}))
+    for field in ("verification_receipt_id", "verification_job_id", "verification_generation"):
+        with pytest.raises(ValidationError):
+            PostSubmitExternalCheckerMaterial.model_validate_json(json.dumps(source | {field: retained[field]}))
+
+
+def test_source_predecessor_custody_keeps_exact_witness_on_roundtrip():
+    from app.modules.checkers.api.evaluation_context import PostSubmitPredecessorCustody
+    custody = PostSubmitPredecessorCustody(
+        submission_id=new_record_id(), submission_version=1, content_sha256=SHA,
+        byte_count=4, semantic_manifest_sha256=SHA, admission_id=new_record_id(),
+        binding_id=new_record_id(), content_id=new_record_id(), replica_id=new_record_id(),
+        evidence_id=new_record_id(), namespace_fingerprint=SHA, semantic_manifest_id=new_record_id(),
+        source_operation_id=new_record_id(), accepted_source_sha256=SHA, acceptance_receipt_sha256=SHA,
+    )
+    body = custody.model_dump(mode="json")
+    assert not any(key.startswith("verification_") for key in body)
+    assert body["source_operation_id"] == str(custody.source_operation_id)
+    assert PostSubmitPredecessorCustody.model_validate_json(custody.model_dump_json()) == custody

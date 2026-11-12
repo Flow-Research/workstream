@@ -237,30 +237,9 @@ pub fn parse_request(bytes: &[u8]) -> Result<ValidatedRequest, ContractError> {
                 return Err(ContractError("request material identity differs"));
             }
         } else {
-            exact_map(
-                material,
-                &[
-                    "phase",
-                    "role",
-                    "submission_id",
-                    "submission_version",
-                    "binding_id",
-                    "content_id",
-                    "replica_id",
-                    "content_sha256",
-                    "byte_count",
-                    "media_type",
-                    "evidence_id",
-                    "verification_receipt_id",
-                    "verification_job_id",
-                    "verification_generation",
-                    "namespace_fingerprint",
-                    "semantic_manifest_sha256",
-                ],
-            )?;
+            validate_post_material_custody(material)?;
             if unsigned(material, "byte_count")? > i64::MAX as u64
                 || unsigned(material, "submission_version")? == 0
-                || unsigned(material, "verification_generation")? == 0
             {
                 return Err(ContractError("request material is invalid"));
             }
@@ -1239,6 +1218,59 @@ fn exact_object<'a>(
     Ok(object)
 }
 
+/// Validate the closed POST material shape and its one complete custody witness.
+pub fn validate_post_material_custody(material: &Map<String, Value>) -> Result<(), ContractError> {
+    let mut fields = vec![
+        "phase",
+        "role",
+        "submission_id",
+        "submission_version",
+        "binding_id",
+        "content_id",
+        "replica_id",
+        "content_sha256",
+        "byte_count",
+        "media_type",
+        "evidence_id",
+        "namespace_fingerprint",
+        "semantic_manifest_sha256",
+    ];
+    if material.contains_key("source_operation_id") {
+        fields.extend([
+            "source_operation_id",
+            "accepted_source_sha256",
+            "acceptance_receipt_sha256",
+        ]);
+        let operation = string(material, "source_operation_id")?;
+        if operation.len() != 36
+            || !operation.bytes().enumerate().all(|(index, byte)| {
+                if [8, 13, 18, 23].contains(&index) {
+                    byte == b'-'
+                } else {
+                    byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase()
+                }
+            })
+        {
+            return Err(ContractError("source operation is invalid"));
+        }
+        digest(material, "accepted_source_sha256")?;
+        digest(material, "acceptance_receipt_sha256")?;
+    } else {
+        fields.extend([
+            "verification_receipt_id",
+            "verification_job_id",
+            "verification_generation",
+        ]);
+        if string(material, "verification_receipt_id")?.is_empty()
+            || string(material, "verification_job_id")?.is_empty()
+            || unsigned(material, "verification_generation")? == 0
+        {
+            return Err(ContractError("verified custody is invalid"));
+        }
+    }
+    exact_map(material, &fields)
+}
+
 fn exact_map(object: &Map<String, Value>, fields: &[&str]) -> Result<(), ContractError> {
     let expected: BTreeSet<_> = fields.iter().copied().collect();
     let actual: BTreeSet<_> = object.keys().map(String::as_str).collect();
@@ -1699,6 +1731,44 @@ mod tests {
         let mut uppercase_check = coverage;
         uppercase_check["findings"][0]["check_id"] = Value::String("Coverage".into());
         assert!(validate_result(&resign(uppercase_check), &request).is_err());
+    }
+
+    #[test]
+    fn post_source_custody_requires_one_complete_witness_for_each_archive() {
+        let mut request = post_context_request("checker_remediation", &[PREDECESSOR_ARCHIVE_ROLE]);
+        for material in request["materials"].as_array_mut().unwrap() {
+            let material = material.as_object_mut().unwrap();
+            for key in [
+                "verification_receipt_id",
+                "verification_job_id",
+                "verification_generation",
+            ] {
+                material.remove(key);
+            }
+            material.insert(
+                "source_operation_id".into(),
+                Value::String("018f6f49-66b8-7d2a-bf4d-0e2eeaa00001".into()),
+            );
+            material.insert(
+                "accepted_source_sha256".into(),
+                Value::String(format!("sha256:{}", "a".repeat(64))),
+            );
+            material.insert(
+                "acceptance_receipt_sha256".into(),
+                Value::String(format!("sha256:{}", "b".repeat(64))),
+            );
+        }
+        let request = resign_request(request);
+        assert!(parse_request(&serde_json::to_vec(&request).unwrap()).is_ok());
+        let mut mixed = request.clone();
+        mixed["materials"][1]["verification_generation"] = Value::from(1);
+        assert!(parse_request(&serde_json::to_vec(&resign_request(mixed)).unwrap()).is_err());
+        let mut incomplete = request;
+        incomplete["materials"][0]
+            .as_object_mut()
+            .unwrap()
+            .remove("acceptance_receipt_sha256");
+        assert!(parse_request(&serde_json::to_vec(&resign_request(incomplete)).unwrap()).is_err());
     }
 
     #[test]

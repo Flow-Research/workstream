@@ -122,6 +122,9 @@ def _external_material(facts, media_type, role):
         verification_receipt_id=facts.verification_receipt_id,
         verification_job_id=facts.verification_job_id,
         verification_generation=facts.verification_generation,
+        source_operation_id=facts.source_operation_id,
+        accepted_source_sha256=facts.accepted_source_sha256,
+        acceptance_receipt_sha256=facts.acceptance_receipt_sha256,
         namespace_fingerprint=facts.namespace_fingerprint,
         semantic_manifest_sha256=material.semantic_manifest_sha256,
     )
@@ -519,6 +522,9 @@ class PostSubmissionMaterializer:
             verification_receipt_id=selected.verification_receipt_id,
             verification_job_id=selected.verification_job_id,
             verification_generation=selected.verification_generation,
+            source_operation_id=selected.sealed_source.location.operation_id if selected.sealed_source else None,
+            accepted_source_sha256=selected.accepted_source_sha256,
+            acceptance_receipt_sha256=selected.acceptance_receipt_sha256,
             namespace_fingerprint=selected.namespace_fingerprint,
             semantic_manifest_id=selected.semantic_manifest_id,
         )
@@ -698,7 +704,8 @@ class PostSubmissionMaterializer:
                         prepared_trusted_intake(
                             self._intake,
                             self._preparation.prepare(
-                                self._store.open(selection.provider_object_ref),
+                                (self._store.open_source(selection.sealed_source) if selection.sealed_source
+                                 else self._store.open(selection.provider_object_ref)),
                                 media_type=selection.media_type,
                                 expected_sha256=selection.sha256,
                                 expected_size=selection.byte_count,

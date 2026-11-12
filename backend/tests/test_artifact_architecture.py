@@ -264,7 +264,9 @@ def test_only_artifact_custody_services_own_provider_execution() -> None:
             } or (node.name == "ForegroundSourceUpload"
                   and path == APP_ROOT / "modules/artifacts/intake/foreground_upload.py")
                 or (node.name == "_PreSubmitSourceGrant"
-                    and path == APP_ROOT / "modules/artifacts/selected_pre_submit_execution.py"))
+                    and path == APP_ROOT / "modules/artifacts/selected_pre_submit_execution.py")
+                or (node.name == "AcceptedSubmissionFinalization"
+                    and path == APP_ROOT / "modules/artifacts/intake/finalization.py"))
         }
         for node in ast.walk(tree):
             if (
@@ -289,12 +291,13 @@ def test_only_artifact_custody_services_own_provider_execution() -> None:
                     in {
                         "CheckerArtifactOutputService",
                         "ScopedGuideDocumentGrant",
-                        "PostSubmissionMaterializer",
                     }
                     and node.func.attr != "open"
                 ) or (owner.name == "ForegroundSourceUpload" and node.func.attr not in {
                     "begin_source_upload", "complete_source_upload", "observe_source_upload",
-                }) or (owner.name == "_PreSubmitSourceGrant" and node.func.attr != "open_source"):
+                }) or (owner.name == "_PreSubmitSourceGrant" and node.func.attr != "open_source"
+                ) or (owner.name == "PostSubmissionMaterializer" and node.func.attr not in {"open", "open_source"}
+                ) or (owner.name == "AcceptedSubmissionFinalization" and node.func.attr != "observe_sealed_source"):
                     violations.append(f"{path.relative_to(BACKEND_ROOT)} calls {node.func.attr}")
     assert violations == []
 

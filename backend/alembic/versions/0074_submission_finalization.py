@@ -193,7 +193,8 @@ _CONTINUATION_MUTATION = """  IF OLD.state='finalization_pending' AND NEW.state=
        OR NEW.continuation_generation IS DISTINCT FROM coalesce(OLD.continuation_generation,0)+1
        OR NEW.continuation_lease_id IS NOT DISTINCT FROM OLD.continuation_lease_id
        OR (OLD.continuation_expires_at IS NOT NULL AND OLD.continuation_expires_at>clock_timestamp())
-       OR NOT isfinite(NEW.continuation_expires_at) OR NEW.continuation_expires_at<=clock_timestamp() THEN
+       OR NOT isfinite(NEW.continuation_expires_at) OR NEW.continuation_expires_at<=clock_timestamp()
+       OR NEW.continuation_expires_at>clock_timestamp()+interval '1 hour' THEN
       RAISE EXCEPTION 'invalid submission continuation claim' USING ERRCODE='23514';
     END IF;
     RETURN NEW;
@@ -247,11 +248,12 @@ BEGIN
  PERFORM public.require_submission_acceptance(o);
  SELECT * INTO r FROM public.selected_pre_submit_runs WHERE id=o.selected_pre_submit_run_id;
  SELECT * INTO v FROM public.artifact_replicas WHERE id=a.verified_replica_id;
- SELECT * INTO c FROM public.artifact_contents WHERE id=a.artifact_content_id;
+ SELECT * INTO c FROM public.artifact_contents WHERE id=a.artifact_content_id FOR SHARE;
  IF a.selected_pre_submit_run_id IS DISTINCT FROM r.id OR a.pre_submit_evidence_set_id IS NOT NULL
     OR v.id IS NULL OR c.id IS NULL OR v.source_operation_id IS DISTINCT FROM o.id
     OR v.content_id IS DISTINCT FROM c.id OR v.storage_namespace_id IS DISTINCT FROM o.namespace_id
     OR v.namespace_fingerprint IS DISTINCT FROM o.namespace_fingerprint OR v.provider_profile IS DISTINCT FROM o.provider_profile
+    OR v.adapter IS DISTINCT FROM (SELECT adapter FROM public.artifact_storage_namespaces WHERE id=o.namespace_id)
     OR v.provider_object_ref IS DISTINCT FROM o.object_ref OR c.sha256 IS DISTINCT FROM o.raw_sha256
     OR c.byte_count IS DISTINCT FROM o.raw_byte_count OR c.media_type IS DISTINCT FROM 'application/zip'
     OR v.verification_state IS DISTINCT FROM 'verified' OR v.integrity_state IS DISTINCT FROM 'valid'
@@ -281,6 +283,18 @@ BEGIN
    RAISE EXCEPTION 'source admission locked lineage mismatch' USING ERRCODE='23514';
  END IF;
 END $$;
+
+CREATE FUNCTION public.guard_accepted_source_content()
+RETURNS trigger LANGUAGE plpgsql SET search_path=pg_catalog,public,pg_temp AS $$
+BEGIN
+ IF ROW(OLD.sha256,OLD.byte_count,OLD.media_type) IS DISTINCT FROM ROW(NEW.sha256,NEW.byte_count,NEW.media_type)
+    AND EXISTS(SELECT 1 FROM public.artifact_replicas WHERE content_id=OLD.id AND source_operation_id IS NOT NULL) THEN
+   RAISE EXCEPTION 'accepted source content is immutable' USING ERRCODE='23514';
+ END IF;
+ RETURN NEW;
+END $$;
+CREATE TRIGGER accepted_source_content_immutable BEFORE UPDATE ON public.artifact_contents
+ FOR EACH ROW EXECUTE FUNCTION public.guard_accepted_source_content();
 
 CREATE FUNCTION public.check_submission_finalization()
 RETURNS trigger LANGUAGE plpgsql SET search_path=pg_catalog,public,pg_temp AS $$

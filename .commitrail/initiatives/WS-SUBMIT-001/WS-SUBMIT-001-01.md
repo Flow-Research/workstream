@@ -2762,3 +2762,77 @@ the ledger coordinates adjusted accordingly. These are worktree-scoped results,
 not full-suite or exact frozen-commit provenance. T5 crash/concurrency and POST
 execution/public integration remain open; focused implementation review follows
 this reproducible milestone.
+
+### POST source custody continuation
+
+The next bounded extension follows the frozen T5 review: repair content/adapter
+immutability with direct SQL probes; bound continuation leases by the existing
+OUTBOX one-hour structural ceiling (no deployment default or C05 approval implied).
+Extend the existing POST selector/materializer and CHECKERS material contracts to
+carry exact accepted-operation custody without provider coordinates. Preserve
+retained verification-backed evidence and its canonical digests; new source-backed
+material carries operation, accepted-source and acceptance-receipt hashes instead
+of fabricated verification IDs. Both current and predecessor material use the same
+selector and version-pinned `open_source` capability. Update external checker SDK
+and service validation together. Do not widen generic object-key parsing.
+
+Allowed scope is ART selection/materialization, CHECKERS material facts and retained
+input custody, the external checker contract validators, focused tests and this
+record. Prohibited changes include weakening AUTH/currentness, exposing provider
+locators, copying/reuploading source bytes, and claiming production provider
+qualification. Acceptance requires real T5-to-POST material execution, exact source
+version substitution controls, and retained-evidence roundtrip tests. Risk is high;
+ARCH/SEC reviews custody and QA reviews execution/failure proof before readiness.
+
+Review repairs: source-linked content SHA/size/media changes now fail under a
+narrow content trigger, with source admission validation holding a content share
+lock through commit. Replica adapter must match its namespace. Direct SQL digest,
+size, media and adapter substitutions are rejected in the composed test. The
+continuation constructor and SQL claim transition reject durations above the
+existing OUTBOX one-hour structural ceiling; deployment must still supply an
+explicit measured duration. Three constructor bound cases pass; expired-claim
+recovery proof remains required.
+
+POST selection now resolves source-backed admissions from their finalized operation
+and uses exact sealed-generation `open_source`. CHECKERS facts, ART's aggregate grant,
+and the Rust SDK/service validators admit one complete source witness or one retained
+verification witness. Python contract tests pass (38); Rust SDK tests pass (9), and
+both targeted service grant tests pass. Artifact architecture tests pass (48).
+The integrated run passed the T5 SQL mutation probes and reached selected POST
+execution, exposing an additional closed field list in ART's grant builder; that
+list is now updated without importing CHECKERS internals. The rerun is pending.
+Historical revision-input SQL still requires extension for a source-backed
+predecessor, and actual MinIO POST version-substitution proof remains required.
+
+Migration 0075 extends both the current-input authorization digest reconstruction
+and the historical predecessor custody predicate for source-backed material. Its
+verification-backed branch preserves existing keys, values and optional revision
+context encoding. The composed test originally reached POST terminal publication
+and was correctly rejected by the old SQL receipt reconstruction; 0075 repairs
+that actual failure rather than bypassing the receipt guard.
+
+Integrated verification now passes: **5 passed, 27 deselected** in
+`/tmp/post-source-composed4.log` (metadata `/tmp/post-source-composed4.json`). Both
+normal T5 and worker death after a committed claim proceed through actual owner
+POST selection/materialization, controlled selected evaluation, terminal commit,
+and replay. The expired-claim case proves a live competitor is refused and a later
+independent transaction reclaims generation 2 without duplicate Submission/POST.
+The storage wrapper forbids generic unversioned reads and requires the exact
+sealed source; replay does not read it again. The three lease constructor bounds
+also pass. This uses real PostgreSQL and Local storage with explicit in-process
+intake/checker fixtures; it is not native Smol or hosted provider qualification.
+
+Runtime/contract verification passed **74 tests**; a further predecessor witness
+roundtrip brings the focused contract file to **39 passed**. The earlier scratch
+lifetime test incorrectly injected the retired `prepared_generation_id` into the
+current PRE wire identity; it now keeps that ID only in private ART scratch facts.
+Its shared scratch lifetime assertions remain. Rust SDK tests pass **9**, targeted
+Rust service grant tests pass **2**, artifact architecture passes **48**, structure,
+changed-file Ruff, and Markdown links pass. These are scoped worktree results.
+Fetched current `origin/main` remains `94334ccf4`, with no missing base commits.
+
+Remaining before end-to-end completion: MinIO source-version substitution during
+actual POST; real source-backed revision routing/preparation/POST; rollback/lost
+acknowledgement/concurrency expansions; durable finalization outbox/Celery wiring
+and operational stall projection; public API/CLI/MCP cutover and the complete
+A01–A35/C01–C07 audit. No merge or overall readiness is claimed by this checkpoint.

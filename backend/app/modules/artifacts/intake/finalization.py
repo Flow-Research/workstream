@@ -40,8 +40,10 @@ class AcceptedSubmissionFinalization:
     """Keep provider I/O outside TASK locks; finalized replay precedes new claims."""
 
     def __init__(self, sessions, *, tasks, authorization, submissions, checkers, store, lease_duration):
-        if not isinstance(lease_duration, timedelta) or lease_duration <= timedelta(0):
-            raise ValueError("finalization lease duration must be explicit and positive")
+        # Match the durable outbox's one-hour structural lease ceiling. This is
+        # not a deployment default; composition must still supply its profile.
+        if not isinstance(lease_duration, timedelta) or not timedelta(0) < lease_duration <= timedelta(hours=1):
+            raise ValueError("finalization lease duration must be explicit, positive and at most one hour")
         self._sessions, self._tasks, self._authorization = sessions, tasks, authorization
         self._submissions, self._store, self._duration = submissions, store, lease_duration
         self._checkers = checkers

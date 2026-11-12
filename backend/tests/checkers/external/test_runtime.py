@@ -422,9 +422,8 @@ async def test_prepared_zip_issues_request_bound_grant_only_inside_callback(tmp_
     )
     inspection = await prepared.inspect(inspector)
     manifest = build_submission_manifest(inspection)
-    identity = execution_identity().model_copy(
-        update={"prepared_generation_id": prepared.generation_id}
-    )
+    # Scratch lifetime is private ART custody, not part of the source PRE wire identity.
+    identity = execution_identity()
     request = _request(
         identity=identity,
         archive_sha256=prepared.commitment.sha256,
