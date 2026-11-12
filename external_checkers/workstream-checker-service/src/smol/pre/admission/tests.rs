@@ -2,7 +2,7 @@ use super::*;
 use serde_json::json;
 use workstream_checker_guest::pre_bootstrap::PrePartition;
 
-fn fixture() -> (PathBuf, ServiceConfig, Value) {
+pub(crate) fn fixture() -> (PathBuf, ServiceConfig, Value) {
     let (root, mut config, _, _) = super::super::tests::fixture();
     let mut header: Value =
         serde_json::from_str::<Value>(include_str!("../../../../../fixtures/pre_startup.json"))

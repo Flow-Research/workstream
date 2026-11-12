@@ -908,6 +908,15 @@ fn serve_connection(
     if let Ok(bytes) = &frame {
         if serde_json::from_slice::<Value>(bytes)
             .ok()
+            .is_some_and(|value| value["operation"] == "execute_pre")
+        {
+            return match smol::serve_pre(config, stream, bytes) {
+                Err(error) if error == UNSETTLED_RESOURCE_ERROR => Err(error),
+                _ => Ok(()),
+            };
+        }
+        if serde_json::from_slice::<Value>(bytes)
+            .ok()
             .and_then(|v| v["protocol_version"].as_str().map(str::to_owned))
             .as_deref()
             == Some("trusted_submission_intake.v1")
@@ -1326,11 +1335,29 @@ fn stop_command_group(child: &mut Child, deadline: Instant) -> Result<ExitStatus
 }
 
 fn collect_bounded_command(
+    child: Child,
+    deadline: Instant,
+    maximum_output: usize,
+    client: Option<&UnixStream>,
+    cleanup: Option<&mut EmergencyCleanupBudget>,
+) -> Result<BoundedCommandOutput, String> {
+    collect_bounded_command_with_connection(
+        child,
+        deadline,
+        maximum_output,
+        client,
+        cleanup,
+        client_is_connected,
+    )
+}
+
+fn collect_bounded_command_with_connection(
     mut child: Child,
     deadline: Instant,
     maximum_output: usize,
     client: Option<&UnixStream>,
     mut cleanup: Option<&mut EmergencyCleanupBudget>,
+    connected: fn(&UnixStream) -> bool,
 ) -> Result<BoundedCommandOutput, String> {
     let mut stdout = match child.stdout.take() {
         Some(stdout) => stdout,
@@ -1353,7 +1380,7 @@ fn collect_bounded_command(
     let mut stdout_bytes = Vec::new();
     let mut stderr_bytes = Vec::new();
     loop {
-        if client.is_some_and(|stream| !client_is_connected(stream)) {
+        if client.is_some_and(|stream| !connected(stream)) {
             let _ = stop_command_group(&mut child, command_cleanup_deadline(&mut cleanup));
             return Err("client disconnected".into());
         }

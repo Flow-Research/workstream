@@ -1,5 +1,37 @@
 use super::*;
 
+#[test]
+fn host_completion_requires_both_worker_and_payload_invocation_bindings() {
+    let (root, config, header) = admission::tests::fixture();
+    let prepared = admission::prepare(&config, &serde_json::to_vec(&header).unwrap()).unwrap();
+    let valid = serde_json::json!({"protocol_version":"workstream.pre_submit_worker.v1","operation":"completed",
+        "request_digest":prepared.invocation.request_digest,"lease_id":prepared.invocation.lease_id,"lease_generation":prepared.invocation.lease_generation,
+        "payload":{"schema_version":"workstream.selected_pre_submit_execution.v2","request_digest":prepared.invocation.request_digest,
+            "lease_id":prepared.invocation.lease_id,"lease_generation":prepared.invocation.lease_generation,
+            "observed_source":header["reservation"]["source"],"policy_sha256":header["reservation"]["policy"]["policy_sha256"]}});
+    // This is an identity-envelope probe, not a fabricated complete QC result.
+    assert!(completed(&serde_json::to_vec(&valid).unwrap(), &prepared).is_ok());
+    for pointer in [
+        "/operation",
+        "/request_digest",
+        "/lease_id",
+        "/lease_generation",
+        "/payload/request_digest",
+        "/payload/lease_id",
+        "/payload/lease_generation",
+        "/payload/observed_source/provider_generation",
+        "/payload/policy_sha256",
+    ] {
+        let mut changed = valid.clone();
+        *changed.pointer_mut(pointer).unwrap() = serde_json::json!("rebound");
+        assert!(
+            completed(&serde_json::to_vec(&changed).unwrap(), &prepared).is_err(),
+            "accepted {pointer}"
+        );
+    }
+    fs::remove_dir_all(root).unwrap();
+}
+
 fn invocation() -> Invocation {
     Invocation {
         operation: Operation::ExecutePre,

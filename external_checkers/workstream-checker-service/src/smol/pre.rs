@@ -1,6 +1,151 @@
 //! Host-owned PRE invocation and durable cleanup custody.
 use super::*;
 pub(super) mod admission;
+mod transport;
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct WorkerResult {
+    protocol_version: String,
+    operation: String,
+    request_digest: String,
+    lease_id: String,
+    lease_generation: u64,
+    payload: Value,
+}
+
+fn completed(bytes: &[u8], prepared: &admission::Prepared<'_>) -> Result<Value, String> {
+    let result: WorkerResult = serde_json::from_slice(bytes).map_err(|_| "PRE result invalid")?;
+    let invocation = &prepared.invocation;
+    let expected = &prepared.job.startup["request"]["reservation"];
+    if result.protocol_version != "workstream.pre_submit_worker.v1"
+        || result.operation != "completed"
+        || result.request_digest != invocation.request_digest
+        || result.lease_id != invocation.lease_id
+        || result.lease_generation != invocation.lease_generation
+        || result.payload["schema_version"] != "workstream.selected_pre_submit_execution.v2"
+        || result.payload["request_digest"] != invocation.request_digest
+        || result.payload["lease_id"] != invocation.lease_id
+        || result.payload["lease_generation"] != invocation.lease_generation
+        || result.payload["observed_source"] != expected["source"]
+        || result.payload["policy_sha256"] != expected["policy"]["policy_sha256"]
+    {
+        return Err("PRE result binding differs".into());
+    }
+    Ok(result.payload)
+}
+
+pub(crate) fn serve(
+    config: &ServiceConfig,
+    mut client: UnixStream,
+    bytes: &[u8],
+) -> Result<(), String> {
+    let started = Instant::now();
+    let mut prepared = admission::prepare(config, bytes)?;
+    let deadline = prepared.deadline;
+    let _reservation = reserve_capacity(
+        config,
+        resource_capacity(prepared.resources, Some(prepared.overlay_gib))?,
+        None,
+    )?;
+    if !transport::connected(&client) || Instant::now() >= deadline {
+        return Err("PRE cancelled or expired".into());
+    }
+    let admission_ms = started.elapsed().as_millis() as u64;
+    let preparing = Instant::now();
+    let mut machine = match Machine::create_pre(
+        config,
+        prepared.resources,
+        deadline,
+        prepared.invocation.clone(),
+    ) {
+        Ok(machine) => machine,
+        Err(error) => {
+            if error.cleanup_unsettled {
+                quarantine(config);
+                return Err(UNSETTLED_RESOURCE_ERROR.into());
+            }
+            return Err(error.code.into());
+        }
+    };
+    let creation = machine.prepare_with_connection(
+        prepared.cache,
+        prepared.resources,
+        Some(prepared.overlay_gib),
+        &client,
+        deadline,
+        transport::connected,
+    );
+    let preparation_ms = preparing.elapsed().as_millis() as u64;
+    let running = Instant::now();
+    let result = creation
+        .and_then(|()| machine.run_pre(&mut prepared, &mut client))
+        .and_then(|bytes| completed(&bytes, &prepared));
+    let execution_ms = running.elapsed().as_millis() as u64;
+    let cleaning = Instant::now();
+    let cleanup_deadline = deadline
+        .min(Instant::now() + Duration::from_millis(prepared.job.limits.cleanup_timeout_ms));
+    let destroyed = machine.close_until(cleanup_deadline).is_ok();
+    let journal_sha256 = if destroyed {
+        machine.journal.sha256.clone()
+    } else {
+        machine
+            .pending_pre_cleanup(config)
+            .map_err(|_| UNSETTLED_RESOURCE_ERROR)?
+    };
+    let cleanup_ms = cleaning.elapsed().as_millis() as u64;
+    let (outcome, reason, execution) = match result {
+        Ok(value) => ("completed", Value::Null, value),
+        Err(error) => {
+            let outcome = if error == "deadline_exceeded" {
+                "deadline_exceeded"
+            } else if error == "cancelled" {
+                "cancelled"
+            } else {
+                "infrastructure_failure"
+            };
+            (
+                outcome,
+                Value::String(
+                    if outcome == "infrastructure_failure" {
+                        "implementation_unavailable"
+                    } else {
+                        outcome
+                    }
+                    .into(),
+                ),
+                Value::Null,
+            )
+        }
+    };
+    // Host custody stays outside the worker payload. The backend must retain
+    // this invocation envelope along with the typed checker facts at T4.
+    let response = serde_json::json!({
+        "schema_version":"workstream.pre_submit_invocation.v1", "operation":"execute_pre", "phase":"pre_submit",
+        "invocation":prepared.invocation,"provider_invocation_id":machine.lease.name,
+        "outcome":outcome,"reason":reason,"execution":execution,
+        "runtime":{"provider":"smolvm","version":VERSION,"binary_sha256":machine.lease.runtime.binary_sha256,
+            "guest_sha256":machine.lease.runtime.guest_sha256,"profile":prepared.job.startup["request"]["reservation"]["runtime_profile"]},
+        "timings_ms":{"admission":admission_ms,"preparation":preparation_ms,"execution":execution_ms,"cleanup":cleanup_ms,"total":started.elapsed().as_millis() as u64},
+        "cleanup":{"obligation_id":machine.lease.name,"journal_sha256":journal_sha256,"disposition":if destroyed {"destroyed"} else {"pending"}}
+    });
+    let response = serde_json::to_vec(&response).map_err(|_| "PRE response invalid")?;
+    let sent = if response.len() <= 64 * 1024 * 1024
+        && Instant::now() < deadline
+        && client_is_connected(&client)
+    {
+        write_frame_until(&mut client, &response, deadline)
+    } else {
+        Err("deadline_exceeded".into())
+    };
+    // A pending receipt may be delivered, but admission stays quarantined and
+    // the service exits so recovery reconciles the durable journal on restart.
+    if !destroyed {
+        Err(UNSETTLED_RESOURCE_ERROR.into())
+    } else {
+        sent
+    }
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -117,6 +262,56 @@ fn custody(metadata: &fs::Metadata) -> bool {
 }
 
 impl Machine {
+    fn run_pre(
+        &mut self,
+        prepared: &mut admission::Prepared<'_>,
+        client: &mut UnixStream,
+    ) -> Result<Vec<u8>, String> {
+        if self.consumed {
+            return Err("execution already consumed".into());
+        }
+        self.consumed = true;
+        let remaining = prepared
+            .deadline
+            .saturating_duration_since(Instant::now())
+            .as_millis() as u64;
+        if remaining == 0 {
+            return Err("deadline_exceeded".into());
+        }
+        prepared.job.limits.timeout_ms = prepared.job.limits.timeout_ms.min(remaining);
+        prepared.job.limits.cleanup_timeout_ms =
+            prepared.job.limits.cleanup_timeout_ms.min(remaining);
+        prepared.job.limits.validate()?;
+        let limits =
+            serde_json::to_string(&prepared.job.limits).map_err(|_| "PRE limits invalid")?;
+        let mut cmd = command(
+            &self.lease.runtime,
+            &[
+                "machine",
+                "exec",
+                "--name",
+                &self.lease.name,
+                "--user",
+                "0:0",
+                "--interactive",
+                "--stream",
+                "--",
+                "/.workstream-guest",
+                workstream_checker_guest::pre_bootstrap::PRE_LIMITS_ARGUMENT,
+                &limits,
+            ],
+            Some(&self.lease.cgroup()),
+        )?;
+        cmd.stdin(Stdio::piped());
+        let child = cmd.spawn().map_err(|_| "PRE guest launch failed")?;
+        transport::exchange(
+            child,
+            client,
+            &mut prepared.root_bundle,
+            &prepared.job,
+            prepared.deadline,
+        )
+    }
     fn create_pre(
         config: &ServiceConfig,
         resources: Resources,

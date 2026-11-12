@@ -2136,3 +2136,48 @@ boundary test closes the reported gap. Architecture/security's `2f8eb812b`
 production review remains compatible because the replay changes only that test
 and this record. This establishes the portable admission boundary, not a callable
 host PRE service, native provider qualification or end-to-end acceptance.
+
+### Host PRE dispatch and bounded guest transport
+
+Continue the approved native plan through the existing service connection owner,
+Smol guardian and guest bootstrap. Allowed files are Rust service dispatch,
+existing bounded command collection/Smol preparation, PRE admission fixtures and
+PRE transport/tests, plus this record. Create once, retain pre-create journal
+custody, charge rounded resources, permit already queued ZIP chunks during
+preparation, enforce the absolute deadline and clamp both guest timer ceilings
+at actual launch. Deliver root bytes and framed source chunks with bounded
+buffers and simultaneous bounded stdout/stderr draining; never spool source or
+export a tree on the host. Require exact counts/hashes, source terminator,
+successful guest exit and one bound terminal frame. Preserve POST/trial's
+existing refusal of unexpected queued bytes through the default connection
+predicate. Prompt cleanup yields destroyed or independently retained pending
+custody with quarantine; uncertain cleanup must never release an admitting node.
+
+This L1 architecture/security change requires those review tracks plus
+QA/test-delta. Portable socket/process tests must discriminate buffered input
+from disconnect, source truncation/overflow/hash/trailing data, root mutation,
+output/log bounds and deadlines, and observe child reaping. Native creation,
+privileged guest isolation and real provider qualification remain separate.
+The host emits a versioned invocation envelope carrying worker facts, runtime
+pins, stage timing and cleanup ownership. The existing Python adapter still
+expects bare worker facts: it must be changed with CHECKERS durable evidence
+retention before the cutover can accept this response. Qualification/conformance
+receipt validation and complete cross-provider outcome contracts also remain
+required; do not label this interim envelope fully qualified or merge-ready.
+
+Portable verification passes 51 selected Smol tests and 42 trial integration
+checks. Full service binary verification passes 127 and retains the same five
+obsolete prepared-PRE fixture failures; it is not a green end-to-end suite.
+Real socket/process probes transfer a 128 KiB-plus source in multiple chunks and
+verify received root/source hashes. Adverse cases cover changed/truncated root,
+changed/short/excess source, oversized chunks, partial frames, disconnect,
+stalled child, logs/output bounds, trailing/empty output and nonzero exit; owned
+processes are reaped. A Python executable standing in for the runtime verifies
+that host launch argv and the actual job carry identical lease-shortened limits,
+that a second launch is refused, and that the first process is reaped. Its
+cgroup.procs stand-in is an ordinary private file: no native cgroup or VM proof
+is claimed. Worker/payload fence/source/policy probes test host binding only;
+typed QC semantics remain CHECKERS' responsibility. Shared POST/trial retains
+its original connection predicate. Formatting, diff, record and link checks
+pass. The checker README is also updated to distinguish the now-wired host
+caller from still-required backend receipt retention and native qualification.

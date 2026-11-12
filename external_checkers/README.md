@@ -502,9 +502,13 @@ private parent without following its final symlink and anchors staging through
 that held directory descriptor. The caller must provide the private parent,
 aggregate deadline/cancellation checks, and capacity for both
 the spool and expanded root, then mount the root read-only before executing a
-trusted child. The PRE guest bootstrap calls this verifier; host dispatch and
-native isolation proof remain required. This library alone does not authorize
-project execution.
+trusted child. The PRE guest bootstrap calls this verifier. Host `execute_pre`
+dispatch now admits an explicitly configured profile, creates one journaled
+session and streams the root and ZIP into it with bounded buffers. Its invocation
+response includes runtime pins, timing and cleanup custody. Python adapter and
+CHECKERS retention of that envelope, the complete qualification/conformance
+contract, and native isolation proof remain required before end-to-end use.
+This library alone does not authorize project execution.
 Cleanup restores owned directory permissions after late staging failures; an
 underlying filesystem cleanup error is propagated and cannot establish released
 capacity. Relative and absolute symlink targets that traverse above the root are

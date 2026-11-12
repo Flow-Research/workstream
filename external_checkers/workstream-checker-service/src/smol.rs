@@ -37,6 +37,7 @@ mod io;
 mod pre;
 pub(super) use io::{ProjectCallbacks, ProjectMaterials};
 pub(super) use pre::admission::Config as PreConfig;
+pub(super) use pre::serve as serve_pre;
 
 #[derive(Clone, Copy)]
 struct Resources {
@@ -468,13 +469,14 @@ fn collect(
     maximum: usize,
     client: Option<&UnixStream>,
 ) -> Result<BoundedCommandOutput, String> {
-    collect_bounded_command(child, deadline, maximum, client, None).map_err(|error| {
-        match error.as_str() {
-            "process deadline exceeded" => "deadline_exceeded".into(),
-            "process output unbounded" => "invalid_output".into(),
-            _ => "implementation_unavailable".into(),
-        }
-    })
+    collect_bounded_command(child, deadline, maximum, client, None).map_err(command_failure)
+}
+fn command_failure(error: String) -> String {
+    match error.as_str() {
+        "process deadline exceeded" => "deadline_exceeded".into(),
+        "process output unbounded" => "invalid_output".into(),
+        _ => "implementation_unavailable".into(),
+    }
 }
 fn control(
     s: &SmolConfig,
@@ -580,14 +582,27 @@ impl Lease {
         }
         Ok(false)
     }
-    fn verify_network_disabled(&self, deadline: Instant) -> Result<(), String> {
-        let output = control(
-            &self.runtime,
-            &["machine", "ls", "--json"],
-            None,
+    fn verify_network_disabled(
+        &self,
+        deadline: Instant,
+        client: &UnixStream,
+        connected: fn(&UnixStream) -> bool,
+    ) -> Result<(), String> {
+        if Instant::now() >= deadline {
+            return Err("deadline_exceeded".into());
+        }
+        let child = command(&self.runtime, &["machine", "ls", "--json"], None)?
+            .spawn()
+            .map_err(|_| "runtime launch unavailable")?;
+        let output = collect_bounded_command_with_connection(
+            child,
             deadline,
+            CONTROL_OUTPUT,
+            Some(client),
             None,
-        )?;
+            connected,
+        )
+        .map_err(command_failure)?;
         if !output.status.success() {
             return Err("runtime inventory unavailable".into());
         }
@@ -911,6 +926,24 @@ impl Machine {
         client: &UnixStream,
         deadline: Instant,
     ) -> Result<(), String> {
+        self.prepare_with_connection(
+            cache,
+            resources,
+            overlay_gib,
+            client,
+            deadline,
+            client_is_connected,
+        )
+    }
+    fn prepare_with_connection(
+        &self,
+        cache: &CacheEntry,
+        resources: Resources,
+        overlay_gib: Option<u64>,
+        client: &UnixStream,
+        deadline: Instant,
+        connected: fn(&UnixStream) -> bool,
+    ) -> Result<(), String> {
         let lease = &self.lease;
         let s = &lease.runtime;
         let group = lease.cgroup();
@@ -941,30 +974,43 @@ impl Machine {
         if let Some(value) = overlay.as_deref() {
             args.extend(["--overlay", value]);
         }
-        checked(s, &args, Some(&group), deadline, Some(client))?;
+        let checked = |args: &[&str]| -> Result<(), String> {
+            if Instant::now() >= deadline {
+                return Err("deadline_exceeded".into());
+            }
+            if !connected(client) {
+                return Err("implementation_unavailable".into());
+            }
+            let child = command(s, args, Some(&group))?
+                .spawn()
+                .map_err(|_| "runtime launch unavailable")?;
+            let output = collect_bounded_command_with_connection(
+                child,
+                deadline,
+                CONTROL_OUTPUT,
+                Some(client),
+                None,
+                connected,
+            )
+            .map_err(command_failure)?;
+            if output.status.success() {
+                Ok(())
+            } else {
+                Err("runtime command failed".into())
+            }
+        };
+        checked(&args)?;
         // Closed argv omits network enablers; verify exact-owner state before start.
-        lease.verify_network_disabled(deadline)?;
-        checked(
-            s,
-            &["machine", "start", "--name", &lease.name, "--no-workload"],
-            Some(&group),
-            deadline,
-            Some(client),
-        )?;
-        checked(
-            s,
-            &[
-                "machine",
-                "cp",
-                "--mode",
-                "0555",
-                s.guest_binary.to_str().ok_or("guest path invalid")?,
-                &format!("{}:/.workstream-guest", lease.name),
-            ],
-            Some(&group),
-            deadline,
-            Some(client),
-        )
+        lease.verify_network_disabled(deadline, client, connected)?;
+        checked(&["machine", "start", "--name", &lease.name, "--no-workload"])?;
+        checked(&[
+            "machine",
+            "cp",
+            "--mode",
+            "0555",
+            s.guest_binary.to_str().ok_or("guest path invalid")?,
+            &format!("{}:/.workstream-guest", lease.name),
+        ])
     }
     fn run(
         &mut self,
@@ -1070,12 +1116,12 @@ impl Machine {
         Ok(ExecutedChecker { value })
     }
     fn close(&mut self) -> Result<(), String> {
+        self.close_until(Instant::now() + CLEANUP_TIMEOUT + SOCKET_IO_TIMEOUT)
+    }
+    fn close_until(&mut self, deadline: Instant) -> Result<(), String> {
         // EOF transfers cleanup to the guardian; wait for durable absence.
         drop(self.keeper.take());
-        let status = reap_child(
-            &mut self.guardian,
-            Instant::now() + CLEANUP_TIMEOUT + SOCKET_IO_TIMEOUT,
-        )?;
+        let status = reap_child(&mut self.guardian, deadline)?;
         if status.success() && !self.lease.path().exists() && !self.lease.cgroup().exists() {
             Ok(())
         } else {

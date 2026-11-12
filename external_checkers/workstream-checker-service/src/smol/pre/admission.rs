@@ -523,4 +523,4 @@ pub(super) fn prepare<'a>(config: &'a ServiceConfig, bytes: &[u8]) -> Result<Pre
 }
 
 #[cfg(test)]
-mod tests;
+pub(super) mod tests;
