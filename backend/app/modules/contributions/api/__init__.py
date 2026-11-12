@@ -1,5 +1,12 @@
 """Dependency-safe public API for the CONTRIBUTIONS business module."""
 
+from app.modules.contributions.api.reward_selection import (
+    RewardSelectionFacts,
+    RewardSelectionPort,
+    RewardSelectionRequest,
+    TaskSize,
+)
+
 from app.modules.contributions.api.compensation_units import (
     CompensationUnitAction,
     CompensationUnitCreateAuthorizationFacts,
@@ -63,6 +70,10 @@ from app.modules.contributions.api.published_selection import (
 )
 
 __all__ = (
+    "RewardSelectionFacts",
+    "RewardSelectionPort",
+    "RewardSelectionRequest",
+    "TaskSize",
     "CompensationUnitAction",
     "CompensationUnitCreateAuthorizationFacts",
     "CompensationUnitInstrument",
