@@ -49,7 +49,10 @@ def _full_project(**overrides: Any) -> dict[str, Any]:
 def _catalogue(client: TestClient) -> dict[str, Any]:
     response = client.post(
         "/mcp",
-        headers={"accept": "application/json, text/event-stream"},
+        headers={
+            "accept": "application/json, text/event-stream",
+            "authorization": "Bearer fixture-token",
+        },
         json={"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}},
     )
     assert response.status_code == 200
@@ -105,7 +108,7 @@ def test_project_create_forwards_exact_fixed_request(adapter: Adapter, call: Cal
     assert request.method == "POST"
     assert request.url.path == "/api/v1/projects"
     assert request.url.query == b""
-    assert request.headers["authorization"] == "Bearer project-manager"
+    assert request.headers["authorization"] == 'Bearer api-project-manager'
     assert request.headers["idempotency-key"] == KEY
     assert "if-match" not in request.headers
     assert json.loads(request.content) == arguments["body"]
@@ -140,7 +143,7 @@ def test_project_get_accepts_only_current_authorized_projections(
     assert request.method == "GET"
     assert request.url.path == f"/api/v1/projects/{PROJECT_ID.upper()}"
     assert request.url.query == b""
-    assert request.headers["authorization"] == "Bearer authorized-reader"
+    assert request.headers["authorization"] == 'Bearer api-authorized-reader'
     assert "idempotency-key" not in request.headers
 
 

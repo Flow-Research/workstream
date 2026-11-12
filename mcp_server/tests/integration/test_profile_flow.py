@@ -6,7 +6,6 @@ import os
 import shutil
 import socket
 import subprocess
-import sys
 import tempfile
 from pathlib import Path
 from typing import IO, Any
@@ -16,14 +15,13 @@ import httpx2 as httpx
 import pytest
 from mcp import Client
 from mcp.client.streamable_http import streamable_http_client
+from oauth_fixture import IdentityFixture, IdentityTokens
 
 from workstream_mcp.tools.profile import normalize_update_input
 
 ROOT = Path(__file__).resolve().parents[3]
 BACKEND = ROOT / "backend"
 BACKEND_PYTHON = str(BACKEND / ".venv" / "bin" / "python")
-sys.path.insert(0, str(BACKEND / "scripts"))
-from local_flow_tokens import issue_flow_token  # noqa: E402
 
 
 def api_environment() -> dict[str, str]:
@@ -40,20 +38,15 @@ def api_environment() -> dict[str, str]:
     environment = os.environ.copy()
     environment["VIRTUAL_ENV"] = str(BACKEND / ".venv")
     result = subprocess.run(  # noqa: S603 - fixed local fixture command
-        [BACKEND_PYTHON, "-c", command], cwd=BACKEND,
-        env=environment, check=True, capture_output=True, text=True,
+        [BACKEND_PYTHON, "-c", command],
+        cwd=BACKEND,
+        env=environment,
+        check=True,
+        capture_output=True,
+        text=True,
     )
     environment.update(json.loads(result.stdout))
     return environment
-
-
-def flow_settings(env: dict[str, str]) -> tuple[str, str, str]:
-    """Read the exact values already resolved by the backend fixture."""
-    return (
-        env["WORKSTREAM_FLOW_AUTH_ISSUER"],
-        env["WORKSTREAM_FLOW_AUTH_AUDIENCE"],
-        env["WORKSTREAM_E2E_FLOW_SECRET"],
-    )
 
 
 def find_free_port() -> int:
@@ -87,13 +80,13 @@ async def _ready(url: str, process: subprocess.Popen[str]) -> None:
 
 async def _call(
     mcp_url: str,
-    token: str,
+    token: IdentityTokens,
     *,
     name: str = "workstream_profile_get",
     arguments: dict[str, Any] | None = None,
 ) -> tuple[dict[str, Any], bool]:
     async with httpx.AsyncClient(
-        headers={"Authorization": f"Bearer {token}"},
+        headers={"Authorization": f"Bearer {token.mcp}"},
         follow_redirects=False,
         trust_env=False,
         timeout=20,
@@ -138,12 +131,12 @@ def _bootstrap_access_administrator(actor_id: str, environment: dict[str, str]) 
 async def _admin_transition(
     client: httpx.AsyncClient,
     *,
-    token: str,
+    token: IdentityTokens,
     path: str,
 ) -> None:
     response = await client.post(
         path,
-        headers={"Authorization": f"Bearer {token}", "Idempotency-Key": str(uuid4())},
+        headers={"Authorization": f"Bearer {token.api}", "Idempotency-Key": str(uuid4())},
         json={"reason": "MCP integration lifecycle proof"},
     )
     assert response.status_code == 200, response.text
@@ -151,6 +144,7 @@ async def _admin_transition(
 
 def _start_processes(
     *,
+    identity: IdentityFixture,
     api_port: int,
     api_env: dict[str, str],
     mcp_port: int,
@@ -158,6 +152,7 @@ def _start_processes(
     executable: str,
     scratch: str,
 ) -> tuple[subprocess.Popen[str], subprocess.Popen[str], IO[str], IO[str]]:
+    identity.configure_processes(api_env, mcp_env)
     api_log = open(Path(scratch) / "api.log", "w", encoding="utf-8")  # noqa: PTH123
     mcp_log = open(Path(scratch) / "mcp.log", "w", encoding="utf-8")  # noqa: PTH123
     api = subprocess.Popen(  # noqa: S603
@@ -192,12 +187,13 @@ def _start_processes(
 
 
 @pytest.mark.asyncio
-async def test_installed_mcp_preserves_profile_and_lifecycle_parity() -> None:
+async def test_installed_mcp_preserves_profile_and_lifecycle_parity(
+    identity: IdentityFixture,
+) -> None:
     """Exercise installed MCP profile and lifecycle tools against the real backend."""
     env = api_environment()
-    issuer, audience, secret = flow_settings(env)
     tokens = {
-        name: issue_flow_token(name, [], issuer=issuer, audience=audience, secret=secret)
+        name: identity.issue(name)
         for name in (
             "mcp-first-a",
             "mcp-first-b",
@@ -228,6 +224,7 @@ async def test_installed_mcp_preserves_profile_and_lifecycle_parity() -> None:
             WORKSTREAM_MCP_PORT=str(mcp_port),
         )
         api, mcp, api_log, mcp_log = _start_processes(
+            identity=identity,
             api_port=api_port,
             api_env=env,
             mcp_port=mcp_port,
@@ -241,7 +238,6 @@ async def test_installed_mcp_preserves_profile_and_lifecycle_parity() -> None:
             from starlette.applications import Starlette
             from starlette.requests import Request
             from starlette.responses import Response
-
 
             proxy_in_flight = 0
             proxy_max_in_flight = 0
@@ -330,7 +326,7 @@ async def test_installed_mcp_preserves_profile_and_lifecycle_parity() -> None:
                     first[name] = profile
                     response = await direct.get(
                         "/api/v1/actors/me",
-                        headers={"Authorization": f"Bearer {tokens[name]}"},
+                        headers={"Authorization": f"Bearer {tokens[name].api}"},
                     )
                     assert response.status_code == 200
                     assert response.json()["actor_profile_id"] == profile["actor_profile_id"]
@@ -357,7 +353,7 @@ async def test_installed_mcp_preserves_profile_and_lifecycle_parity() -> None:
                     assert updated["contact_email"] == "mcp-first-b@flow.local"
                     direct_updated = await direct.get(
                         "/api/v1/actors/me",
-                        headers={"Authorization": f"Bearer {tokens['mcp-first-b']}"},
+                        headers={"Authorization": f"Bearer {tokens['mcp-first-b'].api}"},
                     )
                     assert direct_updated.status_code == 200
                     assert direct_updated.json()["display_name"] == expected_name
@@ -376,13 +372,13 @@ async def test_installed_mcp_preserves_profile_and_lifecycle_parity() -> None:
                     assert failed and rejected["error"] == "invalid_tool_input"
                 saved = await direct.get(
                     "/api/v1/actors/me",
-                    headers={"Authorization": f"Bearer {tokens['mcp-first-b']}"},
+                    headers={"Authorization": f"Bearer {tokens['mcp-first-b'].api}"},
                 )
                 assert saved.json()["contact_email"] == "mcp-first-b@flow.local"
                 manager_grant = await direct.post(
                     "/api/v1/admin-role-grants",
                     headers={
-                        "Authorization": f"Bearer {admin_token}",
+                        "Authorization": f"Bearer {admin_token.api}",
                         "Idempotency-Key": str(uuid4()),
                     },
                     json={
@@ -396,7 +392,7 @@ async def test_installed_mcp_preserves_profile_and_lifecycle_parity() -> None:
                 project = await direct.post(
                     "/api/v1/projects",
                     headers={
-                        "Authorization": f"Bearer {tokens['mcp-first-a']}",
+                        "Authorization": f"Bearer {tokens['mcp-first-a'].api}",
                         "Idempotency-Key": str(uuid4()),
                     },
                     json={
@@ -443,10 +439,9 @@ async def test_installed_mcp_preserves_profile_and_lifecycle_parity() -> None:
                 assert concealed["code"] == "project_authorization_resource_not_found"
 
                 revoked_manager = await direct.post(
-                    "/api/v1/admin-role-grants/"
-                    f"{manager_grant.json()['resource_id']}/revoke",
+                    f"/api/v1/admin-role-grants/{manager_grant.json()['resource_id']}/revoke",
                     headers={
-                        "Authorization": f"Bearer {admin_token}",
+                        "Authorization": f"Bearer {admin_token.api}",
                         "Idempotency-Key": str(uuid4()),
                     },
                     json={"reason": "MCP context revocation proof complete"},
@@ -454,7 +449,7 @@ async def test_installed_mcp_preserves_profile_and_lifecycle_parity() -> None:
                 assert revoked_manager.status_code == 200, revoked_manager.text
                 direct_revoked_context = await direct.get(
                     "/api/v1/actors/me/authorization-context",
-                    headers={"Authorization": f"Bearer {tokens['mcp-first-a']}"},
+                    headers={"Authorization": f"Bearer {tokens['mcp-first-a'].api}"},
                     params={"project_id": project.json()["id"]},
                 )
                 assert direct_revoked_context.status_code == 404
@@ -470,10 +465,7 @@ async def test_installed_mcp_preserves_profile_and_lifecycle_parity() -> None:
                 )
                 assert failed
                 assert revoked_context["status"] == 404
-                assert (
-                    revoked_context["code"]
-                    == direct_revoked_context.json()["error"]["code"]
-                )
+                assert revoked_context["code"] == direct_revoked_context.json()["error"]["code"]
                 assert "project_roles" not in revoked_context
                 assert "effective_action_ids" not in revoked_context
 
@@ -485,7 +477,7 @@ async def test_installed_mcp_preserves_profile_and_lifecycle_parity() -> None:
 
                 revoked_link = await direct.get(
                     f"/api/v1/actors/{first['mcp-revoked']['actor_profile_id']}/identity-links",
-                    headers={"Authorization": f"Bearer {admin_token}"},
+                    headers={"Authorization": f"Bearer {admin_token.api}"},
                 )
                 assert revoked_link.status_code == 200, revoked_link.text
                 await _admin_transition(
@@ -509,7 +501,7 @@ async def test_installed_mcp_preserves_profile_and_lifecycle_parity() -> None:
                 ):
                     direct_response = await direct.get(
                         "/api/v1/actors/me",
-                        headers={"Authorization": f"Bearer {tokens[name]}"},
+                        headers={"Authorization": f"Bearer {tokens[name].api}"},
                     )
                     assert direct_response.status_code == 403
                     assert direct_response.json()["error"]["code"] == code

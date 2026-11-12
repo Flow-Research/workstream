@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.hashing import canonical_json_hash
 from app.core.cancellation import await_cancellation_resistant
 from app.interfaces.trusted_submission_intake import TrustedIntakeSession, TrustedDefaultBinding
-from app.interfaces.external_services import ExternalServiceAdapterError
+from workstream_external_services import ExternalServiceAdapterError
 from app.modules.artifacts.submission_archive import exported_submission_tree
 from app.modules.checkers.api.materialization import PreSubmitMaterialView, SubmissionMaterialEntry
 from app.interfaces.external_checker_execution import (

@@ -74,8 +74,8 @@ def test_duplicate_authorization_does_not_dispatch(
             "params": {"name": "workstream_profile_get", "arguments": {}},
         },
     )
-    assert response.status_code == 200
-    assert response.json()["result"]["isError"] is True
+    assert response.status_code == 401
+    assert response.json()["error"] == "invalid_token"
     assert received == []
 
 
@@ -186,7 +186,7 @@ def test_authorization_context_forwards_caller_and_exact_project(
 
     assert response.json()["result"].get("isError", False) is False
     assert len(received) == 1
-    assert received[0].headers["authorization"] == "Bearer context-caller"
+    assert received[0].headers["authorization"] == "Bearer api-context-caller"
     assert received[0].url.params["project_id"] == "project/one"
 
 
@@ -231,14 +231,15 @@ def test_every_response_is_no_store_and_profile_is_not_cross_caller_cached(
     assert alice.json()["result"]["structuredContent"]["actor_profile_id"] == "alice"
     assert bob.json()["result"]["structuredContent"]["actor_profile_id"] == "bob"
     assert [request.headers["authorization"] for request in received] == [
-        "Bearer alice",
-        "Bearer bob",
+        "Bearer api-alice",
+        "Bearer api-bob",
     ]
 
 
 @pytest.mark.asyncio
 async def test_cancellation_reaches_running_tool_call(
     monkeypatch: pytest.MonkeyPatch,
+    credential_fixture: None,
 ) -> None:
 
     from workstream_mcp.http_gateway import GatewayResult
@@ -312,10 +313,8 @@ async def test_cancellation_reaches_running_tool_call(
             pass
 
 
-
-
 @pytest.mark.asyncio
-async def test_asgi_ingress_limits() -> None:
+async def test_asgi_ingress_limits(credential_fixture: None) -> None:
     settings = Settings(
         api_url="http://127.0.0.1:8000",
         max_request_frames=2,
@@ -323,37 +322,44 @@ async def test_asgi_ingress_limits() -> None:
         ingress_timeout_seconds=0.1,
     )
     app = create_app(settings)
-    scope = {"type": "http", "method": "POST", "path": "/mcp", "headers": [(b"host", b"127.0.0.1")]}
-    
-    # 1. Test Frame Limit
-    from collections.abc import MutableMapping
-    receive_queue: asyncio.Queue[MutableMapping[str, Any]] = asyncio.Queue()
-    for _ in range(5):
-        receive_queue.put_nowait({"type": "http.request", "body": b" ", "more_body": True})
-    receive_queue.put_nowait({"type": "http.request", "body": b"{}", "more_body": False})
-    
-    send_queue: asyncio.Queue[MutableMapping[str, Any]] = asyncio.Queue()
-    await app(scope, receive_queue.get, send_queue.put)
-    resp = await send_queue.get()
-    assert resp["status"] == 400
-    body = await send_queue.get()
-    assert isinstance(body["body"], bytes)
-    assert json.loads(body["body"])["error"] == "request_ingress_limit"
-    
-    # 2. Test Timeout
-    async def slow_receive() -> MutableMapping[str, Any]:
-        await asyncio.sleep(0.2)
-        return {"type": "http.request", "body": b"{}", "more_body": False}
-        
-    send_queue = asyncio.Queue()
-    await app(scope, slow_receive, send_queue.put)
-    resp = await send_queue.get()
-    assert resp["status"] == 408
-    
-    # 3. Test Payload Size Limit
-    receive_queue = asyncio.Queue()
-    receive_queue.put_nowait({"type": "http.request", "body": b" " * 1025, "more_body": False})
-    send_queue = asyncio.Queue()
-    await app(scope, receive_queue.get, send_queue.put)
-    resp = await send_queue.get()
-    assert resp["status"] == 413
+    scope = {
+        "type": "http",
+        "method": "POST",
+        "path": "/mcp",
+        "headers": [(b"host", b"127.0.0.1"), (b"authorization", b"Bearer fixture-token")],
+    }
+
+    async with app.router.lifespan_context(app):
+        # 1. Test Frame Limit
+        from collections.abc import MutableMapping
+
+        receive_queue: asyncio.Queue[MutableMapping[str, Any]] = asyncio.Queue()
+        for _ in range(5):
+            receive_queue.put_nowait({"type": "http.request", "body": b" ", "more_body": True})
+        receive_queue.put_nowait({"type": "http.request", "body": b"{}", "more_body": False})
+
+        send_queue: asyncio.Queue[MutableMapping[str, Any]] = asyncio.Queue()
+        await app(scope, receive_queue.get, send_queue.put)
+        resp = await send_queue.get()
+        assert resp["status"] == 400
+        body = await send_queue.get()
+        assert isinstance(body["body"], bytes)
+        assert json.loads(body["body"])["error"] == "request_ingress_limit"
+
+        # 2. Test Timeout
+        async def slow_receive() -> MutableMapping[str, Any]:
+            await asyncio.sleep(0.2)
+            return {"type": "http.request", "body": b"{}", "more_body": False}
+
+        send_queue = asyncio.Queue()
+        await app(scope, slow_receive, send_queue.put)
+        resp = await send_queue.get()
+        assert resp["status"] == 408
+
+        # 3. Test Payload Size Limit
+        receive_queue = asyncio.Queue()
+        receive_queue.put_nowait({"type": "http.request", "body": b" " * 1025, "more_body": False})
+        send_queue = asyncio.Queue()
+        await app(scope, receive_queue.get, send_queue.put)
+        resp = await send_queue.get()
+        assert resp["status"] == 413

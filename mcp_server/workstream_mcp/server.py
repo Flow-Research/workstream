@@ -6,12 +6,15 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Any
 
+from mcp.server.auth.routes import build_resource_metadata_url, create_protected_resource_routes
 from mcp.server.context import ServerRequestContext
 from mcp.server.lowlevel import Server
 from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from mcp.server.transport_security import TransportSecuritySettings
 from mcp.types import CallToolRequestParams, CallToolResult, ListToolsResult, PaginatedRequestParams
+from pydantic import AnyHttpUrl
 from starlette.applications import Starlette
+from starlette.datastructures import Headers
 from starlette.responses import JSONResponse
 from starlette.routing import Route
 from starlette.types import Message, Receive, Scope, Send
@@ -20,6 +23,8 @@ from workstream_mcp.auth import CredentialError, request_bearer, request_correla
 from workstream_mcp.config import Settings
 from workstream_mcp.errors import adapter_failure
 from workstream_mcp.http_gateway import WorkstreamGateway, create_http_client
+from workstream_mcp.oauth import IdentityUnavailable, InvalidCredential, McpCredentials, McpIdentity
+from workstream_mcp.oauth_composition import create_credentials
 from workstream_mcp.schemas import (
     authorization_context_output_schema,
     profile_output_schema,
@@ -132,6 +137,8 @@ def create_app(settings: Settings) -> Starlette:
     task_execution_definitions = task_execution.definitions()
     task_operation_definitions = task_operations.definitions()
     gateway: WorkstreamGateway | None = None
+    credentials: McpCredentials | None = None
+    metadata_url = str(build_resource_metadata_url(AnyHttpUrl(settings.oauth.resource)))
 
     async def list_tools(
         request: ServerRequestContext[Any], params: PaginatedRequestParams | None
@@ -188,12 +195,17 @@ def create_app(settings: Settings) -> Starlette:
         http_request = request.request
         if http_request is None:
             return adapter_failure("missing_request_context", status=401)
-        try:
-            bearer = request_bearer(http_request.headers)
-        except CredentialError:
+        identity = http_request.scope.get("workstream.identity")
+        if not isinstance(identity, McpIdentity):
             return adapter_failure("invalid_credentials", status=401)
-        if gateway is None:
+        if gateway is None or credentials is None:
             return adapter_failure("adapter_unavailable", status=503)
+        try:
+            bearer = await credentials.exchange(identity)
+        except InvalidCredential:
+            return adapter_failure("invalid_credentials", status=401)
+        except IdentityUnavailable:
+            return adapter_failure("identity_unavailable", status=503)
         correlation_id = request_correlation_id(http_request.headers)
         if params.name == PROFILE_GET_TOOL_NAME:
             return await invoke_get(gateway, bearer, correlation_id)
@@ -212,21 +224,15 @@ def create_app(settings: Settings) -> Starlette:
                 gateway, params.name, bearer, correlation_id, arguments
             )
         if params.name in projects.TOOL_NAMES:
-            return await projects.invoke(
-                gateway, params.name, bearer, correlation_id, arguments
-            )
+            return await projects.invoke(gateway, params.name, bearer, correlation_id, arguments)
         if params.name in project_grants.TOOL_NAMES:
             return await project_grants.invoke(
                 gateway, params.name, bearer, correlation_id, arguments
             )
         if params.name in guides.TOOL_NAMES:
-            return await guides.invoke(
-                gateway, params.name, bearer, correlation_id, arguments
-            )
+            return await guides.invoke(gateway, params.name, bearer, correlation_id, arguments)
         if params.name in policies.TOOL_NAMES:
-            return await policies.invoke(
-                gateway, params.name, bearer, correlation_id, arguments
-            )
+            return await policies.invoke(gateway, params.name, bearer, correlation_id, arguments)
         if params.name in workspace_reads.TOOL_NAMES:
             return await workspace_reads.invoke(
                 gateway, params.name, bearer, correlation_id, arguments
@@ -272,13 +278,19 @@ def create_app(settings: Settings) -> Starlette:
 
     @asynccontextmanager
     async def lifespan(_: Starlette) -> AsyncIterator[None]:
-        nonlocal gateway
-        async with create_http_client(settings) as client, manager.run():
+        nonlocal gateway, credentials
+        async with (
+            create_credentials(settings.oauth) as provider,
+            create_http_client(settings) as client,
+            manager.run(),
+        ):
+            credentials = provider
             gateway = WorkstreamGateway(settings, client)
             try:
                 yield
             finally:
                 gateway = None
+                credentials = None
 
     class Endpoint:
         async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
@@ -320,6 +332,29 @@ def create_app(settings: Settings) -> Starlette:
                         headers={"Cache-Control": "no-store"},
                     )(scope, receive, send)
                     return
+
+            try:
+                if credentials is None:
+                    raise IdentityUnavailable
+                bearer = request_bearer(Headers(scope=scope))
+                scope["workstream.identity"] = await credentials.verify(bearer[7:])
+            except (CredentialError, InvalidCredential):
+                await JSONResponse(
+                    {"error": "invalid_token"},
+                    status_code=401,
+                    headers={
+                        "Cache-Control": "no-store",
+                        "WWW-Authenticate": f'Bearer resource_metadata="{metadata_url}"',
+                    },
+                )(scope, receive, send)
+                return
+            except IdentityUnavailable:
+                await JSONResponse(
+                    {"error": "identity_unavailable"},
+                    status_code=503,
+                    headers={"Cache-Control": "no-store"},
+                )(scope, receive, send)
+                return
 
             loop = asyncio.get_running_loop()
             deadline = loop.time() + settings.ingress_timeout_seconds
@@ -420,6 +455,14 @@ def create_app(settings: Settings) -> Starlette:
                 pump_task.cancel()
 
     return Starlette(
-        routes=[Route("/mcp", Endpoint(), methods=["POST", "GET", "DELETE"])],
+        routes=[
+            *create_protected_resource_routes(
+                AnyHttpUrl(settings.oauth.resource),
+                [AnyHttpUrl(settings.oauth.issuer)],
+                scopes_supported=["workstream:access", "workstream-mcp-audience"],
+                resource_name="Workstream",
+            ),
+            Route("/mcp", Endpoint(), methods=["POST", "GET", "DELETE"]),
+        ],
         lifespan=lifespan,
     )

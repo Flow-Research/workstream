@@ -7,7 +7,7 @@ from enum import StrEnum
 import re
 from typing import Protocol
 
-from app.interfaces.external_services import ExternalServiceAdapter
+from workstream_external_services import ExternalServiceAdapter
 
 
 CHECKER_MODEL_CAPABILITY_KEY = "checker_model_generation"

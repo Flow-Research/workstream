@@ -118,7 +118,10 @@ def _bound_response(name: str) -> dict[str, Any]:
 def _catalogue(client: TestClient) -> list[dict[str, Any]]:
     response = client.post(
         "/mcp",
-        headers={"accept": "application/json, text/event-stream"},
+        headers={
+            "accept": "application/json, text/event-stream",
+            "authorization": "Bearer fixture-token",
+        },
         json={"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}},
     )
     assert response.status_code == 200
@@ -287,7 +290,7 @@ def test_preparation_upload_decodes_once_and_forwards_only_reviewed_headers(
     assert response.json()["result"]["isError"] is False
     request = received[0]
     assert request.content == content
-    assert request.headers["authorization"] == "Bearer fixture-token"
+    assert request.headers["authorization"] == 'Bearer api-fixture-token'
     assert request.headers["content-type"] == "application/zip"
     assert request.headers["idempotency-key"] == KEY
     assert request.headers["x-task-assignment-id"] == ASSIGNMENT_ID

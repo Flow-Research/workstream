@@ -19,13 +19,6 @@
 !external_checkers/workstream-checker-service/Cargo.toml
 !external_checkers/workstream-checker-service/src/
 !external_checkers/workstream-checker-service/src/**
-!experiments/
-!experiments/demo_identity/
-!experiments/demo_identity/Cargo.toml
-!experiments/demo_identity/Cargo.lock
-!experiments/demo_identity/Dockerfile
-!experiments/demo_identity/src/
-!experiments/demo_identity/src/main.rs
 
 backend/.ci/
 backend/.coverage*
@@ -38,3 +31,13 @@ backend/**/*.pyc
 
 backend/build/
 backend/*.egg-info/
+
+!packages/
+!packages/external-services/
+!packages/external-services/**
+packages/**/__pycache__/
+packages/**/*.pyc
+!deploy/
+!deploy/identity/
+!deploy/identity/Dockerfile
+!deploy/identity/entrypoint.sh

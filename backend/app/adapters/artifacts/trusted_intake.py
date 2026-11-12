@@ -18,7 +18,7 @@ from typing import BinaryIO, TypeVar
 from pydantic import TypeAdapter
 
 from app.core.cancellation import await_cancellation_resistant
-from app.interfaces.external_services import (
+from workstream_external_services import (
     ExternalServiceAdapterIdentity,
     ExternalServiceProtocolError,
     ExternalServiceUnavailableError,

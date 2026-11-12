@@ -28,7 +28,7 @@ from pydantic import (
     model_validator,
 )
 
-from app.interfaces.external_services import (
+from workstream_external_services import (
     ExternalServiceAdapter,
     ExternalServiceAdapterError,
     ExternalServiceConfigurationError,

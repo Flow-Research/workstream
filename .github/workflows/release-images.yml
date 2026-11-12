@@ -23,6 +23,7 @@ on:
       - 'scripts/test_guide_document_api_drill.py'
       - 'scripts/verify_guide_parser_isolation.py'
       - 'backend/**'
+      - 'packages/external-services/**'
       - 'external_checkers/**'
 
 permissions:

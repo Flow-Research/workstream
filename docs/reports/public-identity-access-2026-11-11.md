@@ -53,4 +53,4 @@ award, payment or human-review outcome is claimed by this access qualification.
 The preceding product drill supplies that separate lifecycle evidence.
 
 See the [public access runbook](../../deploy/hosted/PUBLIC_ACCESS.md) and
-[issuer account contract](../../experiments/demo_identity/README.md).
+[issuer account contract](https://github.com/Flow-Research/workstream/blob/94334ccf4085c26c7bfaa054465fc05cfbdad1fc/experiments/demo_identity/README.md).

@@ -1,5 +1,5 @@
 [Unit]
-Description=Flow demo identity HTTPS ingress
+Description=Workstream and Flow Identity HTTPS ingress
 Wants=network-online.target
 After=network-online.target docker.service
 StartLimitIntervalSec=60

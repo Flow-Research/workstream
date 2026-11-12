@@ -11,6 +11,7 @@ from uuid import uuid4
 
 import httpx2 as httpx
 import pytest
+from oauth_fixture import IdentityFixture
 from test_profile_flow import (
     _bootstrap_access_administrator,
     _call,
@@ -19,8 +20,6 @@ from test_profile_flow import (
     _stop,
     api_environment,
     find_free_port,
-    flow_settings,
-    issue_flow_token,
 )
 from test_projects import _mcp, _profile, _qualification
 
@@ -39,11 +38,12 @@ def _issue(project_id: str, actor_id: str, role: str, key: str) -> dict[str, Any
 
 
 @pytest.mark.asyncio
-async def test_installed_mcp_preserves_project_participation_authority_and_replay() -> None:
+async def test_installed_mcp_preserves_project_participation_authority_and_replay(
+    identity: IdentityFixture,
+) -> None:
     env = api_environment()
     executable = os.environ.get("WORKSTREAM_MCP_EXECUTABLE") or shutil.which("workstream-mcp")
     assert executable, "install the workstream-mcp wheel before running integration tests"
-    issuer, audience, secret = flow_settings(env)
     run_id = uuid4().hex
     subjects = {
         "admin": "mcp-admin",
@@ -53,10 +53,7 @@ async def test_installed_mcp_preserves_project_participation_authority_and_repla
         "concurrent": f"mcp-grants-{run_id}-concurrent",
         "ordinary": f"mcp-grants-{run_id}-ordinary",
     }
-    tokens = {
-        name: issue_flow_token(subject, [], issuer=issuer, audience=audience, secret=secret)
-        for name, subject in subjects.items()
-    }
+    tokens = {name: identity.issue(subject) for name, subject in subjects.items()}
     api_port, mcp_port = find_free_port(), find_free_port()
     while api_port == mcp_port:
         mcp_port = find_free_port()
@@ -72,6 +69,7 @@ async def test_installed_mcp_preserves_project_participation_authority_and_repla
             WORKSTREAM_MCP_PORT=str(mcp_port),
         )
         api, mcp, api_log, mcp_log = _start_processes(
+            identity=identity,
             api_port=api_port,
             api_env=env,
             mcp_port=mcp_port,

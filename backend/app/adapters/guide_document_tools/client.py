@@ -12,7 +12,7 @@ import struct
 
 from pydantic import ValidationError
 
-from app.interfaces.external_services import (
+from workstream_external_services import (
     ExternalServiceAdapterIdentity,
     ExternalServiceProtocolError,
     ExternalServiceUnavailableError,

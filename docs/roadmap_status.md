@@ -772,30 +772,30 @@ cannot be reused as post-submission review-gate evidence. See the
 
 - Workstream verifies external Flow identity tokens but owns no login,
   password, or primary authentication session.
-- An [external Rust demo issuer](../experiments/demo_identity/README.md) can
-  provision participant accounts through its own administrator. First login
-  requires a password change using a separate purpose/audience credential before
-  compatible Workstream tokens can be issued. Email is an unverified identifier;
-  email invitations and public signup remain deferred. Existing participant
-  subjects survive the explicit issuer schema upgrade. Its opt-in hosted overlay is validated by the canonical wrapper, with
-  bounded HTTPS readiness and persistent private state. [Private hosted account,
-  restart, Caddy transport and Workstream authorization proof](reports/demo-identity-hosted-2026-11-06.md)
-  passed. [Login-based CLI and MCP calls](reports/demo-identity-clients-2026-11-07.md)
-  additionally prove bounded private reads, shared draft-task replay and revocation.
-  [Managed MCP and CLI qualification](reports/managed-mcp-hosted-2026-11-07.md)
-  extends that evidence on the normal deployment with a newly admitted contributor,
-  explicit project grants, immediate claim, external PRE feedback, verified intake,
-  durable Garden POST, automatic acceptance and one stable 100 FLOW award across
-  submission replay. A fresh contribution repeated that path after progressive scratch and sealed-size VM qualification. This remains the false-human-review branch, not live human review.
-  The [active private deployment](reports/demo-identity-active-cutover-2026-11-07.md)
-  now accepts Rust-issued account logins and rejects
-  the previous unexpired fixture token after canonical release/AWS verification.
-  The [public HTTPS profile](../deploy/hosted/PUBLIC_ACCESS.md) adds identity, API
-  and native bearer MCP routing, plus exact `/docs` Swagger and `/openapi.json`
-  schema access without changing API authorization. [Public qualification](reports/public-identity-access-2026-11-11.md)
-  passed mandatory first-login rotation, trusted TLS, fresh verifier access and
-  four exact CLI/MCP operations; all-tool live coverage and OAuth remain separate. Neither the private cutover nor compatibility
-  tests establish full Flow Identity platform integration.
+- The [Keycloak provider](../deploy/identity/README.md) replaces the Rust demo
+  issuer with stock browser code/PKCE login and administrator-provisioned accounts.
+  A temporary password must be changed before issuing participant credentials.
+  Email remains an unverified identifier; SMTP and public registration are not
+  required. The hosted provider has its own database role, private administrator
+  ingress, pinned image and bounded resources. Its regular container holds no
+  bootstrap credential.
+- MCP verifies its resource-scoped token and exchanges it for a short-lived API
+  token for the same user; an API-only bearer is rejected by MCP. Real local
+  provider proof covers password change, login, exchange, renewal/reuse denial,
+  restart and database isolation. Hosted Keycloak cutover, named-administrator
+  recovery and the actual Garden session remain required qualification. See the
+  [replacement record](../.commitrail/changes/keycloak-mcp-oauth.md).
+- Earlier [Rust-hosted account](reports/demo-identity-hosted-2026-11-06.md),
+  [login-based client](reports/demo-identity-clients-2026-11-07.md),
+  [private cutover](reports/demo-identity-active-cutover-2026-11-07.md) and
+  [public access](reports/public-identity-access-2026-11-11.md) reports are historical
+  evidence, not proof of the replacement provider. The
+  [managed CLI/MCP contribution journey](reports/managed-mcp-hosted-2026-11-07.md)
+  retains its recorded PRE/Submission/POST/automatic acceptance and stable award
+  evidence; it does not certify the new OAuth connection or live human review.
+  The [public HTTPS profile](../deploy/hosted/PUBLIC_ACCESS.md) exposes identity,
+  API and MCP paths plus exact `/docs` and `/openapi.json` without changing
+  Workstream product authority.
 - External subject identity resolves through ActorIdentityLink into a stable
   internal ActorProfile.
 - Human roles and fixed-service authority remain separate and fail closed.
@@ -829,11 +829,11 @@ cannot be reused as post-submission review-gate evidence. See the
   they do not repeatedly reopen this original selection. Route discovery alone
   is not readiness.
   The [MCP initiative](../.commitrail/initiatives/WS-MCP-002/OVERVIEW.md)
-  now fixes the caller-token design: the adapter forwards each caller's Flow
-  bearer unchanged and Workstream verifies it. The
-  [local one-tool experiment](../experiments/mcp_caller_token/README.md) passed
-  15 real-process checks and 24 focused tests, including first admission and
-  caller isolation. Independent packaging and the three bounded self-service
+  records the original tool delivery. Its unchanged-bearer design is superseded
+  by [resource-scoped OAuth and same-subject exchange](../.commitrail/changes/keycloak-mcp-oauth.md).
+  The original [one-tool experiment](../experiments/mcp_caller_token/README.md)
+  is historical evidence, not the current credential path. Independent packaging
+  and the three bounded self-service
   tools are delivered through WS-MCP-002-02: profile read, profile update and
   exact-project authorization context. WS-MCP-002-03 adds six administrative
   reads for permission/role definitions, grants and actor/identity projections;
@@ -848,8 +848,8 @@ cannot be reused as post-submission review-gate evidence. See the
   WS-MCP-002-12 adds 18 task execution, preparation, context and submission
   bindings. WS-MCP-002-13 adds the remaining 24 project, task, import,
   service-actor and model-operation bindings. The assembled release proof
-  remains. This is still a custom authentication adapter, not a public
-  deployment or a certified release.
+  remains. Public routing exists; hosted OAuth/Garden qualification and a
+  certified release require their own evidence.
   The [CLI foundation](../.commitrail/initiatives/WS-CLI-001/WS-CLI-001-01.md)
   provides `whoami` and `project access PROJECT_ID` through those public REST
   contracts. [CLI profile editing](../.commitrail/initiatives/WS-CLI-001/WS-CLI-001-02.md)

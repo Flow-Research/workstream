@@ -12,7 +12,7 @@ from uuid import UUID
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.interfaces.external_services import ExternalServiceAdapterError
+from workstream_external_services import ExternalServiceAdapterError
 from app.interfaces.project_agents import (
     ProjectAgentRuntimeError,
     ProjectGuideAgentRuntime,

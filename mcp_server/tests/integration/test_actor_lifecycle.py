@@ -12,6 +12,7 @@ from uuid import uuid4
 
 import httpx2 as httpx
 import pytest
+from oauth_fixture import IdentityFixture, IdentityTokens
 from test_profile_flow import (
     _bootstrap_access_administrator,
     _call,
@@ -20,23 +21,23 @@ from test_profile_flow import (
     _stop,
     api_environment,
     find_free_port,
-    flow_settings,
-    issue_flow_token,
 )
 
 
-async def _profile(client: httpx.AsyncClient, token: str) -> dict[str, Any]:
-    response = await client.get("/api/v1/actors/me", headers={"Authorization": f"Bearer {token}"})
+async def _profile(client: httpx.AsyncClient, token: IdentityTokens) -> dict[str, Any]:
+    response = await client.get(
+        "/api/v1/actors/me", headers={"Authorization": f"Bearer {token.api}"}
+    )
     assert response.status_code == 200, response.text
     return response.json()
 
 
 async def _identity_link(
-    client: httpx.AsyncClient, admin_token: str, actor_profile_id: str
+    client: httpx.AsyncClient, admin_token: IdentityTokens, actor_profile_id: str
 ) -> str:
     response = await client.get(
         f"/api/v1/actors/{actor_profile_id}/identity-links",
-        headers={"Authorization": f"Bearer {admin_token}"},
+        headers={"Authorization": f"Bearer {admin_token.api}"},
     )
     assert response.status_code == 200, response.text
     return str(response.json()["identity_link_id"])
@@ -44,7 +45,7 @@ async def _identity_link(
 
 async def _mcp(
     mcp_url: str,
-    token: str,
+    token: IdentityTokens,
     name: str,
     arguments: dict[str, Any],
     *,
@@ -83,20 +84,15 @@ def _restart_mcp(
 
 
 @pytest.mark.asyncio
-async def test_installed_mcp_preserves_lifecycle_authority_replay_and_terminal_state() -> None:
+async def test_installed_mcp_preserves_lifecycle_authority_replay_and_terminal_state(
+    identity: IdentityFixture,
+) -> None:
     env = api_environment()
     executable = os.environ.get("WORKSTREAM_MCP_EXECUTABLE") or shutil.which("workstream-mcp")
     assert executable, "install the workstream-mcp wheel before running integration tests"
-    issuer, audience, secret = flow_settings(env)
     run_id = uuid4().hex
     tokens = {
-        name: issue_flow_token(
-            f"mcp-lifecycle-{run_id}-{name}",
-            [],
-            issuer=issuer,
-            audience=audience,
-            secret=secret,
-        )
+        name: identity.issue(f"mcp-lifecycle-{run_id}-{name}")
         for name in ("admin", "ordinary", "target", "terminal")
     }
     api_port, mcp_port = find_free_port(), find_free_port()
@@ -114,6 +110,7 @@ async def test_installed_mcp_preserves_lifecycle_authority_replay_and_terminal_s
             WORKSTREAM_MCP_PORT=str(mcp_port),
         )
         api, mcp, api_log, mcp_log = _start_processes(
+            identity=identity,
             api_port=api_port,
             api_env=env,
             mcp_port=mcp_port,
@@ -209,9 +206,7 @@ async def test_installed_mcp_preserves_lifecycle_authority_replay_and_terminal_s
                     mcp_url,
                     tokens["admin"],
                     "workstream_identity_link_revoke",
-                    _arguments(
-                        "identity_link_id", links["admin"], "Self link revoke denial proof"
-                    ),
+                    _arguments("identity_link_id", links["admin"], "Self link revoke denial proof"),
                     status=403,
                     code="resource_guard_denied",
                 )
@@ -220,9 +215,7 @@ async def test_installed_mcp_preserves_lifecycle_authority_replay_and_terminal_s
                 )
                 assert revoked["resource_id"] == links["target"]
                 assert (
-                    await _mcp(
-                        mcp_url, tokens["admin"], "workstream_identity_link_revoke", revoke
-                    )
+                    await _mcp(mcp_url, tokens["admin"], "workstream_identity_link_revoke", revoke)
                     == revoked
                 )
                 await _mcp(

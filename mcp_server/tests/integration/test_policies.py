@@ -10,6 +10,7 @@ from uuid import uuid4
 
 import httpx2 as httpx
 import pytest
+from oauth_fixture import IdentityFixture
 from test_guides import _guide_input
 from test_profile_flow import (
     _bootstrap_access_administrator,
@@ -18,8 +19,6 @@ from test_profile_flow import (
     _stop,
     api_environment,
     find_free_port,
-    flow_settings,
-    issue_flow_token,
 )
 from test_projects import _mcp, _profile, _restart_mcp
 
@@ -46,21 +45,19 @@ def _review_arguments(project_id: str, guide_id: str, key: str, selector: str) -
 
 
 @pytest.mark.asyncio
-async def test_installed_mcp_preserves_policy_lineage_authority_and_replay() -> None:
+async def test_installed_mcp_preserves_policy_lineage_authority_and_replay(
+    identity: IdentityFixture,
+) -> None:
     env = api_environment()
     executable = os.environ.get("WORKSTREAM_MCP_EXECUTABLE") or shutil.which("workstream-mcp")
     assert executable, "install the workstream-mcp wheel before running integration tests"
-    issuer, audience, secret = flow_settings(env)
     run_id = uuid4().hex
     subjects = {
         "admin": "mcp-admin",
         "manager": f"mcp-policies-{run_id}-manager",
         "ordinary": f"mcp-policies-{run_id}-ordinary",
     }
-    tokens = {
-        name: issue_flow_token(subject, [], issuer=issuer, audience=audience, secret=secret)
-        for name, subject in subjects.items()
-    }
+    tokens = {name: identity.issue(subject) for name, subject in subjects.items()}
     api_port, mcp_port = find_free_port(), find_free_port()
     while api_port == mcp_port:
         mcp_port = find_free_port()
@@ -76,6 +73,7 @@ async def test_installed_mcp_preserves_policy_lineage_authority_and_replay() -> 
             WORKSTREAM_MCP_PORT=str(mcp_port),
         )
         api, mcp, api_log, mcp_log = _start_processes(
+            identity=identity,
             api_port=api_port,
             api_env=env,
             mcp_port=mcp_port,
@@ -170,12 +168,15 @@ async def test_installed_mcp_preserves_policy_lineage_authority_and_replay() -> 
                 mcp_log.close()
                 mcp, restart_log = _restart_mcp(executable, scratch, mcp_env)
                 await _ready(mcp_url + "/mcp", mcp)
-                assert await _mcp(
-                    mcp_url,
-                    tokens["manager"],
-                    "workstream_review_policy_put",
-                    review_input,
-                ) == review
+                assert (
+                    await _mcp(
+                        mcp_url,
+                        tokens["manager"],
+                        "workstream_review_policy_put",
+                        review_input,
+                    )
+                    == review
+                )
                 await _mcp(
                     mcp_url,
                     tokens["manager"],

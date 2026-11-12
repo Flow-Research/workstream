@@ -35,7 +35,7 @@ from app.interfaces.artifacts import (
     artifact_provider_object_ref,
     artifact_store_namespace_material,
 )
-from app.interfaces.external_services import ExternalServiceAdapterIdentity
+from workstream_external_services import ExternalServiceAdapterIdentity
 from app.modules.projects.api import (
     ProjectLockedPolicyContextPort, ProjectLockedPolicyContextRequest,
     ProjectLockedPolicyContextUnavailable,

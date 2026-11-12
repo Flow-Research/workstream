@@ -8,7 +8,7 @@ import pytest
 
 from app.adapters.artifacts.local import LocalStorageAdapter, LocalStorageBootstrap
 from app.core.config import Settings
-from app.interfaces.external_services import ExternalServiceAdapterIdentity
+from workstream_external_services import ExternalServiceAdapterIdentity
 from app.modules.artifacts.models import (
     ArtifactOperationReceipt,
     ArtifactReplica,

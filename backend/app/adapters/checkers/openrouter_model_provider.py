@@ -27,7 +27,7 @@ from app.interfaces.checker_model_provider import (
     CheckerModelResponseReference,
     CheckerModelUsage,
 )
-from app.interfaces.external_services import ExternalServiceAdapterIdentity
+from workstream_external_services import ExternalServiceAdapterIdentity
 from app.modules.model_usage.api import ModelCallUnavailable, ProjectModelProfile
 
 

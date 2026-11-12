@@ -15,7 +15,7 @@ from app.adapters.project_agents.openai_workspace import (
     RETAINED_OPENAI_GUIDE_RUNTIME_KEY,
     _cleanup_recorded_openai_guide_resources,
 )
-from app.interfaces.external_services import UnknownExternalServiceProviderError
+from workstream_external_services import UnknownExternalServiceProviderError
 from app.modules.projects.api.guide_documents import (
     GUIDE_RUNTIME_RESOURCE_CLEANUP_CAPABILITY_KEY,
     GuideRuntimeResource,

@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 from dataclasses import dataclass
 import hashlib
+import ipaddress
 from decimal import Decimal, InvalidOperation
 import json
 import os
@@ -32,7 +33,7 @@ TRIAL_KEYS = (
 MODEL_OPENAI_COMPOSE_PATH = Path(__file__).with_name("compose.model-openai.yml")
 MODEL_OPENROUTER_COMPOSE_PATH = Path(__file__).with_name("compose.model-openrouter.yml")
 MCP_COMPOSE_PATH = Path(__file__).with_name("compose.mcp.yml")
-DEMO_IDENTITY_COMPOSE_PATH = Path(__file__).with_name("compose.demo-identity.yml")
+IDENTITY_COMPOSE_PATH = Path(__file__).with_name("compose.identity.yml")
 LOCAL_DATA_COMPOSE_PATH = Path(__file__).with_name("compose.local-data.yml")
 LOCAL_DATA_KEYS = (
     "WORKSTREAM_POSTGRES_IMAGE", "WORKSTREAM_REDIS_IMAGE",
@@ -40,19 +41,13 @@ LOCAL_DATA_KEYS = (
     "WORKSTREAM_POSTGRES_PASSWORD_FILE", "WORKSTREAM_REDIS_CONFIG_FILE",
     "WORKSTREAM_POSTGRES_INIT_SQL_FILE",
 )
-DEMO_IDENTITY_KEYS = (
-    "DEMO_IDENTITY_IMAGE",
-    "DEMO_IDENTITY_ISSUER",
-    "DEMO_IDENTITY_AUDIENCE",
-    "DEMO_IDENTITY_HOSTNAME",
-    "DEMO_IDENTITY_DATA_DIR",
-    "DEMO_IDENTITY_TLS_CERT_FILE",
-    "DEMO_IDENTITY_TLS_KEY_FILE",
+IDENTITY_KEYS = (
+    "FLOW_IDENTITY_IMAGE", "FLOW_IDENTITY_HOSTNAME",
+    "FLOW_IDENTITY_DATABASE_PASSWORD_FILE", "FLOW_IDENTITY_TLS_CERT_FILE",
+    "FLOW_IDENTITY_TLS_KEY_FILE", "FLOW_IDENTITY_PROXY_ADDRESS",
 )
-DEMO_IDENTITY_OPTIONAL_KEYS = (
-    "DEMO_IDENTITY_PUBLISHED_BIND",
-    "DEMO_IDENTITY_PUBLISHED_PORT",
-)
+IDENTITY_FILE_KEYS = IDENTITY_KEYS[2:5]
+MCP_OAUTH_KEYS = ("WORKSTREAM_MCP_RESOURCE_URL", "WORKSTREAM_MCP_EXCHANGE_SECRET_FILE")
 GITHUB_COMPOSE_PATH = Path(__file__).with_name("compose.github.yml")
 GITHUB_APP_KEYS = (
     "WORKSTREAM_GITHUB_APP_ID",
@@ -340,8 +335,8 @@ REQUIRED_RELEASE_KEYS = (
 OPTIONAL_RELEASE_KEYS = (
     *LOCAL_DATA_KEYS,
     "WORKSTREAM_MCP_IMAGE",
-    *DEMO_IDENTITY_KEYS,
-    *DEMO_IDENTITY_OPTIONAL_KEYS,
+    *IDENTITY_KEYS,
+    *MCP_OAUTH_KEYS,
     *GITHUB_APP_KEYS,
     "WORKSTREAM_DEPLOYMENT_ROOT",
     "WORKSTREAM_CHECKER_SERVICE_BINARY",
@@ -413,119 +408,83 @@ def _positive_decimal(values: dict[str, str], key: str) -> Decimal:
     return value
 
 
-def validate_demo_identity_environment(values: dict[str, str]) -> None:
-    selected = any(
-        key in values for key in (*DEMO_IDENTITY_KEYS, *DEMO_IDENTITY_OPTIONAL_KEYS)
-    )
-    if not selected:
+def validate_identity_environment(values: dict[str, str]) -> None:
+    if not any(key in values for key in IDENTITY_KEYS):
         return
-    for key in DEMO_IDENTITY_KEYS:
+    for key in IDENTITY_KEYS:
         _required(values, key)
-    if not IMAGE_REFERENCE.fullmatch(values["DEMO_IDENTITY_IMAGE"]):
-        raise PreflightError("demo identity image must be digest-qualified")
-    hostname = values["DEMO_IDENTITY_HOSTNAME"]
-    if (
-        len(hostname) > 253
-        or not re.fullmatch(
-            r"[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+",
-            hostname,
-        )
-        or any(len(label) > 63 for label in hostname.split("."))
-    ):
-        raise PreflightError("demo identity hostname must be a canonical DNS name")
+    if not values.get("WORKSTREAM_POSTGRES_IMAGE"):
+        raise PreflightError("the hosted identity provider requires local PostgreSQL")
+    if not IMAGE_REFERENCE.fullmatch(values["FLOW_IDENTITY_IMAGE"]):
+        raise PreflightError("identity image must be digest-qualified")
+    hostname = values["FLOW_IDENTITY_HOSTNAME"]
+    if (len(hostname) > 253 or not re.fullmatch(
+            r"[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+", hostname)
+            or any(len(label) > 63 for label in hostname.split("."))):
+        raise PreflightError("identity hostname must be a canonical DNS name")
+    issuer = f"https://{hostname}/realms/flow"
+    if (values.get("WORKSTREAM_TOKEN_ISSUER") != issuer
+            or values.get("WORKSTREAM_TOKEN_AUDIENCE") != "workstream-api"
+            or values.get("WORKSTREAM_TOKEN_JWKS_URL") != issuer + "/protocol/openid-connect/certs"
+            or values.get("WORKSTREAM_TOKEN_ALGORITHMS") != "RS256"):
+        raise PreflightError("Keycloak and Workstream verifier pins must match")
     try:
-        origin = urlsplit(values["DEMO_IDENTITY_ISSUER"])
-        port = origin.port
+        proxy = ipaddress.ip_address(values["FLOW_IDENTITY_PROXY_ADDRESS"])
+        if proxy.is_unspecified or proxy.is_multicast:
+            raise ValueError
     except ValueError as exc:
-        raise PreflightError("demo identity issuer origin is invalid") from exc
-    expected = f"https://{hostname}" + (f":{port}" if port is not None else "")
-    if values["DEMO_IDENTITY_ISSUER"] != expected or (
-        port is not None and not 1 <= port <= 65535
-    ):
-        raise PreflightError("demo identity issuer must use its canonical HTTPS origin")
-    if (
-        values.get("WORKSTREAM_TOKEN_ISSUER") != values["DEMO_IDENTITY_ISSUER"]
-        or values.get("WORKSTREAM_TOKEN_AUDIENCE") != values["DEMO_IDENTITY_AUDIENCE"]
-        or values.get("WORKSTREAM_TOKEN_JWKS_URL")
-        != values["DEMO_IDENTITY_ISSUER"] + "/jwks.json"
-        or values.get("WORKSTREAM_TOKEN_ALGORITHMS") != "RS256"
-    ):
-        raise PreflightError("demo identity and Workstream verifier pins must match")
-    if values.get("DEMO_IDENTITY_PUBLISHED_BIND", "127.0.0.1") != "127.0.0.1":
-        raise PreflightError("demo identity publication must remain loopback")
-    if values.get("DEMO_IDENTITY_PUBLISHED_PORT", "8443") != "8443":
-        raise PreflightError("demo identity publication must use port 8443")
-    paths = [values[key] for key in DEMO_IDENTITY_KEYS[-3:]]
-    for raw in paths:
-        path = Path(raw)
-        if (
-            not path.is_absolute()
-            or path != path.resolve(strict=False)
-            or any(c in raw for c in (",", "\n", "\r", "\0"))
-        ):
-            raise PreflightError("demo identity paths must be canonical absolute paths")
-    if len(set(paths)) != 3 or any(
-        Path(raw).is_relative_to(Path(paths[0])) for raw in paths[1:]
-    ):
-        raise PreflightError("demo identity state and TLS files must be separate")
+        raise PreflightError("identity proxy trust requires one observed IP, not a subnet") from exc
+    _identity_file_paths(values, IDENTITY_FILE_KEYS)
+
+
+def _identity_file_paths(values: dict[str, str], keys: tuple[str, ...]) -> None:
+    paths = [Path(_required(values, key)) for key in keys]
     hosted = deployment_paths(values)
-    shared_roots = (
-        hosted.scratch,
-        hosted.socket_root,
-        hosted.guide_root,
-        hosted.model_root,
-        hosted.model_relays,
-    )
-    if any(
-        Path(raw).is_relative_to(root) or root.is_relative_to(Path(raw))
-        for raw in paths
-        for root in shared_roots
-    ):
-        raise PreflightError(
-            "demo identity custody must remain outside shared runtime roots"
-        )
+    roots = (hosted.scratch, hosted.socket_root, hosted.guide_root, hosted.model_root, hosted.model_relays)
+    for path in paths:
+        if (not path.is_absolute() or path != path.resolve(strict=False)
+                or any(c.isspace() or c in ",:" for c in str(path))
+                or any(path.is_relative_to(root) or root.is_relative_to(path) for root in roots)):
+            raise PreflightError("identity files require canonical private paths outside processing roots")
+    if len(set(paths)) != len(paths):
+        raise PreflightError("identity private files must be distinct")
 
 
-def validate_demo_identity_host_inputs(values: dict[str, str]) -> None:
-    if not values.get("DEMO_IDENTITY_IMAGE"):
+def validate_mcp_environment(values: dict[str, str]) -> None:
+    if not values.get("WORKSTREAM_MCP_IMAGE"):
+        if any(key in values for key in MCP_OAUTH_KEYS):
+            raise PreflightError("MCP OAuth settings require the MCP release image")
         return
-    data = Path(values["DEMO_IDENTITY_DATA_DIR"])
-    _private_metadata(data, kind="directory", uid=12001, gid=12001, mode=0o700)
-    for name in ("accounts.db", "signer.pem"):
-        _private_metadata(data / name, kind="file", uid=12001, gid=12001, mode=0o600)
-    for key in ("DEMO_IDENTITY_TLS_CERT_FILE", "DEMO_IDENTITY_TLS_KEY_FILE"):
-        _private_metadata(
-            Path(values[key]), kind="file", uid=12001, gid=12001, mode=0o400
-        )
-    protected = [
-        data / "signer.pem",
-        data / "accounts.db",
-        *(Path(values[key]) for key in DEMO_IDENTITY_KEYS[-2:]),
-    ]
-    if any(
-        os.path.samestat(a.stat(), b.stat())
-        for i, a in enumerate(protected)
-        for b in protected[i + 1 :]
-    ):
-        raise PreflightError("demo identity private files must be distinct")
-    backend_files = [
-        Path(values[key])
-        for key in (*BASE_SECRET_FILE_KEYS, *ROLES_ANYWHERE_HOST_FILE_KEYS)
-        if values.get(key)
-    ]
+    resource = _required(values, "WORKSTREAM_MCP_RESOURCE_URL")
     try:
-        if any(
-            b.exists() and os.path.samestat(a.stat(), b.stat())
-            for a in protected
-            for b in backend_files
-        ):
-            raise PreflightError(
-                "demo identity must not reuse Workstream private files"
-            )
+        url = urlsplit(resource)
+        port = url.port
+    except ValueError as exc:
+        raise PreflightError("MCP resource URL is invalid") from exc
+    if (url.scheme != "https" or not url.hostname or url.username or url.password
+            or url.query or url.fragment or url.path != "/mcp"
+            or port is not None and not 1 <= port <= 65535
+            or any(c.isspace() for c in resource) or len(resource) > 256):
+        raise PreflightError("MCP resource must be its exact HTTPS /mcp URL")
+    _identity_file_paths(values, ("WORKSTREAM_MCP_EXCHANGE_SECRET_FILE",))
+
+
+def validate_identity_host_inputs(values: dict[str, str]) -> None:
+    keys = list(IDENTITY_FILE_KEYS) if values.get("FLOW_IDENTITY_IMAGE") else []
+    if values.get("WORKSTREAM_MCP_IMAGE"):
+        keys.append("WORKSTREAM_MCP_EXCHANGE_SECRET_FILE")
+    protected = [Path(values[key]) for key in keys]
+    for path in protected:
+        _private_metadata(path, kind="file", uid=1000, gid=1000, mode=0o400)
+    backend_files = [Path(values[key]) for key in
+                     (*BASE_SECRET_FILE_KEYS, *ROLES_ANYWHERE_HOST_FILE_KEYS,
+                      "WORKSTREAM_POSTGRES_PASSWORD_FILE") if values.get(key)]
+    try:
+        if any(os.path.samestat(a.stat(), b.stat()) for i, a in enumerate(protected)
+               for b in protected[i + 1:] + backend_files if b.exists()):
+            raise PreflightError("identity files must not reuse each other or Workstream credentials")
     except OSError as exc:
-        raise PreflightError(
-            "demo identity private file identity is unavailable"
-        ) from exc
+        raise PreflightError("identity file custody is unavailable") from exc
 
 
 def validate_environment(values: dict[str, str]) -> None:
@@ -537,7 +496,8 @@ def validate_environment(values: dict[str, str]) -> None:
         )
     if "WORKSTREAM_MCP_IMAGE" in values and not IMAGE_REFERENCE.fullmatch(values["WORKSTREAM_MCP_IMAGE"]):
         raise PreflightError("MCP image must be digest-qualified")
-    validate_demo_identity_environment(values)
+    validate_identity_environment(values)
+    validate_mcp_environment(values)
     validate_local_data_environment(values)
     github_app_id, github_key_file, github_installation_id = (
         values.get(key, "") for key in GITHUB_APP_KEYS
@@ -1134,7 +1094,7 @@ def validate_private_host_inputs(
     values: dict[str, str], *, require_node: bool = True
 ) -> None:
     """Inspect metadata only; do not read application secret contents."""
-    validate_demo_identity_host_inputs(values)
+    validate_identity_host_inputs(values)
     validate_local_data_host_inputs(values)
     paths = deployment_paths(values)
     uid = _positive_id(values, "WORKSTREAM_RUNTIME_UID")
@@ -1264,8 +1224,8 @@ def _compose_file_arguments(values: dict[str, str]) -> list[str]:
         arguments.extend(("--file", str(LOCAL_DATA_COMPOSE_PATH)))
     if values.get("WORKSTREAM_MCP_IMAGE"):
         arguments.extend(("--file", str(MCP_COMPOSE_PATH)))
-    if values.get("DEMO_IDENTITY_IMAGE"):
-        arguments.extend(("--file", str(DEMO_IDENTITY_COMPOSE_PATH)))
+    if values.get("FLOW_IDENTITY_IMAGE"):
+        arguments.extend(("--file", str(IDENTITY_COMPOSE_PATH)))
     if values.get(GITHUB_APP_KEYS[0]):
         arguments.extend(("--file", str(GITHUB_COMPOSE_PATH)))
     if values["WORKSTREAM_MODEL_PROXY_ENABLED"] == "true":
@@ -1318,19 +1278,19 @@ def run_compose(
         compose_arguments = ["up", "--detach", "--no-deps", "--wait",
                              "--wait-timeout", "120", "postgres", "redis"]
         command_timeout = 150
-    elif compose_arguments == ["start", "demo-identity"]:
-        if not values.get("DEMO_IDENTITY_IMAGE"):
-            raise PreflightError("demo identity bootstrap requires the issuer overlay")
+    elif compose_arguments == ["start", "identity"]:
+        if not values.get("FLOW_IDENTITY_IMAGE"):
+            raise PreflightError("identity startup requires the Keycloak overlay")
         compose_arguments = [
             "up",
             "--detach",
             "--no-deps",
             "--wait",
             "--wait-timeout",
-            "60",
-            "demo-identity",
+            "360",
+            "identity",
         ]
-        command_timeout = 120
+        command_timeout = 390
     elif compose_arguments == ["migrate"]:
         compose_arguments = [
             "run",
@@ -1368,7 +1328,7 @@ def run_compose(
     # MCP attached to a retired API namespace after a Compose-managed update.
     selected_services = set(compose_arguments) & {
         "postgres", "redis",
-        "api", "mcp", "worker", "beat", "model-proxy", "demo-identity",
+        "api", "mcp", "worker", "beat", "model-proxy", "identity",
         "guide-document-parser", *PROOF_SERVICES,
     }
     targets_api = not selected_services or "api" in selected_services or (
@@ -1386,8 +1346,8 @@ def run_compose(
                                  "guide-document-parser"]
             if values.get("WORKSTREAM_POSTGRES_IMAGE"):
                 compose_arguments.extend(("postgres", "redis"))
-            if values.get("DEMO_IDENTITY_IMAGE"):
-                compose_arguments.append("demo-identity")
+            if values.get("FLOW_IDENTITY_IMAGE"):
+                compose_arguments.append("identity")
             if values["WORKSTREAM_MODEL_PROXY_ENABLED"] == "true":
                 compose_arguments.append("model-proxy")
         else:
@@ -1558,8 +1518,8 @@ def run_shutdown(environment_path: Path, values: dict[str, str]) -> int:
     if values["WORKSTREAM_MODEL_PROXY_ENABLED"] == "true":
         phases.append(["stop", "--timeout", "7320", "model-proxy"])
     phases.append(["stop", "guide-document-parser"])
-    if values.get("DEMO_IDENTITY_IMAGE"):
-        phases.append(["stop", "demo-identity"])
+    if values.get("FLOW_IDENTITY_IMAGE"):
+        phases.append(["stop", "identity"])
     if values.get("WORKSTREAM_POSTGRES_IMAGE"):
         phases.append(["stop", "--timeout", "60", "redis", "postgres"])
     for arguments in phases:
@@ -1697,117 +1657,72 @@ def _validate_exact_bind_mounts(
             )
 
 
-def demo_identity_healthcheck(values: dict[str, str]) -> list[str]:
-    host = values["DEMO_IDENTITY_HOSTNAME"]
-    return [
-        "CMD",
-        "curl",
-        "--fail",
-        "--silent",
-        "--show-error",
-        "--max-time",
-        "5",
-        "--cacert",
-        "/run/tls/cert.pem",
-        "--resolve",
-        f"{host}:8443:127.0.0.1",
-        f"https://{host}:8443/jwks.json",
-    ]
+def identity_healthcheck() -> list[str]:
+    return ["CMD", "bash", "-ec", "exec 3<>/dev/tcp/127.0.0.1/9000; "
+            "printf 'GET /health/ready HTTP/1.0\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3; "
+            'IFS= read -r status <&3; [[ "$$status" == *\' 200 \'* ]]']
 
 
-def validate_demo_identity_compose(
-    rendered: dict[str, Any], values: dict[str, str]
-) -> None:
+def validate_identity_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
     services = rendered["services"]
-    enabled = bool(values.get("DEMO_IDENTITY_IMAGE"))
-    for name, service in services.items():
-        expected_hosts = (
-            [values["DEMO_IDENTITY_HOSTNAME"] + "=host-gateway"]
-            if enabled and name == "api" else []
-        )
-        if (service.get("extra_hosts") or []) != expected_hosts:
-            raise PreflightError("demo identity host mapping differs from its profile")
-        networks = service.get("networks") or {}
-        if "demo_identity" in networks and (
-            not enabled or name != "demo-identity"
-        ):
-            raise PreflightError("demo identity network escaped its issuer boundary")
-    if not enabled:
+    for service in services.values():
+        if service.get("extra_hosts"):
+            raise PreflightError("identity resolution must use the configured public DNS")
+    if not values.get("FLOW_IDENTITY_IMAGE"):
         return
-    network = rendered.get("networks", {}).get("demo_identity", {})
-    if (
-        network.get("driver") != "bridge"
-        or network.get("internal", False) is not False
-        or network.get("ipam")
-        or set(network) - {"name", "driver", "internal", "ipam"}
-    ):
-        raise PreflightError("demo identity network must use the dedicated publishing bridge")
-    issuer = services["demo-identity"]
+    bridge = rendered.get("networks", {}).get("default", {})
+    if (bridge.get("driver", "bridge") != "bridge" or bridge.get("internal", False)
+            or bridge.get("ipam") or set(bridge) - {"name", "driver", "ipam", "internal"}):
+        raise PreflightError("identity requires the private publishing bridge")
+    issuer = services["identity"]
     expected_environment = {
-        "DEMO_IDENTITY_ISSUER": values["DEMO_IDENTITY_ISSUER"],
-        "DEMO_IDENTITY_AUDIENCE": values["DEMO_IDENTITY_AUDIENCE"],
-        "DEMO_IDENTITY_TLS_CERT": "/run/tls/cert.pem",
-        "DEMO_IDENTITY_TLS_KEY": "/run/tls/key.pem",
-        "DEMO_IDENTITY_BIND": "0.0.0.0:8443",
+        "KC_DB": "postgres", "KC_DB_URL": "jdbc:postgresql://postgres:5432/flow_identity",
+        "KC_DB_USERNAME": "flow_identity", "KC_DB_PASSWORD_FILE": "/run/identity/database-password",
+        "KC_DB_POOL_INITIAL_SIZE": "1", "KC_DB_POOL_MIN_SIZE": "1", "KC_DB_POOL_MAX_SIZE": "10",
+        "KC_HOSTNAME": "https://" + values["FLOW_IDENTITY_HOSTNAME"],
+        "KC_HOSTNAME_ADMIN": "https://identity-admin.localhost:19443",
+        "KC_HOSTNAME_STRICT": "true", "KC_HOSTNAME_BACKCHANNEL_DYNAMIC": "false",
+        "KC_PROXY_HEADERS": "xforwarded", "KC_PROXY_TRUSTED_ADDRESSES": values["FLOW_IDENTITY_PROXY_ADDRESS"],
+        "KC_HTTPS_CERTIFICATE_FILE": "/run/identity/tls-cert.pem",
+        "KC_HTTPS_CERTIFICATE_KEY_FILE": "/run/identity/tls-key.pem",
+        "KC_CACHE": "local", "KC_HTTP_MANAGEMENT_SCHEME": "http",
+        "JAVA_OPTS_KC_HEAP": "-XX:MaxRAMPercentage=60 -XX:InitialRAMPercentage=30",
     }
-    if (
-        issuer.get("image") != values["DEMO_IDENTITY_IMAGE"]
-        or issuer.get("user") != "12001:12001"
-        or issuer.get("environment") != expected_environment
-        or issuer.get("command") != ["serve", "/data"]
-        or issuer.get("entrypoint") is not None
-        or issuer.get("secrets")
-        or issuer.get("network_mode")
-        or issuer.get("privileged")
-        or issuer.get("devices")
-        or issuer.get("tmpfs")
-        or issuer.get("restart") != "on-failure:5"
-        or str(issuer.get("mem_limit")) != "268435456"
-        or issuer.get("cpus") != 1
-        or issuer.get("pids_limit") != 64
-        or issuer.get("init") is not True
-        or issuer.get("pull_policy") != "always"
-    ):
-        raise PreflightError("demo identity process differs from its bounded profile")
-    if issuer.get("healthcheck") != {
-        "test": demo_identity_healthcheck(values),
-        "interval": "10s",
-        "timeout": "6s",
-        "retries": 3,
-        "start_period": "10s",
-    }:
-        raise PreflightError(
-            "demo identity HTTPS readiness differs from its bounded profile"
-        )
+    if (issuer.get("image") != values["FLOW_IDENTITY_IMAGE"]
+            or issuer.get("user") != "1000:1000"
+            or issuer.get("environment") != expected_environment
+            or issuer.get("command") or issuer.get("entrypoint") or issuer.get("secrets")
+            or issuer.get("network_mode") or issuer.get("privileged") or issuer.get("devices")
+            or issuer.get("restart") != "on-failure:5"
+            or str(issuer.get("mem_limit")) != "1610612736"
+            or str(issuer.get("memswap_limit")) != "1610612736"
+            or issuer.get("cpus") != 1 or issuer.get("pids_limit") != 256
+            or issuer.get("init") is not True or issuer.get("pull_policy") != "always"
+            or issuer.get("stop_grace_period") != "1m0s"
+            or issuer.get("networks") != {"default": None}):
+        raise PreflightError("Keycloak process differs from its bounded profile")
+    if issuer.get("tmpfs") != [
+        "/tmp:uid=1000,gid=1000,mode=0700,size=134217728,noexec,nosuid,nodev",
+        "/opt/keycloak/data:uid=1000,gid=1000,mode=0700,size=134217728,nosuid,nodev",
+    ]:
+        raise PreflightError("Keycloak temporary storage must be private and bounded")
+    if issuer.get("healthcheck") != {"test": identity_healthcheck(), "interval": "10s",
+                                      "timeout": "5s", "retries": 12, "start_period": "3m0s"}:
+        raise PreflightError("Keycloak must use its private readiness endpoint")
     ports = issuer.get("ports", [])
-    if (
-        len(ports) != 1
-        or ports[0].get("host_ip") != "127.0.0.1"
-        or str(ports[0].get("published")) != "8443"
-        or ports[0].get("target") != 8443
-        or ports[0].get("protocol") != "tcp"
-    ):
-        raise PreflightError("demo identity port must remain loopback")
-    if (
-        set(issuer.get("networks", {})) != {"demo_identity"}
-        or issuer["networks"]["demo_identity"] is not None
-    ):
-        raise PreflightError(
-            "demo identity network attachments differ from its profile"
-        )
-    _validate_exact_bind_mounts(
-        "demo-identity",
-        issuer,
-        {
-            "/data": (values["DEMO_IDENTITY_DATA_DIR"], False),
-            "/run/tls/cert.pem": (values["DEMO_IDENTITY_TLS_CERT_FILE"], True),
-            "/run/tls/key.pem": (values["DEMO_IDENTITY_TLS_KEY_FILE"], True),
-        },
-    )
+    if (len(ports) != 1 or ports[0].get("host_ip") != "127.0.0.1"
+            or str(ports[0].get("published")) != "18443" or ports[0].get("target") != 8443
+            or ports[0].get("protocol") != "tcp"):
+        raise PreflightError("Keycloak upstream TLS must remain loopback-only")
+    _validate_exact_bind_mounts("identity", issuer, {
+        "/run/identity/database-password": (values["FLOW_IDENTITY_DATABASE_PASSWORD_FILE"], True),
+        "/run/identity/tls-cert.pem": (values["FLOW_IDENTITY_TLS_CERT_FILE"], True),
+        "/run/identity/tls-key.pem": (values["FLOW_IDENTITY_TLS_KEY_FILE"], True),
+    })
 
 
 def validate_mcp_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
-    """Keep the private client beside API without handing it runtime secrets."""
+    """Keep MCP beside API with only its own identity-exchange credential."""
     services = rendered["services"]
     mcp = services.get("mcp")
     api_ports = services["api"].get("ports", [])
@@ -1838,6 +1753,11 @@ def validate_mcp_compose(rendered: dict[str, Any], values: dict[str, str]) -> No
                 "WORKSTREAM_MCP_PORT": "8080",
                 "WORKSTREAM_MCP_MAX_IN_FLIGHT": "1",
                 "WORKSTREAM_MCP_ALLOWED_HOSTS": "127.0.0.1:8080,localhost:8080",
+                "WORKSTREAM_MCP_TOKEN_ISSUER": values["WORKSTREAM_TOKEN_ISSUER"],
+                "WORKSTREAM_MCP_RESOURCE_URL": values["WORKSTREAM_MCP_RESOURCE_URL"],
+                "WORKSTREAM_MCP_EXCHANGE_CLIENT_ID": "workstream-mcp",
+                "WORKSTREAM_MCP_API_AUDIENCE": values["WORKSTREAM_TOKEN_AUDIENCE"],
+                "WORKSTREAM_MCP_EXCHANGE_SECRET_FILE": "/run/secrets/mcp-exchange-secret",
             }
             or mcp.get("pull_policy") != "always"
             or mcp.get("init") is not True
@@ -1850,15 +1770,21 @@ def validate_mcp_compose(rendered: dict[str, Any], values: dict[str, str]) -> No
             or mcp.get("read_only") is not True
             or mcp.get("cap_drop") != ["ALL"]
             or mcp.get("security_opt") != ["no-new-privileges:true"]
-            or mcp.get("healthcheck", {}).get("disable") is True
-            or not mcp.get("healthcheck", {}).get("test")
+            or mcp.get("healthcheck") != {
+                "test": ["CMD", "python", "-m", "workstream_mcp.healthcheck"],
+                "interval": "10s", "timeout": "7s", "retries": 3, "start_period": "10s",
+            }
             or any(mcp.get(key) for key in (
-                "volumes", "secrets", "configs", "networks", "ports", "extra_hosts",
+                "secrets", "configs", "networks", "ports", "extra_hosts",
                 "privileged", "devices", "device_cgroup_rules", "cap_add", "group_add",
                 "pid", "ipc", "uts", "userns_mode", "cgroup", "use_api_socket",
                 "credential_spec", "command", "entrypoint", "tmpfs",
             ))):
         raise PreflightError("MCP isolation or caller-token boundary is invalid")
+
+    _validate_exact_bind_mounts("mcp", mcp, {
+        "/run/secrets/mcp-exchange-secret": (values["WORKSTREAM_MCP_EXCHANGE_SECRET_FILE"], True),
+    })
 
 
 def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
@@ -1875,8 +1801,8 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
     model_proxy_enabled = values["WORKSTREAM_MODEL_PROXY_ENABLED"] == "true"
     if model_proxy_enabled:
         expected_services.add("model-proxy")
-    if values.get("DEMO_IDENTITY_IMAGE"):
-        expected_services.add("demo-identity")
+    if values.get("FLOW_IDENTITY_IMAGE"):
+        expected_services.add("identity")
     if values.get("WORKSTREAM_MCP_IMAGE"):
         expected_services.add("mcp")
     if values.get("WORKSTREAM_POSTGRES_IMAGE"):
@@ -1886,7 +1812,7 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
             "release Compose services differ from the bounded topology"
         )
     validate_mcp_compose(rendered, values)
-    validate_demo_identity_compose(rendered, values)
+    validate_identity_compose(rendered, values)
     validate_local_data_compose(rendered, values)
     for name, service in services.items():
         if not isinstance(service, dict) or service.get("build") is not None:

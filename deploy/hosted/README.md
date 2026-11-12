@@ -248,26 +248,20 @@ not secret values. Select real Flow issuer, audience, JWKS and algorithm values.
 The release profile uses `WORKSTREAM_AUTH_PROVIDER=flow`; local Flow-HMAC and
 development authentication are absent.
 
-For invite-only demo accounts, the optional [external Rust issuer](../../experiments/demo_identity/README.md)
-provides administrator provisioning, login and password change. It stays outside
-Workstream core. Set all `DEMO_IDENTITY_*` essentials in the release environment
-and pin Workstream's issuer, audience, algorithms and JWKS URL to the same
-service. The wrapper validates the issuer's exact image, private mounts,
-UID 12001, network and resource bounds. Initialize its persistent state once;
-then start only the issuer and wait for verified HTTPS readiness:
+For invite-only accounts, the managed [Flow Identity provider](../identity/README.md)
+uses stock Keycloak browser login and OAuth. Set the `FLOW_IDENTITY_*` values and
+pin the backend to `https://IDENTITY_HOST/realms/flow`, audience `workstream-api`,
+RS256 and that realm's JWKS endpoint. The provider uses its own database and role;
+its credentials are never mounted into the API or workers. Follow the provider
+guide for offline first-administrator bootstrap and participant provisioning.
 
-```sh
-python3 deploy/hosted/compose.py --env-file /etc/workstream/release.env start demo-identity
-```
-
-This bootstrap does not start or reconfigure the backend.
-
-The issuer port stays on loopback. Public participants require the chosen DNS
-name, a trusted TLS certificate and a bounded HTTPS ingress; see the
-[Caddy example](demo-identity.Caddyfile) and issuer instructions. Confirm real
-login and token validation before switching the backend. An issuer administrator
-receives no Workstream administrative grant. Preserve retained actor links and
-records during cutover; never substitute identities by matching email.
+The issuer port stays on loopback. The [Caddy ingress](public.Caddyfile) exposes
+only the public realm and login assets; administration uses a separate loopback
+listener. Confirm real login and token validation before switching the backend.
+An issuer administrator receives no Workstream administrative grant. Preserve
+retained actor links and records during any non-disposable cutover; never
+substitute identities by matching email. Explicitly authorized development
+resets use fresh actors and the existing guarded Workstream bootstrap.
 
 Create each secret named by a nonempty configured path as a one-value regular
 file. Make it owned by the runtime UID/GID with mode `0400`. The explicit role loader gives the
@@ -791,8 +785,9 @@ delivery from live qualification and remaining release gates.
 ## Managed private MCP service
 
 Set `WORKSTREAM_MCP_IMAGE` to the qualified MCP image digest to include
-[`compose.mcp.yml`](compose.mcp.yml). Build that image from `mcp_server/`, not the
-repository root. The adapter receives no account password, server-wide bearer,
+[`compose.mcp.yml`](compose.mcp.yml). Build that image from the repository root with
+`docker build -f mcp_server/Dockerfile .`; its build context excludes backend
+product code. The adapter receives no account password, server-wide bearer,
 database credential or artifact-store key. Each client supplies its own fresh
 Rust-issued Workstream access token; the API retains all authorization decisions.
 

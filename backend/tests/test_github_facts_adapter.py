@@ -27,7 +27,7 @@ from app.adapters.github.app_facts import (
     _InstallationToken,
 )
 from app.core.config import Settings
-from app.interfaces.external_services import (
+from workstream_external_services import (
     ExternalServiceAdapterError,
     ExternalServiceConfigurationError,
 )

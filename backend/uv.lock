@@ -1920,6 +1920,7 @@ dependencies = [
     { name = "sqlalchemy", extra = ["asyncio"], marker = "(platform_machine != 'aarch64' and platform_machine != 'x86_64' and extra == 'extra-18-workstream-backend-agents' and extra == 'extra-18-workstream-backend-omnicore') or (platform_machine == 'aarch64' and platform_python_implementation == 'CPython' and sys_platform == 'linux') or (platform_machine == 'x86_64' and platform_python_implementation == 'CPython' and sys_platform == 'linux') or (platform_machine == 'aarch64' and platform_python_implementation != 'CPython' and extra == 'extra-18-workstream-backend-agents' and extra == 'extra-18-workstream-backend-omnicore') or (platform_machine == 'x86_64' and platform_python_implementation != 'CPython' and extra == 'extra-18-workstream-backend-agents' and extra == 'extra-18-workstream-backend-omnicore') or (sys_platform != 'linux' and extra == 'extra-18-workstream-backend-agents' and extra == 'extra-18-workstream-backend-omnicore')" },
     { name = "uuid6", marker = "(platform_machine != 'aarch64' and platform_machine != 'x86_64' and extra == 'extra-18-workstream-backend-agents' and extra == 'extra-18-workstream-backend-omnicore') or (platform_machine == 'aarch64' and platform_python_implementation == 'CPython' and sys_platform == 'linux') or (platform_machine == 'x86_64' and platform_python_implementation == 'CPython' and sys_platform == 'linux') or (platform_machine == 'aarch64' and platform_python_implementation != 'CPython' and extra == 'extra-18-workstream-backend-agents' and extra == 'extra-18-workstream-backend-omnicore') or (platform_machine == 'x86_64' and platform_python_implementation != 'CPython' and extra == 'extra-18-workstream-backend-agents' and extra == 'extra-18-workstream-backend-omnicore') or (sys_platform != 'linux' and extra == 'extra-18-workstream-backend-agents' and extra == 'extra-18-workstream-backend-omnicore')" },
     { name = "uvicorn", extra = ["standard"], marker = "(platform_machine != 'aarch64' and platform_machine != 'x86_64' and extra == 'extra-18-workstream-backend-agents' and extra == 'extra-18-workstream-backend-omnicore') or (platform_machine == 'aarch64' and platform_python_implementation == 'CPython' and sys_platform == 'linux') or (platform_machine == 'x86_64' and platform_python_implementation == 'CPython' and sys_platform == 'linux') or (platform_machine == 'aarch64' and platform_python_implementation != 'CPython' and extra == 'extra-18-workstream-backend-agents' and extra == 'extra-18-workstream-backend-omnicore') or (platform_machine == 'x86_64' and platform_python_implementation != 'CPython' and extra == 'extra-18-workstream-backend-agents' and extra == 'extra-18-workstream-backend-omnicore') or (sys_platform != 'linux' and extra == 'extra-18-workstream-backend-agents' and extra == 'extra-18-workstream-backend-omnicore')" },
+    { name = "workstream-external-services", marker = "(platform_machine != 'aarch64' and platform_machine != 'x86_64' and extra == 'extra-18-workstream-backend-agents' and extra == 'extra-18-workstream-backend-omnicore') or (platform_machine == 'aarch64' and platform_python_implementation == 'CPython' and sys_platform == 'linux') or (platform_machine == 'x86_64' and platform_python_implementation == 'CPython' and sys_platform == 'linux') or (platform_machine == 'aarch64' and platform_python_implementation != 'CPython' and extra == 'extra-18-workstream-backend-agents' and extra == 'extra-18-workstream-backend-omnicore') or (platform_machine == 'x86_64' and platform_python_implementation != 'CPython' and extra == 'extra-18-workstream-backend-agents' and extra == 'extra-18-workstream-backend-omnicore') or (sys_platform != 'linux' and extra == 'extra-18-workstream-backend-agents' and extra == 'extra-18-workstream-backend-omnicore')" },
 ]
 
 [package.optional-dependencies]
@@ -1972,8 +1973,14 @@ requires-dist = [
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0,<3.0" },
     { name = "uuid6", specifier = "==2025.0.1" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.30,<1.0" },
+    { name = "workstream-external-services", directory = "../packages/external-services" },
 ]
 provides-extras = ["agents", "omnicore", "dev"]
+
+[[package]]
+name = "workstream-external-services"
+version = "0.1.0"
+source = { directory = "../packages/external-services" }
 
 [[package]]
 name = "wrapt"

@@ -20,7 +20,7 @@ from __future__ import annotations
 import asyncio
 import json
 
-from app.interfaces.external_services import ExternalServiceAdapterIdentity
+from workstream_external_services import ExternalServiceAdapterIdentity
 from app.interfaces.project_agents import (
     MAXIMUM_COMPILATION_RESULT_STORAGE_BYTES,
     PROJECT_GUIDE_COMPILATION_AGENT_NAME,

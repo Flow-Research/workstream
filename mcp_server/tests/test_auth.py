@@ -43,12 +43,12 @@ def test_invalid_or_missing_credentials_do_not_dispatch(
 ) -> None:
     client, received, _ = adapter
     response = mcp_call(client, token=token)
-    assert response.status_code == 200
-    assert response.json()["result"]["isError"] is True
+    assert response.status_code == 401
+    assert response.json()["error"] == "invalid_token"
     assert received == []
 
 
-def test_caller_bearer_and_correlation_are_forwarded_without_mutation(
+def test_exchanged_bearer_and_original_correlation_reach_api(
     adapter: tuple[TestClient, list[Any], dict[str, Any]],
 ) -> None:
     client, received, _ = adapter
@@ -58,6 +58,6 @@ def test_caller_bearer_and_correlation_are_forwarded_without_mutation(
     )
     assert response.json()["result"]["isError"] is False
     assert len(received) == 1
-    assert received[0].headers["authorization"] == "Bearer opaque.token+/="
+    assert received[0].headers["authorization"] == "Bearer api-opaque.token+/="
     assert received[0].headers["x-request-id"] == correlation
     assert str(received[0].url) == "http://workstream.test/api/v1/actors/me"

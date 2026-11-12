@@ -9,7 +9,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, model_validator
 
-from app.interfaces.external_services import (
+from workstream_external_services import (
     ExternalServiceAdapter,
     ExternalServiceAdapterError,
     ExternalServiceAdapterIdentity,

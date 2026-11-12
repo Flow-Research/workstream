@@ -28,7 +28,7 @@ from app.adapters.guide_document_tools import (
 )
 from app.adapters.projects import project_guide_document_tools_factory
 from app.core.config import Settings
-from app.interfaces.external_services import (
+from workstream_external_services import (
     ExternalServiceAdapterFactory,
     ExternalServiceAdapterIdentity,
 )

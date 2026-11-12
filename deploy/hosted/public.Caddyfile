@@ -1,4 +1,4 @@
-# Public native-client ingress. Keep API, MCP and issuer listeners loopback-only.
+# Public API and OAuth ingress. Keep upstream and administration listeners loopback-only.
 # Configure the four variables described in PUBLIC_ACCESS.md in the existing
 # ingress service's private environment file. Preserve its persistent TLS state.
 {
@@ -18,40 +18,49 @@
 }
 
 (issuer_transport) {
-	header_up -X-Forwarded-For
+	header_up X-Forwarded-For {remote_host}
 	header_up -X-Real-IP
 	header_up -Forwarded
+	header_up X-Forwarded-Host {host}
+	header_up X-Forwarded-Proto {scheme}
+	header_up X-Forwarded-Port {args[0]}
 	transport http {
-		tls_server_name {$DEMO_IDENTITY_HOSTNAME}
-		tls_trust_pool file {$DEMO_IDENTITY_UPSTREAM_CERT}
+		tls_server_name {$FLOW_IDENTITY_HOSTNAME}
+		tls_trust_pool file {$FLOW_IDENTITY_UPSTREAM_CERT}
 		dial_timeout 5s
-		response_header_timeout 15s
+		response_header_timeout 30s
 		max_conns_per_host 16
 		keepalive off
 	}
 }
 
-{$DEMO_IDENTITY_HOSTNAME} {
+{$FLOW_IDENTITY_HOSTNAME} {
 	header Cache-Control no-store
 	request_body {
-		max_size 4KiB
+		max_size 64KiB
 	}
-	@jwks {
-		method GET
-		path /jwks.json
-	}
-	@accounts {
-		method POST
-		path /login /admin/accounts /me/password
-	}
+	@registration path /realms/flow/clients-registrations*
+	@flow path /realms/flow /realms/flow/* /resources/*
 	route {
-		reverse_proxy @jwks https://127.0.0.1:8443 {
-			import issuer_transport
-		}
-		reverse_proxy @accounts https://127.0.0.1:8443 {
-			import issuer_transport
+		respond @registration 404
+		reverse_proxy @flow https://127.0.0.1:18443 {
+			import issuer_transport 443
 		}
 		respond 404
+	}
+}
+
+# One process and one persistent certificate store. Reach this through SSH;
+# trust the Caddy internal CA on the operator's machine. Never publish this port.
+https://identity-admin.localhost:19443 {
+	bind 127.0.0.1
+	tls internal
+	header Cache-Control no-store
+	request_body {
+		max_size 1MiB
+	}
+	reverse_proxy https://127.0.0.1:18443 {
+		import issuer_transport 19443
 	}
 }
 
@@ -59,6 +68,18 @@
 	header Cache-Control no-store
 	@api path /api/* /docs /openapi.json
 	route {
+		handle /.well-known/oauth-protected-resource/mcp {
+			reverse_proxy 127.0.0.1:8080 {
+				header_up Host 127.0.0.1:8080
+				header_up -Forwarded
+				header_up -X-Forwarded-For
+				header_up -X-Real-IP
+				transport http {
+					dial_timeout 5s
+					response_header_timeout 5s
+				}
+			}
+		}
 		handle /mcp {
 			# JSON/base64 tools retain the MCP owner's stricter body/deadline limits.
 			request_body {

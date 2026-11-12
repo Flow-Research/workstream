@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import ipaddress
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from pathlib import Path
 from urllib.parse import urlsplit
 
 from workstream_mcp.limits import GUIDE_DOCUMENT_MAX_BYTES, MCP_MAX_REQUEST_BYTES
+from workstream_mcp.oauth import OAuthSettings
 
 
 class ConfigurationError(ValueError):
@@ -62,6 +64,13 @@ def _api_url(value: str) -> str:
 @dataclass(frozen=True, slots=True)
 class Settings:
     api_url: str
+    oauth: OAuthSettings = field(
+        default_factory=lambda: OAuthSettings(
+            issuer="https://identity.flowresearch.tech/realms/flow",
+            resource="https://workstream.flowresearch.tech/mcp",
+            secret_file=Path("/run/secrets/mcp-exchange-secret"),
+        )
+    )
     host: str = "127.0.0.1"
     port: int = 8080
     allowed_hosts: tuple[str, ...] = ("127.0.0.1:*", "localhost:*")
@@ -154,6 +163,21 @@ class Settings:
         )
         return cls(
             api_url=api_url,
+            oauth=OAuthSettings(
+                issuer=os.getenv(
+                    "WORKSTREAM_MCP_TOKEN_ISSUER", "https://identity.flowresearch.tech/realms/flow"
+                ),
+                resource=os.getenv(
+                    "WORKSTREAM_MCP_RESOURCE_URL", "https://workstream.flowresearch.tech/mcp"
+                ),
+                secret_file=Path(
+                    os.getenv(
+                        "WORKSTREAM_MCP_EXCHANGE_SECRET_FILE", "/run/secrets/mcp-exchange-secret"
+                    )
+                ),
+                client_id=os.getenv("WORKSTREAM_MCP_EXCHANGE_CLIENT_ID", "workstream-mcp"),
+                api_audience=os.getenv("WORKSTREAM_MCP_API_AUDIENCE", "workstream-api"),
+            ),
             host=os.getenv("WORKSTREAM_MCP_HOST", "127.0.0.1"),
             port=_integer("WORKSTREAM_MCP_PORT", 8080, minimum=1, maximum=65_535),
             allowed_hosts=allowed_hosts,
