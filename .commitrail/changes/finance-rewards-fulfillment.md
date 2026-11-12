@@ -372,3 +372,13 @@ before a fixture tried to access an intentionally private definition ID through
 public JSON. That fixture now loads the exact stored Task instead; rerun the
 remaining focused cases. None of these results qualifies full-suite, durable
 worker, S3 or Finance execution completion.
+
+
+A combined Finance/migration collection exposed two test utilities importing bare
+`conftest`, which resolved to the Finance directory's fixture module. They now
+name `tests.conftest` explicitly, including reset monkeypatch targets; no runtime
+compatibility path is added. The old cap-recovery fixture also executes current
+owners against a predecessor schema and attempts to upgrade retained facts to
+head. Its remaining dependency on superseded owner shapes must be replaced with
+bounded migration-data safety proof or current-owner recovery proof before
+full-suite readiness. Do not restore obsolete writers to satisfy that fixture.

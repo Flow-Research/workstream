@@ -24,7 +24,7 @@ import asyncpg
 
 from app.core.hashing import canonical_json_hash
 from app.db import session as db_session
-from conftest import _assert_owned_test_database
+from tests.conftest import _assert_owned_test_database
 
 
 _ARCHIVE = Path(__file__).with_name("fixtures") / "pilot04_predecessor_rows.json.gz"
