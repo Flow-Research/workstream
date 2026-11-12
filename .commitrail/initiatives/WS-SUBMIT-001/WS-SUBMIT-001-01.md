@@ -636,3 +636,62 @@ and corrected the earlier freeze/publication sequencing sentence. Upload deadlin
 regressions now use an explicit forbidden-write assertion instead of relying on
 a missing provider method; replay and late-part regressions retain their direct
 late-success assertions. No full public API or T1–T5 readiness is inferred.
+
+## One-session PRE: owner trace and implementation boundary
+
+Inspection at `0051687fc` confirms that the existing submission PRE cannot be
+used unchanged after source sealing. `submission_materialization.py` consumes
+an API-prepared archive and exports the trusted guest's verified tree;
+`SelectedPreSubmitProcessor.process` then starts a separate execution for each
+locked PRE entry. The trusted worker requires `export` before `default`, and
+selected-PRE reservation requires a semantic manifest and default-input digest
+before runtime invocation. These are the precise call paths to replace for the
+single-source execution, rather than wrap as an ostensibly single call.
+
+The next implementation boundary must cover source-bound CHECKERS custody,
+ART's exact-generation read authorization, the typed `execute_pre` invocation,
+guest inspection/default/project composition and validation of combined evidence.
+It must not stop at a type-only adapter with the two-guest implementation behind
+it. Core requests carry locked facts and the sealed source without an extracted
+manifest; runtime derives the manifest and nested project request, and CHECKERS
+independently reconstructs that request from locked facts and observed manifest.
+Expiring delivery authority stays separate from the immutable request digest.
+
+Reuse the existing canonical archive inspector, semantic-manifest construction,
+four default checks, registered external request/result validation, foreground
+lease and runtime guardian/capacity ownership. Retain shared POST consumers while
+replacing submission PRE callers. An unsafe archive may complete defaults with
+no manifest or project run; raw source mismatch is an infrastructure failure.
+Neither project output nor matching echoed digests establish platform evidence.
+
+Runtime feasibility is a specific design dependency: `Machine::prepare` boots
+one cache image and injects the static guest bootstrap before the image command.
+The existing trusted defaults require Python and Workstream code from the pinned
+intake image; project images need not contain either. The existing image-archive
+validator verifies layer identities and bounds but does not materialize a second
+root filesystem. Therefore neither a second mounted image nor a safe layer
+extractor may be assumed to exist. Architecture/security review must resolve
+independent trusted-platform provisioning inside that one guest before runtime
+implementation. Loading trusted Python from the project image is forbidden.
+
+Allowed impact cone for the resulting L0 plan: CHECKERS selected-PRE public
+contracts/coordination and validation; ART source grants and submission
+materialization; typed execution interface and concrete adapter; checker service,
+static guest, trusted intake worker and image-cache provisioning; necessary
+custody migration, explicit ownership/lane registrations and focused tests;
+affected operational documentation. No acceptance/finalization shortcut,
+second PRE guest, host verified-tree export, project network/model/trial
+privileges, retained-data deletion, provider qualification claim or deployment
+default is authorized by this boundary. T4 and public cutover remain subsequent
+integration work in the same PR.
+
+Required proof includes one invocation and one guest on pass; no project launch
+on default rejection; hostile project output, filesystem/process/control-channel
+access and resource exhaustion; substituted source/image/fence/derived request;
+unchanged canonical default/manifest semantics; cancellation and uncertain create
+with retained cleanup/capacity obligations; and a managed-style adapter fixture
+without host paths. Native guest isolation needs actual qualified runtime proof,
+not just collection of its fixtures. This checkout currently has neither a Smol
+executable on PATH nor `/dev/kvm`; portable proof can proceed, but cannot establish
+native runtime qualification. Human review focuses on platform-code provenance,
+the supervisor/project boundary and durable evidence binding before T4.
