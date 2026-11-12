@@ -920,3 +920,23 @@ def test_source_first_default_rejection_does_not_require_project_result():
         reservation, new_record_id(), 1, reservation.pre_deadline_at,
     )
     assert SelectedPreSubmitFinalizeFacts(lease, execution, None).execution == execution
+
+
+@pytest.mark.parametrize("boundary", ["finalization", "terminal"])
+def test_source_first_result_digest_revalidated_before_terminal_write(boundary):
+    from app.modules.checkers.api.selected_pre_submit import SelectedPreSubmitTerminalFacts
+
+    reservation = _source_reservation()
+    execution = _source_completed_execution(reservation)
+    member = execution.external_members[0]
+    forged = member.result.model_copy(update={"result_digest": "sha256:" + "f" * 64})
+    execution = replace(execution, external_members=(replace(member, result=forged),))
+    lease = SelectedPreSubmitLeaseFacts(
+        reservation, new_record_id(), 1, reservation.pre_deadline_at,
+    )
+    now = datetime.now(UTC)
+    with pytest.raises(ValueError, match="result digest mismatch"):
+        if boundary == "finalization":
+            SelectedPreSubmitFinalizeFacts(lease, execution, None)
+        else:
+            SelectedPreSubmitTerminalFacts(lease, "completed", execution, None, now, now, now)

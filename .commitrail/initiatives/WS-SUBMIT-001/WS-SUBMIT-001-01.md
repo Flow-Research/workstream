@@ -1424,3 +1424,11 @@ custody nor reconstructs the derived project request. The combined response,
 single-session runtime, SQL deep completed-result guard, old caller replacement
 and T4 remain unfinished. This local change is part of the same coordinated PR,
 not a publishable or merge-ready endpoint. Scoped reviewer evidence is pending.
+
+Architecture/security review found that direct shared-helper calls could accept
+an in-memory Pydantic copy with a forged external result digest, even though
+later JSON decoding would reject it. The helper now revalidates both result and
+registry before selection/schema/size checks. New controls exercise rejection
+before both finalization and terminal construction; the expanded focused suite
+passes 90 cases. The earlier QA pass did not cover this reviewer-reproduced
+integrity path. Renewed review of the repaired candidate is required.
