@@ -266,3 +266,10 @@ Plan-review corrections (SELECTED-PLAN-001/002 and PLAN-SELECT-001–004):
 - Current storage substitution proof uses the real foreign fixture binding and
   definition independently. PostgreSQL exposed the absent second-local-binding
   assumption; the repair removes it rather than extending old fixture behavior.
+
+- tests/finance/test_selected_reward_journey.py::test_original_claim_replay_after_rebase
+  explicitly covers fresh original-actor authority returning the exact committed
+  result; changed request, foreign actor and reassigned assignment are denied,
+  with no new assignment or economic fact. The durable-worker public failure/
+  retry drill remains a later same-PR readiness gate, not proof supplied by this
+  selected-acceptance slice's in-process integration tests.
