@@ -80,19 +80,18 @@ async def test_update_rejects_mismatched_adapter_binding_owner_facts(
     fixture = service_fixture()
     request = update_request(fixture)
     install_draft(fixture, request)
-    definition = request.rules[0].definitions[0]
 
     async def mismatched(**facts: object) -> LockedPolicyAdapterBindingFacts:
         del facts
         return LockedPolicyAdapterBindingFacts(
             project_id=new_record_id() if mismatch == "project_id" else request.project_id,
             adapter_binding_id=(
-                new_record_id() if mismatch == "binding_id" else definition.adapter_binding_id
+                new_record_id() if mismatch == "binding_id" else request.adapter_binding_id
             ),
             instrument_type=(
                 CompensationInstrumentType.PROJECT_POINTS
                 if mismatch == "instrument_type"
-                else definition.instrument_type
+                else request.instrument_type
             ),
             binding_lifecycle_version=1,
         )

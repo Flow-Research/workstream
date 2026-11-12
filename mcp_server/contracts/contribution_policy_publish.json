@@ -1,5 +1,5 @@
 {
-  "canonical_sha256": "35b17f83da8f7d180d7dcc196f8eea758814ca07fd0411d0fd99e147ec73cb7f",
+  "canonical_sha256": "750990a161b6694fd0df2b66969310aebb5873c7557083c2d2feedfbc6d196f4",
   "components": {
     "schemas": {
       "ApiError": {
@@ -176,7 +176,7 @@
     }
   },
   "operation": {
-    "description": "Publish the selected complete draft under exact Finance authority.",
+    "description": "Publish the selected complete draft under exact scoped policy authority.",
     "operationId": "publish_policy_api_v1_projects__project_id__contribution_policies__policy_id__versions__version_id__publication_post",
     "parameters": [
       {
@@ -503,7 +503,6 @@
   "source": {
     "method": "POST",
     "openapi_version": "3.1.0",
-    "path": "/api/v1/projects/{project_id}/contribution-policies/{policy_id}/versions/{version_id}/publication",
-    "repository_sha": "59c52cc81179611ea316935552cc177f83eec687"
+    "path": "/api/v1/projects/{project_id}/contribution-policies/{policy_id}/versions/{version_id}/publication"
   }
 }

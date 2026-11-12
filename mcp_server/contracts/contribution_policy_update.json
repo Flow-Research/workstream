@@ -1,7 +1,30 @@
 {
-  "canonical_sha256": "150c2b8145c8be16785df48a10479560d42662d4ece245e0f631cad11de6034c",
+  "canonical_sha256": "04169f81633c38b1f9181a78a4beefc8954f02314b1f827b8a5e16e1c320e60b",
   "components": {
     "schemas": {
+      "AcceptedSubmissionPolicyRuleInput": {
+        "additionalProperties": false,
+        "description": "Exactly three size alternatives under the version's common header.",
+        "properties": {
+          "compensation_mode": {
+            "const": "compensated",
+            "type": "string"
+          },
+          "contribution_type": {
+            "const": "accepted_submission",
+            "type": "string"
+          },
+          "quantities": {
+            "$ref": "#/components/schemas/TaskSizeQuantities"
+          }
+        },
+        "required": [
+          "contribution_type",
+          "compensation_mode",
+          "quantities"
+        ],
+        "type": "object"
+      },
       "ApiError": {
         "additionalProperties": false,
         "description": "Canonical machine-readable API error.",
@@ -60,6 +83,40 @@
           "project_points"
         ],
         "type": "string"
+      },
+      "CompletedReviewPolicyRuleInput": {
+        "additionalProperties": false,
+        "description": "Reviewer work has its own single fixed quantity, independent of task size.",
+        "properties": {
+          "compensation_mode": {
+            "const": "compensated",
+            "type": "string"
+          },
+          "contribution_type": {
+            "const": "completed_review",
+            "type": "string"
+          },
+          "quantity": {
+            "not": {
+              "anyOf": [
+                {
+                  "pattern": "^0(?:\\.0+)?$"
+                },
+                {
+                  "pattern": "[^0-9.]"
+                }
+              ]
+            },
+            "pattern": "^(?:0|[1-9][0-9]{0,19})(?:\\.[0-9]{1,18})?$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "contribution_type",
+          "compensation_mode",
+          "quantity"
+        ],
+        "type": "object"
       },
       "ContributionPolicyMutationResult": {
         "description": "Immutable result reconstructed only from lifecycle-event truth.",
@@ -175,41 +232,281 @@
         ],
         "type": "object"
       },
-      "PolicyDefinitionInput": {
+      "PolicyUpdateInput": {
         "additionalProperties": false,
-        "description": "One requested immutable compensation definition.",
+        "allOf": [
+          {
+            "properties": {
+              "rules": {
+                "contains": {
+                  "properties": {
+                    "contribution_type": {
+                      "const": "accepted_submission"
+                    }
+                  },
+                  "required": [
+                    "contribution_type"
+                  ]
+                },
+                "maxContains": 1,
+                "minContains": 1
+              }
+            }
+          },
+          {
+            "properties": {
+              "rules": {
+                "contains": {
+                  "properties": {
+                    "contribution_type": {
+                      "const": "completed_review"
+                    }
+                  },
+                  "required": [
+                    "contribution_type"
+                  ]
+                },
+                "maxContains": 1,
+                "minContains": 1
+              }
+            }
+          },
+          {
+            "else": {
+              "properties": {
+                "adapter_binding_id": {
+                  "type": "null"
+                },
+                "instrument_type": {
+                  "type": "null"
+                },
+                "unit_code": {
+                  "type": "null"
+                }
+              }
+            },
+            "if": {
+              "properties": {
+                "rules": {
+                  "contains": {
+                    "properties": {
+                      "compensation_mode": {
+                        "const": "compensated"
+                      }
+                    },
+                    "required": [
+                      "compensation_mode"
+                    ]
+                  }
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "adapter_binding_id": {
+                  "type": "string"
+                },
+                "instrument_type": {
+                  "type": "string"
+                },
+                "unit_code": {
+                  "not": {
+                    "pattern": "[^A-Za-z0-9._:-]"
+                  },
+                  "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,31}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "instrument_type": {
+                  "const": "money"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "unit_code": {
+                  "not": {
+                    "pattern": "[^A-Z]"
+                  },
+                  "pattern": "^[A-Z]{3}$",
+                  "type": "string"
+                }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": {
+                "instrument_type": {
+                  "const": "project_points"
+                }
+              }
+            },
+            "then": {
+              "properties": {
+                "rules": {
+                  "items": {
+                    "properties": {
+                      "quantities": {
+                        "properties": {
+                          "large": {
+                            "not": {
+                              "pattern": "[^0-9]"
+                            },
+                            "pattern": "^[1-9][0-9]{0,19}$"
+                          },
+                          "medium": {
+                            "not": {
+                              "pattern": "[^0-9]"
+                            },
+                            "pattern": "^[1-9][0-9]{0,19}$"
+                          },
+                          "small": {
+                            "not": {
+                              "pattern": "[^0-9]"
+                            },
+                            "pattern": "^[1-9][0-9]{0,19}$"
+                          }
+                        }
+                      },
+                      "quantity": {
+                        "not": {
+                          "pattern": "[^0-9]"
+                        },
+                        "pattern": "^[1-9][0-9]{0,19}$"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "description": "Replace the complete graph without client-generated row identifiers.",
         "properties": {
           "adapter_binding_id": {
-            "format": "uuid",
-            "type": "string"
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "instrument_type": {
-            "$ref": "#/components/schemas/CompensationInstrumentType"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CompensationInstrumentType"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
-          "quantity": {
-            "type": "string"
+          "rules": {
+            "items": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/UnpaidPolicyRuleInput"
+                },
+                {
+                  "$ref": "#/components/schemas/AcceptedSubmissionPolicyRuleInput"
+                },
+                {
+                  "$ref": "#/components/schemas/CompletedReviewPolicyRuleInput"
+                }
+              ]
+            },
+            "maxItems": 2,
+            "minItems": 2,
+            "type": "array"
           },
           "unit_code": {
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
           "instrument_type",
           "unit_code",
-          "quantity",
-          "adapter_binding_id"
+          "adapter_binding_id",
+          "rules"
         ],
         "type": "object"
       },
-      "PolicyRuleInput": {
+      "TaskSizeQuantities": {
         "additionalProperties": false,
-        "description": "One complete contribution rule replacement.",
+        "description": "The exact three alternatives; no missing-tier or amount fallback.",
+        "properties": {
+          "large": {
+            "not": {
+              "anyOf": [
+                {
+                  "pattern": "^0(?:\\.0+)?$"
+                },
+                {
+                  "pattern": "[^0-9.]"
+                }
+              ]
+            },
+            "pattern": "^(?:0|[1-9][0-9]{0,19})(?:\\.[0-9]{1,18})?$",
+            "type": "string"
+          },
+          "medium": {
+            "not": {
+              "anyOf": [
+                {
+                  "pattern": "^0(?:\\.0+)?$"
+                },
+                {
+                  "pattern": "[^0-9.]"
+                }
+              ]
+            },
+            "pattern": "^(?:0|[1-9][0-9]{0,19})(?:\\.[0-9]{1,18})?$",
+            "type": "string"
+          },
+          "small": {
+            "not": {
+              "anyOf": [
+                {
+                  "pattern": "^0(?:\\.0+)?$"
+                },
+                {
+                  "pattern": "[^0-9.]"
+                }
+              ]
+            },
+            "pattern": "^(?:0|[1-9][0-9]{0,19})(?:\\.[0-9]{1,18})?$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "small",
+          "medium",
+          "large"
+        ],
+        "type": "object"
+      },
+      "UnpaidPolicyRuleInput": {
+        "additionalProperties": false,
+        "description": "An explicit unpaid rule has no financial-value members.",
         "properties": {
           "compensation_mode": {
-            "enum": [
-              "unpaid",
-              "compensated"
-            ],
+            "const": "unpaid",
             "type": "string"
           },
           "contribution_type": {
@@ -218,36 +515,11 @@
               "completed_review"
             ],
             "type": "string"
-          },
-          "definitions": {
-            "default": [],
-            "items": {
-              "$ref": "#/components/schemas/PolicyDefinitionInput"
-            },
-            "type": "array"
           }
         },
         "required": [
           "contribution_type",
           "compensation_mode"
-        ],
-        "type": "object"
-      },
-      "PolicyUpdateInput": {
-        "additionalProperties": false,
-        "description": "Replace the complete graph without client-generated row identifiers.",
-        "properties": {
-          "rules": {
-            "items": {
-              "$ref": "#/components/schemas/PolicyRuleInput"
-            },
-            "maxItems": 2,
-            "minItems": 2,
-            "type": "array"
-          }
-        },
-        "required": [
-          "rules"
         ],
         "type": "object"
       }
@@ -581,7 +853,6 @@
   "source": {
     "method": "PUT",
     "openapi_version": "3.1.0",
-    "path": "/api/v1/projects/{project_id}/contribution-policies/{policy_id}/versions/{version_id}",
-    "repository_sha": "59c52cc81179611ea316935552cc177f83eec687"
+    "path": "/api/v1/projects/{project_id}/contribution-policies/{policy_id}/versions/{version_id}"
   }
 }

@@ -153,6 +153,10 @@ id
 contribution_policy_id
 project_id
 version_number
+reward_model_version: 1 | 2
+instrument_type: money | project_points | null
+unit_code: string | null
+adapter_binding_id: UUID | null
 status: draft | published | retired
 created_by
 created_at
@@ -161,6 +165,13 @@ published_at
 retired_by
 retired_at
 ```
+
+New authoring and publication use reward model 2. A compensated version has
+one common instrument, unit and adapter binding for both contribution rules.
+A wholly unpaid version has explicit null financial headers and needs no
+financial setup. Retained model 1 versions remain immutable historical facts;
+an authorized complete draft replacement may upgrade an unpublished v1 draft.
+New guide activation and revision selection require v2.
 
 Draft content may be edited through the authorized policy service. Published
 and retired content is immutable. Publishing a later version affects a work
@@ -185,8 +196,11 @@ compensation_mode: unpaid | compensated
 
 Every publishable policy version MUST contain exactly one rule for each
 contribution type. An `unpaid` rule MUST have no award definitions. A
-`compensated` rule MUST have one or two definitions: at most one `money` and at
-most one `project_points` definition.
+`compensated` v2 `accepted_submission` rule MUST have exactly three definitions,
+one each for `small`, `medium`, and `large`. A compensated `completed_review`
+rule MUST have exactly one fixed definition with null task size. All definitions
+match the version's common financial header. Retained v1 graphs may have one
+or two instrument definitions; reading them does not authorize new v1 effects.
 
 ### ContributionAwardDefinition
 
@@ -202,6 +216,8 @@ instrument_type: money | project_points
 unit_code
 quantity
 adapter_binding_id
+reward_model_version: 1 | 2
+task_size: small | medium | large | null
 ```
 
 Every policy, award, and fulfilled quantity uses the same fixed-point
@@ -224,7 +240,11 @@ configured project-scoped unit; its
 identity is `(project_id, unit_code)`, so equal text in another project is a
 different unit. A definition MUST match the rule's project, policy version,
 contribution type, and unit. Its binding MUST match the project and instrument.
-Published definitions are immutable.
+Published definitions are immutable. New policy input supplies the common
+header, a complete `quantities` object for paid submitter work, and a separate
+fixed `quantity` for paid reviewer work. Unpaid rules contain neither quantity
+field. Per-rule instrument, unit, binding and superseded `definitions` input
+are rejected. Equal or non-monotonic tier amounts are valid explicit choices.
 
 ### ProjectCompensationUnit
 
@@ -928,8 +948,11 @@ COMPENSATION and PROJECTS expose transaction-held public owner ports. Every
 mutation uses a caller-owned root transaction, advisory operation fence,
 opaque prepare/consume/close participant, complete graph replacement, and one
 immutable recoverable lifecycle event. Default composition remains deny-default. CP05 supplies explicit AUTH
-composition for all five actions, limited to active human Finance Authority
-with system or exact-project scope.
+composition for all five actions. Current v2 policy read/create/update/publish/
+retire and version-list operations accept active human Project Manager or
+Finance Authority grants with system or exact-project scope. Unit creation and
+adapter binding management remain Finance Authority-only; sharing
+`compensation.policy.manage` does not widen those action-specific role guards.
 
 CP04B owns publication and terminal retirement. Publication locks and
 revalidates the complete server-owned graph, project units, and adapter
@@ -955,11 +978,11 @@ remain unchanged, and downgrade refuses retained binding audit evidence.
 | `compensation.adapter_binding.suspend` | `compensation.adapter_binding.manage` | covered human Finance Authority / active binding | T | WS-ARCH-001-CP03B (active; CP01A registration custody) |
 | `compensation.adapter_binding.resume` | `compensation.adapter_binding.manage` | covered human Finance Authority / suspended binding | T | WS-ARCH-001-CP03B (active; CP01A registration custody) |
 | `compensation.adapter_binding.retire` | `compensation.adapter_binding.manage` | Finance / dependency-free binding | T | CON-10B |
-| `contribution.policy.read` | `compensation.policy.manage` | Finance / policy version | Q | WS-ARCH-001-CP05 (active AUTH; CP04A owner; CP05A public composition; CP01B registration custody) |
-| `contribution.policy.create_draft` | `compensation.policy.manage` | Finance / policy collection | T | WS-ARCH-001-CP05 (active AUTH; CP04A owner; CP05A public composition; CP01B registration custody) |
-| `contribution.policy.update_draft` | `compensation.policy.manage` | Finance / draft version | T | WS-ARCH-001-CP05 (active AUTH; CP04A owner; CP05A public composition; CP01B registration custody) |
-| `contribution.policy.publish` | `compensation.policy.manage` | Finance / complete draft | T | WS-ARCH-001-CP05 (active AUTH; CP04B owner; CP05A public composition; CP01B registration custody) |
-| `contribution.policy.retire` | `compensation.policy.manage` | Finance / published version | T | WS-ARCH-001-CP05 (active AUTH; CP04B owner; CP05A public composition; CP01B registration custody) |
+| `contribution.policy.read` | `compensation.policy.manage` | covering human PM or Finance / policy version | Q | WS-ARCH-001-CP05 (active AUTH; CP04A owner; CP05A public composition; CP01B registration custody) |
+| `contribution.policy.create_draft` | `compensation.policy.manage` | covering human PM or Finance / policy collection | T | WS-ARCH-001-CP05 (active AUTH; CP04A owner; CP05A public composition; CP01B registration custody) |
+| `contribution.policy.update_draft` | `compensation.policy.manage` | covering human PM or Finance / draft version | T | WS-ARCH-001-CP05 (active AUTH; CP04A owner; CP05A public composition; CP01B registration custody) |
+| `contribution.policy.publish` | `compensation.policy.manage` | covering human PM or Finance / complete draft | T | WS-ARCH-001-CP05 (active AUTH; CP04B owner; CP05A public composition; CP01B registration custody) |
+| `contribution.policy.retire` | `compensation.policy.manage` | covering human PM or Finance / published version | T | WS-ARCH-001-CP05 (active AUTH; CP04B owner; CP05A public composition; CP01B registration custody) |
 | `contribution.compensation_unit.create` | `compensation.policy.manage` | covered human Finance Authority / exact project | T | project-points-unit-creation (active; internal composition only; migration `0058_compensation_unit_create` admits its audit pair) |
 | `compensation.fulfillment.report` | proposed `compensation.fulfillment.report` | exact bound service / award and binding | T | CON-08B |
 | `contribution.read_self` | `contribution.read_self` | active human / own records and complete awards | Q | PILOT-10A |

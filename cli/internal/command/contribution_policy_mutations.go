@@ -16,7 +16,7 @@ func addContributionPolicyMutations(policy *cobra.Command, client func() (*api.C
 			use, count = "create PROJECT_ID", 1
 		}
 		cmd := &cobra.Command{
-			Use: use, Short: action + " an explicitly selected contribution policy through Finance authority", Args: cobra.ExactArgs(count),
+			Use: use, Short: action + " an explicitly selected contribution policy under current project policy authority", Args: cobra.ExactArgs(count),
 			RunE: func(cmd *cobra.Command, args []string) error {
 				apiClient, err := client()
 				if err != nil {

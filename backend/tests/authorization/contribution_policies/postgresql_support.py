@@ -21,10 +21,8 @@ from app.modules.contributions.api import (
     ContributionPolicyPublishRequest,
     ContributionPolicyRetireRequest,
     ContributionPolicyReadRequest,
-    PolicyRuleInput,
-    PolicyDefinitionInput,
 )
-from app.modules.compensation.api import CompensationInstrumentType
+from app.modules.contributions.api.policy_http import PolicyUpdateInput
 from tests.test_contributions import _seed_project
 
 
@@ -60,43 +58,50 @@ class PolicyWorld:
             return ContributionPolicyReadRequest(**common)
         common["operation_id"] = uuid4()
         if operation == "update_draft":
-            if award_bindings:
-                definitions = tuple(
-                    PolicyDefinitionInput(
-                        instrument_type=CompensationInstrumentType(instrument),
-                        unit_code="USD" if instrument == "money" else "PTS",
-                        quantity="2.125000000000000001" if instrument == "money" else "7",
-                        adapter_binding_id=binding,
-                    )
-                    for instrument, binding in award_bindings
-                )
-            else:
-                definitions = (
-                    (
-                        PolicyDefinitionInput(
-                            instrument_type=CompensationInstrumentType.MONEY,
-                            unit_code="USD",
-                            quantity="2",
-                            adapter_binding_id=self.binding,
-                        ),
-                    )
-                    if compensated
-                    else ()
-                )
+            if len(award_bindings) > 1:
+                raise ValueError("dual-instrument v1 history requires its retained archive")
+            paid = bool(compensated or award_bindings)
+            instrument, binding = award_bindings[0] if award_bindings else ("money", self.binding)
+            quantity = "2.125000000000000001" if instrument == "money" else "7"
+            body = PolicyUpdateInput.model_validate(
+                {
+                    "instrument_type": instrument if paid else None,
+                    "unit_code": ("USD" if instrument == "money" else "PTS") if paid else None,
+                    "adapter_binding_id": str(binding) if paid else None,
+                    "rules": [
+                        {
+                            "contribution_type": "accepted_submission",
+                            "compensation_mode": "compensated",
+                            "quantities": {
+                                "small": quantity,
+                                "medium": quantity,
+                                "large": quantity,
+                            },
+                        }
+                        if paid
+                        else {
+                            "contribution_type": "accepted_submission",
+                            "compensation_mode": "unpaid",
+                        },
+                        {
+                            "contribution_type": "completed_review",
+                            "compensation_mode": "compensated",
+                            "quantity": quantity,
+                        }
+                        if award_bindings
+                        else {
+                            "contribution_type": "completed_review",
+                            "compensation_mode": "unpaid",
+                        },
+                    ],
+                }
+            )
             return ContributionPolicyUpdateDraftRequest(
                 **common,
-                rules=(
-                    PolicyRuleInput(
-                        contribution_type="accepted_submission",
-                        compensation_mode="compensated" if definitions else "unpaid",
-                        definitions=definitions,
-                    ),
-                    PolicyRuleInput(
-                        contribution_type="completed_review",
-                        compensation_mode="compensated" if award_bindings else "unpaid",
-                        definitions=definitions if award_bindings else (),
-                    ),
-                ),
+                instrument_type=body.instrument_type,
+                unit_code=body.unit_code,
+                adapter_binding_id=body.adapter_binding_id,
+                rules=body.rules,
             )
         if operation == "publish":
             return ContributionPolicyPublishRequest(**common)

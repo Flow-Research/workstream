@@ -656,7 +656,7 @@ retire, pay, activate a guide or authorize a later write.
 
 ## Manage contribution policies
 
-Finance Authority can make four separate decisions:
+A Project Manager or Finance Authority covering the project can make four separate decisions:
 
 ```sh
 workstream project contribution-policy create PROJECT_ID --input name.json --idempotency-key CREATE_UUID
@@ -669,18 +669,22 @@ workstream project contribution-policy retire PROJECT_ID POLICY_ID VERSION_ID --
 the aggregate's existing name. `rules.json` replaces the complete draft graph:
 
 ```json
-{"rules":[
-  {"contribution_type":"accepted_submission","compensation_mode":"unpaid","definitions":[]},
-  {"contribution_type":"completed_review","compensation_mode":"unpaid","definitions":[]}
+{"instrument_type":null,"unit_code":null,"adapter_binding_id":null,"rules":[
+  {"contribution_type":"accepted_submission","compensation_mode":"unpaid"},
+  {"contribution_type":"completed_review","compensation_mode":"unpaid"}
 ]}
 ```
 
-For a compensated rule, each definition contains `instrument_type` (`money` or
-`project_points`), `unit_code`, exact string `quantity`, and `adapter_binding_id`.
-Workstream checks currency/unit registration, binding eligibility and the complete
-graph. The CLI preserves supplied quantities without rounding. Omitted
-`definitions` retains the API's empty default. Input files are limited to 1 MiB;
-unknown fields and malformed types fail before dispatch.
+For compensated work, the top-level `instrument_type` (`money` or
+`project_points`), `unit_code`, and `adapter_binding_id` select one common
+financial header. A paid `accepted_submission` rule supplies `quantities` with
+explicit `small`, `medium`, and `large` decimal strings. A paid `completed_review`
+rule supplies one fixed string `quantity`. Unpaid rules omit both amount fields.
+The superseded per-rule `definitions` input is rejected. Workstream checks unit
+registration and binding eligibility; unit creation and binding management
+remain Finance-only. The CLI preserves quantities without rounding and reads
+retained v1 policy views, including dual instruments. Input files are limited
+to 1 MiB; unknown fields and malformed types fail before dispatch.
 
 Use selectors from the returned receipt or an explicit policy read. Publication
 replaces the previously published version; retirement ends the selected current

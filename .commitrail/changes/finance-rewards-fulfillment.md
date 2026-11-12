@@ -311,6 +311,51 @@ authorization and changed-request conflicts. Cross-v2 migration proof remains
 required. The one-time capture utility refuses changed writer code and cannot
 serve as a new v1 writer after replacement.
 
+The v2 policy checkpoint replaces authoring with a common header, three exact
+submitter tiers, fixed reviewer quantity and explicit unpaid rules. All six
+policy actions admit covering PM or FM grants; unit and binding role guards
+remain Finance-only. Exact-version selection accepts published or retained
+retired v2 terms without a current-policy lookup. Migration `0069` mechanically
+labels v1 history, fences cutover on disabled/drained lifecycle and frozen source
+checks, replaces definition uniqueness and extends existing publication custody.
+The real paid publication drill found a second, deferred one-or-two-definition
+guard; its cardinality now matches v2 while retaining event/actor/selector checks.
+
+Focused proof: 153 policy-owner tests; 291 AUTH/adapter/boundary tests; 108
+management-read/catalogue tests; 32 real PostgreSQL policy/history tests and 7
+SQL/scope controls. The latter include exact tier resolution, retirement reads,
+cross-project denial, malformed tier/version rejection, immutable publication,
+PM unit denial in both scopes, migration refusal while live, exact retained dual
+economics after authorized drain and forward migration, and original public
+create/import replay after upgrade with fresh AUTH and no provider/parser access.
+Both successful isolated PostgreSQL runs report complete cleanup. These results
+are local checkpoint evidence, not full-suite or final review evidence.
+
+Test changes replace obsolete new-authoring dual-instrument assertions with
+closed-shape rejection; genuine dual history remains covered by the checksum-bound
+archive. Quantity bounds, malformed internal graphs, deny-before-AUTH behavior,
+resource isolation and operation replay remain protected through the replacement
+input and shared quantity parser. No v1 authoring compatibility path remains.
+The Go policy caller now accepts the same input and reads v1/v2 views; built
+binary controls retain exact decimal strings and reject altered tier/marker/header
+facts. MCP uses the frozen backend request schema instead of its superseded
+definition input and separate graph validator.
+Client proof: Go API/command packages passed; 10 built-binary policy controls
+passed; MCP's focused 92-test run and the final 15-test policy/OpenAPI replay
+passed. The 209 financial-wire, policy-shape and selection contract tests passed.
+Scoped Ruff, MCP type checking, module boundaries, stale-input scan and changed
+Markdown links passed. No full-suite or independent implementation-review verdict
+is claimed by this checkpoint.
+
+Still required within this PR: money-unit command exposure; task/import size and
+selected-definition copy chain; revision reward packets; selected-award acceptance;
+exact post-size historical replay; new-revision preflight support; Finance runtime,
+authenticated handoffs, provider execution and durable-worker drills. Existing
+v1-shaped native integration fixtures also need replacement through v2 owners.
+Do not activate financial execution or infer readiness from this checkpoint.
+Git checkpoint reverts aid source rollback only: `0069` deliberately refuses a
+database downgrade; operational restoration requires a matched pre-effect backup.
+
 ## Reconciliation
 
 - Current-source reconciliation: baseline matches the specification; no newer merged owners found.

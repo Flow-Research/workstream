@@ -125,10 +125,13 @@ CONTRIBUTION_POLICY_MUTATION_ACTIONS = (
 )
 
 
-def policy_finance_grant_filters(action_id: ActionId) -> dict[str, object]:
-    """Confine the policy and unit actions to Finance Authority grants."""
+def policy_grant_filters(action_id: ActionId) -> dict[str, object]:
+    """Allow policy managers while keeping unit creation Finance-only."""
     if action_id not in CONTRIBUTION_POLICY_ACTIONS:
         return {}
     from app.modules.authorization.schemas import AdminRole
 
-    return {"allowed_roles": frozenset({AdminRole.FINANCE_AUTHORITY})}
+    roles = {AdminRole.FINANCE_AUTHORITY}
+    if action_id is not ActionId.CONTRIBUTION_COMPENSATION_UNIT_CREATE:
+        roles.add(AdminRole.PROJECT_MANAGER)
+    return {"allowed_roles": frozenset(roles)}

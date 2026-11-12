@@ -40,10 +40,13 @@ from app.modules.contributions.api.policies import (
     ContributionType,
     DenyContributionPolicyAuthorization,
     PolicyAction,
-    PolicyDefinitionInput,
     PolicyDefinitionView,
     PolicyEventType,
     PolicyRuleInput,
+    AcceptedSubmissionPolicyRuleInput,
+    CompletedReviewPolicyRuleInput,
+    UnpaidPolicyRuleInput,
+    TaskSizeQuantities,
     PolicyRuleView,
 )
 
@@ -118,9 +121,12 @@ __all__ = (
     "ContributionType",
     "DenyContributionPolicyAuthorization",
     "PolicyAction",
-    "PolicyDefinitionInput",
     "PolicyDefinitionView",
     "PolicyEventType",
     "PolicyRuleInput",
+    "AcceptedSubmissionPolicyRuleInput",
+    "CompletedReviewPolicyRuleInput",
+    "UnpaidPolicyRuleInput",
+    "TaskSizeQuantities",
     "PolicyRuleView",
 )

@@ -116,6 +116,7 @@ async def test_finance_authority_creates_unit_and_records_allowed_evidence(
     ("role", "scope", "target"),
     [
         ("project_manager", "project", "same"),
+        ("project_manager", "system", "same"),
         ("operator", "system", "same"),
         ("finance_authority", "project", "other"),
     ],

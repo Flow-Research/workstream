@@ -1,26 +1,72 @@
 """Genuine archived rows preserve precise economics and original command replay."""
 
 from copy import deepcopy
+import asyncio
 from decimal import Decimal
+from uuid import UUID
 
+from alembic import command
 import pytest
 from sqlalchemy import text
 
 from app.db import session as db_session
 from app.modules.artifacts.task_import_sources import ArtifactTaskImportSourceCommands
-from tests.finance.reward_history import reward_history
-from tests.historical_submission_fixtures import _restore_validated_snapshot_rows
+from tests.finance.reward_history import reward_history, restore_reward_predecessor
+from tests.migration_fixtures import _config
 from tests.test_task_import_sources import import_source_client as import_source_client
 from tests.test_tasks import auth_headers, task_database_env as task_database_env
+
+pytestmark = pytest.mark.postgres_schema_contract
+
+
+async def economic_snapshot():
+    """Compare every retained economic field, excluding only new mechanical labels."""
+    async with db_session.get_session_factory()() as session:
+        result = {}
+        for table in (
+            "contribution_policy_versions",
+            "contribution_rules",
+            "contribution_award_definitions",
+            "compensation_awards",
+            "contribution_records",
+            "final_acceptances",
+        ):
+            exclusions = "-'reward_model_version'-'task_size'"
+            if table == "contribution_policy_versions":
+                exclusions += "-'instrument_type'-'unit_code'-'adapter_binding_id'"
+            result[table] = (
+                await session.scalars(
+                    text(
+                        f"SELECT (to_jsonb(r){exclusions})::text FROM public.{table} r ORDER BY id"
+                    )
+                )
+            ).all()
+        return result
 
 
 async def test_archived_dual_awards_restore_without_losing_decimal_precision(isolated_database_env):
     snapshot = reward_history("dual")
-    await _restore_validated_snapshot_rows(
-        isolated_database_env,
-        snapshot,
-        expected_revision=snapshot["source_revision"],
+    await restore_reward_predecessor(isolated_database_env, snapshot)
+    before = await economic_snapshot()
+    with pytest.raises(RuntimeError, match="shared lifecycle disabled after drain"):
+        await asyncio.to_thread(command.upgrade, _config(), "head")
+    async with db_session.get_session_factory()() as session:
+        assert (
+            await session.scalar(text("SELECT version_num FROM alembic_version"))
+            == snapshot["source_revision"]
+        )
+    from tests.reviews.lifecycle.transition_support import command_for, transition
+
+    operator = next(
+        row["target_actor_profile_id"]
+        for row in snapshot["tables"]["admin_role_grants"]
+        if row["role"] == "operator"
     )
+    for phase in ("draining", "disabled"):
+        await transition(await command_for(UUID(operator), phase))
+    await db_session.dispose_engine()
+    await asyncio.to_thread(command.upgrade, _config(), "head")
+    assert await economic_snapshot() == before
     async with db_session.get_session_factory()() as session:
         rows = (
             await session.execute(
@@ -33,6 +79,12 @@ async def test_archived_dual_awards_restore_without_losing_decimal_precision(iso
         assert rows[0].quantity == Decimal("2.125000000000000001")
         assert rows[1].quantity == Decimal("7")
         assert {str(row.id) for row in rows} == set(snapshot["seed"]["award_ids"])
+        assert (
+            await session.scalar(
+                text("SELECT bool_and(reward_model_version=1) FROM compensation_awards")
+            )
+            is True
+        )
         assert (
             await session.scalar(
                 text(
@@ -48,11 +100,7 @@ async def test_archive_numeric_descriptor_cannot_reinterpret_other_fields(isolat
     snapshot = deepcopy(reward_history("dual"))
     snapshot["numeric_columns"]["compensation_awards"] = ["contributor_id"]
     with pytest.raises(AssertionError, match="numeric columns differ"):
-        await _restore_validated_snapshot_rows(
-            isolated_database_env,
-            snapshot,
-            expected_revision=snapshot["source_revision"],
-        )
+        await restore_reward_predecessor(isolated_database_env, snapshot)
 
 
 async def command_snapshot():
@@ -76,11 +124,9 @@ async def test_archived_omitted_size_create_and_import_replay_exactly_with_fresh
     monkeypatch,
 ):
     snapshot = reward_history("task_replay")
-    await _restore_validated_snapshot_rows(
-        db_session.get_database_url(),
-        snapshot,
-        expected_revision=snapshot["source_revision"],
-    )
+    await restore_reward_predecessor(db_session.get_database_url(), snapshot)
+    await db_session.dispose_engine()
+    await asyncio.to_thread(command.upgrade, _config(), "head")
     seed = snapshot["seed"]
     before = await command_snapshot()
     async with db_session.get_session_factory()() as session:

@@ -9,7 +9,7 @@ import (
 )
 
 func addContributionPolicyReads(project *cobra.Command, client func() (*api.Client, error), output *string, stdout io.Writer) {
-	policy := &cobra.Command{Use: "contribution-policy", Short: "Inspect and manage contribution policies through public Finance authority"}
+	policy := &cobra.Command{Use: "contribution-policy", Short: "Inspect and manage contribution policies under current project policy authority"}
 	policy.AddCommand(&cobra.Command{
 		Use: "current PROJECT_ID", Short: "Discover the current published and open draft selectors", Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {

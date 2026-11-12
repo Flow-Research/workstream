@@ -1,5 +1,5 @@
 {
-  "canonical_sha256": "d213e85a844b2346abf498f797739f314ae3b31a0ddd84b66a123a92e3d2ea93",
+  "canonical_sha256": "cc3b68b7a63914bf293115c296e8d18d7bbf1a63c629fd4505bbf01083b3d1fc",
   "components": {
     "schemas": {
       "ApiError": {
@@ -64,6 +64,17 @@
       "ContributionPolicyVersionListItem": {
         "description": "One stored version of the project's policy with its lifecycle instants.",
         "properties": {
+          "adapter_binding_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "contribution_policy_id": {
             "format": "uuid",
             "type": "string"
@@ -75,6 +86,16 @@
           "created_at": {
             "format": "date-time",
             "type": "string"
+          },
+          "instrument_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CompensationInstrumentType"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "name": {
             "type": "string"
@@ -113,11 +134,28 @@
               }
             ]
           },
+          "reward_model_version": {
+            "enum": [
+              1,
+              2
+            ],
+            "type": "integer"
+          },
           "rules": {
             "items": {
               "$ref": "#/components/schemas/PolicyRuleView"
             },
             "type": "array"
+          },
+          "unit_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "version_number": {
             "type": "integer"
@@ -139,6 +177,10 @@
           "contribution_policy_version_id",
           "version_number",
           "version_status",
+          "reward_model_version",
+          "instrument_type",
+          "unit_code",
+          "adapter_binding_id",
           "rules",
           "created_at",
           "published_at",
@@ -190,6 +232,28 @@
           "quantity": {
             "type": "string"
           },
+          "reward_model_version": {
+            "enum": [
+              1,
+              2
+            ],
+            "type": "integer"
+          },
+          "task_size": {
+            "anyOf": [
+              {
+                "enum": [
+                  "small",
+                  "medium",
+                  "large"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "unit_code": {
             "type": "string"
           }
@@ -199,7 +263,9 @@
           "instrument_type",
           "unit_code",
           "quantity",
-          "adapter_binding_id"
+          "adapter_binding_id",
+          "reward_model_version",
+          "task_size"
         ],
         "type": "object"
       },
@@ -560,7 +626,6 @@
   "source": {
     "method": "GET",
     "openapi_version": "3.1.0",
-    "path": "/api/v1/projects/{project_id}/contribution-policies",
-    "repository_sha": "59c52cc81179611ea316935552cc177f83eec687"
+    "path": "/api/v1/projects/{project_id}/contribution-policies"
   }
 }

@@ -22,6 +22,7 @@ DIGEST = "sha256:" + "a" * 64
 def adapter(project_id, **kwargs):
     """Use real AUTH/PREP with the existing bounded Finance repository."""
     original, context, session, evidence = _adapter(project_id, **kwargs)
+    original._authorization._admin.expected_roles = frozenset({"finance_authority", "project_manager"})
     return (
         ContributionPolicyAuthorizationAdapter(original._authorization, original._prepared),
         context,

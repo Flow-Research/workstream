@@ -76,7 +76,11 @@ class ContributionPolicyPublicationService:
         await self._lock_project(request.project_id)
         await self._repository.lock_project_scope(request.project_id)
         policy, version = await self._lock_target(request)
-        if policy.status not in {"draft", "active"} or version.status != "draft":
+        if (
+            policy.status not in {"draft", "active"}
+            or version.status != "draft"
+            or version.reward_model_version != 2
+        ):
             raise ContributionPolicyConflict("contribution_policy_not_found")
         prior = await self._lock_prior(policy, version)
         rules, definitions = await self._repository.lock_publication_graph(version.id)
@@ -153,7 +157,9 @@ class ContributionPolicyPublicationService:
             repository=self._repository,
             read_authorization=self._read_authorization,
             mutation_authorization=self._mutation_authorization,
-            action="contribution.policy.publish" if event_type == "published" else "contribution.policy.retire",
+            action="contribution.policy.publish"
+            if event_type == "published"
+            else "contribution.policy.retire",
             request=request,
             request_digest=digest,
             expected_event_type=event_type,

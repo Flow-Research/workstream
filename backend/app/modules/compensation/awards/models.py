@@ -4,7 +4,19 @@ from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Numeric, String, UniqueConstraint, Uuid, text
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    ForeignKeyConstraint,
+    Index,
+    Integer,
+    Numeric,
+    String,
+    UniqueConstraint,
+    Uuid,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -20,10 +32,29 @@ class CompensationAward(Base):
             name="id_uuid7",
         ),
         UniqueConstraint("contribution_record_id", "instrument_type"),
+        CheckConstraint("reward_model_version in (1,2)", name="reward_model_version"),
+        ForeignKeyConstraint(
+            ["contribution_policy_version_id", "project_id", "reward_model_version"],
+            [
+                "contribution_policy_versions.id",
+                "contribution_policy_versions.project_id",
+                "contribution_policy_versions.reward_model_version",
+            ],
+            name="fk_compensation_award_reward_version",
+            deferrable=True,
+            initially="DEFERRED",
+        ),
+        Index(
+            "uq_compensation_award_v2_contribution",
+            "contribution_record_id",
+            unique=True,
+            postgresql_where=text("reward_model_version=2"),
+        ),
         CheckConstraint("instrument_type in ('money','project_points')", name="instrument_type"),
         CheckConstraint(
             "quantity > 0 and quantity < 100000000000000000000 "
-            "and scale(quantity) between 0 and 18", name="quantity_exact_bounds",
+            "and scale(quantity) between 0 and 18",
+            name="quantity_exact_bounds",
         ),
         CheckConstraint(
             "instrument_type <> 'project_points' or scale(quantity)=0", name="project_points_whole"
@@ -31,6 +62,9 @@ class CompensationAward(Base):
     )
 
     id: Mapped[UUID] = mapped_column(Uuid(), primary_key=True)
+    reward_model_version: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default=text("2")
+    )
     project_id: Mapped[str] = mapped_column(
         Uuid(as_uuid=False), ForeignKey("projects.id", ondelete="RESTRICT"), nullable=False
     )
@@ -47,7 +81,9 @@ class CompensationAward(Base):
         Uuid(), ForeignKey("contribution_award_definitions.id", ondelete="RESTRICT"), nullable=False
     )
     adapter_binding_id: Mapped[UUID] = mapped_column(
-        Uuid(), ForeignKey("project_compensation_adapter_bindings.id", ondelete="RESTRICT"), nullable=False
+        Uuid(),
+        ForeignKey("project_compensation_adapter_bindings.id", ondelete="RESTRICT"),
+        nullable=False,
     )
     instrument_type: Mapped[str] = mapped_column(String(32), nullable=False)
     unit_code: Mapped[str] = mapped_column(String(32), nullable=False)

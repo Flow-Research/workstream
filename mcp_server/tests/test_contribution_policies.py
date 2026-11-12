@@ -23,7 +23,6 @@ def _rules() -> list[dict[str, Any]]:
         {
             "contribution_type": contribution_type,
             "compensation_mode": "unpaid",
-            "definitions": [],
         }
         for contribution_type in ("accepted_submission", "completed_review")
     ]
@@ -80,9 +79,7 @@ def test_policy_current_read_forwards_selector_and_rejects_substitution(
     assert result["structuredContent"]["error"] == "invalid_api_response"
 
 
-def test_policy_create_forwards_body_and_typed_key_only(
-    adapter: Adapter, call: Call
-) -> None:
+def test_policy_create_forwards_body_and_typed_key_only(adapter: Adapter, call: Call) -> None:
     client, received, upstream = adapter
     upstream.update(status=201, json=_receipt())
     result = call(
@@ -112,7 +109,12 @@ def test_policy_create_forwards_body_and_typed_key_only(
             "update",
             "PUT",
             "",
-            {"rules": _rules()},
+            {
+                "instrument_type": None,
+                "unit_code": None,
+                "adapter_binding_id": None,
+                "rules": _rules(),
+            },
             {
                 "event_type": "draft_updated",
                 "from_policy_status": "draft",
@@ -202,9 +204,7 @@ def test_policy_mutation_rejects_substituted_receipt_as_uncertain(
     assert len(received) == 1
 
 
-def test_policy_current_rejects_selection_without_any_version(
-    adapter: Adapter, call: Call
-) -> None:
+def test_policy_current_rejects_selection_without_any_version(adapter: Adapter, call: Call) -> None:
     client, _, upstream = adapter
     upstream["json"] = {
         "project_id": PROJECT_ID,
@@ -242,7 +242,6 @@ def test_invalid_policy_graph_never_dispatches(adapter: Adapter, call: Call) -> 
     duplicate = {
         "contribution_type": "accepted_submission",
         "compensation_mode": "unpaid",
-        "definitions": [],
     }
     result = call(
         client,
@@ -251,9 +250,75 @@ def test_invalid_policy_graph_never_dispatches(adapter: Adapter, call: Call) -> 
             "project_id": PROJECT_ID,
             "policy_id": POLICY_ID,
             "version_id": VERSION_ID,
-            "body": {"rules": [duplicate, duplicate]},
+            "body": {
+                "instrument_type": None,
+                "unit_code": None,
+                "adapter_binding_id": None,
+                "rules": [duplicate, duplicate],
+            },
             "idempotency_key": KEY,
         },
     ).json()["result"]
     assert result["structuredContent"]["error"] == "invalid_tool_input"
     assert received == []
+
+
+@pytest.mark.parametrize(
+    "invalid", [None, "missing_tier", "points_fraction", "per_rule_header", "null_header"]
+)
+def test_v2_paid_policy_uses_exact_portable_input_contract(
+    adapter: Adapter, call: Call, invalid: str | None
+) -> None:
+    client, received, upstream = adapter
+    body: dict[str, Any] = {
+        "instrument_type": "project_points",
+        "unit_code": "FLOW",
+        "adapter_binding_id": ACTOR_ID,
+        "rules": [
+            {
+                "contribution_type": "accepted_submission",
+                "compensation_mode": "compensated",
+                "quantities": {"small": "10", "medium": "20", "large": "100"},
+            },
+            {
+                "contribution_type": "completed_review",
+                "compensation_mode": "compensated",
+                "quantity": "3",
+            },
+        ],
+    }
+    if invalid == "missing_tier":
+        del body["rules"][0]["quantities"]["medium"]
+    elif invalid == "points_fraction":
+        body["rules"][1]["quantity"] = "3.0"
+    elif invalid == "per_rule_header":
+        body["rules"][0]["unit_code"] = "OTHER"
+    elif invalid == "null_header":
+        body["adapter_binding_id"] = None
+    upstream.update(
+        status=200,
+        json=_receipt(
+            event_type="draft_updated",
+            from_policy_status="draft",
+            to_policy_status="draft",
+            from_version_status="draft",
+            to_version_status="draft",
+        ),
+    )
+    result = call(
+        client,
+        name="workstream_contribution_policy_update",
+        arguments={
+            "project_id": PROJECT_ID,
+            "policy_id": POLICY_ID,
+            "version_id": VERSION_ID,
+            "idempotency_key": KEY,
+            "body": body,
+        },
+    ).json()["result"]
+    if invalid is None:
+        assert result["isError"] is False
+        assert len(received) == 1 and json.loads(received[0].content) == body
+    else:
+        assert result["structuredContent"]["error"] == "invalid_tool_input"
+        assert received == []

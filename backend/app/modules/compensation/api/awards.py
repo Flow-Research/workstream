@@ -4,7 +4,7 @@ from decimal import Decimal
 from typing import Annotated, Literal, Protocol, Self
 from uuid import UUID
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, StrictInt, model_validator
 
 from app.modules.compensation.api.instruments import CompensationInstrumentType
 
@@ -85,6 +85,7 @@ class CompensationAwardFacts(BaseModel):
     model_config = _STRICT_FROZEN
 
     id: UUID
+    reward_model_version: Annotated[StrictInt, Field(ge=1, le=2)]
     project_id: UUID
     contribution_record_id: UUID
     contributor_id: UUID

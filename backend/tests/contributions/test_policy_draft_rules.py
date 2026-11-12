@@ -1,162 +1,126 @@
-"""Complete ContributionPolicy graph validation."""
+"""Complete v2 graph validation, including forged internal owner inputs."""
 
 from dataclasses import replace
-from app.core.identifiers import new_record_id
 
 import pytest
+from pydantic import ValidationError
 
+from app.core.identifiers import new_record_id
 from app.modules.compensation.api import CompensationInstrumentType
-from app.modules.contributions.api import (
-    ContributionPolicyConflict,
-    PolicyDefinitionInput,
-    PolicyRuleInput,
-)
-from app.modules.contributions.policy_validation import (
-    _validate_definition,
-    validate_policy_graph,
-    validate_policy_name,
-)
+from app.modules.contributions.api import ContributionPolicyConflict
+from app.modules.contributions.api.policies import TaskSizeQuantities
+from app.modules.contributions.api.policy_http import PolicyUpdateInput
+from app.modules.contributions.api.quantities import canonical_award_quantity
+from app.modules.contributions.policy_validation import validate_policy_graph, validate_policy_name
 from tests.contributions.policy_test_support import complete_rules, service_fixture
 from tests.contributions.test_policy_draft_update import install_draft, update_request
 
 
-def test_update_requires_exactly_one_accepted_submission_rule() -> None:
-    rules = (complete_rules()[1],)
-    with pytest.raises(ContributionPolicyConflict):
-        validate_policy_graph(rules)
-
-
-def test_update_requires_exactly_one_completed_review_rule() -> None:
-    rules = (complete_rules()[0],)
-    with pytest.raises(ContributionPolicyConflict):
-        validate_policy_graph(rules)
-
-
-def test_update_rejects_duplicate_required_rule_without_effect() -> None:
-    rule = complete_rules()[0]
-    with pytest.raises(ContributionPolicyConflict):
-        validate_policy_graph((rule, rule))
-
-
-def test_update_rejects_instrument_definition_for_unpaid_rule() -> None:
-    paid = complete_rules()[0]
-    invalid = replace(paid, compensation_mode="unpaid")
-    with pytest.raises(ContributionPolicyConflict):
-        validate_policy_graph((invalid, complete_rules()[1]))
-
-
-def test_update_rejects_duplicate_instrument_definition() -> None:
-    paid, review = complete_rules()
-    invalid = replace(paid, definitions=(paid.definitions[0], paid.definitions[0]))
-    with pytest.raises(ContributionPolicyConflict):
-        validate_policy_graph((invalid, review))
-
-
-def test_update_accepts_one_or_two_unique_compensated_definitions() -> None:
-    paid, review = complete_rules()
-    points = PolicyDefinitionInput(
-        instrument_type=CompensationInstrumentType.PROJECT_POINTS,
-        unit_code="POINT",
-        quantity="2",
-        adapter_binding_id=new_record_id(),
-    )
-    rule = PolicyRuleInput(
-        contribution_type="accepted_submission",
-        compensation_mode="compensated",
-        definitions=(*paid.definitions, points),
-    )
-    assert validate_policy_graph((rule, review)) == (rule, review)
-
-
-@pytest.mark.parametrize("quantity", ("0", "-1"))
-def test_update_rejects_non_positive_quantity(quantity: str) -> None:
-    item = PolicyDefinitionInput(
+def validate(rules, **header):
+    values = dict(
         instrument_type=CompensationInstrumentType.MONEY,
         unit_code="USD",
-        quantity=quantity,
         adapter_binding_id=new_record_id(),
     )
+    values.update(header)
+    return validate_policy_graph(rules, **values)
+
+
+@pytest.mark.parametrize(
+    "rules", [(complete_rules()[1],), (complete_rules()[0],), (complete_rules()[0],) * 2]
+)
+def test_update_requires_exactly_one_rule_of_each_type(rules):
     with pytest.raises(ContributionPolicyConflict):
-        _validate_definition(item)
+        validate(rules)
 
 
-@pytest.mark.parametrize("quantity", ("1e2", "01", "NaN"))
-def test_update_rejects_non_canonical_quantity(quantity: str) -> None:
-    item = PolicyDefinitionInput(
-        instrument_type=CompensationInstrumentType.MONEY,
-        unit_code="USD",
-        quantity=quantity,
-        adapter_binding_id=new_record_id(),
-    )
+def test_update_rejects_quantities_for_unpaid_rule():
+    paid, review = complete_rules()
+    invalid = paid.model_copy(update={"compensation_mode": "unpaid"})
     with pytest.raises(ContributionPolicyConflict):
-        _validate_definition(item)
+        validate((invalid, review))
 
 
-def test_create_rejects_noncanonical_policy_name() -> None:
+def test_update_rejects_superseded_dual_instrument_graph():
+    with pytest.raises(ValidationError):
+        PolicyUpdateInput.model_validate(
+            {
+                "instrument_type": "money",
+                "unit_code": "USD",
+                "adapter_binding_id": str(new_record_id()),
+                "rules": [
+                    {
+                        "contribution_type": "accepted_submission",
+                        "compensation_mode": "compensated",
+                        "definitions": [
+                            {"instrument_type": "money", "quantity": "1"},
+                            {"instrument_type": "project_points", "quantity": "2"},
+                        ],
+                    },
+                    {"contribution_type": "completed_review", "compensation_mode": "unpaid"},
+                ],
+            }
+        )
+
+
+@pytest.mark.parametrize(
+    "quantity", ("0", "-1", "1e2", "01", "NaN", "100000000000000000000", "1.0000000000000000000")
+)
+def test_update_rejects_invalid_quantities(quantity):
+    with pytest.raises(ValueError):
+        canonical_award_quantity(quantity, CompensationInstrumentType.MONEY)
+
+
+def test_create_rejects_noncanonical_policy_name():
     with pytest.raises(ContributionPolicyConflict):
         validate_policy_name(" padded ")
 
 
-def test_update_rejects_compensated_rule_without_definitions() -> None:
+@pytest.mark.parametrize(
+    "tiers",
+    [{}, {"small": "1", "medium": "2"}, {"small": "1", "medium": "2", "large": "3", "other": "4"}],
+)
+def test_update_rejects_incomplete_or_extra_tiers(tiers):
     paid, review = complete_rules()
+    invalid = paid.model_copy(update={"quantities": tiers})
     with pytest.raises(ContributionPolicyConflict):
-        validate_policy_graph((replace(paid, definitions=()), review))
+        validate((invalid, review))
 
 
 @pytest.mark.parametrize("quantity", ("1.5", "1.0"))
-def test_update_rejects_non_integer_scale_project_points(quantity: str) -> None:
-    item = PolicyDefinitionInput(
-        instrument_type=CompensationInstrumentType.PROJECT_POINTS,
-        unit_code="POINT",
-        quantity=quantity,
-        adapter_binding_id=new_record_id(),
-    )
-    with pytest.raises(ContributionPolicyConflict):
-        _validate_definition(item)
+def test_update_rejects_non_integer_scale_project_points(quantity):
+    with pytest.raises(ValueError):
+        canonical_award_quantity(quantity, CompensationInstrumentType.PROJECT_POINTS)
 
 
-def test_update_conceals_malformed_rule_input() -> None:
+def test_update_conceals_malformed_rule_input():
     with pytest.raises(ContributionPolicyConflict, match="contribution_policy_conflict"):
-        validate_policy_graph((object(), complete_rules()[1]))  # type: ignore[arg-type]
+        validate((object(), complete_rules()[1]))
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "quantity",
-    ("100000000000000000000", "1.0000000000000000000"),
-)
-async def test_update_rejects_out_of_bounds_quantity_before_authorization(
-    quantity: str,
-) -> None:
+@pytest.mark.parametrize("quantity", ("100000000000000000000", "1.0000000000000000000"))
+async def test_update_rejects_out_of_bounds_quantity_before_authorization(quantity):
     fixture = service_fixture()
     request = update_request(fixture)
     paid, review = request.rules
-    definition = replace(paid.definitions[0], quantity=quantity)
-    request = replace(request, rules=(replace(paid, definitions=(definition,)), review))
+    tiers = TaskSizeQuantities.model_construct(small=quantity, medium="2", large="3")
+    request = replace(request, rules=(paid.model_copy(update={"quantities": tiers}), review))
     install_draft(fixture, request)
-
     with pytest.raises(ContributionPolicyConflict, match="contribution_policy_conflict"):
         await fixture.service.update_draft(request)
-
     fixture.repository.get_policy.assert_not_awaited()
     assert fixture.authorization.prepared == []
     assert fixture.authorization.consumed == []
     fixture.repository.replace_graph.assert_not_awaited()
 
 
-def test_update_rejects_unknown_compensation_mode_before_authorization() -> None:
+def test_update_rejects_unknown_compensation_mode_before_authorization():
     paid, review = complete_rules()
-    invalid = replace(paid, compensation_mode="unknown")  # type: ignore[arg-type]
     with pytest.raises(ContributionPolicyConflict):
-        validate_policy_graph((invalid, review))
+        validate((paid.model_copy(update={"compensation_mode": "unknown"}), review))
 
 
-def test_update_rejects_noncanonical_instrument_type() -> None:
-    item = PolicyDefinitionInput(
-        instrument_type="money",  # type: ignore[arg-type]
-        unit_code="USD",
-        quantity="1.00",
-        adapter_binding_id=new_record_id(),
-    )
+def test_update_rejects_noncanonical_instrument_type():
     with pytest.raises(ContributionPolicyConflict):
-        _validate_definition(item)
+        validate(complete_rules(), instrument_type="money")

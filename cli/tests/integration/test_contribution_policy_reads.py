@@ -39,6 +39,8 @@ def policy(*, empty=False, compensated=False):
             compensation_mode="compensated",
             definitions=[
                 {
+                    "reward_model_version": 1,
+                    "task_size": None,
                     "definition_id": PROJECT,
                     "instrument_type": "money",
                     "unit_code": "USD",
@@ -46,10 +48,12 @@ def policy(*, empty=False, compensated=False):
                     "adapter_binding_id": KEY,
                 },
                 {
+                    "reward_model_version": 1,
+                    "task_size": None,
                     "definition_id": VERSION,
                     "instrument_type": "project_points",
                     "unit_code": "research_points",
-                    "quantity": "9007199254740993.000000000000000000",
+                    "quantity": "9007199254740993",
                     "adapter_binding_id": ACTOR,
                 },
             ],
@@ -61,6 +65,10 @@ def policy(*, empty=False, compensated=False):
         "policy_status": "draft" if empty else "active",
         "contribution_policy_version_id": VERSION,
         "version_number": 1,
+        "reward_model_version": 1,
+        "instrument_type": None,
+        "unit_code": None,
+        "adapter_binding_id": None,
         "version_status": "draft" if empty else "published",
         "rules": rules,
     }
@@ -225,7 +233,9 @@ def test_policy_view_binds_full_nested_facts_and_normalized_identities(cli):
         good | {"rules": [None]},
     ]
     for key in good:
-        invalid += [{k: v for k, v in good.items() if k != key}, good | {key: None}]
+        invalid.append({k: v for k, v in good.items() if k != key})
+        if good[key] is not None:
+            invalid.append(good | {key: None})
     for key in good["rules"][0]:
         for value in (None, "unknown" if key != "definitions" else [None]):
             altered = deepcopy(good)
@@ -238,9 +248,10 @@ def test_policy_view_binds_full_nested_facts_and_normalized_identities(cli):
         altered = deepcopy(good)
         del altered["rules"][0]["definitions"][0][key]
         invalid.append(altered)
-        altered = deepcopy(good)
-        altered["rules"][0]["definitions"][0][key] = None
-        invalid.append(altered)
+        if good["rules"][0]["definitions"][0][key] is not None:
+            altered = deepcopy(good)
+            altered["rules"][0]["definitions"][0][key] = None
+            invalid.append(altered)
     for change in (
         {"definition_id": "bad"},
         {"adapter_binding_id": "bad"},
@@ -323,3 +334,52 @@ def test_policy_read_credential_safety_bounds_and_backend_denial(cli):
             )
             assert len(requests) == before + 1
             response["status"] = 200
+
+
+def test_v2_policy_read_preserves_three_tiers_and_rejects_wrong_selection(cli):
+    value = policy(compensated=True)
+    value.update(
+        reward_model_version=2,
+        instrument_type="money",
+        unit_code="USD",
+        adapter_binding_id=KEY,
+    )
+    template = value["rules"][0]["definitions"][0]
+    value["rules"][0]["definitions"] = [
+        template
+        | {
+            "definition_id": identifier,
+            "reward_model_version": 2,
+            "task_size": size,
+            "quantity": amount,
+        }
+        for identifier, size, amount in (
+            (PROJECT, "small", "2.125000000000000001"),
+            (VERSION, "medium", "4"),
+            (KEY, "large", "8"),
+        )
+    ]
+    invalid = []
+    for change in (
+        {"task_size": "medium"},
+        {"task_size": None},
+        {"reward_model_version": 1},
+        {"unit_code": "NGN"},
+    ):
+        bad = deepcopy(value)
+        bad["rules"][0]["definitions"][0].update(change)
+        invalid.append(bad)
+    bad = deepcopy(value)
+    bad["rules"][0]["definitions"].pop()
+    invalid.append(bad)
+    with http_fixture() as (origin, response, _):
+        response["body"] = json.dumps(value).encode()
+        result = invoke(cli, origin, "show", "--version", VERSION)
+        assert result.returncode == 0, result.stderr
+        assert json.loads(result.stdout) == value
+        for bad in invalid:
+            response["body"] = json.dumps(bad).encode()
+            assert_failure(
+                invoke(cli, origin, "show", "--version", VERSION),
+                "invalid_api_response",
+            )

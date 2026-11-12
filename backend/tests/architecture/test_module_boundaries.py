@@ -554,9 +554,7 @@ def test_policy_public_api_exports_immutable_contracts() -> None:
             "ContributionPolicyValidationFacts",
             "ContributionPolicyValidationRequest",
             "ContributionPolicyView",
-            "PolicyDefinitionInput",
             "PolicyDefinitionView",
-            "PolicyRuleInput",
             "PolicyRuleView",
             "LockedCompensationAward",
             "LockedCompensationTerms",
@@ -566,6 +564,11 @@ def test_policy_public_api_exports_immutable_contracts() -> None:
         )
     }
     assert all(value.__dataclass_params__.frozen for value in public_dataclasses.values())
+    for name in ("AcceptedSubmissionPolicyRuleInput", "CompletedReviewPolicyRuleInput",
+                 "UnpaidPolicyRuleInput", "TaskSizeQuantities"):
+        model = getattr(policy_api, name)
+        assert model.model_config["frozen"] is True
+        assert model.model_config["extra"] == "forbid"
 
 
 def test_policy_public_api_exports_no_private_persistence_values() -> None:

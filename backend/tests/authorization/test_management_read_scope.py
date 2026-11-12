@@ -94,12 +94,13 @@ MANAGER_ACTIONS = sorted(PROJECT_GUIDE_READ_ACTIONS | PROJECT_WORK_READ_ACTIONS)
 async def test_only_a_covering_manager_or_finance_grant_allows(action, role, scope):
     repository = Grants(principal())
     repository.grants = ((role, repository.project_id if scope == "project" else scope),)
-    expected_role = (AdminRole.FINANCE_AUTHORITY if action is ActionId.CONTRIBUTION_POLICY_LIST
-                     else AdminRole.PROJECT_MANAGER)
-    allowed = role is expected_role and scope != "foreign"
+    expected_roles = {AdminRole.PROJECT_MANAGER}
+    if action is ActionId.CONTRIBUTION_POLICY_LIST:
+        expected_roles.add(AdminRole.FINANCE_AUTHORITY)
+    allowed = role in expected_roles and scope != "foreign"
     result = await evaluate(repository, action)
     assert repository.calls[0] == "actor"
-    assert repository.calls[1] == (ACTION_BY_ID[action].permission_id, frozenset({expected_role}), False)
+    assert repository.calls[1] == (ACTION_BY_ID[action].permission_id, frozenset(expected_roles), False)
     if allowed:
         assert result[0] is None
         assert result[2:5] == (MatchedAuthorityKind.ADMIN_ROLE_GRANT, repository.grant_id, repository.project_id)

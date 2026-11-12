@@ -1,6 +1,7 @@
 """Checksum-bound genuine v1 reward and task/import history."""
 
 import gzip
+import asyncio
 import hashlib
 import json
 from pathlib import Path
@@ -23,3 +24,21 @@ def reward_history(name: str) -> dict:
     assert body["source_revision"] == "0068_issuer_profile_email"
     assert body["writer_commit"] == "70a60846b6bb122a835f1a1d6928edf326cbfdef"
     return body
+
+
+async def restore_reward_predecessor(database_url: str, snapshot: dict) -> None:
+    """Restore genuine archived facts against their exact predecessor schema."""
+    from alembic import command
+    from app.db import session as db_session
+    from tests.conftest import _drop_test_database_schema
+    from tests.historical_submission_fixtures import _restore_validated_snapshot_rows
+    from tests.migration_fixtures import _config
+
+    await db_session.dispose_engine()
+    await _drop_test_database_schema(database_url)
+    await asyncio.to_thread(command.upgrade, _config(), snapshot["source_revision"])
+    await _restore_validated_snapshot_rows(
+        database_url,
+        snapshot,
+        expected_revision=snapshot["source_revision"],
+    )

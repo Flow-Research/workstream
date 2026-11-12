@@ -765,7 +765,7 @@ ADMIN_ROLE_PERMISSION_EXPECTATIONS = {
         project.review_policy.manage project.role_grant.read project.role_grant.manage
         artifact.guide_source.ingest
         review.queue.inspect contribution.read_project compensation.award.read
-        audit.read""".split(),
+        compensation.policy.manage audit.read""".split(),
     AdminRole.FINANCE_AUTHORITY: """project.read contribution.read_project
         compensation.policy.manage compensation.adapter_binding.manage
         compensation.award.read compensation.delivery.reconcile audit.read""".split(),

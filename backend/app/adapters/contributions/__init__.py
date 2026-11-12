@@ -16,6 +16,7 @@ from app.modules.contributions.api import (
     ContributionPolicyValidationPort,
     LockedCompensationTermsPort,
     ProjectCompensationUnitOperationsPort,
+    RewardSelectionPort,
 )
 from app.modules.contributions.service import ContributionPolicyService
 from app.modules.contributions.selected_policy_validation import (
@@ -82,6 +83,12 @@ def published_contribution_policy_port(session: AsyncSession) -> PublishedContri
 
 def locked_compensation_terms_port(session: AsyncSession) -> LockedCompensationTermsPort:
     """Compose the contributor-safe locked-version projection at the CON owner."""
+    from app.modules.contributions.repository import ContributionPolicyRepository
+    return ContributionPolicyRepository(session)
+
+
+def reward_selection_port(session: AsyncSession) -> RewardSelectionPort:
+    """Compose exact tier resolution in the caller's existing owner transaction."""
     from app.modules.contributions.repository import ContributionPolicyRepository
     return ContributionPolicyRepository(session)
 

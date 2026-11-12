@@ -15,10 +15,14 @@ from app.modules.contributions.api import (
     ContributionPolicyCreateDraftRequest,
     ContributionPolicyAuthorizationFacts,
     ContributionPolicyReadRequest,
-    PolicyDefinitionInput,
     PolicyRuleInput,
 )
 from app.modules.contributions.service import ContributionPolicyService
+from app.modules.contributions.api.policies import (
+    AcceptedSubmissionPolicyRuleInput,
+    TaskSizeQuantities,
+    UnpaidPolicyRuleInput,
+)
 from app.modules.projects.api import ProjectContributionPolicyEligibilityFacts
 
 
@@ -152,20 +156,10 @@ def create_request(fixture: SimpleNamespace) -> ContributionPolicyCreateDraftReq
 
 def complete_rules() -> tuple[PolicyRuleInput, ...]:
     return (
-        PolicyRuleInput(
+        AcceptedSubmissionPolicyRuleInput(
             contribution_type="accepted_submission",
             compensation_mode="compensated",
-            definitions=(
-                PolicyDefinitionInput(
-                    instrument_type=CompensationInstrumentType.MONEY,
-                    unit_code="USD",
-                    quantity="10.00",
-                    adapter_binding_id=new_record_id(),
-                ),
-            ),
+            quantities=TaskSizeQuantities(small="10.00", medium="20.00", large="30.00"),
         ),
-        PolicyRuleInput(
-            contribution_type="completed_review",
-            compensation_mode="unpaid",
-        ),
+        UnpaidPolicyRuleInput(contribution_type="completed_review", compensation_mode="unpaid"),
     )
