@@ -1031,3 +1031,64 @@ QA/test-delta review assertion reachability and discriminating mutations.
 Documentation review reconciles exposure and qualification claims. Lead owns
 shared checks, exact CI handles and the same PR; human review focus is the
 source-to-result authority chain and confinement evidence, not test counts.
+
+### Plan review corrections: exact cutover and confinement boundaries
+
+Architecture/security and QA/test-delta inspected `03a09b353` and found the
+single-session direction feasible with the following required corrections.
+These are part of the allowed implementation and acceptance scope above:
+
+- Explicitly include ART `submission_admission.py`,
+  `selected_pre_submit_execution.py`, `submission_materialization.py`,
+  `selected_pre_submit_admission.py`, `submission_custody.py`, affected
+  trusted-intake contracts, AUTH selected-PRE facts, and
+  `backend/app/adapters/tasks/__init__.py` plus TASK's intake public port.
+  Replace the current composition in place; no second transaction owner.
+- Introduce an explicit stored request schema discriminator. Historical
+  prepared-source rows keep their original fields and canonical JSON/digests
+  unchanged and remain readable. New source-bound rows require operation/source
+  identity and forbid a prepared-generation value. Before inspection their
+  manifest/default-input columns are NULL; after inspection those are immutable
+  result evidence. SQL and typed decoders enforce mutually exclusive historical
+  and new shapes. Historical decoding is read-only evidence interpretation,
+  never another executable PRE path. The migration does not rewrite old hashes
+  or delete rows. Completed unsafe-archive rejection permits absent derived
+  fields but forbids eligibility/project evidence.
+- Replace `SelectedPreSubmitAdmissionCapability` and its ART consumer together.
+  New source-bound completion cannot mint or satisfy the old
+  `SubmissionBundlePreparedCustody` capability requiring `PreparedArtifact`.
+  Until T4 is installed, retain the source-bound terminal as CHECKERS evidence
+  only; it cannot authorize old create/admission consumption. The old live
+  prepare/reserve producer is removed with its affected callers in the same
+  coordinated replacement, not kept as an execution compatibility option.
+- Extend the existing TASK-first guard: lock TASK intake custody, verify its
+  active operation, then check ART's exact operation/source generation and
+  current foreground lease/fence in that root before CHECKERS run locks.
+  Reserve, claim and finalize must all enforce the relevant current custody.
+  A valid task/assignment/lineage alone is insufficient. Keep source ownership
+  in ART and task pointer ownership in TASK through public ports.
+- CHECKERS reconstruction consumes bounded guest-observed canonical inspection
+  entries tied to the exact raw source plus persisted locked task/project facts.
+  Recompute manifest/default-input/nested-request canonical bodies and digests;
+  neither locked facts alone nor a mutually consistent pair of returned hashes
+  proves the inspected input.
+- Stage the trusted root/raw input under a supervisor-owned private directory
+  hidden by the project child's mount namespace (not an unmasked `/work`
+  directory). Before exec close inherited bundle, archive, directory and trusted
+  control descriptors; retain only explicitly allowed project stdin/stdout/stderr.
+  Separate fixed trusted/project UIDs and cgroups are part of the qualified
+  profile, not project image choices. Drop privileges and apply the existing
+  workload syscall filter after mounting. The supervisor remains outside both
+  killable workload groups. Namespace hiding must also prevent `/proc`/inherited
+  descriptor access to the trusted root and control process.
+
+The connected fixture must begin with a real sealed operation/generation and
+NULL derived fields, then drive the existing coordinator/ART composition into
+one typed PRE call. Count session creation and conditional project launch.
+Add negative controls for foreign/cleared TASK active operation, stale foreground
+fence, substituted provider generation, and attempted old-capability consumption
+of a new source-bound terminal. Existing prepared-file/mock-execution fixtures
+cannot establish these claims. Retain their still-required semantic assertions
+while replacing their obsolete preparation setup. Lead plan checks passed
+Commitrail, Markdown links and diff whitespace; the review is feasibility
+inspection, not runtime or migration proof.
