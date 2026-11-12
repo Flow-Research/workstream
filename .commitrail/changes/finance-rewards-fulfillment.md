@@ -508,3 +508,42 @@ asserts the exact revised selected award and unchanged original evidence/replay.
 This matrix is running; its outcome is not yet claimed. The affected fixture
 parameters supply exact authored quantities through the existing policy owner,
 without bypassing publication or adding an application behavior.
+
+
+The first expanded matrix run passed the unpaid case but stopped before target
+publication in the lower-money case: setup tried to recreate the existing
+money/USD project unit. The fixture now explicitly receives the original
+Submission definition's binding for same-money publication; new points policies
+still create their exact new binding. No application fallback or upsert was
+added. The corrected four-case run is pending. The c655 review also identified
+one residual preparation-only type token in contributor reads; it is removed
+while ordinary Submission/assignment exhaustion reasons remain valid.
+
+
+Exact clean c655 verification passed the two migration tests (278.40s),187 MCP
+contract/consumer cases (295.47s), and full11974-test collection (159.72s).
+Migration producer asserts clean source before/after and confirms owned resource
+cleanup. MCP uses the frozen source paths and records actual argv/cwd/environment
+with shared clean-start and verified clean-end observations. These are bounded
+source results, not full-suite or Finance-runtime completion.
+
+Review follow-up replaces the synthetic lower-target blocked/running test with
+current paused allowance behavior. The focused current pure contracts passed438
+cases (35.15s). Affected generic audit tests now use the actual ART recovery event
+builder instead of obsolete Task-created/verified-token fixtures. Shared raw
+append/read remains required by ART recovery and exact lifecycle replay; its
+existing persisted domain token is retained. No authority bypass or historical
+Task producer is restored. Native append-only, rollback and non-authority-cause
+rejection proof remains required and is rerunning with the current ART fixture.
+
+
+The corrected-binding development run passed unpaid, lower-money and higher-
+money replacements through acceptance. The points case reached the replacement
+completion delivery but returned no receipt; the run ended3 passed/1 failed
+(376.50s). A points-only reproduction now asserts a stored completion and captures
+bounded delivery state if unavailable. No retry/fallback or production change is
+introduced without diagnosis. The current ART audit consumer/immutability/
+non-authority-cause native run passed4 cases (88.16s), with cleanup verified.
+Both c655 reviewer sessions are closed: earlier three recovery defects are
+closed; remaining type/clock-fixture cleanup is repaired in the working tree;
+the full financial replacement matrix remains unqualified.

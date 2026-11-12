@@ -237,7 +237,7 @@ async def activation_command(factory, approved, policy):
 
 
 async def publish_policy(factory, project_id, *, compensated=False, contribution_awards=(),
-                         submission_quantities=None):
+                         submission_quantities=None, contribution_binding_id=None):
     """Publish complete rules with real scoped Finance authority."""
     from app.modules.authorization.runtime import (
         HumanAuthorizationContext,
@@ -269,7 +269,10 @@ async def publish_policy(factory, project_id, *, compensated=False, contribution
         if len(contribution_awards) != 1:
             raise ValueError("current policy fixture requires one common instrument")
         instrument = contribution_awards[0]
-        financial_header = (instrument, await create_binding(factory, world, instrument_type=instrument))
+        binding = contribution_binding_id
+        if binding is None:
+            binding = await create_binding(factory, world, instrument_type=instrument)
+        financial_header = (instrument, binding)
     policy = None
     for operation in ("create_draft", "update_draft", "publish"):
         async with factory() as session, session.begin():

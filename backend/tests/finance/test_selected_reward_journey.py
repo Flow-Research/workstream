@@ -220,11 +220,18 @@ async def test_original_claim_replay_after_rebase(tmp_path, isolated_database_en
         h.source = await source_values(h)
         await provision_router(h.factory)
         h.envelope = await invoked_completion(h)
+        async with h.factory() as session:
+            prior_binding = await session.scalar(text("""SELECT d.adapter_binding_id
+                FROM public.submissions s JOIN public.contribution_award_definitions d
+                  ON d.id=s.contribution_award_definition_id WHERE s.id=:id"""),
+                {"id": h.created.submission_id})
+            assert prior_binding is not None
         await activate_successor_guide(
             h, version="revised", human_review_required=False,
             contribution_awards=() if target_instrument is None else (target_instrument,),
             submission_quantities=({"small": "1", "medium": target_quantity, "large": "21"}
                                    if target_instrument is not None else None),
+            contribution_binding_id=prior_binding if target_instrument == "money" else None,
         )
         await _fixture_revision_context(h)
         view = await h.client.get(f"/api/v1/tasks/{h.task_id}/work-context")
@@ -332,7 +339,15 @@ async def test_original_claim_replay_after_rebase(tmp_path, isolated_database_en
         async with h.factory() as session:
             completion = await session.scalar(text("SELECT completion_event_id FROM public.checker_runs WHERE id=:id"),
                                               {"id": h.result.attempt_id})
-        delivered = await production_outbox_delivery(h.factory).deliver(completion, h.request.project_id, "revised-unpaid-completion")
+            assert completion is not None
+        delivered = await production_outbox_delivery(h.factory).deliver(completion, h.request.project_id, "revised-selected-completion")
+        if delivered is None:
+            async with h.factory() as session:
+                state = (await session.execute(text("""SELECT delivery_state,event_type,event_version,
+                    claim_generation,claim_owner,claimed_at,claim_expires_at,next_attempt_at,last_error_code,
+                    clock_timestamp() AS observed_at FROM public.outbox_events WHERE event_id=:id"""),
+                    {"id": completion})).mappings().one_or_none()
+            pytest.fail(f"replacement completion was unavailable: {dict(state) if state else None}")
         assert outcome(delivered)["delivery_state"] == "acknowledged", outcome(delivered)
         async with h.factory() as session:
             assert await session.scalar(text("SELECT to_jsonb(s) FROM public.submissions s WHERE id=:id"),
