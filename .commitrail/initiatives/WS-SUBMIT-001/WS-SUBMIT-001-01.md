@@ -1790,3 +1790,10 @@ the shared default-input serializer's rules digest makes the independent expecte
 digest assertion fail even though production producer and validator agree with
 each other. Both mutations were reverted. These probes establish portable source
 and default derivation checks, not runtime/profile or native isolation evidence.
+
+Architecture/security and QA/test-delta replay passed the worker scope at clean
+`7f7b5c122`. Both reviewers verified the independent default vector and the
+same-length SHA negative control against the discriminating mutation logs.
+Record/link checks pass. The next connected implementation is the native
+single-guest supervisor/service path with the reviewed storage, FD, profile and
+cleanup boundaries; the portable worker does not complete that path.
