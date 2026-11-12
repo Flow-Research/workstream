@@ -2203,3 +2203,47 @@ scope and limitations. The next required composition is Python adapter parsing
 and CHECKERS/AUTH-bound durable retention of invocation/runtime/timing/cleanup
 facts; returning only the worker payload would discard required ownership
  evidence. Native qualification and the public submission cutover remain open.
+
+### Backend PRE invocation receipt retention plan
+
+The host now returns invocation/runtime/timing/cleanup evidence, while the Python
+adapter and CHECKERS currently accept only worker facts. Complete this owner
+composition without discarding metadata: introduce a closed invocation receipt
+and a typed result pairing that receipt with optional existing worker facts.
+The worker facts type and worker protocol remain separate and cannot manufacture
+host cleanup custody. Native runtime/cleanup evidence and a managed-style test
+variant have distinct closed provider evidence; shared ports require no host
+paths, file descriptors, local UIDs or Smol journal fields from every provider.
+Configured identities are evidence, not a claim of native qualification; complete
+qualification/conformance enforcement remains a separate explicit requirement.
+
+Validate exact operation/run/source/request/profile/image/fence, outcome/result
+presence, finite stage timing and cleanup disposition. Existing CHECKERS worker
+validation still derives and checks default input, manifest, registry and project
+result. The processor and ART foreground composition carry the typed response
+through finalization; transport failures may have no receipt, but a completed
+result must have one. Bind the receipt into AUTH finalization facts and CHECKERS
+terminal bytes/digest. Preserve typed infrastructure outcomes and do not convert
+cleanup pending into QC rejection or release local runtime capacity.
+
+Allowed changes: CHECKERS API receipt/terminal facts, existing external execution
+port/adapters/processor, ART source-execution composition, CHECKERS coordinator and
+retained reads, the next Alembic migration, affected owner/adapter/PG/read tests
+and fixtures, and this record. No new provider factory, compatibility execution
+path, default qualification values, public handoff shortcut, retained-data rewrite
+or migration-0071 edit is allowed. Use a new terminal/finalization schema version
+for receipt-bearing evidence; retain old source-terminal decoding strictly for
+reads, without inventing missing runtime custody. Existing prepared v1 retention
+continues. The SQL finalization facts digest and closed terminal guards must match
+Python, require bound receipts for completed new terminals, and preserve earlier
+immutable rows/digests. Replay cannot mint acceptance from a historical receipt.
+
+This is architecture/security-sensitive L1 work requiring plan review before
+implementation and architecture/security plus QA/test-delta after tests. Human
+review focus is authority-digest parity, exact receipt retention, historical read
+limits and provider-neutral ownership. Acceptance includes destroyed/pending
+receipts, receipt/source/fence/profile/runtime mismatch rejection, malformed
+outcome/timing refusal, AUTH digest sensitivity, actual PostgreSQL terminal
+retention/guard rejection, native wire decoding and a managed-style no-host-access
+contract test. Public T4, finalization/POST, qualification and full acceptance
+scenarios remain required subsequent work, not completion claims for this step.
