@@ -58,6 +58,12 @@ impl Entry {
 
 /// Derived from the validated PRE bootstrap, never from project stdout.
 pub(super) struct ProjectBinding<'a> {
+    pub project_id: &'a str,
+    pub task_id: &'a str,
+    pub assignment_id: &'a str,
+    pub attempt_id: &'a str,
+    pub effective_plan_sha256: &'a str,
+    pub requirement_id: &'a str,
     pub request_digest: &'a str,
     pub lease_id: &'a str,
     pub lease_generation: u64,
@@ -239,6 +245,24 @@ fn project_request(
     }
     let request = parse_request(&serde_json::to_vec(&frame.payload.request)?)?;
     let manifest_digest = canonical_hash(&frame.payload.manifest)?;
+    let manifest: Manifest = serde_json::from_value(frame.payload.manifest)?;
+    let input_entries: Vec<Value> = manifest
+        .entries
+        .iter()
+        .map(|entry| match entry {
+            Entry::Directory { normalized_path } => json!({"normalized_path":normalized_path,
+            "entry_type":"directory", "byte_count":0,"sha256":null,"executable":null}),
+            Entry::File {
+                normalized_path,
+                sha256,
+                byte_count,
+                executable,
+            } => json!({
+            "normalized_path":normalized_path,"entry_type":"file","byte_count":byte_count,
+            "sha256":sha256,"executable":executable}),
+        })
+        .collect();
+    let input = &request.value["input"];
     let identity = &request.value["identity"];
     let materials = request.value["materials"]
         .as_array()
@@ -247,6 +271,20 @@ fn project_request(
         || request.image_digest != binding.image_digest
         || request.configuration_digest != binding.configuration_digest
         || request.registry_entry_digest != binding.registry_entry_digest
+        || identity["project_id"] != binding.project_id
+        || identity["task_id"] != binding.task_id
+        || identity["assignment_id"] != binding.assignment_id
+        || identity["attempt_id"] != binding.attempt_id
+        || identity["effective_plan_sha256"] != binding.effective_plan_sha256
+        || input["schema_version"] != "workstream.external_checker_pre_submit_input.v1"
+        || input["project_id"] != binding.project_id
+        || input["task_id"] != binding.task_id
+        || input["assignment_id"] != binding.assignment_id
+        || input["requirement_id"] != binding.requirement_id
+        || input["archive_sha256"] != binding.archive_sha256
+        || input["archive_byte_count"] != binding.archive_byte_count
+        || input["semantic_manifest_sha256"] != manifest_digest
+        || input["manifest"] != Value::Array(input_entries)
         || identity["operation_id"] != binding.operation_id
         || identity["attempt_request_digest"] != binding.request_digest
         || identity["source_sha256"] != binding.source_sha256
@@ -259,7 +297,7 @@ fn project_request(
     {
         return Err("PRE derived project identity differs".into());
     }
-    Ok((request, serde_json::from_value(frame.payload.manifest)?))
+    Ok((request, manifest))
 }
 
 /// The worker is waiting on its private control pipe when this phase runs.
@@ -522,16 +560,38 @@ mod tests {
     fn worker_project_request_binds_source_fence_manifest_and_selected_configuration() {
         let mut request: Value =
             serde_json::from_str(include_str!("../../fixtures/request.json")).unwrap();
-        let manifest =
-            json!({"schema_version":"workstream.submission_bundle_manifest.v1", "entries":[]});
+        let manifest = json!({"schema_version":"workstream.submission_bundle_manifest.v1", "entries":[
+                {"normalized_path":"d","entry_type":"directory"},
+                {"normalized_path":"d/a","entry_type":"file","byte_count":3,"sha256":ABC_SHA,"executable":false}]});
         request["materials"][0]["semantic_manifest_sha256"] =
             json!(canonical_hash(&manifest).unwrap());
+        request["input"] = json!({
+            "schema_version":"workstream.external_checker_pre_submit_input.v1",
+            "project_id":request["identity"]["project_id"],
+            "task_id":request["identity"]["task_id"],
+            "assignment_id":request["identity"]["assignment_id"],
+            "requirement_id":"selected_requirement",
+            "archive_sha256":request["materials"][0]["archive_sha256"],
+            "archive_byte_count":request["materials"][0]["archive_byte_count"],
+            "semantic_manifest_sha256":request["materials"][0]["semantic_manifest_sha256"],
+            "manifest":[
+                {"normalized_path":"d","entry_type":"directory","byte_count":0,"sha256":null,"executable":null},
+                {"normalized_path":"d/a","entry_type":"file","byte_count":3,"sha256":ABC_SHA,"executable":false}
+            ], "packet":{"summary":"fixture","contributor_attestation":"fixture"},
+        });
+        request["input_sha256"] = json!(canonical_hash(&request["input"]).unwrap());
         request.as_object_mut().unwrap().remove("request_digest");
         request["request_digest"] = json!(canonical_hash(&request).unwrap());
         let validated = parse_request(&serde_json::to_vec(&request).unwrap()).unwrap();
         let identity = &request["identity"];
         let material = &request["materials"][0];
         let binding = ProjectBinding {
+            project_id: identity["project_id"].as_str().unwrap(),
+            task_id: identity["task_id"].as_str().unwrap(),
+            assignment_id: identity["assignment_id"].as_str().unwrap(),
+            attempt_id: identity["attempt_id"].as_str().unwrap(),
+            effective_plan_sha256: identity["effective_plan_sha256"].as_str().unwrap(),
+            requirement_id: "selected_requirement",
             request_digest: identity["attempt_request_digest"].as_str().unwrap(),
             lease_id: identity["lease_id"].as_str().unwrap(),
             lease_generation: identity["lease_generation"].as_u64().unwrap(),
@@ -583,6 +643,59 @@ mod tests {
             nested["request_digest"] = json!(canonical_hash(nested).unwrap());
             parse_request(&serde_json::to_vec(nested).unwrap()).unwrap();
             assert!(project_request(&binding, &serde_json::to_vec(&changed).unwrap()).is_err());
+        }
+        for field in [
+            "archive_sha256",
+            "archive_byte_count",
+            "semantic_manifest_sha256",
+            "manifest",
+            "project_id",
+            "task_id",
+            "assignment_id",
+            "requirement_id",
+        ] {
+            let mut changed = valid.clone();
+            let nested = &mut changed["payload"]["request"];
+            nested["input"][field] = match field {
+                "archive_byte_count" => json!(binding.archive_byte_count + 1),
+                "manifest" => {
+                    json!([{"normalized_path":"foreign","entry_type":"directory","byte_count":0,"sha256":null,"executable":null}])
+                }
+                "archive_sha256" | "semantic_manifest_sha256" => json!(ABC_SHA),
+                "project_id" | "task_id" | "assignment_id" => {
+                    json!("019b0000-0000-7000-8000-000000000099")
+                }
+                _ => json!("foreign"),
+            };
+            nested["input_sha256"] = json!(canonical_hash(&nested["input"]).unwrap());
+            nested.as_object_mut().unwrap().remove("request_digest");
+            nested["request_digest"] = json!(canonical_hash(nested).unwrap());
+            parse_request(&serde_json::to_vec(nested).unwrap()).unwrap();
+            assert!(
+                project_request(&binding, &serde_json::to_vec(&changed).unwrap()).is_err(),
+                "accepted input {field}"
+            );
+        }
+        for field in [
+            "project_id",
+            "task_id",
+            "assignment_id",
+            "effective_plan_sha256",
+        ] {
+            let mut changed = valid.clone();
+            let nested = &mut changed["payload"]["request"];
+            nested["identity"][field] = if field == "effective_plan_sha256" {
+                json!(ABC_SHA)
+            } else {
+                json!("019b0000-0000-7000-8000-000000000099")
+            };
+            nested.as_object_mut().unwrap().remove("request_digest");
+            nested["request_digest"] = json!(canonical_hash(nested).unwrap());
+            parse_request(&serde_json::to_vec(nested).unwrap()).unwrap();
+            assert!(
+                project_request(&binding, &serde_json::to_vec(&changed).unwrap()).is_err(),
+                "accepted identity {field}"
+            );
         }
         let mut trailing = serde_json::to_vec(&valid).unwrap();
         trailing.extend_from_slice(b"{}");

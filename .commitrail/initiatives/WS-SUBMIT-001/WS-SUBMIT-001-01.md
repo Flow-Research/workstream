@@ -1892,3 +1892,17 @@ include a positive shared SDK vector and rehashed foreign source requests.
 Removing file hashing accepts a same-length substitution and fails its test;
 removing the raw-source binding accepts a rehashed foreign request and fails its
 test. Both mutations were restored. Formatting and whitespace checks pass.
+
+Both reviews of `f8596ed77` found that the nested project input could disagree
+with the bound material while retaining valid input/request hashes. The repair
+compares input archive SHA/count, semantic digest and the complete directory/file
+entry projection with the same locked source and frame manifest. It additionally
+binds project/task/assignment/attempt, plan and selected requirement to explicit
+bootstrap facts; the input identity is checked too. The portable positive vector
+now includes both a directory and a file with independent expected input fields.
+Rehashed foreign input and identity vectors first pass the SDK hash/shape check,
+then fail the phase binding. Removing input-source, input-manifest or project-ID
+comparison separately makes the corresponding vector fail its assertion. All
+mutations were restored; 12 library and 34 binary tests and formatting checks
+pass. These checks do not establish the selected image's JSON-schema behavior,
+privileged launch or the still-missing bootstrap/service connection.
