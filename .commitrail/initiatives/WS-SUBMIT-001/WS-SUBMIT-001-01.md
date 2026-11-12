@@ -247,8 +247,8 @@ This does not authorize late foreground callbacks, cleanup charge release or PRE
 
 - Current-source reconciliation: rebased onto 94334ccf4 (PR #707); preserved issuer
   profile roadmap changes and schema head 0068. Submission owner contracts unchanged.
-- Next implementation stage: durable upload receipt orchestration and exact cleanup custody in
-  the same PR, followed by PRE, handoff/finalization and clients.
+- Next implementation stage: shared foreground authorization/heartbeat and exact cleanup
+  custody in the same PR, followed by PRE, handoff/finalization and clients.
 - Remaining risks: A01–A35 integration and C01–C07 qualification.
 
 
@@ -339,3 +339,13 @@ existing adapter's private filesystem operations and creates no adapter/factory.
 Use cryptographic opaque tokens for provider upload handles and temporary names,
 which are not Workstream surrogate record IDs. Existing composition and UUID
 inventory guards reproduced both failures and remain unchanged.
+
+Private upload composition at `e83ee8642` passed 10 real PostgreSQL/local-store
+cases with database/role cleanup confirmed and 390 static/local checks. Independent
+provider-call transactions proved committed receipts and NOWAIT acquisition of
+TASK, operation and capacity locks. A removed raw-SHA binding check made its
+negative test fail. Scoped architecture/security and QA/test-delta/CI reviews
+passed; none establish the still-missing public foreground lifecycle.
+DOC-UPLOAD-01 corrected summary wording to distinguish intent before begin,
+handle before parts and EOF before completion; receipts do not all precede
+every provider call.

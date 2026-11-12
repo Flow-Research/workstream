@@ -114,8 +114,9 @@ foreground intake custody with a matching TASK pointer, source/lease fences and
 per-operation physical source reservations under explicit limits. Hidden bounded
 receipt and S3-compatible source capabilities cover conditional completion and
 exact-version reads. Local source methods preserve one ZIP inode through sealing
-and completed bytes on late abort. Private upload composition commits receipts
-before external writes and binds the resulting source under the current fence.
+and completed bytes on late abort. Private upload composition commits intent
+before provider begin, handle before parts, and EOF before provider completion,
+then binds the resulting source under the current fence.
 Full foreground authorization/heartbeat integration, cleanup orchestration, AWS
 source qualification, one-session PRE, accepted handoff,
 finalization and client cutover remain planned;
