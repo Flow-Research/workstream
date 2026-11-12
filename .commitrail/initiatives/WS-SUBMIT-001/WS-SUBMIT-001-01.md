@@ -2575,11 +2575,23 @@ Required behavior:
    composition and fixed-service authority. Claim a separately fenced accepted
    continuation in a short transaction. Recognize and validate an already finalized
    operation before requiring a pending TASK pointer or a new lease.
-2. Observe only the recorded immutable source generation/size outside TASK locks
-   through the existing typed ART provider composition. Combine observation with
+2. Extend the existing typed ART provider interface and adapters with
+   `observe_sealed_source(source, operation_evidence=...)`, taking only the exact
+   committed `SealedSubmissionSource`. Return a frozen metadata observation of
+   location, provider generation and byte count, or absence; raise an integrity
+   error on mismatched ownership/generation/size. This is distinct from uncertain
+   upload completion recovery, which currently rehashes the ZIP. S3 must issue
+   version-pinned HEAD and validate VersionId, ContentLength and existing ownership
+   metadata. Local must use the existing directory lock, persisted seal and
+   no-follow descriptor, checking private regular-file permissions, device/inode
+   generation and size without reading the body. Do not use unversioned `head()`
+   or `observe_source_upload()` as this proof. Observe outside TASK locks, then
+   compare every observation field to immutable accepted custody again under the
+   T5 TASK/operation locks and current continuation fence. Combine observation with
    committed ingress and exact PRE hash/manifest evidence; metadata alone cannot
-   authorize adopting an arbitrary object. Do not upload/copy/read the ZIP again
-   merely to create a retained identity; register the exact already stored object.
+   authorize adopting an arbitrary object or prove its hash. Do not upload/copy/read
+   the ZIP again merely to create a retained identity; register the exact already
+   stored object. Retained reads must remain pinned to that same generation.
 3. Under TASK → operation owner locks, consume narrow service continuation
    authority over immutable acceptance and the current continuation fence. Do not
    call ordinary contributor creation with an `evaluation_pending` exception or
@@ -2602,7 +2614,7 @@ Required behavior:
    work on later grant changes.
 
 Allowed scope: ART intake/source/API/models/repository and retained material/binding
-owners; TASK Submission API/composition/participants/replay/dispatch and affected
+owners, `app/interfaces/artifacts.py` and existing Local/S3 provider adapters; TASK Submission API/composition/participants/replay/dispatch and affected
 lineage readers; AUTH closed continuation/binding contracts and adapters/catalogue;
 existing CHECKERS POST content/reservation adapters; outbox handler registration;
 new forward migration 0074 and affected schema fingerprint; tests/CI selection and
@@ -2636,3 +2648,18 @@ Run affected retained-reader and POST policy branches, including default human
 review and configured automatic final acceptance/contribution evidence. Finish the
 public API/CLI/MCP drill and A01–A35/C01–C07 audit before overall completion; internal
 T4/T5 tests alone cannot close the goal.
+
+T5 storage verification must reject an absent recorded version, a response naming
+another version, and replacement of the local inode. A newer S3 version at the same
+key must never be silently adopted: the recorded old version may still be observed
+if present; if absent, fail closed. Assert that observation makes no body-read or
+upload/copy calls. This observation is availability/provenance evidence combined
+with committed ingress/PRE, not a new content hash attestation or native provider
+qualification claim.
+
+Review repairs after f07ddcbd0: T4-QA-01 adds direct database assertions for zero
+Submission ART bindings, POST checker reservations, dispatches and request events
+at acceptance. T5-PLAN-01 is resolved in the plan above by explicitly extending the
+existing provider port for exact sealed-version metadata observation. Revision,
+whole-command heartbeat and substitution proof remain open; these repairs do not
+claim the complete T4/T5 or public journey.

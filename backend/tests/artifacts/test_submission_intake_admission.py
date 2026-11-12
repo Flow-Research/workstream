@@ -448,6 +448,16 @@ async def test_t4_accepts_exact_source_and_replays_one_receipt(admission_intake,
             "SELECT status, active_submission_operation_id FROM workstream_tasks WHERE id=:id"), {"id": f.task})).one()
         assert task.status == "evaluation_pending" and task.active_submission_operation_id == owner.operation_id
         assert await session.scalar(text("SELECT count(*) FROM submissions WHERE task_id=:id"), {"id": f.task}) == 0
+        assert await session.scalar(text(
+            "SELECT count(*) FROM artifact_bindings WHERE project_id=:id "
+            "AND resource_type='submission'"), {"id": f.project}) == 0
+        assert await session.scalar(text(
+            "SELECT count(*) FROM submission_dispatches WHERE task_id=:id"), {"id": f.task}) == 0
+        assert await session.scalar(text(
+            "SELECT count(*) FROM checker_runs WHERE task_id=:id"), {"id": f.task}) == 0
+        assert await session.scalar(text(
+            "SELECT count(*) FROM outbox_events WHERE project_id=:id "
+            "AND event_type='PostSubmissionEvaluationRequested'"), {"id": f.project}) == 0
         assert await session.scalar(text("SELECT count(*) FROM outbox_events WHERE aggregate_id=:id "
                                          "AND event_type='SubmissionFinalizationRequested'"), {"id": owner.operation_id}) == 1
         assert await session.scalar(text("SELECT count(*) FROM submission_source_charges WHERE operation_id=:id"),
