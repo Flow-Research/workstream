@@ -3333,3 +3333,18 @@ structure validation and Ruff passed before the final small Local test repair.
 The initial fixture edits overlapped the first integration run, so that receipt
 is not frozen-head proof. The corrected run and final review establish the
 candidate evidence separately; no cleanup or charge-release readiness is claimed.
+
+Corrected observation run passed91 tests in31.71seconds with PostgreSQL and MinIO
+cleanup complete (`/tmp/source-cleanup-observation2.log/json`). It launched at
+base da3ff9dc1 with all final product edits present; committing8d5780f66 mid-run
+changed no product files. This is worktree evidence, not exact-head launch proof.
+Architecture/security, QA/test-delta and docs/CI-integrity passed clean8d5780f66.
+Final structure validation passed (`/tmp/source-cleanup-structure-final.log`).
+
+Hosted Agent Gates run43329967178 exposed an adjacent test-selector bug:
+`test_backend_uv_cache_keeps_fresh_frozen_installs_and_exact_inputs` splits the
+preflight job through `lanes`, accidentally including the newer independent
+external-checker-runtime job and counting its installer twice. Extend scope to
+that existing test's extraction delimiter only, ending at the actual next job.
+Keep all exact installer/cache assertions and workflow files unchanged. Verify
+all108 lightweight/stale-review tests; CI-integrity reviewer checks this repair.

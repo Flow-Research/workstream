@@ -645,7 +645,7 @@ class LightweightAgentGateTests(unittest.TestCase):
         cache_env = 'echo "UV_CACHE_DIR=${RUNNER_TEMP}/backend-uv-cache" >> "${GITHUB_ENV}"'
         job_blocks = (
             (
-                workflow.split("\n  auth-boundary-preflight:\n", 1)[1].split("\n  lanes:\n", 1)[0],
+                workflow.split("\n  auth-boundary-preflight:\n", 1)[1].split("\n  external-checker-runtime:\n", 1)[0],
                 "uv sync --frozen --extra agents --extra dev",
             ),
             (
