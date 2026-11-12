@@ -853,7 +853,7 @@ def test_finalization_rejects_unbounded_or_empty_lease(duration):
 @pytest.mark.parametrize("lost_at", ["after_commit", "during_observation"])
 async def test_finalization_outbox_recovers_lost_ack_without_provider_replay(admission_intake, tmp_path, lost_at):
     from uuid import UUID
-    from sqlalchemy import select, func
+    from sqlalchemy import select, func, text
     from app.adapters.artifacts.finalization import submission_finalization_handler
     from app.adapters.auth import outbox_dispatch_authorization
     from app.adapters.checkers import selected_pre_submit_coordinator
@@ -926,6 +926,11 @@ async def test_finalization_outbox_recovers_lost_ack_without_provider_replay(adm
             else:
                 assert row.finalized_submission_id is not None and row.continuation_generation == 2
             assert event.delivery_state == "acknowledged" and event.attempt_count == 2
+            for table in ("submissions", "submission_dispatches", "checker_runs"):
+                assert await session.scalar(text(f"SELECT count(*) FROM {table} WHERE task_id=:id"),
+                                            {"id": f.task}) == 1
+            assert await session.scalar(text("SELECT count(*) FROM outbox_events WHERE project_id=:id "
+                "AND event_type='PostSubmissionEvaluationRequested'"), {"id": f.project}) == 1
         assert len(observations) == (1 if lost_at == "after_commit" else 2)
         assert len(invocations) == 2
         assert await handler(invocations[0]) == HandlerOutcome.REJECT

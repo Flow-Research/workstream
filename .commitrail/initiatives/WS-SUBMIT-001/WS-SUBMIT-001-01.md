@@ -15,7 +15,23 @@ The first stage gives database, upload and execution owners one representation
 of the original command and sealed source, separate from credentials and later
 manifest facts.
 
-## Current behavior
+## Implementation snapshot
+
+This branch has tested internal source contracts/custody, physical reservations,
+bounded Local/MinIO streaming, foreground upload/lease owners, source-bound PRE
+contracts/runtime implementation, atomic T4 acceptance, T5 registration and
+source-backed POST. Controlled/portable PRE tests do not qualify native Smol;
+MinIO tests do not qualify AWS. Detailed evidence below belongs to its stated
+commit or worktree, not automatically to every later head.
+
+Finalization now has production OUTBOX registration and invocation fencing, with
+real PostgreSQL recovery proof. Full Celery/provider execution, independent worker
+capacity, stalled-operation projection and operator recovery remain unfinished.
+Next: close those durable-worker gaps, then complete cleanup and public API/CLI/MCP
+cutover, real revision/review/ContributionRecord journeys, policy cardinality and
+the A01–A35/C01–C07 completion audit. No public end-to-end readiness is claimed.
+
+## Original behavior being replaced
 
 `artifacts/submission_admission.py` consumes process-local prepared ZIPs;
 `interfaces/artifacts.py` derives keys from content SHA. The new design needs
@@ -2918,3 +2934,12 @@ delivery case failed before the migration and is not counted as a success.
 Architecture/outbox contracts/topology passed **117 tests**; changed-file Ruff,
 structure and Markdown-link checks passed. These are scoped worktree results,
 not complete durable-worker or public-journey qualification.
+
+Scoped architecture/security review passed clean `3fdbc820a`. QA/test-delta found
+no production defect but requested explicit downstream row counts in each lost
+invocation branch. Both recovery cases now assert exactly one Submission,
+SubmissionDispatch, checker run and initial POST event. The strengthened run
+passed **2 tests** (`/tmp/t5-delivery3.log`, metadata `/tmp/t5-delivery3.json`), with
+database cleanup confirmed. This remains controlled-store handler proof through
+real OUTBOX; production composition is exercised for discovery, not native Celery
+execution or lazy provider startup. No scope expansion follows from the review.
