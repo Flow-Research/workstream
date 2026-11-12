@@ -3202,3 +3202,20 @@ with matching operation/source/lease identities, the full existing
 No test assertions, production validators, CI selection or permissions changed.
 The actual image drill is separate evidence and must finish before qualification
 is claimed. Latest fetch confirms zero commits missing from origin/main.
+
+Architecture and QA/test-delta independently passed the clean caller repair at
+4c101c6e7. Architecture also confirmed that mismatched material operation and the
+retired identity field remain rejected. Commitrail validation passed.
+
+Actual Docker qualification remains unproven: the first local attempt timed out
+executing its first sample. A diagnostic rerun instrumenting command durations
+(without changing repository code, deadlines, or sandbox settings) passed six
+samples, then exhausted the 30-second budget during creation of the seventh.
+Logs: `/tmp/submission-pre-image-repair.log` and
+`/tmp/submission-pre-image-timing.log`. The second run also exposed a late-create
+cleanup gap: despite immediate removal and absence observation, the Docker create
+subsequently left owned container `workstream-image-test-41d80d4bd7e4485599d986bbc87da211`.
+Its exact image/name were inspected and it was explicitly removed. This is an
+unresolved image-runner cleanup obligation, not evidence of successful complete
+qualification; it must be addressed without weakening deadlines. No AWS/native
+runtime qualification or full current-head CI success is claimed.
