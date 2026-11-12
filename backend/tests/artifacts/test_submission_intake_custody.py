@@ -1057,9 +1057,15 @@ async def test_selected_pre_sql_requires_exact_live_source(intake, changed):
     """Exercise the SQL source participant; not full PRE execution or T4 proof."""
     from dataclasses import replace
     from app.core.hashing import canonical_json_hash
-    from app.modules.tasks.api.transition_audit import TaskPolicyLineage
-    from app.modules.checkers.api.external_policy import LockedExternalCheckerPolicies
     from tests.checkers.external.test_selected_pre_submit_coordination import _source_reservation
+    from app.adapters.projects import project_locked_policy_context_port
+    from app.adapters.artifacts import submission_intake_pre_source_port
+    from app.modules.tasks.api.submission_context import TaskSubmissionContextRequest
+    from app.modules.projects.api.locked_policy import ProjectLockedPolicyContextRequest
+    from app.modules.checkers.api.pre_submit_material import SubmissionPacketView
+    from app.modules.artifacts.selected_pre_submit_admission import (
+        bind_selected_pre_submit_admission, build_selected_pre_submit_reservation,
+    )
 
     async with intake.factory.begin() as session:
         row = await reserve(intake, session)
@@ -1070,55 +1076,51 @@ async def test_selected_pre_sql_requires_exact_live_source(intake, changed):
             operation, lease, 1, provider_generation="pre-source-generation",
             pre_deadline_at=deadline, lease_expires_at=deadline,
         )
-        from app.adapters.artifacts import submission_intake_pre_source_port
+    async with intake.factory.begin() as session:
+        task = await task_submission_context_port(session).lock_submission_context(
+            TaskSubmissionContextRequest(
+                task_id=intake.task, assignment_id=intake.assignment,
+                contributor_id=intake.actor.actor_profile_id, predecessor_submission_id=None,
+            )
+        )
+        references = task.locked_project_context
+        project = await project_locked_policy_context_port(session).lock_locked_policy_context(
+            ProjectLockedPolicyContextRequest(**{
+                name: getattr(references, name) for name in (
+                    "project_id", "guide_version", "source_snapshot_id", "source_snapshot_hash",
+                    "effective_policy_id", "effective_policy_hash", "pre_submit_policy_id",
+                    "pre_submit_policy_bundle_hash",
+                )
+            })
+        )
         guarded = await submission_intake_pre_source_port(session).lock_pre_source(
             source=source, lease_id=lease, generation=1,
         )
-        assert guarded.source == source
-        policy_body = await session.scalar(text("""
-            SELECT a.effective_pre_submit_plan FROM project_guide_proposal_approvals a
-            JOIN workstream_tasks t ON t.locked_pre_submit_checker_policy_id=a.pre_submit_policy_id
-            WHERE t.id=:task
-        """), {"task": intake.task})
-        policies = LockedExternalCheckerPolicies.model_validate_json(json.dumps(policy_body))
-        base = _source_reservation()
-        locked = await session.scalar(text("""
-            SELECT jsonb_build_object('task',to_jsonb(t),'guide_id',g.id)
-            FROM workstream_tasks t JOIN project_guides g
-              ON g.project_id=t.project_id AND g.version=t.locked_guide_version
-            WHERE t.id=:task
-        """), {"task": intake.task})
-        task = locked["task"]
-        locked_policy = TaskPolicyLineage.model_validate_json(json.dumps({
-            key: task[key] for key in TaskPolicyLineage.model_fields
-        }))
-        rules = canonical_json_hash({
-            "schema_version": "workstream.task_checker_rules.v1",
-            "task_policy": locked_policy.model_dump(mode="json"),
-            "external_checker_policies_sha256": policies.policies_sha256,
-        })
-        lineage = replace(
-            base.admission_lineage, rules_sha256=rules, effective_plan_sha256=policies.pre_submit.policy_sha256,
-            guide_id=UUID(locked["guide_id"]), guide_version=task["locked_guide_version"],
-            source_snapshot_id=UUID(task["locked_guide_source_snapshot_id"]),
-            source_snapshot_sha256=task["locked_guide_source_snapshot_hash"],
-            effective_policy_id=UUID(task["locked_effective_project_submission_artifact_policy_id"]),
-            effective_policy_sha256=task["locked_effective_project_submission_artifact_policy_hash"],
-            pre_submit_policy_id=UUID(task["locked_pre_submit_checker_policy_id"]),
-            pre_submit_policy_sha256=task["locked_pre_submit_checker_bundle_hash"],
-            external_checker_policies_sha256=policies.policies_sha256,
-            post_submit_policy_body=policies.post_submit.model_dump(mode="json"),
-            post_submit_policy_sha256=policies.post_submit.policy_sha256,
+        metadata = SubmissionIntakeMetadata.model_validate_json(json.dumps(row.command_metadata))
+        selected = bind_selected_pre_submit_admission(
+            task=task, project=project, predecessor=None, predecessor_rules_sha256=None,
+            predecessor_exists=False,
+            packet=SubmissionPacketView(metadata.summary, metadata.contributor_attestation),
         )
-        request = replace(
-            base, actor_profile_id=UUID(row.actor_profile_id), identity_link_id=UUID(row.identity_link_id),
-            project_id=UUID(row.project_id), task_id=intake.task, assignment_id=intake.assignment,
-            idempotency_key=UUID(row.idempotency_key), source=source,
-            metadata_sha256=row.metadata_sha256, locked_context_sha256=row.locked_context_sha256,
-            foreground_lease_id=lease, foreground_lease_generation=1, pre_deadline_at=deadline,
-            policy=policies.pre_submit, admission_lineage=lineage,
-            default_context=replace(base.default_context, current_rules_sha256=rules),
+        build_values = dict(
+            source=guarded, metadata=metadata, task=task, project=project,
+            attempt_id=new_record_id(), idempotency_key=UUID(row.idempotency_key),
+            selected=selected, storage_scheme="local", runtime_profile=_source_reservation().runtime_profile,
         )
+        request = build_selected_pre_submit_reservation(**build_values)
+        if changed is None:
+            substitutions = (
+                {"metadata": metadata.model_copy(update={"summary": "substituted"})},
+                {"source": guarded.model_copy(update={"actor_profile_id": new_record_id()})},
+                {"source": guarded.model_copy(update={"metadata_sha256": "sha256:" + "f" * 64})},
+                {"selected": replace(selected, rules_sha256="sha256:" + "f" * 64)},
+                {"selected": replace(selected, default_context=replace(
+                    selected.default_context, packet=SubmissionPacketView("substituted", ""),
+                ))},
+            )
+            for replacement in substitutions:
+                with pytest.raises(ValueError, match="selected PRE .* context differs"):
+                    build_selected_pre_submit_reservation(**(build_values | replacement))
         body = request.canonical_body()
         if changed == "source":
             body["source"]["provider_generation"] = "substituted"

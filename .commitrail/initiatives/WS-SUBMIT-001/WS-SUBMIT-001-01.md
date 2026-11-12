@@ -1344,3 +1344,23 @@ predecessor upgrade, the retained-row migration round trip or the public source
 submission journey. The next implementation remains the live source-first
 producer/result path and removal of its prepared-bundle consumers, followed by
 the single-session runtime and the rest of the original end-to-end objective.
+
+The live ART reservation producer is now source-first: it accepts locked ART
+source facts and original metadata, compares TASK/PROJECT references and exact
+approved policy/rules/packet, and produces v2 without current manifest,
+prepared-generation or derived default-input facts. Its default-context binder
+uses only locked policy and retained predecessor facts; it no longer inspects
+or binds a current archive/change gate. The source-first PostgreSQL control now
+commits sealing before opening the TASK/PROJECT/ART binding root and calls this
+production builder instead of constructing a reservation from test row fields.
+The initial positive source/SQL/real-AUTH lifecycle run passed with cleanup on
+the dirty tree based at `7dd8ca6f5`; exact-head evidence is pending. Added builder
+substitution probes cover metadata, actor/source custody, rules and packet.
+
+This is not the completed producer-to-runtime cutover. The old public preparation
+caller still passes the removed inputs, and its prepared-bundle capability and
+consumer chain still require coordinated removal when source execution/T4 replace
+them. The old attempt-request hash helper is still referenced only by that chain
+and its obsolete tests; it is not a second v2 request identity. No new route,
+compatibility adapter, placeholder manifest or executable authority was added.
+The existing reviewed L0 single-session plan and file/reviewer scope still apply.
