@@ -7,6 +7,7 @@ from typing import Literal
 from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
 
+from app.modules.artifacts.api.submission_intake import PreSubmitSourceReadFacts
 from app.modules.authorization.domain.guide_compilation import ProjectGuideCompilationExecuteResourceContext, ProjectGuideCompilationRequestResourceContext
 from app.modules.authorization.domain.resource_digest import authorization_resource_digest as authorization_resource_digest
 from app.modules.authorization.domain.guide_proposals import GuideProposalResourceContext
@@ -1024,42 +1025,22 @@ class ProjectRoleGrantRevokeResourceContext(BaseModel):
     version: Literal[1, 2]
 
 
-class PreSubmitCheckerInputPreparationContext(BaseModel):
-    """Pre-inspection facts used to lock materializer authority."""
+class PreSubmitCheckerInputResourceContext(BaseModel):
+    """Exact sealed source and PRE lease authorized for the ART materializer."""
 
     model_config = _STRICT_FROZEN
-    resource_type: Literal["pre_submit_checker_input"]
+    resource_type: Literal["pre_submit_checker_input"] = "pre_submit_checker_input"
     resource_id: UUID
-    task_id: UUID
-    assignment_id: UUID
-    project_id: UUID
-    guide_id: UUID
-    guide_version: str = Field(min_length=1, max_length=50)
-    source_snapshot_id: UUID
-    source_snapshot_hash: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
-    submission_artifact_policy_id: UUID
-    submission_artifact_policy_hash: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
-    checker_policy_id: UUID
-    checker_policy_hash: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
-    prepared_generation_id: UUID
-    plan_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
-    catalogue_manifest_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
-    archive_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
-    archive_byte_count: int = Field(ge=0)
-    storage_scheme: Literal["local", "s3"]
+    scope_project_id: UUID
+    facts: PreSubmitSourceReadFacts
 
     @model_validator(mode="after")
-    def bind_prepared_generation(self):
-        """Use the process-local prepared generation as the opaque selector."""
-        if self.resource_id != self.prepared_generation_id:
-            raise ValueError("pre-submit checker input resource must match generation")
+    def bind_source_operation(self):
+        """Use the operation-owned immutable source as the opaque read selector."""
+        if (self.resource_id != self.facts.source.location.operation_id
+                or self.scope_project_id != self.facts.project_id):
+            raise ValueError("pre-submit checker input resource differs from source")
         return self
-
-
-class PreSubmitCheckerInputResourceContext(PreSubmitCheckerInputPreparationContext):
-    """Exact inspected contributor bundle authorized for checker materialization."""
-
-    semantic_manifest_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
 
 
 AuthorizationResourceContext = (

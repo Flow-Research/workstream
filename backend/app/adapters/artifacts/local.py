@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator, AsyncIterator
 from contextlib import contextmanager
 import errno
 import fcntl
@@ -251,7 +251,9 @@ class LocalStorageAdapter:
                                    operation_evidence: ArtifactProviderOperationEvidence | None = None) -> None:
         await self._source_io(LocalSubmissionSource(self).abort, upload)
 
-    def open_source(self, source: SealedSubmissionSource, *, operation_evidence: ArtifactProviderOperationEvidence | None = None) -> AsyncIterator[bytes]:
+    def open_source(self, source: SealedSubmissionSource, *, operation_evidence: ArtifactProviderOperationEvidence | None = None, maximum_chunk_bytes: int = 64 * 1024) -> AsyncGenerator[bytes, None]:
+        if type(maximum_chunk_bytes) is not int or not 1 <= maximum_chunk_bytes <= 64 * 1024:
+            raise ValueError("source read chunk bound is invalid")
         source = SealedSubmissionSource.model_validate(source)
         helper = LocalSubmissionSource(self)
         helper.location(source.location)
@@ -260,7 +262,7 @@ class LocalStorageAdapter:
             position = 0
             digest = hashlib.sha256()
             while position < source.raw_byte_count:
-                chunk = await self._source_io(helper.chunk, source, position)
+                chunk = await self._source_io(helper.chunk, source, position, maximum_chunk_bytes)
                 if not chunk:
                     raise ArtifactIntegrityError("submission source was truncated")
                 position += len(chunk)

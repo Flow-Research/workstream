@@ -895,10 +895,11 @@ async def local_source_completion(store, upload, data):
 
 
 @pytest.mark.asyncio
-async def test_local_submission_source_keeps_one_inode_and_survives_late_abort_and_restart(tmp_path):
+@pytest.mark.parametrize("read_cap", [4096, 65536])
+async def test_local_submission_source_keeps_one_inode_and_survives_late_abort_and_restart(tmp_path, read_cap):
     from app.interfaces.artifacts import ArtifactPreconditionFailedError
     root = tmp_path / "store"
-    store = initialize_local_store(root=root, buffer_bytes=65536)
+    store = initialize_local_store(root=root, buffer_bytes=256 * 1024)
     intent = local_source_intent(store)
     upload = await store.begin_source_upload(intent)
     path = root / "objects" / intent.location.object_ref
@@ -914,10 +915,10 @@ async def test_local_submission_source_keeps_one_inode_and_survives_late_abort_a
     with pytest.raises(ArtifactPreconditionFailedError):
         await store.upload_source_part(upload, 1, b"replacement")
     store.close()
-    store = initialize_local_store(root=root, buffer_bytes=65536)
+    store = initialize_local_store(root=root, buffer_bytes=256 * 1024)
     try:
-        chunks = [chunk async for chunk in store.open_source(sealed)]
-        assert max(map(len, chunks)) <= 65536 and b"".join(chunks) == data
+        chunks = [chunk async for chunk in store.open_source(sealed, maximum_chunk_bytes=read_cap)]
+        assert max(map(len, chunks)) <= read_cap and b"".join(chunks) == data
         assert path.stat().st_ino == inode
         assert list(root.rglob("bundle.zip")) == [path]
     finally:

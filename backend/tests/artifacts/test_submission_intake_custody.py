@@ -1310,3 +1310,114 @@ async def _assert_pre_terminal_guards(intake, request):
             )
             assert completion.terminal.outcome == "infrastructure_failed"
             assert completion.capability is None
+
+
+@pytest.mark.parametrize("intake", [True], indirect=True)
+@pytest.mark.parametrize("materializer_enabled", [True, False])
+async def test_source_pre_execution_uses_committed_authorized_local_read(intake, materializer_enabled):
+    """Real source/SQL/AUTH composition with an explicitly failing runtime double."""
+    from contextlib import aclosing
+    from app.adapters.artifacts import submission_intake_pre_source_port
+    from app.adapters.auth import selected_pre_submit_authority
+    from app.adapters.checkers import selected_pre_submit_coordinator, SelectedPreSubmitCheckerExecutionAdapter
+    from app.adapters.projects import project_locked_policy_context_port
+    from app.modules.actors.api import ServiceIdentity
+    from app.modules.artifacts.authorization import PreparedPreSubmitMaterializationAuthorization
+    from app.modules.artifacts.selected_pre_submit_admission import (
+        bind_selected_pre_submit_admission, build_selected_pre_submit_reservation,
+    )
+    from app.modules.artifacts.selected_pre_submit_execution import (
+        SelectedPreSubmitSourceReads, SelectedPreSubmitExecutionService,
+    )
+    from app.modules.authorization.catalogue import ActionId
+    from app.modules.checkers.api.pre_submit_material import SubmissionPacketView
+    from app.modules.checkers.api.selected_pre_submit import SelectedPreSubmitInfrastructureUnavailable
+    from app.modules.projects.api.locked_policy import ProjectLockedPolicyContextRequest
+    from app.modules.tasks.api.submission_context import TaskSubmissionContextRequest
+    from tests.artifact_store_helpers import initialize_local_store
+    from tests.authorization.test_pre_submit_attempt_authority import _seed_materializer
+    from tests.checkers.execution.support import provision_post_submit_service
+    from tests.checkers.external.test_selected_pre_submit_coordination import _source_reservation
+
+    store = initialize_local_store(root=intake.durable_root, buffer_bytes=256 * 1024)
+    async with intake.factory.begin() as session:
+        row = await reserve(intake, session, with_upload=False)
+        operation, foreground_lease = UUID(row.id), UUID(row.lease_id)
+        metadata = SubmissionIntakeMetadata.model_validate_json(json.dumps(row.command_metadata))
+        key = UUID(row.idempotency_key)
+    source = await foreground_upload(intake, store).receive(
+        operation, foreground_lease, 1, foreground_bytes(), **foreground_limits(),
+    )
+    async with intake.factory.begin() as session:
+        task = await task_submission_context_port(session).lock_submission_context(
+            TaskSubmissionContextRequest(intake.task, intake.assignment, intake.actor.actor_profile_id, None),
+        )
+        references = task.locked_project_context
+        project = await project_locked_policy_context_port(session).lock_locked_policy_context(
+            ProjectLockedPolicyContextRequest(**{name: getattr(references, name) for name in (
+                "project_id", "guide_version", "source_snapshot_id", "source_snapshot_hash",
+                "effective_policy_id", "effective_policy_hash", "pre_submit_policy_id", "pre_submit_policy_bundle_hash",
+            )}),
+        )
+        custody = await submission_intake_pre_source_port(session).lock_pre_source(
+            source=source, lease_id=foreground_lease, generation=1,
+        )
+        selected = bind_selected_pre_submit_admission(
+            task=task, project=project, predecessor=None, predecessor_rules_sha256=None,
+            predecessor_exists=False, packet=SubmissionPacketView(metadata.summary, metadata.contributor_attestation),
+        )
+        request = build_selected_pre_submit_reservation(
+            source=custody, metadata=metadata, task=task, project=project,
+            attempt_id=new_record_id(), idempotency_key=key, selected=selected,
+            runtime_profile=_source_reservation().runtime_profile,
+        )
+        await selected_pre_submit_coordinator(session).reserve(request)
+    await provision_post_submit_service(intake.factory, ServiceIdentity.CHECKER_PRE_SUBMIT)
+    if materializer_enabled:
+        await _seed_materializer(intake.factory)
+    observed = []
+    async with intake.factory() as session:
+        class ObservedStore:
+            def open_source(self, actual, *, maximum_chunk_bytes):
+                assert actual == source and not session.in_transaction()
+                assert maximum_chunk_bytes == 64 * 1024
+                async def chunks():
+                    async with intake.factory.begin() as probe:
+                        # Independent NOWAIT locks prove provider reads do not
+                        # retain TASK or intake locks from either AUTH root.
+                        for sql, params in (
+                            ("SELECT id FROM workstream_tasks WHERE id=:id FOR UPDATE NOWAIT", {"id": intake.task}),
+                            ("SELECT id FROM submission_intake_operations WHERE id=:id FOR UPDATE NOWAIT", {"id": operation}),
+                        ):
+                            assert (await probe.execute(text(sql), params)).one()
+                        assert await probe.scalar(text(
+                            "SELECT count(*) FROM audit_events WHERE action_id=:action AND resource_id=:id"
+                        ), {"action": ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE.value, "id": str(operation)}) == 1
+                    async with aclosing(store.open_source(actual, maximum_chunk_bytes=maximum_chunk_bytes)) as reader:
+                        async for chunk in reader:
+                            observed.append(chunk)
+                            yield chunk
+                return chunks()
+        class RuntimeFailure:
+            async def execute_pre(self, lease, grant):
+                async with aclosing(grant.open_source(lease=lease)) as reader:
+                    assert b"".join([chunk async for chunk in reader]) == b"original source bytes"
+                raise SelectedPreSubmitInfrastructureUnavailable("capacity_exceeded")
+        authority = PreparedPreSubmitMaterializationAuthorization(
+            session, request_id=new_record_id(), correlation_id=new_record_id(),
+        )
+        service = SelectedPreSubmitExecutionService(
+            session=session, coordinator=selected_pre_submit_coordinator(session),
+            authority=selected_pre_submit_authority(session),
+            source_reads=SelectedPreSubmitSourceReads(
+                session=session, sources=submission_intake_pre_source_port(session),
+                authority=authority, store=ObservedStore(),
+            ), execution=SelectedPreSubmitCheckerExecutionAdapter(external_execution=RuntimeFailure()),
+        )
+        result = await service.execute(reservation=request)
+        assert result.capability is None and result.terminal.outcome == "infrastructure_failed"
+        assert result.terminal.infrastructure_failure_code == (
+            "capacity_exceeded" if materializer_enabled else "material_unavailable"
+        )
+    assert bool(observed) == materializer_enabled
+    store.close()

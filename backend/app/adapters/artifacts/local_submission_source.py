@@ -301,7 +301,7 @@ class LocalSubmissionSource:
             SealedSubmissionSource.model_validate_json(json.dumps(value["source"])),
         )
 
-    def chunk(self, source: SealedSubmissionSource, position: int) -> bytes:
+    def chunk(self, source: SealedSubmissionSource, position: int, maximum_chunk_bytes: int) -> bytes:
         source = SealedSubmissionSource.model_validate(source)
         with self.locked(source.location) as directory:
             completion, sealed = self.seal(directory)
@@ -314,7 +314,7 @@ class LocalSubmissionSource:
                 if (sealed != source or self.source(completion, info) != source or info.st_size != source.raw_byte_count
                         or stat.S_IMODE(info.st_mode) != 0o400):
                     raise ArtifactIntegrityError("submission source generation mismatch")
-                return os.pread(descriptor, min(self.store._buffer_bytes, source.raw_byte_count - position), position)
+                return os.pread(descriptor, min(self.store._buffer_bytes, maximum_chunk_bytes, source.raw_byte_count - position), position)
             finally:
                 os.close(descriptor)
 

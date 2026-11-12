@@ -488,7 +488,7 @@ def get_submission_bundle_preparation_command(
             from app.adapters.auth import selected_pre_submit_authority
             from app.adapters.checkers import selected_pre_submit_checker_execution
             from app.modules.artifacts.selected_pre_submit_execution import (
-                SelectedPreSubmitExecutionService,
+                SelectedPreSubmitExecutionService, SelectedPreSubmitSourceReads,
             )
             from app.adapters.checkers import selected_pre_submit_coordinator
 
@@ -528,7 +528,11 @@ def get_submission_bundle_preparation_command(
                     session=session,
                     coordinator=selected_coordinator,
                     authority=selected_pre_submit_authority(session),
-                    materialization=materialization,
+                    source_reads=SelectedPreSubmitSourceReads(
+                        session=session, sources=submission_intake_pre_source_port(session),
+                        authority=materialization_authority, store=store,
+                    ),
+                    execution=checker_execution,
                 ),
                 storage_scheme=storage_scheme,
                 artifact_deadline_ms=int(

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterator, Callable, Mapping
+from collections.abc import AsyncGenerator, AsyncIterator, Callable, Mapping
 from contextlib import asynccontextmanager
 import datetime
 import hashlib
@@ -791,8 +791,11 @@ class S3CompatibleArtifactStore:
     def open_source(
         self, source: SealedSubmissionSource, *,
         operation_evidence: ArtifactProviderOperationEvidence | None = None,
-    ) -> AsyncIterator[bytes]:
+        maximum_chunk_bytes: int = 64 * 1024,
+    ) -> AsyncGenerator[bytes, None]:
         """Read one immutable version; verify the original ZIP at stream exhaustion."""
+        if type(maximum_chunk_bytes) is not int or not 1 <= maximum_chunk_bytes <= 64 * 1024:
+            raise ValueError("source read chunk bound is invalid")
         source = SealedSubmissionSource.model_validate(source)
         self._source_key(source.location)
         evidence = operation_evidence or ArtifactProviderOperationEvidence()
@@ -808,7 +811,7 @@ class S3CompatibleArtifactStore:
                 async with response["Body"] as body:
                     self._check_source_response(source, response)
                     while True:
-                        chunk = await body.read(min(self._buffer_bytes, source.raw_byte_count - observed + 1))
+                        chunk = await body.read(min(self._buffer_bytes, maximum_chunk_bytes, source.raw_byte_count - observed + 1))
                         if not chunk:
                             break
                         if type(chunk) is not bytes or observed + len(chunk) > source.raw_byte_count:

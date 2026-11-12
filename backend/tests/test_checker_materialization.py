@@ -255,3 +255,162 @@ def test_adapter_failure_after_handoff_revokes_tree_and_cleans_workspace(
     assert escaped._content == {}
     assert list((tmp_path / "scratch" / "workspaces").iterdir()) == []
     manager.close()
+
+
+def _source_read_fixture(*, failure=None):
+    """Controlled commit/authority boundaries; provider I/O is explicitly simulated."""
+    from contextlib import asynccontextmanager
+    from datetime import UTC, datetime
+    from types import SimpleNamespace
+    import hashlib
+    from app.core.identifiers import new_record_id
+    from app.modules.artifacts.api.submission_intake import SubmissionIntakePreSourceFacts
+    from app.modules.artifacts.schemas import ArtifactAuthorityDeniedError
+    from app.modules.artifacts.selected_pre_submit_execution import SelectedPreSubmitSourceReads
+    from app.modules.checkers.api.selected_pre_submit import SelectedPreSubmitLeaseFacts
+    from tests.checkers.external.test_selected_pre_submit_coordination import _source_reservation
+
+    events = []
+    payload = b"authorized original bytes"
+    reservation = _source_reservation()
+    reservation = replace(reservation, source=reservation.source.model_copy(update={
+        "raw_sha256": "sha256:" + hashlib.sha256(payload).hexdigest(), "raw_byte_count": len(payload),
+    }))
+    lease = SelectedPreSubmitLeaseFacts(reservation, new_record_id(), 1, reservation.pre_deadline_at)
+    class Session:
+        active = False
+        def in_transaction(self):
+            return self.active
+        @asynccontextmanager
+        async def begin(self):
+            assert not self.active
+            self.active = True
+            events.append("begin")
+            try:
+                yield self
+                if failure == "commit":
+                    raise RuntimeError("commit acknowledgement lost")
+                events.append("commit")
+            finally:
+                self.active = False
+        async def scalar(self, query):
+            assert self.active
+            return datetime.now(UTC)
+    session = Session()
+    class Authority:
+        async def prepare(self, *, facts, idempotency_key):
+            assert session.active and facts.run_id == idempotency_key
+            events.append("prepare")
+            if failure == "authority":
+                raise ArtifactAuthorityDeniedError("source read denied")
+            return self
+        async def consume(self, *, prepared_authorization, facts):
+            assert prepared_authorization is self and session.active
+            events.append("consume")
+        def close(self):
+            events.append("close_authority")
+    class Sources:
+        async def lock_pre_source(self, **kwargs):
+            assert session.active
+            events.append("lock_source")
+            return SubmissionIntakePreSourceFacts(
+                source=reservation.source, project_id=reservation.project_id,
+                task_id=new_record_id() if failure == "source" else reservation.task_id,
+                assignment_id=reservation.assignment_id, actor_profile_id=reservation.actor_profile_id,
+                identity_link_id=reservation.identity_link_id, metadata_sha256=reservation.metadata_sha256,
+                locked_context_sha256=reservation.locked_context_sha256,
+                lease_id=reservation.foreground_lease_id, lease_generation=reservation.foreground_lease_generation,
+                lease_expires_at=reservation.pre_deadline_at, pre_deadline_at=reservation.pre_deadline_at,
+            )
+    class Capability:
+        consumed = False
+        def consume(self, *, run_id, lease):
+            assert not self.consumed and run_id == lease.reservation.attempt_id
+            self.consumed = True
+            return lease
+    class Store:
+        def open_source(self, source, *, maximum_chunk_bytes):
+            assert not session.active and events.index("commit") > events.index("consume")
+            assert source == reservation.source and maximum_chunk_bytes == 64 * 1024
+            events.append("open_source")
+            async def chunks():
+                try:
+                    yield payload
+                finally:
+                    events.append("close_source")
+            return chunks()
+    return SimpleNamespace(
+        issuer=SelectedPreSubmitSourceReads(session=session, sources=Sources(), authority=Authority(), store=Store()),
+        session=session, lease=lease, capability=Capability(), events=events, payload=payload,
+    )
+
+
+@pytest.mark.asyncio
+async def test_pre_source_grant_requires_commit_and_is_one_use_and_callback_scoped():
+    from app.core.identifiers import new_record_id
+    from app.modules.checkers.api.selected_pre_submit import SelectedPreSubmitInfrastructureUnavailable
+
+    value = _source_read_fixture()
+    async with value.issuer.issue(lease=value.lease, execution_authority=value.capability) as grant:
+        assert value.events == ["begin", "prepare", "lock_source", "consume", "commit"]
+        with pytest.raises(SelectedPreSubmitInfrastructureUnavailable):
+            grant.open_source(lease=replace(value.lease, lease_id=new_record_id()))
+        reader = grant.open_source(lease=value.lease)
+        with pytest.raises(SelectedPreSubmitInfrastructureUnavailable):
+            grant.open_source(lease=value.lease)
+        assert b"".join([chunk async for chunk in reader]) == value.payload
+    assert value.events[-2:] == ["close_source", "close_authority"]
+    with pytest.raises(SelectedPreSubmitInfrastructureUnavailable):
+        grant.open_source(lease=value.lease)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failure", ["authority", "source", "commit"])
+async def test_pre_source_grant_never_exposes_bytes_before_authorized_commit(failure):
+    from app.modules.checkers.api.selected_pre_submit import SelectedPreSubmitInfrastructureUnavailable
+
+    value = _source_read_fixture(failure=failure)
+    error = RuntimeError if failure == "commit" else SelectedPreSubmitInfrastructureUnavailable
+    with pytest.raises(error):
+        async with value.issuer.issue(lease=value.lease, execution_authority=value.capability):
+            raise AssertionError("uncommitted or unauthorized source grant escaped")
+    assert "open_source" not in value.events
+    assert "commit" not in value.events
+    if failure != "commit":
+        assert "consume" not in value.events
+
+
+@pytest.mark.asyncio
+async def test_pre_source_grant_refuses_reads_in_database_transaction():
+    from app.modules.checkers.api.selected_pre_submit import SelectedPreSubmitInfrastructureUnavailable
+
+    value = _source_read_fixture()
+    async with value.issuer.issue(lease=value.lease, execution_authority=value.capability) as grant:
+        async with value.session.begin():
+            with pytest.raises(SelectedPreSubmitInfrastructureUnavailable):
+                grant.open_source(lease=value.lease)
+    assert "open_source" not in value.events
+
+
+@pytest.mark.asyncio
+async def test_pre_source_grant_closes_abandoned_reader_when_callback_ends():
+    value = _source_read_fixture()
+    async with value.issuer.issue(lease=value.lease, execution_authority=value.capability) as grant:
+        reader = grant.open_source(lease=value.lease)
+        assert await anext(reader) == value.payload
+        assert "close_source" not in value.events
+    assert value.events[-2:] == ["close_source", "close_authority"]
+    with pytest.raises(StopAsyncIteration):
+        await anext(reader)
+
+
+@pytest.mark.asyncio
+async def test_pre_source_grant_cannot_start_escaped_reader_after_callback():
+    from app.modules.checkers.api.selected_pre_submit import SelectedPreSubmitInfrastructureUnavailable
+
+    value = _source_read_fixture()
+    async with value.issuer.issue(lease=value.lease, execution_authority=value.capability) as grant:
+        reader = grant.open_source(lease=value.lease)
+    with pytest.raises((StopAsyncIteration, SelectedPreSubmitInfrastructureUnavailable)):
+        await anext(reader)
+    assert "open_source" not in value.events

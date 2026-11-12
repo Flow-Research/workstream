@@ -165,6 +165,37 @@ class SubmissionIntakePreSourceFacts(_IntakeValue):
         return self
 
 
+class PreSubmitSourceReadFacts(_IntakeValue):
+    """Exact ART read authorization, distinct from CHECKERS execution authority."""
+
+    schema_version: Literal["workstream.pre_submit_source_read.v1"] = "workstream.pre_submit_source_read.v1"
+    source: SealedSubmissionSource
+    project_id: UUID
+    task_id: UUID
+    assignment_id: UUID
+    actor_profile_id: UUID
+    identity_link_id: UUID
+    metadata_sha256: Sha256
+    locked_context_sha256: Sha256
+    foreground_lease_id: UUID
+    foreground_lease_generation: int = Field(ge=1)
+    pre_deadline_at: AwareDatetime
+    run_id: UUID
+    request_digest: Sha256
+    policy_sha256: Sha256
+    execution_lease_id: UUID
+    execution_lease_generation: int = Field(ge=1)
+    execution_lease_expires_at: AwareDatetime
+
+    @model_validator(mode="after")
+    def bounded_execution(self) -> Self:
+        """Keep source upload fencing and the immutable PRE deadline intact."""
+        if (self.foreground_lease_generation < self.source.sealed_upload_fence
+                or self.execution_lease_expires_at > self.pre_deadline_at):
+            raise ValueError("PRE source read bounds differ")
+        return self
+
+
 class SubmissionIntakePreSourcePort(Protocol):
     """ART exact source participation in an authorized, caller-owned T3 root."""
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator, AsyncIterator
 from dataclasses import dataclass
 import re
 from typing import Protocol
@@ -395,8 +395,9 @@ class ArtifactStore(ExternalServiceAdapter, Protocol):
     def open_source(
         self, source: SealedSubmissionSource, *,
         operation_evidence: ArtifactProviderOperationEvidence | None = None,
-    ) -> AsyncIterator[bytes]:
-        """Read the exact authorized version with bounded raw identity verification."""
+        maximum_chunk_bytes: int = 64 * 1024,
+    ) -> AsyncGenerator[bytes, None]:
+        """Yield closable exact-version reads, capped by maximum_chunk_bytes (1..64 KiB)."""
 
     async def observe_source_upload(
         self, completion: SubmissionSourceCompletion, *,

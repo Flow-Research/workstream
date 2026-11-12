@@ -1514,3 +1514,24 @@ unfinished; the next work is the exact ART source-read grant/AUTH issuer and the
 native single-session handler, followed by removing their obsolete prepared
 callers and completing SQL/T4 custody. This evidence does not authorize a push
 or readiness claim for the incomplete public cutover.
+
+The ART source-read implementation now projects exact sealed-source, foreground
+and execution fences into the existing fixed-materializer AUTH action. Issuance
+consumes committed CHECKERS authority, rechecks locked TASK/ART custody, commits
+the independent materializer audit, and only then exposes a one-use stream.
+Reads enforce the earlier foreground/execution deadline, exact byte count and
+64 KiB chunk ceiling outside database transactions. The provider port accepts a
+smaller explicit read cap without changing source identity.
+
+Real PostgreSQL/local-provider integration passed authorized and denied service
+cases (two tests), including independent NOWAIT TASK/ART lock probes during I/O
+and visibility of the committed materializer audit. The guest is deliberately
+replaced by a capacity-failure consumer in this proof; no native guest or success
+handoff is claimed. Three real authorization tests passed, including revocation.
+Controlled tests cover failed commit acknowledgement and changed custody.
+A new abandoned-reader regression exposed that callback revocation alone left
+an opened provider generator suspended. Callback exit now closes that generator
+with cancellation-resistant cleanup before closing the authority adapter.
+Owner/lane checks passed 229 tests. This source-read work remains pending scoped
+review, and the native handler and obsolete public caller replacement remain
+required before the coordinated cutover can be published.
