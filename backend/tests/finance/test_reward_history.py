@@ -8,6 +8,9 @@ from uuid import UUID
 from alembic import command
 import pytest
 from sqlalchemy import text
+from sqlalchemy.exc import DBAPIError
+
+from app.core.identifiers import new_record_id
 
 from app.db import session as db_session
 from app.modules.artifacts.task_import_sources import ArtifactTaskImportSourceCommands
@@ -66,6 +69,24 @@ async def test_archived_dual_awards_restore_without_losing_decimal_precision(iso
         await transition(await command_for(UUID(operator), phase))
     await db_session.dispose_engine()
     await asyncio.to_thread(command.upgrade, _config(), "head")
+    assert await economic_snapshot() == before
+    for table, message in (
+        ("contribution_award_definitions", "new reward definitions require exact v2 policy"),
+        ("contribution_records", "new contribution and award effects require v2"),
+        ("compensation_awards", "new contribution and award effects require v2"),
+    ):
+        async with db_session.get_session_factory()() as session, session.begin():
+            with pytest.raises(DBAPIError, match=message):
+                async with session.begin_nested():
+                    await session.execute(
+                        text(
+                            f"INSERT INTO public.{table} SELECT (jsonb_populate_record(NULL::public.{table}, "
+                            "to_jsonb(source)||jsonb_build_object('id',CAST(:id AS uuid)))).* "
+                            f"FROM public.{table} source ORDER BY source.id LIMIT 1"
+                        ),
+                        {"id": new_record_id()},
+                    )
+                    await session.execute(text("SET CONSTRAINTS ALL IMMEDIATE"))
     assert await economic_snapshot() == before
     async with db_session.get_session_factory()() as session:
         rows = (
