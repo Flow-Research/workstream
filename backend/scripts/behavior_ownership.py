@@ -356,6 +356,7 @@ PILOT_04_SELECTED_FLOW_TARGETS = frozenset(
         "backend/app/modules/checkers/api/pre_submit_material.py",
         "backend/app/modules/checkers/api/selected_post_submit.py",
         "backend/app/modules/checkers/api/selected_pre_submit.py",
+        "backend/app/modules/checkers/api/historical_selected_pre_submit.py",
         "backend/app/modules/checkers/selected_post_submit_execution.py",
         "backend/app/modules/checkers/selected_pre_submit_coordination.py",
         "backend/app/modules/checkers/selected_pre_submit_execution.py",

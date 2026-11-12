@@ -1346,6 +1346,10 @@
     },
     {
       "group": "artifacts",
+      "target": "backend/app/modules/checkers/api/historical_selected_pre_submit.py"
+    },
+    {
+      "group": "artifacts",
       "target": "backend/app/modules/checkers/api/history.py"
     },
     {
@@ -2661,7 +2665,7 @@
       "target": "backend/scripts/validate_test_lane_evidence.py"
     }
   ],
-  "authority_digest": "e33f74715c05aa7421172de067b9b199daf6655580361a6eb740d31e8b825aaf",
+  "authority_digest": "b6cc06f83827bf37427589437c71a084255f91a27b66bcc4109eebe8ba0160b2",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }

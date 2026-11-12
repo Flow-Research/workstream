@@ -12,6 +12,7 @@ from app.core.hashing import canonical_json_hash
 from app.modules.checkers.api.default_checker import WORKSTREAM_DEFAULT_BEHAVIOR_SHA256
 from app.modules.checkers.api.default_checker import WorkstreamDefaultCheckerResult
 from app.modules.checkers.api.external import ExternalCheckerExecutionResult
+from app.modules.checkers.api.historical_selected_pre_submit import HistoricalSelectedPreSubmitTerminal
 
 
 @dataclass(frozen=True, slots=True)
@@ -936,7 +937,7 @@ class SelectedPreSubmitRunView:
     archive_byte_count: int
     queued_at: datetime
     completed_at: datetime | None
-    terminal: SelectedPreSubmitTerminalFacts | None
+    terminal: SelectedPreSubmitTerminalFacts | HistoricalSelectedPreSubmitTerminal | None
 
 
 class SelectedPreSubmitRunReadPort(Protocol):

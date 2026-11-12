@@ -1190,3 +1190,16 @@ excluded. Claims/finalization use DB time and cannot outlive ART's hard deadline
 Architecture/security found this replacement feasible; it is not implemented by
 the preceding source-lock port. Fetched `origin/main` remains `94334ccf4`, already
 an ancestor of this branch.
+
+The retained v1 reader now uses a separate frozen data decoder, containing only
+lineage/request/lease/result/terminal values and no coordination or capability
+ports. The read projection uses that decoder, so the live source-first request
+can be changed without rewriting historical canonical bytes. A fixed v1 request
+and terminal vector preserves both hashes; altered request binding/timing and
+row terminal digest are rejected. Historical values cannot enter the live
+reservation or lease constructor, even with identical field values. The first
+test used an incomplete session stub; it now opens a real unbound SQLAlchemy root
+and proves rejection before TASK/DB access. All 250 focused decoder/projection,
+owner and lane checks pass. This is the read side of the coordinated replacement;
+new v1 write prohibition, v2 live request/SQL guards and removal of the prepared
+producer remain pending and are not implied by this checkpoint.

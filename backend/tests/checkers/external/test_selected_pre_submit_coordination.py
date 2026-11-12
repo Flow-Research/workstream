@@ -484,3 +484,67 @@ def test_selected_ready_admission_binds_selected_run() -> None:
     facts = SubmissionAdmissionConsumptionService._authority_facts(admission, request)
     assert facts.evidence_set_id is None
     assert facts.selected_pre_submit_run_id == run_id
+
+
+def _retained_v1():
+    """Fixed pre-cutover bytes; never regenerated from the live request schema."""
+    import json
+    from pathlib import Path
+
+    return json.loads((Path(__file__).parent / "fixtures" / "selected_pre_v1.json").read_text())
+
+
+def test_historical_pre_decoder_preserves_exact_request_and_terminal_bytes():
+    from app.modules.checkers.api.historical_selected_pre_submit import (
+        HistoricalSelectedPreSubmitReservation, HistoricalSelectedPreSubmitTerminal,
+    )
+    from app.modules.checkers.selected_pre_submit_reads import _view
+
+    retained = _retained_v1()
+    request = HistoricalSelectedPreSubmitReservation.from_canonical_body(retained["request"])
+    terminal = HistoricalSelectedPreSubmitTerminal.from_canonical_body(retained["terminal"])
+    assert request.canonical_body() == retained["request"]
+    assert request.request_digest == retained["request_digest"]
+    assert terminal.canonical_body() == retained["terminal"]
+    assert terminal.terminal_digest == retained["terminal_digest"]
+    row = SimpleNamespace(
+        id=str(request.attempt_id), actor_profile_id=str(request.actor_profile_id),
+        task_id=str(request.task_id), assignment_id=str(request.assignment_id),
+        status="infrastructure_failed", archive_sha256=request.archive_sha256,
+        archive_byte_count=request.archive_byte_count, queued_at=terminal.queued_at,
+        completed_at=terminal.completed_at, terminal_json=retained["terminal"],
+        terminal_digest=retained["terminal_digest"], eligible=None,
+    )
+    view = _view(row)
+    assert type(view.terminal) is HistoricalSelectedPreSubmitTerminal
+    assert view.terminal.canonical_body() == retained["terminal"]
+    row.terminal_digest = "sha256:" + "f" * 64
+    with pytest.raises(SelectedPreSubmitUnavailable):
+        _view(row)
+
+
+@pytest.mark.asyncio
+async def test_historical_pre_values_cannot_become_live_reservation_or_lease():
+    from app.modules.checkers.api.historical_selected_pre_submit import HistoricalSelectedPreSubmitReservation
+
+    request = HistoricalSelectedPreSubmitReservation.from_canonical_body(_retained_v1()["request"])
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    tasks = SimpleNamespace(lock_selected_pre_submit_scope=AsyncMock())
+    async with AsyncSession() as session, session.begin():
+        coordinator = SelectedPreSubmitCoordinator(session, tasks=tasks)
+        with pytest.raises(TypeError, match="reservation facts are invalid"):
+            await coordinator.reserve(request)
+    tasks.lock_selected_pre_submit_scope.assert_not_awaited()
+    with pytest.raises(ValueError, match="lease facts are invalid"):
+        SelectedPreSubmitLeaseFacts(request, new_record_id(), 1, datetime.now(UTC))
+
+
+@pytest.mark.parametrize("field", ["request_digest", "queue_latency_ms", "execution_latency_ms"])
+def test_historical_pre_decoder_rejects_changed_binding_or_timing(field):
+    from app.modules.checkers.api.historical_selected_pre_submit import HistoricalSelectedPreSubmitTerminal
+
+    body = _retained_v1()["terminal"]
+    body[field] = "sha256:" + "f" * 64 if field == "request_digest" else body[field] + 1
+    with pytest.raises(ValueError):
+        HistoricalSelectedPreSubmitTerminal.from_canonical_body(body)

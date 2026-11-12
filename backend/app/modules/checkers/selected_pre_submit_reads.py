@@ -6,9 +6,10 @@ from sqlalchemy import select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.checkers.api.selected_pre_submit import (
-    SelectedPreSubmitRunStatus, SelectedPreSubmitRunView, SelectedPreSubmitTerminalFacts,
+    SelectedPreSubmitRunStatus, SelectedPreSubmitRunView,
     SelectedPreSubmitUnavailable,
 )
+from app.modules.checkers.api.historical_selected_pre_submit import HistoricalSelectedPreSubmitTerminal
 from app.modules.checkers.models import SelectedPreSubmitRun
 
 
@@ -16,7 +17,7 @@ def _view(row: SelectedPreSubmitRun) -> SelectedPreSubmitRunView:
     """Revalidate one stored terminal body against its fixed columns."""
     try:
         terminal = (
-            SelectedPreSubmitTerminalFacts.from_canonical_body(row.terminal_json)
+            HistoricalSelectedPreSubmitTerminal.from_canonical_body(row.terminal_json)
             if row.terminal_json is not None else None
         )
     except (TypeError, ValueError):
