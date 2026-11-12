@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.hashing import canonical_json_hash
 from app.modules.tasks.api.authorization import TaskAuthorityFacts, TaskAuthorityOperation
 from app.modules.tasks.models import TaskAssignment, TaskCommandReceipt, WorkstreamTask, Submission
-from app.modules.tasks.schemas import TaskResponse, TaskWithAssignmentResponse
+from app.modules.tasks.schemas import ContributorClaimTaskResponse, TaskResponse, TaskWithAssignmentResponse
 from app.modules.tasks.service import TaskServiceError, LOCKED_CONTEXT_REQUIRED_FIELDS
 
 
@@ -113,7 +113,6 @@ class TaskCommandReplay:
             or receipt.assignment_id != assignment.id
             or receipt.contributor_id != assignment.contributor_id
             or task.assigned_to != assignment.contributor_id
-
         ):
             raise TaskReplayConflict("task_replay_state_changed")
         response_type = TaskWithAssignmentResponse if facts.operation is TaskAuthorityOperation.CLAIM else TaskResponse
@@ -152,9 +151,11 @@ class TaskCommandReplay:
                 field: str(value) if isinstance(value, UUID) else value
                 for field,value in context.items()
             })
+            # The full immutable context proves the receipt hash. The captured
+            # contributor result intentionally masks private policy coordinates.
             if (original.task_size != captured_task.task_size or original_hash != receipt.locked_context_hash
                     or any(str(getattr(captured_task, field)) != str(value)
-                           for field,value in context.items() if field in TaskResponse.model_fields)):
+                           for field,value in context.items() if field in ContributorClaimTaskResponse.model_fields)):
                 raise TaskReplayConflict("task_replay_state_changed")
         return response
 

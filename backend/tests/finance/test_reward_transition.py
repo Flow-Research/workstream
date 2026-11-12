@@ -10,6 +10,7 @@ from sqlalchemy import text
 
 from app.db import session as db_session
 from tests.authorization.contribution_policies.postgresql_support import world
+from tests.migration_fixtures import current_schema_revision
 
 
 def _admit(connection):
@@ -48,5 +49,5 @@ async def test_transition_admission_refuses_financial_definitions_without_rewrit
             await connection.run_sync(_admit)
         assert str(before[0].id) in str(failure.value)
         assert (await session.execute(query, parameters)).all() == before
-        assert await session.scalar(text("SELECT version_num FROM alembic_version")) == "0070_task_size"
+        assert await session.scalar(text("SELECT version_num FROM alembic_version")) == current_schema_revision()
         assert await session.scalar(text("SELECT count(*) FROM compensation_awards")) == 0

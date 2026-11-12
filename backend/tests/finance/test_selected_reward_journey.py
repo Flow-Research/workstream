@@ -29,7 +29,7 @@ from tests.trusted_intake_fixtures import LocalIntakeAdapter
 
 
 @asynccontextmanager
-async def selected_public_work(tmp_path, database_url, monkeypatch, *, human_review_required, instrument="money"):
+async def selected_public_work(tmp_path, database_url, monkeypatch, *, human_review_required, instrument="money", post_submit_registry_spec=None):
     """Only policy/actor setup is arranged; TASK/Assignment/Submission use HTTP."""
     engine = create_async_engine(database_url)
     factory = async_sessionmaker(engine, expire_on_commit=False)
@@ -40,7 +40,7 @@ async def selected_public_work(tmp_path, database_url, monkeypatch, *, human_rev
     try:
         plan, policy = await approved_selected_policy_fixture(
             factory, namespace, guide_version="initial", contribution_awards=(instrument,),
-            human_review_required=human_review_required,
+            human_review_required=human_review_required, post_submit_registry_spec=post_submit_registry_spec,
         )
         project = plan.lineage.project_id
         await provision_material_services(factory, artifacts=True, checker=True)
@@ -86,11 +86,15 @@ async def selected_public_work(tmp_path, database_url, monkeypatch, *, human_rev
                      for row in ready.json()["items"]}
             assert terms == ({"small": "2.125000000000000001", "medium": "4.250000000000000002"}
                              if instrument == "money" else {"small": "7", "medium": "14"})
+            h.claim_headers = {"Idempotency-Key": str(new_record_id())}
+            h.claim_body = {"reason": "Start exact Medium work"}
             claim = await client.post(f"/api/v1/tasks/{h.task_id}/claim",
-                headers={"Idempotency-Key": str(new_record_id())}, json={"reason": "Start exact Medium work"})
+                headers=h.claim_headers, json=h.claim_body)
             assert claim.status_code == 200, claim.text
+            h.claim_response = claim.json()
             h.assignment_id = UUID(claim.json()["assignment"]["id"])
             data = archive_with_modes(policy["evidence_path"], project)
+            h.data = data
             packet = {"summary": "Completed required work and evidence.",
                 "contributor_attestation": "I confirm rights_confirmed and no confidential data, credentials or copied source. "
                     + " ".join(policy["attestation_terms"])}
@@ -175,3 +179,74 @@ async def test_medium_public_claim_to_selected_automatic_acceptance(
             assert record["awards"][0]["award_definition_id"] == str(copied[5])
             assert record["awards"][0]["quantity"] == ("4.250000000000000002" if instrument == "money" else "14")
         assert await delivery.deliver(completed, h.request.project_id, "selected-medium-replay") is None
+
+
+async def test_original_claim_replay_after_rebase(tmp_path, isolated_database_env, monkeypatch):
+    """A real paid-to-unpaid rebase changes work context, never the original claim result."""
+    from app.modules.checkers.models import CheckerRun
+    from tests.checkers.execution.support import ControlledSelectedExecution, live_executor, reserve
+    from tests.checkers.external.support import post_registry_spec
+    from tests.tasks.post_submit_routing.outcome_support import invoked_completion
+    from tests.tasks.post_submit_routing.support import activate_successor_guide, source_values
+    from tests.test_submission_predecessor_custody import _fixture_revision_context
+
+    async with selected_public_work(tmp_path, isolated_database_env, monkeypatch,
+            human_review_required=False, post_submit_registry_spec=post_registry_spec()) as h:
+        await reserve(h)
+        h.result = await live_executor(h, selected_execution=ControlledSelectedExecution(verdict="failed")).evaluate_post_submission(h.request)
+        async with h.factory() as session:
+            run = await session.get(CheckerRun, str(h.result.attempt_id))
+            assert run.routing_recommendation == "needs_revision"
+            h.material = dict(run.material_custody)
+        h.source = {}
+        h.source = await source_values(h)
+        await provision_router(h.factory)
+        h.envelope = await invoked_completion(h)
+        await activate_successor_guide(h, version="revised")
+        await _fixture_revision_context(h)
+        view = await h.client.get(f"/api/v1/tasks/{h.task_id}/work-context")
+        assert view.status_code == 200, view.text
+        revision = view.json()["revision_context"]
+        assert revision["prior_reward_selection"] == {
+            "compensation_mode": "compensated", "task_size": "medium",
+            "instrument": "money", "unit": "USD", "quantity": "4.250000000000000002",
+        }
+        assert revision["target_reward_selection"] == {
+            "compensation_mode": "unpaid", "task_size": "medium",
+            "instrument": None, "unit": None, "quantity": None,
+        }
+        assert "adapter_binding_id" not in view.text
+        foreign = _context()
+        async with h.factory() as session, session.begin():
+            await _seed_human_actor(session, foreign)
+        async with h.engine.begin() as connection:
+            await install_submitter_grant(connection, {
+                "actor": str(foreign.actor_profile_id), "project": str(h.request.project_id),
+            })
+        async with h.factory() as session:
+            original = await session.scalar(text("SELECT to_jsonb(s) FROM public.submissions s WHERE id=:id"),
+                                            {"id": h.created.submission_id})
+            counts = {table: await session.scalar(text(f"SELECT count(*) FROM public.{table}"))
+                      for table in ("task_command_receipts", "task_assignments", "submissions", "final_acceptances", "contribution_records", "compensation_awards")}
+            decisions = await session.scalar(text("SELECT count(*) FROM public.audit_events WHERE action_id='task.claim' "
+                "AND event_type='SensitiveAuthorizationAllowed' AND actor_id=:actor"),
+                {"actor": str(h.actor_context.actor_profile_id)})
+        replay = await h.client.post(f"/api/v1/tasks/{h.task_id}/claim", headers=h.claim_headers, json=h.claim_body)
+        assert replay.status_code == 200 and replay.json() == h.claim_response, replay.text
+        changed = await h.client.post(f"/api/v1/tasks/{h.task_id}/claim", headers=h.claim_headers,
+                                      json={"reason": "Different request"})
+        assert changed.status_code == 409, changed.text
+        with monkeypatch.context() as foreign_environment:
+            async with _client(h, foreign_environment, isolated_database_env,
+                               subject=f"human-{foreign.actor_profile_id}") as other:
+                denied = await other.post(f"/api/v1/tasks/{h.task_id}/claim", headers=h.claim_headers, json=h.claim_body)
+                assert denied.status_code == 403, denied.text
+        submission = await h.client.post(f"/api/v1/tasks/{h.task_id}/submissions", json=h.submission_body)
+        assert submission.status_code == 201 and submission.json() == h.submission_response, submission.text
+        async with h.factory() as session:
+            assert await session.scalar(text("SELECT to_jsonb(s) FROM public.submissions s WHERE id=:id"),
+                                        {"id": h.created.submission_id}) == original
+            assert {table: await session.scalar(text(f"SELECT count(*) FROM public.{table}")) for table in counts} == counts
+            assert await session.scalar(text("SELECT count(*) FROM public.audit_events WHERE action_id='task.claim' "
+                "AND event_type='SensitiveAuthorizationAllowed' AND actor_id=:actor"),
+                {"actor": str(h.actor_context.actor_profile_id)}) > decisions

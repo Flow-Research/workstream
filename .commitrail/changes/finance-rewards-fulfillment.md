@@ -303,7 +303,17 @@ Additional supporting proof: 71 PRE/export cases, 59 financial/size/receipt case
 4 revision projection cases, 144 MCP contract/operation cases with live OpenAPI
 comparison, 26 built CLI read/revision/export cases, Go packages, scoped Ruff and
 module-boundary validation. Retain exact execution custody in the PR evidence;
-these counts are not coverage gates or whole-PR qualification. Remaining planned
-migration refusal, independent-session claim/acceptance races, explicit original
-claim/Submission replay after rebase and durable-worker failure/retry proof stay
+these counts are not coverage gates or whole-PR qualification. Clean-candidate replay of
+migration refusal, independent-session claim/acceptance races, original claim/
+Submission replay after rebase and durable-worker failure/retry proof stays
 required. Finance roots, handoff and execution remain unfinished.
+
+The real paid-to-unpaid revision drill also proves original claim and Submission
+replay: fresh original-actor authority returns exact prior results, changed input
+returns conflict, and another eligible same-project submitter is denied. Work,
+receipt and economic row counts remain unchanged; the original immutable
+Submission is identical. Its regression exposed comparison of intentionally
+masked contributor receipt fields with private source coordinates. The repair
+keeps full immutable-context hash validation and compares captured public fields
+through the canonical contributor projection instead of weakening lineage or
+adding another receipt format.
