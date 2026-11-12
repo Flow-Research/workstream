@@ -12,7 +12,7 @@ use std::path::{Component, Path, PathBuf};
 use std::process::Command;
 use std::sync::mpsc::{self, Sender, SyncSender};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use workstream_checker_guest::confinement::install_workload_filter;
 use workstream_checker_guest::{
     GuestCapabilities, GuestIoChannel, GuestIoHeader, GuestJob, GuestPurpose, MaterialRoot,
@@ -51,19 +51,22 @@ fn private_mounts() -> Result<()> {
     syscall_ok(unsafe { libc::unshare(libc::CLONE_NEWNS) })?;
     mount("", "/", "", libc::MS_REC | libc::MS_PRIVATE, "")
 }
-fn cgroups(cpu: u64, memory: u64) -> Result<()> {
+fn cgroups(cpu: u64, memory: u64, pids: u64) -> Result<()> {
     let root = Path::new("/sys/fs/cgroup");
     fs::write(root.join("cgroup.subtree_control"), "+cpu +memory +pids")?;
     let group = root.join("workstream-checker");
     fs::create_dir(&group)?;
-    fs::write(group.join("cpu.max"), format!("{} 100000", cpu * 100))?;
+    fs::write(
+        group.join("cpu.max"),
+        format!(
+            "{} 100000",
+            cpu.checked_mul(100).ok_or("CPU quota overflow")?
+        ),
+    )?;
     fs::write(group.join("memory.max"), memory.to_string())?;
     disable_swap(&group, Path::new("/proc/meminfo"))?;
     fs::write(group.join("memory.oom.group"), "1")?;
-    fs::write(
-        group.join("pids.max"),
-        (memory / (16 * 1024 * 1024)).clamp(16, 256).to_string(),
-    )?;
+    fs::write(group.join("pids.max"), pids.to_string())?;
     Ok(())
 }
 // Some fixed guest kernels omit the swap controller. In that case only a
@@ -534,7 +537,7 @@ fn confined_devices() -> Result<()> {
     Ok(())
 }
 
-fn readonly_filesystem() -> Result<()> {
+fn readonly_filesystem(scratch_bytes: u64) -> Result<()> {
     // mount_setattr recursively freezes every existing mount, including image
     // overlays and material. Then install the sole writable, bounded scratch.
     #[repr(C)]
@@ -589,7 +592,7 @@ fn readonly_filesystem() -> Result<()> {
         "/tmp",
         "tmpfs",
         libc::MS_NOSUID | libc::MS_NODEV | libc::MS_NOEXEC,
-        "size=16777216,mode=1777",
+        &format!("size={scratch_bytes},mode=1777"),
     )?;
     // Hide the management filesystem, cgroup controls and agent storage. Mounts
     // are private, so the supervisor outside this namespace remains functional.
@@ -649,12 +652,15 @@ fn supervised_exit(status: i32, oom_kills: u64) -> i32 {
     }
 }
 
-fn finish_workload_cgroup() -> Result<u64> {
+fn finish_workload_cgroup(deadline: Option<Instant>) -> Result<u64> {
     let group = Path::new("/sys/fs/cgroup/workstream-checker");
     if group.join("cgroup.kill").exists() {
         fs::write(group.join("cgroup.kill"), "1")?;
     }
     for _ in 0..5000 {
+        if deadline.is_some_and(|value| Instant::now() >= value) {
+            return Err("project cleanup deadline exceeded".into());
+        }
         let events = fs::read_to_string(group.join("cgroup.events"))?;
         if events.lines().any(|line| line == "populated 0") {
             let memory = fs::read_to_string(group.join("memory.events"))?;
@@ -708,15 +714,80 @@ impl ProjectOutcome {
     }
 }
 
+/// Explicit project-child bounds. Ordinary Project retains its established
+/// policy-derived controls; PRE supplies its qualified partition and deadlines.
+#[derive(Clone, Copy)]
+struct ProjectLimits {
+    cpu_millis: u64,
+    memory_bytes: u64,
+    maximum_processes: u64,
+    scratch_bytes: u64,
+    maximum_output_bytes: usize,
+    maximum_log_bytes: usize,
+    deadline: Option<Instant>,
+    cleanup_deadline: Option<Instant>,
+}
+
+impl ProjectLimits {
+    fn validate(&self, capabilities: GuestCapabilities) -> Result<()> {
+        // PRE cannot enter a blocking model/trial relay while relying on this
+        // local deadline. Ordinary POST relays retain their host-owned budget.
+        if self.deadline.is_some() && (capabilities.model || capabilities.execution) {
+            return Err("deadline-controlled project capabilities invalid".into());
+        }
+        if self.cpu_millis == 0
+            || self.cpu_millis.checked_mul(100).is_none()
+            || self.memory_bytes == 0
+            || self.maximum_processes == 0
+            || self.scratch_bytes == 0
+            || self.maximum_output_bytes == 0
+            || self.maximum_log_bytes == 0
+            || u32::try_from(self.maximum_output_bytes).is_err()
+            || u32::try_from(self.maximum_log_bytes).is_err()
+        {
+            return Err("project resource bounds invalid".into());
+        }
+        match (self.deadline, self.cleanup_deadline) {
+            (None, None) => Ok(()),
+            (Some(run), Some(cleanup)) if Instant::now() < run && run <= cleanup => Ok(()),
+            _ => Err("project deadline bounds invalid".into()),
+        }
+    }
+}
+
+fn stop_project(child: libc::pid_t, group: &Path, deadline: Instant) -> Result<i32> {
+    // Kill the owned PID as well: it may not have joined its cgroup yet. The
+    // unreaped child PID cannot be reused for an unrelated process.
+    let group_kill = fs::write(group.join("cgroup.kill"), "1");
+    let killed = unsafe { libc::kill(child, libc::SIGKILL) };
+    if killed != 0 && std::io::Error::last_os_error().raw_os_error() != Some(libc::ESRCH) {
+        return Err(std::io::Error::last_os_error().into());
+    }
+    let mut status = 0;
+    loop {
+        let waited = unsafe { libc::waitpid(child, &mut status, libc::WNOHANG) };
+        if waited == child {
+            group_kill?;
+            return Ok(status);
+        }
+        if waited < 0 && std::io::Error::last_os_error().kind() != std::io::ErrorKind::Interrupted {
+            return Err(std::io::Error::last_os_error().into());
+        }
+        if Instant::now() >= deadline {
+            return Err("project cleanup deadline exceeded".into());
+        }
+        thread::sleep(Duration::from_millis(2));
+    }
+}
+
 fn run_project(
     job: GuestJob,
     capabilities: GuestCapabilities,
     staged: StagedJob,
     mut input: File,
-    cpu: u64,
-    memory: u64,
-    maximum_output_bytes: usize,
+    limits: ProjectLimits,
 ) -> Result<ProjectOutcome> {
+    limits.validate(capabilities)?;
     bind_project_materials(&staged)?;
     let model = capabilities
         .model
@@ -728,7 +799,12 @@ fn run_project(
         .transpose()?;
     let (stdout_parent, stdout_child) = socket_pair()?;
     let (stderr_parent, stderr_child) = socket_pair()?;
-    cgroups(cpu, memory).map_err(|error| format!("cgroup: {error}"))?;
+    cgroups(
+        limits.cpu_millis,
+        limits.memory_bytes,
+        limits.maximum_processes,
+    )
+    .map_err(|error| format!("cgroup: {error}"))?;
     // The supervisor retains the trusted stream and capability listeners. The
     // workload receives separate output pipes, so it cannot forge mux frames.
     let child = unsafe { libc::fork() };
@@ -747,7 +823,8 @@ fn run_project(
             std::process::id().to_string(),
         )?;
         confined_devices().map_err(|error| format!("devices: {error}"))?;
-        readonly_filesystem().map_err(|error| format!("filesystem: {error}"))?;
+        readonly_filesystem(limits.scratch_bytes)
+            .map_err(|error| format!("filesystem: {error}"))?;
         drop_privileges(job.uid, job.gid).map_err(|error| format!("privileges: {error}"))?;
         // SAFETY: both streams are live child-owned descriptors and dup2
         // atomically replaces the conventional output descriptors.
@@ -778,17 +855,37 @@ fn run_project(
     }
     drop(stdout_child);
     drop(stderr_child);
-    let stdout_reader = thread::spawn(move || read_bounded(stdout_parent, maximum_output_bytes));
-    let stderr_reader = thread::spawn(move || read_bounded(stderr_parent, 64 * 1024));
+    let stdout_reader =
+        thread::spawn(move || read_bounded(stdout_parent, limits.maximum_output_bytes));
+    let stderr_reader =
+        thread::spawn(move || read_bounded(stderr_parent, limits.maximum_log_bytes));
     let (exchange_sender, exchange_receiver) = mpsc::channel::<CapabilityExchange>();
     let mut sessions = Vec::new();
     let mut model_accepted = false;
     let mut execution_accepted = false;
     let mut sequence = 0_u32;
     let mut status = 0_i32;
+    let deadline_exceeded;
     loop {
         let waited = unsafe { libc::waitpid(child, &mut status, libc::WNOHANG) };
         if waited == child {
+            deadline_exceeded = limits
+                .deadline
+                .is_some_and(|deadline| Instant::now() >= deadline);
+            break;
+        }
+        if limits
+            .deadline
+            .is_some_and(|deadline| Instant::now() >= deadline)
+        {
+            deadline_exceeded = true;
+            status = stop_project(
+                child,
+                Path::new("/sys/fs/cgroup/workstream-checker"),
+                limits
+                    .cleanup_deadline
+                    .ok_or("project cleanup deadline missing")?,
+            )?;
             break;
         }
         if waited < 0 && std::io::Error::last_os_error().kind() != std::io::ErrorKind::Interrupted {
@@ -848,7 +945,7 @@ fn run_project(
     }
     drop(model);
     drop(execution);
-    let oom_kills = finish_workload_cgroup()?;
+    let oom_kills = finish_workload_cgroup(limits.cleanup_deadline)?;
     drop(exchange_receiver);
     drop(exchange_sender);
     for (_, session) in sessions {
@@ -868,6 +965,15 @@ fn run_project(
     } else {
         (stdout, stderr)
     };
+    if limits
+        .cleanup_deadline
+        .is_some_and(|value| Instant::now() >= value)
+    {
+        return Err("project cleanup deadline exceeded".into());
+    }
+    if deadline_exceeded {
+        return Err("project deadline exceeded".into());
+    }
     Ok(ProjectOutcome {
         status,
         oom_kills,
@@ -991,6 +1097,129 @@ mod tests {
             unsafe { libc::fcntl(owned.as_raw_fd(), libc::F_GETFD) } & libc::FD_CLOEXEC,
             0
         );
+    }
+
+    #[test]
+    fn explicit_project_limits_refuse_zero_overflow_and_partial_deadlines() {
+        let valid = ProjectLimits {
+            cpu_millis: 1000,
+            memory_bytes: 1024,
+            maximum_processes: 3,
+            scratch_bytes: 4096,
+            maximum_output_bytes: 1024,
+            maximum_log_bytes: 512,
+            deadline: Some(Instant::now() + Duration::from_secs(5)),
+            cleanup_deadline: Some(Instant::now() + Duration::from_secs(6)),
+        };
+        let closed = GuestCapabilities {
+            model: false,
+            execution: false,
+        };
+        assert!(valid.validate(closed).is_ok());
+        assert!(valid
+            .validate(GuestCapabilities {
+                model: true,
+                execution: false
+            })
+            .is_err());
+        assert!(valid
+            .validate(GuestCapabilities {
+                model: false,
+                execution: true
+            })
+            .is_err());
+        for limits in [
+            ProjectLimits {
+                cpu_millis: u64::MAX,
+                ..valid
+            },
+            ProjectLimits {
+                memory_bytes: 0,
+                ..valid
+            },
+            ProjectLimits {
+                maximum_processes: 0,
+                ..valid
+            },
+            ProjectLimits {
+                scratch_bytes: 0,
+                ..valid
+            },
+            ProjectLimits {
+                maximum_output_bytes: 0,
+                ..valid
+            },
+            ProjectLimits {
+                maximum_log_bytes: 0,
+                ..valid
+            },
+            ProjectLimits {
+                deadline: None,
+                ..valid
+            },
+            ProjectLimits {
+                cleanup_deadline: None,
+                ..valid
+            },
+            ProjectLimits {
+                deadline: Some(Instant::now()),
+                ..valid
+            },
+            ProjectLimits {
+                cleanup_deadline: Some(Instant::now()),
+                ..valid
+            },
+        ] {
+            assert!(limits.validate(closed).is_err());
+        }
+    }
+
+    #[test]
+    fn project_stop_kills_and_reaps_child_before_cgroup_membership() {
+        // Real owned PID race; a file stands in only for the cgroup command
+        // sink. Neither case claims kernel cgroup isolation qualification.
+        let root = std::env::temp_dir().join(format!("ws-project-stop-{}", std::process::id()));
+        fs::create_dir(&root).unwrap();
+        for group_available in [true, false] {
+            let child = unsafe { libc::fork() };
+            assert!(child >= 0);
+            if child == 0 {
+                loop {
+                    unsafe {
+                        libc::pause();
+                    }
+                }
+            }
+            let group = if group_available {
+                root.clone()
+            } else {
+                root.join("missing")
+            };
+            let stopped = stop_project(child, &group, Instant::now() + Duration::from_secs(5));
+            // Observe custody before fallback cleanup: even a failed cgroup
+            // command must kill/reap the directly owned child and fail closed.
+            let reaped = unsafe { libc::waitpid(child, std::ptr::null_mut(), libc::WNOHANG) };
+            let error = std::io::Error::last_os_error().raw_os_error();
+            if reaped == 0 {
+                unsafe {
+                    libc::kill(child, libc::SIGKILL);
+                    libc::waitpid(child, std::ptr::null_mut(), 0);
+                }
+            }
+            if reaped != -1 || error != Some(libc::ECHILD) {
+                fs::remove_dir_all(&root).unwrap();
+                panic!("owned project child was not reaped");
+            }
+            if group_available {
+                let status = stopped.unwrap();
+                assert!(libc::WIFSIGNALED(status));
+                assert_eq!(libc::WTERMSIG(status), libc::SIGKILL);
+                assert_eq!(fs::read(group.join("cgroup.kill")).unwrap(), b"1");
+            } else {
+                assert!(stopped.is_err());
+            }
+        }
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
@@ -1342,9 +1571,16 @@ fn run() -> Result<()> {
             *capabilities,
             staged,
             input,
-            cpu,
-            memory,
-            request.maximum_output_bytes,
+            ProjectLimits {
+                cpu_millis: cpu,
+                memory_bytes: memory,
+                maximum_processes: (memory / (16 * 1024 * 1024)).clamp(16, 256),
+                scratch_bytes: 16 * 1024 * 1024,
+                maximum_output_bytes: request.maximum_output_bytes,
+                maximum_log_bytes: 64 * 1024,
+                deadline: None,
+                cleanup_deadline: None,
+            },
         )?;
         outcome.write_completion(&mut std::io::stdout().lock())?;
         std::process::exit(outcome.exit_code());
@@ -1357,7 +1593,8 @@ fn run() -> Result<()> {
         syscall_ok(unsafe { libc::chown(c("/work/scratch")?.as_ptr(), job.uid, job.gid) })?;
         fs::set_permissions("/work/scratch", fs::Permissions::from_mode(0o700))?;
     }
-    cgroups(cpu, memory).map_err(|e| format!("cgroup: {e}"))?;
+    cgroups(cpu, memory, (memory / (16 * 1024 * 1024)).clamp(16, 256))
+        .map_err(|e| format!("cgroup: {e}"))?;
     // The trusted, single-threaded supervisor stays outside the workload cgroup
     // so an OOM cannot destroy the kernel evidence before it is classified.
     // stdin's lock has been dropped and no other threads exist at this fork.
@@ -1392,7 +1629,7 @@ fn run() -> Result<()> {
         std::process::id().to_string(),
     )?;
     confined_devices().map_err(|e| format!("devices: {e}"))?;
-    readonly_filesystem().map_err(|e| format!("filesystem: {e}"))?;
+    readonly_filesystem(16 * 1024 * 1024).map_err(|e| format!("filesystem: {e}"))?;
     if matches!(purpose, GuestPurpose::TrustedIntake { .. }) {
         // Only the trusted worker receives private VM-disk scratch. Project
         // workloads retain their existing bounded tmpfs-only writable surface.

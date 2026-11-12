@@ -1830,3 +1830,19 @@ clean `2625b2062`. Both confirmed preserved ordinary Project framing/classificat
 and the real fork/exec descriptor negative control. Their verdict is limited to
 captured-result continuation and child descriptor sealing; the combined PRE
 orchestration and native isolation remain unproved. Record validation passes.
+
+The same project runner now accepts explicit CPU, memory, process, scratch,
+output/log and paired run/cleanup deadline bounds for the planned PRE caller.
+Ordinary POST keeps its existing values and host-owned deadline. Local deadlines
+refuse model/execution capabilities because those relays can block. On expiry
+the supervisor issues cgroup kill and kills its unreaped owned PID, covering the
+pre-membership race, then reaps before returning failure. A failed cgroup command
+still kills/reaps the direct child and cannot produce successful evidence.
+
+The guest crate passes 12 library and 29 binary tests after restoring production
+code. A real fork/pause child proves termination and reaping both with an
+available command sink and a missing group path; the regular-file command sink
+is expressly not kernel cgroup isolation proof. Disabling the direct PID kill
+makes the regression fail on unreaped custody, and fallback test cleanup reaps
+the child. Formatting and whitespace checks pass. This remains within the
+approved native supervisor scope and does not qualify PRE or complete its wiring.
