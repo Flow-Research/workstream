@@ -65,6 +65,15 @@ temporary `workstream-bootstrap` account, and remove its password file. This
 does not replace Workstream's independently guarded first Access Administrator
 bootstrap. See [Keycloak's bootstrap and recovery documentation](https://www.keycloak.org/server/bootstrap-admin-recovery).
 
+For recovery-code login, enrollment alone is insufficient. In the master
+realm's Authentication → Browser flow, set the existing **Recovery Authentication
+Code Form** inside **Browser - Conditional 2FA** from Disabled to Alternative.
+Leave the password, OTP and conditional checks unchanged. Enroll the named
+administrator's recovery codes, store them privately, and prove a fresh recovery
+login before removing the bootstrap account. This is Keycloak's
+[documented recovery-code configuration](https://www.keycloak.org/docs/latest/server_admin/),
+not a change to Workstream roles or the participant realm.
+
 ## Realm and clients
 
 Render the sanitized initial realm with:
