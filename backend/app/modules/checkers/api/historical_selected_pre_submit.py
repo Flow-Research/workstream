@@ -598,7 +598,7 @@ class HistoricalSelectedPreSubmitTerminal:
                 or self.execution.policy_sha256 != self.lease.reservation.policy_sha256
             ):
                 raise ValueError("selected PRE completed outcome is invalid")
-        elif self.execution is not None or self.infrastructure_failure_code not in {
+        elif self.outcome != "infrastructure_failed" or self.execution is not None or self.infrastructure_failure_code not in {
             "capacity_exceeded",
             "deadline_exceeded",
             "material_unavailable",

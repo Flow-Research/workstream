@@ -1203,3 +1203,22 @@ and proves rejection before TASK/DB access. All 250 focused decoder/projection,
 owner and lane checks pass. This is the read side of the coordinated replacement;
 new v1 write prohibition, v2 live request/SQL guards and removal of the prepared
 producer remain pending and are not implied by this checkpoint.
+
+QA found that the inherited read projection compared terminal hash/run ID but
+could accept divergent row actor/archive selectors. The repaired reader decodes
+the independent retained request, compares every v1 indexed identity and source/
+policy/default/budget field, then checks terminal reservation, outcome, lease,
+eligibility and timestamps. All thirteen new row-substitution controls fail with
+the exact prior `18d3a5663` reader injected in memory and pass the repair. The
+historical decoder also rejects an unknown outcome token explicitly; no valid
+retained outcome is changed. Queued/running history stays readable without a
+fabricated terminal state.
+
+A second fixed vector now covers complete lineage, canonical default results
+and a selected project member. It was generated once through the existing ZIP/
+default pipeline with a controlled project-result adapter, not native runtime
+execution or a database-origin attestation. Nested lineage/member/default
+mutations are rejected. All 270 focused checks pass. The four PostgreSQL
+read-consistency tests also passed with cleanup, but their fixture produced no
+completed selected PRE row, so that run is not credited as historical payload
+coverage. The reader's direct frozen-row tests establish that narrower claim.

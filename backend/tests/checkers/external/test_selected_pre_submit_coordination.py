@@ -486,35 +486,46 @@ def test_selected_ready_admission_binds_selected_run() -> None:
     assert facts.selected_pre_submit_run_id == run_id
 
 
-def _retained_v1():
+def _retained_v1(name="selected_pre_v1"):
     """Fixed pre-cutover bytes; never regenerated from the live request schema."""
     import json
     from pathlib import Path
 
-    return json.loads((Path(__file__).parent / "fixtures" / "selected_pre_v1.json").read_text())
+    return json.loads((Path(__file__).parent / "fixtures" / f"{name}.json").read_text())
 
 
-def test_historical_pre_decoder_preserves_exact_request_and_terminal_bytes():
+
+def _retained_row(retained):
+    """Complete indexed columns beside one independently frozen v1 record."""
+    terminal = retained["terminal"]
+    values = dict(retained["request"])
+    values.update(
+        id=values["attempt_id"], request_json=retained["request"],
+        request_digest=retained["request_digest"], status=terminal["outcome"],
+        terminal_json=terminal, terminal_digest=retained["terminal_digest"],
+        eligible=terminal["execution"]["eligible"] if terminal["execution"] is not None else None,
+        lease_id=terminal["lease_id"], lease_generation=terminal["lease_generation"],
+    )
+    values.update({key: datetime.fromisoformat(terminal[key]) for key in (
+        "queued_at", "started_at", "completed_at", "lease_expires_at",
+    )})
+    return SimpleNamespace(**values)
+
+@pytest.mark.parametrize("name", ["selected_pre_v1", "selected_pre_v1_completed"])
+def test_historical_pre_decoder_preserves_exact_request_and_terminal_bytes(name):
     from app.modules.checkers.api.historical_selected_pre_submit import (
         HistoricalSelectedPreSubmitReservation, HistoricalSelectedPreSubmitTerminal,
     )
     from app.modules.checkers.selected_pre_submit_reads import _view
 
-    retained = _retained_v1()
+    retained = _retained_v1(name)
     request = HistoricalSelectedPreSubmitReservation.from_canonical_body(retained["request"])
     terminal = HistoricalSelectedPreSubmitTerminal.from_canonical_body(retained["terminal"])
     assert request.canonical_body() == retained["request"]
     assert request.request_digest == retained["request_digest"]
     assert terminal.canonical_body() == retained["terminal"]
     assert terminal.terminal_digest == retained["terminal_digest"]
-    row = SimpleNamespace(
-        id=str(request.attempt_id), actor_profile_id=str(request.actor_profile_id),
-        task_id=str(request.task_id), assignment_id=str(request.assignment_id),
-        status="infrastructure_failed", archive_sha256=request.archive_sha256,
-        archive_byte_count=request.archive_byte_count, queued_at=terminal.queued_at,
-        completed_at=terminal.completed_at, terminal_json=retained["terminal"],
-        terminal_digest=retained["terminal_digest"], eligible=None,
-    )
+    row = _retained_row(retained)
     view = _view(row)
     assert type(view.terminal) is HistoricalSelectedPreSubmitTerminal
     assert view.terminal.canonical_body() == retained["terminal"]
@@ -546,5 +557,69 @@ def test_historical_pre_decoder_rejects_changed_binding_or_timing(field):
 
     body = _retained_v1()["terminal"]
     body[field] = "sha256:" + "f" * 64 if field == "request_digest" else body[field] + 1
+    with pytest.raises(ValueError):
+        HistoricalSelectedPreSubmitTerminal.from_canonical_body(body)
+
+
+@pytest.mark.parametrize("field,value", [
+    ("actor_profile_id", "01900000-0000-7000-8000-999999999999"),
+    ("identity_link_id", "01900000-0000-7000-8000-999999999999"),
+    ("project_id", "01900000-0000-7000-8000-999999999999"),
+    ("task_id", "01900000-0000-7000-8000-999999999999"),
+    ("assignment_id", "01900000-0000-7000-8000-999999999999"),
+    ("archive_sha256", "sha256:" + "f" * 64),
+    ("archive_byte_count", 999),
+    ("request_digest", "sha256:" + "f" * 64),
+    ("lease_id", "01900000-0000-7000-8000-999999999999"),
+    ("lease_generation", 2),
+    ("status", "completed"),
+    ("eligible", True),
+    ("completed_at", datetime(2026, 1, 2, tzinfo=UTC)),
+])
+def test_historical_pre_read_rejects_foreign_row_selectors_and_facts(field, value):
+    from app.modules.checkers.selected_pre_submit_reads import _view
+
+    row = _retained_row(_retained_v1())
+    setattr(row, field, value)
+    with pytest.raises(SelectedPreSubmitUnavailable):
+        _view(row)
+
+
+def test_historical_pre_decoder_rejects_an_unknown_outcome():
+    from app.modules.checkers.api.historical_selected_pre_submit import HistoricalSelectedPreSubmitTerminal
+
+    body = _retained_v1()["terminal"]
+    body["outcome"] = "unknown"
+    with pytest.raises(ValueError):
+        HistoricalSelectedPreSubmitTerminal.from_canonical_body(body)
+
+
+@pytest.mark.parametrize("status", ["queued", "running"])
+def test_historical_nonterminal_pre_remains_readable_without_inventing_an_outcome(status):
+    from app.modules.checkers.selected_pre_submit_reads import _view
+
+    row = _retained_row(_retained_v1())
+    row.status = status
+    row.terminal_json = row.terminal_digest = row.completed_at = row.eligible = None
+    if status == "queued":
+        row.started_at = row.lease_id = row.lease_expires_at = None
+        row.lease_generation = 0
+    view = _view(row)
+    assert view.status == status and view.terminal is None and view.completed_at is None
+
+
+@pytest.mark.parametrize("changed", ["lineage", "member", "default"])
+def test_historical_completed_pre_rejects_changed_nested_evidence(changed):
+    from app.modules.checkers.api.historical_selected_pre_submit import HistoricalSelectedPreSubmitTerminal
+
+    body = _retained_v1("selected_pre_v1_completed")["terminal"]
+    assert body["reservation"]["admission_lineage"] is not None
+    assert len(body["execution"]["external_members"]) == 1
+    if changed == "lineage":
+        body["reservation"]["admission_lineage"]["packet_sha256"] = "sha256:" + "f" * 64
+    elif changed == "member":
+        body["execution"]["external_members"][0]["result"]["request_digest"] = "sha256:" + "f" * 64
+    else:
+        body["execution"]["workstream_default"]["checks"].pop()
     with pytest.raises(ValueError):
         HistoricalSelectedPreSubmitTerminal.from_canonical_body(body)

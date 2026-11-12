@@ -9,29 +9,70 @@ from app.modules.checkers.api.selected_pre_submit import (
     SelectedPreSubmitRunStatus, SelectedPreSubmitRunView,
     SelectedPreSubmitUnavailable,
 )
-from app.modules.checkers.api.historical_selected_pre_submit import HistoricalSelectedPreSubmitTerminal
+from app.modules.checkers.api.historical_selected_pre_submit import (
+    HistoricalSelectedPreSubmitReservation, HistoricalSelectedPreSubmitTerminal,
+)
 from app.modules.checkers.models import SelectedPreSubmitRun
 
 
+def _request_matches(row: SelectedPreSubmitRun, request: HistoricalSelectedPreSubmitReservation) -> bool:
+    """Bind every v1 indexed identity to the retained canonical request."""
+    identifiers = {
+        "id": request.attempt_id, "actor_profile_id": request.actor_profile_id,
+        "identity_link_id": request.identity_link_id, "project_id": request.project_id,
+        "task_id": request.task_id, "assignment_id": request.assignment_id,
+        "idempotency_key": request.idempotency_key,
+        "prepared_generation_id": request.prepared_generation_id,
+    }
+    return (
+        row.request_json == request.canonical_body()
+        and row.request_digest == request.request_digest
+        and all(UUID(str(getattr(row, key))) == value for key, value in identifiers.items())
+        and all(getattr(row, key) == getattr(request, key) for key in (
+            "policy_sha256", "default_behavior_sha256", "default_input_sha256",
+            "archive_sha256", "archive_byte_count", "semantic_manifest_sha256",
+            "execution_budget_ms",
+        ))
+    )
+
+
+def _terminal_matches(row: SelectedPreSubmitRun, request, terminal) -> bool:
+    """Check retained outcome/lease/timing without conferring current liveness."""
+    if terminal is None:
+        return (
+            row.status in {"queued", "running"} and row.terminal_digest is None
+            and row.eligible is None and row.completed_at is None
+        )
+    return (
+        terminal.lease.reservation == request
+        and terminal.terminal_digest == row.terminal_digest
+        and terminal.outcome == row.status
+        and str(terminal.lease.lease_id) == str(row.lease_id)
+        and terminal.lease.lease_generation == row.lease_generation
+        and terminal.lease.lease_expires_at == row.lease_expires_at
+        and terminal.queued_at == row.queued_at
+        and terminal.started_at == row.started_at
+        and terminal.completed_at == row.completed_at
+        and (terminal.execution.eligible if terminal.execution is not None else None) is row.eligible
+    )
+
+
 def _view(row: SelectedPreSubmitRun) -> SelectedPreSubmitRunView:
-    """Revalidate one stored terminal body against its fixed columns."""
+    """Refuse any divergence between read selectors and retained v1 evidence."""
     try:
+        request = HistoricalSelectedPreSubmitReservation.from_canonical_body(row.request_json)
         terminal = (
             HistoricalSelectedPreSubmitTerminal.from_canonical_body(row.terminal_json)
             if row.terminal_json is not None else None
         )
-    except (TypeError, ValueError):
+        if not _request_matches(row, request) or not _terminal_matches(row, request, terminal):
+            raise ValueError("retained PRE columns differ")
+    except (KeyError, TypeError, ValueError):
         raise SelectedPreSubmitUnavailable("selected_pre_submit_stored_facts_invalid") from None
-    if terminal is not None and (
-        terminal.terminal_digest != row.terminal_digest
-        or terminal.lease.reservation.attempt_id != UUID(str(row.id))
-        or (terminal.execution is not None and terminal.execution.eligible != row.eligible)
-    ):
-        raise SelectedPreSubmitUnavailable("selected_pre_submit_stored_facts_invalid")
     return SelectedPreSubmitRunView(
-        run_id=UUID(str(row.id)), actor_profile_id=UUID(str(row.actor_profile_id)),
-        task_id=UUID(str(row.task_id)), assignment_id=UUID(str(row.assignment_id)), status=row.status,
-        archive_sha256=row.archive_sha256, archive_byte_count=row.archive_byte_count,
+        run_id=request.attempt_id, actor_profile_id=request.actor_profile_id,
+        task_id=request.task_id, assignment_id=request.assignment_id, status=row.status,
+        archive_sha256=request.archive_sha256, archive_byte_count=request.archive_byte_count,
         queued_at=row.queued_at, completed_at=row.completed_at, terminal=terminal,
     )
 

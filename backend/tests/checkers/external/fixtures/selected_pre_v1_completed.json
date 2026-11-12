@@ -1,0 +1,230 @@
+{
+  "request": {
+    "actor_profile_id": "01a1cf4c-d6c9-7216-882d-5e7a771cba31",
+    "admission_lineage": {
+      "checker_remediation_manifest_id": null,
+      "effective_plan_sha256": "sha256:c53d4239196e812de756e7816d10ee6dd753e7305f27fdbd11383215254d3a1f",
+      "effective_policy_id": "01a1cf4c-d6c6-7418-8bca-8e321bc3348e",
+      "effective_policy_sha256": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+      "external_checker_policies_sha256": "sha256:9999999999999999999999999999999999999999999999999999999999999999",
+      "guide_id": "01a1cf4c-d6c4-7ede-add7-f9bd12e64560",
+      "guide_version": "v2",
+      "locked_guide_sha256": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "locked_policy_context_hash": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+      "packet_sha256": "sha256:e0d6ac76841a549e4333e21fb8d4314f57e0e7445bb89d4d87df14304d3ca977",
+      "post_submit_policy_body": {
+        "entries": [],
+        "policy_sha256": "sha256:ffcd8b8e350f4d11a53731faf9b41c97e09562a78178bdbfb96c300b4994d401",
+        "schema_version": "external_post_submit_policy.v1"
+      },
+      "post_submit_policy_sha256": "sha256:ffcd8b8e350f4d11a53731faf9b41c97e09562a78178bdbfb96c300b4994d401",
+      "pre_submit_policy_id": "01a1cf4c-d6c7-777d-8bdf-eb0e12879148",
+      "pre_submit_policy_sha256": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+      "predecessor_submission_id": null,
+      "predecessor_submission_version": null,
+      "rules_sha256": "sha256:8888888888888888888888888888888888888888888888888888888888888888",
+      "semantic_manifest_body": {
+        "entries": [
+          {
+            "entry_type": "directory",
+            "normalized_path": "evidence"
+          },
+          {
+            "byte_count": 9,
+            "entry_type": "file",
+            "executable": false,
+            "normalized_path": "evidence/results",
+            "sha256": "sha256:672eb8316fec83f94119a4193f9fc552513d56a147502f8be4830e017d817831"
+          },
+          {
+            "byte_count": 20,
+            "entry_type": "file",
+            "executable": false,
+            "normalized_path": "task.toml",
+            "sha256": "sha256:db827bb156a8942c9c3f6f9a6c734959f667f0e84a8682ad1827df1e9cfc0744"
+          }
+        ],
+        "schema_version": "workstream.submission_bundle_manifest.v1"
+      },
+      "semantic_manifest_id": "9dd2371a-6f33-577a-b9ab-20724b2471d0",
+      "source_snapshot_id": "01a1cf4c-d6c5-798a-98ae-e349ea3ac7e7",
+      "source_snapshot_sha256": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "storage_scheme": "s3"
+    },
+    "archive_byte_count": 253,
+    "archive_sha256": "sha256:468d2c28c74d3267c606eced24803b70e02713559497efc26d6273b367a85a8a",
+    "assignment_id": "01a1cf4c-d6cd-75b0-bf35-75c5083fd88a",
+    "attempt_id": "01a1cf4c-d6ce-7e36-9146-23b07a3a300e",
+    "attempt_request_digest": "sha256:8888888888888888888888888888888888888888888888888888888888888888",
+    "default_behavior_sha256": "sha256:af2c604f792c4456d3b222036c772161b1503eace65ff90c3d3a23d9d348c28f",
+    "default_input_sha256": "sha256:55c5f22c51b24717ee0d87daa4f207956f5626abd3a16e9478f7416ba8498808",
+    "execution_budget_ms": 120000,
+    "idempotency_key": "01a1cf4c-d6cf-7aee-acbe-68792762e8aa",
+    "identity_link_id": "01a1cf4c-d6ca-776f-abe1-1eead56ec7b4",
+    "policy_sha256": "sha256:c53d4239196e812de756e7816d10ee6dd753e7305f27fdbd11383215254d3a1f",
+    "prepared_generation_id": "01a1cf4c-d6aa-7030-b53f-fa4f8c26145a",
+    "project_id": "01a1cf4c-d6cb-71cb-8c9b-ceb9aa6381d7",
+    "schema_version": "workstream.selected_pre_submit_reservation.v1",
+    "semantic_manifest_sha256": "sha256:dc88d211b1a40342e06eaaed145c35a1b1e9ca18c000eaf74946677ecabc502e",
+    "task_id": "01a1cf4c-d6cc-7685-b855-783575615290"
+  },
+  "request_digest": "sha256:c5865ba9f9ebc8f34823c18b1900ca1e937399adde1621188770468e7fea9780",
+  "terminal": {
+    "completed_at": "2026-11-12T10:28:03.957896+00:00",
+    "execution": {
+      "eligible": true,
+      "external_members": [
+        {
+          "isolation": {
+            "architecture": "amd64",
+            "config_image_id": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "isolation_mode": "gvisor",
+            "operating_system": "linux",
+            "platform_manifest_byte_count": 1024,
+            "platform_manifest_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "platform_manifest_media_type": "application/vnd.oci.image.manifest.v1+json",
+            "repository": "registry.example/workstream/checker",
+            "runtime": "runsc",
+            "sandbox_gid": 65532,
+            "sandbox_uid": 65532
+          },
+          "order": 0,
+          "registry_entry_digest": "sha256:2666891954c7e14a486c548a5395991ee5ff92a353495a43baee729779282e2d",
+          "registry_entry_id": "01a1cf4c-d6b0-777a-b9b0-40b0f8d5e63f",
+          "request_digest": "sha256:1ec3f0f1fb1e184245871bc579bbcba1674938a5b6c94881b94c1340d7f4ff09",
+          "requirement_id": "project.archive_rules",
+          "result": {
+            "findings": [],
+            "infrastructure_failure_code": null,
+            "outcome": "completed",
+            "phase": "pre_submit",
+            "registry_entry_digest": "sha256:2666891954c7e14a486c548a5395991ee5ff92a353495a43baee729779282e2d",
+            "registry_entry_id": "01a1cf4c-d6b0-777a-b9b0-40b0f8d5e63f",
+            "request_digest": "sha256:1ec3f0f1fb1e184245871bc579bbcba1674938a5b6c94881b94c1340d7f4ff09",
+            "result_digest": "sha256:d29b0c09210e3d41eed0d1cf9edf03cf76d6e39dc77a15cd60f3287abb049fae",
+            "schema_version": "external_checker_result.v1",
+            "verdict": "passed"
+          }
+        }
+      ],
+      "policy_sha256": "sha256:c53d4239196e812de756e7816d10ee6dd753e7305f27fdbd11383215254d3a1f",
+      "required_external_count": 1,
+      "schema_version": "workstream.selected_pre_submit_execution.v1",
+      "workstream_default": {
+        "behavior_sha256": "sha256:af2c604f792c4456d3b222036c772161b1503eace65ff90c3d3a23d9d348c28f",
+        "checker_id": "workstream.default",
+        "checker_version": "v1",
+        "checks": [
+          {
+            "check_id": "archive_safe",
+            "failure_code": null,
+            "finding_count": 0,
+            "status": "passed"
+          },
+          {
+            "check_id": "received_identity_exact",
+            "failure_code": null,
+            "finding_count": 0,
+            "status": "passed"
+          },
+          {
+            "check_id": "high_confidence_secrets_absent",
+            "failure_code": null,
+            "finding_count": 0,
+            "status": "passed"
+          },
+          {
+            "check_id": "submission_changed_for_current_rules",
+            "failure_code": null,
+            "finding_count": 0,
+            "status": "passed"
+          }
+        ],
+        "eligible": true,
+        "schema_version": "workstream.default_checker_result.v1",
+        "warnings": []
+      }
+    },
+    "execution_latency_ms": 1000,
+    "infrastructure_failure_code": null,
+    "lease_expires_at": "2026-11-12T10:30:01.957896+00:00",
+    "lease_generation": 1,
+    "lease_id": "01a1cf4c-d725-7a40-8da1-346570f6b642",
+    "outcome": "completed",
+    "queue_latency_ms": 1000,
+    "queued_at": "2026-11-12T10:28:01.957896+00:00",
+    "request_digest": "sha256:c5865ba9f9ebc8f34823c18b1900ca1e937399adde1621188770468e7fea9780",
+    "reservation": {
+      "actor_profile_id": "01a1cf4c-d6c9-7216-882d-5e7a771cba31",
+      "admission_lineage": {
+        "checker_remediation_manifest_id": null,
+        "effective_plan_sha256": "sha256:c53d4239196e812de756e7816d10ee6dd753e7305f27fdbd11383215254d3a1f",
+        "effective_policy_id": "01a1cf4c-d6c6-7418-8bca-8e321bc3348e",
+        "effective_policy_sha256": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+        "external_checker_policies_sha256": "sha256:9999999999999999999999999999999999999999999999999999999999999999",
+        "guide_id": "01a1cf4c-d6c4-7ede-add7-f9bd12e64560",
+        "guide_version": "v2",
+        "locked_guide_sha256": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "locked_policy_context_hash": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+        "packet_sha256": "sha256:e0d6ac76841a549e4333e21fb8d4314f57e0e7445bb89d4d87df14304d3ca977",
+        "post_submit_policy_body": {
+          "entries": [],
+          "policy_sha256": "sha256:ffcd8b8e350f4d11a53731faf9b41c97e09562a78178bdbfb96c300b4994d401",
+          "schema_version": "external_post_submit_policy.v1"
+        },
+        "post_submit_policy_sha256": "sha256:ffcd8b8e350f4d11a53731faf9b41c97e09562a78178bdbfb96c300b4994d401",
+        "pre_submit_policy_id": "01a1cf4c-d6c7-777d-8bdf-eb0e12879148",
+        "pre_submit_policy_sha256": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+        "predecessor_submission_id": null,
+        "predecessor_submission_version": null,
+        "rules_sha256": "sha256:8888888888888888888888888888888888888888888888888888888888888888",
+        "semantic_manifest_body": {
+          "entries": [
+            {
+              "entry_type": "directory",
+              "normalized_path": "evidence"
+            },
+            {
+              "byte_count": 9,
+              "entry_type": "file",
+              "executable": false,
+              "normalized_path": "evidence/results",
+              "sha256": "sha256:672eb8316fec83f94119a4193f9fc552513d56a147502f8be4830e017d817831"
+            },
+            {
+              "byte_count": 20,
+              "entry_type": "file",
+              "executable": false,
+              "normalized_path": "task.toml",
+              "sha256": "sha256:db827bb156a8942c9c3f6f9a6c734959f667f0e84a8682ad1827df1e9cfc0744"
+            }
+          ],
+          "schema_version": "workstream.submission_bundle_manifest.v1"
+        },
+        "semantic_manifest_id": "9dd2371a-6f33-577a-b9ab-20724b2471d0",
+        "source_snapshot_id": "01a1cf4c-d6c5-798a-98ae-e349ea3ac7e7",
+        "source_snapshot_sha256": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "storage_scheme": "s3"
+      },
+      "archive_byte_count": 253,
+      "archive_sha256": "sha256:468d2c28c74d3267c606eced24803b70e02713559497efc26d6273b367a85a8a",
+      "assignment_id": "01a1cf4c-d6cd-75b0-bf35-75c5083fd88a",
+      "attempt_id": "01a1cf4c-d6ce-7e36-9146-23b07a3a300e",
+      "attempt_request_digest": "sha256:8888888888888888888888888888888888888888888888888888888888888888",
+      "default_behavior_sha256": "sha256:af2c604f792c4456d3b222036c772161b1503eace65ff90c3d3a23d9d348c28f",
+      "default_input_sha256": "sha256:55c5f22c51b24717ee0d87daa4f207956f5626abd3a16e9478f7416ba8498808",
+      "execution_budget_ms": 120000,
+      "idempotency_key": "01a1cf4c-d6cf-7aee-acbe-68792762e8aa",
+      "identity_link_id": "01a1cf4c-d6ca-776f-abe1-1eead56ec7b4",
+      "policy_sha256": "sha256:c53d4239196e812de756e7816d10ee6dd753e7305f27fdbd11383215254d3a1f",
+      "prepared_generation_id": "01a1cf4c-d6aa-7030-b53f-fa4f8c26145a",
+      "project_id": "01a1cf4c-d6cb-71cb-8c9b-ceb9aa6381d7",
+      "schema_version": "workstream.selected_pre_submit_reservation.v1",
+      "semantic_manifest_sha256": "sha256:dc88d211b1a40342e06eaaed145c35a1b1e9ca18c000eaf74946677ecabc502e",
+      "task_id": "01a1cf4c-d6cc-7685-b855-783575615290"
+    },
+    "schema_version": "workstream.selected_pre_submit_terminal.v1",
+    "started_at": "2026-11-12T10:28:02.957896+00:00"
+  },
+  "terminal_digest": "sha256:b80ff3c92862fc92b1ae0a3f6af4898b16b192e417155fb562de76a5e1648397"
+}
