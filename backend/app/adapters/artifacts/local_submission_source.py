@@ -7,9 +7,10 @@ import hashlib
 import json
 import os
 import re
+import secrets
 import stat
-from typing import TYPE_CHECKING, Any, Iterator
-from uuid import UUID, uuid4
+from typing import Any, Iterator
+from uuid import UUID
 
 from app.core.file_locks import acquire_exclusive_file_lock
 from app.interfaces.artifacts import (
@@ -22,9 +23,6 @@ from app.modules.artifacts.api.submission_intake import (
     SubmissionSourcePart, SubmissionSourceUpload, SubmissionSourceUploadIntent,
 )
 
-if TYPE_CHECKING:
-    from app.adapters.artifacts.local import LocalStorageAdapter
-
 _METADATA_LIMIT = 256 * 1024
 _TEMP = re.compile(r"^\.(?:upload|seal|aborted)\.[0-9a-f]{32}\.tmp$")
 _FILES = frozenset({"upload.json", "seal.json", "aborted.json", "bundle.zip"})
@@ -33,7 +31,7 @@ _FILES = frozenset({"upload.json", "seal.json", "aborted.json", "bundle.zip"})
 class LocalSubmissionSource:
     """Private synchronous primitives, called off-loop with cancellation drained."""
 
-    def __init__(self, store: LocalStorageAdapter) -> None:
+    def __init__(self, store: Any) -> None:
         self.store = store
 
     def location(self, value: SubmissionSourceLocation) -> SubmissionSourceLocation:
@@ -109,7 +107,7 @@ class LocalSubmissionSource:
         raw = json.dumps(value, separators=(",", ":"), sort_keys=True).encode()
         if len(raw) > _METADATA_LIMIT:
             raise ArtifactIntegrityError("submission source metadata exceeds bound")
-        temporary = f".{name[:-5]}.{uuid4().hex}.tmp"
+        temporary = f".{name[:-5]}.{secrets.token_hex(16)}.tmp"
         descriptor = os.open(temporary, os.O_CREAT | os.O_EXCL | os.O_WRONLY | os.O_NOFOLLOW,
                              0o600, dir_fd=directory)
         try:
@@ -139,7 +137,8 @@ class LocalSubmissionSource:
         with self.locked(intent.location, intent, create=True) as directory:
             if self.exists(directory, "upload.json") or self.exists(directory, "aborted.json"):
                 raise ArtifactPreconditionFailedError("submission source already initiated")
-            upload = SubmissionSourceUpload(intent=intent, provider_upload_id=uuid4().hex)
+            # An opaque provider token is not a Workstream surrogate record ID.
+            upload = SubmissionSourceUpload(intent=intent, provider_upload_id=secrets.token_hex(16))
             self.publish(directory, "upload.json", upload.model_dump(mode="json"))
             descriptor = os.open("bundle.zip", os.O_CREAT | os.O_EXCL | os.O_WRONLY | os.O_NOFOLLOW,
                                  0o600, dir_fd=directory)
