@@ -39,6 +39,7 @@ class SubmissionAdmissionConsumptionRequest:
     submission_version: int
     task_context: TaskSubmissionContextFacts
     packet_sha256: str
+    accepted_operation_id: UUID | None = None
 
     def __post_init__(self) -> None:
         if type(self.submission_version) is not int or self.submission_version < 1:

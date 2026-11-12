@@ -13,6 +13,7 @@ FIXED_SERVICE_ACTION_EXPECTATIONS = {
     ServiceIdentity.ARTIFACT_SCHEDULER: {"artifact.pending_work.scan"},
     ServiceIdentity.ARTIFACT_BINDING: {
         "artifact.submission.binding.create",
+        "artifact.submission.finalize",
         "artifact.checker_output.binding.create",
         "artifact.review_evidence.binding.create",
     },
@@ -136,6 +137,7 @@ ART_CUSTODY_EXPECTATIONS = {
         "WS-XINT-002-06A",
         "active",
     ),
+    "artifact.submission.finalize": ("artifact.binding.create", "WS-AUTH-001-ART-05", "active"),
     "artifact.submission.binding.create": (
         "artifact.binding.create",
         "WS-AUTH-001-ART-05",
@@ -698,6 +700,7 @@ AUDIT_ALLOWED_ACTION_VALUES = {
     "artifact.recovery_attempt.read",
     "artifact.replica.read",
     "artifact.submission.binding.create",
+    "artifact.submission.finalize",
     "artifact.submission_bundle.prepare",
     "artifact.verification.execute",
     "artifact.verification_job.read",

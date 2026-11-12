@@ -1,5 +1,6 @@
 """Deny-by-default request-scoped authorization kernel."""
 from __future__ import annotations
+from app.modules.authorization.domain.submission_finalization import SubmissionFinalizationResourceContext
 from app.modules.authorization.domain.guide_proposals import GUIDE_PROPOSAL_RESOURCE_BY_ACTION
 from app.modules.authorization.catalogue import POST_POLICY_ACTION_IDS
 from app.modules.authorization.domain.post_policy import PostPolicyResourceContext
@@ -37,8 +38,10 @@ from app.modules.authorization.domain import (
 from app.modules.authorization.domain.action_groups import (
     GUIDE_BOUND_PROJECT_MANAGER_ACTIONS as _GUIDE_BOUND_PROJECT_MANAGER_ACTIONS,
     CONTEXT_DIGEST_ACTIONS,
-    PROJECT_SCOPED_ADMIN_MUTATIONS,
     supports_prepared_denial,
+    ADMIN_ACTIONS as _ADMIN_ACTIONS,
+    SERIALIZED_ADMIN_READS as _SERIALIZED_ADMIN_READS,
+    ADMIN_MUTATIONS as _ADMIN_MUTATIONS,
 )
 from app.modules.authorization.domain.audit import CONTEXT_DIGEST_RESOURCE_TYPES
 from app.modules.authorization.domain.audit_targets import project_authority_audit_target
@@ -125,88 +128,6 @@ ServiceContextRevalidator = Callable[
     [ServiceAuthorizationContext, ActionId],
     Awaitable[ServiceAuthorizationContext | None],
 ]
-_ADMIN_ACTIONS = (
-    frozenset(
-        {
-            ActionId.REVIEW_LIFECYCLE_ACTIVATION_MANAGE,
-            ActionId.AUTHORIZATION_PERMISSION_CATALOGUE_READ,
-            ActionId.AUTHORIZATION_ADMIN_ROLE_DEFINITIONS_READ,
-            ActionId.ADMIN_ROLE_GRANT_LIST,
-            ActionId.ACTOR_ADMIN_ROLE_GRANT_HISTORY_READ,
-            ActionId.ADMIN_ROLE_GRANT_ISSUE,
-            ActionId.ADMIN_ROLE_GRANT_REVOKE,
-            ActionId.ADMIN_ROLE_GRANT_BOOTSTRAP,
-            ActionId.ACTOR_SERVICE_PROVISION,
-            ActionId.ACTOR_PROFILE_READ,
-            ActionId.ACTOR_IDENTITY_LINK_READ,
-            ActionId.ACTOR_PROFILE_SUSPEND,
-            ActionId.ACTOR_PROFILE_REACTIVATE,
-            ActionId.ACTOR_PROFILE_DEACTIVATE,
-            ActionId.ACTOR_IDENTITY_LINK_REVOKE,
-            ActionId.ACTOR_IDENTITY_LINK_REACTIVATE,
-            ActionId.PROJECT_ROLE_GRANT_ISSUE,
-            ActionId.PROJECT_ROLE_GRANT_REVOKE,
-            ActionId.PROJECT_CONTRIBUTOR_CANDIDATE_LIST,
-            ActionId.PROJECT_ROLE_GRANT_LIST,
-            ActionId.PROJECT_ROLE_GRANT_READ,
-            ActionId.PROJECT_SETUP_RUN_READ,
-            ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_LIST,
-            ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_READ,
-            ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_LIST,
-            ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_READ,
-            ActionId.PROJECT_EFFECTIVE_SUBMISSION_ARTIFACT_POLICY_READ,
-            ActionId.PROJECT_PRE_SUBMIT_CHECKER_POLICY_READ,
-            ActionId.PROJECT_ACTIVE_GUIDE_READ,
-        }
-    )
-    | adapter_bindings.ADAPTER_BINDING_READ_ACTIONS
-    | contribution_policies.CONTRIBUTION_POLICY_READ_ACTIONS
-    | checker_registry.CHECKER_REGISTRY_ACTIONS
-    | checker_models.MODEL_ADMIN_ACTIONS
-    | checker_retry.CHECKER_RETRY_ACTIONS
-    | post_submit_deliveries.POST_SUBMIT_DELIVERY_MUTATION_ACTIONS
-    | artifact_operator.ARTIFACT_OPERATOR_ACTIONS
-)
-_SERIALIZED_ADMIN_READS = (
-    frozenset(
-        {
-            ActionId.ACTOR_PROFILE_READ,
-            ActionId.ACTOR_IDENTITY_LINK_READ,
-            ActionId.PROJECT_SETUP_RUN_READ,
-            ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_LIST,
-            ActionId.PROJECT_GUIDE_SUFFICIENCY_REPORT_READ,
-            ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_LIST,
-            ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_READ,
-            ActionId.PROJECT_EFFECTIVE_SUBMISSION_ARTIFACT_POLICY_READ,
-            ActionId.PROJECT_PRE_SUBMIT_CHECKER_POLICY_READ,
-            ActionId.PROJECT_ACTIVE_GUIDE_READ,
-        }
-    )
-    | adapter_bindings.ADAPTER_BINDING_READ_ACTIONS
-    | contribution_policies.CONTRIBUTION_POLICY_READ_ACTIONS
-    | checker_registry.CHECKER_REGISTRY_READ_ACTIONS
-    | artifact_operator.ARTIFACT_OPERATOR_READ_ACTIONS
-)
-_ADMIN_MUTATIONS = (
-    frozenset(
-        {
-            ActionId.REVIEW_LIFECYCLE_ACTIVATION_MANAGE,
-            ActionId.ADMIN_ROLE_GRANT_REVOKE,
-            ActionId.ACTOR_SERVICE_PROVISION,
-            ActionId.ACTOR_PROFILE_SUSPEND,
-            ActionId.ACTOR_PROFILE_REACTIVATE,
-            ActionId.ACTOR_PROFILE_DEACTIVATE,
-            ActionId.ACTOR_IDENTITY_LINK_REVOKE,
-            ActionId.ACTOR_IDENTITY_LINK_REACTIVATE,
-        }
-    )
-    | PROJECT_SCOPED_ADMIN_MUTATIONS
-    | checker_registry.CHECKER_REGISTRY_MUTATION_ACTIONS
-    | checker_models.MODEL_ADMIN_ACTIONS
-    | checker_retry.CHECKER_RETRY_ACTIONS
-    | post_submit_deliveries.POST_SUBMIT_DELIVERY_MUTATION_ACTIONS
-    | {ActionId.ARTIFACT_VERIFICATION_JOB_RETRY}
-)
 def _prepared_admin_role_locker(action_id):
     """Select the only supported prepared admin-role authority locker."""
     if action_id in _ADMIN_MUTATIONS:
@@ -230,6 +151,9 @@ _ARTIFACT_INTERNAL_RESOURCES = {
     ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE: (
         "pre_submit_checker_input",
         PreSubmitCheckerInputResourceContext,
+    ),
+    ActionId.ARTIFACT_SUBMISSION_FINALIZE: (
+        "submission_finalization", SubmissionFinalizationResourceContext,
     ),
     ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE: (
         "submission_binding",

@@ -1063,6 +1063,10 @@ class SelectedPreSubmitCoordinationPort(Protocol):
     ) -> SelectedPreSubmitCurrentFacts | None:
         """Read one exact actor/key result after TASK custody is locked."""
 
+    async def read_accepted_terminal(self, *, run_id: UUID, source_operation_id: UUID,
+                                     terminal_digest: str) -> SelectedPreSubmitTerminalFacts:
+        """Read retained source evidence without new PRE or current foreground eligibility."""
+
     async def lock_acceptance(
         self, *, run_id: UUID, facts: SelectedPreSubmitReservationFacts, terminal_digest: str,
     ) -> SelectedPreSubmitTerminalFacts:

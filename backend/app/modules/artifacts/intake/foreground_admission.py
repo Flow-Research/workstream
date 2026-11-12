@@ -211,8 +211,8 @@ class ForegroundIntakeAdmission:
                 row = await repository._lock(owner.operation_id)
                 await authority.authorize_read(IntakeOperationReadFacts(
                     UUID(row.id), UUID(row.project_id), UUID(row.task_id), UUID(row.actor_profile_id)))
-                self._match_acceptance_command(row, request, terminal_digest, accepted=row.state == "finalization_pending")
-                if row.state == "finalization_pending":
+                self._match_acceptance_command(row, request, terminal_digest, accepted=row.state in {"finalization_pending", "finalized"})
+                if row.state in {"finalization_pending", "finalized"}:
                     return await self._accepted_receipt(session, authority, row)
                 receipt = await self._accept_new(session, authority, repository, row, owner,
                                                  request, terminal_digest, checkers, outbox)
@@ -224,7 +224,7 @@ class ForegroundIntakeAdmission:
                 row = await SubmissionIntakeRepository(session, self._tasks(session))._lock(owner.operation_id)
                 await authority.authorize_read(IntakeOperationReadFacts(
                     UUID(row.id), UUID(row.project_id), UUID(row.task_id), UUID(row.actor_profile_id)))
-                if row.state != "finalization_pending":
+                if row.state not in {"finalization_pending", "finalized"}:
                     raise IntakeCommitUnknown("submission acceptance outcome is unresolved")
                 self._match_acceptance_command(row, request, terminal_digest, accepted=True)
                 return await self._accepted_receipt(session, authority, row)

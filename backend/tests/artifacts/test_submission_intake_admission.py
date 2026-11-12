@@ -746,3 +746,70 @@ async def test_t4_cancellation_drains_commit_and_keeps_accepted_custody(admissio
         await asyncio.gather(command, return_exceptions=True)
     receipt = await f.admission.accept(owner, request, terminal.terminal_digest, **kwargs)
     assert receipt["status"] == "accepted" and receipt["replayed"] is True
+
+
+async def test_t5_finalizes_same_source_with_one_submission_and_post_dispatch(admission_intake, tmp_path):
+    from datetime import timedelta
+    from sqlalchemy import text
+    from app.adapters.artifacts import submission_admission_consumption_port
+    from app.adapters.checkers import selected_pre_submit_coordinator
+    from app.adapters.outbox import outbox_append
+    from app.adapters.tasks import accepted_submission_creation_service
+    from app.modules.actors.api import ServiceIdentity
+    from app.modules.artifacts.authorization import PreparedSubmissionFinalizationAuthorization
+    from app.modules.artifacts.intake.finalization import AcceptedSubmissionFinalization
+    from tests.artifact_store_helpers import initialize_local_store
+    from tests.artifacts.intake_acceptance_support import completed_source
+    from tests.checkers.execution.support import provision_post_submit_service
+
+    f = admission_intake
+    owner, request, terminal = await completed_source(f, tmp_path)
+    accepted = await f.admission.accept(owner, request, terminal.terminal_digest,
+        checkers=selected_pre_submit_coordinator, outbox=outbox_append)
+    await provision_post_submit_service(f.factory, ServiceIdentity.ARTIFACT_BINDING)
+    store = initialize_local_store(root=tmp_path / "durable", buffer_bytes=256 * 1024)
+    def submissions(session):
+        return accepted_submission_creation_service(session, settings=_settings(tmp_path),
+            admissions=submission_admission_consumption_port(session,
+                request_id=new_record_id(), correlation_id=owner.operation_id))
+    finalizer = AcceptedSubmissionFinalization(
+        f.factory, tasks=f.admission._tasks, submissions=submissions,
+        checkers=selected_pre_submit_coordinator, store=store, lease_duration=timedelta(seconds=60),
+        authorization=lambda session: PreparedSubmissionFinalizationAuthorization(
+            session, request_id=new_record_id(), correlation_id=owner.operation_id),
+    )
+    try:
+        result = await finalizer.run(owner.operation_id)
+        assert await finalizer.run(owner.operation_id) == result
+        assert await f.admission.accept(owner, request, terminal.terminal_digest,
+            checkers=selected_pre_submit_coordinator, outbox=outbox_append) == dict(accepted, replayed=True)
+        async with f.factory() as session:
+            row = await session.get(SubmissionIntakeOperation, str(owner.operation_id))
+            assert row.state == "finalized" and row.finalized_submission_id == str(result.submission_id)
+            task = (await session.execute(text("SELECT status, active_submission_operation_id "
+                "FROM workstream_tasks WHERE id=:id"), {"id": f.task})).one()
+            assert task.status == "evaluation_pending" and task.active_submission_operation_id is None
+            admission = (await session.execute(text("SELECT source_operation_id, durable_intent_id, put_attempt_id, "
+                "verification_receipt_id FROM submission_bundle_admissions WHERE id=:id"),
+                {"id": result.admission_id})).one()
+            assert admission.source_operation_id == owner.operation_id
+            assert admission.durable_intent_id is admission.put_attempt_id is admission.verification_receipt_id is None
+            replica = (await session.execute(text("SELECT provider_object_ref FROM artifact_replicas "
+                "WHERE source_operation_id=:id"), {"id": owner.operation_id})).one()
+            assert replica.provider_object_ref == request.source.location.object_ref
+            for table in ("submissions", "submission_dispatches", "checker_runs"):
+                assert await session.scalar(text(f"SELECT count(*) FROM {table} WHERE task_id=:id"), {"id": f.task}) == 1
+            assert await session.scalar(text("SELECT count(*) FROM outbox_events WHERE project_id=:id "
+                "AND event_type='PostSubmissionEvaluationRequested'"), {"id": f.project}) == 1
+            assert await session.scalar(text("SELECT count(*) FROM submission_source_charges WHERE operation_id=:id"),
+                {"id": owner.operation_id}) == 1
+        # Removing retained provenance must fail at commit even when all other
+        # replica coordinates remain unchanged.
+        from sqlalchemy.exc import IntegrityError
+        async with f.factory() as session:
+            with pytest.raises(IntegrityError, match="retained source ownership is immutable"):
+                async with session.begin():
+                    await session.execute(text("UPDATE artifact_replicas SET source_operation_id=NULL "
+                        "WHERE source_operation_id=:id"), {"id": owner.operation_id})
+    finally:
+        store.close()

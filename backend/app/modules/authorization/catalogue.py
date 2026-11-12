@@ -272,6 +272,7 @@ class ActionId(StrEnum):
     ARTIFACT_TASK_IMPORT_SOURCE_READ = "artifact.task_import_source.read"
     ARTIFACT_GUIDE_SOURCE_READ = "artifact.guide_source.read"
     ARTIFACT_SUBMISSION_BUNDLE_PREPARE = "artifact.submission_bundle.prepare"
+    ARTIFACT_SUBMISSION_FINALIZE = "artifact.submission.finalize"
     ARTIFACT_SUBMISSION_BINDING_CREATE = "artifact.submission.binding.create"
     ARTIFACT_CHECKER_OUTPUT_BINDING_CREATE = "artifact.checker_output.binding.create"
     ARTIFACT_VERIFICATION_EXECUTE = "artifact.verification.execute"
@@ -567,7 +568,7 @@ HISTORICAL_PERMISSION_IDS = PERMISSION_IDS - NEW_PERMISSION_IDS
 
 def _require_catalogue_counts() -> None:
     """Keep the closed action inventory and permission boundary exact."""
-    if len(PERMISSION_IDS) != 94 or len(ACTION_IDS) != 192:
+    if len(PERMISSION_IDS) != 94 or len(ACTION_IDS) != 193:
         raise RuntimeError("authorization catalogue count mismatch")
     if len(HISTORICAL_PERMISSION_IDS) != 49 or len(NEW_PERMISSION_IDS) != 45:
         raise RuntimeError("authorization permission boundary mismatch")
@@ -701,6 +702,7 @@ _ACTIVE_ACTION_BOUNDARY = frozenset(
         ActionId.ARTIFACT_SUBMISSION_BUNDLE_PREPARE,
         ActionId.SUBMISSION_CREATE,
         ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE,
+        ActionId.ARTIFACT_SUBMISSION_FINALIZE,
         ActionId.ARTIFACT_CHECKER_OUTPUT_BINDING_CREATE,
         ActionId.ARTIFACT_VERIFICATION_EXECUTE,
         ActionId.ARTIFACT_PENDING_WORK_SCAN,
@@ -814,6 +816,7 @@ _SERVICE_ACTIONS = {
     ServiceIdentity.ARTIFACT_BINDING: frozenset(
         {
             ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE,
+            ActionId.ARTIFACT_SUBMISSION_FINALIZE,
             ActionId.ARTIFACT_CHECKER_OUTPUT_BINDING_CREATE,
             ActionId.ARTIFACT_REVIEW_EVIDENCE_BINDING_CREATE,
         }
@@ -877,6 +880,7 @@ _EXPECTED_SERVICE_ACTION_MEMBERSHIPS = frozenset(
         (ServiceIdentity.ARTIFACT_PUT_RESOLVER, ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE),
         (ServiceIdentity.ARTIFACT_SCHEDULER, ActionId.ARTIFACT_PENDING_WORK_SCAN),
         (ServiceIdentity.ARTIFACT_BINDING, ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE),
+        (ServiceIdentity.ARTIFACT_BINDING, ActionId.ARTIFACT_SUBMISSION_FINALIZE),
         (ServiceIdentity.ARTIFACT_BINDING, ActionId.ARTIFACT_CHECKER_OUTPUT_BINDING_CREATE),
         (ServiceIdentity.ARTIFACT_BINDING, ActionId.ARTIFACT_REVIEW_EVIDENCE_BINDING_CREATE),
         (ServiceIdentity.ARTIFACT_GUIDE_READER, ActionId.ARTIFACT_GUIDE_SOURCE_READ),
@@ -943,6 +947,7 @@ _ACTIVE_SERVICE_ACTIONS = {
     ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
     ActionId.ARTIFACT_PENDING_WORK_SCAN,
     ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE,
+    ActionId.ARTIFACT_SUBMISSION_FINALIZE,
     ActionId.ARTIFACT_CHECKER_OUTPUT_BINDING_CREATE,
     ActionId.ARTIFACT_GUIDE_SOURCE_READ,
     ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE,
@@ -1032,6 +1037,9 @@ _SERVICE_ACTION_METADATA = {
     ActionId.ARTIFACT_PENDING_WORK_SCAN: (
         PermissionId.ARTIFACT_PENDING_WORK_SCAN,
         ActionOwner.AUTH_ART_02D_INTERNAL,
+    ),
+    ActionId.ARTIFACT_SUBMISSION_FINALIZE: (
+        PermissionId.ARTIFACT_BINDING_CREATE, ActionOwner.AUTH_ART_05,
     ),
     ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE: (
         PermissionId.ARTIFACT_BINDING_CREATE,

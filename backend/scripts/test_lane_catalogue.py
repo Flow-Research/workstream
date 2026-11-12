@@ -73,6 +73,7 @@ SHARED_FOUNDATION_MODULES = (
     "tests/authorization/guide_activation/test_postgresql.py",
     "tests/authorization/guide_activation/test_concurrency.py",
     "tests/authorization/test_pre_submit_attempt_authority.py",
+    "tests/authorization/test_submission_finalization_authority.py",
     "tests/authorization/pre_submit/test_contracts.py",
     "tests/authorization/test_guide_metadata_contracts.py",
     "tests/authorization/post_policy/test_concurrency.py",

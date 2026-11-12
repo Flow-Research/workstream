@@ -262,6 +262,29 @@ class SelectedPreSubmitCoordinator:
             terminal=terminal,
         )
 
+    async def read_accepted_terminal(self, *, run_id: UUID, source_operation_id: UUID,
+                                     terminal_digest: str) -> SelectedPreSubmitTerminalFacts:
+        """Read exact retained v3 evidence; ART independently owns accepted custody."""
+        _require_root(self._session)
+        row = await self._session.get(SelectedPreSubmitRun, str(run_id))
+        if (row is None or row.source_operation_id != str(source_operation_id)
+                or row.status != "completed" or row.eligible is not True
+                or row.terminal_digest != terminal_digest or row.execute_evidence_id is None
+                or row.finalize_evidence_id is None
+                or row.request_json.get("schema_version") != "workstream.selected_pre_submit_reservation.v2"
+                or row.terminal_json.get("schema_version") != "workstream.selected_pre_submit_terminal.v3"):
+            raise SelectedPreSubmitUnavailable("selected_pre_submit_stored_facts_invalid")
+        try:
+            request = SelectedPreSubmitReservationFacts.from_canonical_body(row.request_json)
+            terminal = SelectedPreSubmitTerminalFacts.from_canonical_body(row.terminal_json)
+            if not matches_source_request(row, request) or not matches_terminal(row, request, terminal):
+                raise ValueError("retained PRE differs")
+        except (TypeError, ValueError):
+            raise SelectedPreSubmitUnavailable("selected_pre_submit_stored_facts_invalid") from None
+        await self._session.execute(text("SELECT public.require_selected_pre_invocation(r) "
+            "FROM public.selected_pre_submit_runs r WHERE id=:id"), {"id": row.id})
+        return terminal
+
     async def lock_acceptance(
         self, *, run_id: UUID, facts: SelectedPreSubmitReservationFacts, terminal_digest: str,
     ) -> SelectedPreSubmitTerminalFacts:

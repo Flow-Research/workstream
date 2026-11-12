@@ -1,6 +1,7 @@
 """Transaction-bound, single-use authorization for sensitive mutations."""
 
 from __future__ import annotations
+from app.modules.authorization.domain.submission_finalization import SubmissionFinalizationResourceContext
 from app.modules.authorization.prepared_preflight import preflight_authority
 from app.modules.authorization.domain.submission_intake import IntakeReservationResourceContext, IntakeReservationPreflightResourceContext, intake_preflight_matches, parse_intake_binding
 from app.modules.authorization.catalogue import GUIDE_PROPOSAL_ACTION_IDS, POST_POLICY_ACTION_IDS
@@ -195,6 +196,9 @@ _EXACT_ARTIFACT_RESOURCE_BY_ACTION = {
     ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE: (
         "pre_submit_checker_input",
         PreSubmitCheckerInputResourceContext,
+    ),
+    ActionId.ARTIFACT_SUBMISSION_FINALIZE: (
+        "submission_finalization", SubmissionFinalizationResourceContext,
     ),
     ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE: (
         "submission_binding",
@@ -642,6 +646,21 @@ class PreparedAuthorizationService:
         if checker_runtime_matches is False:
             raise PreparedAuthorizationHandleInvalid("invalid prepared checker runtime authority")
 
+    def _validate_artifact_consumption(self, issuance, final_resource_context):
+        """Require the exact artifact custody facts sealed at preparation."""
+        if isinstance(
+            final_resource_context,
+            (
+                PreSubmitCheckerInputResourceContext, SubmissionBindingResourceContext,
+                SubmissionCreationResourceContext, IntakeAcceptanceResourceContext,
+                SubmissionFinalizationResourceContext, TaskImportSourceResourceContext,
+            ),
+        ) and not exact_artifact_binding_matches(
+            issuance.binding.exact_artifact_context,
+            issuance.binding.exact_artifact_resource_digest, final_resource_context,
+        ):
+            raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
+
     async def consume(
         self,
         handle: PreparedAuthorizationHandle,
@@ -703,20 +722,7 @@ class PreparedAuthorizationService:
             final_resource_context, ProjectSubmissionArtifactPolicyMutationResourceContext
         ) and not _submission_policy_binding_matches(issuance.binding, final_resource_context):
             raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
-        if isinstance(
-            final_resource_context,
-            (
-                PreSubmitCheckerInputResourceContext,
-                SubmissionBindingResourceContext,
-                SubmissionCreationResourceContext,
-                IntakeAcceptanceResourceContext,
-                TaskImportSourceResourceContext,
-            ),
-        ) and not exact_artifact_binding_matches(
-            issuance.binding.exact_artifact_context,
-            issuance.binding.exact_artifact_resource_digest, final_resource_context,
-        ):
-            raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
+        self._validate_artifact_consumption(issuance, final_resource_context)
         if isinstance(
             final_resource_context, SubmissionBundlePreparationResourceContext
         ) and not _submission_preparation_binding_matches(issuance.binding, final_resource_context):

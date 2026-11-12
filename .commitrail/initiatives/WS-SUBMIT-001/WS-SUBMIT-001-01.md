@@ -2715,3 +2715,50 @@ began on the corresponding worktree before freeze; do not attribute them as a ne
 exact-commit full-suite execution. The next required change is accepted continuation
 and atomic retained registration/Submission/POST composition, not additional
 observation scaffolding. This checkpoint leaves the end-to-end goal incomplete.
+
+### Accepted continuation and retained registration implementation
+
+T5 now has a fixed-service `artifact.submission.finalize` action, an exact accepted
+operation/context/source/receipt capability, and separate claim and commit decisions.
+The continuation lease is committed before metadata observation outside TASK locks.
+The final transaction registers the same sealed source as ART content/replica and a
+source-backed admission, then invokes the shared TASK Submission/binding/POST dispatch
+writer. It retains the original acceptance decision for creation provenance and a
+separate service decision for continuation. Finalized replay reads retained closure
+before any new lease or provider observation. No fabricated put or verification
+receipt substitutes for accepted ingress/PRE evidence.
+
+Migration 0074 extends the closed audit action/permission pair, discriminates source
+admissions from retained put/verification admissions, and enforces acceptance,
+continuation authority, finalized Submission/dispatch closure, and immutable source
+ownership. The AUTH kernel's action classifications move to the existing domain
+classification module; this removes its oversized-file debt without adding debt.
+
+Verification on the implementation worktree: five focused real-PostgreSQL AUTH
+cases passed (claim/commit exact consumption plus missing/wrong/revoked service).
+The first composed T5 run advanced through registration and shared Submission/POST
+creation to commit, then failed because a shared deferred trigger referenced intake
+fields on a replica row. The repair isolates intake-specific checks in nested table
+and operation branches. Known database failures now propagate directly rather than
+being mislabeled uncertain commit acknowledgement. This is diagnostic progress,
+not a passing T5 or POST execution claim. The composed test also checks replay,
+original acceptance receipt stability, one Submission/dispatch/POST reservation,
+same source key, retained charge, absent fabricated receipts, and rejected removal
+of replica source ownership. Its repaired result remains required.
+
+Still required: integrated T5 failure/retry/concurrency proofs, the finalization
+outbox handler and composition, POST reads from exact retained source generation,
+revision and public API/CLI/MCP journey, and the complete acceptance/deployment audit.
+The single PR remains the delivery unit; this implementation does not complete it.
+
+The repaired composed PostgreSQL T5 test passed (**1 passed, 27 deselected**,
+`/tmp/t5-composed-repaired.log`, isolation metadata `/tmp/t5-composed-repaired.json`,
+cleanup complete). It includes exact finalized replay, original acceptance replay,
+all registration/dispatch assertions, and the source-link removal rejection.
+Catalogue tests passed (**7 passed**, `/tmp/t5-catalogue-final.log`); changed Python
+files pass Ruff; Markdown links and structure validation passed. A subsequent
+unused-import removal shifts the unchanged kernel debt function by one line, with
+the ledger coordinates adjusted accordingly. These are worktree-scoped results,
+not full-suite or exact frozen-commit provenance. T5 crash/concurrency and POST
+execution/public integration remain open; focused implementation review follows
+this reproducible milestone.

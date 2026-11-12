@@ -1,6 +1,7 @@
 """Exact project resource audit selectors, without raw product facts."""
 
 from uuid import UUID
+from app.modules.authorization.domain.submission_finalization import SubmissionFinalizationResourceContext
 from app.modules.authorization.domain.submission_intake import IntakeReservationResourceContext, IntakeReservationPreflightResourceContext, IntakeAcceptanceResourceContext
 from app.modules.authorization.domain.contributor_reads import ContributorWorkReadResourceContext
 
@@ -80,8 +81,8 @@ def _model_administration_target(resource):
 
 
 def _submission_operation_target(resource):
-    if type(resource) is IntakeAcceptanceResourceContext:
-        project_id = str(resource.scope_project_id)
+    if type(resource) in {IntakeAcceptanceResourceContext, SubmissionFinalizationResourceContext}:
+        project_id = str(getattr(resource, "scope_project_id", None) or resource.project_id)
         return project_id, "submission_operation", str(resource.operation_id), "project", project_id
     if type(resource) in {IntakeReservationResourceContext, IntakeReservationPreflightResourceContext} or (
         type(resource) is ContributorWorkReadResourceContext

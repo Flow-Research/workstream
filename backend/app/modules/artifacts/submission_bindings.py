@@ -112,6 +112,13 @@ class SubmissionAdmissionConsumptionService:
             raise SubmissionAdmissionConsumptionError(
                 "submission_bundle_admission_unavailable"
             )
+        if admission.source_operation_id != (
+            str(request.accepted_operation_id) if request.accepted_operation_id else None
+        ):
+            raise SubmissionAdmissionConsumptionError("submission_bundle_admission_unavailable")
+        if admission.source_operation_id is not None:
+            await self._session.execute(text("SELECT public.require_source_submission_admission(a) "
+                "FROM public.submission_bundle_admissions a WHERE id=:id"), {"id": admission.id})
         if admission.status == "stale":
             raise SubmissionAdmissionConsumptionError(
                 "submission_bundle_admission_stale"
@@ -314,17 +321,15 @@ class SubmissionAdmissionConsumptionService:
             == (predecessor.version if predecessor is not None else None)
             and admission.checker_remediation_manifest_id
             == context.checker_remediation_manifest_id
-            and (predecessor is None or (
+            and (admission.source_operation_id is not None or predecessor is None or (
                 revision is not None and revision.disposition == "ready"
                 and revision.source_submission_id == predecessor.submission_id
                 and revision.source_routing_manifest_id == context.checker_remediation_manifest_id
             ))
-            and admission.revision_preparation_id == (
-                revision.preparation_id if revision is not None else None
-            )
-            and admission.revision_preparation_sha256 == (
-                revision.preparation_sha256 if revision is not None else None
-            )
+            and (admission.source_operation_id is not None or (
+                admission.revision_preparation_id == (revision.preparation_id if revision is not None else None)
+                and admission.revision_preparation_sha256 == (revision.preparation_sha256 if revision is not None else None)
+            ))
             and admission.guide_version == references.guide_version
             and admission.source_snapshot_id == str(references.source_snapshot_id)
             and admission.source_snapshot_sha256 == references.source_snapshot_hash

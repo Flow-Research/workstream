@@ -29,6 +29,8 @@ from app.modules.artifacts.schemas import (
     ArtifactVerificationAuthorityFacts,
 )
 from app.modules.artifacts.api.submission_intake import PreSubmitSourceReadFacts
+from app.modules.artifacts.api.submission_finalization import SubmissionFinalizationAuthorityFacts
+from app.modules.authorization.domain.submission_finalization import SubmissionFinalizationResourceContext
 
 from app.modules.artifacts.submission_bindings import SubmissionBindingAuthorityFacts
 from app.modules.artifacts.api import SubmissionAdmissionConsumptionError
@@ -544,7 +546,7 @@ class _PreparedArtifactServiceAuthorization:
         self._facts: (
             GuideSourceReadAuthorityFacts
             | PreSubmitSourceReadFacts
-            | SubmissionBindingAuthorityFacts
+            | SubmissionFinalizationAuthorityFacts | SubmissionBindingAuthorityFacts
             | None
         ) = None
 
@@ -553,7 +555,7 @@ class _PreparedArtifactServiceAuthorization:
         *,
         facts: GuideSourceReadAuthorityFacts
         | PreSubmitSourceReadFacts
-        | SubmissionBindingAuthorityFacts,
+        | SubmissionFinalizationAuthorityFacts | SubmissionBindingAuthorityFacts,
         idempotency_key: UUID,
     ) -> PreparedAuthorizationHandle:
         """Prepare one process-local capability bound to every canonical fact."""
@@ -614,7 +616,7 @@ class _PreparedArtifactServiceAuthorization:
         prepared_authorization: PreparedAuthorizationHandle,
         facts: GuideSourceReadAuthorityFacts
         | PreSubmitSourceReadFacts
-        | SubmissionBindingAuthorityFacts,
+        | SubmissionFinalizationAuthorityFacts | SubmissionBindingAuthorityFacts,
     ) -> UUID | None:
         """Consume only the exact handle and facts prepared by this adapter."""
         if (
@@ -632,7 +634,7 @@ class _PreparedArtifactServiceAuthorization:
                 self._input,
                 _artifact_service_resource_context(facts),
             )
-            if self._action_id is ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE:
+            if self._action_id in {ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE, ActionId.ARTIFACT_SUBMISSION_FINALIZE}:
                 return decision.decision_id
             return None
         except (AuthorizationDenied, PreparedAuthorizationHandleInvalid, ValidationError) as exc:
@@ -669,6 +671,24 @@ class _PreparedArtifactServiceAuthorization:
         self._input = None
         self._handle = None
         self._facts = None
+
+
+class PreparedSubmissionFinalizationAuthorization(_PreparedArtifactServiceAuthorization):
+    """Accepted continuation authority belongs only to the existing binding service."""
+
+    def __init__(self, session: AsyncSession, *, request_id: UUID, correlation_id: UUID) -> None:
+        super().__init__(session, service_identity=ServiceIdentity.ARTIFACT_BINDING,
+                         action_id=ActionId.ARTIFACT_SUBMISSION_FINALIZE,
+                         request_id=request_id, correlation_id=correlation_id)
+
+
+    async def authorize(self) -> None:
+        """Check the current fixed service before replay or provider observation."""
+        await fixed_service_action_context(
+            self._session, service_identity=ServiceIdentity.ARTIFACT_BINDING,
+            action_id=ActionId.ARTIFACT_SUBMISSION_FINALIZE,
+            request_id=self._request_id, correlation_id=self._correlation_id,
+        )
 
 
 class PreparedSubmissionBindingAuthorization:
@@ -783,14 +803,16 @@ class PreparedPreSubmitMaterializationAuthorization:
 
 
 def _artifact_service_resource_context(
-    facts: GuideSourceReadAuthorityFacts | PreSubmitSourceReadFacts | SubmissionBindingAuthorityFacts,
-) -> GuideSourceReadResourceContext | PreSubmitCheckerInputResourceContext | SubmissionBindingResourceContext:
+    facts: GuideSourceReadAuthorityFacts | PreSubmitSourceReadFacts | SubmissionFinalizationAuthorityFacts | SubmissionBindingAuthorityFacts,
+) -> GuideSourceReadResourceContext | PreSubmitCheckerInputResourceContext | SubmissionBindingResourceContext | SubmissionFinalizationResourceContext:
     """Compose AUTH context for the exact fixed ART service operation."""
     if type(facts) is PreSubmitSourceReadFacts:
         return PreSubmitCheckerInputResourceContext(
             resource_id=facts.source.location.operation_id,
             scope_project_id=facts.project_id, facts=facts,
         )
+    if type(facts) is SubmissionFinalizationAuthorityFacts:
+        return SubmissionFinalizationResourceContext(resource_id=facts.operation_id, **asdict(facts))
     if isinstance(facts, SubmissionBindingAuthorityFacts):
         return SubmissionBindingResourceContext(
             resource_type="submission_binding", resource_id=facts.admission_id, **asdict(facts),
@@ -801,8 +823,8 @@ def _artifact_service_resource_context(
 
 
 def _prepared_artifact_facts_match(
-    prepared: GuideSourceReadAuthorityFacts | PreSubmitSourceReadFacts | SubmissionBindingAuthorityFacts,
-    final: GuideSourceReadAuthorityFacts | PreSubmitSourceReadFacts | SubmissionBindingAuthorityFacts,
+    prepared: GuideSourceReadAuthorityFacts | PreSubmitSourceReadFacts | SubmissionFinalizationAuthorityFacts | SubmissionBindingAuthorityFacts,
+    final: GuideSourceReadAuthorityFacts | PreSubmitSourceReadFacts | SubmissionFinalizationAuthorityFacts | SubmissionBindingAuthorityFacts,
 ) -> bool:
     """Require source, lease and every locked fact to remain exactly prepared."""
     return type(prepared) is type(final) and prepared == final
