@@ -99,6 +99,7 @@ from app.modules.authorization.runtime import (
     GuideSourceReadResourceContext,
     SubmissionBindingResourceContext,
     SubmissionCreationResourceContext,
+    IntakeAcceptanceResourceContext,
     GuideSourceIngestResourceContext,
     TaskImportSourceResourceContext,
     PreSubmitCheckerInputResourceContext,
@@ -574,6 +575,9 @@ class PreparedAuthorizationService:
         """Bind consumption to its issued request, root transaction and exact resource."""
         if expected_action_id is not issuance.binding.action_id:
             raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
+        if (type(final_resource_context) is IntakeAcceptanceResourceContext
+                and issuance.binding.idempotency_key != final_resource_context.idempotency_key):
+            raise PreparedAuthorizationHandleInvalid("invalid prepared acceptance key")
         rebound = self._binding(expected_action_id, caller_input, issuance.binding.scope)
         if rebound != issuance.binding:
             raise PreparedAuthorizationHandleInvalid("invalid prepared authorization handle")
@@ -705,6 +709,7 @@ class PreparedAuthorizationService:
                 PreSubmitCheckerInputResourceContext,
                 SubmissionBindingResourceContext,
                 SubmissionCreationResourceContext,
+                IntakeAcceptanceResourceContext,
                 TaskImportSourceResourceContext,
             ),
         ) and not exact_artifact_binding_matches(
@@ -1062,7 +1067,7 @@ class PreparedAuthorizationService:
                 kind=PreparedAuthorityScopeKind.PROJECT,
                 project_id=resource.scope_project_id,
             )
-        if isinstance(resource, SubmissionCreationResourceContext):
+        if isinstance(resource, (SubmissionCreationResourceContext, IntakeAcceptanceResourceContext)):
             return PreparedAuthorityScope(
                 kind=PreparedAuthorityScopeKind.PROJECT,
                 project_id=resource.scope_project_id,

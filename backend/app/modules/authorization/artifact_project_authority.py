@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from app.modules.authorization.domain.submission_intake import IntakeReservationResourceContext
+from app.modules.authorization.domain.submission_intake import IntakeReservationResourceContext, IntakeAcceptanceResourceContext
 from app.modules.authorization.catalogue import ActionAvailability, ActionId
 from app.modules.authorization.schemas import AdminRole
 from app.modules.authorization.domain.task_authority import (
@@ -189,10 +189,11 @@ def evaluate_submitter_authority(action, context, authority, resource, lifecycle
     if denial is None and action.availability is not ActionAvailability.ACTIVE:
         denial = AuthorizationDenialCode.ACTION_UNAVAILABLE
     elif denial is None and (
-        (action.action_id is ActionId.SUBMISSION_INTAKE_RESERVE
-         and type(resource) is not IntakeReservationResourceContext)
-        or (action.action_id is not ActionId.SUBMISSION_INTAKE_RESERVE
-            and not isinstance(resource, (SubmissionBundlePreparationResourceContext, SubmissionCreationResourceContext)))
+        type(resource) not in {
+            ActionId.SUBMISSION_INTAKE_RESERVE: (IntakeReservationResourceContext,),
+            ActionId.ARTIFACT_SUBMISSION_BUNDLE_PREPARE: (SubmissionBundlePreparationResourceContext,),
+            ActionId.SUBMISSION_CREATE: (SubmissionCreationResourceContext, IntakeAcceptanceResourceContext),
+        }.get(action.action_id, ())
     ):
         denial = AuthorizationDenialCode.RESOURCE_GUARD_DENIED
     elif denial is None and resource.scope_project_id != authority.scope_project_id:

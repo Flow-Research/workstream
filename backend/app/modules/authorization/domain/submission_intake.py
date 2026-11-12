@@ -3,12 +3,12 @@ import json
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from app.modules.authorization.catalogue import ActionId
 
 
-class _IntakeReservationSelectors(BaseModel):
+class _IntakeOperationSelectors(BaseModel):
     """A source-custody reservation, never a prepared artifact or Submission."""
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True, revalidate_instances="always")
     resource_id: UUID
@@ -29,16 +29,49 @@ class _IntakeReservationSelectors(BaseModel):
 
 
 
-class IntakeReservationPreflightResourceContext(_IntakeReservationSelectors):
+class IntakeReservationPreflightResourceContext(_IntakeOperationSelectors):
     """Selector-only preflight; cannot become a prepared reservation handle."""
     resource_type: Literal["submission_intake_preflight"] = "submission_intake_preflight"
 
 
-class IntakeReservationResourceContext(_IntakeReservationSelectors):
+class IntakeReservationResourceContext(_IntakeOperationSelectors):
     """Complete locked reservation facts used only for prepare and consume."""
     resource_type: Literal["submission_intake_reservation"] = "submission_intake_reservation"
     locked_context_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
     task_status: Literal["in_progress", "needs_revision"]
+
+
+class IntakeAcceptanceResourceContext(_IntakeOperationSelectors):
+    """Closed human command acceptance, identified by operation rather than Submission."""
+    resource_type: Literal["submission_intake_acceptance"] = "submission_intake_acceptance"
+    operation_id: UUID
+    locked_context_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    task_status: Literal["in_progress", "needs_revision"]
+    foreground_lease_id: UUID
+    foreground_lease_generation: int = Field(gt=0)
+    selected_pre_submit_run_id: UUID
+    selected_pre_submit_request_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    selected_pre_submit_terminal_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    source_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    semantic_manifest_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    accepted_context_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    receipt_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    accepted_at: AwareDatetime
+    predecessor_submission_id: UUID | None
+    predecessor_submission_version: int | None = Field(ge=1)
+    checker_remediation_manifest_id: UUID | None
+
+    @model_validator(mode="after")
+    def exact_operation_and_revision(self):
+        if self.resource_id != self.operation_id:
+            raise ValueError("acceptance resource must match its operation")
+        initial = (self.task_status == "in_progress" and self.predecessor_submission_id is None
+                   and self.predecessor_submission_version is None and self.checker_remediation_manifest_id is None)
+        revision = (self.task_status == "needs_revision" and self.predecessor_submission_id is not None
+                    and self.predecessor_submission_version is not None and self.checker_remediation_manifest_id is not None)
+        if not (initial or revision):
+            raise ValueError("acceptance revision identity is inconsistent")
+        return self
 
 
 def intake_preflight_matches(caller_input, resource, scope) -> bool:

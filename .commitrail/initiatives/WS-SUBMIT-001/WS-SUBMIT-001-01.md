@@ -2471,3 +2471,23 @@ T4 plan-review resolutions:
   and prove one stable accepted result/event. Preserve the actual ZIP and real
   database lease fixture while explicitly treating its simulated runtime/Smol
   observations as portable transaction evidence only.
+
+T4 authorization implementation checkpoint:
+
+- Added a closed operation-scoped `submission.create` acceptance resource and
+  exact prepared consumption binding for source, PRE request/terminal, lease,
+  context and receipt evidence. No formal Submission identifier is fabricated.
+  The persisted audit target uses the existing `submission_operation` identity.
+- Retained receipt validation checks the original immutable decision digest;
+  callers must first authorize a current own-operation read. This does not issue
+  a new acceptance handle or continuation authority.
+- Real PostgreSQL verification: 29 tests passed in
+  `/tmp/t4-auth-final.log` (isolated-run metadata `/tmp/t4-auth-final.json`).
+  Coverage includes exact acceptance/receipt, consumed-handle reuse, changed
+  custody evidence, and missing/reviewer/foreign/revoked/admin grant denial.
+  The tests exposed and drove repairs to the closed decision vocabulary and
+  prepared-denial audit dispatch. Structure validation and diff checks passed.
+- This checkpoint is AUTH participation only. ART accepted-state storage,
+  TASK transition, CHECKERS terminal consumption, atomic outbox/migration and
+  acceptance race/rollback proofs remain T4 work. It is not proof of public
+  exposure, T5 continuation, native qualification or end-to-end completion.

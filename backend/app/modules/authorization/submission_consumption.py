@@ -7,6 +7,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.modules.authorization.catalogue import ActionId
+from app.modules.authorization.domain.submission_intake import IntakeAcceptanceResourceContext
 
 _STRICT_FROZEN = ConfigDict(extra="forbid", frozen=True, strict=True)
 
@@ -133,6 +134,9 @@ RESOURCE_BY_ACTION = {
 def parse_consumption_binding(action_id: ActionId, value, invalid):
     """Parse exact submission facts into their canonical context and digest."""
     resource_type = RESOURCE_BY_ACTION.get(action_id)
+    if (action_id is ActionId.SUBMISSION_CREATE and type(value) is dict
+            and value.get("resource_type") == "submission_intake_acceptance"):
+        resource_type = IntakeAcceptanceResourceContext
     if resource_type is None:
         return None
     try:

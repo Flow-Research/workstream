@@ -65,6 +65,7 @@ from app.modules.authorization.domain.artifact_operator import (
 from app.modules.authorization.schemas import AdminRole, AdminScope, ProjectRole
 from app.modules.authorization.submission_preparation import SubmissionBundlePreparationPreflightResourceContext, SubmissionBundlePreparationResourceContext
 from app.modules.authorization.submission_consumption import SubmissionBindingResourceContext, SubmissionCreationResourceContext
+from app.modules.authorization.domain.submission_intake import IntakeAcceptanceResourceContext
 from app.modules.authorization.domain.task_authority import TaskImportBatchResourceContext as TaskImportBatchResourceContext
 
 _STRICT_FROZEN = ConfigDict(extra="forbid", frozen=True, strict=True)
@@ -1110,7 +1111,7 @@ AuthorizationResourceContext = (
     | ArtifactOperatorReadResourceContext
     | ArtifactOperatorRetryResourceContext
     | GuideSourceReadResourceContext
-    | SubmissionCreationResourceContext | SubmissionBindingResourceContext
+    | SubmissionCreationResourceContext | SubmissionBindingResourceContext | IntakeAcceptanceResourceContext
     | PreSubmitCheckerInputResourceContext
     | SubmissionBundlePreparationPreflightResourceContext
     | SubmissionBundlePreparationResourceContext
