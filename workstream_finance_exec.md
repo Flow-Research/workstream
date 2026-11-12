@@ -1816,7 +1816,7 @@ Use outcomes and failure boundaries. Avoid tests that only assert a field exists
 | T44 | Restart/queue loss | Postgres intents recover correctly; no lost obligation or duplicate effect |
 | T45 | Same contributor in two projects | One source/contributor identity; project manager cannot read, suspend or change another project's profile/destination/arrangement |
 | T46 | Points credit execution | The active exact arrangement authorizes one atomic credit and fulfillment event; no per-obligation human authorization, agreement or transfer attempt is created; duplicate delivery creates no second credit |
-| T47 | Prior-fulfillment finding | Unknown/already_fulfilled cannot authorize credit or bank transfer; checked=true alone is insufficient |
+| T47 | Prior-fulfillment finding | Unknown/already_fulfilled cannot authorize a bank transfer; checked=true alone is insufficient |
 | T48 | Disabled Workstream after acknowledged handoff | Finance can authorize/execute its existing obligation; source reads and late reports work, while no new Workstream root/PUT is admitted |
 | T49 | Real HTTP with no open sending transaction | Instrument both adapters and DB transaction state; admission/source reads/callbacks traverse the live authenticated router; no in-process fallback or callback inside Finance commit; dropped response recovers exact original IDs |
 | T50 | Source/grant race after HTTP | Valid earlier evidence followed by independent-session binding suspension, source receipt change, actor/link/grant revocation or plan replacement cannot authorize a stale effect; a Workstream phase-only change preserves existing-obligation eligibility |
