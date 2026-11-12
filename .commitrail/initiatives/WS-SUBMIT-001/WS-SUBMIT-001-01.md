@@ -3271,3 +3271,14 @@ production limits are unchanged, injected timeout refusal and real process
 boundaries forbid Docker creation. Ruff, stale authorization documentation and
 Markdown link checks pass. Actual-image and structure rechecks are tracked
 separately; the earlier seven-sample result does not attest these later edits.
+
+Final repair evidence: architecture, QA/test-delta and documentation passed clean
+e31200fc4. IMAGE-CLEANUP-DURABILITY-01 is closed. QA additionally disabled
+`sync_directory` in memory and both injected-failure tests failed, confirming
+they discriminate missing synchronization. No actual power-cut drill is claimed.
+The post-sync actual Docker run passed all seven samples with confirmed cleanup
+(`/tmp/image-cleanup-sync-live.log`, receipt
+`.checker-images/5250510b3df74e588192121327ae6c3f/receipt.json`). Structure validation
+passed (`/tmp/image-cleanup-sync-structure.log`), and Commitrail passed. An
+unacknowledged daemon create remains an explicit unresolved receipt obligation;
+this engineering command still does not supply an automatic daemon reaper.
