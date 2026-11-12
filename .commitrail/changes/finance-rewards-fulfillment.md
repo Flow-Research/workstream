@@ -624,3 +624,61 @@ reachability before implementation; then replay affected security, architecture,
 product/reuse/senior and QA/test-delta/CI/docs reviewers on a clean candidate.
 Human focus: source identity setup, same-transaction closure, exact replay,
 original-binding preservation and no activation of unimplemented delivery.
+
+### Plan review corrections adopted before implementation
+
+- `FULFILLMENT-PLAN-001`/`PLAN-FULFILL-001/003`: allowed scope explicitly includes
+  existing REV controller/service and its composition. Inject a mandatory COMP
+  public readiness port; before consuming target-live authority, resolve the
+  configured canonical UUIDv7 and reject missing/mismatched committed-root
+  identity. New roots compare their source against all existing roots while
+  holding the same global fence; no second registry. Tests cover missing/invalid
+  configuration, restart with the same UUID, and two differently configured
+  processes. The current AUTH observation shape needs no historical reader.
+- Forward `source_authorization_decision_id` and `source_routing_manifest_id`
+  from FinalAcceptance through CON and the required COMP award request; persist
+  both on the root and check their exact native acceptance/manifest chain.
+  Define COMP's exact historical binding read returning original project,
+  instrument, binding and route regardless of active/suspended status; never
+  use the active-only policy-authoring lookup. Current expected generation fences
+  the call; replay checks the root's original admission/manifest generation,
+  without equating it to a later current generation.
+- `FULFILLMENT-PLAN-002`/`PLAN-FULFILL-004`: remove the0038 reconstruction test and
+  its sole-use migration/config/operator/fence/runtime-hash helpers in
+  `tests/reviews/lifecycle/test_participant_control.py`. Replace the old SQL/hash
+  swapping test in `test_transitions.py` with current operation replay and
+  unknown/current-manifest denial. Lift its distinct forged-Python-fact/native-
+  SQL rejection into current stopped-generation fixtures. Retain immutable
+  authority, current phase/restart select-only replay and actual migration proof.
+- `PLAN-FULFILL-002`: extend `test_medium_public_claim_to_selected_automatic_acceptance`
+  for real root/event paid, unpaid and human-review observations. Add
+  `test_fulfillment_closure_rolls_back_incomplete_earning` using real award
+  creation with only root admission omitted; target each deferred constraint
+  IMMEDIATE for omitted root, omitted/wrong event, then disable only that named
+  guard inside a rolled-back transaction to prove the assertion discriminates.
+  Compare all acceptance/contribution/award/root/outbox rows afterward.
+  `test_fulfillment_ordinals_serialize_distinct_acceptances` uses two real paid
+  sources: sessionA holds REV before allocation, sessionB's advisory wait is
+  observed, then commit n/n+1; a rolled-back A consumes no committed ordinal.
+  `test_compensation_root_requires_current_root_fence` invokes COMP directly with
+  real closed/stale/nested custody, so upstream TASK/CON cannot mask denial.
+  Native alteration/incomplete-closure probes and exact replay/no-write probes
+  retain their separate boundaries.
+- `test_fulfillment_root_migration` proves fresh/actual0071→0072 disabled success,
+  repeated head/fingerprint and atomic retained-award refusal. Its0071 award
+  fixture is native previous-schema data preparation: use current AUTH/fence
+  owners with the installed schema's exact manifest facts and native history
+  guards, stage a real earning with only the not-yet-installed root participant
+  omitted, and retain every row. No old application/fence reader, SQL function
+  swap, schema patch or runtime manifest fallback is introduced. Assert the
+  exact retained acceptance/award authority predicates before testing refusal.
+- The new outbox key stays absent from handler and replay-safe registrations in
+  this slice; a real candidate/claim probe must prove it cannot dispatch.
+  Fulfillment admission/payment delivery remain unavailable. Add new tests to
+  existing Finance/PostgreSQL semantic lanes and exact ownership catalogue;
+  run `test_ci_lane_catalogue.py`, `test_ci_test_lanes.py` and
+  `test_behavior_ownership.py` without weakening their scope/inventory checks.
+- Update `docs/roadmap_status.md`, `docs/architecture_data_model.md`,
+  `docs/spec_review_lifecycle.md` and `docs/spec_contribution_compensation.md`.
+  Wording stays root-only: no Finance source-read/HTTP/worker/payment or
+  cutoff/drain qualification from this change. Those remain full-goal work.
