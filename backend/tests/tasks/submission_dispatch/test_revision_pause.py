@@ -79,7 +79,7 @@ def test_paused_projection_never_spends_allowance_as_wall_time_passes():
     assert wire["remaining_microseconds"] == row.remaining_microseconds
 
 
-def test_lower_target_limit_blocks_context_and_respects_running_deadline():
+def test_lower_target_limit_preserves_paused_allowance():
     row = _paused_row()
     candidate = candidate_from_packet(row.packet)
     target = candidate.prior.model_copy(update={
@@ -94,11 +94,11 @@ def test_lower_target_limit_blocks_context_and_respects_running_deadline():
     }).model_dump(mode="json")
     row.next_revision_round = 2
     row.blocked_reason = "context_blocked"
-    row.deadline_at = row.requested_at + timedelta(hours=24)
-    row.remaining_microseconds = None
     before = project_revision(row, row.requested_at)
-    assert before.disposition == "context_blocked" and before.clock_state == "running"
-    assert project_revision(row, row.deadline_at).disposition == "revision_deadline_expired"
+    assert before.disposition == "context_blocked" and before.clock_state == "paused"
+    assert before.target == target and before.next_revision_round == 2
+    assert before.deadline_at is None and before.remaining_microseconds == 86_400_000_000
+    assert project_revision(row, row.requested_at + timedelta(days=100)) == before
 
 
 def test_resumed_timer_keeps_root_identity_but_selects_new_effective_deadline():
