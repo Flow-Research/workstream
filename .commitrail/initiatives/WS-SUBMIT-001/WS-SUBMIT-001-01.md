@@ -1906,3 +1906,12 @@ comparison separately makes the corresponding vector fail its assertion. All
 mutations were restored; 12 library and 34 binary tests and formatting checks
 pass. These checks do not establish the selected image's JSON-schema behavior,
 privileged launch or the still-missing bootstrap/service connection.
+
+Architecture/security and QA replay passed the repaired handoff scope at clean
+`abbd94ee0`, including all three discriminating binding mutations. Packet content
+and other canonical default derivations still belong to the pinned worker; this
+supervisor phase does not claim independent rederivation of the entire request.
+The PRE bootstrap caller, early control envelope, staged trusted-root worker,
+service/profile/cleanup envelope and native qualification remain necessary.
+A fresh fetch confirms current main `94334ccf4` is already an ancestor; the
+single draft PR remains the only PR, and this cutover has not been pushed.
