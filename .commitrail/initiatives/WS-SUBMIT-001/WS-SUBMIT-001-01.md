@@ -3364,3 +3364,12 @@ step (the behavior this cache test owns), preserving the ban on cached virtual
 environments. Correct the remaining preflight/save extraction boundaries too.
 No workflow or production command changes. Earlier failed35/108-test runs remain
 failed evidence; only the final rerun can establish the repair.
+
+Final CI test repair: all 108 workflow-selected lightweight regression tests pass
+(`/tmp/source-cleanup-agent-gates3.log`, 5.747 seconds). CI-integrity review passed
+clean b41501f6c; an independent in-memory `.venv` cache-path injection still fails
+the exact guard. No workflow file changed. Commitrail, stale authorization docs
+and Markdown links passed. Hosted results for the next push remain unverified.
+The next product boundary is the durable source cleanup claim/tombstone and
+exact eligible deletion, followed by confirmed charge release; the observation
+port by itself intentionally grants none of those operations.
