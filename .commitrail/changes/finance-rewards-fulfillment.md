@@ -125,8 +125,11 @@ process. The final compound award FK was added after those database runs;
 its actual schema fingerprint was separately probed and installed in the rigid
 schema test gate. Exact candidate proof remains required.
 
-Tests that previously originated dual-instrument contributions now arrange one
-current instrument; independent money and points cases remain. Current
+Review identified remaining dual-instrument positive fixtures and stale enrollment
+wording. The repair replaces those arrangements with one current instrument,
+retains independent money and points cases, and removes the obsolete operation.
+Baseline migration tests retain immutable-data preservation proof; they do not
+provide a current runtime compatibility path. Current
 complete-set contracts and readers accept only zero/one award. The missing-award
 mutation now omits the required single award rather than omitting a fictional
 second award. No count/coverage gate or skip is weakened.

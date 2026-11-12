@@ -288,7 +288,7 @@ async def test_production_registry_delivers_request_then_completion_exactly_once
     """Production registration must consume its own emitted completion event."""
     from app.adapters import artifacts as artifact_adapters
 
-    awards = () if human else ("money", "project_points")
+    awards = () if human else ("money",)
     async with material_fixture(
         tmp_path,
         isolated_database_env,

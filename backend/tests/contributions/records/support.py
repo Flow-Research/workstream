@@ -13,12 +13,12 @@ from app.modules.contributions.records.schemas import ContributionRecordInput
 
 
 @asynccontextmanager
-async def reviewer_contribution_source(tmp_path, url, *, decision="accept", paid=False, **options):
+async def reviewer_contribution_source(tmp_path, url, *, decision="accept", paid=False, instrument="money", **options):
     """Persist a real Review only; reviewer contribution storage is a separate fact."""
     from tests.reviews.decision.support import review_source, finding, insert_review
 
     async with review_source(
-        tmp_path, url, contribution_awards=("money",) if paid else (), **options
+        tmp_path, url, contribution_awards=(instrument,) if paid else (), **options
     ) as h:
         h.review = h.review.model_copy(
             update={
@@ -178,6 +178,9 @@ async def retire_policy_and_suspend_bindings(h):
             "SELECT DISTINCT adapter_binding_id FROM public.contribution_award_definitions "
             "WHERE contribution_policy_version_id=:id"
         ), {"id": prior.contribution_policy_version_id})).scalars().all()
+        before_states = dict((await session.execute(text(
+            "SELECT id,status FROM public.project_compensation_adapter_bindings WHERE project_id=:id"
+        ), {"id": project_id})).all())
     for binding in bindings:
         async with h.factory() as session, session.begin():
             service = AdapterBindingService(
@@ -198,12 +201,10 @@ async def retire_policy_and_suspend_bindings(h):
         assert await session.scalar(text(
             "SELECT status FROM public.contribution_policy_versions WHERE id=:id"
         ), {"id": prior.contribution_policy_version_id}) == "retired"
-        states = (
-            await session.scalars(
-                text(
-                    "SELECT status FROM public.project_compensation_adapter_bindings WHERE project_id=:id"
-                ),
-                {"id": project_id},
-            )
-        ).all()
-        assert len(states) == 2 and set(states) == {"suspended"}
+        states = dict((await session.execute(text(
+            "SELECT id,status FROM public.project_compensation_adapter_bindings WHERE project_id=:id"
+        ), {"id": project_id})).all())
+        assert states == {
+            binding_id: "suspended" if binding_id in bindings else status
+            for binding_id, status in before_states.items()
+        }

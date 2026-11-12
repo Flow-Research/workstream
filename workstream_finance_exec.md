@@ -238,7 +238,7 @@ Timestamps normalize before digest comparison; producers emit the canonical form
 - Local HTTP is allowed only in the isolated test/development Compose network with an explicit development setting that production refuses.
 - JSON body limit: 64 KiB for service and Finance admin APIs. Paystack webhook limit: 1 MiB before parsing. Issuer token/login limits are specified in section 8.
 - Integration timeout: 3 seconds connect and 10 seconds total. A timeout is an unknown outcome when an effect might have begun.
-- Idempotency-Key is required on all mutating Finance admin operations and Workstream enrollment/reconciliation requests. It is a UUID value chosen once per logical operation.
+- Idempotency-Key is required on all mutating Finance admin operations and Workstream reconciliation requests. It is a UUID value chosen once per logical operation.
 - Finance obligation PUT uses the award UUID as Idempotency-Key. A retry changes neither path nor body.
 - Fulfillment-report deduplication uses the persisted external_event_id, with an identical Idempotency-Key header. Exception deduplication instead uses exception_event_id, with an identical Idempotency-Key header. Both event identifiers are Finance-generated UUIDv7 strings.
 - Finance admin replay identity is (verified human principal, action, resource, idempotency key); retain request digest and original response. Changed payload with the same key returns 409.
@@ -468,7 +468,6 @@ Native human review remains unavailable until its own owner is implemented. Mode
 | CompensationFulfillmentReceipt | Existing planned closed receipt fields; immutable; UNIQUE(binding_id, external_event_id); at most one fulfilled receipt per award |
 | CompensationFulfillmentException | Immutable exception ID/event, exact root/award/binding, prior fulfilled event/receipt, kind, observed/received times and authority; unique event per binding |
 | CompensationStatusProjection | Rebuildable delivery and fulfillment status, latest receipt, last bounded failure, attention flag and latest exception; no eligibility mutation |
-| Historical enrollment operation | Exact actor/action/idempotency/request digest, source award digest, bounded attestation reference, authority, root/event and original response |
 
 No fulfillment-status column is added to the immutable CompensationAward.
 
@@ -501,9 +500,9 @@ This exception prevents dropping financial evidence merely because Workstream ex
 
 ### 7.4 Binding suspension and revocation
 
-Suspension blocks new policy use where current rules require it, new enrollment and new outbound admission. In Finance it also blocks a new credit, first provider dispatch, re-initiation or OTP finalization until eligible again, using the source-currentness predicate in §8.5. It never blocks pure observation or late factual recording for an existing attempt/root and does not redirect an existing award.
+Suspension blocks new policy use where current rules require it, new outbound admission. In Finance it also blocks a new credit, first provider dispatch, re-initiation or OTP finalization until eligible again, using the source-currentness predicate in §8.5. It never blocks pure observation or late factual recording for an existing attempt/root and does not redirect an existing award.
 
-In particular, suspension blocks a first Finance PUT even when its Workstream award/root was already committed. Retain that earned award, root and undelivered intent; the drain may remain blocked until an authorized binding resume. Status GET, callback recording and read-only exact enrollment replay remain available for an existing root under its original binding. If Finance admission already succeeded, suspension does not prevent recovery of that known admission; a repeated identical PUT may only confirm the already stored obligation and must not admit an unseen one. Prefer GET to establish existence before this replay.
+In particular, suspension blocks a first Finance PUT even when its Workstream award/root was already committed. Retain that earned award, root and undelivered intent; the drain may remain blocked until an authorized binding resume. Status GET and callback recording remain available for an existing root under its original binding. If Finance admission already succeeded, suspension does not prevent recovery of that known admission; a repeated identical PUT may only confirm the already stored obligation and must not admit an unseen one. Prefer GET to establish existence before this replay.
 
 A callback, exact replay or reconciliation for an already admitted root can use its original suspended binding, provided the reporter's current service actor/link remains valid and matches that exact binding. Otherwise a transfer completed just before suspension could become unrecordable.
 
@@ -833,7 +832,6 @@ Require an existing admitted root and the exact original service binding. Return
 - fulfillment_root_id, admission_kind and obligation_digest.
 - The current normalized fulfillment status, attention flag, fulfilled external_event_id if recorded, and exact receipt evidence.
 
-The enrollment attestation contains only the enrolled Workstream actor ID, operation ID, timestamp and non-secret evidence reference. It does not assert that external payment was impossible.
 
 Finance uses this authenticated HTTP evidence during its authorization operation, with no open DB transaction, and compares it with its admitted envelope. The final local authorization transaction also acquires the compensation-owned `FulfillmentSourceCurrentnessPort` described in §8.5; this typed read/locking port closes races and never replaces the HTTP evidence, admission or callback. The service performs this verification; it is not a second human approval or another Workstream acceptance. It never uses a mutable task amount, email, PR description or caller-supplied bank record as acceptance evidence.
 
@@ -1819,7 +1817,7 @@ Use outcomes and failure boundaries. Avoid tests that only assert a field exists
 | T44 | Restart/queue loss | Postgres intents recover correctly; no lost obligation or duplicate effect |
 | T45 | Same contributor in two projects | One source/contributor identity; project manager cannot read, suspend or change another project's profile/destination/arrangement |
 | T46 | Historical points authorization | Same project-authorized Finance human may enroll and authorize through distinct owner actions with the same existing AUTH grant; null agreement/attempt fields, exact source and explicit not_fulfilled attestation required before one credit; new points_credit has no per-obligation authorization step |
-| T47 | Prior-fulfillment finding | Unknown/already_fulfilled cannot authorize enrollment, credit or bank transfer; checked=true alone is insufficient |
+| T47 | Prior-fulfillment finding | Unknown/already_fulfilled cannot authorize credit or bank transfer; checked=true alone is insufficient |
 | T48 | Disabled Workstream after acknowledged handoff | Finance can authorize/execute its existing obligation; source reads and late reports work, while no new Workstream root/PUT is admitted |
 | T49 | Real HTTP with no open sending transaction | Instrument both adapters and DB transaction state; admission/source reads/callbacks traverse the live authenticated router; no in-process fallback or callback inside Finance commit; dropped response recovers exact original IDs |
 | T50 | Source/grant race after HTTP | Valid earlier evidence followed by independent-session binding suspension, source receipt change, actor/link/grant revocation or plan replacement cannot authorize a stale effect; a Workstream phase-only change preserves existing-obligation eligibility |

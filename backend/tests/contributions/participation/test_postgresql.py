@@ -192,10 +192,7 @@ async def test_retired_policy_and_suspended_bindings_keep_frozen_awards_due(
     async with authorized_submitter_source(
         tmp_path, isolated_database_env, paid=True, retire_before_outcome=True
     ) as h:
-        assert {award.instrument_type.value for award in h.participation.awards} == {
-            "money",
-            "project_points",
-        }
+        assert {award.instrument_type.value for award in h.participation.awards} == {"money"}
 
 
 async def test_exact_replay_rejects_each_changed_source_fact_and_real_foreign_source(
@@ -308,7 +305,8 @@ async def test_partial_same_transaction_replay_rejects_without_backfill(
         async with h.factory() as session:
             await session.begin()
             await PostgresJointLifecycleMutationFence(session).acquire(2)
-            expected_awards = await award_values(session, h.submitter_record)
+            expected_awards = [award for award in await award_values(session, h.submitter_record)
+                               if award["award_definition_id"] == h.participation.awards[0].award_definition_id]
             # Isolate replay from storage immutability; this corruption never commits.
             await session.execute(
                 text(
@@ -317,11 +315,11 @@ async def test_partial_same_transaction_replay_rejects_without_backfill(
             )
             await session.execute(
                 text("DELETE FROM public.compensation_awards WHERE id=:id"),
-                {"id": h.participation.awards[1].id},
+                {"id": h.participation.awards[0].id},
             )
             with pytest.raises(ContributionParticipationConflict):
                 await participant(session).participate_submitter(request)
-            assert len(await rows(session, "compensation_awards")) == 1
+            assert len(await rows(session, "compensation_awards")) == 0
 
             owner = CompensationAwardParticipant(session)
             definitions = tuple(
@@ -354,7 +352,7 @@ async def test_partial_same_transaction_replay_rejects_without_backfill(
             )
             with pytest.raises(CompensationAwardConflict):
                 await owner.complete_award_set(rule_request)
-            assert len(await rows(session, "compensation_awards")) == 1
+            assert len(await rows(session, "compensation_awards")) == 0
 
             monkeypatch.setattr(
                 CompensationAwardParticipant,

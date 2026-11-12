@@ -1276,7 +1276,7 @@ cannot be reused as post-submission review-gate evidence. See the
   audit vocabulary for the existing binding actions. CP07 guide activation/binding, AUTH-12H live exact-project manager authority
   and AUTH-18 public manager activation are delivered.
 - CP05A exposes ContributionPolicy discovery, read, draft update, publication
-  and retirement. V2 policy commands and version lists admit covering human PM
+  and retirement. Current policy commands and version lists admit covering human PM
   or Finance Authority and preserve immutable history and default-denied
   uncomposed owners. Unit and binding administration remains Finance-only and
   internal; public manager activation uses exact published selectors.

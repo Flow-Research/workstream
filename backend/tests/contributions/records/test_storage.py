@@ -67,15 +67,18 @@ async def test_review_contribution_sources(tmp_path, isolated_database_env, deci
             assert len(await rows(session, "reviews")) == 1
 
 
+@pytest.mark.parametrize("instrument", ["money", "project_points"])
 @pytest.mark.parametrize("retired", [False, True])
-async def test_reviewer_frozen_awards(tmp_path, isolated_database_env, retired):
-    async with reviewer_contribution_source(tmp_path, isolated_database_env, paid=True) as h:
+async def test_reviewer_frozen_awards(tmp_path, isolated_database_env, retired, instrument):
+    async with reviewer_contribution_source(
+        tmp_path, isolated_database_env, paid=True, instrument=instrument
+    ) as h:
         if retired:
             await retire_policy_and_suspend_bindings(h)
         async with h.factory() as session, session.begin():
             await insert_record(session, h.reviewer_record)
             awards = await award_values(session, h.reviewer_record)
-            assert {a["instrument_type"] for a in awards} == {"money", "project_points"}
+            assert {a["instrument_type"] for a in awards} == {instrument}
             for award in awards:
                 await insert_award(session, award)
         async with h.factory() as session:
@@ -91,7 +94,7 @@ async def test_reviewer_frozen_awards(tmp_path, isolated_database_env, retired):
                 .mappings()
                 .all()
             )
-            assert len(actual) == 2
+            assert len(actual) == 1
             for a in actual:
                 assert (
                     a["quantity"]
@@ -147,13 +150,18 @@ async def test_reviewer_award_definition_substitution(tmp_path, isolated_databas
     async with reviewer_contribution_source(tmp_path, isolated_database_env, paid=True) as h:
         async with h.factory() as session, session.begin():
             await insert_record(session, h.reviewer_record)
-            money, points = await award_values(session, h.reviewer_record)
+            (money,) = await award_values(session, h.reviewer_record)
+            other_binding = await session.scalar(text(
+                "SELECT id FROM public.project_compensation_adapter_bindings "
+                "WHERE project_id=:project AND id<>:binding LIMIT 1"
+            ), {"project": h.reviewer_record.project_id, "binding": money["adapter_binding_id"]})
+            assert other_binding is not None
         async with h.factory() as session:
             for change in (
                 {"quantity": money["quantity"] + Decimal("0.000000000000000001")},
                 {"unit_code": "EUR"},
-                {"adapter_binding_id": points["adapter_binding_id"]},
-                {"award_definition_id": points["award_definition_id"]},
+                {"adapter_binding_id": other_binding},
+                {"award_definition_id": new_record_id()},
                 {"instrument_type": "project_points", "quantity": Decimal("7"), "unit_code": "PTS"},
             ):
                 await reject_award(session, money, "award frozen definition mismatch", **change)
@@ -202,7 +210,6 @@ async def test_reviewer_award_definition_substitution(tmp_path, isolated_databas
                     adapter_binding_id=foreign_money["adapter_binding_id"],
                 )
                 await insert_award(session, money)
-                await insert_award(session, points)
                 await session.commit()
         async with h.factory() as session, session.begin():
             await reject_award(session, money, "uq_compensation_awards", id=new_record_id())
