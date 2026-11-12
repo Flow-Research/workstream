@@ -14,6 +14,7 @@ _planned = _catalogue._planned
 
 
 ACTION_DEFINITIONS = (
+    _active(ActionId.SUBMISSION_INTAKE_RESERVE, PermissionId.SUBMISSION_CREATE, ActionOwner.SUBMISSION_INTAKE),
     _active(
         ActionId.ACTOR_PROJECT_LIST, PermissionId.ACTOR_PROFILE_READ_SELF, ActionOwner.PILOT_READ_2
     ),

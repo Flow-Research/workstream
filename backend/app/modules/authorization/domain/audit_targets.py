@@ -1,6 +1,8 @@
 """Exact project resource audit selectors, without raw product facts."""
 
 from uuid import UUID
+from app.modules.authorization.domain.submission_intake import IntakeReservationResourceContext
+from app.modules.authorization.domain.contributor_reads import ContributorWorkReadResourceContext
 
 from app.modules.authorization.catalogue import ActionId
 from app.modules.authorization.domain.lifecycle import ReviewLifecycleActivationContract
@@ -108,6 +110,12 @@ def project_authority_audit_target(
         ProjectGuideActivationResourceContext,
     )
 
+    if type(resource) is IntakeReservationResourceContext or (
+        type(resource) is ContributorWorkReadResourceContext
+        and resource.resource_type == "submission_operation_read"
+    ):
+        return (str(resource.scope_project_id), "submission_operation", str(resource.resource_id),
+                "submission_operation", str(resource.resource_id))
     if type(resource) is ReviewLifecycleActivationContract:
         return None, resource.resource_type, str(resource.resource_id), "joint_lifecycle_control", str(resource.resource_id)
     if type(resource) is TaskImportBatchResourceContext:

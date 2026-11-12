@@ -2106,3 +2106,26 @@ def test_fresh_head_installs_guide_creation_custody(
             await connection.close()
 
     assert asyncio.run(creation_guards()) == 3
+
+
+
+def test_intake_authority_upgrade_changes_only_two_audit_constraints(isolated_database_env, migration_lock):
+    config = _alembic_config()
+    with migration_lock():
+        asyncio.run(_execute(isolated_database_env, "drop schema public cascade; create schema public"))
+        command.upgrade(config, "0069_submission_intake_custody")
+        before = asyncio.run(build_manifest(isolated_database_env))
+        command.upgrade(config, "0070_submission_intake_authority")
+        after = asyncio.run(build_manifest(isolated_database_env))
+    changed = {key for key in before if before[key] != after[key]}
+    assert changed == {"constraints"}
+    old = {(row["table_name"], row["name"]): row for row in before["constraints"]}
+    new = {(row["table_name"], row["name"]): row for row in after["constraints"]}
+    assert old.keys() == new.keys()
+    assert {key for key in old if old[key] != new[key]} == {
+        ("audit_events", "ck_audit_events_authorization_action_evidence"),
+        ("audit_events", "ck_audit_events_authority_privacy_bounds"),
+    }
+    actions = new[("audit_events", "ck_audit_events_authorization_action_evidence")]["definition"]
+    assert "submission.intake.reserve" in actions and "task.submission_operation.read" in actions
+    assert "artifact.submission_bundle.prepare" in actions and "submission.create" in actions

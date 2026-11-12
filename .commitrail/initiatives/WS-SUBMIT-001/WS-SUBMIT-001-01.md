@@ -432,7 +432,7 @@ Verify real PostgreSQL prepared consume/rollback and exact audit evidence;
 reject foreign actor, service/admin-only actor, revoked grant/link and substituted
 operation/task/key/metadata/context. Reject repeated or cross-transaction handles.
 Prove own-operation read under current grant after task eligibility changes and
-with a different active identity link; deny wrong-project grants. Preserve all
+under its current active identity link; deny revoked/foreign links and wrong-project grants. Preserve all
 existing TASK prepared and contributor-read tests. Extend the closed catalogue
 and audit migration together and verify migrated schema equality. Full T1
 currentness/cardinality/readiness, actor-key concurrency, body discard replay and
@@ -440,3 +440,17 @@ public concealment proof remain the next composition work, not this AUTH proof.
 
 Reservation extends the existing project-submitter evaluator with its own exact
 resource and prepared binding; TASK claim/manager/read guards stay unchanged.
+
+Canonical identity currently permits one link per actor (database uniqueness).
+A renewed login uses that stable link; this stage does not invent a second active
+link or weaken identity custody to exercise a hypothetical replay configuration.
+
+Migration 0070 adds only the two action/permission pairs and exact operation audit
+target to the existing closed constraints. A real before/after schema manifest
+comparison confirmed that only those two audit constraints change. Initial real
+AUTH negatives exposed missing prepared-denial registration: rejected actors
+raised an unsupported-denial error instead of canonical evidence. Register the
+exact new action/resource pair and compare the denial binding; the fixed-service
+matrix then passed. Live own-operation reads consume resolved historical facts
+without an eligible-status input. ART must still prove stored-operation replay
+after task progression and denied-body nonconsumption in T1 composition.

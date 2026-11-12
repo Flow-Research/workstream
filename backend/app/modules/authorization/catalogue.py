@@ -113,6 +113,8 @@ class PermissionId(StrEnum):
 class ActionId(StrEnum):
     """Closed action identifiers reserved by approved owner chunks."""
 
+    SUBMISSION_INTAKE_RESERVE = "submission.intake.reserve"
+    TASK_SUBMISSION_OPERATION_READ = "task.submission_operation.read"
     TASK_SUBMISSION_LIST = "task.submission.list"
     SUBMISSION_READ = "submission.read"
     SUBMISSION_CHECKER_RUN_LIST = "submission.checker_run.list"
@@ -325,6 +327,7 @@ CONTRIBUTOR_WORK_READ_ACTIONS = frozenset(
         ActionId.ACTOR_WORK_SUMMARY_READ,
         ActionId.TASK_SUBMISSION_BUNDLE_PREPARATION_LIST,
         ActionId.TASK_SUBMISSION_BUNDLE_PREPARATION_READ,
+        ActionId.TASK_SUBMISSION_OPERATION_READ,
     }
 )
 CONTRIBUTOR_READ_ACTIONS = CONTRIBUTOR_WORK_READ_ACTIONS | {ActionId.ACTOR_PROJECT_LIST}
@@ -396,6 +399,7 @@ class ActionOwner(StrEnum):
     PILOT_05 = "PILOT-05"
     PILOT_08 = "PILOT-08"
     PILOT_10 = "PILOT-10"
+    SUBMISSION_INTAKE = "WS-SUBMIT-001"
     PILOT_READ_2 = "PILOT-READ-2"
     CLI_46 = "WS-CLI-001-46"
     PILOT_READ_3 = "PILOT-READ-3"
@@ -563,7 +567,7 @@ HISTORICAL_PERMISSION_IDS = PERMISSION_IDS - NEW_PERMISSION_IDS
 
 def _require_catalogue_counts() -> None:
     """Keep the closed action inventory and permission boundary exact."""
-    if len(PERMISSION_IDS) != 94 or len(ACTION_IDS) != 190:
+    if len(PERMISSION_IDS) != 94 or len(ACTION_IDS) != 192:
         raise RuntimeError("authorization catalogue count mismatch")
     if len(HISTORICAL_PERMISSION_IDS) != 49 or len(NEW_PERMISSION_IDS) != 45:
         raise RuntimeError("authorization permission boundary mismatch")
@@ -693,6 +697,7 @@ _ACTIVE_ACTION_BOUNDARY = frozenset(
         ActionId.OPERATIONS_ARTIFACT_STORAGE_ADMISSION_READ,
         ActionId.ARTIFACT_GUIDE_SOURCE_INGEST,
         ActionId.ARTIFACT_GUIDE_SOURCE_READ,
+        ActionId.SUBMISSION_INTAKE_RESERVE,
         ActionId.ARTIFACT_SUBMISSION_BUNDLE_PREPARE,
         ActionId.SUBMISSION_CREATE,
         ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE,

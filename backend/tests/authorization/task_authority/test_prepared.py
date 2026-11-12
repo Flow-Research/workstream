@@ -375,3 +375,54 @@ async def test_service_task_denials_have_canonical_restageable_evidence(identity
     assert len(evidence.events) == 1
     assert evidence.events[0].after_facts == first.after_facts
     assert evidence.events[0].project_id == first.project_id
+
+
+@pytest.mark.parametrize("mutation", ["operation", "task", "key", "metadata", "status", "foreign_resource"])
+async def test_intake_prepared_binding_rejects_cross_operation_and_wrong_resource(mutation):
+    from app.core.identifiers import new_record_id
+    from app.modules.authorization.domain.submission_intake import IntakeReservationResourceContext
+    _, _, prepared, task, evidence = setup()
+    resource = IntakeReservationResourceContext(resource_id=new_record_id(), scope_project_id=task.scope_project_id,
+        task_id=new_record_id(), assignment_id=new_record_id(), actor_profile_id=task.actor_profile_id,
+        identity_link_id=task.identity_link_id, idempotency_key=new_record_id(),
+        metadata_sha256="sha256:" + "a" * 64, locked_context_sha256="sha256:" + "b" * 64,
+        task_status="in_progress")
+    changes = {"operation": {"resource_id": new_record_id()}, "task": {"task_id": new_record_id()},
+               "key": {"idempotency_key": new_record_id()}, "metadata": {"metadata_sha256": "sha256:" + "c" * 64},
+               "status": {"task_status": "accepted"}}
+    wrong = task if mutation == "foreign_resource" else resource.model_copy(update=changes[mutation])
+    try:
+        handle, value = await prepare(prepared, resource, ActionId.SUBMISSION_INTAKE_RESERVE)
+        with pytest.raises(PreparedAuthorizationHandleInvalid):
+            await prepared.consume(handle, ActionId.SUBMISSION_INTAKE_RESERVE, value, wrong)
+        assert evidence.events == []
+    finally:
+        prepared.close()
+
+
+@pytest.mark.parametrize("identity", list(ServiceIdentity))
+async def test_fixed_services_cannot_reserve_submission_intake(identity):
+    from app.core.identifiers import new_record_id
+    from app.modules.authorization.api.submission_intake import IntakeAuthorityDenied, IntakeReservationAuthorityFacts
+    from app.modules.authorization.submission_intake import SubmissionIntakeAuthorization
+    context = ServiceAuthorizationContext(
+        actor_profile_id=uuid4(), actor_kind=ActorKind.SERVICE,
+        actor_status=ActorStatus.ACTIVE, identity_link_id=uuid4(),
+        identity_link_status=IdentityLinkStatus.ACTIVE, service_identity=identity,
+        request_id=uuid4(), correlation_id=uuid4(),
+    )
+    authority = SubmissionIntakeAuthorization(Session(), context)
+    evidence = Evidence()
+    authority._kernel._audit = evidence
+    facts = IntakeReservationAuthorityFacts(new_record_id(), uuid4(), uuid4(), uuid4(),
+        context.actor_profile_id, context.identity_link_id, uuid4(),
+        "sha256:" + "a" * 64, "sha256:" + "b" * 64, "in_progress")
+    try:
+        with pytest.raises(IntakeAuthorityDenied) as caught:
+            await authority.prepare(facts)
+        assert isinstance(caught.value.__cause__, AuthorizationDenied)
+        assert caught.value.__cause__.decision.denial_code.value == "permission_not_granted"
+        assert len(evidence.events) == 1 and evidence.events[0].resource_id == str(facts.operation_id)
+        assert evidence.events[0].after_facts["allowed"] is False
+    finally:
+        authority.close()

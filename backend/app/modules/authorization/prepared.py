@@ -1,6 +1,7 @@
 """Transaction-bound, single-use authorization for sensitive mutations."""
 
 from __future__ import annotations
+from app.modules.authorization.domain.submission_intake import IntakeReservationResourceContext, parse_intake_binding
 from app.modules.authorization.catalogue import GUIDE_PROPOSAL_ACTION_IDS, POST_POLICY_ACTION_IDS
 from app.modules.authorization.domain.lifecycle import parse_lifecycle_prepare, lifecycle_matches
 from app.modules.authorization.prepared_routing_replay import validate_routing_replay
@@ -257,6 +258,7 @@ class _PreparedAuthorizationBinding:
     submission_policy_resource_digest: str | None = None
     exact_artifact_context: dict | None = None
     exact_artifact_resource_digest: str | None = None
+    intake_reservation_context: IntakeReservationResourceContext | None = None
     submission_preparation_context: dict | None = None
     submission_preparation_resource_digest: str | None = None
     submission_preparation_final_context: dict | None = None
@@ -682,6 +684,11 @@ class PreparedAuthorizationService:
         """Consume one exact capability before evaluating and evidencing final facts."""
         issuance = self._live_issuance(handle)
         self._validate_consumption(issuance, expected_action_id, caller_input, final_resource_context)
+        if expected_action_id is ActionId.SUBMISSION_INTAKE_RESERVE and (
+            type(final_resource_context) is not IntakeReservationResourceContext
+            or issuance.binding.intake_reservation_context != final_resource_context
+        ):
+            raise PreparedAuthorizationHandleInvalid("invalid prepared intake authorization")
         if expected_action_id in TASK_ACTIONS | TASK_IMPORT_BATCH_ACTIONS and (
             not isinstance(final_resource_context, (TaskAuthorityResourceContext, TaskImportBatchResourceContext))
             or issuance.binding.task_authority_context != final_resource_context
@@ -832,6 +839,11 @@ class PreparedAuthorizationService:
             else self._scope_from_resource(action_id, final_resource_context)
         )
         binding = self._binding(action_id, caller_input, scope)
+        if action_id is ActionId.SUBMISSION_INTAKE_RESERVE and (
+            type(final_resource_context) is not IntakeReservationResourceContext
+            or binding.intake_reservation_context != final_resource_context
+        ):
+            raise PreparedAuthorizationHandleInvalid("invalid prepared intake denial")
         if isinstance(final_resource_context, ProjectCreateResourceContext) and not (
             _project_create_binding_matches(binding, final_resource_context)
         ):
@@ -964,6 +976,9 @@ class PreparedAuthorizationService:
             submission_policy_context=submission_policy_context,
             submission_policy_resource_digest=submission_policy_resource_digest,
             lifecycle_command=parse_lifecycle_prepare(action_id, caller_input, scope, self._context),
+            intake_reservation_context=parse_intake_binding(
+                action_id, caller_input.request_value, caller_input.idempotency_key, PreparedAuthorizationHandleInvalid,
+            ),
             task_authority_context=parse_task_authority_binding(
                 action_id, caller_input.request_value, PreparedAuthorizationHandleInvalid,
                 caller_input.idempotency_key,
@@ -1003,6 +1018,8 @@ class PreparedAuthorizationService:
         if admin_scope := _admin_prepared_scope(action_id, resource):
             return admin_scope
         expected_project_resource = (
+            (IntakeReservationResourceContext if action_id is ActionId.SUBMISSION_INTAKE_RESERVE else None)
+            or
             PROJECT_MUTATION_RESOURCE_BY_ACTION.get(action_id)
             or GUIDE_PROPOSAL_RESOURCE_BY_ACTION.get(action_id)
             or COMPILATION_RESOURCE_BY_ACTION.get(action_id)
