@@ -2663,3 +2663,27 @@ at acceptance. T5-PLAN-01 is resolved in the plan above by explicitly extending 
 existing provider port for exact sealed-version metadata observation. Revision,
 whole-command heartbeat and substitution proof remain open; these repairs do not
 claim the complete T4/T5 or public journey.
+
+### Exact sealed-source observation implementation
+
+The existing ArtifactStore now exposes `observe_sealed_source`, returning a frozen
+location/generation/size/upload-fence observation or absence. S3 uses version-pinned
+HEAD with the existing ownership response validator. Local uses the existing
+operation directory lock, persisted seal and no-follow descriptor; it verifies
+private sealed permissions, inode generation and size without reading ZIP bytes.
+This is metadata evidence only, combined later with committed ingress and PRE;
+it is not a hash attestation, arbitrary adoption capability or provider qualification.
+
+Focused tests use real Local files and MinIO: same-size inode replacement is
+rejected, missing recorded objects/versions return absence, a newer same-key S3
+version cannot replace the recorded old version, and substituted response version,
+size or ownership metadata is rejected. The S3 test proxy exposes HEAD only; the
+Local test forbids body `pread`. Provider protocol and architecture guards include
+only this additional operation, without extending foreground upload authority.
+
+T4-QA-01's focused PostgreSQL regression passed (1 passed, 26 deselected;
+`/tmp/t4-review-repair.log`, metadata `/tmp/t4-review-repair.json`). This is scoped
+worktree evidence, not a complete T4 or exact frozen-head suite. The observation
+implementation still needs its test result and focused review; it has no T5 caller
+until accepted continuation, retained registration and atomic Submission/POST
+composition are implemented. Full original acceptance requirements remain open.

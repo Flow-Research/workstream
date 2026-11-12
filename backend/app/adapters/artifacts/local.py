@@ -28,6 +28,7 @@ from app.core.cancellation import (
 )
 from app.core.file_locks import acquire_exclusive_file_lock
 from app.interfaces.artifacts import (
+    SealedSourceObservation,
     ARTIFACT_STORE_CAPABILITY_KEY,
     ArtifactByteRange,
     ArtifactConfigurationError,
@@ -238,6 +239,10 @@ class LocalStorageAdapter:
     async def complete_source_upload(self, completion: SubmissionSourceCompletion, *,
                                      operation_evidence: ArtifactProviderOperationEvidence | None = None) -> SealedSubmissionSource:
         return await self._source_io(LocalSubmissionSource(self).complete, completion)
+
+    async def observe_sealed_source(self, source: SealedSubmissionSource, *,
+                                    operation_evidence: ArtifactProviderOperationEvidence | None = None) -> SealedSourceObservation | None:
+        return await self._source_io(LocalSubmissionSource(self).observe_sealed, source)
 
     async def observe_source_upload(self, completion: SubmissionSourceCompletion, *,
                                     operation_evidence: ArtifactProviderOperationEvidence | None = None) -> SealedSubmissionSource | None:

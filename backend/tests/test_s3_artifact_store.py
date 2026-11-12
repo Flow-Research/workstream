@@ -91,7 +91,7 @@ class TestMinioArtifactStoreConformance(ArtifactStoreConformanceTests):
     )
     expected_source_operations = frozenset({
         "begin_source_upload", "upload_source_part", "complete_source_upload",
-        "open_source", "observe_source_upload", "discover_source_uploads", "request_source_abort",
+        "open_source", "observe_source_upload", "observe_sealed_source", "discover_source_uploads", "request_source_abort",
     })
 
     def make_store(self, root: Path) -> ArtifactStore:

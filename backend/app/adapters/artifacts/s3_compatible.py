@@ -59,6 +59,7 @@ from app.core.s3_validation import (
     is_canonical_s3_region,
 )
 from app.interfaces.artifacts import (
+    SealedSourceObservation,
     ARTIFACT_STORE_CAPABILITY_KEY,
     ArtifactByteRange,
     ArtifactConfigurationError,
@@ -758,6 +759,27 @@ class S3CompatibleArtifactStore:
             }
         ):
             raise ArtifactIntegrityError("submission source response violates custody")
+
+    async def observe_sealed_source(
+        self, source: SealedSubmissionSource, *,
+        operation_evidence: ArtifactProviderOperationEvidence | None = None,
+    ) -> SealedSourceObservation | None:
+        """Observe only the retained version; metadata does not reprove its hash."""
+        source = SealedSubmissionSource.model_validate(source)
+        evidence = operation_evidence or ArtifactProviderOperationEvidence()
+        try:
+            async with self._source_client(source.location, evidence) as client:
+                response = await client.head_object(
+                    Bucket=self._bucket, Key=self._source_key(source.location),
+                    VersionId=source.provider_generation,
+                )
+        except ArtifactObjectMissingError:
+            return None
+        self._check_source_response(source, response)
+        return SealedSourceObservation(
+            source.location, response["VersionId"], response["ContentLength"],
+            source.sealed_upload_fence,
+        )
 
     async def observe_source_upload(
         self, completion: SubmissionSourceCompletion, *,

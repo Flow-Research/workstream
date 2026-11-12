@@ -17,6 +17,7 @@ from app.interfaces.external_services import (
 from app.modules.artifacts.sources import ArtifactCommitment, CommittedArtifactSource
 from app.modules.artifacts.api.submission_intake import (
     SealedSubmissionSource,
+    SubmissionSourceLocation,
     SubmissionSourceCompletion,
     SubmissionSourcePart,
     SubmissionSourceUpload,
@@ -371,6 +372,16 @@ class ArtifactProviderLiveProofRequiredError(ArtifactConfigurationError):
     code = "artifact_provider_live_proof_required"
 
 
+@dataclass(frozen=True)
+class SealedSourceObservation:
+    """Exact provider metadata, not an independent attestation of content hash."""
+
+    location: SubmissionSourceLocation
+    provider_generation: str
+    raw_byte_count: int
+    sealed_upload_fence: int
+
+
 class ArtifactStore(ExternalServiceAdapter, Protocol):
     """Immutable byte-provider capability used only by artifact orchestration."""
 
@@ -398,6 +409,12 @@ class ArtifactStore(ExternalServiceAdapter, Protocol):
         maximum_chunk_bytes: int = 64 * 1024,
     ) -> AsyncGenerator[bytes, None]:
         """Yield closable exact-version reads, capped by maximum_chunk_bytes (1..64 KiB)."""
+
+    async def observe_sealed_source(
+        self, source: SealedSubmissionSource, *,
+        operation_evidence: ArtifactProviderOperationEvidence | None = None,
+    ) -> SealedSourceObservation | None:
+        """Observe the recorded immutable version without reading its body."""
 
     async def observe_source_upload(
         self, completion: SubmissionSourceCompletion, *,

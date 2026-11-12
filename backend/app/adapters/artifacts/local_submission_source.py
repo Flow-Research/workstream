@@ -14,6 +14,7 @@ from uuid import UUID
 
 from app.core.file_locks import acquire_exclusive_file_lock
 from app.interfaces.artifacts import (
+    SealedSourceObservation,
     ArtifactIntegrityError, ArtifactOperationConflictError,
     ArtifactPreconditionFailedError, ArtifactStoreUnavailableError,
     ArtifactInputMismatchError, ArtifactLimitExceededError,
@@ -230,6 +231,31 @@ class LocalSubmissionSource:
                 return self.source(completion, info)
             finally:
                 os.close(descriptor)
+
+    def observe_sealed(self, source: SealedSubmissionSource) -> SealedSourceObservation | None:
+        """Check sealed ownership and inode metadata without hashing body bytes."""
+        source = SealedSubmissionSource.model_validate(source)
+        try:
+            with self.locked(source.location) as directory:
+                completion, sealed = self.seal(directory)
+                if sealed != source or self.exists(directory, "aborted.json"):
+                    raise ArtifactIntegrityError("submission source seal mismatch")
+                self.upload(directory, completion.upload)
+                descriptor = os.open("bundle.zip", os.O_RDONLY | os.O_NOFOLLOW, dir_fd=directory)
+                try:
+                    info = self.store._assert_private_regular(descriptor)
+                    if (stat.S_IMODE(info.st_mode) != 0o400
+                            or info.st_size != source.raw_byte_count
+                            or self.source(completion, info) != source):
+                        raise ArtifactIntegrityError("submission source generation or size mismatch")
+                    return SealedSourceObservation(
+                        source.location, source.provider_generation, info.st_size,
+                        source.sealed_upload_fence,
+                    )
+                finally:
+                    os.close(descriptor)
+        except FileNotFoundError:
+            return None
 
     def observe(self, completion: SubmissionSourceCompletion) -> SealedSubmissionSource | None:
         completion = SubmissionSourceCompletion.model_validate(completion)

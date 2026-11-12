@@ -93,7 +93,7 @@ RETIRED_CONTRIBUTOR_INTAKE_NAMES = {
 }
 PROVIDER_METHODS = {"put", "observe_put_result", "open", "head", "begin_source_upload",
                     "upload_source_part", "complete_source_upload", "open_source",
-                    "observe_source_upload", "discover_source_uploads", "request_source_abort"}
+                    "observe_source_upload", "observe_sealed_source", "discover_source_uploads", "request_source_abort"}
 CONCRETE_ADAPTER_MODULES = {
     "app.adapters.artifacts.local",
     "app.adapters.artifacts.s3_compatible",
@@ -486,6 +486,7 @@ def test_s3_adapter_exposes_only_required_immutable_object_operations() -> None:
         "complete_source_upload": {"complete_multipart_upload", "head_object"},
         "open_source": {"get_object"},
         "observe_source_upload": {"head_object"},
+        "observe_sealed_source": {"head_object"},
         "discover_source_uploads": {"list_multipart_uploads"},
         "request_source_abort": {"abort_multipart_upload"},
     }
