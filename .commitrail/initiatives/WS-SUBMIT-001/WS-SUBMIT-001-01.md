@@ -396,3 +396,44 @@ Review finding LEASE-QA-001 identified missing runner proof across the phase
 transition; the delayed-upload case now holds the same callback in PRE beyond
 its initial PRE lease and independently observes unchanged owner and renewed
 expiry. This is private custody proof, not executed PRE or public T1–T4 proof.
+
+## Intake authorization stage
+
+T1 cannot reuse the old prepared-generation or formal Submission authority:
+reservation precedes both. Extend the existing AUTH prepared service with exact
+`submission.intake.reserve` (existing `submission.create` permission), and its
+contributor read family with `task.submission_operation.read` (existing
+`submission.read_own` permission). Keep retained audit vocabulary. This stage
+supplies the real transaction-bound authority consumed by the forthcoming ART
+T1 composition; it does not expose a route or claim that reservation is wired.
+
+The reservation resource pins operation, task, assignment, current actor/link,
+idempotency key, immutable command metadata and locked context digests, and
+eligible task status. Prepared handles remain exact, single-use and bound to the
+same root transaction; AUTH checks the live human identity and exact-project
+Submitter grant without administrator bypass. TASK/ART remain responsible for
+loading and locking canonical facts. The operation ID is never a Submission ID.
+Own-operation reads use the current actor/link/grant and recorded project,
+independent of current task eligibility. A later login does not replace original
+operation identity-link provenance. ART must narrow by actor and key/operation
+before invoking read authority; the read grant alone cannot select another owner.
+
+Allowed files: AUTH public intake contract and adapter, typed domain resources,
+existing prepared/task-authority and contributor-read dispatch, action catalogue
+and definitions, audit vocabulary migration/model-derived schema fingerprint,
+focused AUTH tests and exact partition registration, affected current records.
+No role/permission expansion, acceptance/finalization authority, data rewrite,
+provider work, production defaults, route exposure or relaxed guard is allowed.
+Risk L0; architecture/security, QA/test-delta/CI and affected docs review required.
+Human review focus: exact operation binding, current authority and historical
+replay separation. Plan review precedes implementation.
+
+Verify real PostgreSQL prepared consume/rollback and exact audit evidence;
+reject foreign actor, service/admin-only actor, revoked grant/link and substituted
+operation/task/key/metadata/context. Reject repeated or cross-transaction handles.
+Prove own-operation read under current grant after task eligibility changes and
+with a different active identity link; deny wrong-project grants. Preserve all
+existing TASK prepared and contributor-read tests. Extend the closed catalogue
+and audit migration together and verify migrated schema equality. Full T1
+currentness/cardinality/readiness, actor-key concurrency, body discard replay and
+public concealment proof remain the next composition work, not this AUTH proof.
