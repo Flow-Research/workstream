@@ -2432,3 +2432,42 @@ acknowledgement. Direct SQL probes must reject detached accepted state, missing
 or mismatched decision/event/PRE evidence, accepted mutation and foreground
 cleanup of accepted work. Keep native-provider qualification and public journey
 completion explicitly unproven by these internal portable tests.
+
+T4 plan-review resolutions:
+
+- The receipt is acceptance of the source command for durable finalization. Its
+  operation ID and exact PRE terminal identify that accepted command; it is not
+  a formal Submission, POST verdict or final task acceptance. The snapshot fields
+  say `evaluation_pending`/`finalization_pending` at acceptance, never the task's
+  later current state. TASK gains a T4-specific authorized direct transition for
+  both initial `in_progress` and governed `needs_revision` work. Do not enable an
+  unguarded generic lifecycle shortcut or persist an intermediate `submitted`
+  state. Require successful initial and revision tests as well as denial cases.
+- The closed acceptance resource under `submission.create` has
+  `resource_id == operation_id`. Its exact canonical digest binds operation,
+  actor/link, project/task/assignment, command/context/source digests, selected
+  PRE run/request/terminal and manifest identities, and accepted policy lineage.
+  Prepared consumption and replay explicitly dispatch on this operation-scoped
+  resource shape; a Submission-creation resource, another operation or changed
+  digest must not replay it. Retained old audit facts remain readable, without
+  fabricating a Submission ID for the new action.
+- T4 performs fresh authority, revision and owner checks. After T4 commits, T5
+  relies on the immutable accepted receipt/source/run/decision/event under its
+  own continuation fence. It must not repeat foreground lease, revision
+  deadline/cap, submitter grant or contributor-eligibility checks which can expire
+  after valid acceptance. T4 tests prove later deadline/grant changes cannot
+  invalidate or expose accepted source to foreground cleanup; T5's required
+  proof must additionally finalize across those changes before overall completion.
+- The foreground composer must keep the existing heartbeat over PRE through T4.
+  T4 uses short SQL-only roots and rejects expiration at its final deferred commit
+  boundary, not merely when it initially read the lease. The accepted-state
+  transition check is distinct from later accepted custody: a later T5/read must
+  not reapply the old foreground expiry condition. No lease extension beyond the
+  absolute PRE deadline is allowed.
+- PostgreSQL concurrency proof uses independent sessions for both orders of
+  T4 versus expiry/abandonment. Acceptance winning leaves source/charge/pointer
+  protected and abandonment refused; expiry/abandonment winning prevents an
+  accepted receipt, event or task transition. Also race duplicate T4 commands
+  and prove one stable accepted result/event. Preserve the actual ZIP and real
+  database lease fixture while explicitly treating its simulated runtime/Smol
+  observations as portable transaction evidence only.
