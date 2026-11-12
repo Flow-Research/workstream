@@ -3219,3 +3219,35 @@ Its exact image/name were inspected and it was explicitly removed. This is an
 unresolved image-runner cleanup obligation, not evidence of successful complete
 qualification; it must be addressed without weakening deadlines. No AWS/native
 runtime qualification or full current-head CI success is claimed.
+
+## Image runner uncertain-create custody
+
+Bounded scope: `backend/scripts/checker_image.py`, its existing test module, and
+this record. Before a Docker create, persist the exact owned container name and
+image in the existing private receipt. Keep create uncertainty distinct from a
+confirmed created container; a failed create followed by empty LIST cannot close
+that obligation. Persist confirmation only after acknowledged creation and scoped
+removal/absence. This closes lost cleanup identity, not the Docker daemon's ability
+to finish an outstanding request. Uncertain receipts require reconciliation of
+the named container and remain failed; no automatic retry/publication is allowed.
+
+Acceptance: the on-disk receipt exists before create; simulated late create after
+an empty cleanup observation retains its exact name and unresolved state; a
+successful sample ends with confirmed cleanup; cleanup failure retains an open
+obligation. Existing deadlines, output bounds, isolation and publication guards
+remain unchanged. Risk: runtime resource custody. Verification: existing full
+image-runner suite plus focused late-create regression and actual image drill.
+Reviewers: architecture and QA/test delta. Human focus: whether retained receipt
+truthfully distinguishes request settlement from point-in-time absence. Do not
+claim an automatic daemon reaper or native runtime qualification from this repair.
+
+Verification: the final existing suite plus custody regression passed 26 tests
+in 8.25 seconds (`/tmp/image-cleanup-custody-tests-final.log`). Loading the previous
+script implementation in memory and running the new regression failed with the
+missing `sample_cleanup` receipt (`/tmp/image-cleanup-prefixed-regression.log`);
+no worktree replacement or test weakening was used. Ruff and diff checks pass.
+The actual unchanged Terminal Systems PRE image passed all seven configured
+positive/negative samples, with confirmed cleanup in receipt
+`.checker-images/bd8859524a454b358ef56dd02586ce25/receipt.json`; full output is
+`/tmp/image-cleanup-live.log`. This is local Docker compatibility evidence only,
+not AWS/native Smol qualification or a complete public submission journey.
