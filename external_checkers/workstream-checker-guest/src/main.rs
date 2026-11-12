@@ -729,6 +729,25 @@ struct ProjectLimits {
 }
 
 impl ProjectLimits {
+    fn check_run_deadline(&self) -> Result<()> {
+        if self
+            .deadline
+            .is_some_and(|deadline| Instant::now() >= deadline)
+        {
+            return Err("project deadline exceeded".into());
+        }
+        Ok(())
+    }
+
+    fn fork_project(&self) -> Result<libc::pid_t> {
+        self.check_run_deadline()?;
+        let child = unsafe { libc::fork() };
+        if child < 0 {
+            return Err(std::io::Error::last_os_error().into());
+        }
+        Ok(child)
+    }
+
     fn validate(&self, capabilities: GuestCapabilities) -> Result<()> {
         // PRE cannot enter a blocking model/trial relay while relying on this
         // local deadline. Ordinary POST relays retain their host-owned budget.
@@ -807,10 +826,7 @@ fn run_project(
     .map_err(|error| format!("cgroup: {error}"))?;
     // The supervisor retains the trusted stream and capability listeners. The
     // workload receives separate output pipes, so it cannot forge mux frames.
-    let child = unsafe { libc::fork() };
-    if child < 0 {
-        return Err(std::io::Error::last_os_error().into());
-    }
+    let child = limits.fork_project()?;
     if child == 0 {
         drop(stdout_parent);
         drop(stderr_parent);
@@ -851,6 +867,7 @@ fn run_project(
         } else {
             &job.working_directory
         });
+        limits.check_run_deadline()?;
         return Err(command.exec().into());
     }
     drop(stdout_child);
@@ -1172,6 +1189,53 @@ mod tests {
         ] {
             assert!(limits.validate(closed).is_err());
         }
+    }
+
+    #[test]
+    fn project_launch_refuses_deadline_consumed_by_setup() {
+        let mut limits = ProjectLimits {
+            cpu_millis: 1000,
+            memory_bytes: 1024,
+            maximum_processes: 3,
+            scratch_bytes: 4096,
+            maximum_output_bytes: 1024,
+            maximum_log_bytes: 512,
+            deadline: None,
+            cleanup_deadline: None,
+        };
+        let child = limits.fork_project().unwrap();
+        if child == 0 {
+            unsafe { libc::_exit(0) };
+        }
+        let mut status = 0;
+        assert_eq!(unsafe { libc::waitpid(child, &mut status, 0) }, child);
+        assert!(libc::WIFEXITED(status));
+        assert_eq!(libc::WEXITSTATUS(status), 0);
+
+        let deadline = Instant::now() + Duration::from_millis(50);
+        limits.deadline = Some(deadline);
+        limits.cleanup_deadline = Some(deadline + Duration::from_secs(1));
+        limits
+            .validate(GuestCapabilities {
+                model: false,
+                execution: false,
+            })
+            .unwrap();
+        // Stand in for setup consuming the allowance after initial validation.
+        while Instant::now() < deadline {
+            thread::sleep(Duration::from_millis(1));
+        }
+        match limits.fork_project() {
+            Err(error) => assert_eq!(error.to_string(), "project deadline exceeded"),
+            Ok(0) => unsafe { libc::_exit(0) },
+            Ok(child) => {
+                unsafe {
+                    libc::waitpid(child, std::ptr::null_mut(), 0);
+                }
+                panic!("expired setup launched a project child");
+            }
+        }
+        assert!(limits.check_run_deadline().is_err());
     }
 
     #[test]

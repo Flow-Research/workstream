@@ -1846,3 +1846,12 @@ is expressly not kernel cgroup isolation proof. Disabling the direct PID kill
 makes the regression fail on unreaped custody, and fallback test cleanup reaps
 the child. Formatting and whitespace checks pass. This remains within the
 approved native supervisor scope and does not qualify PRE or complete its wiring.
+
+QA review of `4aebc604a` identified that setup could exhaust the deadline after
+initial validation but before fork. The launch boundary now rechecks immediately
+before fork, and the child rechecks before exec after confinement setup. A real
+fork control plus an expired-during-setup case exercises the launch helper;
+removing its deadline check makes the latter fail and reaps the unexpected child.
+Production code was restored. The guest suite passes 12 library and 30 binary
+tests. Architecture/security had passed the earlier scope; both tracks must
+replay this repair before a scoped review claim applies to the new candidate.
