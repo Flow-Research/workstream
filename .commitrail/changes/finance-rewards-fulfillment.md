@@ -188,6 +188,7 @@ the focused contract suite plus canonicalization and shape adversarial controls.
 | Target behavior | Specification sections 20–21 and focused existing owner tests | Required proof defined; implementation pending | No payment/deployment qualification yet |
 | Obligation wire validation | Focused COMP/FIN contract suite and Ruff | 76 cases passed; lint passed | Pure input proof only; no source authority, runtime activation or payment proof |
 | Full-award reports and exceptions | Both owner contract paths, shared positive/negative fixtures | 164 combined contract cases passed; scoped lint and module boundaries passed | No receipt persistence, source authority or provider-finality proof |
+| Retained-reward preflight | Isolated PostgreSQL runner, 15 diagnostic tests | All passed, including live work, dual awards, read-only DML rejection, seeded corruption and unknown schema | Supports the pinned pre-v2 schema only; no actual migration fence or cutover proof |
 
 ## Review findings
 
