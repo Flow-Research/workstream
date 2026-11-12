@@ -1855,3 +1855,10 @@ removing its deadline check makes the latter fail and reaps the unexpected child
 Production code was restored. The guest suite passes 12 library and 30 binary
 tests. Architecture/security had passed the earlier scope; both tracks must
 replay this repair before a scoped review claim applies to the new candidate.
+
+Architecture/security and QA replay passed the repaired scope at clean
+`d3975f59a`. Both verified the pre-fork deadline regression and its failing
+guard-removal mutation. The child-side pre-exec check is code-inspected; this
+is not hard real-time preemption or native cgroup qualification. The parent
+still rejects late evidence. Record validation passes. Combined PRE guest
+orchestration and service dispatch remain the next connected implementation.
