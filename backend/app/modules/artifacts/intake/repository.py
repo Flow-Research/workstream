@@ -6,7 +6,7 @@ and replay authorization to that composition. Expired foreground work is never
 resumed by another request or by a background PRE worker.
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 import re
 from uuid import UUID
@@ -205,11 +205,18 @@ class SubmissionIntakeRepository:
         )
 
     async def heartbeat(self, operation_id: UUID, lease_id: UUID, generation: int,
-                        *, lease_expires_at: datetime) -> None:
-        """Renew within the immutable phase deadline; never revive an expired owner."""
+                        *, lease_duration: timedelta) -> float:
+        """Renew without shortening custody; return DB remaining seconds after flush."""
+        if not isinstance(lease_duration, timedelta) or lease_duration <= timedelta(0):
+            raise ValueError("foreground lease duration must be positive")
         row = await self._owned(operation_id, lease_id, generation)
-        row.lease_expires_at = lease_expires_at
+        now = await self._session.scalar(select(func.clock_timestamp()))
+        deadline = row.upload_deadline_at if row.state == "receiving" else row.pre_deadline_at
+        extension = min(lease_duration, deadline - now)
+        row.lease_expires_at = max(row.lease_expires_at, now + extension)
         await self._session.flush()
+        now = await self._session.scalar(select(func.clock_timestamp()))
+        return (row.lease_expires_at - now).total_seconds()
 
     async def terminalize(self, operation_id: UUID, lease_id: UUID, generation: int,
                           *, state: str, failure_code: str) -> None:

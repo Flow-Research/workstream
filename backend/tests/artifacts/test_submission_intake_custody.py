@@ -63,15 +63,16 @@ async def intake(tmp_path, isolated_database_env, capacity_limits):
         await engine.dispose()
 
 
-async def reserve(intake, session, *, key=None, declared_raw_bytes=None, with_upload=True):
+async def reserve(intake, session, *, key=None, declared_raw_bytes=None, with_upload=True,
+                  lease_seconds=60, upload_seconds=300):
     now = datetime.now(UTC)
     row = await repository(session).reserve(
         metadata=SubmissionIntakeMetadata(task_id=intake.task, assignment_id=intake.assignment),
         actor_id=intake.actor.actor_profile_id, identity_link_id=intake.actor.identity_link_id,
         idempotency_key=key or new_record_id(), maximum_raw_bytes=1024,
         capacity_limits=intake.capacity_limits, declared_raw_bytes=declared_raw_bytes,
-        upload_deadline_at=now + timedelta(minutes=5),
-        lease_expires_at=now + timedelta(minutes=1),
+        upload_deadline_at=now + timedelta(seconds=upload_seconds),
+        lease_expires_at=now + timedelta(seconds=lease_seconds),
     )
     if not with_upload:
         return row
@@ -207,7 +208,7 @@ async def test_foreground_eof_seal_terminal_and_stale_fence(intake):
         assert tuple(stored) == ("rejected", 2, 1, None)
     with pytest.raises(IntakeCustodyConflict, match="intake_owner_stale"):
         async with intake.factory.begin() as session:
-            await repository(session).heartbeat(operation, lease, 1, lease_expires_at=deadline)
+            await repository(session).heartbeat(operation, lease, 1, lease_duration=timedelta(seconds=30))
 
 
 async def test_reservation_rollback_leaves_no_pointer_or_operation(intake):
@@ -783,3 +784,166 @@ async def test_foreground_upload_rolled_back_reservation_cannot_start_provider(i
                 foreground_bytes(), **foreground_limits())
     finally:
         store.close()
+
+
+def foreground_lease(intake, *, duration=2, interval=0.1):
+    from app.modules.artifacts.intake.foreground_lease import ForegroundIntakeLease
+    return ForegroundIntakeLease(intake.factory,
+        lambda session: IntakeTaskCustody(session, task_submission_context_port(session)),
+        lease_duration=timedelta(seconds=duration), heartbeat_interval=timedelta(seconds=interval))
+
+
+async def test_foreground_lease_delayed_local_upload_and_longer_pre_lease(intake):
+    from tests.artifact_store_helpers import initialize_local_store
+    store = initialize_local_store(root=intake.durable_root, buffer_bytes=7)
+    async with intake.factory.begin() as session:
+        row = await reserve(intake, session, with_upload=False, lease_seconds=2)
+        operation, lease, initial_expiry = UUID(row.id), UUID(row.lease_id), row.lease_expires_at
+
+    async def delayed_bytes():
+        while True:
+            async with intake.factory() as session:
+                now = await session.scalar(text("SELECT clock_timestamp()"))
+            if now > initial_expiry:
+                break
+            await asyncio.sleep(0.1)
+        yield b"original source bytes"
+
+    async def command(op, owner, generation):
+        assert (op, owner, generation) == (operation, lease, 1)
+        return await foreground_upload(intake, store).receive(op, owner, generation,
+            delayed_bytes(), **foreground_limits())
+
+    source = await foreground_lease(intake).run(operation, lease, 1, command)
+    async with intake.factory.begin() as session:
+        row = await session.get(SubmissionIntakeOperation, str(operation))
+        pre_expiry = row.lease_expires_at
+        assert row.state == "pre_checking" and row.lease_generation == 1 and row.lease_id == str(lease)
+        assert row.lease_expires_at > initial_expiry
+        assert row.provider_generation == source.provider_generation
+        await repository(session).heartbeat(operation, lease, 1, lease_duration=timedelta(seconds=2))
+    async with intake.factory() as session:
+        row = await session.get(SubmissionIntakeOperation, str(operation))
+        assert row.lease_expires_at == pre_expiry
+
+
+@pytest.mark.parametrize("invalid", ["lease", "generation", "terminal", "expired"])
+async def test_foreground_lease_invalid_owner_never_invokes_callback(intake, invalid):
+    async with intake.factory.begin() as session:
+        row = await reserve(intake, session, with_upload=False)
+        operation, lease = UUID(row.id), UUID(row.lease_id)
+    if invalid == "terminal":
+        async with intake.factory.begin() as session:
+            await repository(session).terminalize(operation, lease, 1, state="failed", failure_code="fixture_failed")
+    if invalid == "expired":
+        async with intake.factory.begin() as session:
+            await session.execute(text("UPDATE submission_intake_operations SET lease_expires_at=clock_timestamp()-interval '1 second' WHERE id=:id"), {"id": operation})
+    called = False
+
+    def command(*owner):
+        nonlocal called
+        called = True
+        raise AssertionError("stale owner invoked command")
+
+    with pytest.raises(IntakeCustodyConflict, match="owner_stale"):
+        await foreground_lease(intake).run(operation, new_record_id() if invalid == "lease" else lease,
+                                          2 if invalid == "generation" else 1, command)
+    assert not called
+
+
+@pytest.mark.parametrize("stop", ["caller", "fence", "deadline"])
+async def test_foreground_lease_drains_local_write_and_retains_charge(intake, monkeypatch, stop):
+    from app.core.cancellation import await_completion_preserving_cancellation
+    from app.interfaces.artifacts import ArtifactStoreUnavailableError
+    from tests.artifact_store_helpers import initialize_local_store
+    store = initialize_local_store(root=intake.durable_root, buffer_bytes=7)
+    async with intake.factory.begin() as session:
+        row = await reserve(intake, session, with_upload=False,
+                            lease_seconds=2, upload_seconds=2 if stop == "deadline" else 60)
+        operation, lease = UUID(row.id), UUID(row.lease_id)
+    started, cancelled, release = asyncio.Event(), asyncio.Event(), asyncio.Event()
+    original = store.upload_source_part
+    writes = []
+
+    async def held_part(*args, **kwargs):
+        async def write():
+            started.set()
+            await release.wait()
+            result = await original(*args, **kwargs)
+            writes.append(result)
+            return result
+        try:
+            return await await_completion_preserving_cancellation(write())
+        finally:
+            cancelled.set()
+
+    monkeypatch.setattr(store, "upload_source_part", held_part)
+
+    async def command(op, owner, generation):
+        return await foreground_upload(intake, store).receive(op, owner, generation,
+            foreground_bytes(), **foreground_limits())
+
+    runner = asyncio.create_task(foreground_lease(intake).run(operation, lease, 1, command))
+    try:
+        await asyncio.wait_for(started.wait(), 5)
+        if stop == "caller":
+            runner.cancel()
+            await asyncio.sleep(0.05)
+            runner.cancel()
+        elif stop == "fence":
+            async with intake.factory.begin() as session:
+                await repository(session).terminalize(operation, lease, 1, state="failed", failure_code="fixture_fenced")
+        else:
+            await asyncio.sleep(2.1)
+        await asyncio.sleep(0.3)
+        assert not runner.done() and not cancelled.is_set()
+        release.set()
+        with pytest.raises(asyncio.CancelledError if stop == "caller" else (IntakeCustodyConflict, DBAPIError, ArtifactStoreUnavailableError)):
+            await asyncio.wait_for(runner, 5)
+        assert cancelled.is_set() and len(writes) == (0 if stop == "deadline" else 1)
+        assert not [task for task in asyncio.all_tasks()
+                    if task.get_name() in {f"submission-foreground:{operation}", f"submission-lease:{operation}"}]
+        async with intake.factory() as session:
+            row = await session.get(SubmissionIntakeOperation, str(operation))
+            expiry = row.lease_expires_at
+            assert expiry <= row.upload_deadline_at
+            assert row.state == ("failed" if stop == "fence" else "receiving")
+            assert await session.scalar(text("SELECT accounted_bytes FROM submission_source_charges")) == 1024
+        await asyncio.sleep(0.2)
+        async with intake.factory() as session:
+            row = await session.get(SubmissionIntakeOperation, str(operation))
+            assert row.lease_expires_at == expiry and len(writes) == (0 if stop == "deadline" else 1)
+    finally:
+        release.set()
+        if not runner.done():
+            runner.cancel()
+        await asyncio.gather(runner, return_exceptions=True)
+
+
+async def test_foreground_lease_exhausted_commit_response_budget_does_not_start(intake):
+    from contextlib import asynccontextmanager
+    from app.modules.artifacts.intake.foreground_lease import ForegroundIntakeLease
+    async with intake.factory.begin() as session:
+        row = await reserve(intake, session, with_upload=False, lease_seconds=2)
+        operation, lease = UUID(row.id), UUID(row.lease_id)
+
+    class DelayedCommitResponse:
+        @asynccontextmanager
+        async def begin(self):
+            async with intake.factory.begin() as session:
+                yield session
+            await asyncio.sleep(2.1)
+
+    runner = ForegroundIntakeLease(DelayedCommitResponse(),
+        lambda session: IntakeTaskCustody(session, task_submission_context_port(session)),
+        lease_duration=timedelta(seconds=2), heartbeat_interval=timedelta(seconds=0.1))
+    called = False
+
+    def command(*owner):
+        nonlocal called
+        called = True
+        raise AssertionError("expired commit budget invoked command")
+
+    with pytest.raises(IntakeCustodyConflict, match="renewal_expired"):
+        await runner.run(operation, lease, 1, command)
+    assert not called

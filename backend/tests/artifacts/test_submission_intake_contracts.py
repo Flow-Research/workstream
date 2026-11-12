@@ -9,6 +9,7 @@ from uuid import UUID, uuid4
 import pytest
 from pydantic import ValidationError
 
+from app.core.identifiers import new_record_id
 from app.modules.artifacts.api.submission_archive import MAXIMUM_SUBMISSION_ZIP_BYTES
 from app.modules.artifacts.api.submission_intake import (
     SealedSubmissionSource,
@@ -358,3 +359,35 @@ def test_foreground_upload_rejects_unbounded_or_coercive_deadlines(seconds):
     from app.modules.artifacts.intake.foreground_upload import _duration
     with pytest.raises(ValueError):
         _duration(seconds)
+
+
+@pytest.mark.parametrize("duration,interval", [(0, 1), (1, 0), (1, 1), (1, 2), (-1, 1)])
+def test_foreground_lease_rejects_invalid_timing(duration, interval):
+    from app.modules.artifacts.intake.foreground_lease import ForegroundIntakeLease
+    with pytest.raises(ValueError):
+        ForegroundIntakeLease(None, None, lease_duration=timedelta(seconds=duration),
+                              heartbeat_interval=timedelta(seconds=interval))
+
+
+async def test_foreground_lease_committed_command_wins_simultaneous_pulse_failure(monkeypatch):
+    from app.modules.artifacts.intake.foreground_lease import ForegroundIntakeLease
+    from app.modules.artifacts.intake.repository import IntakeCustodyConflict
+    runner = ForegroundIntakeLease(None, None, lease_duration=timedelta(seconds=2),
+                                  heartbeat_interval=timedelta(seconds=0.1))
+    release = asyncio.Event()
+    calls = 0
+
+    async def renew(*owner):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return 1
+        release.set()
+        raise IntakeCustodyConflict("fixture_after_commit")
+
+    async def command(*owner):
+        await release.wait()
+        return "committed"
+
+    monkeypatch.setattr(runner, "_renew", renew)
+    assert await runner.run(new_record_id(), new_record_id(), 1, command) == "committed"
