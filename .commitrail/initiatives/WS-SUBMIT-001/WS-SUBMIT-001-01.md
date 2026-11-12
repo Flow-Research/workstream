@@ -852,3 +852,13 @@ consulting the divergent daemon filesystem; two builds from identical approved
 bytes must agree. Then repeat guest staging and trusted-interpreter checks and
 retain the unchanged four-default behavior identity. This correction is a
 prerequisite for the same one-session supervisor, not a separate completion goal.
+
+Architecture/security approved this corrected direction with explicit parser
+requirements: whiteout markers must be empty regular entries with valid nonempty
+targets, with exact handling for `.wh..wh..opq`; complete layer streams must match
+their approved compressed digests and config diff IDs, and retained file bytes
+must be rehashed during spool/output. Reuse the existing graph/member index.
+Read-only inventory of the actual ten-layer intake image found only directories,
+regular files, symlinks and hardlinks, with no duplicate layer paths, whiteouts,
+or writes through nondirectory ancestors. That makes the restricted profile
+concrete; synthetic whiteout/replacement regressions are still required.
