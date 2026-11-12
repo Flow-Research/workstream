@@ -29,7 +29,7 @@ from app.adapters.auth.flow import FlowAuthVerifier
 from app.core.config import Settings
 from app.interfaces.auth import AuthVerificationError
 from deploy.identity import realm_config
-from scripts.identity_protocol_probe import IdentityProtocolProbe, ProviderRejected
+from scripts.identity_protocol_probe import IdentityProtocolProbe, ProviderRejected, LoginRejected
 from workstream_mcp.adapters.keycloak import KeycloakCredentials
 from workstream_mcp.oauth import InvalidCredential, OAuthSettings
 
@@ -171,6 +171,147 @@ class IdentityProviderTests(unittest.TestCase):
             except (URLError, ProviderRejected, TimeoutError):
                 time.sleep(2)
         raise RuntimeError("fixture Keycloak failed to become ready within 360 seconds")
+
+    def setUp(self):
+        self.operator = self.probe.request("/realms/master/protocol/openid-connect/token", {
+            "grant_type": "password", "client_id": "admin-cli", "username": "fixture-operator",
+            "password": self.admin_password,
+        }, form=True)["access_token"]
+
+    def test_provider_denies_marker_tampering_exchange_widening_and_closed_sessions(self):
+        password = secrets.token_urlsafe(24)
+        email = "negative-participant@example.invalid"
+        self.probe.request("/admin/realms/flow/users", {
+            "username": "negative-participant", "email": email, "enabled": True,
+            "firstName": "Negative", "lastName": "Participant",
+            "requiredActions": ["UPDATE_PROFILE"],
+            "credentials": [{"type": "password", "value": password, "temporary": False}],
+        }, token=self.operator)
+        users = self.probe.request("/admin/realms/flow/users?username=negative-participant&exact=true",
+                                   token=self.operator)
+        self.assertEqual(len(users), 1)
+        user_path = "/admin/realms/flow/users/" + users[0]["id"]
+        # Reach the actual participant profile form, then attempt both ordinary
+        # and attribute-prefixed submissions of the admin-only marker.
+        unmarked = self.probe.login("workstream-mcp-proof", "workstream-mcp-audience", email,
+            password, profile_changes={"firstName": "Edited", "lastName": "Participant",
+                "email": email, "workstream_subject_kind": "human",
+                "user.attributes.workstream_subject_kind": "human"})
+        stored = self.probe.request(user_path, token=self.operator)
+        self.assertEqual(stored["firstName"], "Edited")
+        self.assertFalse(stored.get("attributes", {}).get("workstream_subject_kind"))
+        clients = self.probe.request("/admin/realms/flow/clients", token=self.operator)
+        client = next(c for c in clients if c["clientId"] == "workstream-mcp")
+        secret = self.probe.request(f"/admin/realms/flow/clients/{client['id']}/client-secret",
+                                    token=self.operator)["value"]
+        keys = self.probe.request("/realms/flow/protocol/openid-connect/certs")["keys"]
+
+        def claims(token, audience):
+            key = next(k for k in keys if k["kid"] == jwt.get_unverified_header(token)["kid"])
+            return jwt.decode(token, jwt.PyJWK.from_dict(key).key, algorithms=["RS256"],
+                              audience=audience, issuer=self.origin + "/realms/flow")
+
+        self.assertNotIn("subject_kind", claims(unmarked["access_token"], realm_config.MCP_RESOURCE))
+
+        def exchange(source, **overrides):
+            data = {"grant_type": "urn:ietf:params:oauth:grant-type:token-exchange",
+                "subject_token_type": "urn:ietf:params:oauth:token-type:access_token",
+                "subject_token": source, "audience": "workstream-api",
+                "requested_token_type": "urn:ietf:params:oauth:token-type:access_token",
+                "scope": "workstream:access", **overrides}
+            with httpx.Client(verify=self.context, trust_env=False, timeout=15) as http:
+                response = http.post(self.origin + "/realms/flow/protocol/openid-connect/token",
+                                     data=data, auth=("workstream-mcp", secret))
+            body = response.json()
+            return response.status_code, body
+
+        def denied(status, body):
+            self.assertIn(status, (400, 401, 403))
+            self.assertFalse(any(name in body for name in ("access_token", "refresh_token", "id_token")),
+                             "denied provider operation returned credentials")
+
+        denied(*exchange(unmarked["access_token"]))
+        def update_user(changes):
+            current = self.probe.request(user_path, token=self.operator)
+            current.update(changes)
+            self.probe.request(user_path, current, token=self.operator, method="PUT")
+
+        update_user({"attributes": {"workstream_subject_kind": ["human"]}})
+        human = self.probe.login("workstream-mcp-proof", "workstream-mcp-audience", email, password)
+        status, result = exchange(human["access_token"])
+        self.assertEqual(status, 200)
+        actual = claims(result["access_token"], "workstream-api")
+        source = claims(human["access_token"], realm_config.MCP_RESOURCE)
+        self.assertEqual(actual["sub"], source["sub"])
+        self.assertLessEqual(actual["exp"], source["exp"])
+        self.assertLessEqual(actual["exp"] - actual["iat"], 120)
+        self.assertNotIn("refresh_token", result)
+        for override in (
+            {"audience": "workstream-mcp"}, {"scope": "workstream:access workstream:admin"},
+            {"requested_token_type": "urn:ietf:params:oauth:token-type:refresh_token"},
+        ):
+            denied(*exchange(human["access_token"], **override))
+
+        # A fixture-only service client produces a real provider-signed,
+        # nonhuman source with the same requested audience and scope.
+        service = realm_config.restricted_client("negative-service")
+        service.update(serviceAccountsEnabled=True,
+            defaultClientScopes=["basic", "workstream:access", "workstream-mcp-audience"],
+            protocolMappers=[realm_config.claim_mapper("service-kind", "oidc-hardcoded-claim-mapper", {
+                "claim.name": "subject_kind", "claim.value": "service", "jsonType.label": "String",
+            })])
+        self.probe.request("/admin/realms/flow/clients", service, token=self.operator)
+        clients = self.probe.request("/admin/realms/flow/clients", token=self.operator)
+        service_id = next(c["id"] for c in clients if c["clientId"] == "negative-service")
+        service_secret = self.probe.request(
+            f"/admin/realms/flow/clients/{service_id}/client-secret", token=self.operator)["value"]
+        service_token = self.probe.request("/realms/flow/protocol/openid-connect/token", {
+            "grant_type": "client_credentials", "client_id": "negative-service",
+            "client_secret": service_secret,
+        }, form=True)["access_token"]
+        self.assertEqual(claims(service_token, realm_config.MCP_RESOURCE)["subject_kind"], "service")
+        denied(*exchange(service_token))
+        # Prove the actual claim guard is discriminating, not an unrelated
+        # client/audience rejection: temporarily remove only that executor in
+        # this owned provider, then restore it before any subsequent assertion.
+        profiles, _ = realm_config.exchange_policy()
+        without_claim = json.loads(json.dumps(profiles))
+        without_claim["profiles"][0]["executors"] = [
+            e for e in without_claim["profiles"][0]["executors"]
+            if e["executor"] != "jwt-claim-enforcer"
+        ]
+        try:
+            self.probe.request("/admin/realms/flow/client-policies/profiles", without_claim,
+                               token=self.operator, method="PUT")
+            status, mutant = exchange(service_token)
+            self.assertEqual(status, 200, "counterexample did not reach the removed claim guard")
+            self.assertTrue(isinstance(mutant.get("access_token"), str))
+        finally:
+            self.probe.request("/admin/realms/flow/client-policies/profiles", profiles,
+                               token=self.operator, method="PUT")
+        denied(*exchange(service_token))
+
+        # Terminate this exact user's sessions, not other fixture users.
+        self.probe.request(user_path + "/logout", {}, token=self.operator)
+        with self.assertRaises(ProviderRejected) as rejected:
+            self.probe.request("/realms/flow/protocol/openid-connect/token", {
+                "grant_type": "refresh_token", "client_id": "workstream-mcp-proof",
+                "refresh_token": human["refresh_token"],
+            }, form=True)
+        self.assertEqual(rejected.exception.status, 400)
+        renewed = self.probe.login("workstream-mcp-proof", "workstream-mcp-audience", email, password)
+        update_user({"enabled": False})
+        with self.assertRaises(LoginRejected):
+            self.probe.login("workstream-mcp-proof", "workstream-mcp-audience", email, password)
+        with self.assertRaises(ProviderRejected) as rejected:
+            self.probe.request("/realms/flow/protocol/openid-connect/token", {
+                "grant_type": "refresh_token", "client_id": "workstream-mcp-proof",
+                "refresh_token": renewed["refresh_token"],
+            }, form=True)
+        self.assertEqual(rejected.exception.status, 400)
+        update_user({"enabled": True})
+        restored = self.probe.login("workstream-mcp-proof", "workstream-mcp-audience", email, password)
+        self.assertEqual(claims(restored["access_token"], realm_config.MCP_RESOURCE)["sub"], source["sub"])
 
     def test_real_login_exchange_renewal_restart_and_database_isolation(self):
         container = json.loads(self.docker("inspect", self.identity))[0]

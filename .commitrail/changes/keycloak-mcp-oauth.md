@@ -108,6 +108,9 @@ new state. No reset or deployment is implied by merely rendering configuration.
 | Participant browser login | Real Chrome 157 with Playwright 1.57, isolated NSS trust, sandbox enabled; `scripts/test_identity_browser.py` | Two tests passed: forced password change, consent, loopback code callback, private credential persistence/renewal plus inherited provider restart/isolation; owned resources cleaned | Hosted browser, named administrator MFA/recovery and Garden remain separate |
 | Packaged MCP transport | `scripts/test_hosted_mcp_container.py` with image `sha256:258e40374656cafd1e78f54f4be0010ed0cd5a00dbdbe6bacc4974a3f6f947b3` | 132 authenticated tools, signed HTTPS exchange, two callers, restart, API replacement and stale-namespace counterexample passed | Fixture provider; actual Garden session not established |
 | API/MCP profile and authority parity | Installed wheel, HTTPS signed fixture issuer, real API and isolated PostgreSQL; `test_profile_flow.py` | 11 passed, including concurrent callers, signed profile observations, local display-name edits, admission and revocation | Remaining owner suites and hosted Garden still require their own evidence |
+| API/MCP owner integration | Installed wheel, HTTPS signed fixture issuer and fresh isolated PostgreSQL per suite | All eight suites passed: profile 11 tests plus access reads, admin grants, actor lifecycle, projects, project grants, guides and policies; cleanup confirmed | Fixture issuer integration does not establish deployed Garden interoperability |
+| Real provider denial boundaries | Owned Keycloak fixture, direct execution of `test_provider_denies_marker_tampering_exchange_widening_and_closed_sessions` | Passed profile-marker injection, unmarked/nonhuman exchange, scope/audience/refresh rejection, logout and disabled-account renewal/login; removing and restoring the provider claim executor reproduced the intended counterexample | Exact-head CI and hosted provider operation still required |
+| Release shared-package custody | `scripts.test_hosted_release_images` plus actual frozen dependency exports for both SDK environments | 21 tests passed; both exports include the exact shared package; same-permission shared-code substitution is rejected | Fresh image inspection remains hosted CI work |
 | Delivery | Acceptance matrix in approved plan | Implementation underway | Hosted qualification and final reviews remain |
 
 ## Review findings
@@ -116,6 +119,15 @@ Plan correction preserves email claims, includes actual Garden OAuth delivery,
 retires local Rust helpers and retains independent first-administrator bootstrap.
 Provider resource-indicator maturity and exact Garden registration need pinned
 runtime proof; neither is assumed from a green health endpoint.
+
+Implementation review confirmed the shared adapter extraction and typed MCP
+boundary. It identified missing real-provider negative proofs and current hosted
+instructions that still described Rust tokens without OAuth discovery. The
+provider proof now exercises those denial paths, and both hosted instruction
+sections describe MCP-scoped tokens, the exchange-secret mount and actual health
+checks. Image verification also follows the relocated shared package's locked
+identity and installed source bytes instead of assuming every dependency export
+is a registry requirement. These corrections require affected review replay.
 
 ## Reconciliation
 

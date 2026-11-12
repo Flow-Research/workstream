@@ -15,6 +15,48 @@ from scripts import verify_hosted_release_images as proof
 
 
 class ReleaseImageProofTests(unittest.TestCase):
+    def test_exported_shared_dependency_requires_exact_locked_identity(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "backend").mkdir()
+            (root / "backend/pyproject.toml").write_text('[project]\nname="workstream-backend"\nversion="0.1.0"\n')
+            package = root / "packages/external-services"
+            package.mkdir(parents=True)
+            (package / "pyproject.toml").write_text('[project]\nname="workstream-external-services"\nversion="0.1.0"\n')
+            lock = root / "backend/uv.lock"
+            lock.write_text('[[package]]\nname="workstream-external-services"\nversion="0.1.0"\nsource={directory="../packages/external-services"}\n')
+            with patch.object(proof, "checked", return_value=b"../packages/external-services ; python_version >= '3.11'\n"):
+                self.assertEqual(proof.expected_packages(root, "agents"), {
+                    "workstream-backend": "0.1.0", "workstream-external-services": "0.1.0",
+                })
+                lock.write_text(lock.read_text().replace('version="0.1.0"', 'version="0.2.0"'))
+                with self.assertRaisesRegex(ValueError, "shared adapter lock differs"):
+                    proof.expected_packages(root, "agents")
+            with patch.object(proof, "checked", return_value=b"../packages/unapproved\n"):
+                with self.assertRaises(ValueError):
+                    proof.expected_packages(root, "agents")
+
+    def test_installed_shared_adapter_bytes_remain_part_of_source_custody(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            backend, shared = root / "backend", root / "shared"
+            (backend / "app").mkdir(parents=True)
+            shared.mkdir()
+            (backend / "app/main.py").write_text("# application\n")
+            module = shared / "__init__.py"
+            module.write_text("# shared adapter\n")
+            with patch.object(proof, "SOURCE_PATHS", ("app",)):
+                expected = proof.source_inventory(backend, shared)
+                self.assertIn("shared-adapter/__init__.py", expected)
+                actual = self.backend | {"source": expected}
+                proof.verify_backend(actual, expected, self.packages, self.loader, "agents")
+                mode = module.stat().st_mode
+                module.write_text("# substituted adapter\n")
+                self.assertEqual(module.stat().st_mode, mode)
+                changed = self.backend | {"source": proof.source_inventory(backend, shared)}
+                with self.assertRaisesRegex(ValueError, "source inventory differs"):
+                    proof.verify_backend(changed, expected, self.packages, self.loader, "agents")
+
     def test_release_workflow_builds_and_verifies_both_sdk_environments(self):
         workflow = Path(".github/workflows/release-images.yml").read_text(
             encoding="utf-8"

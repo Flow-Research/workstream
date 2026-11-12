@@ -28,6 +28,10 @@ class ProviderRejected(Exception):
         self.status = status
 
 
+class LoginRejected(Exception):
+    """The provider returned its login form again after submitted credentials."""
+
+
 class _Forms(HTMLParser):
     def __init__(self, html: str):
         super().__init__()
@@ -106,7 +110,7 @@ class IdentityProtocolProbe:
             raise ProviderRejected(error.code) from None
 
     def login(self, client: str, audience_scope: str, email: str, password: str,
-              *, new_password: str | None = None) -> dict:
+              *, new_password: str | None = None, profile_changes: dict | None = None) -> dict:
         callback = {
             "workstream-cli-login": "http://127.0.0.1:17843/callback",
             "workstream-mcp-proof": "http://127.0.0.1:17844/callback",
@@ -125,6 +129,7 @@ class IdentityProtocolProbe:
         )
         url = self.origin + "/realms/flow/protocol/openid-connect/auth?" + query
         data = None
+        credentials_submitted = False
         try:
             for _ in range(6):
                 with browser.open(Request(url, data=data), timeout=30) as response:
@@ -138,8 +143,19 @@ class IdentityProtocolProbe:
                 url = urljoin(self.origin, forms[0]["action"])
                 if urlsplit(url).netloc != urlsplit(self.origin).netloc or urlsplit(url).scheme != "https":
                     raise RuntimeError("authentication form changed origin")
-                if "username" in fields:
+                if "firstName" in fields and "lastName" in fields:
+                    # A rejected malicious update may return the same form.
+                    # Submit the hostile fields once, then complete a clean
+                    # update so the test can inspect retained profile/claims.
+                    fields.pop("workstream_subject_kind", None)
+                    fields.pop("user.attributes.workstream_subject_kind", None)
+                    fields.update(profile_changes or {})
+                    profile_changes = None
+                elif "username" in fields:
+                    if credentials_submitted:
+                        raise LoginRejected("provider rejected fixture login")
                     fields.update(username=email, password=password)
+                    credentials_submitted = True
                 elif "password-new" in fields and new_password:
                     fields.update({"password-new": new_password, "password-confirm": new_password})
                 else:

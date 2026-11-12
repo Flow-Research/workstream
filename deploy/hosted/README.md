@@ -788,15 +788,19 @@ Set `WORKSTREAM_MCP_IMAGE` to the qualified MCP image digest to include
 [`compose.mcp.yml`](compose.mcp.yml). Build that image from the repository root with
 `docker build -f mcp_server/Dockerfile .`; its build context excludes backend
 product code. The adapter receives no account password, server-wide bearer,
-database credential or artifact-store key. Each client supplies its own fresh
-Rust-issued Workstream access token; the API retains all authorization decisions.
+database credential or artifact-store key. It receives only its private Keycloak
+exchange-client secret through `WORKSTREAM_MCP_EXCHANGE_SECRET_FILE`. Each client
+supplies an MCP-scoped OAuth token; the adapter exchanges it for an API-only
+token for the same user. The API retains all authorization decisions.
 
 The adapter shares API's network namespace and calls only its loopback port 8000.
 Its port 8080 is published on host `127.0.0.1` only. For private access, forward
 local port 8080 to host `127.0.0.1:8080` through authenticated SSH and connect to
-`http://127.0.0.1:8080/mcp`. Preserve that exact Host header. This is custom
-bearer-header MCP, not OAuth discovery or a public browser endpoint. Tokens belong
-in the client's protected header configuration, never tool arguments or URLs.
+`http://127.0.0.1:8080/mcp`. Preserve that exact Host header. The configured OAuth
+resource identity remains the public HTTPS MCP URL, even through a private
+transport. Use the [public ingress](PUBLIC_ACCESS.md) for normal OAuth discovery
+and browser authorization. Tokens belong in the client's protected credential
+storage, never tool arguments or URLs; an API-only login token cannot access MCP.
 
 Use the hosted wrapper for updates. When an `up` operation can replace API, the
 wrapper stops MCP first and force-recreates it after the operation succeeds,
@@ -806,12 +810,12 @@ before API. Direct Docker recreation of API bypasses this coupling and is not a
 supported update procedure. The initial overlay requires a controlled API
 replacement to add the private port; it cannot be hot-attached.
 
-The health probe checks API health and the static MCP catalogue. It does not
-establish a caller's authority: qualification must additionally call tools with
-fresh login tokens and verify both permitted and denied access. API's Docker
+The health probe checks API health, protected-resource metadata and the
+unauthenticated 401 challenge. It does not establish a caller's authority:
+qualification must additionally call tools with fresh MCP-scoped tokens and
+verify both permitted and denied access. API's Docker
 bridge can still reach the listener, so exact Host checks, browser-Origin
-rejection and per-call authentication remain necessary. For public native bearer
-clients, use the [public HTTPS ingress](PUBLIC_ACCESS.md) and run its external
-login/client checks before sharing the URL. It preserves these private listeners
-and browser-Origin denial. Clients requiring OAuth discovery remain unsupported
-by this profile.
+rejection and per-call authentication remain necessary. For public OAuth clients, use the [public HTTPS ingress](PUBLIC_ACCESS.md) and
+qualify the actual client before sharing the URL. It preserves these private
+listeners and browser-Origin denial. Discovery support alone does not prove
+Garden interoperability; that requires its registered client and live flow.

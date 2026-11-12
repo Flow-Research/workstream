@@ -295,13 +295,15 @@ change in the
 
 The [hosted deployment](../deploy/hosted/README.md#managed-private-mcp-service)
 can enable this image through `WORKSTREAM_MCP_IMAGE`. It runs as a bounded,
-non-root service with no credential mounts, alongside the API. Access is private
+non-root service alongside the API, with only its private Keycloak exchange-client
+secret mounted. It receives no database or artifact-storage credentials. Access is private
 host loopback through authenticated SSH until public ingress is qualified.
 The hosted wrapper couples API/MCP recreation so the adapter cannot retain an
-obsolete API namespace. A catalogue health check is separate from authenticated
-live workflow proof.
+obsolete API namespace. Its health check verifies API health, protected-resource
+metadata and the unauthenticated challenge; authenticated live workflow proof
+is still required.
 
-The [managed hosted qualification](../docs/reports/managed-mcp-hosted-2026-11-07.md)
+The historical [managed hosted qualification](../docs/reports/managed-mcp-hosted-2026-11-07.md)
 records actual SDK calls with Rust-issued login tokens, CLI cross-client checks
 and restart behavior. It does not establish all-tool live coverage or native
 connector/OAuth support.

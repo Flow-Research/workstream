@@ -385,7 +385,8 @@ def test_missing_bearer_prevents_access_read_dispatch(
     client, received, _ = adapter
     response = call(client, name=name, arguments=_arguments(name), token=None)
     assert response.status_code == 401
-    assert 'resource_metadata="https://workstream.flowresearch.tech/.well-known/oauth-protected-resource/mcp"' in response.headers["www-authenticate"]
+    metadata = "https://workstream.flowresearch.tech/.well-known/oauth-protected-resource/mcp"
+    assert f'resource_metadata="{metadata}"' in response.headers["www-authenticate"]
     assert received == []
 
 
