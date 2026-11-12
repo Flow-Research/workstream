@@ -2335,3 +2335,15 @@ session. All 14 affected socket cases pass after fixture extraction; the earlier
 combined wrapper/receipt run passed 50 cases. Documentation independently ran all
 36 receipt cases on clean `ceeccaaa6`. The composition repair requires affected
 review replay before scoped readiness.
+
+Architecture/security, QA/test-delta and documentation replay passed clean
+`cbd445d4a`, resolving the missing-wrapper-property finding. Architecture verified
+both configured compositions expose `unix_socket`/`smolvm`; the affected socket
+proof exercises both, including the prohibition on PRE model-session use.
+CI-integrity remains compatible with the unchanged catalogue repair. Earlier
+PostgreSQL and portable-runtime evidence remains scoped compatible evidence,
+not relabeled as exact-head reruns. This closes backend receipt retention and
+its reviewed repairs; it does not complete the initiative. The next concrete
+journey gap is the authorized T4 source-pass handoff, followed by accepted
+finalization/POST and the coordinated public API, CLI and MCP replacement.
+Native qualification/conformance and full acceptance verification remain open.
