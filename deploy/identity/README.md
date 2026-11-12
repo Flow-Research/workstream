@@ -198,8 +198,8 @@ its own resource-scoped browser flow; do not copy this API-only token into MCP.
 
 After the intended administrator signs in and calls `workstream whoami`, use
 their returned actor UUID with the existing guarded bootstrap. This is separate
-from Keycloak administration. For the default hosted Compose project, run on
-the deployment host:
+from Keycloak administration. On the deployment host, replace the qualified
+example container `workstream-api-1` with your deployment's API container:
 
 ```sh
 sudo docker exec workstream-api-1 /usr/local/bin/workstream-release-entrypoint \
@@ -211,8 +211,7 @@ sudo docker exec workstream-api-1 /usr/local/bin/workstream-release-entrypoint \
   --actor-profile-id '<actor UUID returned by whoami>' --execute
 ```
 
-If the Compose project name differs, select that project's API container. The
-release entrypoint loads its mounted database secret; a bare `docker exec …
+The release entrypoint loads its mounted database secret; a bare `docker exec …
 python` does not inherit the running API process's loaded secret environment.
 Do not print or copy database credentials to work around this. Bootstrap grants
 only Access Administrator, refuses repetition, and does not grant project roles.
