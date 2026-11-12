@@ -616,12 +616,20 @@ class ExternalCheckerExecutionResult(ExternalCheckerValue):
             request.identity.phase,
         ):
             raise ExternalCheckerContractError("external checker result request mismatch")
-        if result.outcome == "completed":
-            request.registry.output_schema.validate_instance(
-                result.model_dump(mode="json", exclude={"result_digest"})
+        result.validate_registry(request.registry)
+
+    def validate_registry(self, registry: ExternalCheckerRegistryEntry) -> None:
+        """Check selected registry identity, output schema and canonical byte limit."""
+        if (self.registry_entry_id, self.registry_entry_digest, self.phase) != (
+            registry.registry_entry_id, registry.entry_digest, registry.phase,
+        ):
+            raise ExternalCheckerContractError("external checker result registry mismatch")
+        if self.outcome == "completed":
+            registry.output_schema.validate_instance(
+                self.model_dump(mode="json", exclude={"result_digest"})
             )
-        if len(_canonical_bytes(result.model_dump(mode="json"))) > (
-            request.registry.resources.maximum_output_bytes
+        if len(_canonical_bytes(self.model_dump(mode="json"))) > (
+            registry.resources.maximum_output_bytes
         ):
             raise ExternalCheckerContractError("external checker result exceeds registry limit")
 

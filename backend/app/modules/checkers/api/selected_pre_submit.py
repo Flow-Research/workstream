@@ -272,7 +272,7 @@ class ExternalPreSubmitMemberFacts:
 
 @dataclass(frozen=True, slots=True)
 class SelectedPreSubmitExecutionFacts:
-    """One default result followed by the executed required external prefix."""
+    """Platform defaults and the single selected project PRE result, if run."""
 
     policy_sha256: str
     workstream_default: WorkstreamDefaultCheckerResult
@@ -286,7 +286,7 @@ class SelectedPreSubmitExecutionFacts:
             not self.policy_sha256.startswith("sha256:")
             or len(self.policy_sha256) != 71
             or type(self.required_external_count) is not int
-            or self.required_external_count < 0
+            or self.required_external_count != 1
             or tuple(item.order for item in members) != tuple(range(len(members)))
             or len({item.requirement_id for item in members}) != len(members)
             or len(members) > self.required_external_count
@@ -302,6 +302,31 @@ class SelectedPreSubmitExecutionFacts:
             or any(item.result.verdict == "failed" for item in members[:-1])
         ):
             raise ValueError("selected PRE execution continued after a blocker")
+
+    def validate_reservation(self, reservation: SelectedPreSubmitReservationFacts) -> None:
+        """Bind returned policy members to locked selection, independently of echoes.
+
+        This is selection validation only. Source observation and the derived
+        project request must also be verified before accepted custody is issued.
+        """
+        if (
+            self.policy_sha256 != reservation.policy_sha256
+            or self.workstream_default.behavior_sha256 != reservation.default_behavior_sha256
+            or self.required_external_count != len(reservation.policy.entries)
+            or (self.workstream_default.eligible and len(self.external_members) != 1)
+        ):
+            raise ValueError("selected PRE execution selection is invalid")
+        for member, selected in zip(self.external_members, reservation.policy.entries, strict=False):
+            registry = selected.registry
+            if (
+                member.requirement_id != selected.requirement_id
+                or member.registry_entry_id != registry.registry_entry_id
+                or member.registry_entry_digest != registry.entry_digest
+                or member.result.phase != "pre_submit"
+                or member.isolation.platform_manifest_digest != registry.image_digest
+            ):
+                raise ValueError("selected PRE execution selection is invalid")
+            member.result.validate_registry(registry)
 
     def canonical_body(self) -> dict[str, object]:
         """Return the complete bounded result body retained by the durable owner."""
@@ -628,8 +653,7 @@ class SelectedPreSubmitFinalizeFacts:
         if self.execution is not None:
             if type(self.execution) is not SelectedPreSubmitExecutionFacts:
                 raise ValueError("selected PRE finalize execution is invalid")
-            if self.execution.policy_sha256 != self.lease.reservation.policy_sha256:
-                raise ValueError("selected PRE finalize policy is invalid")
+            self.execution.validate_reservation(self.lease.reservation)
         else:
             SelectedPreSubmitInfrastructureUnavailable(self.infrastructure_failure_code or "")
 
@@ -778,6 +802,7 @@ class SelectedPreSubmitTerminalFacts:
                 or self.execution.policy_sha256 != self.lease.reservation.policy_sha256
             ):
                 raise ValueError("selected PRE completed outcome is invalid")
+            self.execution.validate_reservation(self.lease.reservation)
         elif (self.outcome != "infrastructure_failed" or self.execution is not None
               or self.infrastructure_failure_code not in {
             "capacity_exceeded",

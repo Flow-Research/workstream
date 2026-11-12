@@ -821,3 +821,102 @@ def test_source_first_profile_rejects_archive_time_beyond_aggregate() -> None:
         replace(request, runtime_profile=request.runtime_profile.model_copy(update={
             "archive_limits": SubmissionArchiveLimits(maximum_inspection_seconds=121),
         }))
+
+
+def _source_completed_execution(reservation):
+    """Build structural result evidence; this fixture does not attest a runtime."""
+    from app.modules.checkers.api.selected_pre_submit import SelectedPreSubmitExecutionFacts
+    from app.modules.checkers.api.external import make_external_checker_execution_result
+
+    execution = SelectedPreSubmitExecutionFacts.from_canonical_body(
+        _retained_v1("selected_pre_v1_completed")["terminal"]["execution"]
+    )
+    selected = reservation.policy.entries[0]
+    member = execution.external_members[0]
+    result = make_external_checker_execution_result(
+        **(member.result.model_dump(exclude={"result_digest"}) | {
+            "registry_entry_id": selected.registry.registry_entry_id,
+            "registry_entry_digest": selected.registry.entry_digest,
+        })
+    )
+    return replace(
+        execution, policy_sha256=reservation.policy_sha256,
+        external_members=(replace(
+            member, requirement_id=selected.requirement_id,
+            registry_entry_id=selected.registry.registry_entry_id,
+            registry_entry_digest=selected.registry.entry_digest, result=result,
+            isolation=replace(member.isolation,
+                              platform_manifest_digest=selected.registry.image_digest),
+        ),),
+    )
+
+
+@pytest.mark.parametrize("changed", [
+    None, "requirement", "registry_id", "registry_digest", "phase", "image", "missing",
+])
+def test_source_first_finalization_binds_actual_selected_member(changed):
+    from app.modules.checkers.api.external import make_external_checker_execution_result
+    from app.modules.checkers.api.selected_pre_submit import SelectedPreSubmitTerminalFacts
+
+    reservation = _source_reservation()
+    execution = _source_completed_execution(reservation)
+    member = execution.external_members[0]
+    if changed in {"registry_id", "registry_digest", "phase"}:
+        field = {"registry_id": "registry_entry_id", "registry_digest": "registry_entry_digest",
+                 "phase": "phase"}[changed]
+        value = {"registry_id": new_record_id(), "registry_digest": "sha256:" + "f" * 64,
+                 "phase": "post_submit"}[changed]
+        # Rehash the forged result and agree with its echoed member identity.
+        # Only the frozen reservation distinguishes it from valid evidence.
+        result = make_external_checker_execution_result(
+            **(member.result.model_dump(exclude={"result_digest"}) | {field: value})
+        )
+        member = replace(member, result=result, **({field: value} if changed != "phase" else {}))
+    elif changed == "requirement":
+        member = replace(member, requirement_id="another.requirement")
+    elif changed == "image":
+        member = replace(member, isolation=replace(
+            member.isolation, platform_manifest_digest="sha256:" + "f" * 64,
+        ))
+    execution = replace(execution, external_members=(member,))
+    if changed == "missing":
+        execution = replace(execution, external_members=(), eligible=False)
+    now = datetime.now(UTC)
+    lease = SelectedPreSubmitLeaseFacts(
+        reservation=reservation, lease_id=new_record_id(), lease_generation=1,
+        lease_expires_at=reservation.pre_deadline_at,
+    )
+    def finalize():
+        return SelectedPreSubmitFinalizeFacts(lease, execution, None)
+    def terminal():
+        return SelectedPreSubmitTerminalFacts(lease, "completed", execution, None, now, now, now)
+    if changed is None:
+        assert finalize().execution == execution
+        value = terminal()
+        assert SelectedPreSubmitTerminalFacts.from_canonical_body(value.canonical_body()) == value
+    else:
+        for construct in (finalize, terminal):
+            with pytest.raises(ValueError, match="execution selection"):
+                construct()
+
+
+def test_source_first_execution_cannot_claim_zero_required_project_checks():
+    execution = _source_completed_execution(_source_reservation())
+    with pytest.raises(ValueError, match="execution facts"):
+        replace(execution, required_external_count=0, external_members=(), eligible=True)
+
+
+def test_source_first_default_rejection_does_not_require_project_result():
+    from app.modules.checkers.default_checker import evaluate_rejected_archive
+
+    reservation = _source_reservation()
+    execution = replace(
+        _source_completed_execution(reservation),
+        workstream_default=evaluate_rejected_archive(
+            "submission_archive_malformed", packet=reservation.default_context.packet,
+        ), external_members=(), eligible=False,
+    )
+    lease = SelectedPreSubmitLeaseFacts(
+        reservation, new_record_id(), 1, reservation.pre_deadline_at,
+    )
+    assert SelectedPreSubmitFinalizeFacts(lease, execution, None).execution == execution

@@ -1402,3 +1402,25 @@ QA/test-delta/CI passed that bounded scope at the same clean head. The earlier
 syntax-error run remains failed evidence, not a green migration proof. Nothing
 in this result qualifies the unfinished public caller/capability/result/runtime
 or accepted T4 path; those remain required by the original single-PR objective.
+
+### Live result selection validation during execution replacement
+
+Tracing the old executor exposed an independent result-binding gap: finalization
+and terminal reconstruction compared only the echoed policy digest, while the
+result could declare zero required members or substitute a self-consistently
+rehashable registry/phase/requirement/image. Live execution now requires exactly
+one selected project check, verifies returned members against the reservation's
+actual locked binding, and refuses a missing project result after defaults pass.
+A blocking default still permits no project execution. Finalization and terminal
+reconstruction share this validation; historical v1 read-only decoding is unchanged.
+The existing external-result owner supplies registry schema and canonical output
+size checks, reused by both request validation and selected-result validation.
+
+Focused contracts plus source-first/historical tests passed 88 cases. Removing
+both selection-validation calls caused all six substitution/omission controls to
+fail, while the positive control passed; the production code was restored.
+This is structural selection proof only. It neither establishes observed source
+custody nor reconstructs the derived project request. The combined response,
+single-session runtime, SQL deep completed-result guard, old caller replacement
+and T4 remain unfinished. This local change is part of the same coordinated PR,
+not a publishable or merge-ready endpoint. Scoped reviewer evidence is pending.
