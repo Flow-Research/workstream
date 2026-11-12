@@ -381,6 +381,14 @@ controls, scoped lint/type checks and Markdown links. Affected reviewer replay i
 required before treating either finding as closed; whole-PR qualification remains
 separate.
 
+Repair replay at `f51ea30a2` closed `QA-POLICY-001`; security, architecture,
+product/operations, reuse, QA, test delta and CI found no further code repair in
+that bounded delta. Hostile-output and validator-bypass controls were
+independently discriminating. One remaining executive roadmap paragraph still
+excluded PM; its correction now states covering PM or Finance policy authority
+and preserves Finance-only unit/binding administration. The final delta is
+wording only; it changes no implementation or financial eligibility.
+
 ## Reconciliation
 
 - Current-source reconciliation: baseline matches the specification; no newer merged owners found.

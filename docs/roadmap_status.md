@@ -449,13 +449,13 @@ CLI grant list/detail now expose the existing authorized qualification and
 revocation history: one filtered count-free page with explicit continuation,
 or one exact project/grant. Current authority remains backend-owned; no global
 actor directory, role cache or automatic decisions are added.
-CLI contribution-policy current/exact-version reads now expose the authorized
-Finance policy graph, including empty drafts, published/open-draft selectors and
-retained historical versions. Backend selection and current Finance authority
-remain decisive; PM-only permission does not suffice. CLI draft creation, complete
-rule replacement, publication and retirement now use the existing public Finance
-operations with explicit retry keys and immutable receipts. Guide activation is
-separate. CLI contribution-evidence commands now provide self and authorized
+CLI contribution-policy current/exact-version reads expose the authorized
+project policy graph, including empty or complete drafts, published/open-draft
+selectors and retained historical versions. Backend selection and a current
+covering Project Manager or Finance Authority grant govern each call. Unit and
+binding administration remains Finance-only. CLI draft creation, complete v2
+rule replacement, publication and retirement use the public policy operations
+with explicit retry keys and immutable receipts. Guide activation is separate. CLI contribution-evidence commands now provide self and authorized
 project reads, including exact server CSV downloads. Backend fixed-membership
 pagination and the CLI's bounded internal traversal preserve complete selections
 through 100,000 contributions without exposing cursor controls.
