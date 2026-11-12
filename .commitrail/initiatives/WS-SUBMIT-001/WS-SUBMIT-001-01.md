@@ -1677,3 +1677,74 @@ only their exercised contracts. This workspace currently has neither a Smol
 binary nor `/dev/kvm`, and hosted backend CI only collects native qualification
 fixtures; actual one-guest isolation qualification remains a required distinct
 execution prerequisite, not an inferred pass from portable tests.
+
+The native plan review required the following concrete decisions before code:
+
+- PRE does not use `Resources::from(ValidatedRequest)` and its fixed 1 GiB disk.
+  Resolve the pinned root descriptor and qualified PRE envelope first. Checked
+  peak disk admission sums root bundle spool + expanded platform root + exact raw
+  ZIP + maximum expanded submission tree + explicit project scratch + image
+  overlay + filesystem overhead. Reject arithmetic overflow or a total above
+  the locked temporary-disk budget. Round provider storage and overlay separately
+  to GiB and charge their full rounded amounts to node admission before create.
+  Root, ZIP, tree, scratch, inode/entry and control-buffer caps are enforced at
+  their writers. Scratch/overlay/overhead bounds are explicit qualified values,
+  never inferred from the old 1 GiB path or supplied as new deployment defaults.
+- The existing persisted `Lease.name` is the discoverable invocation and cleanup
+  obligation identity. Its pre-create record additionally binds PRE operation,
+  run, request, source, profile and execution fence. A captured valid result may
+  return with cleanup `pending` only if that exact durable obligation remains
+  verified and the existing guardian/reaper owns it; node admission stays
+  quarantined. Confirmed destruction yields `destroyed`. Missing or rebound
+  obligation custody fails closed. PRE uses one create attempt, not the generic
+  project path's three-attempt loop. Shared POST/trial semantics are unchanged.
+- One supervisor stays outside both child roots and both workload OOM groups.
+  First run a trusted child chrooted into the verified platform root, with only
+  the exact read-only source/request and protected extraction workspace. Then,
+  only after passing defaults, run the project child in its private namespace,
+  cgroup and non-root identity. Refactor the existing project confinement/output
+  machinery for this second phase instead of duplicating its policy. Before
+  either exec, duplicate only intended stdin/stdout/stderr/control descriptors
+  and close all others. Project code receives no platform worker pipe, source
+  spool, platform root, supervisor control or storage credential. Explicit
+  control/default/project resource partitions must fit the qualified aggregate;
+  a project OOM cannot put the supervisor in the same killable group.
+- The canonical projection's in-memory snapshot closes after defaults, while
+  its verified files remain. The supervisor walks only the exact manifest via
+  anchored no-follow descriptors, sets root-owned directories to 0555 and files
+  to 0444 (0555 for executable entries), and binds that view read-only into the
+  project namespace. Its private parent remains 0700 and inaccessible there.
+  Test readable exact bytes alongside denied writes, chmod and rename; no host
+  tree copy or export is involved. The supervisor owns final guest cleanup.
+- Qualified PRE configuration points to the existing WSROOT1 producer bundle,
+  its `RootDescriptor`, and explicit `RootLimits`. Match the bundle digest to
+  the locked profile's platform-root digest. Transfer the bounded bundle to a
+  guest-private spool and call `trusted_root::stage_root` before trusted worker
+  launch, validating manifest/config/default pins and expanded size/entry limits.
+  A library verifier with no caller is not evidence of this path.
+- Use separate trusted control and project output frames. Project output is
+  bounded by both selected registry and profile limits, logs by the profile log
+  ceiling; trusted frames remain within the existing 64 MiB protocol ceiling
+  and the explicit control memory budget. Refuse partial, oversized or trailing
+  frames. Only the trusted supervisor/worker constructs source/default/profile
+  evidence. Project output is parsed solely as its registered result.
+- Before allocation/source reads, the Rust handler validates the closed header,
+  canonical reservation/request/source digests, lease/fence relationships,
+  selected cached image and exact configured runtime/profile/root pins. The
+  authenticated local caller and backend ART grant own command/read authority;
+  self-consistent hashes are not independent authorization. Negative controls
+  must distinguish inconsistencies/rebound configured pins (refused before
+  create) from raw-byte mismatch (provable only during actual input loading).
+  Do not claim that a new internally consistent run identity can be rejected
+  without an independent authority reference. Guest and CHECKERS bind all
+  captured evidence back to this exact invocation.
+- Add a dedicated pinned native PRE qualification case/harness; the existing
+  trial qualifier is not suitable. It must observe exactly one machine name,
+  persisted lease and create, worker then optional project under that guest,
+  root/source/profile pins, adversarial isolation probes, and cleanup or retained
+  quarantine. Portable tests instead use real ZIPs and an independent expected
+  manifest/default/request vector, including secret/unchanged blockers with an
+  incompatible project schema and a project-start sentinel. They reject host
+  manifest/default-input/export/prepared-generation commands. Native Smol/KVM
+  qualification remains unavailable locally and must not be relabeled portable
+  proof. Existing shared POST/trial fixtures retain their own behavior coverage.
