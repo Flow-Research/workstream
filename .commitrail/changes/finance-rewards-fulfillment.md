@@ -169,6 +169,9 @@ Submission selection; no parallel reader or compatibility implementation remains
 Allowed files: TASK models, existing screening/claim/context/admission/replay,
 revision preparation/recovery/routing and read owners; CON reward-selection and
 published-terms APIs/repository, contribution source/repository/participant;
+ART admission/binding public contracts, TASK routing-manifest/accepted-effects
+contracts, REV shared FinalAcceptance participant/API, CON participation/source
+reads and COMP award completion; existing AUTH task-replay guards/contracts;
 existing composition roots and their affected callers; one forward migration in
 the current chain replacing affected guards; affected public schemas, CLI/MCP
 contracts, fixtures/tests and current documentation. No new workflow owner,
@@ -205,9 +208,10 @@ unpaid selects no definition/award; fixed reviewer remains one independent
 award. Reject cross-project/policy/size/definition substitutions in owner code
 and direct SQL. Preserve assignment/submission equality, old-submission evidence
 after upward/downward/unpaid/instrument-changing revision, blocked-target repair,
-acknowledgement hash, concurrent claim, rollback and exact replay. Both human
-review and automatic acceptance use shared final acceptance with selected awards
-committed atomically. Cache/batch reads must distinguish two sizes under one
+acknowledgement hash, concurrent claim, rollback and exact replay. The default human-required branch stops at review handoff with no
+FinalAcceptance/contribution/award, preserving its existing unavailable human
+acceptance guard. The automatic branch uses shared FinalAcceptance and commits
+the selected award atomically; live human acceptance is not qualified here. Cache/batch reads must distinguish two sizes under one
 policy and never expose bindings to contributors. Live-drill defects require
 focused regressions. Existing pure proof and baseline migration-data proof
 remain unless replaced by meaningful current proof. Full-suite and real
@@ -219,3 +223,46 @@ QA/test delta, reuse and docs/CI reviewers inspect their affected boundaries;
 shared checks run once per frozen candidate. Human focus is exact selection,
 AUTH, immutable lineage, revision/replay and transaction atomicity. This boundary
 qualifies selected acceptance only; it does not claim Finance runtime delivery.
+
+Plan-review corrections (SELECTED-PLAN-001/002 and PLAN-SELECT-001–004):
+- Immutable selection flows TASK public acceptance-source/accepted-effects facts
+  through REV FinalAcceptance into CON participation; CON does not join TASK's
+  private ORM. ART binding/context digests and admission validation carry the
+  same copied facts. Existing revision packet/projection and SQL guards own the
+  rebase; no separate state machine.
+- Claim replay means fresh-authorized same-original-actor/same-assignment read
+  of its exact committed result after rebase. Existing AUTH and TASK guards must
+  distinguish this from new-claim eligibility; changed request, foreign actor or
+  reassigned assignment remains denied. Submission replay means its exact
+  existing admission/creation receipt returning original immutable evidence
+  after continuing-context rebase, with fresh authority and no new Submission,
+  claim or economic fact. Routing/acceptance replay independently retains exact
+  source and original selected award; it never reselects from the current Task.
+- Named future tests in tests/finance/test_selected_reward_journey.py:
+  test_medium_public_claim_to_selected_automatic_acceptance publishes three
+  distinct tier quantities, creates Medium, calls real screen/release/claim,
+  admits ZIP and creates Submission, runs actual outbox/completion, and compares
+  all copied IDs and sole medium quantity; test_original_submission_replay_after_rebase
+  retains that Submission/admission and proves original response after governed
+  revision; test_human_required_has_no_acceptance preserves the default handoff.
+  Fixture setup may use existing policy approval owners, but cannot seed Task,
+  Assignment or Submission instead of these operations. Durable-worker public
+  drill remains distinct from focused in-process integration proof.
+- Named future tests in tests/finance/test_selected_reward_storage.py:
+  test_same_policy_wrong_tier_copy_rejected substitutes valid Large into the
+  Medium Assignment/Submission to reach equality guards past valid FKs;
+  test_cross_project_selection_rejected checks ownership;
+  test_deferred_selected_award_completeness checks missing/extra/wrong selected
+  award at commit; test_unpaid_has_zero_awards checks unpaid closure. Each records
+  an unchanged transaction snapshot on rejection. Independent-session
+  test_concurrent_claim_keeps_one_selection and
+  test_acceptance_replay_keeps_one_selected_award protect concurrency/retry.
+- Named future tests in tests/finance/test_selected_reward_migration.py:
+  test_fresh_install_and_empty_current_upgrade verifies actual Alembic head;
+  test_incompatible_facts_refuse_without_rewrite compares all retained rows and
+  starting schema revision after atomic refusal. Existing exact schema-fingerprint
+  fixture must reflect installed columns/FKs/checks/deferred and immutable guards,
+  using an actual isolated PostgreSQL probe. No fake migration or percentage gate.
+- Current storage substitution proof uses the real foreign fixture binding and
+  definition independently. PostgreSQL exposed the absent second-local-binding
+  assumption; the repair removes it rather than extending old fixture behavior.

@@ -151,16 +151,10 @@ async def test_reviewer_award_definition_substitution(tmp_path, isolated_databas
         async with h.factory() as session, session.begin():
             await insert_record(session, h.reviewer_record)
             (money,) = await award_values(session, h.reviewer_record)
-            other_binding = await session.scalar(text(
-                "SELECT id FROM public.project_compensation_adapter_bindings "
-                "WHERE project_id=:project AND id<>:binding LIMIT 1"
-            ), {"project": h.reviewer_record.project_id, "binding": money["adapter_binding_id"]})
-            assert other_binding is not None
         async with h.factory() as session:
             for change in (
                 {"quantity": money["quantity"] + Decimal("0.000000000000000001")},
                 {"unit_code": "EUR"},
-                {"adapter_binding_id": other_binding},
                 {"award_definition_id": new_record_id()},
                 {"instrument_type": "project_points", "quantity": Decimal("7"), "unit_code": "PTS"},
             ):
@@ -202,13 +196,17 @@ async def test_reviewer_award_definition_substitution(tmp_path, isolated_databas
                     await reject_award(
                         session, money, "award contribution lineage mismatch", **change
                     )
-                await reject_award(
-                    session,
-                    money,
-                    "award frozen definition mismatch",
-                    award_definition_id=foreign_money["award_definition_id"],
-                    adapter_binding_id=foreign_money["adapter_binding_id"],
-                )
+                for change in (
+                    {"award_definition_id": foreign_money["award_definition_id"]},
+                    {"adapter_binding_id": foreign_money["adapter_binding_id"]},
+                    {
+                        "award_definition_id": foreign_money["award_definition_id"],
+                        "adapter_binding_id": foreign_money["adapter_binding_id"],
+                    },
+                ):
+                    await reject_award(
+                        session, money, "award frozen definition mismatch", **change
+                    )
                 await insert_award(session, money)
                 await session.commit()
         async with h.factory() as session, session.begin():
