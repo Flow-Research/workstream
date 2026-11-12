@@ -3173,3 +3173,32 @@ independently compared the explicit SQL whitespace set with Python's 29 whitespa
 code points. Evidence remains the declared worktree runs, not an exact-head native
 or public-API drill. Public operator routes, cleanup and single-request API/client
 cutover remain required for the full goal.
+
+## Checker image qualification caller repair
+
+Current-head hosted run 43326850205 builds the PRE image but fails before its
+first sample executes. Inspection found the sample request builder still emits
+`prepared_generation_id`, superseded by the operation/source/lease PRE contract.
+This shared consumer must migrate with the source-first contract; no compatibility
+alias or production validator relaxation is allowed.
+
+Bounded scope: `backend/scripts/checker_image_samples.py`, existing
+`backend/tests/test_checker_image.py` proof, and this record. Acceptance: both PRE
+and POST dry-run qualification construct valid canonical requests; PRE material
+matches operation/source/lease and attempt identity; existing publication and
+cleanup failure protections remain effective. Risk: architecture/contract caller
+repair, no new authority or product state. Verification: reproduce the existing
+two-phase regression before repair, run the complete checker-image suite, then
+run the actual Terminal Systems PRE image. Required review: architecture and
+QA/test delta, with human focus on synthetic identities versus real custody and
+unchanged production validation. Cleanup implementation remains the next feature
+boundary; this discovered integrated proof failure is repaired first.
+
+The existing two-phase dry-run regression reproduced the exact failure before
+repair (PRE failed, POST passed). After replacing the retired synthetic field
+with matching operation/source/lease identities, the full existing
+`tests/test_checker_image.py` suite passed: 25 tests in 14.25 seconds, captured in
+`/tmp/submission-checker-image-repair.log`. Ruff and diff whitespace checks pass.
+No test assertions, production validators, CI selection or permissions changed.
+The actual image drill is separate evidence and must finish before qualification
+is claimed. Latest fetch confirms zero commits missing from origin/main.
