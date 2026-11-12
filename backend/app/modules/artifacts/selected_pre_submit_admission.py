@@ -17,6 +17,7 @@ from app.modules.artifacts.submission_manifest import (
 from app.modules.checkers.api.default_checker import (
     WORKSTREAM_DEFAULT_BEHAVIOR_SHA256,
     WorkstreamDefaultCheckerInput,
+    WorkstreamDefaultContext,
     WorkstreamDefaultPredecessor,
     workstream_default_input_body,
 )
@@ -252,18 +253,19 @@ def bind_selected_pre_submit_admission(
         policy=policies.pre_submit,
         post_policy=policies.post_submit,
         policies_sha256=policies.policies_sha256,
-        default_input=WorkstreamDefaultCheckerInput(
-            archive_sha256=commitment.sha256,
-            archive_byte_count=commitment.byte_count,
-            archive_media_type=commitment.media_type,
-            semantic_manifest_sha256=manifest.sha256,
-            entries=entries,
+        default_input=WorkstreamDefaultContext(
             predecessor=default_predecessor,
             predecessor_exists=predecessor_exists,
             current_predecessor=default_predecessor,
             current_rules_sha256=rules_sha256,
             predecessor_rules_sha256=predecessor_rules_sha256,
             packet=packet,
+        ).bind_verified_input(
+            archive_sha256=commitment.sha256,
+            archive_byte_count=commitment.byte_count,
+            archive_media_type=commitment.media_type,
+            semantic_manifest_sha256=manifest.sha256,
+            entries=entries,
         ),
         change_gate=change_gate,
         rules_sha256=rules_sha256,

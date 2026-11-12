@@ -23,6 +23,8 @@ from app.modules.artifacts.submission_archive import (
 from app.modules.artifacts.submission_manifest import build_submission_manifest
 from app.modules.checkers.api.default_checker import (
     WorkstreamDefaultCheckerInput,
+    WorkstreamDefaultContext,
+    workstream_default_input_sha256,
     WorkstreamDefaultPredecessor,
 )
 from app.modules.checkers.api.materialization import SubmissionMaterialEntry
@@ -69,7 +71,17 @@ def _input(
     attestation: str = "I confirm the submitted material is authorized.",
 ) -> WorkstreamDefaultCheckerInput:
     _, inspection, manifest, commitment = _facts(value)
-    return WorkstreamDefaultCheckerInput(
+    context = WorkstreamDefaultContext(
+        predecessor=predecessor,
+        predecessor_exists=predecessor is not None,
+        current_predecessor=current_predecessor,
+        current_rules_sha256=current_rules_sha256,
+        predecessor_rules_sha256=predecessor_rules_sha256,
+        packet=SubmissionPacketView(
+            summary=summary, contributor_attestation=attestation
+        ),
+    )
+    return context.bind_verified_input(
         archive_sha256=commitment.sha256,
         archive_byte_count=commitment.byte_count,
         archive_media_type=commitment.media_type,
@@ -84,15 +96,8 @@ def _input(
             )
             for item in inspection.entries
         ),
-        predecessor=predecessor,
-        predecessor_exists=predecessor is not None,
-        current_predecessor=current_predecessor,
-        current_rules_sha256=current_rules_sha256,
-        predecessor_rules_sha256=predecessor_rules_sha256,
-        packet=SubmissionPacketView(
-            summary=summary, contributor_attestation=attestation
-        ),
     )
+
 
 
 def _evaluate(value: bytes, request: WorkstreamDefaultCheckerInput, workspace: Path):
@@ -356,4 +361,54 @@ def test_predecessor_currentness_rejects_duck_typed_equal_values() -> None:
             predecessor_exists=True,
             current_predecessor=foreign,
             predecessor_rules_sha256=RULES_A,
+        )
+
+
+def test_default_context_exists_before_zip_and_binds_later_observation() -> None:
+    """No manifest/input digest is needed until trusted inspection completes."""
+    context = WorkstreamDefaultContext(
+        predecessor=None, predecessor_exists=False, current_predecessor=None,
+        current_rules_sha256=RULES_A, predecessor_rules_sha256=None,
+        packet=SubmissionPacketView(summary="", contributor_attestation=""),
+    )
+    archive = _archive({"work.txt": b"new work"})
+    expected = _input(archive, summary="", attestation="")
+    observed = {
+        "archive_sha256": expected.archive_sha256,
+        "archive_byte_count": expected.archive_byte_count,
+        "archive_media_type": expected.archive_media_type,
+        "semantic_manifest_sha256": expected.semantic_manifest_sha256,
+        "entries": expected.entries,
+    }
+    bound = context.bind_verified_input(**observed)
+    assert bound == expected
+    digest = workstream_default_input_sha256(bound)
+    # Retained rules/packet and independently observed raw/manifest evidence
+    # must all participate; agreeing on an echoed digest cannot substitute them.
+    for changed_context in (
+        replace(context, current_rules_sha256=RULES_B),
+        replace(context, packet=SubmissionPacketView(
+            summary="different packet", contributor_attestation="",
+        )),
+    ):
+        assert workstream_default_input_sha256(
+            changed_context.bind_verified_input(**observed)
+        ) != digest
+    for field, value in (
+        ("archive_sha256", "sha256:" + "c" * 64),
+        ("archive_byte_count", expected.archive_byte_count + 1),
+        ("semantic_manifest_sha256", "sha256:" + "d" * 64),
+        ("entries", (replace(expected.entries[0], executable=True),)),
+    ):
+        assert workstream_default_input_sha256(
+            context.bind_verified_input(**(observed | {field: value}))
+        ) != digest
+
+
+def test_default_context_rejects_partial_rules_before_source_read() -> None:
+    with pytest.raises(ValueError):
+        WorkstreamDefaultContext(
+            predecessor=None, predecessor_exists=False, current_predecessor=None,
+            current_rules_sha256=RULES_A, predecessor_rules_sha256=RULES_B,
+            packet=SubmissionPacketView(summary="", contributor_attestation=""),
         )

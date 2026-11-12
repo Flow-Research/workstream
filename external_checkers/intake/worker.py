@@ -33,6 +33,7 @@ from app.modules.artifacts.submission_manifest import build_submission_manifest
 from app.modules.checkers.api.default_checker import (
     WORKSTREAM_DEFAULT_BEHAVIOR_SHA256,
     WorkstreamDefaultCheckerInput,
+    WorkstreamDefaultContext,
     workstream_default_input_sha256,
 )
 from app.modules.checkers.api.material import SubmissionMaterialEntry
@@ -226,8 +227,24 @@ class IntakeWorker:
                     value = TypeAdapter(WorkstreamDefaultCheckerInput).validate_json(
                         json.dumps(raw), strict=True
                     )
+                    material = _Material(tree)
+                    derived = WorkstreamDefaultContext(
+                        predecessor=value.predecessor,
+                        predecessor_exists=value.predecessor_exists,
+                        current_predecessor=value.current_predecessor,
+                        current_rules_sha256=value.current_rules_sha256,
+                        predecessor_rules_sha256=value.predecessor_rules_sha256,
+                        packet=value.packet,
+                    ).bind_verified_input(
+                        archive_sha256=self._startup["archive_sha256"],
+                        archive_byte_count=size,
+                        archive_media_type="application/zip",
+                        semantic_manifest_sha256=manifest.sha256,
+                        entries=material.entries,
+                    )
                     if (
-                        binding.policy_sha256 != self._preparation.policy_sha256
+                        value != derived
+                        or binding.policy_sha256 != self._preparation.policy_sha256
                         or binding.semantic_manifest_sha256 != manifest.sha256
                         or value.semantic_manifest_sha256 != manifest.sha256
                         or value.archive_sha256 != self._startup["archive_sha256"]
@@ -237,7 +254,7 @@ class IntakeWorker:
                     ):
                         raise ValueError("default custody differs")
                     self._state = "evaluating"
-                    result = evaluate_verified_archive(value, _Material(tree))
+                    result = evaluate_verified_archive(derived, material)
                     self._reply("default", result.model_dump(mode="json"))
                     self._state = "evaluated"
                 else:

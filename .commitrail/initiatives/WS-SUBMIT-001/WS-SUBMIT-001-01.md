@@ -1092,3 +1092,15 @@ cannot establish these claims. Retain their still-required semantic assertions
 while replacing their obsolete preparation setup. Lead plan checks passed
 Commitrail, Markdown links and diff whitespace; the review is feasibility
 inspection, not runtime or migration proof.
+
+The first implementation step separates `WorkstreamDefaultContext` (locked
+predecessor/rules/packet facts available before inspection) from the derived
+`WorkstreamDefaultCheckerInput`. Both use one context validator. ART's existing
+builder now binds its inspected source/manifest through that context; the trusted
+worker independently derives its input from its own raw receipt and projected
+entries and compares the supplied input before evaluation. The canonical input
+body and four-default behavior identity are unchanged. Eighty focused default,
+predecessor, trusted-worker and selected-PRE tests pass, including late binding
+and digest sensitivity to locked facts and observed input. This is an internal
+step in the reviewed replacement: the worker still has its old command sequence,
+and source-first reservation, combined guest and T4 are not implemented yet.

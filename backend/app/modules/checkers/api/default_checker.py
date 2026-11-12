@@ -121,6 +121,58 @@ class WorkstreamDefaultPredecessor:
 
 
 @dataclass(frozen=True, slots=True)
+class WorkstreamDefaultContext:
+    """Locked facts known before source inspection; no derived input identity.
+
+    This value confers no authority. The owner must recover it from the locked
+    request, and bind only independently verified raw and manifest evidence.
+    """
+
+    predecessor: WorkstreamDefaultPredecessor | None
+    predecessor_exists: bool
+    current_predecessor: WorkstreamDefaultPredecessor | None
+    current_rules_sha256: str
+    predecessor_rules_sha256: str | None
+    packet: SubmissionPacketView
+
+    def __post_init__(self) -> None:
+        """Validate detached rule and predecessor facts before any source read."""
+        _require_sha256(self.current_rules_sha256)
+        if (
+            (self.predecessor is not None
+             and type(self.predecessor) is not WorkstreamDefaultPredecessor)
+            or (self.current_predecessor is not None
+                and type(self.current_predecessor) is not WorkstreamDefaultPredecessor)
+            or type(self.predecessor_exists) is not bool
+            or type(self.packet) is not SubmissionPacketView
+            or (self.predecessor_rules_sha256 is None) != (self.predecessor is None)
+        ):
+            raise ValueError("default checker context is invalid")
+        if self.predecessor_rules_sha256 is not None:
+            _require_sha256(self.predecessor_rules_sha256)
+
+    def bind_verified_input(
+        self, *, archive_sha256: str, archive_byte_count: int,
+        archive_media_type: str, semantic_manifest_sha256: str,
+        entries: tuple[SubmissionMaterialEntry, ...],
+    ) -> WorkstreamDefaultCheckerInput:
+        """Derive the canonical input after the owner verifies source and manifest.
+
+        Neither this constructor nor a matching digest proves observation of
+        bytes. Guest and CHECKERS must independently supply their verified facts.
+        """
+        return WorkstreamDefaultCheckerInput(
+            archive_sha256=archive_sha256, archive_byte_count=archive_byte_count,
+            archive_media_type=archive_media_type,
+            semantic_manifest_sha256=semantic_manifest_sha256, entries=entries,
+            predecessor=self.predecessor, predecessor_exists=self.predecessor_exists,
+            current_predecessor=self.current_predecessor,
+            current_rules_sha256=self.current_rules_sha256,
+            predecessor_rules_sha256=self.predecessor_rules_sha256, packet=self.packet,
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class WorkstreamDefaultCheckerInput:
     """Detached exact custody and task-rule facts; never storage authority."""
 
@@ -140,28 +192,23 @@ class WorkstreamDefaultCheckerInput:
         """Reject malformed detached facts before any callback-scoped byte read."""
         _require_sha256(self.archive_sha256)
         _require_sha256(self.semantic_manifest_sha256)
-        _require_sha256(self.current_rules_sha256)
         if (
             type(self.archive_byte_count) is not int
             or self.archive_byte_count <= 0
             or self.archive_media_type != "application/zip"
             or type(self.entries) is not tuple
             or any(type(item) is not SubmissionMaterialEntry for item in self.entries)
-            or (
-                self.predecessor is not None
-                and type(self.predecessor) is not WorkstreamDefaultPredecessor
-            )
-            or (
-                self.current_predecessor is not None
-                and type(self.current_predecessor) is not WorkstreamDefaultPredecessor
-            )
-            or type(self.predecessor_exists) is not bool
-            or type(self.packet) is not SubmissionPacketView
-            or (self.predecessor_rules_sha256 is None) != (self.predecessor is None)
         ):
             raise ValueError("default checker input is invalid")
-        if self.predecessor_rules_sha256 is not None:
-            _require_sha256(self.predecessor_rules_sha256)
+        try:
+            WorkstreamDefaultContext(
+                predecessor=self.predecessor, predecessor_exists=self.predecessor_exists,
+                current_predecessor=self.current_predecessor,
+                current_rules_sha256=self.current_rules_sha256,
+                predecessor_rules_sha256=self.predecessor_rules_sha256, packet=self.packet,
+            )
+        except ValueError as exc:
+            raise ValueError("default checker input is invalid") from exc
 
 
 def workstream_default_input_body(
@@ -317,6 +364,7 @@ __all__ = (
     "WorkstreamDefaultCheck",
     "WorkstreamDefaultCheckId",
     "WorkstreamDefaultCheckerInput",
+    "WorkstreamDefaultContext",
     "WorkstreamDefaultCheckerResult",
     "WorkstreamDefaultFailureCode",
     "WorkstreamDefaultPredecessor",
