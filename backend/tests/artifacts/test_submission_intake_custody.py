@@ -1052,7 +1052,7 @@ async def test_pre_source_custody_rejects_substitution_or_stale_owner(intake, ch
 
 
 @pytest.mark.parametrize("intake", [True], indirect=True)
-@pytest.mark.parametrize("changed", [None, "source", "packet", "policy", "post_policy", "fence", "deadline", "actor", "rules", "predecessor", "predecessor_identity"])
+@pytest.mark.parametrize("changed", [None, "source", "packet", "policy", "post_policy", "fence", "deadline", "actor", "rules", "predecessor", "predecessor_identity", "storage_scheme"])
 async def test_selected_pre_sql_requires_exact_live_source(intake, changed):
     """Exercise the SQL source participant; not full PRE execution or T4 proof."""
     from dataclasses import replace
@@ -1105,9 +1105,10 @@ async def test_selected_pre_sql_requires_exact_live_source(intake, changed):
         build_values = dict(
             source=guarded, metadata=metadata, task=task, project=project,
             attempt_id=new_record_id(), idempotency_key=UUID(row.idempotency_key),
-            selected=selected, storage_scheme="local", runtime_profile=_source_reservation().runtime_profile,
+            selected=selected, runtime_profile=_source_reservation().runtime_profile,
         )
         request = build_selected_pre_submit_reservation(**build_values)
+        assert request.admission_lineage.storage_scheme == "local"
         if changed is None:
             substitutions = (
                 {"metadata": metadata.model_copy(update={"summary": "substituted"})},
@@ -1138,6 +1139,8 @@ async def test_selected_pre_sql_requires_exact_live_source(intake, changed):
             body["foreground_lease_generation"] += 1
         elif changed == "deadline":
             body["pre_deadline_at"] = (deadline + timedelta(seconds=1)).isoformat()
+        elif changed == "storage_scheme":
+            body["admission_lineage"]["storage_scheme"] = "s3"
         elif changed == "rules":
             body["default_context"]["current_rules_sha256"] = "sha256:" + "f" * 64
             body["admission_lineage"]["rules_sha256"] = "sha256:" + "f" * 64

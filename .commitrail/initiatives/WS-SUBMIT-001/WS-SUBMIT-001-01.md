@@ -1364,3 +1364,17 @@ them. The old attempt-request hash helper is still referenced only by that chain
 and its obsolete tests; it is not a second v2 request identity. No new route,
 compatibility adapter, placeholder manifest or executable authority was added.
 The existing reviewed L0 single-session plan and file/reviewer scope still apply.
+
+The production-builder PostgreSQL run passed 13 cases at exact `61871924d`,
+with cleanup confirmed, and 49 source-first/historical contract checks passed.
+QA passed that bounded producer/proof scope. Architecture/security found one
+remaining provenance gap: separately supplied lineage storage scheme could
+contradict the sealed source profile. The builder now derives the scheme from
+the same currently admitted `local-v2`/`minio-v1` profiles as T1 and refuses other
+profiles; AWS qualification is not inferred. SQL source custody independently
+requires the same profile/scheme relationship. A raw INSERT substitution changes
+only the scheme and recomputes the request digest, preserving all source facts.
+The repaired migration applies with measured fingerprint
+`3b71e6b86dea2b6b525fc1fdc3a130b83c070e74e826ef65f4cf6976d1e58d01`.
+Exact-head repaired proof and focused re-review are pending. The broader caller,
+capability, completed result and one-session runtime replacement remains open.

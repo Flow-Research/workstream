@@ -88,7 +88,6 @@ def build_selected_pre_submit_reservation(
     attempt_id: UUID,
     idempotency_key: UUID,
     selected: SelectedPreSubmitAdmissionContext,
-    storage_scheme: str,
     runtime_profile: SelectedPreSubmitRuntimeProfile,
 ) -> SelectedPreSubmitReservationFacts:
     """Bind T3's locked source to policy/context without host ZIP inspection.
@@ -135,6 +134,11 @@ def build_selected_pre_submit_reservation(
             or selected.rules_sha256 != expected_rules
             or selected.default_context.current_rules_sha256 != expected_rules):
         raise ValueError("selected PRE policy context differs")
+    storage_scheme = {"local-v2": "local", "minio-v1": "s3"}.get(
+        source.source.location.provider_profile
+    )
+    if storage_scheme is None:
+        raise ValueError("selected PRE source profile is unavailable")
     predecessor = task.predecessor
     locked_guide_sha256 = canonical_json_hash(
         {
