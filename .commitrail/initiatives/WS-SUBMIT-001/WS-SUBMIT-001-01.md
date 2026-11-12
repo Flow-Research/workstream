@@ -2029,3 +2029,36 @@ required-status propagation. Hosted CI has not run on this unpushed cutover.
 Native host `execute_pre` dispatch, independent configured pins and persisted
 invocation custody, the runtime/profile/timing/cleanup response, public handoff
 and actual VM qualification remain the next implementation and proof boundaries.
+
+### Host PRE invocation journal
+
+This implements the pre-create custody portion of the reviewed native plan:
+use the existing Smol lease and startup recovery owner, persisting PRE operation,
+CHECKERS run ID (the reservation attempt ID), source operation, request/source/
+profile/image/configuration digests and execution fence before guardian or
+provider creation. The allowed scope is the existing Smol service implementation,
+its PRE module and tests, and this record. Public dispatch, response assembly,
+policy decisions, source streaming and provider qualification are not claimed by
+this step. Shared POST/trial creation and cleanup remain the same operations.
+
+This is architecture/security-sensitive L1 work under the prior native plan
+review. Acceptance requires one PRE create attempt, malformed binding refusal
+before persistence, and pending cleanup evidence only for the exact retained
+private journal captured at creation. Node admission is quarantined even when
+that evidence cannot be recovered. Recovery remains owned by the existing
+lease guardian/startup reaper. Human and architecture/security review should
+focus on pre-create ordering, identity binding, replaced-file refusal and the
+absence of any inferred native qualification. QA/test-delta review should
+exercise fence/source changes, inode replacement, links and permission loss,
+plus the existing shared Smol tests. The public execute_pre handler and use of
+this journal in its response remain required subsequent integration.
+
+The portable journal suite passes all 42 selected shared Smol tests, including
+four PRE tests. Real filesystem probes reject changed source/fence, replacement
+inode, symlink, hardlink and unsafe file/parent permissions. A failed guardian
+handshake leaves one pre-bound journal; malformed input leaves none. Separate
+probes prove quarantine both with retained custody and after journal loss. These
+are journal/admission proofs, not successful guardian recovery or VM execution.
+Formatting, diff, Commitrail and Markdown link checks pass. The new PRE entry
+methods are not yet called by the public host dispatch; compiler dead-code
+warnings reflect that unfinished integration rather than a runtime proof.

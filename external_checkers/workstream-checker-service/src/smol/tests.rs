@@ -99,6 +99,7 @@ fn foreign_lease_refuses_recovery_before_any_runtime_or_owned_cleanup() {
         root: leases.clone(),
         runtime,
         private_home_root: None,
+        pre: None,
     };
     let owned = lease.path();
     fs::write(&owned, serde_json::to_vec(&lease).unwrap()).unwrap();
@@ -261,6 +262,7 @@ fn private_child_home_is_derived_from_the_exact_lease() {
         root: lease_root,
         runtime,
         private_home_root: Some(child_home_root),
+        pre: None,
     };
     assert!(lease.valid());
     lease.runtime.home = root.join("shared-or-foreign-home");
@@ -346,12 +348,24 @@ fn intake_overlay_is_explicit_in_runtime_argv_and_project_creation_is_unchanged(
         root: root.join("leases"),
         runtime,
         private_home_root: None,
+        pre: None,
     };
     fs::create_dir_all(lease.cgroup()).unwrap();
     // A private ordinary file substitutes the cgroup control, with no host effect.
     fs::write(lease.cgroup().join("cgroup.procs"), b"").unwrap();
+    fs::create_dir_all(&lease.root).unwrap();
+    let bytes = serde_json::to_vec(&lease).unwrap();
+    let mut file = OpenOptions::new()
+        .create_new(true)
+        .write(true)
+        .mode(0o600)
+        .open(lease.path())
+        .unwrap();
+    file.write_all(&bytes).unwrap();
+    let journal = pre::Journal::capture(&file, &bytes).unwrap();
     let mut machine = Machine {
         lease,
+        journal,
         guardian: Command::new("/bin/true").spawn().unwrap(),
         keeper: None,
         consumed: false,

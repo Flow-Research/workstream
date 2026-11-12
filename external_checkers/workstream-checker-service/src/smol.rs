@@ -34,6 +34,7 @@ pub(crate) mod trial;
 mod trial_io;
 pub(super) use intake::{serve as serve_intake, IntakeConfig};
 mod io;
+mod pre;
 pub(super) use io::{ProjectCallbacks, ProjectMaterials};
 
 #[derive(Clone, Copy)]
@@ -93,9 +94,12 @@ struct Lease {
     runtime: SmolConfig,
     #[serde(default)]
     private_home_root: Option<PathBuf>,
+    #[serde(default)]
+    pre: Option<pre::Invocation>,
 }
 struct Machine {
     lease: Lease,
+    journal: pre::Journal,
     guardian: Child,
     keeper: Option<std::process::ChildStdin>,
     consumed: bool,
@@ -511,6 +515,10 @@ impl Lease {
                     && root != &self.root
                     && self.runtime.home == self.private_home_path()
             })
+            && self
+                .pre
+                .as_ref()
+                .is_none_or(|invocation| self.private_home_root.is_none() && invocation.valid())
     }
     fn inventory(&self, deadline: Instant) -> Result<bool, String> {
         let output = control(
@@ -654,7 +662,7 @@ impl Machine {
         resources: Resources,
         deadline: Instant,
     ) -> Result<Self, ExecutionFailure> {
-        Self::create_inner(config, resources, deadline, None)
+        Self::create_inner(config, resources, deadline, None, None)
     }
 
     pub(super) fn create_child(
@@ -680,6 +688,7 @@ impl Machine {
             resources,
             deadline,
             Some(child_home_root.to_owned()),
+            None,
         )
     }
 
@@ -688,7 +697,16 @@ impl Machine {
         resources: Resources,
         deadline: Instant,
         private_home_root: Option<PathBuf>,
+        pre: Option<pre::Invocation>,
     ) -> Result<Self, ExecutionFailure> {
+        if pre.as_ref().is_some_and(|invocation| !invocation.valid())
+            || (pre.is_some() && private_home_root.is_some())
+        {
+            return Err(ExecutionFailure::ordinary(
+                "implementation_unavailable",
+                false,
+            ));
+        }
         let mut s = settings(config)
             .map_err(|_| ExecutionFailure::ordinary("implementation_unavailable", false))?
             .clone();
@@ -745,6 +763,7 @@ impl Machine {
             root,
             runtime: s,
             private_home_root,
+            pre,
         };
         let bytes = match serde_json::to_vec(&lease) {
             Ok(bytes) => bytes,
@@ -786,6 +805,8 @@ impl Machine {
         File::open(&lease.root)
             .and_then(|f| f.sync_all())
             .map_err(|_| ExecutionFailure::unsettled(false))?;
+        let journal =
+            pre::Journal::capture(&file, &bytes).map_err(|_| ExecutionFailure::unsettled(false))?;
         // Persist ownership before any runtime resource is created. The guardian
         // is a distinct exec with its own lifetime and only this lease's custody.
         let mut guardian =
@@ -820,6 +841,7 @@ impl Machine {
         }
         let mut machine = Self {
             lease,
+            journal,
             guardian,
             keeper,
             consumed: false,
