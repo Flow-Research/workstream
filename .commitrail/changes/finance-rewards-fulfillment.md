@@ -255,6 +255,7 @@ real public API/durable-worker drill remain final PR requirements.
 | Obligation wire validation | Focused COMP/FIN contract suite and Ruff | 76 cases passed; lint passed | Pure input proof only; no source authority, runtime activation or payment proof |
 | Full-award reports and exceptions | Both owner contract paths, shared positive/negative fixtures | 164 combined contract cases passed; scoped lint and module boundaries passed | No receipt persistence, source authority or provider-finality proof |
 | Retained-reward preflight | Isolated PostgreSQL runner: initial 15-test suite plus 4 affected-source repair tests | Passed, including live work, dual awards, read-only DML rejection, seeded corruption, unsupported human evidence and unknown schema; cleanup confirmed | Supports the pinned pre-v2 schema only; no actual migration fence or cutover proof |
+| Genuine v1 archive inputs | Two current-owner captures; three real PostgreSQL restore/replay controls | Captures and controls passed; exact 18-decimal money retained, stored create/import responses replay exactly under fresh authority | Pre-v2 proof; rerun across the v2 forward migration before claiming preservation |
 
 ## Review findings
 
@@ -298,6 +299,17 @@ The source-qualification repair passed focused security/QA/test-delta replay at
 `70a60846b`. The next v2 policy/selection plan passed at `629149638` after adding
 explicit retained TASK create/import digest, response and membership handling;
 new defaults must not rewrite historical canonical field sets.
+
+Before replacing the writer, captured genuine dual awards and omitted-size
+task/import receipts from the unchanged pre-v2 owners. The first uncommitted
+capture exposed JSON-float precision loss; discarded it and preserved scalar
+NUMERIC values as exact strings with verified column metadata. The existing
+restore helper now validates and compares that representation without changing
+old archive behavior. The new archives have fixed checksums, and the controls
+prove exact decimal restoration, provider-free original response replay, fresh
+authorization and changed-request conflicts. Cross-v2 migration proof remains
+required. The one-time capture utility refuses changed writer code and cannot
+serve as a new v1 writer after replacement.
 
 ## Reconciliation
 

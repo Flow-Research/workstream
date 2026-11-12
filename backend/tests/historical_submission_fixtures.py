@@ -24,7 +24,7 @@ import asyncpg
 
 from app.core.hashing import canonical_json_hash
 from app.db import session as db_session
-from conftest import _assert_owned_test_database
+from tests.conftest import _assert_owned_test_database
 
 
 _ARCHIVE = Path(__file__).with_name("fixtures") / "pilot04_predecessor_rows.json.gz"
@@ -200,6 +200,9 @@ async def _restore_validated_snapshot_rows(
         """))
         assert set(tables).issubset(database_tables), "archived table inventory differs"
         table_columns: dict[str, tuple[str, ...]] = {}
+        numeric_columns = snapshot.get("numeric_columns")
+        if numeric_columns is not None:
+            assert set(numeric_columns) == set(tables), "archived numeric table inventory differs"
         for table in tables:
             columns = tuple(await connection.fetchval("""
                 SELECT array_agg(column_name ORDER BY ordinal_position)
@@ -210,6 +213,13 @@ async def _restore_validated_snapshot_rows(
             assert all(set(row) == set(columns) for row in snapshot["tables"][table]), (
                 f"archived columns differ for {table}"
             )
+            if numeric_columns is not None:
+                actual_numeric = list(await connection.fetchval("""
+                    SELECT coalesce(array_agg(column_name ORDER BY ordinal_position), ARRAY[]::text[])
+                    FROM information_schema.columns
+                    WHERE table_schema='public' AND table_name=$1 AND data_type='numeric'
+                """, table))
+                assert numeric_columns[table] == actual_numeric, "archived numeric columns differ"
         original_triggers = await _trigger_state(connection)
         original_foreign_keys = await _foreign_keys(connection)
         original_fk_state = tuple(
@@ -276,9 +286,18 @@ async def _restore_validated_snapshot_rows(
             nonempty = tuple(nonempty_tables)
             assert nonempty == tables, "archived nonempty table inventory differs"
             for table in tables:
+                projection = "to_jsonb(r)"
+                if numeric_columns is not None:
+                    # Preserve exact NUMERIC values as strings; a JSON float
+                    # round trip can silently erase original economic precision.
+                    for column in numeric_columns[table]:
+                        literal = "'" + column.replace("'", "''") + "'"
+                        projection += (
+                            f" || jsonb_build_object({literal},r.{_identifier(column)}::text)"
+                        )
                 actual = sorted(
                     (json.loads(row["value"]) for row in await connection.fetch(
-                        f"SELECT to_jsonb(r)::text AS value "
+                        f"SELECT ({projection})::text AS value "
                         f"FROM public.{_identifier(table)} r"
                     )),
                     key=lambda row: json.dumps(
