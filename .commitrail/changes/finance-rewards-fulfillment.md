@@ -92,12 +92,29 @@ Closed report categories and fixed predicates:
 - `saved_task_commands`, `saved_import_batches`, `saved_import_commands`,
   `saved_policy_operations`, `saved_revision_preparations`: existing receipt/
   event/preparation rows, IDs only; inventory, never rewrite stored JSON.
+- Exact saved selectors are respectively `task_command_receipts.id`,
+  `task_import_batches.id`, `task_import_batch_command_receipts.id`,
+  `contribution_policy_lifecycle_events.id`, and `task_revision_preparations.id`.
+  Also inventory `saved_import_members` from `task_import_batch_members.id`,
+  and `saved_policy_transition_custody` separately from
+  `contribution_policy_transition_custody.operation_id`; these are distinct
+  retained facts and are not silently deduplicated against lifecycle events.
 - `acceptance_source_anomalies`: FinalAcceptance missing exact matching
   Submission/project/task/contributor or missing referenced authorization
-  AUDIT row; blocker. `acceptance_contribution_gaps`: FinalAcceptance without
+  AUDIT row; task-route sources must additionally match their routing manifest's
+  project/task/submission/contributor/content/policy/router/decision and exact
+  final-acceptance ID, with its retained authority receipt valid. Use the
+  existing SQL `task_routing_receipt_valid` as retained authorization proof;
+  do not require a currently active grant or current lifecycle generation.
+  Human sources must match actual accepting Review, lease, reviewer, locked
+  review policy, source project/task/submission/assignment/content and existing
+  source authority AUDIT. No new human acceptance is enabled. Block on a missing
+  or crossed source. `acceptance_contribution_gaps`: FinalAcceptance without
   exact submitter ContributionRecord; blocker.
 - `contribution_source_anomalies`: exact Submission/project/task/artifact
-  mismatch; accepted_submission must match FinalAcceptance and assignment,
+  mismatch, where the canonical artifact hash is
+  `submissions.artifact_content_id -> artifact_contents.sha256` (there is no
+  Submission hash column); accepted_submission must match FinalAcceptance and assignment,
   submitter and policy; completed_review must match actual Review/lease,
   reviewer and reviewer policy. Do not require a current grant for historical
   evidence. Missing/crossed source or policy facts block cutover.
@@ -111,8 +128,18 @@ Planned verification uses a real isolated PostgreSQL database: empty supported
 schema inventory; real existing authorized routing fixture before and after
 acceptance (live blockers disappear, dual awards retained); sample-limit
 truncation; direct DML rejected in the same read-only snapshot; repeated report
-and before/after economic row snapshots unchanged. Synthetic malformed source
-rows are not inserted by bypassing runtime guards. Later migration rehearsal
+and before/after economic row snapshots unchanged. Every blocker also gets a
+reachable negative PostgreSQL control. For diagnostic corruption cases, a
+schema-owning isolated test may temporarily disable USER triggers on one named
+table, change one valid source field to a crossed but physically valid FK/value,
+re-enable triggers and run the read-only diagnostic. This deliberately models
+retained datastore corruption; it proves the diagnostic, never that current
+runtime guards permit that corruption. Keep physical FKs/check constraints,
+restore schema through the existing schema-owning test fixture, and prohibit
+this setup in application code. Required controls cover mismatched acceptance
+source/authority, missing contribution, crossed contribution content, crossed
+award quantity/source, and missing required award; normal owner fixtures cover
+each live-task/assignment/submission/revision blocker. Later migration rehearsal
 adds genuine archived evidence and independent-session cutover races.
 Commands (new test not yet executed): `cd backend && .venv/bin/python
 scripts/run_isolated_tests.py -- .venv/bin/python -m pytest -q
