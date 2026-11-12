@@ -2130,3 +2130,9 @@ source and request digests: the exact configured maximum passes, one byte above
 it fails, and neither allocates a lease. All 46 selected Smol tests pass after
 this test-only repair. Guest/SDK implementation is unchanged from the 52/eight
 passing run. No production guard or test expectation was weakened.
+
+QA/test-delta replay passed clean `95949369f`: the self-consistent source-cap
+boundary test closes the reported gap. Architecture/security's `2f8eb812b`
+production review remains compatible because the replay changes only that test
+and this record. This establishes the portable admission boundary, not a callable
+host PRE service, native provider qualification or end-to-end acceptance.
