@@ -485,6 +485,27 @@ def test_pre_worker_derives_source_manifest_defaults_and_project_request(tmp_pat
     }]}
     assert execution.manifest_body == expected_manifest
     assert execution.manifest_sha256 == canonical_json_hash(expected_manifest)
+    # Build the expected default input independently of the production input
+    # derivation and serializer; only canonical JSON hashing is shared.
+    expected_default_input = {
+        "schema_version": "workstream.default_checker_input.v1",
+        "archive_sha256": "sha256:" + hashlib.sha256(data).hexdigest(),
+        "archive_byte_count": len(data), "archive_media_type": "application/zip",
+        "semantic_manifest_sha256": canonical_json_hash(expected_manifest),
+        "entries": expected_manifest["entries"], "predecessor": None,
+        "predecessor_exists": False, "current_predecessor": None,
+        "current_rules_sha256": lease.reservation.default_context.current_rules_sha256,
+        "predecessor_rules_sha256": None,
+        "packet_sha256": canonical_json_hash({"summary": "", "contributor_attestation": ""}),
+    }
+    assert execution.default_input_sha256 == canonical_json_hash(expected_default_input)
+    assert [(check.check_id, check.status, check.failure_code, check.finding_count)
+            for check in execution.workstream_default.checks] == [
+        ("archive_safe", "passed", None, 0),
+        ("received_identity_exact", "passed", None, 0),
+        ("high_confidence_secrets_absent", "passed", None, 0),
+        ("submission_changed_for_current_rules", "passed", None, 0),
+    ]
     assert execution.observed_source.raw_sha256 == "sha256:" + hashlib.sha256(data).hexdigest()
     assert project["payload"]["request"]["input"]["manifest"] == expected_manifest["entries"]
     with pytest.raises(ValueError, match="already consumed"):
@@ -508,7 +529,7 @@ def test_pre_worker_refuses_host_derived_inputs(tmp_path, field):
         _pre_worker(tmp_path, _archive(), extra_startup={field: {}})
 
 
-@pytest.mark.parametrize("stored", [b"different", b"", _archive() + b"extra"])
+@pytest.mark.parametrize("stored", [b"different", b"", _archive() + b"extra", b"Q" + _archive()[1:]])
 def test_pre_worker_refuses_source_substitution_before_inspection(tmp_path, monkeypatch, stored):
     worker, output, reply, _ = _pre_worker(tmp_path, _archive(), stored_data=stored)
     def forbidden(*args):

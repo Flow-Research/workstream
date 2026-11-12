@@ -1779,3 +1779,14 @@ caller removal, trusted image/root rebuild and actual Smol/KVM qualification are
 still required. The existing old PRE controller cannot use the now POST-only
 prepared worker and must be replaced, not shimmed. No runnable public cutover or
 T4/accepted result authority is claimed by these portable worker tests.
+
+Worker review at `b3aefe559` found no code defect but required two stronger proof
+atoms. The positive ZIP case now builds the default-input body independently of
+the production derivation/serializer and checks its digest plus all four exact
+passing default outcomes. A same-length corrupt ZIP joins the source substitutions.
+The expanded module passes 46 cases. Removing only the raw SHA comparison makes
+exactly the same-length case fail while the three size controls pass. Changing
+the shared default-input serializer's rules digest makes the independent expected
+digest assertion fail even though production producer and validator agree with
+each other. Both mutations were reverted. These probes establish portable source
+and default derivation checks, not runtime/profile or native isolation evidence.
