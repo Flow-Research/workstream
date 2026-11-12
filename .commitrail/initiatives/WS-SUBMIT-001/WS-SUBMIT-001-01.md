@@ -1319,3 +1319,13 @@ applies with measured schema fingerprint
 The repaired PostgreSQL lifecycle/negative/repeat-upgrade command will run after
 this candidate is committed, so its receipt can identify the actual head.
 Required re-review and full live caller/result/read/runtime cutover remain open.
+
+The repaired exact-head PostgreSQL run at `2910cdef5` completed with 13 passes,
+one failure and cleanup confirmed. Source/packet/rules/predecessor substitutions,
+versioned digest comparison and repeat migration passed. The positive lifecycle
+case stopped before claim because its fixture lacked the fixed PRE service actor
+(`ACTOR_NOT_FOUND`); no terminal-guard claim is credited from that run. Both
+review tracks confirmed the prior code findings repaired but held proof pending
+this fixture correction. The positive case now provisions only
+`CHECKER_PRE_SUBMIT` through the existing real service-principal fixture helper,
+without altering production authorization or resetting an existing principal.

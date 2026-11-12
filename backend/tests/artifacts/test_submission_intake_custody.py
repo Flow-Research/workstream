@@ -1223,12 +1223,15 @@ async def test_selected_pre_sql_audit_digest_keeps_versioned_custody(isolated_da
 
 async def _assert_pre_terminal_guards(intake, request):
     """Claim with real AUTH, reject rebound terminal updates, then finalize once."""
+    from app.modules.actors.api import ServiceIdentity
+    from tests.checkers.execution.support import provision_post_submit_service
     from app.adapters.auth import selected_pre_submit_authority
     from app.adapters.checkers import selected_pre_submit_coordinator
     from app.core.hashing import canonical_json_hash
     from app.modules.checkers.api.selected_pre_submit import SelectedPreSubmitFinalizeFacts, SelectedPreSubmitTerminalFacts
     from app.modules.checkers.models import SelectedPreSubmitRun
 
+    await provision_post_submit_service(intake.factory, ServiceIdentity.CHECKER_PRE_SUBMIT)
     async with intake.factory.begin() as session:
         async with selected_pre_submit_authority(session).prepare_execution(request) as authority:
             lease = await selected_pre_submit_coordinator(session).claim(
