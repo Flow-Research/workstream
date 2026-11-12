@@ -161,6 +161,60 @@ partial-quantity negatives. No routes, receipt store, new policy writer or
 provider implementation is introduced by this continuation. Verification is
 the focused contract suite plus canonicalization and shape adversarial controls.
 
+### Next implementation boundary: v2 policy and exact task reward selection
+
+This closes specification sections 4–6 and the policy/selection portion of
+section 17, before fulfillment activation. Allowed: existing CON policy public
+inputs/views, draft/publication/eligibility/graph/units owners; COMP award and
+participation contracts; TASK create/import/screen/release/claim, contributor
+reads, submission and revision owners; ART admission context; AUTH policy
+permissions; their adapter roots, REST/CLI/MCP callers, focused fixtures/tests,
+new forward Alembic revisions, preflight support for those exact revisions and
+affected canonical policy/task/revision documentation. Finance execution,
+provider calls, new human-review runtime and fulfillment handlers stay excluded.
+
+Implementation decisions to review before runtime edits:
+
+- Replace the current per-definition authoring shape with the specified common
+  header and three-size/fixed-reviewer/unpaid rule shapes. Reject superseded
+  input; do not maintain two authoring paths. Preserve per-definition facts in
+  historical views. PM and FM share all six existing project policy actions;
+  units/bindings remain Finance-only. Extend the existing unit command for money.
+- Add v1 markers to retained policy versions/definitions/awards mechanically,
+  preserving IDs, quantities and every stored digest/response. New policy and
+  award inserts require v2; only a complete authorized replacement can upgrade
+  an unpublished v1 draft. V1 publication/new acceptance is forbidden. Historical
+  replay stays select-only, including dual awards and originally absent fields.
+- Forward migration reruns the preflight blockers under the shared lifecycle
+  and table cutover fence; live v1 tasks/assignments/submissions/preparations or
+  source anomalies abort the transaction. Retained terminal facts remain. Add
+  composite version/definition lineage and partial uniqueness, replacing the
+  superseded global definition uniqueness and graph validator in place. Do not
+  edit old migrations. Extend exact preflight support with the new revision.
+- New task insertion stores a size (omission resolves to small; explicit null
+  fails). CON resolves a size only under the screened active guide's exact
+  policy; TASK copies its selected definition into assignment and immutable
+  Submission. PostgreSQL enforces the same copy chain and immutable size.
+  Retained unscreened drafts may receive small; immutable v1 submissions keep
+  null. Public projections must never choose the newest policy or another tier.
+- Revision retains size and records prior/target reward facts beside activation
+  lineage, hashes both selections, and atomically rebases continuing TASK and
+  assignment context through the existing operation. Preserve deadline/round
+  guards and exact acknowledgement; permit both higher and lower terms.
+- Shared acceptance obtains the selected definition from locked immutable
+  submission facts and creates exactly one v2 award or zero for unpaid. Replace
+  the old all-definitions new-write path. Historical v1 read/replay result types
+  still represent two instruments; no global one-award validator may erase them.
+
+Required proof: focused policy shape/graph/AUTH tests, direct-SQL version/tier
+and copy-chain rejection, complete public sized-task flow, exact first-submission
+terms after later publication, higher/lower governed revision and acknowledgement,
+atomic acceptance rollback/concurrency/replay, retained dual history, and migration
+refusal with a live v1 source. Existing owner fixtures must originate new v2
+graphs through the replacement writer; retain explicit archived v1 fixtures for
+history/migration instead of adding old-writer compatibility. Shared checks and
+real public API/durable-worker drill remain final PR requirements.
+
 ## Acceptance criteria
 
 - [ ] Positive/negative contract fixtures reproduce canonical digest vectors and reject altered evidence.
