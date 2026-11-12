@@ -1157,8 +1157,10 @@ restart it or misattribute its eventual result to the repair.
 
 The source-custody boundary passed scoped architecture/security and QA at
 `3cee7cc5f`; 371 contract/ownership/lane/architecture tests also passed, with an
-unchanged ownership partition. Its full PostgreSQL custody run remains separate
-from the focused evidence until the exact running command completes.
+unchanged ownership partition. The full PostgreSQL run at `3cee7cc5f` passed
+all 69 custody cases plus the original unmodified outbox cancellation test:
+70 passed in 642.52 seconds, with database cleanup confirmed. The earlier CI
+timeout did not reproduce locally; this does not erase that failed CI result.
 
 The outbox observation repair passed two focused real-PostgreSQL tests and QA
 at `16704ddd6`. Mutating only `invoke` in memory to await the cancelled handler
@@ -1166,3 +1168,25 @@ before finalization made the repaired test fail at the two-second finalization
 entry event. The mutation receipt records the exact commit and successful database
 cleanup. This proves the test retains the cancellation-ordering boundary; it is
 not a production outbox change or a claim that the original full CI run passed.
+
+
+Source-first reservation review resolved the remaining historical-data boundary:
+retain v1 JSON/digests/status verbatim, including nonterminal historical rows;
+make them read-only rather than fabricating terminal outcomes or migration AUTH.
+Reject new v1 writes/transitions and v1 actor/key collisions as conflicts. The
+live coordinator is v2-only; old prepared-bundle producer and capability consumer
+are replaced together. A frozen v1 read decoder is evidence interpretation only.
+
+The concrete SQL transition must cover the existing 0036 insert, immutable-row,
+execute/finalize audit-digest and receipt guards, not just ORM columns. Add a
+nullable source operation reference with the existing `(id, task_id)` ART
+composite key and uniqueness per non-null operation. The v2 insert guard also
+compares project/assignment/actor/link and the full sealed descriptor under the
+locked operation. Explicitly confine old ART admission guards to historical v1.
+Request facts bind source, locked context/packet/predecessor, exact selected
+policy/image/config/default/profile/resource limits and immutable PRE deadline;
+manifest/default input become terminal evidence. Mutable heartbeat expiry is
+excluded. Claims/finalization use DB time and cannot outlive ART's hard deadline.
+Architecture/security found this replacement feasible; it is not implemented by
+the preceding source-lock port. Fetched `origin/main` remains `94334ccf4`, already
+an ancestor of this branch.
