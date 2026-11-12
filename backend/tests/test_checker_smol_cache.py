@@ -16,7 +16,7 @@ def sha(raw):
     return "sha256:" + hashlib.sha256(raw).hexdigest()
 
 
-def bundle(root, *, compressed=False, defect=None):
+def bundle(root, *, compressed=False, defect=None, volumes=True):
     layer_output = io.BytesIO()
     with tarfile.open(fileobj=layer_output, mode="w", format=tarfile.USTAR_FORMAT) as output:
         info = tarfile.TarInfo("usr/bin/checker")
@@ -28,7 +28,7 @@ def bundle(root, *, compressed=False, defect=None):
                   "digest": sha(blob), "size": len(blob)}
     config = json.dumps({"os": "linux", "architecture": "amd64",
                          "rootfs": {"type": "layers", "diff_ids": [sha(layer)]},
-                         "config": {"Entrypoint": ["/checker"], "Volumes": {"/busybox": {}}}}).encode()
+                         "config": {"Entrypoint": ["/checker"], "Volumes": {"/busybox": {}} if volumes else {}}}).encode()
     manifest = {"schemaVersion": 2, "mediaType": "application/vnd.oci.image.manifest.v1+json",
                 "config": {"digest": sha(config), "size": len(config),
                            "mediaType": "application/vnd.oci.image.config.v1+json"},
@@ -269,3 +269,195 @@ def test_cli_requires_a_distinct_archive_output(tmp_path, monkeypatch, capsys):
     assert error.value.code == 2
     assert "--archive-output" in capsys.readouterr().err
     assert not (tmp_path / "config.json").exists()
+
+
+def root_export(entries):
+    """A flattened image export, independent of contributor ZIP handling."""
+    output = io.BytesIO()
+    with tarfile.open(fileobj=output, mode="w") as archive:
+        for name, kind, content in entries:
+            item = tarfile.TarInfo(name)
+            item.type = kind
+            if kind == tarfile.REGTYPE:
+                item.size = len(content)
+                item.mode = 0o4755
+                archive.addfile(item, io.BytesIO(content))
+            else:
+                if kind in {tarfile.SYMTYPE, tarfile.LNKTYPE}:
+                    item.linkname = content
+                archive.addfile(item)
+    output.seek(0)
+    return output
+
+
+def test_trusted_root_bundle_normalizes_links_and_keeps_bytes():
+    """Flattened hardlinks retain content; symlinks follow all file records."""
+    import struct
+    from scripts.checker_trusted_root import MAGIC, pack_root
+
+    source = root_export([
+        ("usr/bin/python", tarfile.REGTYPE, b"trusted interpreter"),
+        ("usr/bin/python3", tarfile.LNKTYPE, "usr/bin/python"),
+        ("bin", tarfile.SYMTYPE, "usr/bin"),
+    ])
+    output = io.BytesIO()
+    facts = pack_root(source, output, identity={"test": "identity"},
+                      maximum_entries=10, maximum_bytes=100)
+    output.seek(0)
+    assert output.read(len(MAGIC)) == MAGIC
+    records, files = [], {}
+    while raw := output.read(4):
+        value = json.loads(output.read(struct.unpack(">I", raw)[0]))
+        records.append(value)
+        if value["kind"] == "file":
+            files[value["path"]] = output.read(value["byte_count"])
+    assert files == {"usr/bin/python": b"trusted interpreter", "usr/bin/python3": b"trusted interpreter"}
+    assert [item["kind"] for item in records] == ["identity", "directory", "directory", "file", "file", "symlink", "end"]
+    assert all(set(item) == {"kind", "path", "byte_count", "executable"}
+               for item in records if item["kind"] == "file")
+    assert facts == {"expanded_bytes": 38, "entries": 5}
+
+
+@pytest.mark.parametrize("entries", [
+    [("../escape", tarfile.REGTYPE, b"x")],
+    [("/escape", tarfile.REGTYPE, b"x")],
+    [("x", tarfile.REGTYPE, b"x"), ("x", tarfile.REGTYPE, b"y")],
+    [("a", tarfile.SYMTYPE, "/outside"), ("a/b", tarfile.REGTYPE, b"x")],
+    [("a", tarfile.LNKTYPE, "b"), ("b", tarfile.LNKTYPE, "a")],
+    [("a", tarfile.SYMTYPE, "b"), ("b", tarfile.LNKTYPE, "a")],
+    [("device", tarfile.CHRTYPE, "")],
+])
+def test_trusted_root_refuses_paths_special_files_and_link_ancestry(entries):
+    from scripts.checker_trusted_root import pack_root
+
+    with pytest.raises(ImageError):
+        pack_root(root_export(entries), io.BytesIO(), identity={}, maximum_entries=20, maximum_bytes=100)
+
+
+def test_trusted_root_charges_hardlink_expansion_and_implicit_directories():
+    from scripts.checker_trusted_root import pack_root
+
+    source = [("a/b/c", tarfile.REGTYPE, b"12345"), ("copy", tarfile.LNKTYPE, "a/b/c")]
+    with pytest.raises(ImageError, match="hardlink expansion"):
+        pack_root(root_export(source), io.BytesIO(), identity={}, maximum_entries=10, maximum_bytes=9)
+    with pytest.raises(ImageError, match="implicit directory"):
+        pack_root(root_export(source), io.BytesIO(), identity={}, maximum_entries=3, maximum_bytes=20)
+
+
+@pytest.mark.parametrize("defect", [None, "image", "container", "started", "export"])
+def test_root_export_requires_exact_never_started_container_and_cleans_owned_id(monkeypatch, defect):
+    import time
+    from scripts import checker_trusted_root as root
+
+    config_id, container_id = "sha256:" + "1" * 64, "2" * 64
+    config = {"rootfs": {"diff_ids": ["sha256:" + "3" * 64]}}
+    calls, state = [], {}
+
+    def command(argv, **kwargs):
+        calls.append(argv)
+        if argv[1:3] == ["image", "inspect"]:
+            return json.dumps([{"Id": "other" if defect == "image" else config_id,
+                                "Os": "linux", "Architecture": "amd64",
+                                "RootFS": {"Layers": config["rootfs"]["diff_ids"]}, "Config": {}}]).encode()
+        if argv[1] == "create":
+            assert "--pull=never" in argv and argv[-1] == config_id
+            state["token"] = argv[argv.index("--label") + 1].split("=", 1)[1]
+            return container_id.encode()
+        if argv[1:3] == ["container", "inspect"]:
+            return json.dumps([{"Image": "other" if defect == "container" else config_id,
+                                "Config": {"Labels": {"workstream.root-provision": state["token"]}},
+                                "State": {"Status": "running" if defect == "started" else "created", "Running": defect == "started"}}]).encode()
+        if argv[1] == "export":
+            if defect == "export":
+                raise ImageError("export failed")
+            kwargs["stdout_sink"].write(b"root bytes")
+        elif argv[1] == "rm":
+            assert argv == ["docker", "rm", container_id]
+        else:
+            pytest.fail(f"unexpected Docker command {argv}")
+        return b""
+
+    monkeypatch.setattr(root, "run", command)
+    output = io.BytesIO()
+    if defect:
+        with pytest.raises(ImageError):
+            root.export_root("docker", config_id, config, output, maximum_bytes=1000, deadline=time.monotonic() + 10)
+    else:
+        root.export_root("docker", config_id, config, output, maximum_bytes=1000, deadline=time.monotonic() + 10)
+        assert output.getvalue() == b"root bytes"
+    assert not any("start" in item or "pull" in item for item in calls)
+    assert any(item[1] == "rm" for item in calls) == (defect in {None, "export"})
+    assert any(item[1] == "export" for item in calls) == (defect in {None, "export"})
+
+
+@pytest.mark.parametrize("failure", [False, True])
+def test_trusted_root_publication_binds_verified_graph_and_removes_partial_bundle(tmp_path, monkeypatch, failure):
+    from scripts import checker_trusted_root as root
+
+    archive, manifest, config_id = bundle(tmp_path, volumes=False)
+    def export(docker, selected_id, config, sink, **kwargs):
+        assert selected_id == config_id
+        assert config["rootfs"]["diff_ids"]
+        sink.write(root_export([("python", tarfile.REGTYPE, b"trusted")]).read())
+    monkeypatch.setattr(root, "export_root", export)
+    kwargs = dict(archive_output=tmp_path / "cache.tar", config_output=tmp_path / "config.json",
+                  bundle_output=tmp_path / "root.bundle", descriptor_output=tmp_path / "root.json",
+                  docker="docker", default_behavior_sha256=sha(b"behavior"),
+                  maximum_export_bytes=100000, maximum_root_bytes=1 if failure else 100,
+                  maximum_entries=10, timeout_seconds=5)
+    if failure:
+        with pytest.raises(ImageError, match="expanded byte limit"):
+            root.provision_root(archive, "trusted/intake", manifest, **kwargs)
+        assert not kwargs["bundle_output"].exists()
+        assert not kwargs["descriptor_output"].exists()
+    else:
+        receipt = root.provision_root(archive, "trusted/intake", manifest, **kwargs)
+        assert receipt["config_image_id"] == config_id
+        assert receipt["platform_manifest_digest"] == manifest
+        assert receipt["bundle_sha256"] == sha(kwargs["bundle_output"].read_bytes())
+        assert receipt["bundle_byte_count"] == kwargs["bundle_output"].stat().st_size
+        assert json.loads(kwargs["descriptor_output"].read_bytes()) == receipt
+        assert kwargs["bundle_output"].stat().st_mode & 0o777 == 0o400
+
+
+def test_uncertain_root_container_creation_discovers_exact_owned_id_for_cleanup(monkeypatch):
+    import time
+    from scripts import checker_trusted_root as root
+
+    image_id, container_id = sha(b"image"), "a" * 64
+    diff_ids = [sha(b"layer")]
+    state, calls = {}, []
+    def command(argv, **kwargs):
+        calls.append(argv)
+        if argv[1:3] == ["image", "inspect"]:
+            return json.dumps([{"Id": image_id, "Os": "linux", "Architecture": "amd64",
+                                "RootFS": {"Layers": diff_ids}, "Config": {}}]).encode()
+        if argv[1] == "create":
+            state["token"] = argv[argv.index("--label") + 1].split("=", 1)[1]
+            state["name"] = argv[argv.index("--name") + 1]
+            raise ImageError("create acknowledgement lost")
+        if argv[1] == "ps":
+            assert "name=^/" + state["name"] + "$" in argv
+            assert "label=workstream.root-provision=" + state["token"] in argv
+            return container_id.encode()
+        if argv[1:3] == ["container", "inspect"]:
+            assert argv[-1] == container_id
+            return json.dumps([{"Image": image_id, "State": {"Status": "created", "Running": False},
+                                "Config": {"Labels": {"workstream.root-provision": state["token"]}}}]).encode()
+        assert argv == ["docker", "rm", container_id]
+        return b""
+    monkeypatch.setattr(root, "run", command)
+    with pytest.raises(ImageError, match="acknowledgement lost"):
+        root.export_root("docker", image_id, {"rootfs": {"diff_ids": diff_ids}}, io.BytesIO(),
+                         maximum_bytes=100, deadline=time.monotonic() + 10)
+    assert calls[-1] == ["docker", "rm", container_id]
+    assert not any(item[1] == "export" for item in calls)
+
+
+def test_root_pack_cannot_publish_after_deadline():
+    import time
+    from scripts.checker_trusted_root import pack_root
+
+    with pytest.raises(ImageError, match="deadline"):
+        pack_root(root_export([("python", tarfile.REGTYPE, b"trusted")]), io.BytesIO(),
+                  identity={}, maximum_entries=10, maximum_bytes=100, deadline=time.monotonic() - 1)

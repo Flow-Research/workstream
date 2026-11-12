@@ -107,6 +107,7 @@ CHECKER_IMAGE_PUBLISH_TARGETS = frozenset({
     "backend/scripts/checker_image_process.py",
     "backend/scripts/checker_image_manifest.py",
     "backend/scripts/checker_smol_cache.py",
+    "backend/scripts/checker_trusted_root.py",
     "backend/scripts/checker_image_samples.py",
 })
 AWS_ARTIFACT_ACTIVATION_TARGETS = frozenset({

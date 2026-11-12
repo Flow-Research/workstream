@@ -458,3 +458,38 @@ This matrix proves the adapter/ART boundary. The separate
 connects the same node to API uploads and durable workers, including the public
 Operator retry and both governed policy branches. Its recorded Flow/inference
 fixtures do not certify production identity, live models or hosted deployment.
+
+### Trusted root provisioning for single-session PRE development
+
+`backend/scripts/checker_trusted_root.py` provisions a separate pinned Python
+root for the single-session PRE supervisor under development. This command and
+the guest bundle reader do not yet replace the current submission PRE flow or
+establish native runtime qualification.
+
+The command first verifies the approved local image graph with the existing Smol
+cache provisioner. A trusted offline Docker daemon must already contain that
+exact config image ID. It checks the platform and ordered layer identities,
+creates a container with pulling disabled, verifies its exact image and created
+state, exports without starting it, and removes the owned container. Images with
+volumes are refused. The daemon is build infrastructure; it is not used for PRE
+execution, and no submission bytes enter this provisioning path.
+
+Run the module from `backend/` with `--archive`, `--repository`, `--manifest`,
+`--archive-output` and `--config-output` as for the cache command. Also supply
+new `--bundle-output` and `--descriptor-output` paths, `--docker`,
+`--default-behavior-sha256`, `--maximum-export-bytes`, `--maximum-root-bytes`,
+`--maximum-entries`, and `--timeout-seconds`. All bounds and identities are
+explicit; the command does not choose deployment values. Keep the emitted
+bundle and descriptor operator-controlled and pin their identities independently
+before use. Completed cache files may remain if later bundle provisioning fails;
+a partial bundle/descriptor never establishes readiness.
+
+The `WSROOT1` format carries bounded closed JSON records and inline regular-file
+bytes. Hard links become independently charged file content; symlinks are
+installed last. No image paths are extracted on the host. The guest library
+verifies the entire bounded spool and descriptor, stages into a fresh private
+root, and rechecks consumed bytes before returning. The caller must provide a
+protected parent, aggregate deadline/cancellation checks, and capacity for both
+the spool and expanded root, then mount the root read-only before executing a
+trusted child. Combined supervisor wiring and native isolation proof remain
+required; this library alone does not authorize project execution.

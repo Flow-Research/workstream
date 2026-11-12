@@ -751,3 +751,28 @@ hardlink/symlink/path attacks, truncation/digest/bounds refusal and a valid Pyth
 root round trip. Native mount/chroot isolation remains a subsequent guest
 integration gate. No backend public cutover, second PRE guest, deployment default
 or provider qualification is included in this provisioning step.
+
+The provisioning implementation now reuses the existing verified image graph
+and bounded subprocess runner. `checker_trusted_root.py` exports only the
+inspected never-started container, resolves uncertain create acknowledgement by
+unique label/name and rechecks ownership before removal. It writes a sealed
+`WSROOT1` bundle and separate descriptor; completed verified cache files may
+remain after bundle failure. Parsing and hardlink expansion have explicit byte,
+entry and deadline checks. No host extraction or image execution occurs.
+
+The guest `trusted_root` library verifies the bounded spool, enforces exact
+platform/config/default identities, rejects invalid path ancestry and record
+ordering, installs links last, and hashes consumed bytes again before returning.
+It creates only a fresh root and removes partial staging on cancellation or
+failure. Its caller must own a protected parent, charge spool plus expanded root,
+and mount the result read-only. The combined PRE supervisor is not wired yet.
+
+Initial focused checks passed 75 Python tests and 170 ownership tests, plus nine
+guest-library tests including source mutation after first verification. The real
+pinned intake image built locally. Its first export hit the subprocess helper's
+unrelated default 120-second timeout despite an explicit 600-second provisioning
+budget; owned-container cleanup succeeded. Export now uses the remaining
+aggregate deadline. Real-image export/staging and final verification remain
+publication gates. A newer local Clippy reports existing workspace warnings;
+the required runtime gate uses CI's pinned Rust 1.84.0 and unchanged test command.
+No native Smol qualification follows from portable guest-library execution.

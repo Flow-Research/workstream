@@ -2557,6 +2557,10 @@
       "target": "backend/scripts/checker_smol_cache.py"
     },
     {
+      "group": "artifacts",
+      "target": "backend/scripts/checker_trusted_root.py"
+    },
+    {
       "group": "shared",
       "target": "backend/scripts/coverage_policy.py"
     },
@@ -2653,7 +2657,7 @@
       "target": "backend/scripts/validate_test_lane_evidence.py"
     }
   ],
-  "authority_digest": "3f4b580a947ef98164cf6df277feee494299cbc506dd9f4d02f2b2e41f436598",
+  "authority_digest": "5093f0ae793900f5aacc8dc30f7b7711e405fa8b36c6b8eba758ddecc8b7f147",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }
