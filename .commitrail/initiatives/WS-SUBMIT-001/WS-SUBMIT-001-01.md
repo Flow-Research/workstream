@@ -3123,3 +3123,43 @@ after acknowledgement. This must complete before claiming the recovery checkpoin
 verified. The one-child limit follows existing reconciliation: exhaustion remains
 held, not an automatic contributor retry. Public operator discovery/command
 routes and the full public operation progress contract remain outstanding.
+
+### Recovery review repair
+
+The additional original-expiry/stale-child run completed successfully:
+`/tmp/t5-recovery5.log` reports **3 passed**, with database/role cleanup confirmed.
+Frozen review of `a32a870f8` nevertheless found direct-SQL custody gaps; typed
+command success was not sufficient proof of those guards. Architecture/security
+required exact retained system Operator grant, actor/link and target binding,
+canonical child payload digest parity, and reason-whitespace parity with the typed
+command. QA also requested a rehashed source substitution and a final authorized
+progress read after child acknowledgement. Documentation identified the adjacent
+stale checker-retry availability label; CI integrity found no guard weakening.
+
+The repair adds those SQL predicates and historical cause checks in AUTH. SQL
+creation checks current active actor/grant/link; worker cause validation preserves
+the accepted decision after later human grant revocation, while still requiring
+its immutable system Operator/actor/link/target associations. Reason trimming uses
+the explicit Python whitespace set and C0/DEL control exclusion rather than a
+locale-dependent SQL character class. The observed repaired schema fingerprint is
+`98e8a90037368efa975e8807d2191da466756e46421f89f114424c6a0d3694cf`
+(`/tmp/t5-recovery-schema4.log`).
+
+The composed test's existing raw SQL reason/nonexistent-decision probes move to
+`test_recovery_sql_requires_exact_source_and_real_operator_cause`, alongside
+source, payload-digest, absent/wrong grant, identity-link, target and Unicode-edge
+reason forgeries. For relevant cases the test first inserts a self-consistent
+forged allow-audit row with recomputed resource digest and proves that row exists
+before attempting the forbidden child; a valid child is the positive control.
+The original journey retains its denial/race/replay/revocation, single Submission
+and dispatch, expired-original and stale-child assertions; it now loses the
+child acknowledgement after T5 and verifies replay plus final contributor progress.
+A shared real setup fixture keeps both tests cohesive, without adding test debt.
+The repaired journey and both progress tests passed in `/tmp/t5-recovery6.log`
+(**3 passed**); its SQL test first failed because the forged fixture copied the
+old audit `entity_id`, so generic audit shape rejected it before the new guard.
+The fixture now gives the forged audit its own matching id/entity id, without
+changing any guard. The focused `/tmp/t5-recovery7.log` run passed (**1 passed**,
+41.18s), exercising all nine SQL forgeries plus valid-child positive control;
+isolated database/role cleanup completed for both runs. Ruff, structure and link
+checks passed. Frozen repair review remains pending.

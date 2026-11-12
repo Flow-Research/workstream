@@ -49,11 +49,24 @@ class SubmissionRecoveryAuthorization:
         command, source, authority = payload.command, payload.source, payload.authority
         digest = authorization_resource_digest(self._resource(command, source, authority.identity_link_id))
         event = (await self._session.execute(text(
-            "SELECT event_type, actor_id, action_id, permission_id, project_id, resource_type, "
-            "resource_id, request_id, correlation_id, denial_code, after_facts "
-            "FROM public.audit_events WHERE id=:decision_id"
-        ), {"decision_id": authority.decision_id})).mappings().one_or_none()
+            "SELECT d.event_domain, d.event_type, d.actor_ref_kind, d.actor_id, d.action_id, "
+            "d.permission_id, d.project_id, d.resource_type, d.resource_id, d.request_id, "
+            "d.correlation_id, d.denial_code, d.after_facts, d.target_ref_kind, d.target_ref_id, "
+            "EXISTS (SELECT 1 FROM public.admin_role_grants g WHERE g.id::text=d.matched_grant_id "
+            "AND g.target_actor_profile_id=:actor AND g.role='operator' AND g.scope_type='system' "
+            "AND g.scope_project_id IS NULL) AS operator_grant, "
+            "EXISTS (SELECT 1 FROM public.actor_profiles p WHERE p.id=:actor "
+            "AND p.actor_kind='human') AS human_actor, "
+            "EXISTS (SELECT 1 FROM public.actor_identity_links l WHERE l.id=:link "
+            "AND l.actor_profile_id=:actor) AS identity_link "
+            "FROM public.audit_events d WHERE d.id=:decision_id"
+        ), {"decision_id": authority.decision_id, "actor": command.actor_profile_id,
+            "link": authority.identity_link_id})).mappings().one_or_none()
         if not (event is not None and authority.resource_digest == digest
+                and event["event_domain"] == "authority" and event["actor_ref_kind"] == "actor_profile"
+                and event["operator_grant"] and event["human_actor"] and event["identity_link"]
+                and event["target_ref_kind"] == "submission_operation"
+                and event["target_ref_id"] == str(source.operation_id)
                 and event["event_type"] == "SensitiveAuthorizationAllowed"
                 and event["actor_id"] == str(command.actor_profile_id)
                 and event["action_id"] == ActionId.OPERATIONS_SUBMISSION_GATE_REPAIR.value
