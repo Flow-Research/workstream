@@ -8,6 +8,12 @@ migration, evidence and joint release gates. PILOT-10's bounded authorized
 contribution evidence reads consume existing facts without activating recognition
 or external fulfillment.
 
+The [size-based rewards and dedicated Finance contract](../workstream_finance_exec.md)
+amends the policy and fulfillment design below. It selects v2 as the sole new
+reward writer while retaining genuine v1 economic evidence. This decision is
+implementation authority, not a payment-availability claim; the
+[capability ledger](roadmap_status.md) owns delivered status.
+
 ## Context
 
 At adoption, the backend carried guide-bound payment terms. Migration
@@ -59,8 +65,20 @@ manual API and no independent authorization action.
 `ContributionPolicy` is the only target award-eligibility aggregate. Immutable
 published `ContributionPolicyVersion` values contain exactly one explicit
 `ContributionRule` for `accepted_submission` and one for `completed_review`.
-Each rule is `unpaid` or `compensated`; compensated rules reference immutable
-money and/or project-points `ContributionAwardDefinition` rows.
+Each rule is `unpaid` or `compensated`. New v2 policy versions use one common
+instrument, unit and adapter binding for all compensated terms. Compensated
+`accepted_submission` rules have exactly three immutable alternatives: small,
+medium and large. Tasks select a size, never an entered amount. Omitted size
+at creation resolves to small; explicit null is invalid. A compensated
+`completed_review` rule has one fixed quantity in the same instrument and unit,
+or is explicitly unpaid. An unpaid rule has no definitions. Wholly unpaid
+versions have null common financial fields.
+
+Screening resolves the exact size under the guide's selected policy. Assignment
+and immutable Submission copy that selected definition. New accepted work earns
+exactly that one award, or zero for an unpaid rule. Retained v1 policies and
+awards may contain two instruments; reads and exact historical replay preserve
+them without permitting new v1 financial effects or rewriting stored digests.
 
 Guide activation validates and binds one policy version. Task readiness locks
 it before claimability; TaskAssignment copies that lock, each Submission stamps
@@ -82,7 +100,8 @@ removes the unused guide-bound economic-policy storage and remaining response,
 repository and CLI consumers through migration 0023. CON-05A/05B and CP09 are
 historical groupings, not another pending removal or an activation gate. No
 alias, fallback, dual read/write or implicit unpaid behavior is introduced.
-Current ContributionPolicy and immutable award semantics remain unchanged.
+The v2 writer replaces the superseded authoring shape within the same owners;
+required read-only business-version evidence is not a parallel old writer.
 
 ### Transaction ownership
 
@@ -134,6 +153,21 @@ already-created awards through ADR 0014 typed capability ports and factories.
 They cannot determine, create, change, or void eligibility. Provider I/O occurs
 after a durable pre-I/O commit and outside database locks and lifecycle fences.
 
+The selected fulfiller is a dedicated Finance module in the same backend,
+database, migration chain and image. It reuses AUTH/ACTORS, AUDIT, OUTBOX and
+Celery/Redis while owning payees, arrangements, conversion, plans and financial
+execution. Workstream owns earned awards, fulfillment roots, receipts and
+exceptions. Admission and reports traverse actual authenticated HTTP after the
+sending local transaction commits; shared hosting permits no direct cross-owner
+financial writes. Points conversion fulfills the original points award and
+creates no additional money award.
+
+One eligible human with the existing scoped `finance_authority` role authorizes
+each initial or replacement bank-transfer attempt. New configured points credit
+has no per-obligation human authorization; historical credit requires explicit
+prior-fulfillment attestation. Unknown provider outcomes reconcile the same
+reference and never authorize a replacement payment.
+
 The shared outbox dispatcher owns only outbox mechanics. Every protected
 handler has independent AUTH-approved authority.
 
@@ -142,8 +176,13 @@ handler has independent AUTH-approved authority.
 REV owns one shared lifecycle controller and mutation fence. Every CON
 fulfillment-obligation writer fences before allocating an immutable monotonic
 root ordinal. During drain, only same-generation roots at or below REV's
-persisted cutoff may complete; no new successor or repair obligation is
-admitted.
+persisted cutoff may initiate Workstream admission/delivery; no new successor
+obligation is admitted. Finance's already admitted obligations retain their
+independent execution eligibility across Workstream phase changes, subject to
+current source/binding, Finance execution and recorded authority guards. Factual
+same-reference observations and authenticated late reports remain recoverable
+after Workstream disablement. Finance execution and callbacks do not become
+Workstream drain dependencies.
 
 Recognition mutation and fulfillment routes remain hidden until their behavior,
 exact AUTH activation and applicable joint release proof pass. Bounded evidence
