@@ -10,6 +10,7 @@ from pydantic import (
     ConfigDict,
     Discriminator,
     Tag,
+    with_config,
 )
 
 from app.modules.compensation.api import CompensationInstrumentType
@@ -185,6 +186,7 @@ PolicyMutationRequest: TypeAlias = (
 )
 
 
+@with_config(ConfigDict(extra="forbid"))
 @dataclass(frozen=True, slots=True, kw_only=True)
 class PolicyDefinitionView:
     """Server-owned immutable compensation definition facts."""
@@ -198,6 +200,7 @@ class PolicyDefinitionView:
     task_size: TaskSize | None
 
 
+@with_config(ConfigDict(extra="forbid"))
 @dataclass(frozen=True, slots=True, kw_only=True)
 class PolicyRuleView:
     """Server-owned immutable contribution rule facts."""
@@ -208,6 +211,7 @@ class PolicyRuleView:
     definitions: tuple[PolicyDefinitionView, ...]
 
 
+@with_config(ConfigDict(extra="forbid"))
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ContributionPolicyView:
     """Authorized immutable view of one exact policy version graph."""

@@ -84,7 +84,7 @@ def invoke(
     output="json",
     token=TOKEN,
 ):
-    selectors = (project,) if action == "current" else (project, selected)
+    selectors = (project,) if action in {"current", "list"} else (project, selected)
     return cli(
         origin,
         token,
@@ -383,3 +383,31 @@ def test_v2_policy_read_preserves_three_tiers_and_rejects_wrong_selection(cli):
                 invoke(cli, origin, "show", "--version", VERSION),
                 "invalid_api_response",
             )
+
+
+def test_policy_read_rejects_partial_draft_and_non_integer_markers(cli):
+    partial = policy()
+    partial.update(version_status="draft", rules=partial["rules"][:1])
+    invalid = [partial, policy() | {"reward_model_version": 1.0}]
+    child = policy(compensated=True)
+    child["rules"][0]["definitions"][0]["reward_model_version"] = 1.0
+    invalid.append(child)
+    with http_fixture() as (origin, response, _):
+        for value in invalid:
+            for action in ("show", "list"):
+                if action == "list":
+                    item = value | {
+                        "created_at": "2026-10-23T10:00:00Z",
+                        "published_at": None
+                        if value["version_status"] == "draft"
+                        else "2026-10-23T10:00:00Z",
+                        "retired_at": None,
+                    }
+                    response["body"] = json.dumps(
+                        {"items": [item], "next_cursor": None}
+                    ).encode()
+                    result = invoke(cli, origin, action)
+                else:
+                    response["body"] = json.dumps(value).encode()
+                    result = invoke(cli, origin, action, "--version", VERSION)
+                assert_failure(result, "invalid_api_response")

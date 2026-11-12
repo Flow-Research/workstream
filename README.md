@@ -544,18 +544,20 @@ Submission and checker history use live exact-project Submitter authority for th
 original contributor. Separate `/projects/{project_id}` reads require a covering
 Project Manager grant and expose fixed management fields. Token roles confer no
 authority and authentication returns only the verified identity contract.
-Finance Authority can publicly discover, create, update, publish,
-read and retire a project's ContributionPolicy under
+Project Managers and Finance Authority with a current covering grant can
+publicly list, discover, create, update, publish, read and retire a project's ContributionPolicy under
 `/api/v1/projects/{project_id}/contribution-policies`. The current-policy read
 recovers a draft selector, a published selector, or both for another authorized
-Finance actor.
+policy manager.
 Each mutation requires one UUID `Idempotency-Key`. AUTH owns the authorization
 decision for the authenticated actor; the CON caller transaction atomically commits
 policy effects, AUTH evidence and immutable replay custody. Both contribution
-types must explicitly declare compensated or unpaid rules. Unpaid publication
-needs no compensation binding; compensated rules retain verified binding checks.
-Project Managers do not acquire Finance powers. Public compensation-binding
-administration remains pending.
+types explicitly declare compensated or unpaid rules. V2 uses one common
+instrument, unit and binding, three exact submitter size amounts and a fixed
+reviewer amount. Wholly unpaid publication needs no financial setup. Retained
+v1 policy and dual-award facts remain readable. Unit and adapter-binding
+administration remains Finance-only; its public exposure remains pending.
+Task/revision selection and award propagation are separate qualification boundaries.
 
 CON provides internal exact selected-policy validation: a
 new guide binding must match the active policy’s current published version;
@@ -575,7 +577,7 @@ AUTH-18 exposes `POST /api/v1/projects/{project_id}/guides/{guide_id}/activate`.
 The draft post-policy review package supplies `activation_context`: exact guide,
 review/revision, predecessor, separately approved post-policy and published CON
 selectors. Missing selectors remain explicit; the context does not promise readiness.
-Managers obtain those selectors without Finance privileges, then submit the exact
+Managers obtain those selectors under current project authority, then submit the exact
 selection with one UUID `Idempotency-Key`. Save the body and key for receipt replay;
 the draft context is not an active-guide replay endpoint. Response validation,
 authority evidence and activation effects commit together. ARCH-03D connects the

@@ -123,7 +123,7 @@ func validPolicyVersion(fields map[string]json.RawMessage, value *ContributionPo
 		strings.TrimSpace(value.Name) == "" || value.VersionNumber == nil || value.VersionNumber.Sign() <= 0 ||
 		(value.PolicyStatus != "draft" && value.PolicyStatus != "active" && value.PolicyStatus != "retired") ||
 		(value.VersionStatus != "draft" && value.VersionStatus != "published" && value.VersionStatus != "retired") ||
-		value.Rules == nil || len(value.Rules) > 2 || !requiredNullable(fields, "instrument_type", "unit_code", "adapter_binding_id") ||
+		value.Rules == nil || (len(value.Rules) != 0 && len(value.Rules) != 2) || !requiredNullable(fields, "instrument_type", "unit_code", "adapter_binding_id") ||
 		(value.RewardModelVersion != 1 && value.RewardModelVersion != 2) {
 		return false
 	}

@@ -1219,8 +1219,17 @@ def contribution_policy_output_schema(name: str) -> dict[str, Any]:
     return _contract_output_schema(name)
 
 
+@lru_cache(maxsize=8)
 def contribution_policy_output_validator(name: str) -> Draft202012Validator:
-    contribution_policy_output_schema(name)
+    schema = contribution_policy_output_schema(name)
+    if name in {"contribution_policy_get", "contribution_policies_list"}:
+        from workstream_mcp.contribution_policy_contract import policy_view_output_validator
+
+        return policy_view_output_validator(
+            schema,
+            collection=name == "contribution_policies_list",
+            format_checker=_OUTPUT_FORMAT_CHECKER,
+        )
     return _contract_output_validator(name)
 
 

@@ -356,6 +356,31 @@ Do not activate financial execution or infer readiness from this checkpoint.
 Git checkpoint reverts aid source rollback only: `0069` deliberately refuses a
 database downgrade; operational restoration requires a matched pre-effect backup.
 
+Two combined reviews inspected checkpoint `024714dfb`: security, architecture,
+product/operations and reuse found no blocking implementation issue in the
+bounded policy phase. An exact-candidate SQL probe falsified the hypothesis that
+application validation concealed missing database enforcement: malformed header
+and incomplete-tier publications failed at commit, rolled back, and allowed the
+same valid retry. Copies of genuine retained v1 economic rows failed on the
+specific new-write prohibition. Those controls now remain regular regression
+tests; their four-case PostgreSQL run passed with complete cleanup. Final cutover
+race and live-v1 refusal qualification still remain.
+
+QA/test-delta and docs found `QA-POLICY-001` and `DOC-POLICY-001`: MCP accepted
+incomplete graphs and floating-point markers; CLI accepted a partial draft;
+current authority documentation still excluded PM. The repair uses closed CON
+view schemas and one MCP semantic validator for read/list parent-child relations
+and exact integer representation, with matching CLI empty-or-complete draft
+validation. Read/list adversarial controls preserve valid unpaid, reviewer-only,
+three-tier and retained v1 graphs. Current entry, glossary, CLI and affected
+roadmap summary/scoreboard/dependency/gate/trace claims now distinguish PM/Finance
+policy management from Finance-only units/bindings. No local spreadsheet exports
+are present. Repair proof includes 219 backend contracts/read controls, the
+focused 94-test MCP/OpenAPI run, Go package checks, built-client malformed-output
+controls, scoped lint/type checks and Markdown links. Affected reviewer replay is
+required before treating either finding as closed; whole-PR qualification remains
+separate.
+
 ## Reconciliation
 
 - Current-source reconciliation: baseline matches the specification; no newer merged owners found.

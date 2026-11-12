@@ -633,9 +633,9 @@ with its `draft`, `published` or `retired` version status and its created,
 published and retired instants; continue with `--cursor` and the same
 `--limit`.
 
-These are Finance Authority reads, not Project Manager permissions. Workstream
-requires current covering Finance authority and active admission for each call;
-PM-only, foreign-project or withdrawn authority remains a concealed server denial.
+These reads require current Project Manager or Finance Authority covering the
+project, with active admission for each call. Foreign-project or withdrawn
+authority remains a concealed server denial.
 Each command sends one public GET, without a preflight or automatic selector fetch.
 
 `current` returns the aggregate ID and nullable published/open-draft version IDs.
