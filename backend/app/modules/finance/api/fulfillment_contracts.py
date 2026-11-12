@@ -2,7 +2,7 @@
 
 from jsonschema import Draft202012Validator
 
-from app.core.financial_wire import decode_financial_object, require_canonical_financial_values
+from app.core.financial_wire import decode_financial_object, require_canonical_obligation_values
 from app.core.hashing import canonical_json_hash
 from app.modules.finance.api.contract_schema import obligation_schema
 
@@ -29,7 +29,7 @@ def decode_obligation(body: bytes) -> dict:
     errors = Draft202012Validator(obligation_schema()).iter_errors(value)
     if next(errors, None) is not None:
         raise ValueError("invalid obligation shape")
-    require_canonical_financial_values(value)
+    require_canonical_obligation_values(value)
     source = {key: value[key] for key in SOURCE_AWARD_KEYS}
     if canonical_json_hash(source) != value["source_award_digest"]:
         raise ValueError("source award digest mismatch")

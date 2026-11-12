@@ -1,11 +1,10 @@
 """Portable versioned schema shared as public contract data."""
 
-from importlib.resources import files
 import json
+from pathlib import Path
 
 
 def obligation_schema() -> dict:
     """Return a fresh portable schema; callers cannot mutate another validation."""
-    return json.loads(
-        files("app.modules.finance").joinpath("contracts/obligation-v1.schema.json").read_text()
-    )
+    path = Path(__file__).resolve().parents[1] / "contracts/obligation-v1.schema.json"
+    return json.loads(path.read_text(encoding="utf-8"))

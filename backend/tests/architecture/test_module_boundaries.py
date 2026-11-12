@@ -30,10 +30,10 @@ def test_repository_matches_the_protected_module_boundary() -> None:
     boundary.validate(ROOT, REGISTRY, LEDGER, AUTH_LEDGER)
 
 
-def test_registry_names_exactly_ten_business_and_three_supporting_modules() -> None:
+def test_registry_names_exactly_eleven_business_and_three_supporting_modules() -> None:
     """The canonical ownership map cannot silently grow or collapse."""
     registry = boundary.load_registry(REGISTRY)
-    assert len(registry.business) == 10
+    assert len(registry.business) == 11
     assert len(registry.supporting) == 3
     assert registry.names == {
         "actors",
@@ -46,6 +46,7 @@ def test_registry_names_exactly_ten_business_and_three_supporting_modules() -> N
         "reviews",
         "contributions",
         "compensation",
+        "finance",
         "audit",
         "outbox",
         "api_controls",

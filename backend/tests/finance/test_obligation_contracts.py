@@ -95,6 +95,8 @@ def test_changed_quantity_with_original_digests_rejected(decode):
         {"reward_model_version": 1},
         {"reward_model_version": True},
         {"contract_version": True},
+        {"contract_version": 1.0},
+        {"reward_model_version": 2.0},
         {"route_key": "finance..primary"},
         {"bank_account": "forbidden"},
     ],

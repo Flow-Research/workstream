@@ -10,7 +10,8 @@
     "model_usage",
     "reviews",
     "contributions",
-    "compensation"
+    "compensation",
+    "finance"
   ],
   "supporting_modules": [
     "audit",

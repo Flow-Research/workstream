@@ -41,6 +41,13 @@ Allowed: `backend/app/modules/compensation/api/fulfillment_contracts.py`, `backe
 
 Both owners independently validate the portable closed JSON Schema and canonical digests through their own public entry paths. Neither owner's decoder calls the other's decoder. Reuse the existing core hash and route-token primitive; avoid duplicated manually maintained field rules. Decode raw bytes before ordinary request parsing: enforce 64 KiB, strict UTF-8, duplicate-member rejection, object-only envelopes and unknown-member rejection. Tests exercise both entry paths against the same fixtures, including changed quantity with old digests and recomputed digests over an invalid source shape. Pure wire validation proves no source authority or database identity.
 
+First-stage repair scope also includes `backend/pyproject.toml` package data,
+the module registry and its scanner/count test, and the current architecture
+module inventory. These make the contract installable and maintain scanner
+parity; they activate no runtime financial effects. Existing registry tests
+retain exact membership assertions with Finance added; no private-edge or
+dynamic-import exceptions are introduced.
+
 First-commit verification: `cd backend && .venv/bin/python -m pytest -q tests/finance/test_obligation_contracts.py`; `.venv/bin/ruff check app/core/financial_wire.py app/modules/compensation/api/fulfillment_contracts.py app/modules/finance/api tests/finance/test_obligation_contracts.py`. These are planned new tests/files, not executed proof. Schema fixtures include the exact specification vector, money and historical controls, plus negative canonicalization/shape/digest cases. Source-authority and runtime HTTP assertions remain later integration proof.
 
 ## Acceptance criteria
@@ -77,6 +84,17 @@ requiring raw-byte JSON guards and independent owner validation against one
 portable schema. Preflight is excluded until its exact report/query plan is
 reviewed. The first-stage implementation is subject to code review; broader
 runtime stages remain unreviewed. No readiness claim.
+
+First implementation review was provisional and identified missing wheel
+package data (ARCH-001), permissive floating-point version values (SEC-001),
+missing module-registry parity (ARCH-002), and an overly general primitive name
+(ARCH-003). Repairs explicitly package contract data, require exact integer
+versions, register Finance with unchanged exact-membership protection, and
+name the obligation-specific canonical validator accordingly. The schema
+loader uses a static package-relative path because the existing boundary
+scanner rejects importlib surfaces; no scanner exception is added. A built
+wheel extracted outside the checkout successfully loads the schema and validates
+the known fixture through both owners. Exact-head replay remains required.
 
 ## Reconciliation
 
