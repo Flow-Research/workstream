@@ -1391,3 +1391,14 @@ The corrected fresh migration fingerprint is
 `41e1b52d8d9807e8ca3c1d1975b73f1e338a519ab5b73ee40bfe1e086eb2700d`.
 Native re-execution and renewed scoped reviews remain required before recording
 the scheme fix as proven.
+
+The corrected exact-head PostgreSQL run passed all 14 cases at `2798f370b`,
+with database cleanup confirmed. It exercises the production source-first builder,
+committed-source TASK/PROJECT/ART port sequence, metadata/source/rules/packet
+substitution controls, supported-profile scheme forgery with recomputed request
+hash, unsupported AWS descriptor refusal, real SQL INSERT and fixed-service AUTH
+claim/finalization with terminal substitutions. Both architecture/security and
+QA/test-delta/CI passed that bounded scope at the same clean head. The earlier
+syntax-error run remains failed evidence, not a green migration proof. Nothing
+in this result qualifies the unfinished public caller/capability/result/runtime
+or accepted T4 path; those remain required by the original single-PR objective.
