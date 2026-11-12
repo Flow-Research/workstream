@@ -64,6 +64,7 @@ class _ExistingKey(RuntimeError):
 
 
 class ForegroundIntakeAdmission:
+    """Reserve one authorized foreground owner or resolve its immutable retry key."""
     def __init__(
         self, sessions: async_sessionmaker[AsyncSession], *,
         tasks: Callable[[AsyncSession], IntakeTaskCustodyPort],
@@ -73,6 +74,7 @@ class ForegroundIntakeAdmission:
         namespace: ArtifactStorageNamespaceSpec, capacity_limits: SubmissionSourceCapacityLimits,
         maximum_raw_bytes: int, upload_duration: timedelta, lease_duration: timedelta,
     ) -> None:
+        """Bind explicit limits and transaction-local owner ports without provider I/O."""
         if (type(maximum_raw_bytes) is not int or not 1 <= maximum_raw_bytes <= MAXIMUM_SUBMISSION_ZIP_BYTES
                 or not isinstance(upload_duration, timedelta) or not isinstance(lease_duration, timedelta)
                 or not timedelta(0) < lease_duration <= upload_duration):
@@ -85,6 +87,7 @@ class ForegroundIntakeAdmission:
 
     @asynccontextmanager
     async def _root(self):
+        """Own commit/cleanup and restage only this request's canonical AUTH denial."""
         session = self._sessions()
         authority = self._authorization(session)
         try:
@@ -109,6 +112,7 @@ class ForegroundIntakeAdmission:
         self, metadata: SubmissionIntakeMetadata, *, actor_id: UUID, identity_link_id: UUID,
         idempotency_key: UUID, declared_raw_bytes: int | None,
     ) -> IntakeReservationOwner | IntakeReplay:
+        """Return upload ownership only after commit, otherwise resolve current read authority."""
         metadata = SubmissionIntakeMetadata.model_validate(metadata)
         if declared_raw_bytes is not None and (
             type(declared_raw_bytes) is not int or not 1 <= declared_raw_bytes <= self._maximum
@@ -125,6 +129,7 @@ class ForegroundIntakeAdmission:
         return await self._read(metadata, actor_id, idempotency_key)
 
     async def _reserve(self, metadata, actor_id, identity_link_id, key, declared):
+        """Serialize TASK then actor/grant before committing pointer, charge and allow."""
         async with self._root() as (session, authority):
             tasks = self._tasks(session)
             repository = SubmissionIntakeRepository(session, tasks)
@@ -157,6 +162,7 @@ class ForegroundIntakeAdmission:
         return owner
 
     async def _validate_context(self, session, metadata, actor_id):
+        """Require canonical lineage, selected phases and the exact qualified namespace."""
         task = await self._contexts(session).lock_submission_context(TaskSubmissionContextRequest(
             metadata.task_id, metadata.assignment_id, actor_id, metadata.predecessor_submission_id,
         ))
@@ -181,6 +187,7 @@ class ForegroundIntakeAdmission:
             raise IntakeCustodyConflict("intake_source_provider_unqualified")
 
     async def _read(self, metadata, actor_id, key, *, expected_operation_id=None):
+        """Authorize the stored operation before comparing metadata or returning its state."""
         async with self._root() as (session, authority):
             repository = SubmissionIntakeRepository(session, self._tasks(session))
             found = await repository.find_actor_key(actor_id, key)

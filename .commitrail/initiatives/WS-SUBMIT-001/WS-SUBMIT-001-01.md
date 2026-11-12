@@ -590,3 +590,36 @@ original failure even after another operation claims the same task. Integrated
 accepted replay, revision journey, public framing/runtime readiness, and the
 full T1–T5 public drill remain later required evidence; these tests do not prove
 the public submission cutover.
+
+Frozen candidate `dfdcfa181` subsequently passed all 15 admission cases against
+that exact commit in 173.76s, with isolated cleanup confirmed. Documentation
+review passed its scoped claims. Architecture/security and QA independently
+found a concrete deadline escape: a non-yielding async body reader can return
+bytes or EOF after an `asyncio.timeout` deadline without running the cancellation
+callback. The shared upload reader and final provider-part response had the same
+boundary risk. Repair checks elapsed idle time after each read, including EOF,
+and absolute time before/after read boundaries and before upload completion;
+cooperative timeout cancellation remains. Nine new regressions all fail against
+the frozen pre-fix implementation in memory; all 105 intake contract tests pass
+with the repair. No test skips or deadline relaxation were introduced.
+
+Remaining hosted failures were traced to concrete current-consumer omissions:
+Alembic's supported-head constant still named 0069 after installing 0070, the
+independent linear-graph assertion omitted 0069, and the MCP authorization-context
+snapshot lacked the two new ActionId values. Repair scope includes Alembic env
+and its existing graph/resume tests, plus that exact generated MCP snapshot and
+its canonical digest. It preserves the allowed historical revisions and refusal
+of unknown revisions, and changes no MCP tool or product route. Targeted repeated
+upgrade/downgrade/historical-resume checks and real OpenAPI comparison must pass
+before the next review candidate is frozen.
+
+The selected MCP contract checks now pass all 144 tests against actual backend
+OpenAPI (58.94s). The snapshot delta is exactly the two intake action values,
+canonical digest and capture source revision; no tool behavior changed. The
+migration repair run remains separate from this contract evidence.
+
+The full backend Ruff check passed. The existing app docstring check initially
+fell just below its unchanged threshold after the new admission class; documenting
+its constructor, transaction ownership, reservation validation and authorized-read
+contracts restores the check (80.1%). This is documentation of the actual owner
+boundaries, with no behavior or threshold change.

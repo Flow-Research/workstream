@@ -479,3 +479,49 @@ async def test_discard_replay_cancellation_drains_read_and_remains_cancellation(
     with pytest.raises(asyncio.CancelledError):
         await task
     assert stopped.is_set()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("path", ["replay", "upload"])
+@pytest.mark.parametrize("deadline", ["idle", "total"])
+@pytest.mark.parametrize("stall_at_eof", [False, True])
+async def test_non_yielding_ingress_cannot_escape_deadline(path, deadline, stall_at_eof):
+    import time
+    from app.modules.artifacts.intake.streaming import hash_submission_replay
+
+    async def chunks():
+        if not stall_at_eof:
+            time.sleep(0.05)
+        yield b"abc"
+        if stall_at_eof:
+            time.sleep(0.05)
+
+    idle = 0.01 if deadline == "idle" else 10
+    expires = datetime.now(UTC) + timedelta(seconds=0.01 if deadline == "total" else 10)
+    with pytest.raises(ArtifactStoreUnavailableError):
+        if path == "replay":
+            await hash_submission_replay(chunks(), maximum_raw_bytes=100, declared_raw_bytes=None,
+                                         idle_timeout_seconds=idle, deadline_at=expires)
+        else:
+            # This small body must not reach a provider when its reader expires.
+            await receive_submission_source(object(), upload_value(
+                idle_timeout_seconds=idle, upload_deadline_at=expires,
+            ), chunks())
+
+
+@pytest.mark.asyncio
+async def test_non_yielding_final_part_cannot_return_completion_after_deadline():
+    import time
+
+    class BufferedStore:
+        async def upload_source_part(self, upload, number, data, **kwargs):
+            time.sleep(0.05)
+            return SubmissionSourcePart(number=number, byte_count=len(data), provider_etag="late")
+
+    async def chunks():
+        yield b"abc"
+
+    with pytest.raises(ArtifactStoreUnavailableError):
+        await receive_submission_source(BufferedStore(), upload_value(
+            upload_deadline_at=datetime.now(UTC) + timedelta(seconds=0.01),
+        ), chunks())
