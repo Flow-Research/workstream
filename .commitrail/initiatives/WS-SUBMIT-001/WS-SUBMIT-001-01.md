@@ -454,3 +454,11 @@ exact new action/resource pair and compare the denial binding; the fixed-service
 matrix then passed. Live own-operation reads consume resolved historical facts
 without an eligible-status input. ART must still prove stored-operation replay
 after task progression and denied-body nonconsumption in T1 composition.
+
+AUTH-only review found no grant bypass. ARCH-AUTH-01 corrects the new read action's
+catalogue owner to this initiative while preserving its contributor evaluator.
+The CI review found the new PostgreSQL test module absent from the explicit
+semantic lane catalogue; register it with the existing task-authority modules.
+The focused migration comparison is replayed at the repaired commit so its
+receipt identifies the same reviewed source. These are necessary verification
+and metadata corrections, not expanded authority or public exposure.

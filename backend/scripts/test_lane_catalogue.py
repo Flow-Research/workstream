@@ -211,6 +211,7 @@ SHARED_FOUNDATION_MODULES = (
     "tests/actors/test_issuer_profile.py",
     "tests/actors/test_self_api_lifecycle.py",
     "tests/actors/test_identity_bounds_and_rate_controls.py",
+    "tests/authorization/task_authority/test_intake_authority.py",
     "tests/authorization/task_authority/test_audit_contract.py",
     "tests/authorization/task_authority/test_concurrency.py",
     "tests/authorization/task_authority/test_postgresql.py",
