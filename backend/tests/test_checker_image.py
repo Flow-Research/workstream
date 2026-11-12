@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from pathlib import Path
+import stat
 import sys
 import time
 
@@ -42,7 +44,10 @@ def project(tmp_path: Path) -> Path:
         "resources": {
             "cpu_millis": 500,
             "memory_bytes": 134217728,
-            "deadline_ms": 1000,
+            # Receipt fsync uses the real filesystem even with fake Docker.
+            # Deadline refusal is exercised separately with injected timeout
+            # and real bounded child-process tests, not host disk latency.
+            "deadline_ms": 30000,
             "maximum_output_bytes": 32768,
         },
         "samples": [
@@ -265,6 +270,31 @@ def test_late_create_keeps_durable_obligation_after_empty_cleanup_observation(
     assert not aws_calls
     assert not any(args[0] == "start" for args, _ in docker.calls)
     assert not (output / "registry.json").exists()
+
+
+@pytest.mark.parametrize("boundary", ["output_creation", "receipt_publication"])
+def test_directory_sync_failure_prevents_container_creation(
+    project, transport, tmp_path, monkeypatch, boundary,
+):
+    """Both the output ancestry and renamed receipt must survive before create."""
+    output = tmp_path / "new-parent" / "release"
+    original = os.fsync
+    rejected = []
+
+    def fsync(descriptor):
+        if stat.S_ISDIR(os.fstat(descriptor).st_mode):
+            published = (output / "receipt.json").exists()
+            if (boundary == "receipt_publication") == published:
+                rejected.append(boundary)
+                raise OSError("injected directory sync failure")
+        return original(descriptor)
+
+    monkeypatch.setattr(cli.os, "fsync", fsync)
+    assert cli.main([str(project), "--out", str(output)]) == 1
+    assert rejected
+    docker, aws_calls = transport
+    assert not any(args[0] == "create" for args, _ in docker.calls)
+    assert not aws_calls
 
 
 def test_publish_verifies_exact_image_and_rechecks_digest_before_outputs(

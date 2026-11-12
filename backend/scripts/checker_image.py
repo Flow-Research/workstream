@@ -478,6 +478,15 @@ def execute(args, evidence: dict, checkpoint) -> dict:
         }
 
 
+def sync_directory(path: Path) -> None:
+    """Persist directory entries before relying on a published cleanup receipt."""
+    descriptor = os.open(path, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
 def write_json(path: Path, value: dict) -> None:
     """Replace one owned receipt atomically; no credentials or raw checker text are stored."""
     temporary = path.with_suffix(".tmp")
@@ -487,6 +496,7 @@ def write_json(path: Path, value: dict) -> None:
         handle.flush()
         os.fsync(handle.fileno())
     temporary.replace(path)
+    sync_directory(path.parent)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -527,6 +537,9 @@ def main(argv: list[str] | None = None) -> int:
     try:
         output.mkdir(mode=0o700, parents=True, exist_ok=False)
         owned_output = True
+        # Persist newly created ancestors too, including the default receipt root.
+        for directory in (output, *output.parents):
+            sync_directory(directory)
         outputs = execute(args, evidence, lambda: write_json(output / "receipt.json", evidence))
         for name, value in outputs.items():
             write_json(output / name, value)

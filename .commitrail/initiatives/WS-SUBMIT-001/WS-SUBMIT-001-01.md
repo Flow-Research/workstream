@@ -3251,3 +3251,23 @@ positive/negative samples, with confirmed cleanup in receipt
 `.checker-images/bd8859524a454b358ef56dd02586ce25/receipt.json`; full output is
 `/tmp/image-cleanup-live.log`. This is local Docker compatibility evidence only,
 not AWS/native Smol qualification or a complete public submission journey.
+
+Review repair IMAGE-CLEANUP-DURABILITY-01: sync the receipt directory after its
+atomic rename and sync output-directory ancestry before external calls. Added
+injected directory-fsync failure cases at output creation and receipt publication;
+both must prevent Docker create. Do not narrow durability to process visibility.
+
+Adjacent hosted Agent Gates failure 43328703870 identifies unqualified technical
+worker wording at developer-setup.md:153–154. Extend editorial scope only to those
+two references, identifying them as Celery workers; retain the vocabulary gate
+unchanged and rerun it. Documentation review covers this wording correction.
+
+The directory-sync repair's first suite run had 24 passes and four sample-budget
+failures: synchronous real filesystem fsync exceeded the fake Docker fixture's
+one-second sample budget. The fixture now uses a 30-second sample deadline;
+production limits are unchanged, injected timeout refusal and real process
+0.2-second deadline tests remain. The repaired suite passes all 28 tests in
+12.10 seconds (`/tmp/image-cleanup-sync-tests2.log`). Both directory-sync failure
+boundaries forbid Docker creation. Ruff, stale authorization documentation and
+Markdown link checks pass. Actual-image and structure rechecks are tracked
+separately; the earlier seven-sample result does not attest these later edits.
