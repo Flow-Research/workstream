@@ -1,15 +1,14 @@
-"""Database failures protect the same tier and version boundaries as policy input."""
+"""Database failures protect the same current tier and header boundaries as policy input."""
 
 import pytest
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 
-from app.core.identifiers import new_record_id
 from app.db import session as db_session
 from tests.authorization.contribution_policies.postgresql_support import world
 
 
-async def test_v2_policy_tiers_and_version_markers_fail_closed_in_postgres(admin_access):
+async def test_policy_tiers_fail_closed_in_postgres(admin_access):
     target = await world(admin_access)
     created = await target.execute("create_draft", target.request("create_draft"))
     updated = await target.execute(
@@ -38,20 +37,7 @@ async def test_v2_policy_tiers_and_version_markers_fail_closed_in_postgres(admin
             (
                 "UPDATE contribution_award_definitions SET task_size='medium' WHERE id=:id",
                 {"id": ids["small"]},
-                "uq_award_definition_v2_size",
-            ),
-            (
-                "UPDATE contribution_award_definitions SET reward_model_version=1,task_size=NULL WHERE id=:id",
-                {"id": ids["small"]},
-                "fk_award_definition_reward_version",
-            ),
-            (
-                "INSERT INTO contribution_policy_versions "
-                "(id,contribution_policy_id,project_id,version_number,status,created_by,reward_model_version) "
-                "SELECT :id,contribution_policy_id,project_id,version_number+1,'draft',created_by,1 "
-                "FROM contribution_policy_versions WHERE id=:version",
-                {"id": new_record_id(), "version": version},
-                "new reward policies require v2",
+                "uq_award_definition_size",
             ),
         ):
             with pytest.raises(DBAPIError, match=message):

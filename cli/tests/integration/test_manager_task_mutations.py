@@ -36,6 +36,7 @@ def receipt(action, payload=None):
         k: TASK_RESPONSE[k] for k in ("id", "project_id", "created_at", "updated_at")
     }
     value.update(payload)
+    value.setdefault("task_size", "small")
     value.setdefault("skill_tags", [])
     value.setdefault("source_type", "manual")
     value.update(
@@ -337,7 +338,7 @@ def test_manager_task_credential_denial_uncertainty_and_one_http2_post(cli, tmp_
             assert len(requests) == 1
 
 
-def test_manager_task_sizes_bind_response_and_preserve_omitted_history(cli, tmp_path):
+def test_manager_task_sizes_bind_current_response(cli, tmp_path):
     file = tmp_path / "task.json"
     with http_fixture() as (origin, response, requests):
         for size in (None, "small", "medium", "large"):
@@ -353,8 +354,10 @@ def test_manager_task_sizes_bind_response_and_preserve_omitted_history(cli, tmp_
             result = invoke(cli, origin, "create", file)
             assert result.returncode == 1 and result.stdout == ""
         file.write_text(json.dumps(INPUT))
-        response["body"] = json.dumps(receipt("create")).encode()
-        assert invoke(cli, origin, "create", file).returncode == 0
+        missing = receipt("create")
+        missing.pop("task_size")
+        response["body"] = json.dumps(missing).encode()
+        assert invoke(cli, origin, "create", file).returncode == 1
         file.write_text(json.dumps(INPUT | {"task_size": "small"}))
         result = invoke(cli, origin, "create", file)
         assert result.returncode == 1 and result.stdout == ""

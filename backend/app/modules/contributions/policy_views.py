@@ -28,7 +28,6 @@ def _rule_views(version: ContributionPolicyVersion) -> tuple[PolicyRuleView, ...
                     unit_code=item.unit_code,
                     quantity=_canonical_quantity(item.quantity),
                     adapter_binding_id=item.adapter_binding_id,
-                    reward_model_version=item.reward_model_version,
                     task_size=item.task_size,
                 )
                 for item in sorted(
@@ -54,7 +53,6 @@ def _view_fields(policy: ContributionPolicy, version: ContributionPolicyVersion)
         "contribution_policy_version_id": version.id,
         "version_number": version.version_number,
         "version_status": version.status,
-        "reward_model_version": version.reward_model_version,
         "instrument_type": CompensationInstrumentType(version.instrument_type)
         if version.instrument_type
         else None,

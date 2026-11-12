@@ -85,7 +85,7 @@ class SubmitterParticipationResult(BaseModel):
     model_config = _STRICT_FROZEN
 
     contribution: SubmitterContributionFacts
-    awards: tuple[CompensationAwardFacts, ...] = Field(max_length=2)
+    awards: tuple[CompensationAwardFacts, ...] = Field(max_length=1)
 
 
 class SubmitterParticipationPort(Protocol):

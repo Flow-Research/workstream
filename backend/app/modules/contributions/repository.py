@@ -51,7 +51,7 @@ class ContributionPolicyRepository:
     async def resolve_reward_selection(
         self, request: RewardSelectionRequest
     ) -> RewardSelectionFacts:
-        """Resolve only the requested v2 version/tier, without choosing a current policy."""
+        """Resolve only the requested policy version/tier, without choosing a current policy."""
         if not self._session.in_transaction():
             raise ContributionPolicyUnavailable("reward_selection_unavailable")
         try:
@@ -63,7 +63,6 @@ class ContributionPolicyRepository:
             .where(
                 ContributionPolicyVersion.id == checked.policy_version_id,
                 ContributionPolicyVersion.project_id == str(checked.project_id),
-                ContributionPolicyVersion.reward_model_version == 2,
                 ContributionPolicyVersion.status.in_(("published", "retired")),
             )
             .options(
@@ -287,7 +286,7 @@ class ContributionPolicyRepository:
                 mode, awards = rules[contribution_type]
                 if mode == "unpaid" and not awards:
                     return "unpaid"
-                if mode == "compensated" and 1 <= len(awards) <= 2:
+                if mode == "compensated" and len(awards) == 1:
                     return tuple(awards)
                 raise ValueError("locked compensation graph is invalid")
 

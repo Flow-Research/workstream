@@ -335,14 +335,14 @@ async def test_routed_accepted_submission_requires_complete_awards(
     from app.modules.contributions.records.participant import SubmitterContributionParticipant
 
     async with authorized_routing_source(
-        tmp_path, isolated_database_env, contribution_awards=("money", "project_points")
+        tmp_path, isolated_database_env, contribution_awards=("money",)
     ) as h:
-        original = CompensationAwardParticipant.complete_award_set
-
         async def incomplete(owner, request):
-            return await original(
-                owner, request.model_copy(update={"definitions": request.definitions[:1]})
-            )
+            from app.modules.compensation.api import CompleteAwardSetResult
+
+            # Simulate a participant returning no required award. The current
+            # contract never has a second award to omit.
+            return CompleteAwardSetResult(awards=())
 
         async with h.factory() as session:
             before = await outcome_snapshot(session)
@@ -367,7 +367,7 @@ async def test_routed_accepted_submission_requires_complete_awards(
                         )
                     )
                 await apply_outcome(session, h, 2)
-                assert len(await rows(session, "compensation_awards")) == 1
+                assert len(await rows(session, "compensation_awards")) == 0
 
                 async def assert_reject():
                     with pytest.raises(DBAPIError, match="incomplete award set"):
@@ -382,7 +382,7 @@ async def test_routed_accepted_submission_requires_complete_awards(
         async with h.factory() as session:
             assert await outcome_snapshot(session) == before
         async with h.factory() as session, session.begin():
-            assert len((await apply_outcome(session, h, 2)).economic.award_ids) == 2
+            assert len((await apply_outcome(session, h, 2)).economic.award_ids) == 1
 
 
 async def test_uncommitted_acceptance_and_contribution_parents_are_invisible(

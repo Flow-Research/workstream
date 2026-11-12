@@ -18,7 +18,7 @@ def decode(request):
 
 
 def vector():
-    return json.loads((FIXTURES / "obligation-points-v2.json").read_text())
+    return json.loads((FIXTURES / "obligation-points.json").read_text())
 
 
 def encode(value):
@@ -96,11 +96,8 @@ def test_changed_quantity_with_original_digests_rejected(decode):
         {"award_id": "019A78B0-0000-7000-8000-000000000011"},
         {"task_size": None},
         {"review_id": "019a78b0-0000-7000-8000-000000000008"},
-        {"reward_model_version": 1},
-        {"reward_model_version": True},
         {"contract_version": True},
         {"contract_version": 1.0},
-        {"reward_model_version": 2.0},
         {"route_key": "finance..primary"},
         {"bank_account": "forbidden"},
     ],
@@ -121,7 +118,6 @@ def test_explicit_null_field_cannot_be_omitted(decode):
     "change",
     [
         {"instrument_type": "money", "unit_code": "NGN", "quantity": "2000.01"},
-        {"reward_model_version": 1, "task_size": None, "admission_kind": "historical_enrollment"},
         {
             "contribution_type": "completed_review",
             "task_size": None,

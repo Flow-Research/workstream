@@ -1,10 +1,10 @@
-"""Persist explicit new task sizes while retaining original immutable responses."""
+"""Persist required immutable task size and current command/import custody."""
 
 from alembic import op
 from sqlalchemy import text
 
 revision = "0070_task_size"
-down_revision = "0069_reward_policy_v2"
+down_revision = "0069_sized_reward_policy"
 branch_labels = None
 depends_on = None
 
@@ -30,7 +30,7 @@ def upgrade() -> None:
         .execute(
             text("""SELECT
         EXISTS(SELECT 1 FROM public.workstream_tasks
-          WHERE status<>'accepted' AND locked_contribution_policy_version_id IS NOT NULL)
+          WHERE status<>'draft' OR locked_contribution_policy_version_id IS NOT NULL)
         OR EXISTS(SELECT 1 FROM public.task_assignments WHERE status='active')
         OR EXISTS(SELECT 1 FROM public.submissions
           WHERE attempt_status IN ('evaluation_pending','review_pending','needs_revision'))
@@ -41,11 +41,11 @@ def upgrade() -> None:
         raise RuntimeError("task size cutover blocked by work without a recorded size")
     op.execute("ALTER TABLE public.workstream_tasks ADD COLUMN task_size varchar(8)")
     op.execute("""ALTER TABLE public.workstream_tasks ADD CONSTRAINT
-        ck_workstream_tasks_task_size CHECK (task_size IS NULL OR task_size IN ('small','medium','large'))""")
-    # Only unscreened drafts acquire the creation default. Terminal evidence and
-    # all saved command/import JSON remain unchanged.
+        ck_workstream_tasks_task_size CHECK (task_size IN ('small','medium','large'))""")
+    # The preceding transition admitted only unscreened, unrecorded draft work.
     op.execute("""UPDATE public.workstream_tasks SET task_size='small'
         WHERE status='draft' AND locked_contribution_policy_version_id IS NULL""")
+    op.execute("ALTER TABLE public.workstream_tasks ALTER COLUMN task_size SET NOT NULL")
     op.execute("""
 CREATE FUNCTION public.guard_task_size() RETURNS trigger
 LANGUAGE plpgsql SET search_path=pg_catalog,public,pg_temp AS $$
@@ -85,17 +85,16 @@ FOR EACH ROW EXECUTE FUNCTION public.guard_task_command_size();
     """)
 
 
-    # The existing deferred validator owns both retained and new manifest custody.
-    # Select the recorded field set before hashing; never rewrite archived bytes.
+    # Extend the existing manifest validator to the sole current row shape.
     body = op.get_bind().execute(text(
         "SELECT pg_get_functiondef('public.validate_task_import_batch_custody(uuid)'::regprocedure)"
     )).scalar_one()
     anchor = "'rejection_criteria',m.response::jsonb->'rejection_criteria')"
     if body.count(anchor) != 2:
         raise RuntimeError("task import manifest custody function shape changed")
-    op.execute(body.replace(anchor, anchor + " || CASE WHEN m.response::jsonb ? 'task_size' "
-        "THEN pg_catalog.jsonb_build_object('task_size',m.response::jsonb->'task_size') "
-        "ELSE '{}'::jsonb END"))
+    op.execute(body.replace(anchor,
+        "'rejection_criteria',m.response::jsonb->'rejection_criteria',"
+        "'task_size',m.response::jsonb->'task_size')"))
 
 
 def downgrade() -> None:

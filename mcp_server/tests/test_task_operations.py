@@ -131,7 +131,7 @@ def _bound_response(name: str, upload: bytes | None = None) -> dict[str, Any]:
     if name in {"management_tasks_list", "operational_tasks_list"}:
         return {"project_id": PROJECT_ID, "items": [], "next_cursor": None}
     if name == "management_task_create":
-        return {"project_id": PROJECT_ID}
+        return {"project_id": PROJECT_ID, "task_size": "small"}
     if name in {"task_import_batch_screen", "task_import_batch_release"}:
         return {"project_id": PROJECT_ID, "batch_id": BATCH_ID}
     if name == "task_import_batch_get":

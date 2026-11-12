@@ -32,8 +32,8 @@ pytestmark = pytest.mark.usefixtures("live_acceptance_lifecycle")
 
 @pytest.mark.parametrize(
     "instruments",
-    [(), ("money",), ("project_points",), ("money", "project_points")],
-    ids=("unpaid", "money", "points", "money-and-points"),
+    [(), ("money",), ("project_points",)],
+    ids=("unpaid", "money", "points"),
 )
 async def test_create_and_exact_replay_all_frozen_award_shapes(
     tmp_path, isolated_database_env, instruments
@@ -254,7 +254,7 @@ async def test_exact_replay_rejects_each_changed_source_fact_and_real_foreign_so
                         )
                     )
                 assert len(await rows(session, "contribution_records")) == 2
-                assert len(await rows(session, "compensation_awards")) == 4
+                assert len(await rows(session, "compensation_awards")) == 2
             assert created.contribution.id is not None
 
 
@@ -277,7 +277,7 @@ async def test_paid_correlation_conflicts_but_unpaid_replay_is_honest(
                     )
                 )
         async with paid.factory() as session:
-            assert len(await rows(session, "compensation_awards")) == len(created.awards) == 2
+            assert len(await rows(session, "compensation_awards")) == len(created.awards) == 1
 
     async with authorized_submitter_source(
         tmp_path / "unpaid",

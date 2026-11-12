@@ -40,7 +40,7 @@ def _install_complete_draft(
         id=request.contribution_policy_version_id,
         contribution_policy_id=policy.id,
         project_id=str(request.project_id),
-        version_number=1, reward_model_version=2,
+        version_number=1,
         instrument_type="money", unit_code="USD", adapter_binding_id=new_record_id(),
         status="draft",
         created_by=str(request.actor_profile_id),
@@ -64,7 +64,7 @@ def _install_complete_draft(
         contribution_policy_version_id=version.id, project_id=policy.project_id,
         contribution_type="accepted_submission", instrument_type="money", unit_code="USD",
         quantity=Decimal(quantity), adapter_binding_id=version.adapter_binding_id,
-        reward_model_version=2, task_size=size,
+        task_size=size,
     ) for size, quantity in (("small", "10"), ("medium", "20"), ("large", "30"))]
     accepted.award_definitions = definitions
     reviewed.award_definitions = []

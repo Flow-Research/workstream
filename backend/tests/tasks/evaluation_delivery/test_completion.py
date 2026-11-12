@@ -130,7 +130,7 @@ async def test_completion_handler_true_commits_before_ack_without_rev(
         await commit_before_ack(h, monkeypatch, human=True, award_count=0)
 
 
-@pytest.mark.parametrize("awards", [(), ("money", "project_points")])
+@pytest.mark.parametrize("awards", [()])
 async def test_completion_handler_false_commits_acceptance_before_ack(
     tmp_path,
     isolated_database_env,

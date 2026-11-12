@@ -4,7 +4,7 @@ from decimal import Decimal
 from typing import Annotated, Literal, Protocol, Self
 from uuid import UUID
 
-from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, StrictInt, model_validator
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
 
 from app.modules.compensation.api.instruments import CompensationInstrumentType
 
@@ -53,20 +53,18 @@ class CompleteAwardSetRequest(BaseModel):
     disposition: Literal["new", "replay"]
     compensation_mode: Literal["unpaid", "compensated"]
     contribution: AwardContributionFacts
-    definitions: tuple[AwardDefinitionFacts, ...] = Field(max_length=2)
+    definitions: tuple[AwardDefinitionFacts, ...] = Field(max_length=1)
     correlation_id: UUID
 
     @model_validator(mode="after")
     def validate_complete_definition_set(self) -> Self:
         """Reject incomplete, duplicate, or crossed frozen definition facts."""
         definitions = self.definitions
-        instruments = {item.instrument_type for item in definitions}
         expected = (
             self.compensation_mode == "unpaid" and not definitions
         ) or (
             self.compensation_mode == "compensated"
-            and 1 <= len(definitions) <= 2
-            and len(instruments) == len(definitions)
+            and len(definitions) == 1
         )
         if not expected or any(
             item.project_id != self.contribution.project_id
@@ -85,7 +83,6 @@ class CompensationAwardFacts(BaseModel):
     model_config = _STRICT_FROZEN
 
     id: UUID
-    reward_model_version: Annotated[StrictInt, Field(ge=1, le=2)]
     project_id: UUID
     contribution_record_id: UUID
     contributor_id: UUID
@@ -100,19 +97,12 @@ class CompensationAwardFacts(BaseModel):
 
 
 class CompleteAwardSetResult(BaseModel):
-    """The exact complete stored set, ordered by instrument identity."""
+    """The exact zero-or-one stored award outcome."""
 
     model_config = _STRICT_FROZEN
 
-    awards: tuple[CompensationAwardFacts, ...] = Field(max_length=2)
+    awards: tuple[CompensationAwardFacts, ...] = Field(max_length=1)
 
-    @model_validator(mode="after")
-    def validate_unique_instruments(self) -> Self:
-        """A returned complete set cannot contain duplicate instruments."""
-        instruments = {item.instrument_type for item in self.awards}
-        if len(instruments) != len(self.awards):
-            raise ValueError("award result contains duplicate instruments")
-        return self
 
 
 class CompleteAwardSetPort(Protocol):

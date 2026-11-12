@@ -196,7 +196,6 @@ class PolicyDefinitionView:
     unit_code: str
     quantity: str
     adapter_binding_id: UUID
-    reward_model_version: Literal[1, 2]
     task_size: TaskSize | None
 
 
@@ -223,7 +222,6 @@ class ContributionPolicyView:
     contribution_policy_version_id: UUID
     version_number: int
     version_status: ContributionPolicyVersionStatus
-    reward_model_version: Literal[1, 2]
     instrument_type: CompensationInstrumentType | None
     unit_code: str | None
     adapter_binding_id: UUID | None

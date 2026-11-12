@@ -27,7 +27,7 @@ def encode(value):
 
 
 def obligation(owner, *, money=False):
-    name = "obligation-money-v2.json" if money else "obligation-points-v2.json"
+    name = "obligation-money.json" if money else "obligation-points.json"
     return owner.decode_obligation((FIXTURES / name).read_bytes())
 
 

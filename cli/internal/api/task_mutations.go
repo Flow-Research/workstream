@@ -13,7 +13,7 @@ import (
 // MutationTask is the contributor-safe TaskResponse returned by claim,
 // not the management detail or contributor read projection.
 type MutationTask struct {
-	TaskSize                          *string  `json:"task_size,omitempty"`
+	TaskSize                          string   `json:"task_size"`
 	ID                                string   `json:"id"`
 	ProjectID                         string   `json:"project_id"`
 	LockedContributionPolicyVersionID string   `json:"locked_contribution_policy_version_id"`

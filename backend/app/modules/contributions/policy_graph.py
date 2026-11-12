@@ -11,7 +11,6 @@ from app.modules.contributions.models import ContributionPolicyVersion
 
 def publication_graph_facts(version: ContributionPolicyVersion) -> tuple[str, tuple[UUID, ...]]:
     """Return the canonical graph digest and sorted unique adapter bindings."""
-    v2 = version.reward_model_version == 2
     size_order = {None: 0, "small": 0, "medium": 1, "large": 2}
     rules = []
     binding_ids: set[UUID] = set()
@@ -20,7 +19,7 @@ def publication_graph_facts(version: ContributionPolicyVersion) -> tuple[str, tu
         for item in sorted(
             rule.award_definitions,
             key=lambda value: (
-                size_order[value.task_size] if v2 else 0,
+                size_order[value.task_size],
                 value.instrument_type,
                 value.unit_code,
                 str(value.adapter_binding_id),
@@ -35,8 +34,7 @@ def publication_graph_facts(version: ContributionPolicyVersion) -> tuple[str, tu
                 "quantity": _canonical_quantity(item.quantity),
                 "unit_code": item.unit_code,
             }
-            if v2:
-                definition["task_size"] = item.task_size
+            definition["task_size"] = item.task_size
             definitions.append(definition)
         rules.append(
             {
@@ -46,18 +44,12 @@ def publication_graph_facts(version: ContributionPolicyVersion) -> tuple[str, tu
                 "rule_id": str(rule.id),
             }
         )
-    graph = {"rules": rules}
-    if v2:
-        graph.update(
-            {
-                "reward_model_version": 2,
-                "instrument_type": version.instrument_type,
-                "unit_code": version.unit_code,
-                "adapter_binding_id": str(version.adapter_binding_id)
-                if version.adapter_binding_id
-                else None,
-            }
-        )
+    graph = {
+        "rules": rules,
+        "instrument_type": version.instrument_type,
+        "unit_code": version.unit_code,
+        "adapter_binding_id": str(version.adapter_binding_id) if version.adapter_binding_id else None,
+    }
     return canonical_json_hash(graph), tuple(sorted(binding_ids, key=str))
 
 

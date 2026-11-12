@@ -1,5 +1,5 @@
 {
-  "canonical_sha256": "6a5ace545214715f06dd6b5694c8a33d500f36afeae7e941c0d44774023b2a8c",
+  "canonical_sha256": "9ccd95d78022c79c036f153979b3ee578a6ad18b0af52724e0ee6046c6e8570f",
   "components": {
     "schemas": {
       "ApiError": {
@@ -109,13 +109,6 @@
             "format": "uuid",
             "type": "string"
           },
-          "reward_model_version": {
-            "enum": [
-              1,
-              2
-            ],
-            "type": "integer"
-          },
           "rules": {
             "items": {
               "$ref": "#/components/schemas/PolicyRuleView"
@@ -152,7 +145,6 @@
           "contribution_policy_version_id",
           "version_number",
           "version_status",
-          "reward_model_version",
           "instrument_type",
           "unit_code",
           "adapter_binding_id",
@@ -177,13 +169,6 @@
           },
           "quantity": {
             "type": "string"
-          },
-          "reward_model_version": {
-            "enum": [
-              1,
-              2
-            ],
-            "type": "integer"
           },
           "task_size": {
             "anyOf": [
@@ -210,7 +195,6 @@
           "unit_code",
           "quantity",
           "adapter_binding_id",
-          "reward_model_version",
           "task_size"
         ],
         "type": "object"
@@ -570,7 +554,6 @@
   "source": {
     "method": "GET",
     "openapi_version": "3.1.0",
-    "path": "/api/v1/projects/{project_id}/contribution-policies/{policy_id}",
-    "repository_sha": "9757e57dd4d942fdbbc7f10a166a9c2cfd109316"
+    "path": "/api/v1/projects/{project_id}/contribution-policies/{policy_id}"
   }
 }

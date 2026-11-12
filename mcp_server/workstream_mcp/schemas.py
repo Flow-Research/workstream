@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from copy import deepcopy
 from functools import lru_cache
 from importlib.resources import files
 from pathlib import Path
@@ -1600,26 +1601,10 @@ def task_operation_output_schema(name: str) -> dict[str, Any]:
         return TASK_IMPORT_SOURCE_CONTENT_OUTPUT_SCHEMA
     schema = _contract_output_schema(name)
     if name in {"task_import_batch_create", "task_import_batch_get"}:
-        # One immutable batch has one recorded format. The general TaskResponse
-        # also represents terminal history, but new import receipts never have
-        # null sizes and cannot mix sized rows with pre-size archived rows.
+        schema = deepcopy(schema)
         batch_schema = schema["properties"]["creation"] if name.endswith("get") else schema
         task_schema = batch_schema["properties"]["tasks"]["items"]
-        recorded_fields = sorted(set(task_schema["properties"]) - {"task_size"})
-        formats: dict[str, Any] = {
-            "oneOf": [
-                {"properties": {"tasks": {"items": {
-                    "required": recorded_fields, "not": {"required": ["task_size"]},
-                }}}},
-                {"properties": {"tasks": {"items": {
-                    "required": [*recorded_fields, "task_size"],
-                    "properties": {"task_size": {"enum": ["small", "medium", "large"]}},
-                }}}},
-            ]
-        }
-        if name == "task_import_batch_get":
-            formats = {"properties": {"creation": formats}}
-        return {"type": "object", "allOf": [schema, formats]}
+        task_schema["required"] = sorted(task_schema["properties"])
     return schema
 
 

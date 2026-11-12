@@ -248,7 +248,7 @@ async def test_revoked_project_reader_cannot_continue_even_with_a_malformed_curs
         assert all(row["project_id"] is row["target_ref_id"] is None for row in evidence[1:])
 
 
-@pytest.mark.parametrize("instruments", [(), ("money",), ("money", "project_points")])
+@pytest.mark.parametrize("instruments", [(), ("money",), ("project_points",)])
 async def test_self_export_preserves_real_source_and_complete_json_csv_awards(
     tmp_path, auth_database_env, signed_access, live_acceptance_lifecycle, instruments,
 ):

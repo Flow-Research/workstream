@@ -9,8 +9,6 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     ForeignKeyConstraint,
-    Index,
-    Integer,
     Numeric,
     String,
     UniqueConstraint,
@@ -31,24 +29,13 @@ class CompensationAward(Base):
             "(get_byte(uuid_send(id), 6) >> 4) = 7 and (get_byte(uuid_send(id), 8) & 192) = 128",
             name="id_uuid7",
         ),
-        UniqueConstraint("contribution_record_id", "instrument_type"),
-        CheckConstraint("reward_model_version in (1,2)", name="reward_model_version"),
+        UniqueConstraint("contribution_record_id", name="uq_compensation_award_contribution"),
         ForeignKeyConstraint(
-            ["contribution_policy_version_id", "project_id", "reward_model_version"],
-            [
-                "contribution_policy_versions.id",
-                "contribution_policy_versions.project_id",
-                "contribution_policy_versions.reward_model_version",
-            ],
-            name="fk_compensation_award_reward_version",
+            ["contribution_policy_version_id", "project_id"],
+            ["contribution_policy_versions.id", "contribution_policy_versions.project_id"],
+            name="fk_compensation_award_policy_project",
             deferrable=True,
             initially="DEFERRED",
-        ),
-        Index(
-            "uq_compensation_award_v2_contribution",
-            "contribution_record_id",
-            unique=True,
-            postgresql_where=text("reward_model_version=2"),
         ),
         CheckConstraint("instrument_type in ('money','project_points')", name="instrument_type"),
         CheckConstraint(
@@ -62,9 +49,6 @@ class CompensationAward(Base):
     )
 
     id: Mapped[UUID] = mapped_column(Uuid(), primary_key=True)
-    reward_model_version: Mapped[int] = mapped_column(
-        Integer, nullable=False, server_default=text("2")
-    )
     project_id: Mapped[str] = mapped_column(
         Uuid(as_uuid=False), ForeignKey("projects.id", ondelete="RESTRICT"), nullable=False
     )

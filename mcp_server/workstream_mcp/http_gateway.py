@@ -1792,9 +1792,7 @@ class WorkstreamGateway:
             if not isinstance(body, dict):
                 return False
             size = body.get("task_size", "small")
-            size_matches = (
-                "task_size" not in body and "task_size" not in data
-            ) or data.get("task_size") == size
+            size_matches = data.get("task_size") == size
             return (
                 size in ("small", "medium", "large") and size_matches
                 and cls._same_uuid(data.get("project_id"), project_id)

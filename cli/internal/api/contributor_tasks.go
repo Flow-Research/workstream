@@ -66,7 +66,7 @@ func compensationAwards(raw json.RawMessage) ([]CompensationAward, bool) {
 		return nil, unpaid == "unpaid"
 	}
 	var awards []CompensationAward
-	if err := jsonv2.Unmarshal(raw, &awards, jsonv2.RejectUnknownMembers(true)); err != nil || len(awards) < 1 || len(awards) > 2 {
+	if err := jsonv2.Unmarshal(raw, &awards, jsonv2.RejectUnknownMembers(true)); err != nil || len(awards) < 1 || len(awards) > 1 {
 		return nil, false
 	}
 	seen := make(map[string]bool)

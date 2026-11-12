@@ -266,7 +266,7 @@ def test_invalid_policy_graph_never_dispatches(adapter: Adapter, call: Call) -> 
 @pytest.mark.parametrize(
     "invalid", [None, "missing_tier", "points_fraction", "per_rule_header", "null_header"]
 )
-def test_v2_paid_policy_uses_exact_portable_input_contract(
+def test_paid_policy_uses_exact_portable_input_contract(
     adapter: Adapter, call: Call, invalid: str | None
 ) -> None:
     client, received, upstream = adapter
@@ -333,7 +333,6 @@ def _policy_view() -> dict[str, Any]:
         "policy_status": "active",
         "version_number": 1,
         "version_status": "published",
-        "reward_model_version": 2,
         "instrument_type": "money",
         "unit_code": "USD",
         "adapter_binding_id": ACTOR_ID,
@@ -345,7 +344,6 @@ def _policy_view() -> dict[str, Any]:
                 "definitions": [
                     {
                         "definition_id": identifier,
-                        "reward_model_version": 2,
                         "task_size": size,
                         "instrument_type": "money",
                         "unit_code": "USD",
@@ -370,7 +368,7 @@ def _policy_view() -> dict[str, Any]:
 
 
 @pytest.mark.parametrize("collection", [False, True])
-def test_policy_reads_and_lists_reject_malformed_graphs_and_keep_history(
+def test_policy_reads_and_lists_require_complete_current_graphs(
     adapter: Adapter, call: Call, collection: bool
 ) -> None:
     from copy import deepcopy
@@ -401,23 +399,9 @@ def test_policy_reads_and_lists_reject_malformed_graphs_and_keep_history(
         return result
 
     valid = _policy_view()
-    historical = deepcopy(valid)
-    historical.update(
-        reward_model_version=1, instrument_type=None, unit_code=None, adapter_binding_id=None
-    )
-    historical["rules"][0]["definitions"] = historical["rules"][0]["definitions"][:2]
-    for definition in historical["rules"][0]["definitions"]:
-        definition.update(reward_model_version=1, task_size=None)
-    historical["rules"][0]["definitions"][1].update(
-        instrument_type="project_points",
-        unit_code="FLOW",
-        quantity="7",
-        adapter_binding_id=EVENT_ID,
-    )
     empty = deepcopy(valid)
     empty.update(
         version_status="draft",
-        reward_model_version=2,
         instrument_type=None,
         unit_code=None,
         adapter_binding_id=None,
@@ -450,26 +434,23 @@ def test_policy_reads_and_lists_reject_malformed_graphs_and_keep_history(
             | {"definition_id": EVENT_ID, "task_size": None, "quantity": "1"},
         ],
     )
-    for view in (valid, historical, empty, unpaid, reviewer_only):
+    for view in (valid, empty, unpaid, reviewer_only):
         assert read(view)["isError"] is False
 
     invalid = []
     for change in (
         {"rules": []},
-        {"reward_model_version": 2.0},
         {"version_number": 0},
         {"unit_code": "NGN"},
         {"adapter_binding_id": KEY},
         {"private": 1},
     ):
         invalid.append(deepcopy(valid) | change)
-    invalid.append(deepcopy(historical) | {"reward_model_version": 1.0})
     partial = deepcopy(valid)
     partial.update(version_status="draft", rules=partial["rules"][:1])
     invalid.append(partial)
     for change in (
         {"task_size": "medium"},
-        {"reward_model_version": 2.0},
         {"quantity": "0"},
         {"private": 1},
     ):
@@ -481,9 +462,6 @@ def test_policy_reads_and_lists_reject_malformed_graphs_and_keep_history(
     invalid.append(altered)
     altered = deepcopy(valid)
     altered["rules"][1]["definitions"] = [deepcopy(valid["rules"][0]["definitions"][0])]
-    invalid.append(altered)
-    altered = deepcopy(historical)
-    altered["rules"][0]["definitions"][0]["task_size"] = "small"
     invalid.append(altered)
     for view in invalid:
         assert read(view)["structuredContent"]["error"] == "invalid_api_response", view

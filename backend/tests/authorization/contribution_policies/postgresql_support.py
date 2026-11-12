@@ -1,4 +1,4 @@
-"""Real CON/AUTH composition with signed Finance grants and historical parents."""
+"""Real current CON/AUTH composition with signed Finance grants."""
 
 from dataclasses import dataclass
 from uuid import UUID, uuid4
@@ -43,7 +43,7 @@ class PolicyWorld:
             session, read_authorization=auth, mutation_authorization=auth
         )
 
-    def request(self, operation, prior=None, *, compensated=False, award_bindings=()):
+    def request(self, operation, prior=None, *, compensated=False, financial_header=None):
         """Prepare a valid caller request from a previous immutable result."""
         common = dict(actor_profile_id=self.context.actor_profile_id, project_id=self.project)
         if operation == "create_draft":
@@ -58,10 +58,8 @@ class PolicyWorld:
             return ContributionPolicyReadRequest(**common)
         common["operation_id"] = uuid4()
         if operation == "update_draft":
-            if len(award_bindings) > 1:
-                raise ValueError("dual-instrument v1 history requires its retained archive")
-            paid = bool(compensated or award_bindings)
-            instrument, binding = award_bindings[0] if award_bindings else ("money", self.binding)
+            paid = bool(compensated or financial_header)
+            instrument, binding = financial_header if financial_header else ("money", self.binding)
             quantity = "2.125000000000000001" if instrument == "money" else "7"
             body = PolicyUpdateInput.model_validate(
                 {
@@ -88,7 +86,7 @@ class PolicyWorld:
                             "compensation_mode": "compensated",
                             "quantity": quantity,
                         }
-                        if award_bindings
+                        if financial_header
                         else {
                             "contribution_type": "completed_review",
                             "compensation_mode": "unpaid",

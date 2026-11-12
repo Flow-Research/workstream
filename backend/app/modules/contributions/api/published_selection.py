@@ -60,7 +60,7 @@ class LockedCompensationTerms:
                 continue
             if (
                 type(value) is not tuple
-                or not 1 <= len(value) <= 2
+                or len(value) != 1
                 or any(not isinstance(item, LockedCompensationAward) for item in value)
                 or len({item.instrument for item in value}) != len(value)
             ):

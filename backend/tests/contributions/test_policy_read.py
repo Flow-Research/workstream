@@ -36,7 +36,7 @@ async def _read_version_view(*, with_graph: bool = False) -> ContributionPolicyV
         id=version_id,
         contribution_policy_id=policy_id,
         project_id=str(fixture.project_id),
-        version_number=2, reward_model_version=2,
+        version_number=2,
         status="draft",
         created_by=str(fixture.actor_id),
     )
@@ -54,7 +54,7 @@ async def _read_version_view(*, with_graph: bool = False) -> ContributionPolicyV
             contribution_policy_version_id=version_id,
             project_id=str(fixture.project_id),
             contribution_type="accepted_submission",
-            reward_model_version=2, task_size="small",
+            task_size="small",
             instrument_type="money",
             unit_code="USD",
             quantity=Decimal("1.00"),

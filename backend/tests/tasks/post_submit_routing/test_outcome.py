@@ -273,7 +273,7 @@ async def test_participant_failure_rolls_back(tmp_path, isolated_database_env, l
         (SubmitterContributionParticipant, "participate_submitter"),
         (_TaskRoutingAudit, "record"),
     )
-    async with authorized_routing_source(tmp_path, isolated_database_env, contribution_awards=("money", "project_points")) as h:
+    async with authorized_routing_source(tmp_path, isolated_database_env, contribution_awards=("money",)) as h:
         async with h.factory() as session:
             before = await outcome_snapshot(session)
         for owner_type, method in boundaries:
@@ -295,4 +295,4 @@ async def test_participant_failure_rolls_back(tmp_path, isolated_database_env, l
             async with h.factory() as session:
                 assert await outcome_snapshot(session) == before
         async with h.factory() as session, session.begin():
-            assert len((await apply_outcome(session, h, 2)).economic.award_ids) == 2
+            assert len((await apply_outcome(session, h, 2)).economic.award_ids) == 1

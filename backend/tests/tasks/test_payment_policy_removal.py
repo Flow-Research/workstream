@@ -26,7 +26,7 @@ def _command_receipt(operation, status):
     actor, contributor, task_id, project_id = [new_record_id() for _ in range(4)]
     now = datetime.now(UTC)
     task = WorkstreamTask(id=str(task_id), project_id=str(project_id), title="Task", description="Work",
-                         source_type="manual", skill_tags=[], status=status, created_at=now, updated_at=now)
+                         source_type="manual", task_size="small", skill_tags=[], status=status, created_at=now, updated_at=now)
     uses_assignment = operation is TaskAuthorityOperation.CLAIM
     assignment = None
     if uses_assignment:

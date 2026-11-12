@@ -272,7 +272,6 @@ class ContributionPolicyService:
             action, request, digest, policy.id, version.id, policy.status, version.status
         )
         actor = await consume_and_close_policy_authority(self._mutation_authorization, facts)
-        version.reward_model_version = 2
         version.instrument_type = (
             request.instrument_type.value if request.instrument_type is not None else None
         )
@@ -375,7 +374,6 @@ class ContributionPolicyService:
                         quantity=Decimal(quantity),
                         adapter_binding_id=request.adapter_binding_id,
                         task_size=size,
-                        reward_model_version=2,
                     )
                 )
         await lock_policy_resources(

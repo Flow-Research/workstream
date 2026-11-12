@@ -2,8 +2,6 @@
   "contract_version": 1,
   "source_instance_id": "019a78b0-0000-7000-8000-000000000040",
   "fulfillment_root_id": "019a78b0-0000-7000-8000-000000000060",
-  "admission_kind": "acceptance",
-  "reward_model_version": 2,
   "award_id": "019a78b0-0000-7000-8000-000000000011",
   "project_id": "019a78b0-0000-7000-8000-000000000001",
   "contributor_id": "019a78b0-0000-7000-8000-000000000003",

@@ -23,17 +23,17 @@ _KEYWORD = "x-workstream-policy-view"
 def _closed_policy_view(value: Any) -> bool:
     if not isinstance(value, dict):
         return False
-    marker, rules = value.get("reward_model_version"), value.get("rules")
+    rules = value.get("rules")
     if type(value.get("version_number")) is not int or value["version_number"] < 1:
         return False
     if not isinstance(value.get("name"), str) or not value["name"].strip():
         return False
     header = tuple(value.get(key) for key in ("instrument_type", "unit_code", "adapter_binding_id"))
-    if type(marker) is not int or marker not in (1, 2) or not isinstance(rules, list):
+    if not isinstance(rules, list):
         return False
     if not rules:
         return value.get("version_status") == "draft" and all(item is None for item in header)
-    if len(rules) != 2 or marker == 1 and any(item is not None for item in header):
+    if len(rules) != 2:
         return False
     kinds: set[str] = set()
     definition_ids: set[UUID] = set()
@@ -60,19 +60,11 @@ def _closed_policy_view(value: Any) -> bool:
                 return False
             paid = True
             expected = 3 if kind == "accepted_submission" else 1
-            if marker == 1:
-                if not 1 <= len(definitions) <= 2:
-                    return False
-            elif len(definitions) != expected:
+            if len(definitions) != expected:
                 return False
-            sizes, instruments = set(), set()
+            sizes: set[str] = set()
             for definition in definitions:
                 if not isinstance(definition, dict):
-                    return False
-                if (
-                    type(definition.get("reward_model_version")) is not int
-                    or definition["reward_model_version"] != marker
-                ):
                     return False
                 definition_id = UUID(definition.get("definition_id"))
                 if definition_id in definition_ids:
@@ -98,24 +90,19 @@ def _closed_policy_view(value: Any) -> bool:
                 else:
                     return False
                 size = definition.get("task_size")
-                if marker == 1:
-                    if size is not None or instrument in instruments:
+                if (instrument, unit) != header[:2] or binding != UUID(header[2]):
+                    return False
+                if kind == "accepted_submission":
+                    if size not in ("small", "medium", "large") or size in sizes:
                         return False
-                else:
-                    if (instrument, unit) != header[:2] or binding != UUID(header[2]):
-                        return False
-                    if kind == "accepted_submission":
-                        if size not in ("small", "medium", "large") or size in sizes:
-                            return False
-                        sizes.add(size)
-                    elif size is not None:
-                        return False
-                instruments.add(instrument)
+                    sizes.add(size)
+                elif size is not None:
+                    return False
     except (TypeError, ValueError, AttributeError):
         return False
-    return marker == 1 or (
-        all(item is not None for item in header) if paid else all(item is None for item in header)
-    )
+    if paid:
+        return all(item is not None for item in header)
+    return all(item is None for item in header)
 
 
 def _policy_view_errors(

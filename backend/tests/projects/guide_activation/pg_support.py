@@ -261,22 +261,20 @@ async def publish_policy(factory, project_id, *, compensated=False, contribution
         from .compensation_fixtures import create_binding
 
         world.binding = await create_binding(factory, world)
-    award_bindings = ()
+    financial_header = None
     if contribution_awards:
         from .compensation_fixtures import create_binding
 
-        award_bindings = tuple(
-            [
-                (instrument, await create_binding(factory, world, instrument_type=instrument))
-                for instrument in contribution_awards
-            ]
-        )
+        if len(contribution_awards) != 1:
+            raise ValueError("current policy fixture requires one common instrument")
+        instrument = contribution_awards[0]
+        financial_header = (instrument, await create_binding(factory, world, instrument_type=instrument))
     policy = None
     for operation in ("create_draft", "update_draft", "publish"):
         async with factory() as session, session.begin():
             policy = await getattr(world.service(session), operation)(
                 world.request(
-                    operation, policy, compensated=compensated, award_bindings=award_bindings
+                    operation, policy, compensated=compensated, financial_header=financial_header
                 )
             )
     return world, policy

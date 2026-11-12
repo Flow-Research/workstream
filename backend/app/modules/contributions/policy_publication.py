@@ -79,7 +79,6 @@ class ContributionPolicyPublicationService:
         if (
             policy.status not in {"draft", "active"}
             or version.status != "draft"
-            or version.reward_model_version != 2
         ):
             raise ContributionPolicyConflict("contribution_policy_not_found")
         prior = await self._lock_prior(policy, version)

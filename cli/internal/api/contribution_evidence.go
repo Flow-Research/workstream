@@ -387,7 +387,7 @@ func validateContributionRecords(raw json.RawMessage, filters ContributionFilter
 		}
 		seen[id], previousTime, previousID = true, stamp, id
 		var rawAwards []json.RawMessage
-		if err := json.Unmarshal(fields["awards"], &rawAwards); err != nil || rawAwards == nil || len(rawAwards) > 2 {
+		if err := json.Unmarshal(fields["awards"], &rawAwards); err != nil || rawAwards == nil || len(rawAwards) > 1 {
 			return bad
 		}
 		instruments := make(map[string]bool)

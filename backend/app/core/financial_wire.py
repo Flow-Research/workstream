@@ -36,9 +36,8 @@ def decode_financial_object(body: bytes) -> dict:
 
 def require_canonical_obligation_values(value: dict) -> None:
     """Validate canonical UUID, UTC timestamp and exact positive quantity strings."""
-    for key in ("contract_version", "reward_model_version"):
-        if type(value[key]) is not int:
-            raise ValueError("version must be an integer wire value")
+    if type(value["contract_version"]) is not int:
+        raise ValueError("contract version must be an integer wire value")
     for key, item in value.items():
         if key.endswith("_id") and item is not None:
             require_canonical_uuid(item)

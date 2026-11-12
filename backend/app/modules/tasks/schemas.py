@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator, model_serializer
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.modules.projects.api.guide_activation_context import GuidePolicySelection
 from app.modules.projects.api.locked_policy import GuideDisplayFacts, ProjectDisplayFacts
@@ -167,7 +167,7 @@ class TaskResponse(BaseModel):
 
     id: str
     project_id: str
-    task_size: TaskSize | None = None
+    task_size: TaskSize
     locked_contribution_policy_version_id: UUID | None
     locked_guide_version: str | None
     locked_review_policy_id: str | None
@@ -202,17 +202,12 @@ class TaskResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
 
-    @model_serializer(mode="wrap")
-    def recorded_fields(self, handler):
-        """Preserve an old saved response's absent size without rewriting its JSON."""
-        result = handler(self)
-        if "task_size" not in self.model_fields_set:
-            result.pop("task_size", None)
-        return result
 
 
 class ContributorClaimTaskResponse(BaseModel):
     """Claim task facts without management-only source or policy coordinates."""
+
+    task_size: TaskSize
 
     model_config = ConfigDict(from_attributes=True, extra="forbid", frozen=True)
 

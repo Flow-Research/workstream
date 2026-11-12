@@ -35,16 +35,12 @@ def require_complete_policy_graph(
         raise ContributionPolicyConflict("contribution_policy_conflict")
 
     if (
-        version.reward_model_version not in {1, 2}
-        or len(rules) != 2
+        len(rules) != 2
         or {rule.contribution_type for rule in rules} != {"accepted_submission", "completed_review"}
     ):
         conflict()
     header = (version.instrument_type, version.unit_code, version.adapter_binding_id)
-    if version.reward_model_version == 1:
-        if any(value is not None for value in header):
-            conflict()
-    elif any(rule.compensation_mode == "compensated" for rule in rules):
+    if any(rule.compensation_mode == "compensated" for rule in rules):
         if any(value is None for value in header):
             conflict()
     elif any(value is not None for value in header):
@@ -61,12 +57,7 @@ def require_complete_policy_graph(
             if items:
                 conflict()
         elif rule.compensation_mode == "compensated":
-            if version.reward_model_version == 1:
-                if not 1 <= len(items) <= 2 or len({item.instrument_type for item in items}) != len(
-                    items
-                ):
-                    conflict()
-            elif rule.contribution_type == "accepted_submission":
+            if rule.contribution_type == "accepted_submission":
                 if len(items) != 3 or {item.task_size for item in items} != {
                     "small",
                     "medium",
@@ -83,13 +74,9 @@ def require_complete_policy_graph(
                 or item.contribution_policy_version_id != version.id
                 or item.contribution_rule_id != rule.id
                 or item.contribution_type != rule.contribution_type
-                or item.reward_model_version != version.reward_model_version
             ):
                 conflict()
-            if version.reward_model_version == 1:
-                if item.task_size is not None:
-                    conflict()
-            elif (item.instrument_type, item.unit_code, item.adapter_binding_id) != header:
+            if (item.instrument_type, item.unit_code, item.adapter_binding_id) != header:
                 conflict()
             try:
                 canonical_award_quantity(

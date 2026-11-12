@@ -23,7 +23,7 @@ async def test_paid_rollback_and_late_sql_failure_discard_every_new_effect(
     async with authorized_routing_source(
         tmp_path,
         isolated_database_env,
-        contribution_awards=("money", "project_points"),
+        contribution_awards=("money",),
     ) as h:
         async with h.factory() as session:
             before = await outcome_snapshot(session)
@@ -31,7 +31,7 @@ async def test_paid_rollback_and_late_sql_failure_discard_every_new_effect(
             async with h.factory() as session:
                 await session.begin()
                 result = await apply_outcome(session, h, 2)
-                assert len(result.economic.award_ids) == 2
+                assert len(result.economic.award_ids) == 1
                 if fail_sql:
                     with pytest.raises(DBAPIError, match="division by zero"):
                         await session.execute(text("SELECT 1 / 0"))
@@ -49,7 +49,7 @@ async def test_concurrent_shared_acceptance_converges_on_committed_winner_ids(
     async with authorized_routing_source(
         tmp_path,
         isolated_database_env,
-        contribution_awards=("money", "project_points"),
+        contribution_awards=("money",),
     ) as h:
         ready = asyncio.Future()
 

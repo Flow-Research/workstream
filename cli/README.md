@@ -291,7 +291,7 @@ not payment status**. A completed-review record is evidence of an actual Review;
 reading existing records does not activate unfinished human review or its
 revision workflow.
 
-`--csv FILE` requests the server's formula-neutralized CSV, one row per award
+`--csv FILE` requests the server's formula-neutralized CSV, one row per applicable selected award
 or one row for an unpaid contribution. It preserves those exact bytes after
 validation across every page, emits the server header once, writes a new 0600
 file in an existing directory and refuses existing files or destination
@@ -682,8 +682,8 @@ explicit `small`, `medium`, and `large` decimal strings. A paid `completed_revie
 rule supplies one fixed string `quantity`. Unpaid rules omit both amount fields.
 The superseded per-rule `definitions` input is rejected. Workstream checks unit
 registration and binding eligibility; unit creation and binding management
-remain Finance-only. The CLI preserves quantities without rounding and reads
-retained v1 policy views, including dual instruments. Input files are limited
+remain Finance-only. The CLI preserves quantities without rounding and validates
+the one current complete policy graph. Input files are limited
 to 1 MiB; unknown fields and malformed types fail before dispatch.
 
 Use selectors from the returned receipt or an explicit policy read. Publication
@@ -1482,8 +1482,7 @@ The input is the public `TaskCreate` JSON, for example:
 Task creation accepts `task_size`: `small`, `medium` or `large`. Omission means
 `small`; explicit null, case variants and other values are rejected. Size is
 immutable after creation. It does not accept a price, unit or award override.
-New create/import receipts record size explicitly; archived receipts retain their
-original shape. Other declaration fields retain their API omission/null semantics. Creation requires a canonical hyphenated project UUID, as does
+All create/import receipts record size explicitly and use the current format. Other declaration fields retain their API omission/null semantics. Creation requires a canonical hyphenated project UUID, as does
 the backend create route. Inputs are bounded to 1MiB; management responses to
 2MiB. Transition selectors accept supported UUID spellings without changing the
 supplied task selector on the wire. The project selector binds the returned

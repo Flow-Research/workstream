@@ -153,7 +153,6 @@ id
 contribution_policy_id
 project_id
 version_number
-reward_model_version: 1 | 2
 instrument_type: money | project_points | null
 unit_code: string | null
 adapter_binding_id: UUID | null
@@ -166,12 +165,13 @@ retired_by
 retired_at
 ```
 
-New authoring and publication use reward model 2. A compensated version has
-one common instrument, unit and adapter binding for both contribution rules.
-A wholly unpaid version has explicit null financial headers and needs no
-financial setup. Retained model 1 versions remain immutable historical facts;
-an authorized complete draft replacement may upgrade an unpublished v1 draft.
-New guide activation and revision selection require v2.
+All authoring, publication and reads use one current reward implementation
+within unreleased v0.1. A compensated policy version has one common instrument,
+unit and adapter binding for both contribution rules. A wholly unpaid version
+has explicit null financial headers and needs no financial setup. Superseded
+implementations, old-format readers and compatibility-only fixtures/tests are
+removed. Incompatible data transitions fail atomically without deleting facts
+or inventing prices.
 
 Draft content may be edited through the authorized policy service. Published
 and retired content is immutable. Publishing a later version affects a work
@@ -196,11 +196,11 @@ compensation_mode: unpaid | compensated
 
 Every publishable policy version MUST contain exactly one rule for each
 contribution type. An `unpaid` rule MUST have no award definitions. A
-`compensated` v2 `accepted_submission` rule MUST have exactly three definitions,
+`compensated` `accepted_submission` rule MUST have exactly three definitions,
 one each for `small`, `medium`, and `large`. A compensated `completed_review`
 rule MUST have exactly one fixed definition with null task size. All definitions
-match the version's common financial header. Retained v1 graphs may have one
-or two instrument definitions; reading them does not authorize new v1 effects.
+match the version's common financial header. There is no alternate old graph
+validator, writer or response/hash format.
 
 ### ContributionAwardDefinition
 
@@ -216,7 +216,6 @@ instrument_type: money | project_points
 unit_code
 quantity
 adapter_binding_id
-reward_model_version: 1 | 2
 task_size: small | medium | large | null
 ```
 
@@ -678,7 +677,7 @@ Its typed input contains only locked:
 
 It contains no FinalAcceptance, TaskAssignment contribution source, submitter,
 or submitter policy. It creates exactly one `completed_review`, evaluates only
-the reviewer rule, stages zero to two awards, returns typed audit/outbox inputs,
+the reviewer rule, stages zero or one award, returns typed audit/outbox inputs,
 and flushes.
 
 ### Decision branches
@@ -740,7 +739,7 @@ participant in that transaction.
 
 It contains no direct Review or ReviewLease contribution-source fields. It
 creates or exactly replays one `accepted_submission`, evaluates only the frozen
-submitter rule, stages the complete zero-to-two award set, returns immutable
+submitter rule, stages the complete zero-or-one award set, returns immutable
 contribution/award facts, and flushes. Paid replay checks correlation equality;
 unpaid replay has no stored award correlation to compare.
 
@@ -948,7 +947,7 @@ COMPENSATION and PROJECTS expose transaction-held public owner ports. Every
 mutation uses a caller-owned root transaction, advisory operation fence,
 opaque prepare/consume/close participant, complete graph replacement, and one
 immutable recoverable lifecycle event. Default composition remains deny-default. CP05 supplies explicit AUTH
-composition for all five actions. Current v2 policy read/create/update/publish/
+composition for all five actions. Current policy read/create/update/publish/
 retire and version-list operations accept active human Project Manager or
 Finance Authority grants with system or exact-project scope. Unit creation and
 adapter binding management remain Finance Authority-only; sharing

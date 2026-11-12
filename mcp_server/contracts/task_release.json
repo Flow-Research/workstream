@@ -1,5 +1,5 @@
 {
-  "canonical_sha256": "d12572fae3db85f82c4b3546c2a38d209f0d501f5504c3260b8cd711e8d3b058",
+  "canonical_sha256": "839d529cacda2c5d7e78f303d85bf677e2821903a1caf0c466c5151a74838931",
   "components": {
     "schemas": {
       "ApiError": {
@@ -394,20 +394,13 @@
             "type": "string"
           },
           "task_size": {
-            "anyOf": [
-              {
-                "enum": [
-                  "small",
-                  "medium",
-                  "large"
-                ],
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
+            "enum": [
+              "small",
+              "medium",
+              "large"
             ],
-            "title": "Task Size"
+            "title": "Task Size",
+            "type": "string"
           },
           "task_type": {
             "anyOf": [
@@ -433,6 +426,7 @@
         "required": [
           "id",
           "project_id",
+          "task_size",
           "locked_contribution_policy_version_id",
           "locked_guide_version",
           "locked_review_policy_id",
@@ -811,7 +805,6 @@
   "source": {
     "method": "POST",
     "openapi_version": "3.1.0",
-    "path": "/api/v1/tasks/{task_id}/release",
-    "repository_sha": "23c519b7d7a3092ed7da2b88bd245c579752f4e4"
+    "path": "/api/v1/tasks/{task_id}/release"
   }
 }

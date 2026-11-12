@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Workstream Finance post-fulfillment exception v1",
+  "title": "Workstream Finance post-fulfillment exception",
   "type": "object",
   "additionalProperties": false,
   "required": [

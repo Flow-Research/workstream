@@ -30,7 +30,7 @@ class ContributionReadFacts(ContributionRecordInput):
     recorded_at: AwareDatetime
     policy_version_number: int = Field(gt=0)
     compensation_mode: Literal["unpaid", "compensated"]
-    award_definitions: tuple[FrozenContributionAward, ...] = Field(max_length=2)
+    award_definitions: tuple[FrozenContributionAward, ...] = Field(max_length=1)
 
     @model_validator(mode="after")
     def validate_frozen_set(self) -> Self:
@@ -40,7 +40,7 @@ class ContributionReadFacts(ContributionRecordInput):
             item.instrument for item in self.award_definitions
         }) != count or (
             self.compensation_mode == "unpaid" and count != 0
-        ) or (self.compensation_mode == "compensated" and not 1 <= count <= 2):
+        ) or (self.compensation_mode == "compensated" and count != 1):
             raise ValueError("stored contribution rule is incomplete")
         return self
 

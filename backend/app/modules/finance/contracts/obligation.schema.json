@@ -1,14 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "title": "Workstream Finance obligation v1",
+  "title": "Workstream Finance obligation",
   "type": "object",
   "additionalProperties": false,
   "required": [
     "contract_version",
     "source_instance_id",
     "fulfillment_root_id",
-    "admission_kind",
-    "reward_model_version",
     "award_id",
     "project_id",
     "contributor_id",
@@ -43,19 +41,6 @@
     "fulfillment_root_id": {
       "type": "string",
       "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
-    },
-    "admission_kind": {
-      "enum": [
-        "acceptance",
-        "historical_enrollment"
-      ]
-    },
-    "reward_model_version": {
-      "type": "integer",
-      "enum": [
-        1,
-        2
-      ]
     },
     "award_id": {
       "type": "string",
@@ -172,25 +157,6 @@
     {
       "if": {
         "properties": {
-          "reward_model_version": {
-            "const": 1
-          }
-        }
-      },
-      "then": {
-        "properties": {
-          "admission_kind": {
-            "const": "historical_enrollment"
-          },
-          "task_size": {
-            "type": "null"
-          }
-        }
-      }
-    },
-    {
-      "if": {
-        "properties": {
           "contribution_type": {
             "const": "accepted_submission"
           }
@@ -203,6 +169,13 @@
           },
           "review_id": {
             "type": "null"
+          },
+          "task_size": {
+            "enum": [
+              "small",
+              "medium",
+              "large"
+            ]
           }
         }
       },
@@ -216,29 +189,6 @@
           },
           "task_size": {
             "type": "null"
-          }
-        }
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "reward_model_version": {
-            "const": 2
-          },
-          "contribution_type": {
-            "const": "accepted_submission"
-          }
-        }
-      },
-      "then": {
-        "properties": {
-          "task_size": {
-            "enum": [
-              "small",
-              "medium",
-              "large"
-            ]
           }
         }
       }

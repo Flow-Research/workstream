@@ -9,8 +9,8 @@ contribution evidence reads consume existing facts without activating recognitio
 or external fulfillment.
 
 The [size-based rewards and dedicated Finance contract](../workstream_finance_exec.md)
-amends the policy and fulfillment design below. It selects v2 as the sole new
-reward writer while retaining genuine v1 economic evidence. This decision is
+amends the policy and fulfillment design below. It requires one current reward implementation within unreleased v0.1,
+with superseded implementations and compatibility-only tests removed. This decision is
 implementation authority, not a payment-availability claim; the
 [capability ledger](roadmap_status.md) owns delivered status.
 
@@ -65,7 +65,7 @@ manual API and no independent authorization action.
 `ContributionPolicy` is the only target award-eligibility aggregate. Immutable
 published `ContributionPolicyVersion` values contain exactly one explicit
 `ContributionRule` for `accepted_submission` and one for `completed_review`.
-Each rule is `unpaid` or `compensated`. New v2 policy versions use one common
+Each rule is `unpaid` or `compensated`. Policy versions use one common
 instrument, unit and adapter binding for all compensated terms. Compensated
 `accepted_submission` rules have exactly three immutable alternatives: small,
 medium and large. Tasks select a size, never an entered amount. Omitted size
@@ -76,9 +76,9 @@ versions have null common financial fields.
 
 Screening resolves the exact size under the guide's selected policy. Assignment
 and immutable Submission copy that selected definition. New accepted work earns
-exactly that one award, or zero for an unpaid rule. Retained v1 policies and
-awards may contain two instruments; reads and exact historical replay preserve
-them without permitting new v1 financial effects or rewriting stored digests.
+exactly that one award, or zero for an unpaid rule. There is no alternate
+old-model reader or writer. Incompatible data transitions fail atomically;
+removing obsolete code does not authorize rewriting or deleting earned facts.
 
 Guide activation validates and binds one policy version. Task readiness locks
 it before claimability; TaskAssignment copies that lock, each Submission stamps
@@ -100,8 +100,9 @@ removes the unused guide-bound economic-policy storage and remaining response,
 repository and CLI consumers through migration 0023. CON-05A/05B and CP09 are
 historical groupings, not another pending removal or an activation gate. No
 alias, fallback, dual read/write or implicit unpaid behavior is introduced.
-The v2 writer replaces the superseded authoring shape within the same owners;
-required read-only business-version evidence is not a parallel old writer.
+The current implementation replaces superseded authoring behavior within the
+same owners. Policy and submission revisions remain business evidence within
+that implementation, without compatibility dispatch or old hash formats.
 
 ### Transaction ownership
 

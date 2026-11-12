@@ -17,8 +17,8 @@ pytestmark = pytest.mark.usefixtures("live_acceptance_lifecycle")
 
 @pytest.mark.parametrize(
     "instruments",
-    [(), ("money",), ("money", "project_points")],
-    ids=("unpaid", "one-award", "two-awards"),
+    [(), ("money",), ("project_points",)],
+    ids=("unpaid", "money", "points"),
 )
 async def test_authorized_acceptance_creates_and_exactly_replays_complete_effects(
     tmp_path,

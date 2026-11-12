@@ -18,7 +18,7 @@ async def reviewer_contribution_source(tmp_path, url, *, decision="accept", paid
     from tests.reviews.decision.support import review_source, finding, insert_review
 
     async with review_source(
-        tmp_path, url, contribution_awards=("money", "project_points") if paid else (), **options
+        tmp_path, url, contribution_awards=("money",) if paid else (), **options
     ) as h:
         h.review = h.review.model_copy(
             update={
@@ -65,7 +65,7 @@ async def authorized_submitter_source(
     awards = (
         tuple(contribution_awards)
         if contribution_awards is not None
-        else (("money", "project_points") if paid else ())
+        else (("money",) if paid else ())
     )
     async with authorized_routing_source(tmp_path, url, contribution_awards=awards, **options) as h:
         if retire_before_outcome:

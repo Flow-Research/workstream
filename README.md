@@ -552,10 +552,10 @@ policy manager.
 Each mutation requires one UUID `Idempotency-Key`. AUTH owns the authorization
 decision for the authenticated actor; the CON caller transaction atomically commits
 policy effects, AUTH evidence and immutable replay custody. Both contribution
-types explicitly declare compensated or unpaid rules. V2 uses one common
+types explicitly declare compensated or unpaid rules. The current model uses one common
 instrument, unit and binding, three exact submitter size amounts and a fixed
-reviewer amount. Wholly unpaid publication needs no financial setup. Retained
-v1 policy and dual-award facts remain readable. Unit and adapter-binding
+reviewer amount. Wholly unpaid publication needs no financial setup. Superseded
+reward-model implementations and old-format readers are removed. Unit and adapter-binding
 administration remains Finance-only; its public exposure remains pending.
 Task/revision selection and award propagation are separate qualification boundaries.
 

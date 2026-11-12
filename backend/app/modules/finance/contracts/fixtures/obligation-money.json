@@ -2,8 +2,6 @@
   "contract_version": 1,
   "source_instance_id": "019a78b0-0000-7000-8000-000000000040",
   "fulfillment_root_id": "019a78b0-0000-7000-8000-000000000060",
-  "admission_kind": "acceptance",
-  "reward_model_version": 2,
   "award_id": "019a78b0-0000-7000-8000-000000000011",
   "project_id": "019a78b0-0000-7000-8000-000000000001",
   "contributor_id": "019a78b0-0000-7000-8000-000000000003",
@@ -24,5 +22,5 @@
   "awarded_at": "2026-11-12T05:00:00.000000Z",
   "correlation_id": "019a78b0-0000-7000-8000-000000000012",
   "source_award_digest": "sha256:b1af8ccb0bc8c9df58016dd574242b7c70caf5454c6ae86e230a969ddc11b87b",
-  "obligation_digest": "sha256:36c15ebbd141162c9b929b1075ed62a306e43319f4e9753643e2ca437d63774b"
+  "obligation_digest": "sha256:12bb9e2699459b64a06088c375d45ae8415073b86555727e52409c4dd48694b1"
 }

@@ -200,7 +200,7 @@ def _set_runtime_manifest(monkeypatch, digest) -> None:
     )
 
 
-@pytest.mark.parametrize("instruments", [(), ("money",), ("money", "project_points")])
+@pytest.mark.parametrize("instruments", [(), ("money",), ("project_points",)])
 async def test_stopped_terminal_replay_is_select_only(
     tmp_path,
     isolated_database_env,
@@ -624,7 +624,7 @@ async def test_each_owner_independently_rejects_new_effects(
         await transition(await command_for(admin_access.target.id, "shadow"))
         await transition(await command_for(admin_access.target.id, "live"))
     async with authorized_routing_source(
-        tmp_path, isolated_database_env, contribution_awards=("money", "project_points")
+        tmp_path, isolated_database_env, contribution_awards=("money",)
     ) as h:
         phases = ("disabled", "shadow") if sequence == "genesis" else ("draining", "disabled", "shadow")
         for phase in phases:

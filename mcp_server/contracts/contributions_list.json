@@ -1,5 +1,5 @@
 {
-  "canonical_sha256": "598f36beccac91828f28f2edab6b5115d065d4d17e823f1137eb4058a064b991",
+  "canonical_sha256": "1197846abb7e1eb5edf14e8c4471dd69ac38e8275b8246be9d794b68e58ea086",
   "components": {
     "schemas": {
       "ApiError": {
@@ -205,7 +205,7 @@
             "items": {
               "$ref": "#/components/schemas/ContributionAwardView"
             },
-            "maxItems": 2,
+            "maxItems": 1,
             "title": "Awards",
             "type": "array"
           },
@@ -791,7 +791,6 @@
   "source": {
     "method": "GET",
     "openapi_version": "3.1.0",
-    "path": "/api/v1/actors/me/contributions",
-    "repository_sha": "bb39ac10aed24e3484f3155706f7a8902ef97694"
+    "path": "/api/v1/actors/me/contributions"
   }
 }

@@ -104,6 +104,40 @@ retained-data refusal without deletion, current AUTH/replay boundaries, exact
 public-API and durable-worker evidence. Prior compatibility review passes do not
 qualify the replacement.
 
+## Replacement evidence and remaining dependency
+
+Plan feasibility was reviewed at `dc6a621a90bbcd7ea41ec078b095e7420e9fc496`
+under the corrected user direction. No compatibility requirement survives that
+review. Current-model implementation proof during work: 222 pure financial,
+policy/size/selection cases; 95 focused CON/participation cases; 52 MCP client
+cases; 36 rebuilt CLI cases; Go package tests; MCP strict typing; scoped Ruff,
+stale wording and Markdown links. These are working-tree supporting results,
+not a full-PR or final-target qualification.
+
+Fresh isolated PostgreSQL installs the replacement schema without model-marker
+columns. Four current admission/creation cases passed, including canonical
+omission/explicit-Small equivalence and unchanged financial data after refusal.
+A broader current public run passed 24 cases, then loaded inconsistent fixture
+revisions because a helper changed during execution. Both helper and caller now
+use the single header contract; replay the failed claim case on the frozen
+candidate. Do not add an old parameter alias to satisfy an already running
+process. The final compound award FK was added after those database runs;
+its actual schema fingerprint was separately probed and installed in the rigid
+schema test gate. Exact candidate proof remains required.
+
+Tests that previously originated dual-instrument contributions now arrange one
+current instrument; independent money and points cases remain. Current
+complete-set contracts and readers accept only zero/one award. The missing-award
+mutation now omits the required single award rather than omitting a fictional
+second award. No count/coverage gate or skip is weakened.
+
+The remaining paid-path dependency is explicit immutable Submission selection:
+policy-wide tier enumeration cannot select an earned award. Finish the existing
+TASK/ART copy chain, selected CON source/read/cache lookup and SQL completeness
+closure, including governed revisions, before qualifying paid acceptance or its
+integration tests. Do not preserve the old all-definitions operation, choose the
+first tier, or describe isolated passing module checks as a paid journey.
+
 ## Completion and remaining work
 
 After this cleanup, finish the same PR's selection-copy chain, governed revision,

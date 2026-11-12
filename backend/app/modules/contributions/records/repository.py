@@ -106,7 +106,7 @@ class SubmitterContributionRepository:
         instruments = {item.instrument_type for item in definitions}
         complete = (rule.compensation_mode == "unpaid" and not definitions) or (
             rule.compensation_mode == "compensated"
-            and 1 <= len(definitions) <= 2
+            and len(definitions) == 1
             and len(instruments) == len(definitions)
         )
         if not complete:

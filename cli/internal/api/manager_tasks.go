@@ -75,7 +75,7 @@ func (c *Client) CreateTask(ctx context.Context, project string, body json.RawMe
 		return result, managerTaskFailure(err)
 	}
 	value, err := decodeManagerTask(raw, project, "", "draft")
-	if err != nil || !sameTaskDeclaration(value, input, fields["task_size"] != nil) || !c.safeMutationResponse(raw) {
+	if err != nil || !sameTaskDeclaration(value, input) || !c.safeMutationResponse(raw) {
 		return result, managerTaskFailure(&Failure{Code: "invalid_api_response", OutcomeUnknown: true})
 	}
 	return Result[ManagerTask]{Raw: raw, Value: value}, nil
@@ -143,13 +143,13 @@ func decodeManagerTask(raw json.RawMessage, project, selector, status string) (M
 	return task, nil
 }
 
-func validTaskSizeField(fields map[string]json.RawMessage, size *string) bool {
+func validTaskSizeField(fields map[string]json.RawMessage, size string) bool {
 	_, present := fields["task_size"]
-	return !present || (size != nil && oneOf(*size, "small", "medium", "large"))
+	return present && oneOf(size, "small", "medium", "large")
 }
 
-func sameTaskDeclaration(t ManagerTask, input taskCreateInput, sizeExplicit bool) bool {
-	if t.TaskSize == nil && sizeExplicit || t.TaskSize != nil && *t.TaskSize != input.TaskSize {
+func sameTaskDeclaration(t ManagerTask, input taskCreateInput) bool {
+	if t.TaskSize != input.TaskSize {
 		return false
 	}
 

@@ -32,7 +32,7 @@ class ContributionAwardReadRepository:
             ).order_by(CompensationAward.contribution_record_id, CompensationAward.instrument_type)
         )).all()
         return tuple(CompensationAwardFacts(
-            id=row.id, reward_model_version=row.reward_model_version, project_id=UUID(row.project_id),
+            id=row.id, project_id=UUID(row.project_id),
             contribution_record_id=row.contribution_record_id,
             contributor_id=UUID(row.contributor_id),
             contribution_policy_version_id=row.contribution_policy_version_id,

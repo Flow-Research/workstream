@@ -429,18 +429,15 @@ def test_uncertain_batch_writes_are_once_only_and_preserve_manual_recovery(
     assert json.loads(result.stderr)["error"]["outcome_unknown"] is True
 
 
-def test_original_size_formats_reject_null_and_mixed_batches(cli):
+def test_current_import_receipts_reject_size_omissions_and_partial_rows(cli):
     with http_fixture() as (origin, response, requests):
         for operation in ("import", "status"):
-            for change in ("new", "old", "null", "mixed", "unknown", "partial"):
+            for change in ("valid", "null", "missing_size", "unknown", "partial"):
                 original = creation()
                 original["tasks"][1]["task_size"] = "large"
-                if change == "old":
-                    for row in original["tasks"]:
-                        row.pop("task_size")
-                elif change == "null":
+                if change == "null":
                     original["tasks"][0]["task_size"] = None
-                elif change == "mixed":
+                elif change == "missing_size":
                     original["tasks"][0].pop("task_size")
                 elif change == "unknown":
                     original["tasks"][0]["task_size"] = "Small"
@@ -452,7 +449,7 @@ def test_original_size_formats_reject_null_and_mixed_batches(cli):
                 response.update(status=201 if operation == "import" else 200,
                                 body=json.dumps(value).encode())
                 result = invoke(cli, origin, operation)
-                if change in {"new", "old"}:
+                if change == "valid":
                     assert result.returncode == 0, result.stderr
                     assert json.loads(result.stdout) == value
                 else:
@@ -460,4 +457,4 @@ def test_original_size_formats_reject_null_and_mixed_batches(cli):
                     error = json.loads(result.stderr)["error"]
                     assert error["code"] == "invalid_api_response"
                     assert error.get("outcome_unknown", False) == (operation == "import")
-        assert len(requests) == 12
+        assert len(requests) == 10

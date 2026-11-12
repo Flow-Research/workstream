@@ -35,29 +35,15 @@ def policy(*, empty=False, compensated=False):
                 }
             )
     if compensated:
-        rules[0].update(
-            compensation_mode="compensated",
-            definitions=[
-                {
-                    "reward_model_version": 1,
-                    "task_size": None,
-                    "definition_id": PROJECT,
-                    "instrument_type": "money",
-                    "unit_code": "USD",
-                    "quantity": "99999999999999999999.123456789012345678",
-                    "adapter_binding_id": KEY,
-                },
-                {
-                    "reward_model_version": 1,
-                    "task_size": None,
-                    "definition_id": VERSION,
-                    "instrument_type": "project_points",
-                    "unit_code": "research_points",
-                    "quantity": "9007199254740993",
-                    "adapter_binding_id": ACTOR,
-                },
-            ],
-        )
+        rules[0].update(compensation_mode="compensated", definitions=[
+            {"task_size": size, "definition_id": identifier, "instrument_type": "money",
+             "unit_code": "USD", "quantity": quantity, "adapter_binding_id": KEY}
+            for size, identifier, quantity in (
+                ("small", PROJECT, "99999999999999999999.123456789012345678"),
+                ("medium", VERSION, "9007199254740993"),
+                ("large", POLICY, "10"),
+            )
+        ])
     return {
         "project_id": PROJECT,
         "contribution_policy_id": POLICY,
@@ -65,10 +51,9 @@ def policy(*, empty=False, compensated=False):
         "policy_status": "draft" if empty else "active",
         "contribution_policy_version_id": VERSION,
         "version_number": 1,
-        "reward_model_version": 1,
-        "instrument_type": None,
-        "unit_code": None,
-        "adapter_binding_id": None,
+        "instrument_type": "money" if compensated else None,
+        "unit_code": "USD" if compensated else None,
+        "adapter_binding_id": KEY if compensated else None,
         "version_status": "draft" if empty else "published",
         "rules": rules,
     }
@@ -276,7 +261,7 @@ def test_policy_view_binds_full_nested_facts_and_normalized_identities(cli):
         invalid.append(altered)
     for change in (
         {"definition_id": PROJECT.replace("-", "")},
-        {"instrument_type": "money"},
+        {"instrument_type": "project_points"},
     ):
         altered = deepcopy(good)
         altered["rules"][0]["definitions"][1].update(change)
@@ -336,10 +321,9 @@ def test_policy_read_credential_safety_bounds_and_backend_denial(cli):
             response["status"] = 200
 
 
-def test_v2_policy_read_preserves_three_tiers_and_rejects_wrong_selection(cli):
+def test_policy_read_preserves_three_tiers_and_rejects_wrong_selection(cli):
     value = policy(compensated=True)
     value.update(
-        reward_model_version=2,
         instrument_type="money",
         unit_code="USD",
         adapter_binding_id=KEY,
@@ -349,7 +333,6 @@ def test_v2_policy_read_preserves_three_tiers_and_rejects_wrong_selection(cli):
         template
         | {
             "definition_id": identifier,
-            "reward_model_version": 2,
             "task_size": size,
             "quantity": amount,
         }
@@ -363,7 +346,6 @@ def test_v2_policy_read_preserves_three_tiers_and_rejects_wrong_selection(cli):
     for change in (
         {"task_size": "medium"},
         {"task_size": None},
-        {"reward_model_version": 1},
         {"unit_code": "NGN"},
     ):
         bad = deepcopy(value)
@@ -385,12 +367,12 @@ def test_v2_policy_read_preserves_three_tiers_and_rejects_wrong_selection(cli):
             )
 
 
-def test_policy_read_rejects_partial_draft_and_non_integer_markers(cli):
+def test_policy_read_rejects_partial_draft_and_invalid_revision_numbers(cli):
     partial = policy()
     partial.update(version_status="draft", rules=partial["rules"][:1])
-    invalid = [partial, policy() | {"reward_model_version": 1.0}]
+    invalid = [partial, policy() | {"version_number": 1.0}]
     child = policy(compensated=True)
-    child["rules"][0]["definitions"][0]["reward_model_version"] = 1.0
+    child["rules"][0]["definitions"][0]["quantity"] = "0"
     invalid.append(child)
     with http_fixture() as (origin, response, _):
         for value in invalid:

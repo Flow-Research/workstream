@@ -78,7 +78,6 @@ class SelectedContributionPolicyValidation:
         if (
             version is None
             or version.status not in {"published", "retired"}
-            or version.reward_model_version != 2
         ):
             raise ContributionPolicyUnavailable("contribution_policy_unavailable")
         if (

@@ -42,6 +42,13 @@ async def test_public_creation_stores_default_and_each_exact_size(import_source_
         original = response.json()
         replay = await client.post(f"/api/v1/projects/{project}/tasks", headers=headers, json=body)
         assert replay.status_code == 201 and replay.json() == original, replay.text
+        if not selection:
+            explicit = await client.post(f"/api/v1/projects/{project}/tasks", headers=headers,
+                                         json=body | {"task_size": "small"})
+            assert explicit.status_code == 201 and explicit.json() == original, explicit.text
+            changed = await client.post(f"/api/v1/projects/{project}/tasks", headers=headers,
+                                        json=body | {"task_size": "medium"})
+            assert changed.status_code == 409, changed.text
         created.append(original)
         async with db_session.get_session_factory()() as session:
             task = await session.get(WorkstreamTask, original["id"])

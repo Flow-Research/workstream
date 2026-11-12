@@ -1,4 +1,4 @@
-"""Exact immutable v2 reward selection; values never confer owner authority."""
+"""Exact immutable reward selection; values never confer owner authority."""
 
 import re
 from typing import Annotated, Literal, Protocol, Self
@@ -64,7 +64,7 @@ class RewardSelectionFacts(BaseModel):
 
 
 class RewardSelectionPort(Protocol):
-    """Resolve only an exact v2 policy under the caller's existing transaction."""
+    """Resolve only an exact policy under the caller's existing transaction."""
 
     async def resolve_reward_selection(
         self, request: RewardSelectionRequest

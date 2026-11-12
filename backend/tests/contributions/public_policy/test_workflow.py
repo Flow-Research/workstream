@@ -61,7 +61,6 @@ async def test_paid_policy_resolves_exact_tiers_and_retained_version(admin_acces
     view = await admin_access.signed.client.get(root, headers=admin_access.target.headers)
     assert view.status_code == 200, view.text
     graph = view.json()
-    assert graph["reward_model_version"] == 2
     assert (graph["instrument_type"], graph["unit_code"], graph["adapter_binding_id"]) == (
         "money",
         "USD",

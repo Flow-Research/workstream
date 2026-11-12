@@ -674,7 +674,7 @@ A first valid request commits one obligation, its immutable source envelope, aud
   "source_instance_id": "019a78b0-0000-7000-8000-000000000040",
   "award_id": "019a78b0-0000-7000-8000-000000000011",
   "obligation_id": "019a78b0-0000-7000-8000-000000000050",
-  "obligation_digest": "sha256:0a51b63fa6b459aa449b886b6a6eb27199f9f49106da2c324081a63eccfea943",
+  "obligation_digest": "sha256:c20d731d6e2fa3a88ae4f86b5894507d2d577db617922768743d85657fec0311",
   "processing_status": "awaiting_configuration",
   "replay": false
 }
@@ -1954,7 +1954,7 @@ The following is a complete valid new points obligation for schema and digest te
   "awarded_at": "2026-11-12T05:00:00.000000Z",
   "correlation_id": "019a78b0-0000-7000-8000-000000000012",
   "source_award_digest": "sha256:e0de37a2fbf054a816a23c5658f3446c725bf55175c73093a6947019d95306df",
-  "obligation_digest": "sha256:0a51b63fa6b459aa449b886b6a6eb27199f9f49106da2c324081a63eccfea943"
+  "obligation_digest": "sha256:c20d731d6e2fa3a88ae4f86b5894507d2d577db617922768743d85657fec0311"
 }
 ~~~
 

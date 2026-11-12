@@ -30,11 +30,9 @@ from tests.test_tasks import (
 EXPECTED_PAID = {
     "accepted_submission": [
         {"instrument": "money", "unit": "USD", "quantity": "2.125000000000000001"},
-        {"instrument": "project_points", "unit": "PTS", "quantity": "7"},
     ],
     "completed_review": [
         {"instrument": "money", "unit": "USD", "quantity": "2.125000000000000001"},
-        {"instrument": "project_points", "unit": "PTS", "quantity": "7"},
     ],
 }
 FINANCE_INTERNALS = (
@@ -84,7 +82,7 @@ async def test_ready_and_detail_show_exact_locked_paid_terms_to_both_project_rol
     factory = db_session.get_session_factory()
     url = factory.kw["bind"].url.render_as_string(hide_password=False)
     async with activation_case(
-        url, contribution_awards=("money", "project_points")
+        url, contribution_awards=("money",)
     ) as (sessions, command, actor, _manager_grant, world, published):
         await activate(sessions, actor, command)
         project = command.target.proposal.project_id

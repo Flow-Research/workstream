@@ -11,7 +11,7 @@ from app.modules.tasks.api.task_import_membership import (
     TaskImportBatchError,
     TaskImportMemberIdentity,
 )
-from app.modules.tasks.command_replay import recorded_task_import_fields
+from app.modules.tasks.api.task_import import TaskImportRow
 from app.modules.tasks.models import TaskCommandReceipt, TaskImportBatch, TaskImportBatchMember
 from app.modules.tasks.schemas import TaskImportBatchResponse
 
@@ -59,13 +59,7 @@ class TaskImportMembership:
         ).where(TaskImportBatchMember.batch_id == batch.id).order_by(TaskImportBatchMember.row_index))).all()
         if len(rows) != batch.row_count:
             raise TaskImportBatchError("task_import_batch_custody_invalid", 409)
-        try:
-            field_sets = tuple(recorded_task_import_fields(task) for task in batch.response["tasks"])
-        except (ValueError, KeyError, TypeError) as exc:
-            raise TaskImportBatchError("task_import_batch_custody_invalid", 409) from exc
-        if len(set(field_sets)) != 1:
-            raise TaskImportBatchError("task_import_batch_custody_invalid", 409)
-        fields = field_sets[0]
+        fields = tuple(TaskImportRow.model_fields)
         manifest = {"schema_version": response.schema_version, "metadata": {"label": response.label},
                     "tasks": [{field: getattr(task, field) for field in fields} for task in response.tasks]}
         if response.label != batch.metadata_label or canonical_json_hash(manifest) != batch.manifest_digest:

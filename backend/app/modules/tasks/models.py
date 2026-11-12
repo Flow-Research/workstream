@@ -102,7 +102,7 @@ class WorkstreamTask(Base):
 
     __tablename__ = "workstream_tasks"
     __table_args__ = (
-        CheckConstraint("task_size is null or task_size in ('small','medium','large')", name="task_size"),
+        CheckConstraint("task_size in ('small','medium','large')", name="task_size"),
         CheckConstraint("(get_byte(uuid_send(id), 6) >> 4) = 7 and (get_byte(uuid_send(id), 8) & 192) = 128", name="id_uuid7"),
         CheckConstraint(
             "status in ('draft','screening','ready','in_progress','submitted','evaluation_pending','review_pending','needs_revision','accepted')",
@@ -287,7 +287,7 @@ class WorkstreamTask(Base):
     )
 
     id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True)
-    task_size: Mapped[str | None] = mapped_column(String(8))
+    task_size: Mapped[str] = mapped_column(String(8), nullable=False)
     project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), nullable=False, index=True)
     locked_contribution_policy_version_id: Mapped[UUID | None] = mapped_column(Uuid())
     locked_guide_version: Mapped[str | None] = mapped_column(String(50))

@@ -117,7 +117,7 @@ class ContributionRecordView(BaseModel):
     source_type: str
     source_ref: str | None
     external_task_id: str | None
-    awards: tuple[ContributionAwardView, ...] = Field(max_length=2)
+    awards: tuple[ContributionAwardView, ...] = Field(max_length=1)
 
     @model_validator(mode="after")
     def validate_source_and_awards(self) -> Self:
