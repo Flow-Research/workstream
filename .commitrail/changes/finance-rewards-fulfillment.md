@@ -50,6 +50,75 @@ dynamic-import exceptions are introduced.
 
 First-commit verification: `cd backend && .venv/bin/python -m pytest -q tests/finance/test_obligation_contracts.py`; `.venv/bin/ruff check app/core/financial_wire.py app/modules/compensation/api/fulfillment_contracts.py app/modules/finance/api tests/finance/test_obligation_contracts.py`. These are planned new tests/files, not executed proof. Schema fixtures include the exact specification vector, money and historical controls, plus negative canonicalization/shape/digest cases. Source-authority and runtime HTTP assertions remain later integration proof.
 
+### Next commit boundary: retained-reward preflight
+
+Allowed: `backend/scripts/finance_reward_preflight.py`, focused
+`backend/tests/finance/test_reward_preflight.py` and its fixture imports, plus
+this record and a short operational usage note. This is an offline migration
+inspection command, not a product service or second migration runner. It uses
+the shared configured engine and fixed SQL over the existing owner tables;
+no private owner imports, mutations, repairs, HTTP routes, runtime handlers or
+new schema are introduced.
+
+Use one `REPEATABLE READ READ ONLY` transaction with a 30-second local statement
+timeout. Each closed category returns `total_count`, sorted `sample_ids`
+(default 100; caller may lower to 1–100), `truncated`, and `blocks_cutover`.
+No economic bodies, request responses, actors' PII or credentials are emitted.
+Exactly one supported Alembic revision must exist. Missing required tables or
+columns fail closed. A missing `reward_model_version` column at the pinned
+pre-v2 revision means v1; after the v2 migration the exact column determines
+version and markers on definitions/awards are checked against their policy.
+The post-v2 supported revision is added with its forward migration, not guessed
+from arbitrary future schemas. Optional roots/receipts are reported only under
+their exact owner table names when introduced, with explicit absent inventory
+until then. This report is diagnostic, never cutover authority: the migration
+must rerun blocker predicates while holding the real owner cutover fence.
+
+Closed report categories and fixed predicates:
+
+- `v1_policy_drafts/published/retired`: policy-version rows by exact status and
+  v1 marker; inventory only. `unscreened_draft_tasks`: null locked contribution
+  policy and draft status; inventory only, no economic terms inferred.
+- `live_v1_tasks`: task has an exact v1 locked policy and status != accepted;
+  conservative blocker because even a currently unassigned ready task can
+  still originate v1 acceptance. `live_v1_assignments`: v1 submitter policy and
+  active status; blocker. `live_v1_submissions`: v1 immutable submission policy
+  and attempt_status in evaluation_pending/review_pending/needs_revision;
+  blocker. `live_v1_revision_preparations`: joins its exact task in the live-v1
+  task set; blocker, regardless of preparation outcome.
+- `retained_contributions`, `retained_awards`: all existing source rows;
+  inventory. `dual_award_contributions`: group awards by contribution ID with
+  count > 1; inventory preserving both facts.
+- `saved_task_commands`, `saved_import_batches`, `saved_import_commands`,
+  `saved_policy_operations`, `saved_revision_preparations`: existing receipt/
+  event/preparation rows, IDs only; inventory, never rewrite stored JSON.
+- `acceptance_source_anomalies`: FinalAcceptance missing exact matching
+  Submission/project/task/contributor or missing referenced authorization
+  AUDIT row; blocker. `acceptance_contribution_gaps`: FinalAcceptance without
+  exact submitter ContributionRecord; blocker.
+- `contribution_source_anomalies`: exact Submission/project/task/artifact
+  mismatch; accepted_submission must match FinalAcceptance and assignment,
+  submitter and policy; completed_review must match actual Review/lease,
+  reviewer and reviewer policy. Do not require a current grant for historical
+  evidence. Missing/crossed source or policy facts block cutover.
+- `award_source_anomalies`: award/contribution/definition project, contributor,
+  policy, contribution kind, original instrument/unit/quantity/binding mismatch,
+  or absent source/definition/binding; blocker. `award_completeness_anomalies`:
+  retained contribution's award-definition set differs from its exact frozen
+  rule (including valid unpaid zero and v1 dual sets); blocker.
+
+Planned verification uses a real isolated PostgreSQL database: empty supported
+schema inventory; real existing authorized routing fixture before and after
+acceptance (live blockers disappear, dual awards retained); sample-limit
+truncation; direct DML rejected in the same read-only snapshot; repeated report
+and before/after economic row snapshots unchanged. Synthetic malformed source
+rows are not inserted by bypassing runtime guards. Later migration rehearsal
+adds genuine archived evidence and independent-session cutover races.
+Commands (new test not yet executed): `cd backend && .venv/bin/python
+scripts/run_isolated_tests.py -- .venv/bin/python -m pytest -q
+tests/finance/test_reward_preflight.py`; `.venv/bin/ruff check
+scripts/finance_reward_preflight.py tests/finance/test_reward_preflight.py`.
+
 ## Acceptance criteria
 
 - [ ] Positive/negative contract fixtures reproduce canonical digest vectors and reject altered evidence.
