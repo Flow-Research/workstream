@@ -462,3 +462,60 @@ semantic lane catalogue; register it with the existing task-authority modules.
 The focused migration comparison is replayed at the repaired commit so its
 receipt identifies the same reviewed source. These are necessary verification
 and metadata corrections, not expanded authority or public exposure.
+
+## T1 admission and exact replay composition
+
+Connect the private foreground path to real AUTH/TASK/PROJECT owners. Add a
+strict selector-only reservation preflight under the existing intake action;
+it checks current human/Submitter authority without issuing a handle or staging
+an allow. Full prepare/consume continues to require exact locked context/status.
+TASK's existing lock returns the stored project ID. Preserve the actual AUTH
+lock sequence: TASK, actor/link, exact grant, canonical TASK context/PROJECT
+policy, new operation, capacity. No body or provider call occurs in these short
+root transactions. Old preparation and accepted execution retain their contracts.
+
+The ART admission composition generates the operation UUID before preflight and
+passes it into the existing repository reservation. It validates current task,
+assignment, predecessor/revision acknowledgement and capacity, exactly one locked
+PRE and POST selection, and the configured claimed storage namespace/profile.
+Unqualified AWS source capability fails closed before reservation. Explicit
+positive raw/deadline/lease/capacity limits have no deployment defaults. The full
+PRE runtime/readiness and public rate/framing gates remain cutover dependencies;
+this private composition cannot expose a public accepted response.
+
+Resolve actor/key first. An existing operation uses its stored task/project and
+current own-operation read authority before metadata comparison or ordinary new
+submission eligibility. Active/no-EOF and terminal/no-EOF never consume a retry
+body. Complete EOF identity permits bounded hash/count into a discard sink,
+including unresolved provider completion; no new object or PRE is created.
+Reauthorize and reread the same operation after hashing. Metadata or raw mismatch
+is conflict; an exact replay returns the operation's own current state/failure,
+not another task submission or a takeover. Cancellation cannot mutate the original.
+Share ingress framing/count/hash enforcement with upload rather than duplicate it.
+
+Recheck actor/key after serialization. A raced-in key or exact uniqueness loser
+rolls back its root transaction, then resolves the committed original under read
+authority. Do not lock another task while holding the requested task. If commit
+acknowledgement is lost, never infer rollback or begin upload from an in-memory
+row: resolve in a fresh authorized read or leave an unknown infrastructure result.
+Caller cancellation drains transaction cleanup and remains cancellation; it cannot
+start upload. Retained uncertain custody stays charged for later recovery.
+
+Allowed files: intake AUTH public/domain/adapter preflight and existing prepared
+service; TASK custody API/owner and canonical revision acknowledgement helper;
+ART intake repository/streaming/admission and existing preparation helper caller;
+exact partition and semantic CI test registration, focused custody/contract/AUTH
+tests, affected current records. No accepted state, source deletion/release,
+background PRE, new provider/config parser, fabricated readiness, public route or
+production default. Risk L0; architecture/security, QA/test-delta/CI and affected
+docs reviews. Human review focus: fresh authority before disclosure, same-key
+concurrency/commit uncertainty, exact context and bounded replay without writes.
+
+Prove real PostgreSQL/local admission with canonical AUTH grants; denied/revoked
+and foreign callers leave no operation/pointer/charge/allow or provider work.
+Prove metadata/raw conflicts, EOF-unsealed replay, terminal replay after TASK
+advances, concurrent same/different keys and cross-task key reuse, capacity
+rollback, wrong namespace/unqualified AWS, revision/cardinality refusal, lost
+commit acknowledgement and cancelled retry. Existing upload/lease/custody and
+old preparation authority proof must remain intact. Integrated accepted replay
+and public API concealment remain required after T4 and route cutover.
