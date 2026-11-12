@@ -67,6 +67,7 @@ async def reserve(intake, session, *, key=None, declared_raw_bytes=None, with_up
                   lease_seconds=60, upload_seconds=300):
     now = datetime.now(UTC)
     row = await repository(session).reserve(
+        operation_id=new_record_id(),
         metadata=SubmissionIntakeMetadata(task_id=intake.task, assignment_id=intake.assignment),
         actor_id=intake.actor.actor_profile_id, identity_link_id=intake.actor.identity_link_id,
         idempotency_key=key or new_record_id(), maximum_raw_bytes=1024,

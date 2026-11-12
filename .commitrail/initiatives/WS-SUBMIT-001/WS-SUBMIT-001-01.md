@@ -519,3 +519,74 @@ rollback, wrong namespace/unqualified AWS, revision/cardinality refusal, lost
 commit acknowledgement and cancelled retry. Existing upload/lease/custody and
 old preparation authority proof must remain intact. Integrated accepted replay
 and public API concealment remain required after T4 and route cutover.
+
+T1 component evidence (implementation worktree based on `00aab633d`, not a
+frozen candidate): selector-only AUTH preflight now checks the current Submitter
+grant without an allow or prepared handle. Full reservation preparation still
+requires locked context/status. The shared bounded ingress reader supports
+provider-free discard hashing, including exact EOF, size/framing refusal,
+idle/total deadlines and cancellation propagation. TASK owns the shared revision
+acknowledgement validation used by existing preparation and future T1 admission.
+
+Verification: 518 focused intake-contract/prepared-authority tests passed;
+17 isolated PostgreSQL intake-authority tests passed (47.92s, migration head
+0070, database/role cleanup confirmed); 14 existing selected-PRE tests passed,
+including revision acknowledgement checks. Ruff and whitespace checks passed.
+The PostgreSQL runner was initially invoked from the repository root and failed
+migration import before tests; rerunning from backend corrected that invocation.
+Local evidence: `/tmp/workstream-t1-preflight-static.log` and
+`/tmp/workstream-t1-preflight-pg.log` with matching metadata JSON. These results
+prove components only: ART admission/replay transaction composition, races,
+commit-acknowledgement uncertainty and integrated T1 acceptance remain unproven.
+
+T1 composition now exists privately in `foreground_admission.py`. It owns short
+root transactions, TASK/actor/grant/context ordering, capacity reservation and
+full reservation authorization. Only acknowledged commit yields a foreground
+owner. Existing/raced keys and uncertain commit acknowledgements use a fresh
+current-authority read; replay hashes outside the transaction and reauthorizes
+before returning the same operation. Commit cancellation drains cleanup and
+preserves cancellation without issuing upload ownership.
+
+Initial composition evidence on the implementation worktree: six PostgreSQL
+cases passed (73.30s) for atomic custody/allow, EOF-unsealed replay, same-key race,
+lost acknowledgement, revocation and namespace refusal. Three further cases
+passed (33.85s) for conflicting retries, capacity rollback and repeated commit
+cancellation. Both isolated databases and roles were cleaned up. Protected owner
+registration and module boundaries passed 207 tests. The initial older policy
+fixture had no project checker selections and correctly failed T1 cardinality;
+the positive fixture now registers and selects one image in each phase through
+canonical policy setup. This is not yet frozen T1 review evidence or public API
+acceptance proof; remaining planned refusal/race/advanced-context cases and
+full custody regression must be assessed before declaring this stage complete.
+
+Hosted verification of pushed `2cdf10ee4` exposed structural-debt mismatch and
+an omitted exact active-action inventory assertion (Backend run 43170021484;
+shared-foundations-c otherwise reported 2093 passing tests). Repair remains in
+this T1 worktree: extract cohesive prepared preflight handling, keep exact intake
+audit selectors in their own target helper, split admission integration tests
+from custody tests and explicitly register the new module/protected paths, and
+include both intake actions in the existing active-action inventory. Structural
+limits and the frozen debt ledger remain unchanged. New admission test family
+membership is checked against the previous fingerprint with only that exact
+module added. Fetched `origin/main` remains `94334ccf4`, already an ancestor.
+
+The focused CI repair checks passed 709 tests in 60.80s, covering prepared
+AUTH, exact active-action inventory, lane membership, behavior ownership and
+structural-boundary contracts (`/tmp/workstream-t1-ci-repair.log`). Ruff and
+whitespace checks passed. The full custody regression was launched before the
+cohesive file split; its eventual result must be distinguished from verification
+of the final split modules and extracted preflight helper.
+
+Additional T1 evidence: the full pre-split custody regression passed 65 tests in
+551.27s with isolated cleanup confirmed. The final split admission/AUTH suites
+passed 30 tests in 213.09s, including missing phase-selection refusal, cross-task
+same-key serialization and cancelled discard replay. Two additional PostgreSQL
+cases passed in 34.74s: canonical configured AWS namespace refusal before source
+reservation, and current grant revocation during replay body hashing. All three
+isolated database/role cleanups completed. The AWS case proves refusal only,
+not AWS provider qualification. Direct AUTH and test-structure CLI validators
+passed without changing their ledgers. The terminal EOF replay case retains the
+original failure even after another operation claims the same task. Integrated
+accepted replay, revision journey, public framing/runtime readiness, and the
+full T1–T5 public drill remain later required evidence; these tests do not prove
+the public submission cutover.

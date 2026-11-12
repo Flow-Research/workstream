@@ -1,5 +1,5 @@
 """Real AUTH prepared/read evidence for intake operations, not ART T1 admission."""
-from dataclasses import replace
+from dataclasses import fields, replace
 
 import pytest
 from sqlalchemy import select, text
@@ -7,7 +7,7 @@ from sqlalchemy import select, text
 from app.core.identifiers import new_record_id
 from app.db import session as db_session
 from app.modules.authorization.api.submission_intake import (
-    IntakeAuthorityDenied, IntakeOperationReadFacts, IntakeReservationAuthorityFacts,
+    IntakeAuthorityDenied, IntakeOperationReadFacts, IntakeReservationAuthorityFacts, IntakeReservationPreflightFacts,
 )
 from app.modules.authorization.submission_intake import SubmissionIntakeAuthorization
 from app.modules.tasks.models import AuditEvent
@@ -103,7 +103,7 @@ async def test_intake_reserve_and_read_require_exact_current_submitter(admin_acc
     ctx = await context(admin_access)
     facts = reservation(ctx, project)
     read = IntakeOperationReadFacts(facts.operation_id, project, facts.task_id, ctx.actor_profile_id)
-    for method, value in (("prepare", facts), ("authorize_read", read)):
+    for method, value in (("preflight", preflight_facts(facts)), ("prepare", facts), ("authorize_read", read)):
         async with db_session.get_session_factory()() as session:
             authority = SubmissionIntakeAuthorization(session, ctx)
             try:
@@ -166,5 +166,33 @@ async def test_intake_revoked_current_link_cannot_reserve_or_read(intake_authori
                 with pytest.raises(IntakeAuthorityDenied):
                     async with session.begin():
                         await getattr(authority, method)(*args)
+        finally:
+            authority.close()
+
+
+def preflight_facts(facts):
+    return IntakeReservationPreflightFacts(**{
+        field.name: getattr(facts, field.name) for field in fields(IntakeReservationPreflightFacts)
+    })
+
+
+async def test_intake_preflight_has_no_allow_or_consumable_handle(intake_authority):
+    _, project, _, ctx = intake_authority
+    facts = reservation(ctx, project)
+    selectors = preflight_facts(facts)
+    async with db_session.get_session_factory()() as session:
+        authority = SubmissionIntakeAuthorization(session, ctx)
+        try:
+            async with session.begin():
+                await authority.lock_actor(ctx.actor_profile_id, ctx.identity_link_id)
+                assert await authority.preflight(selectors) is None
+                assert not list(await session.scalars(select(AuditEvent).where(
+                    AuditEvent.request_id == str(ctx.request_id))))
+                with pytest.raises(IntakeAuthorityDenied):
+                    await authority.prepare(selectors)
+                # Only complete locked-context facts may produce reservation authority.
+                decision = await authority.consume(await authority.prepare(facts), facts)
+            row = await session.get(AuditEvent, str(decision))
+            assert row.after_facts["allowed"] is True
         finally:
             authority.close()

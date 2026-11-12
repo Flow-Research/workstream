@@ -606,6 +606,10 @@
     },
     {
       "group": "artifacts",
+      "target": "backend/app/modules/artifacts/intake/foreground_admission.py"
+    },
+    {
+      "group": "artifacts",
       "target": "backend/app/modules/artifacts/intake/foreground_lease.py"
     },
     {
@@ -1191,6 +1195,10 @@
     {
       "group": "auth",
       "target": "backend/app/modules/authorization/prepared_post_submit_replay.py"
+    },
+    {
+      "group": "auth",
+      "target": "backend/app/modules/authorization/prepared_preflight.py"
     },
     {
       "group": "auth",
@@ -2645,7 +2653,7 @@
       "target": "backend/scripts/validate_test_lane_evidence.py"
     }
   ],
-  "authority_digest": "2ebaa06f0f65d9ddad2d1013d0256f51ccb8248a09ae3c14bb518c118041c5ce",
+  "authority_digest": "3f4b580a947ef98164cf6df277feee494299cbc506dd9f4d02f2b2e41f436598",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }

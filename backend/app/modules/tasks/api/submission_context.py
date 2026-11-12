@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from typing import Literal, Protocol, get_args
 from uuid import UUID
@@ -14,6 +15,9 @@ TaskSubmissionContextKind = Literal["initial", "checker_remediation"]
 TaskSubmissionContextStatus = Literal["in_progress", "needs_revision"]
 TaskSubmissionContextFailure = Literal[
     "task_submission_context_invalid",
+    "task_submission_operation_in_progress",
+    "revision_acknowledgement_required",
+    "revision_acknowledgement_invalid",
     "task_submission_predecessor_changed",
     "revision_limit_reached",
     "revision_deadline_expired",
@@ -198,3 +202,32 @@ def require_revision_capacity(
     # A global Submission version is not an assignment's revision allowance.
     if task.predecessor.revision_round > max_revision_rounds:
         raise TaskSubmissionContextUnavailable("revision_limit_reached")
+
+
+
+def require_revision_acknowledgement(
+    task: TaskSubmissionContextFacts, preparation_id: UUID | str | None, preparation_sha256: str | None,
+) -> None:
+    """Compare an explicit packet acknowledgement with canonical locked revision facts."""
+    if task.predecessor is None:
+        if preparation_id is not None or preparation_sha256 is not None:
+            raise TaskSubmissionContextUnavailable("revision_acknowledgement_invalid")
+        return
+    context = task.revision_context
+    if context is None:
+        raise TaskSubmissionContextUnavailable("revision_context_changed")
+    if preparation_id is None and preparation_sha256 is None:
+        raise TaskSubmissionContextUnavailable("revision_acknowledgement_required")
+    if not isinstance(preparation_id, (UUID, str)) or not isinstance(preparation_sha256, str):
+        raise TaskSubmissionContextUnavailable("revision_acknowledgement_invalid")
+    try:
+        acknowledged_id = UUID(preparation_id) if isinstance(preparation_id, str) else preparation_id
+    except ValueError as exc:
+        raise TaskSubmissionContextUnavailable("revision_acknowledgement_invalid") from exc
+    if re.fullmatch(r"sha256:[0-9a-f]{64}", preparation_sha256) is None:
+        raise TaskSubmissionContextUnavailable("revision_acknowledgement_invalid")
+    if (context.source_submission_id != task.predecessor.submission_id
+            or context.source_routing_manifest_id != task.checker_remediation_manifest_id
+            or acknowledged_id != context.preparation_id
+            or preparation_sha256 != context.preparation_sha256):
+        raise TaskSubmissionContextUnavailable("revision_context_changed")

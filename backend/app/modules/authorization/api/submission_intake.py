@@ -5,8 +5,8 @@ from uuid import UUID
 
 
 @dataclass(frozen=True, slots=True)
-class IntakeReservationAuthorityFacts:
-    """Canonical locked facts supplied by ART/TASK before reserving source custody."""
+class IntakeReservationPreflightFacts:
+    """Exact selectors before task eligibility; no final context or grant."""
     operation_id: UUID
     project_id: UUID
     task_id: UUID
@@ -15,6 +15,11 @@ class IntakeReservationAuthorityFacts:
     identity_link_id: UUID
     idempotency_key: UUID
     metadata_sha256: str
+
+
+@dataclass(frozen=True, slots=True)
+class IntakeReservationAuthorityFacts(IntakeReservationPreflightFacts):
+    """Canonical locked facts required for the final reservation decision."""
     locked_context_sha256: str
     task_status: Literal["in_progress", "needs_revision"]
 
@@ -35,6 +40,7 @@ class IntakeAuthorityDenied(RuntimeError):
 class IntakeAuthorizationPort(Protocol):
     """The caller owns root transactions, product locks and original provenance."""
     async def lock_actor(self, actor_id: UUID, identity_link_id: UUID) -> None: ...
+    async def preflight(self, facts: IntakeReservationPreflightFacts) -> None: ...
     async def prepare(self, facts: IntakeReservationAuthorityFacts) -> object: ...
     async def consume(self, handle: object, facts: IntakeReservationAuthorityFacts) -> UUID: ...
     async def authorize_read(self, facts: IntakeOperationReadFacts) -> UUID: ...

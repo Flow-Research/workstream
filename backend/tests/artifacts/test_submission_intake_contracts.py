@@ -391,3 +391,91 @@ async def test_foreground_lease_committed_command_wins_simultaneous_pulse_failur
 
     monkeypatch.setattr(runner, "_renew", renew)
     assert await runner.run(new_record_id(), new_record_id(), 1, command) == "committed"
+
+
+@pytest.mark.asyncio
+async def test_discard_replay_hashes_exact_raw_bytes_across_chunk_boundaries():
+    from app.modules.artifacts.intake.streaming import hash_submission_replay
+
+    payload = b"PK\x03\x04\x00\xffraw ZIP bytes"
+
+    async def chunks():
+        for chunk in (payload[:3], b"", payload[3:8], payload[8:]):
+            yield chunk
+
+    receipt = await hash_submission_replay(
+        chunks(), maximum_raw_bytes=100, declared_raw_bytes=len(payload),
+        idle_timeout_seconds=1, deadline_at=datetime.now(UTC) + timedelta(seconds=2),
+    )
+    assert receipt.raw_byte_count == len(payload)
+    assert receipt.raw_sha256 == "sha256:" + hashlib.sha256(payload).hexdigest()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("updates,payload,error", [
+    ({}, [], ArtifactInputMismatchError),
+    ({"declared_raw_bytes": 4}, [b"abc"], ArtifactInputMismatchError),
+    ({"declared_raw_bytes": 2}, [b"abc"], ArtifactInputMismatchError),
+    ({"maximum_raw_bytes": 2}, [b"abc"], ArtifactLimitExceededError),
+    ({"maximum_raw_bytes": 2 * 1024 * 1024}, [b"x" * (1024 * 1024 + 1)], ArtifactLimitExceededError),
+    ({}, [bytearray(b"abc")], ArtifactInputMismatchError),
+])
+async def test_discard_replay_enforces_raw_ingress_contract(updates, payload, error):
+    from app.modules.artifacts.intake.streaming import hash_submission_replay
+
+    async def chunks():
+        for chunk in payload:
+            yield chunk
+
+    limits = dict(maximum_raw_bytes=100, declared_raw_bytes=None,
+                  idle_timeout_seconds=1, deadline_at=datetime.now(UTC) + timedelta(seconds=2))
+    with pytest.raises(error):
+        await hash_submission_replay(chunks(), **(limits | updates))
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("total_deadline", [False, True])
+async def test_discard_replay_deadlines_drain_pending_body_read(total_deadline):
+    from app.modules.artifacts.intake.streaming import hash_submission_replay
+
+    stopped = asyncio.Event()
+
+    async def chunks():
+        try:
+            await asyncio.Event().wait()
+            yield b"never"
+        finally:
+            stopped.set()
+
+    with pytest.raises(ArtifactStoreUnavailableError):
+        await hash_submission_replay(
+            chunks(), maximum_raw_bytes=100, declared_raw_bytes=None,
+            idle_timeout_seconds=10 if total_deadline else 0.01,
+            deadline_at=datetime.now(UTC) + timedelta(seconds=0.02 if total_deadline else 10),
+        )
+    assert stopped.is_set()
+
+
+@pytest.mark.asyncio
+async def test_discard_replay_cancellation_drains_read_and_remains_cancellation():
+    from app.modules.artifacts.intake.streaming import hash_submission_replay
+
+    started, stopped = asyncio.Event(), asyncio.Event()
+
+    async def chunks():
+        try:
+            started.set()
+            await asyncio.Event().wait()
+            yield b"never"
+        finally:
+            stopped.set()
+
+    task = asyncio.create_task(hash_submission_replay(
+        chunks(), maximum_raw_bytes=100, declared_raw_bytes=None,
+        idle_timeout_seconds=10, deadline_at=datetime.now(UTC) + timedelta(seconds=10),
+    ))
+    await asyncio.wait_for(started.wait(), 1)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert stopped.is_set()

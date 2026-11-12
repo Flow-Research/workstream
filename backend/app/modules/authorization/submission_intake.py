@@ -7,11 +7,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.hashing import canonical_json_hash
 from app.modules.authorization.api.submission_intake import (
-    IntakeAuthorityDenied, IntakeOperationReadFacts, IntakeReservationAuthorityFacts,
+    IntakeAuthorityDenied, IntakeOperationReadFacts, IntakeReservationAuthorityFacts, IntakeReservationPreflightFacts,
 )
 from app.modules.authorization.catalogue import ActionId
 from app.modules.authorization.domain.contributor_reads import ContributorWorkReadResourceContext
-from app.modules.authorization.domain.submission_intake import IntakeReservationResourceContext
+from app.modules.authorization.domain.submission_intake import IntakeReservationResourceContext, IntakeReservationPreflightResourceContext
 from app.modules.authorization.kernel import AuthorizationService
 from app.modules.authorization.prepared import PreparedAuthorizationService
 from app.modules.authorization.repository import AdminAuthorizationRepository
@@ -63,6 +63,27 @@ class SubmissionIntakeAuthorization:
     def _input(resource: IntakeReservationResourceContext) -> PreparedAuthorizationInput:
         return PreparedAuthorizationInput(idempotency_key=resource.idempotency_key,
                                           request_value=resource.model_dump(mode="json"))
+
+    async def preflight(self, facts: IntakeReservationPreflightFacts) -> None:
+        """Check fresh Submitter authority before eligibility disclosure, with no handle."""
+        if (type(facts) is not IntakeReservationPreflightFacts
+                or facts.actor_profile_id != self._context.actor_profile_id
+                or facts.identity_link_id != self._context.identity_link_id):
+            raise IntakeAuthorityDenied("submission intake is unavailable")
+        values = asdict(facts)
+        values["resource_id"] = values.pop("operation_id")
+        values["scope_project_id"] = values.pop("project_id")
+        try:
+            resource = IntakeReservationPreflightResourceContext(**values)
+            value = PreparedAuthorizationInput(idempotency_key=facts.idempotency_key,
+                                                request_value=resource.model_dump(mode="json"))
+            try:
+                await self._prepared.preflight(ActionId.SUBMISSION_INTAKE_RESERVE, value,
+                    PreparedAuthorityScope(kind=PreparedAuthorityScopeKind.PROJECT, project_id=facts.project_id), resource)
+            except PreparedAuthorizationUnsupported as exc:
+                await self._prepared.deny_unsupported(ActionId.SUBMISSION_INTAKE_RESERVE, value, resource, exc)
+        except (AuthorizationDenied, PreparedAuthorizationHandleInvalid, PreparedAuthorizationUnsupported, ValidationError) as exc:
+            raise IntakeAuthorityDenied("submission intake is unavailable") from exc
 
     async def prepare(self, facts: IntakeReservationAuthorityFacts) -> object:
         resource = self._resource(facts)

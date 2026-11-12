@@ -1,7 +1,8 @@
 """Transaction-bound, single-use authorization for sensitive mutations."""
 
 from __future__ import annotations
-from app.modules.authorization.domain.submission_intake import IntakeReservationResourceContext, parse_intake_binding
+from app.modules.authorization.prepared_preflight import preflight_authority
+from app.modules.authorization.domain.submission_intake import IntakeReservationResourceContext, IntakeReservationPreflightResourceContext, intake_preflight_matches, parse_intake_binding
 from app.modules.authorization.catalogue import GUIDE_PROPOSAL_ACTION_IDS, POST_POLICY_ACTION_IDS
 from app.modules.authorization.domain.lifecycle import parse_lifecycle_prepare, lifecycle_matches
 from app.modules.authorization.prepared_routing_replay import validate_routing_replay
@@ -66,7 +67,7 @@ from app.modules.authorization.domain.prepared_adapter_bindings import (
     parse_prepared_adapter_binding,
     prepared_adapter_binding_matches,
 )
-from app.modules.authorization.domain.prepared_service import project_setup_resource_matches, prepared_fixed_service_bindings
+from app.modules.authorization.domain.prepared_service import prepared_fixed_service_bindings
 from app.modules.authorization.domain.prepared_guide_mutations import parse_prepared_guide_mutation
 from app.modules.authorization.domain.guide_compilation_projections import (
     ProjectGuideProjectionResourceContext,
@@ -552,48 +553,11 @@ class PreparedAuthorizationService:
         return handle
 
     async def preflight(
-        self,
-        action_id: ActionId,
-        caller_input: PreparedAuthorizationInput,
-        scope: PreparedAuthorityScope,
-        resource: AuthorizationResourceContext,
+        self, action_id: ActionId, caller_input: PreparedAuthorizationInput,
+        scope: PreparedAuthorityScope, resource: AuthorizationResourceContext,
     ) -> None:
         """Revalidate current authority without issuing a handle or staging evidence."""
-        self._root_transaction()
-        binding = self._binding(action_id, caller_input, scope)
-        scope_matches = self._scope_from_resource(action_id, resource) == scope
-        if isinstance(resource, SubmissionBundlePreparationPreflightResourceContext):
-            resource_matches = _submission_preparation_binding_matches(binding, resource)
-        else:
-            resource_matches = prepared_compilation_matches(
-                binding.guide_compilation_context,
-                binding.guide_compilation_resource_digest,
-                resource,
-            )
-        if not scope_matches or not resource_matches:
-            raise PreparedAuthorizationHandleInvalid("invalid prepared authorization preflight")
-        authority = await self._authorization._prepare_prelocked(
-            self._consumer_token, action_id, scope
-        )
-        try:
-            setup_match = project_setup_resource_matches(
-                action_id, resource, authority.scope_project_id
-            )
-            if setup_match is False or (
-                setup_match is None
-                and action_id is not ActionId.ARTIFACT_SUBMISSION_BUNDLE_PREPARE
-                and not (
-                    action_id is ActionId.PROJECT_GUIDE_COMPILATION_REQUEST
-                    and isinstance(resource, ProjectGuideCompilationRequestResourceContext)
-                    and resource.trigger == "project_manager"
-                    and resource.scope_project_id == authority.scope_project_id
-                )
-            ):
-                raise PreparedAuthorizationUnsupported(
-                    AuthorizationDenialCode.RESOURCE_GUARD_DENIED
-                )
-        finally:
-            self._authorization._discard_prelocked(authority)
+        await preflight_authority(self, action_id, caller_input, scope, resource)
 
     def _live_issuance(self, handle: PreparedAuthorizationHandle) -> _Issuance:
         """Reject foreign, consumed and closed-session handles at the shared entry boundary."""
@@ -823,6 +787,16 @@ class PreparedAuthorizationService:
         denial: PreparedAuthorizationUnsupported,
     ) -> NoReturn:
         """Evidence an exact prepare-time denial without issuing a handle."""
+        if action_id is ActionId.SUBMISSION_INTAKE_RESERVE and type(final_resource_context) is IntakeReservationPreflightResourceContext:
+            self._root_transaction()
+            scope = PreparedAuthorityScope(kind=PreparedAuthorityScopeKind.PROJECT,
+                                           project_id=final_resource_context.scope_project_id)
+            if caller_input is None or not intake_preflight_matches(caller_input, final_resource_context, scope):
+                raise PreparedAuthorizationHandleInvalid("invalid intake preflight denial")
+            await self._authorization._complete_prepared_denial(
+                self._consumer_token, action_id, final_resource_context, denial.denial_code,
+            )
+            raise RuntimeError("denied intake preflight unexpectedly returned")
         if type(final_resource_context) is ContributionPolicyMutationScopeDenialResourceContext:
             self._root_transaction()
             if caller_input is not None or action_id != final_resource_context.requested_action:

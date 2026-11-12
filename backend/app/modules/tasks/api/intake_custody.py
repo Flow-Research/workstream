@@ -23,8 +23,8 @@ class IntakeTaskCustodyPort(Protocol):
         """Lock canonical submission context and install its unique operation pointer."""
         ...
 
-    async def lock(self, task_id: UUID) -> None:
-        """Acquire the TASK lock before ART locks the associated operation."""
+    async def lock(self, task_id: UUID) -> UUID:
+        """Acquire TASK first and return its project without asserting eligibility."""
         ...
 
     async def release(self, task_id: UUID, operation_id: UUID) -> None:

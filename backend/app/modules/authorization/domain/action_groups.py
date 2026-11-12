@@ -72,7 +72,7 @@ CONTEXT_DIGEST_ACTIONS = frozenset(
 
 def supports_prepared_denial(action_id: ActionId, resource_context: object) -> bool:
     """Admit only the existing action/context pairs for prepare-time denial evidence."""
-    from app.modules.authorization.domain.submission_intake import IntakeReservationResourceContext
+    from app.modules.authorization.domain.submission_intake import IntakeReservationResourceContext, IntakeReservationPreflightResourceContext
     from app.modules.authorization.domain.task_authority import TASK_ACTIONS, TaskAuthorityResourceContext
     from app.modules.authorization.domain.project_create import ProjectCreateResourceContext
     from app.modules.authorization.domain.checker_retry import (
@@ -84,7 +84,7 @@ def supports_prepared_denial(action_id: ActionId, resource_context: object) -> b
         ProjectPolicyMutationPrepareDenialResourceContext, ProjectSubmissionArtifactPolicyMutationResourceContext,
     )
     return (
-        (action_id is ActionId.SUBMISSION_INTAKE_RESERVE and type(resource_context) is IntakeReservationResourceContext)
+        (action_id is ActionId.SUBMISSION_INTAKE_RESERVE and type(resource_context) in {IntakeReservationResourceContext, IntakeReservationPreflightResourceContext})
         or (
             action_id in checker_outputs.CHECKER_OUTPUT_ACTIONS
             and type(resource_context) is checker_outputs.CheckerOutputResourceContext

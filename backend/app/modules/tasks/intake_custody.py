@@ -21,19 +21,21 @@ class IntakeTaskCustody:
         self._tasks = TaskRepository(session)
         self._contexts = contexts
 
-    async def lock(self, task_id: UUID) -> None:
+    async def lock(self, task_id: UUID) -> UUID:
         """Lock TASK first and require a root transaction owned by the caller."""
         if not self._session.in_transaction() or self._session.in_nested_transaction():
             raise TaskSubmissionContextUnavailable("task_submission_context_invalid")
-        if await self._tasks.get_task(str(task_id), for_update=True) is None:
+        task = await self._tasks.get_task(str(task_id), for_update=True)
+        if task is None:
             raise TaskSubmissionContextUnavailable("task_submission_context_invalid")
+        return UUID(task.project_id)
 
     async def claim(self, request: TaskSubmissionContextRequest, operation_id: UUID) -> IntakeTaskSnapshot:
         """Use canonical eligibility/currentness before installing a new pointer."""
         await self.lock(request.task_id)
         task = await self._tasks.get_task(str(request.task_id), for_update=True)
         if task.active_submission_operation_id is not None:
-            raise TaskSubmissionContextUnavailable("task_submission_context_invalid")
+            raise TaskSubmissionContextUnavailable("task_submission_operation_in_progress")
         context = await self._contexts.lock_submission_context(request)
         snapshot = await self._session.scalar(text(
             "SELECT public.submission_intake_task_snapshot(t) "

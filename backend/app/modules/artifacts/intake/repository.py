@@ -47,7 +47,7 @@ class SubmissionIntakeRepository:
             raise IntakeCustodyConflict("intake_requires_root_transaction")
 
     async def reserve(
-        self, *, metadata: SubmissionIntakeMetadata, actor_id: UUID, identity_link_id: UUID,
+        self, *, operation_id: UUID, metadata: SubmissionIntakeMetadata, actor_id: UUID, identity_link_id: UUID,
         idempotency_key: UUID, maximum_raw_bytes: int,
         upload_deadline_at: datetime, lease_expires_at: datetime,
         capacity_limits: SubmissionSourceCapacityLimits, declared_raw_bytes: int | None,
@@ -55,7 +55,8 @@ class SubmissionIntakeRepository:
         """Reserve command and physical bytes; callers still own AUTH and full T1 admission."""
         self._require_transaction()
         metadata = SubmissionIntakeMetadata.model_validate(metadata)
-        operation_id = new_record_id()
+        if not isinstance(operation_id, UUID) or operation_id.version != 7:
+            raise ValueError("intake operation requires a generated UUIDv7")
         snapshot = await self._tasks.claim(TaskSubmissionContextRequest(
             metadata.task_id, metadata.assignment_id, actor_id, metadata.predecessor_submission_id,
         ), operation_id)
@@ -86,6 +87,14 @@ class SubmissionIntakeRepository:
         await self._session.refresh(row)
         await self._capacity.reserve(row, limits=capacity_limits, declared_raw_bytes=declared_raw_bytes)
         return row
+
+    async def find_actor_key(self, actor_id: UUID, key: UUID) -> SubmissionIntakeOperation | None:
+        """Resolve immutable caller identity before current TASK eligibility; not AUTH."""
+        self._require_transaction()
+        return await self._session.scalar(select(SubmissionIntakeOperation).where(
+            SubmissionIntakeOperation.actor_profile_id == str(actor_id),
+            SubmissionIntakeOperation.idempotency_key == str(key),
+        ).execution_options(populate_existing=True))
 
     async def _lock(self, operation_id: UUID) -> SubmissionIntakeOperation:
         self._require_transaction()

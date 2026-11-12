@@ -47,7 +47,7 @@ from app.modules.authorization.domain.pre_submit import PreSubmitResourceContext
 from app.modules.authorization.domain.guide_activation import ProjectGuideActivationResourceContext
 from app.modules.authorization.domain.lifecycle import ReviewLifecycleActivationContract
 from app.modules.authorization.service_actor_schemas import ServiceActorProvisionResourceContext
-from app.modules.authorization.domain.submission_intake import IntakeReservationResourceContext
+from app.modules.authorization.domain.submission_intake import IntakeReservationResourceContext, IntakeReservationPreflightResourceContext
 from app.modules.authorization.catalogue import ActionId
 from app.modules.authorization.domain.artifact_storage import (
     ArtifactPutAttemptResourceContext as ArtifactPutAttemptResourceContext,
@@ -1067,7 +1067,7 @@ AuthorizationResourceContext = (
     | checker_models.CheckerModelCallResourceContext
     | checker_models.ProjectModelAdministrationResourceContext
     | checker_outputs.CheckerOutputResourceContext
-    | IntakeReservationResourceContext
+    | IntakeReservationResourceContext | IntakeReservationPreflightResourceContext
     | contributor_reads.ActorProjectListResourceContext | contributor_reads.ContributorWorkReadResourceContext
     | project_catalogue.ProjectCatalogueResourceContext
     | management_reads.ProjectManagementReadResourceContext |
