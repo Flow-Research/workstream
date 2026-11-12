@@ -40,6 +40,19 @@ def _frame(output, value):
     output.write(raw)
 
 
+def _link(path, target):
+    if not target or "\0" in target or "\\" in target or len(target.encode()) > 4096:
+        raise ImageError("trusted root link invalid")
+    depth = 0 if target.startswith("/") else path.count("/")
+    for part in target.split("/"):
+        if part == "..":
+            if depth == 0:
+                raise ImageError("trusted root link escapes root")
+            depth -= 1
+        elif part not in {"", "."}:
+            depth += 1
+
+
 def _available(deadline):
     if deadline is not None and time.monotonic() >= deadline:
         raise ImageError("trusted root provisioning deadline exceeded")
@@ -59,9 +72,8 @@ def _members(archive, maximum_entries, maximum_bytes, deadline):
             raise ImageError("trusted root entry invalid")
         if item.size < 0 or (not item.isfile() and item.size):
             raise ImageError("trusted root entry size invalid")
-        if item.issym() and (not item.linkname or "\0" in item.linkname
-                            or "\\" in item.linkname or len(item.linkname.encode()) > 4096):
-            raise ImageError("trusted root link invalid")
+        if item.issym():
+            _link(name, item.linkname)
         total += item.size
         if total > maximum_bytes:
             raise ImageError("trusted root expanded byte limit exceeded")
@@ -144,8 +156,8 @@ def _inspect(docker, kind, selector, budget):
     return body[0]
 
 
-def _container_matches(value, config_id, token):
-    return (value.get("Image") == config_id
+def _container_matches(value, config_id, token, container_id):
+    return (value.get("Id") == container_id and value.get("Image") == config_id
             and value.get("Config", {}).get("Labels", {}).get("workstream.root-provision") == token
             and value.get("State", {}).get("Status") == "created"
             and value.get("State", {}).get("Running") is False)
@@ -171,7 +183,7 @@ def export_root(docker, config_id, config, sink, *, maximum_bytes, deadline):
         if re.fullmatch(r"[0-9a-f]{64}", container_id) is None:
             raise ImageError("trusted root container id invalid")
         value = _inspect(docker, "container", container_id, budget)
-        if not _container_matches(value, config_id, token):
+        if not _container_matches(value, config_id, token, container_id):
             raise ImageError("trusted root container differs")
         run([docker, "export", container_id], step="export trusted root", budget=budget,
             timeout=max(0.001, deadline - time.monotonic()),
@@ -187,8 +199,10 @@ def export_root(docker, config_id, config, sink, *, maximum_bytes, deadline):
                 raise ImageError("trusted root cleanup discovery ambiguous")
             container_id = matches[0] if matches else None
         if container_id is not None:
+            if re.fullmatch(r"[0-9a-f]{64}", container_id) is None:
+                raise ImageError("trusted root discovered container id invalid")
             value = _inspect(docker, "container", container_id, cleanup)
-            if not _container_matches(value, config_id, token):
+            if not _container_matches(value, config_id, token, container_id):
                 raise ImageError("trusted root cleanup ownership unconfirmed")
             run([docker, "rm", container_id], step="remove trusted root export", budget=cleanup)
 

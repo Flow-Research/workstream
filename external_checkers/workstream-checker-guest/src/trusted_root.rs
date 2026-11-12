@@ -5,7 +5,8 @@ use sha2::{Digest, Sha256};
 use std::collections::HashSet;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Read, Seek, SeekFrom, Write};
-use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+use std::os::fd::AsRawFd;
+use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};
 use std::path::Path;
 
 const MAGIC: &[u8] = b"WSROOT1\n";
@@ -71,6 +72,42 @@ fn path_valid(value: &str) -> bool {
             .all(|part| !part.is_empty() && part != "." && part != "..")
 }
 
+fn link_valid(path: &str, target: &str) -> bool {
+    if target.is_empty() || target.len() > 4096 || target.contains(['\\', '\0']) {
+        return false;
+    }
+    let mut depth = if target.starts_with('/') {
+        0
+    } else {
+        path.matches('/').count()
+    };
+    for part in target.split('/') {
+        match part {
+            ".." if depth == 0 => return false,
+            ".." => depth -= 1,
+            "" | "." => (),
+            _ => depth += 1,
+        }
+    }
+    true
+}
+
+fn remove_owned_root(path: &Path) -> Result<()> {
+    // Restore directory write access after a late permission/cancellation error.
+    // The private held parent prevents an untrusted process replacing this tree.
+    fs::set_permissions(path, fs::Permissions::from_mode(0o700))?;
+    for entry in fs::read_dir(path)? {
+        let entry = entry?;
+        if entry.file_type()?.is_dir() {
+            remove_owned_root(&entry.path())?;
+        } else {
+            fs::remove_file(entry.path())?;
+        }
+    }
+    fs::remove_dir(path)?;
+    Ok(())
+}
+
 struct Hashed<'a> {
     file: &'a mut File,
     digest: Sha256,
@@ -115,7 +152,8 @@ fn check_digest(reader: Hashed<'_>, expected: &RootDescriptor) -> Result<()> {
 
 /// Verify the pinned spool, then stage only into an exclusively created root.
 /// `check` must enforce the invocation's aggregate deadline/cancellation fence.
-/// The caller must isolate the parent from all concurrent untrusted writers.
+/// The parent must be private and owned by the supervisor. A held no-follow
+/// descriptor anchors writes even if an ancestor path is renamed concurrently.
 pub fn stage_root(
     source: &mut File,
     target: &Path,
@@ -157,11 +195,27 @@ pub fn stage_root(
     check_digest(reader, expected)?;
     check()?;
     source.seek(SeekFrom::Start(0))?;
-    fs::create_dir(target)?;
-    fs::set_permissions(target, fs::Permissions::from_mode(0o700))?;
-    let result = unpack(source, target, expected, &check);
+    if !target.is_absolute() {
+        return Err("root target must be absolute".into());
+    }
+    let parent = OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC)
+        .open(target.parent().ok_or("root parent missing")?)?;
+    let metadata = parent.metadata()?;
+    if metadata.uid() != unsafe { libc::geteuid() } || metadata.mode() & 0o077 != 0 {
+        return Err("root parent is not supervisor-private".into());
+    }
+    let anchored = std::path::PathBuf::from(format!("/proc/self/fd/{}", parent.as_raw_fd()))
+        .join(target.file_name().ok_or("root name missing")?);
+    fs::create_dir(&anchored)?;
+    let result = (|| {
+        check()?;
+        fs::set_permissions(&anchored, fs::Permissions::from_mode(0o700))?;
+        unpack(source, &anchored, expected, &check)
+    })();
     if result.is_err() {
-        fs::remove_dir_all(target)?;
+        remove_owned_root(&anchored)?;
     }
     result
 }
@@ -255,8 +309,11 @@ fn unpack(
                     0o444
                 }))?;
             }
-            Record::Symlink { target: link, .. } => {
-                if link.is_empty() || link.len() > 4096 || link.contains(['\\', '\0']) {
+            Record::Symlink {
+                path: name,
+                target: link,
+            } => {
+                if !link_valid(&name, &link) {
                     return Err("root symlink invalid".into());
                 }
                 std::os::unix::fs::symlink(link, path)?;
@@ -277,6 +334,7 @@ fn unpack(
         fs::set_permissions(target.join(directory), fs::Permissions::from_mode(0o555))?;
     }
     fs::set_permissions(target, fs::Permissions::from_mode(0o555))?;
+    check()?;
     Ok(())
 }
 
@@ -298,6 +356,7 @@ mod tests {
                 NEXT.fetch_add(1, Ordering::Relaxed)
             ));
             fs::create_dir(&path).unwrap();
+            fs::set_permissions(&path, fs::Permissions::from_mode(0o700)).unwrap();
             Self(path)
         }
     }
@@ -536,5 +595,108 @@ mod tests {
         )
         .is_err());
         assert_eq!(fs::read(root.join("existing")).unwrap(), b"retained");
+    }
+    #[test]
+    fn rejects_escaping_links_and_accepts_contained_relative_links() {
+        assert!(link_valid("usr/link", "../usr/python"));
+        for target in ["../../outside", "/../outside"] {
+            let fixture = Fixture::new();
+            let (bytes, descriptor) = bundle(vec![
+                (json!({"kind":"directory", "path":"safe"}), b""),
+                (
+                    json!({"kind":"symlink", "path":"safe/escape", "target":target}),
+                    b"",
+                ),
+            ]);
+            let root = fixture.0.join("root");
+            assert!(stage_root(
+                &mut source(&fixture, &bytes),
+                &root,
+                &descriptor,
+                &limits(),
+                || Ok(())
+            )
+            .is_err());
+            assert!(!root.exists());
+        }
+    }
+
+    #[test]
+    fn errors_immediately_after_create_and_after_sealing_remove_owned_root() {
+        for early in [true, false] {
+            let fixture = Fixture::new();
+            let (bytes, descriptor) = valid();
+            let root = fixture.0.join("root");
+            let calls = Cell::new(0);
+            let result = stage_root(
+                &mut source(&fixture, &bytes),
+                &root,
+                &descriptor,
+                &limits(),
+                || {
+                    calls.set(calls.get() + 1);
+                    let sealed = fs::metadata(&root)
+                        .map(|info| info.permissions().mode() & 0o777 == 0o555)
+                        .unwrap_or(false);
+                    if (early && calls.get() == 4) || (!early && sealed) {
+                        Err("cancelled at permission boundary".into())
+                    } else {
+                        Ok(())
+                    }
+                },
+            );
+            assert!(result.is_err());
+            assert!(!root.exists());
+        }
+    }
+
+    #[test]
+    fn requires_private_nofollow_parent_and_pins_its_identity() {
+        let fixture = Fixture::new();
+        let (bytes, descriptor) = valid();
+        let parent = fixture.0.join("private");
+        fs::create_dir(&parent).unwrap();
+        let target = parent.join("root");
+        fs::set_permissions(&parent, fs::Permissions::from_mode(0o755)).unwrap();
+        assert!(stage_root(
+            &mut source(&fixture, &bytes),
+            &target,
+            &descriptor,
+            &limits(),
+            || Ok(())
+        )
+        .is_err());
+        fs::set_permissions(&parent, fs::Permissions::from_mode(0o700)).unwrap();
+        let alias = fixture.0.join("alias");
+        std::os::unix::fs::symlink(&parent, &alias).unwrap();
+        assert!(stage_root(
+            &mut source(&fixture, &bytes),
+            &alias.join("root"),
+            &descriptor,
+            &limits(),
+            || Ok(())
+        )
+        .is_err());
+        let moved = fixture.0.join("moved");
+        let outside = fixture.0.join("outside");
+        fs::create_dir(&outside).unwrap();
+        let calls = Cell::new(0);
+        stage_root(
+            &mut source(&fixture, &bytes),
+            &target,
+            &descriptor,
+            &limits(),
+            || {
+                calls.set(calls.get() + 1);
+                if calls.get() == 4 {
+                    fs::rename(&parent, &moved)?;
+                    std::os::unix::fs::symlink(&outside, &parent)?;
+                }
+                Ok(())
+            },
+        )
+        .unwrap();
+        assert_eq!(fs::read(moved.join("root/usr/python")).unwrap(), b"code");
+        assert!(!outside.join("root").exists());
     }
 }

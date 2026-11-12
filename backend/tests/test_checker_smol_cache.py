@@ -326,6 +326,8 @@ def test_trusted_root_bundle_normalizes_links_and_keeps_bytes():
     [("a", tarfile.LNKTYPE, "b"), ("b", tarfile.LNKTYPE, "a")],
     [("a", tarfile.SYMTYPE, "b"), ("b", tarfile.LNKTYPE, "a")],
     [("device", tarfile.CHRTYPE, "")],
+    [("safe/escape", tarfile.SYMTYPE, "../../outside")],
+    [("escape", tarfile.SYMTYPE, "/../outside")],
 ])
 def test_trusted_root_refuses_paths_special_files_and_link_ancestry(entries):
     from scripts.checker_trusted_root import pack_root
@@ -344,7 +346,7 @@ def test_trusted_root_charges_hardlink_expansion_and_implicit_directories():
         pack_root(root_export(source), io.BytesIO(), identity={}, maximum_entries=3, maximum_bytes=20)
 
 
-@pytest.mark.parametrize("defect", [None, "image", "container", "started", "export"])
+@pytest.mark.parametrize("defect", [None, "image", "container", "container_id", "started", "export"])
 def test_root_export_requires_exact_never_started_container_and_cleans_owned_id(monkeypatch, defect):
     import time
     from scripts import checker_trusted_root as root
@@ -364,10 +366,12 @@ def test_root_export_requires_exact_never_started_container_and_cleans_owned_id(
             state["token"] = argv[argv.index("--label") + 1].split("=", 1)[1]
             return container_id.encode()
         if argv[1:3] == ["container", "inspect"]:
-            return json.dumps([{"Image": "other" if defect == "container" else config_id,
+            return json.dumps([{"Id": "f" * 64 if defect == "container_id" else container_id,
+                                "Image": "other" if defect == "container" else config_id,
                                 "Config": {"Labels": {"workstream.root-provision": state["token"]}},
                                 "State": {"Status": "running" if defect == "started" else "created", "Running": defect == "started"}}]).encode()
         if argv[1] == "export":
+            assert 0 < kwargs["timeout"] <= 10
             if defect == "export":
                 raise ImageError("export failed")
             kwargs["stdout_sink"].write(b"root bytes")
@@ -442,7 +446,7 @@ def test_uncertain_root_container_creation_discovers_exact_owned_id_for_cleanup(
             return container_id.encode()
         if argv[1:3] == ["container", "inspect"]:
             assert argv[-1] == container_id
-            return json.dumps([{"Image": image_id, "State": {"Status": "created", "Running": False},
+            return json.dumps([{"Id": container_id, "Image": image_id, "State": {"Status": "created", "Running": False},
                                 "Config": {"Labels": {"workstream.root-provision": state["token"]}}}]).encode()
         assert argv == ["docker", "rm", container_id]
         return b""

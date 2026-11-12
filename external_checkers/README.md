@@ -488,8 +488,14 @@ The `WSROOT1` format carries bounded closed JSON records and inline regular-file
 bytes. Hard links become independently charged file content; symlinks are
 installed last. No image paths are extracted on the host. The guest library
 verifies the entire bounded spool and descriptor, stages into a fresh private
-root, and rechecks consumed bytes before returning. The caller must provide a
-protected parent, aggregate deadline/cancellation checks, and capacity for both
+root, and rechecks consumed bytes before returning. It opens the supervisor-owned
+private parent without following its final symlink and anchors staging through
+that held directory descriptor. The caller must provide the private parent,
+aggregate deadline/cancellation checks, and capacity for both
 the spool and expanded root, then mount the root read-only before executing a
 trusted child. Combined supervisor wiring and native isolation proof remain
 required; this library alone does not authorize project execution.
+Cleanup restores owned directory permissions after late staging failures; an
+underlying filesystem cleanup error is propagated and cannot establish released
+capacity. Relative and absolute symlink targets that traverse above the root are
+refused before installation.

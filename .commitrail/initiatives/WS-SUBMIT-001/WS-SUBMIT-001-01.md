@@ -776,3 +776,27 @@ aggregate deadline. Real-image export/staging and final verification remain
 publication gates. A newer local Clippy reports existing workspace warnings;
 the required runtime gate uses CI's pinned Rust 1.84.0 and unchanged test command.
 No native Smol qualification follows from portable guest-library execution.
+
+The first review wave found three actionable gaps: escaping relative symlink
+targets were accepted, inspected container IDs were not compared with the exact
+selector, and initial directory permission setup sat outside the cleanup guard.
+Repairs reject lexical root escape in producer and guest, compare exact returned
+IDs for create and recovery, and guard every post-create staging action. Cleanup
+restores writable owned directories after late failures; filesystem cleanup
+failure remains an error and cannot release capacity. The guest now verifies a
+supervisor-owned private parent, opens it without following its final symlink,
+and anchors writes through its held descriptor across ancestor renames.
+
+The repair checks passed 80 Python and 12 guest tests. Running the updated Python
+regressions against the frozen pre-repair producer produced exactly three
+failures for the two escaping links and wrong container ID, with 12 controls
+passing. Export tests also assert the explicit remaining timeout reaches the
+runner. The prior pinned Rust 1.84.0 serial workspace gate completed 213 tests;
+the repaired candidate needs its final gate before publication.
+
+Real-image provisioning produced a 460,208,808-byte bundle describing
+457,060,353 expanded bytes and 24,549 entries; the repaired Rust reader staged
+that whole bundle successfully. The temporary container was removed. These are
+local image/bundle composition facts, not a PRE invocation or native isolation
+qualification. Exact repaired producer replay and staged-interpreter execution
+remain separate final proof checks.
