@@ -3619,3 +3619,32 @@ QA also requested wrong non-null confirmation decisions with a complete attempte
 charge-release transaction. Added phase, generation and source-digest probes;
 all must leave confirmation empty and charge unchanged. Replay proof is pending
 for this repair; the prior 20-pass result does not prove the new race guard.
+
+The repaired full cleanup module passed 23 tests in 336.82 seconds
+(`/tmp/source-cleanup-decisions2.log/json`, Alembic0080, database cleanup true).
+The receipt launched at2407d522b with final worktree content; it is not an
+exact-head launch. Architecture/security and QA/test-delta replay passed frozen
+clean4fa19c88b and closed the replay race and confirmation-proof findings.
+Docs/CI replay found no gate or scope-claim defect. Structure validation2 and
+shared Ruff/Commitrail/stale AUTH docs/Markdown checks passed. Provider deletion,
+late-write/part settlement and scheduling remain unimplemented.
+
+Hosted CI inspection of the previous pushed735f165b4 (PR merge execution
+b083aa86e92a9b36ce306d27003a8d4202a6887d, Backend run43338819788) is NOT green:
+- AUTH preflight fails the reflection gate at `vars(draft)` in foreground
+  acceptance; replace it with explicit acceptance-field publication, not a gate
+  exemption. Evidence `/tmp/submission-ci-auth-preflight.log`.
+- Checker runtime stops at rustfmt differences in `src/smol/pre.rs` and
+  `src/smol/pre/tests.rs`; no native runtime qualification result follows that
+  failure. Evidence `/tmp/submission-ci-runtime.log`.
+- CLI API contract run has 10 failures/15 passes: its permission catalogue still
+  expects94 instead of95, and remaining old PRE callers use removed preparation
+  facts or the removed `materialization` constructor argument. Evidence
+  `/tmp/submission-ci-cli-api.log`.
+- Task lifecycle C artifact has47 failures/259 passes, likewise identifying old
+  PRE/retained-fixture consumers that require coordinated source-first cutover.
+  Evidence `/tmp/submission-task-c-pytest.log`, downloaded exact lane artifact
+  13999330936. Do not restore a parallel obsolete PRE implementation to hide them.
+Repair bounded count/format/reflection regressions, then continue provider cleanup
+and the already-required public/client/downstream cutover. No full-suite readiness
+or merge request is implied by the focused cleanup proof.
