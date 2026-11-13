@@ -30,7 +30,10 @@ authorized stall projection are implemented. Full Celery/provider execution,
 independent worker capacity and public progress/operator endpoints remain unfinished.
 Internal audited finalization recovery now reuses the existing Operator gate-repair
 action, preserves the original delivery and runs the same T5 under a live child lease.
-Next: close those durable-worker gaps, then complete cleanup and public API/CLI/MCP
+Private sealed-source cleanup claims, retention barriers and atomic charge-release
+custody are now implemented and database-tested. Provider deletion, cleanup service
+authority, scheduling and uncertain/unsealed reconciliation remain uncomposed.
+Remaining work includes durable-worker deployment, complete cleanup, public API/CLI/MCP
 cutover, real revision/review/ContributionRecord journeys, policy cardinality and
 the A01–A35/C01–C07 completion audit. No public end-to-end readiness is claimed.
 
@@ -3462,3 +3465,16 @@ of the loser. Lease-expiry tests likewise observe database time before takeover.
 The separate admission-pointer trigger remains code-inspected rather than directly
 race-tested; source acceptance/finalization protection is covered independently.
 No full admission-retention or provider-cleanup qualification claim follows.
+
+Final custody repair proof: all nine focused PostgreSQL tests passed in120.01
+seconds (`/tmp/source-cleanup-custody3.log/json`), with database cleanup complete
+and schema0078. This covers the shifted-timestamp regression, bounded leases,
+exact target, atomic release/replay, live/unsealed refusal, retained key barrier,
+both blocked two-session race orders and model parity. Launch metadata records
+59783a1a5 with final worktree content; it is not exact-head launch evidence.
+Architecture/security and QA/test-delta passed clean5cbb19c90; CI integrity passed.
+The final passing result closes DOC-CLEANUP-CLOCK-01's premature wording concern.
+Final structure and Commitrail checks passed. Earlier partial/red runs remain
+separately recorded and are not relabeled green. Provider deletion, current cleanup
+service authority, scheduling, unsealed reconciliation and direct admission-pointer
+race proof remain required; the full goal is not complete.
