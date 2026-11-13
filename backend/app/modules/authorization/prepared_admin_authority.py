@@ -63,7 +63,7 @@ async def lock_admin_mutation_authority(repository, context, scope, action_id, p
         ),
         **adapter_bindings.finance_authority_grant_filters(action_id),
         **checker_registry.checker_registry_grant_filters(action_id),
-        **contribution_policies.policy_finance_grant_filters(action_id),
+        **contribution_policies.policy_grant_filters(action_id),
     )
     if grant is None:
         raise PreparedAuthorizationUnsupported(

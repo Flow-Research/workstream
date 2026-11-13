@@ -15,6 +15,7 @@ from app.modules.contributions.api.records import (
     ContributionReadAuthorizationPort,
     ContributionReadRequest, ContributionRecordView,
 )
+from app.core.financial_wire import format_award_quantity
 from app.modules.contributions.api.source_reads import (
     ContributionAcceptanceSourceFacts, ContributionAcceptanceSourceReadPort,
     ContributionTaskSourceFacts, ContributionTaskSourceReadPort,
@@ -73,11 +74,11 @@ class ContributionReadService:
                 if award.contribution_record_id not in by_record:
                     raise ContributionExportUnavailable("Contribution evidence unavailable")
                 by_record[award.contribution_record_id].append(award)
-            task_ids = {(record.project_id, record.task_id) for record in records}
+            task_ids = {(record.project_id, record.task_id, record.submission_id) for record in records}
             tasks = _index_exact(
                 (ContributionTaskSourceFacts.model_validate(row) for row in
                  await self._tasks.read_contribution_tasks(tuple(task_ids))),
-                lambda row: (row.project_id, row.task_id), task_ids,
+                lambda row: (row.project_id, row.task_id, row.submission_id), task_ids,
             )
             actor_ids = {record.contributor_id for record in records}
             actors = _index_exact(
@@ -93,7 +94,7 @@ class ContributionReadService:
                 lambda row: (row.project_id, row.id), acceptance_ids,
             )
             items = tuple(self._view(
-                record, by_record[record.id], tasks[(record.project_id, record.task_id)],
+                record, by_record[record.id], tasks[(record.project_id, record.task_id, record.submission_id)],
                 actors[record.contributor_id],
                 acceptances.get((record.project_id, record.source_final_acceptance_id)),
             ) for record in records)
@@ -120,6 +121,14 @@ class ContributionReadService:
     @staticmethod
     def _view(record, awards, task, actor, acceptance) -> ContributionRecordView:
         """Validate complete frozen economic equality and actual acceptance lineage."""
+        if record.contribution_type == "accepted_submission" and (
+            record.task_size != task.task_size
+            or record.contribution_policy_version_id != task.contribution_policy_version_id
+            or {d.id for d in record.award_definitions} != (
+                {task.contribution_award_definition_id} if task.contribution_award_definition_id else set()
+            )
+        ):
+            raise ContributionExportUnavailable("Contribution evidence unavailable")
         definitions = {definition.id: definition for definition in record.award_definitions}
         if len(awards) != len(definitions) or {award.award_definition_id for award in awards} != set(definitions):
             raise ContributionExportUnavailable("Contribution evidence unavailable")
@@ -137,7 +146,7 @@ class ContributionReadService:
             raise ContributionExportUnavailable("Contribution evidence unavailable")
         return ContributionRecordView(
             contribution_id=record.id, project_id=record.project_id, task_id=record.task_id,
-            submission_id=record.submission_id, contributor_id=record.contributor_id,
+            submission_id=record.submission_id, task_size=record.task_size, contributor_id=record.contributor_id,
             contributor_display_name=actor.display_name, contribution_type=record.contribution_type,
             source_review_id=record.source_review_id, source_review_lease_id=record.source_review_lease_id,
             source_final_acceptance_id=record.source_final_acceptance_id,
@@ -155,6 +164,6 @@ class ContributionReadService:
             awards=tuple(ContributionAwardView(
                 award_id=award.id, award_definition_id=award.award_definition_id,
                 instrument=award.instrument_type.value, unit=award.unit_code,
-                quantity=format(award.quantity, "f"),
+                quantity=format_award_quantity(award.quantity),
             ) for award in sorted(awards, key=lambda row: row.instrument_type.value)),
         )

@@ -31,16 +31,16 @@ type ContributionPolicyReceipt struct {
 }
 
 type policyRuleInput struct {
-	ContributionType string                  `json:"contribution_type"`
-	CompensationMode string                  `json:"compensation_mode"`
-	Definitions      []policyDefinitionInput `json:"definitions"`
+	ContributionType string                `json:"contribution_type"`
+	CompensationMode string                `json:"compensation_mode"`
+	Quantities       *policySizeQuantities `json:"quantities"`
+	Quantity         *string               `json:"quantity"`
 }
 
-type policyDefinitionInput struct {
-	InstrumentType   string `json:"instrument_type"`
-	UnitCode         string `json:"unit_code"`
-	Quantity         string `json:"quantity"`
-	AdapterBindingID string `json:"adapter_binding_id"`
+type policySizeQuantities struct {
+	Small  string `json:"small"`
+	Medium string `json:"medium"`
+	Large  string `json:"large"`
 }
 
 // Validate wire shape only; the public owner decides graph and economic validity.
@@ -64,36 +64,57 @@ func validatePolicyInput(action string, body json.RawMessage) error {
 		return err
 	}
 	var input struct {
-		Rules []policyRuleInput `json:"rules"`
+		InstrumentType   *string           `json:"instrument_type"`
+		UnitCode         *string           `json:"unit_code"`
+		AdapterBindingID *string           `json:"adapter_binding_id"`
+		Rules            []policyRuleInput `json:"rules"`
 	}
 	fields, err := contextObject(body, &input, []string{"rules"}, nil)
-	if err != nil || len(input.Rules) != 2 {
+	if err != nil || !requiredNullable(fields, "instrument_type", "unit_code", "adapter_binding_id") || len(input.Rules) != 2 {
 		return invalid
 	}
 	var rules []json.RawMessage
 	if json.Unmarshal(fields["rules"], &rules) != nil {
 		return invalid
 	}
+	paid, seen := false, map[string]bool{}
 	for i, raw := range rules {
 		rule := &input.Rules[i]
 		members, err := contextObject(raw, rule, []string{"contribution_type", "compensation_mode"}, nil)
-		if err != nil || (rule.ContributionType != "accepted_submission" && rule.ContributionType != "completed_review") || (rule.CompensationMode != "unpaid" && rule.CompensationMode != "compensated") {
+		if err != nil || seen[rule.ContributionType] || !oneOf(rule.ContributionType, "accepted_submission", "completed_review") || !oneOf(rule.CompensationMode, "unpaid", "compensated") {
 			return invalid
 		}
-		if definitions, present := members["definitions"]; present {
-			var items []json.RawMessage
-			if json.Unmarshal(definitions, &items) != nil || items == nil {
+		seen[rule.ContributionType] = true
+		if rule.CompensationMode == "unpaid" {
+			if len(members) != 2 {
 				return invalid
 			}
-			for j, rawDefinition := range items {
-				definition := &rule.Definitions[j]
-				_, err := contextObject(rawDefinition, definition, []string{"instrument_type", "unit_code", "quantity", "adapter_binding_id"}, nil)
-				if err != nil || (definition.InstrumentType != "money" && definition.InstrumentType != "project_points") || !validUUID(definition.AdapterBindingID) {
+			continue
+		}
+		paid = true
+		if input.InstrumentType == nil || input.UnitCode == nil || input.AdapterBindingID == nil || !validUUID(*input.AdapterBindingID) || len(members) != 3 {
+			return invalid
+		}
+		if rule.ContributionType == "accepted_submission" {
+			if rule.Quantities == nil {
+				return invalid
+			}
+			if _, err := contextObject(members["quantities"], rule.Quantities, []string{"small", "medium", "large"}, nil); err != nil {
+				return invalid
+			}
+			for _, quantity := range []string{rule.Quantities.Small, rule.Quantities.Medium, rule.Quantities.Large} {
+				if !validPolicyAmount(*input.InstrumentType, *input.UnitCode, quantity) {
 					return invalid
 				}
 			}
+		} else if rule.Quantity == nil || !validPolicyAmount(*input.InstrumentType, *input.UnitCode, *rule.Quantity) {
+			return invalid
 		}
 	}
+	if !paid && (input.InstrumentType != nil || input.UnitCode != nil || input.AdapterBindingID != nil) {
+		return invalid
+	}
+
 	return nil
 }
 

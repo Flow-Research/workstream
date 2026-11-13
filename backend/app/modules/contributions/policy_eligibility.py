@@ -1,5 +1,8 @@
 """Shared locked policy graph and resource eligibility for publication and binding."""
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 from app.modules.compensation.api import (
@@ -9,17 +12,16 @@ from app.modules.compensation.api import (
 )
 from app.modules.contributions.api import (
     ContributionPolicyConflict,
-    PolicyDefinitionInput,
-    PolicyRuleInput,
 )
 from app.modules.contributions.models import (
     ContributionAwardDefinition,
     ContributionPolicyVersion,
     ContributionRule,
 )
-from app.modules.contributions.policy_graph import _canonical_quantity
-from app.modules.contributions.policy_validation import validate_policy_graph
-from app.modules.contributions.repository import ContributionPolicyRepository
+from app.modules.contributions.api.quantities import canonical_award_quantity
+
+if TYPE_CHECKING:
+    from app.modules.contributions.repository import ContributionPolicyRepository
 
 
 def require_complete_policy_graph(
@@ -28,46 +30,65 @@ def require_complete_policy_graph(
     definitions: list[ContributionAwardDefinition],
 ) -> None:
     """Check complete canonical rules and every child's exact persisted ownership."""
+
+    def conflict():
+        raise ContributionPolicyConflict("contribution_policy_conflict")
+
+    if (
+        len(rules) != 2
+        or {rule.contribution_type for rule in rules} != {"accepted_submission", "completed_review"}
+    ):
+        conflict()
+    header = (version.instrument_type, version.unit_code, version.adapter_binding_id)
+    if any(rule.compensation_mode == "compensated" for rule in rules):
+        if any(value is None for value in header):
+            conflict()
+    elif any(value is not None for value in header):
+        conflict()
     attached = []
-    inputs = []
     for rule in rules:
         if (
             rule.project_id != version.project_id
             or rule.contribution_policy_version_id != version.id
         ):
-            raise ContributionPolicyConflict("contribution_policy_conflict")
-        items = []
-        for item in rule.award_definitions:
+            conflict()
+        items = rule.award_definitions
+        if rule.compensation_mode == "unpaid":
+            if items:
+                conflict()
+        elif rule.compensation_mode == "compensated":
+            if rule.contribution_type == "accepted_submission":
+                if len(items) != 3 or {item.task_size for item in items} != {
+                    "small",
+                    "medium",
+                    "large",
+                }:
+                    conflict()
+            elif len(items) != 1 or items[0].task_size is not None:
+                conflict()
+        else:
+            conflict()
+        for item in items:
             if (
                 item.project_id != version.project_id
                 or item.contribution_policy_version_id != version.id
                 or item.contribution_rule_id != rule.id
                 or item.contribution_type != rule.contribution_type
             ):
-                raise ContributionPolicyConflict("contribution_policy_conflict")
+                conflict()
+            if (item.instrument_type, item.unit_code, item.adapter_binding_id) != header:
+                conflict()
             try:
-                instrument = CompensationInstrumentType(item.instrument_type)
-            except ValueError:
-                raise ContributionPolicyConflict("contribution_policy_conflict") from None
-            items.append(
-                PolicyDefinitionInput(
-                    instrument_type=instrument,
-                    unit_code=item.unit_code,
-                    quantity=_canonical_quantity(item.quantity),
-                    adapter_binding_id=UUID(str(item.adapter_binding_id)),
+                canonical_award_quantity(
+                    format(item.quantity, "f"), CompensationInstrumentType(item.instrument_type)
                 )
-            )
+            except (ValueError, TypeError):
+                conflict()
             attached.append(item.id)
-        inputs.append(
-            PolicyRuleInput(
-                contribution_type=rule.contribution_type,
-                compensation_mode=rule.compensation_mode,
-                definitions=tuple(items),
-            )
-        )
-    if sorted(attached) != sorted(item.id for item in definitions):
-        raise ContributionPolicyConflict("contribution_policy_conflict")
-    validate_policy_graph(tuple(inputs))
+    if len(set(attached)) != len(attached) or sorted(attached) != sorted(
+        item.id for item in definitions
+    ):
+        conflict()
 
 
 async def lock_policy_resources(

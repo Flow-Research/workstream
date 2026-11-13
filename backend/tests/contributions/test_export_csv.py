@@ -21,6 +21,7 @@ def record(*, awards=(), reviewer=False, **changes):
     return ContributionRecordView(**({
         "contribution_id": new_record_id(), "project_id": new_record_id(),
         "task_id": new_record_id(), "submission_id": new_record_id(),
+        "task_size": None if reviewer else "medium",
         "contributor_id": new_record_id(), "contributor_display_name": "Ada",
         "contribution_type": "completed_review" if reviewer else "accepted_submission",
         "source_review_id": new_record_id() if reviewer else None,
@@ -64,16 +65,20 @@ def test_empty_and_zero_award_exports_keep_honest_identity():
     assert "paid" not in rows[0] and "payout_status" not in rows[0]
 
 
-def test_multiple_awards_flatten_ids_and_preserve_all_decimal_digits():
-    awards = (award(), award(instrument="project_points", quantity="123456789"))
-    item = record(awards=awards)
+@pytest.mark.parametrize("instrument,quantity", [
+    ("money", "99999999999999999999.123456789012345678"),
+    ("project_points", "123456789"),
+])
+def test_selected_award_preserves_identity_size_and_all_decimal_digits(instrument, quantity):
+    value = award(instrument=instrument, quantity=quantity)
+    item = record(awards=(value,))
     response, rows = parse_csv(item)
-    assert len(response.items) == 1 and len(rows) == 2
-    assert {(row["contribution_id"], row["award_id"]) for row in rows} == {
-        (str(item.contribution_id), str(value.award_id)) for value in awards
-    }
-    assert [row["quantity"] for row in rows] == [value.quantity for value in awards]
-    assert response.model_dump(mode="json")["items"][0]["awards"][0]["quantity"] == awards[0].quantity
+    assert len(response.items) == len(rows) == 1
+    assert rows[0]["contribution_id"] == str(item.contribution_id)
+    assert rows[0]["award_id"] == str(value.award_id)
+    assert rows[0]["quantity"] == quantity
+    assert rows[0]["task_size"] == "medium"
+    assert response.model_dump(mode="json")["items"][0]["awards"][0]["quantity"] == quantity
 
 
 @pytest.mark.parametrize("text", ["=HYPERLINK(\"x\")", "+cmd", "-2+3", "@SUM(1)", " \t=1+2", "\tordinary", "\rordinary", "\nordinary", "＝SUM(1)", "＋cmd", "－2+3", "＠SUM(1)"])
@@ -156,7 +161,7 @@ def test_duplicate_contribution_or_award_rows_are_not_exportable():
     with pytest.raises(ValidationError, match="identity"):
         ContributionExportResponse(exported_at=TIME, items=(item, item))
     value = award()
-    with pytest.raises(ValidationError, match="duplicated"):
+    with pytest.raises(ValidationError, match="at most 1"):
         record(awards=(value, value))
 
 

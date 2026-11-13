@@ -108,6 +108,8 @@ class TaskSubmissionContextFacts:
     kind: TaskSubmissionContextKind
     predecessor: SubmissionPredecessorFacts | None
     submitter_contribution_policy_version_id: UUID
+    task_size: Literal["small", "medium", "large"]
+    contribution_award_definition_id: UUID | None
     locked_project_context: TaskLockedProjectContextReferences
     locked_policy: TaskPolicyLineage
     acceptance_criteria: str | None
@@ -123,6 +125,11 @@ class TaskSubmissionContextFacts:
             != self.locked_project_context.locked_contribution_policy_version_id
         ):
             raise ValueError("assignment contribution policy differs from task")
+        if self.task_size not in {"small", "medium", "large"} or (
+            self.contribution_award_definition_id is not None
+            and not isinstance(self.contribution_award_definition_id, UUID)
+        ):
+            raise ValueError("task reward selection is invalid")
         if self.acceptance_criteria is not None and type(self.acceptance_criteria) is not str:
             raise ValueError("task acceptance criteria is invalid")
         reference_fields = {

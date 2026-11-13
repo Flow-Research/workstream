@@ -24,7 +24,7 @@ from app.modules.tasks.api.assignment_invalidation import (
     AssignmentInvalidationUnavailable,
 )
 from app.modules.tasks.repository import TaskRepository
-from app.modules.tasks.service import LOCKED_CONTEXT_REQUIRED_FIELDS
+from app.modules.tasks.service import LOCKED_CONTEXT_HASH_FIELDS
 
 
 def _target(envelope):
@@ -121,7 +121,7 @@ class AssignmentInvalidationOperation:
             locked_context_hash=canonical_json_hash(
                 {
                     field: str(value) if isinstance(value, UUID) else value
-                    for field in LOCKED_CONTEXT_REQUIRED_FIELDS
+                    for field in LOCKED_CONTEXT_HASH_FIELDS
                     for value in (getattr(task, field),)
                 }
             ),

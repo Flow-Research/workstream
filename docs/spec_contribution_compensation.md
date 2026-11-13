@@ -63,11 +63,15 @@ flush-only consumer of a real stored FinalAcceptance and assignment lineage. It
 runs only inside the caller-owned root transaction after acquiring the supplied
 canonical lifecycle fence. It creates or exactly replays one
 `accepted_submission` ContributionRecord and the complete frozen award set:
-zero awards for unpaid work, one for money-only or points-only work, and two for
-combined work. Compensated replay checks the original correlation UUID and
+zero awards for unpaid work, or the one exact size-selected definition under
+the version's common money or project-points header. Compensated replay checks the original correlation UUID and
 award IDs; unpaid replay retains no correlation to compare. This participant
-adds no acceptance/source writer, TASK transition, authorization claim, route,
-fulfillment root or reviewer contribution.
+adds no acceptance/source writer, TASK transition, authorization claim, route
+or reviewer contribution. COMP now stages one immutable fulfillment root and
+selector-only outbox event with each award in the same transaction. The root
+retains the original authorization decision and routing manifest as provenance;
+those IDs do not independently authorize work. No Finance delivery handler is
+registered by this internal custody step.
 
 The boundary MUST preserve four distinct facts:
 
@@ -153,6 +157,9 @@ id
 contribution_policy_id
 project_id
 version_number
+instrument_type: money | project_points | null
+unit_code: string | null
+adapter_binding_id: UUID | null
 status: draft | published | retired
 created_by
 created_at
@@ -161,6 +168,14 @@ published_at
 retired_by
 retired_at
 ```
+
+All authoring, publication and reads use one current reward implementation
+within unreleased v0.1. A compensated policy version has one common instrument,
+unit and adapter binding for both contribution rules. A wholly unpaid version
+has explicit null financial headers and needs no financial setup. Superseded
+implementations, old-format readers and compatibility-only fixtures/tests are
+removed. Incompatible data transitions fail atomically without deleting facts
+or inventing prices.
 
 Draft content may be edited through the authorized policy service. Published
 and retired content is immutable. Publishing a later version affects a work
@@ -185,8 +200,11 @@ compensation_mode: unpaid | compensated
 
 Every publishable policy version MUST contain exactly one rule for each
 contribution type. An `unpaid` rule MUST have no award definitions. A
-`compensated` rule MUST have one or two definitions: at most one `money` and at
-most one `project_points` definition.
+`compensated` `accepted_submission` rule MUST have exactly three definitions,
+one each for `small`, `medium`, and `large`. A compensated `completed_review`
+rule MUST have exactly one fixed definition with null task size. All definitions
+match the version's common financial header. There is no alternate old graph
+validator, writer or response/hash format.
 
 ### ContributionAwardDefinition
 
@@ -202,6 +220,7 @@ instrument_type: money | project_points
 unit_code
 quantity
 adapter_binding_id
+task_size: small | medium | large | null
 ```
 
 Every policy, award, and fulfilled quantity uses the same fixed-point
@@ -224,7 +243,11 @@ configured project-scoped unit; its
 identity is `(project_id, unit_code)`, so equal text in another project is a
 different unit. A definition MUST match the rule's project, policy version,
 contribution type, and unit. Its binding MUST match the project and instrument.
-Published definitions are immutable.
+Published definitions are immutable. New policy input supplies the common
+header, a complete `quantities` object for paid submitter work, and a separate
+fixed `quantity` for paid reviewer work. Unpaid rules contain neither quantity
+field. Per-rule instrument, unit, binding and superseded `definitions` input
+are rejected. Equal or non-monotonic tier amounts are valid explicit choices.
 
 ### ProjectCompensationUnit
 
@@ -307,7 +330,9 @@ route, reviewer participant or fulfillment consumer is registered. Human decisio
 authority remains future work. Migration refuses retained pre-authority sources
 and dependent contribution/award rows unchanged, never backfilling receipts or
 deleting evidence. REV-12A4A supplies scoped lifecycle control;
-fulfillment-root ordinal custody is required only before fulfillment activation.
+COMP fulfillment-root ordinal custody is staged atomically with current awards;
+Finance obligation admission, callbacks and cutoff/drain qualification remain
+required before external fulfillment activation.
 
 Canonical fields:
 
@@ -388,6 +413,34 @@ fixed-point quantity are byte-for-byte/decimal-equal to the definition; award
 creation never recalculates, converts, rounds, or accepts binary floating point.
 
 Fulfillment state MUST NOT be stored by mutating the award.
+
+### CompensationFulfillmentRoot
+
+Before entering the live lifecycle phase, configure `WORKSTREAM_SOURCE_INSTANCE_ID`
+with one canonical UUIDv7 provisioned through `app.core.identifiers.new_record_id()`.
+Persist that value in deployment configuration and use it across all API and worker
+replicas and restarts. Missing configuration prevents activation; a value different
+from committed roots prevents further earning. Never mint an identity per process
+or rotate it to bypass retained source custody.
+
+The current COMP owner stages one root and its exact initial shared-outbox event
+with each earned award. Unpaid and human-review handoff branches create neither.
+The root stores UUIDv7 identity, unique award and increasing ordinal, original
+admission generation, configured source UUID, original binding/route,
+FinalAcceptance/authorization-decision/routing-manifest references, the complete
+canonical obligation, both digests and initial outbox event ID. PostgreSQL
+checks source equality, immutable evidence and deferred award/root/event closure.
+
+Allocation uses the existing held REV fence. Replay requires the stored root and
+event without repair or a new ordinal, including after lifecycle generations
+advance. A suspended original binding remains the earned source. Missing source
+configuration or disagreement with existing roots blocks live activation/new
+custody; no per-request deployment identity is generated.
+
+The event contains selectors and digests only and stays unregistered for delivery
+in this step. Finance HTTP admission, receipts/exceptions, execution, callbacks,
+status/quote reads and cutoff/drain qualification remain unfinished. See the
+[implementation record](../.commitrail/changes/finance-rewards-fulfillment.md).
 
 ### CompensationFulfillmentReceipt
 
@@ -658,7 +711,7 @@ Its typed input contains only locked:
 
 It contains no FinalAcceptance, TaskAssignment contribution source, submitter,
 or submitter policy. It creates exactly one `completed_review`, evaluates only
-the reviewer rule, stages zero to two awards, returns typed audit/outbox inputs,
+the reviewer rule, stages zero or one award, returns typed audit/outbox inputs,
 and flushes.
 
 ### Decision branches
@@ -720,7 +773,7 @@ participant in that transaction.
 
 It contains no direct Review or ReviewLease contribution-source fields. It
 creates or exactly replays one `accepted_submission`, evaluates only the frozen
-submitter rule, stages the complete zero-to-two award set, returns immutable
+submitter rule, stages the complete zero-or-one award set, returns immutable
 contribution/award facts, and flushes. Paid replay checks correlation equality;
 unpaid replay has no stored award correlation to compare.
 
@@ -928,8 +981,11 @@ COMPENSATION and PROJECTS expose transaction-held public owner ports. Every
 mutation uses a caller-owned root transaction, advisory operation fence,
 opaque prepare/consume/close participant, complete graph replacement, and one
 immutable recoverable lifecycle event. Default composition remains deny-default. CP05 supplies explicit AUTH
-composition for all five actions, limited to active human Finance Authority
-with system or exact-project scope.
+composition for all five actions. Current policy read/create/update/publish/
+retire and version-list operations accept active human Project Manager or
+Finance Authority grants with system or exact-project scope. Unit creation and
+adapter binding management remain Finance Authority-only; sharing
+`compensation.policy.manage` does not widen those action-specific role guards.
 
 CP04B owns publication and terminal retirement. Publication locks and
 revalidates the complete server-owned graph, project units, and adapter
@@ -955,11 +1011,11 @@ remain unchanged, and downgrade refuses retained binding audit evidence.
 | `compensation.adapter_binding.suspend` | `compensation.adapter_binding.manage` | covered human Finance Authority / active binding | T | WS-ARCH-001-CP03B (active; CP01A registration custody) |
 | `compensation.adapter_binding.resume` | `compensation.adapter_binding.manage` | covered human Finance Authority / suspended binding | T | WS-ARCH-001-CP03B (active; CP01A registration custody) |
 | `compensation.adapter_binding.retire` | `compensation.adapter_binding.manage` | Finance / dependency-free binding | T | CON-10B |
-| `contribution.policy.read` | `compensation.policy.manage` | Finance / policy version | Q | WS-ARCH-001-CP05 (active AUTH; CP04A owner; CP05A public composition; CP01B registration custody) |
-| `contribution.policy.create_draft` | `compensation.policy.manage` | Finance / policy collection | T | WS-ARCH-001-CP05 (active AUTH; CP04A owner; CP05A public composition; CP01B registration custody) |
-| `contribution.policy.update_draft` | `compensation.policy.manage` | Finance / draft version | T | WS-ARCH-001-CP05 (active AUTH; CP04A owner; CP05A public composition; CP01B registration custody) |
-| `contribution.policy.publish` | `compensation.policy.manage` | Finance / complete draft | T | WS-ARCH-001-CP05 (active AUTH; CP04B owner; CP05A public composition; CP01B registration custody) |
-| `contribution.policy.retire` | `compensation.policy.manage` | Finance / published version | T | WS-ARCH-001-CP05 (active AUTH; CP04B owner; CP05A public composition; CP01B registration custody) |
+| `contribution.policy.read` | `compensation.policy.manage` | covering human PM or Finance / policy version | Q | WS-ARCH-001-CP05 (active AUTH; CP04A owner; CP05A public composition; CP01B registration custody) |
+| `contribution.policy.create_draft` | `compensation.policy.manage` | covering human PM or Finance / policy collection | T | WS-ARCH-001-CP05 (active AUTH; CP04A owner; CP05A public composition; CP01B registration custody) |
+| `contribution.policy.update_draft` | `compensation.policy.manage` | covering human PM or Finance / draft version | T | WS-ARCH-001-CP05 (active AUTH; CP04A owner; CP05A public composition; CP01B registration custody) |
+| `contribution.policy.publish` | `compensation.policy.manage` | covering human PM or Finance / complete draft | T | WS-ARCH-001-CP05 (active AUTH; CP04B owner; CP05A public composition; CP01B registration custody) |
+| `contribution.policy.retire` | `compensation.policy.manage` | covering human PM or Finance / published version | T | WS-ARCH-001-CP05 (active AUTH; CP04B owner; CP05A public composition; CP01B registration custody) |
 | `contribution.compensation_unit.create` | `compensation.policy.manage` | covered human Finance Authority / exact project | T | project-points-unit-creation (active; internal composition only; migration `0058_compensation_unit_create` admits its audit pair) |
 | `compensation.fulfillment.report` | proposed `compensation.fulfillment.report` | exact bound service / award and binding | T | CON-08B |
 | `contribution.read_self` | `contribution.read_self` | active human / own records and complete awards | Q | PILOT-10A |
@@ -1219,9 +1275,10 @@ includes delivered hidden AUTH preparation, CON-07 participation, REV-04C
 FinalAcceptance/TASK/CON composition and ARCH-04E2-B mandatory persisted receipt
 custody and complete authorized outcomes. B8 supplies completion delivery and the
 selected request/completion handlers are registered in production composition.
-False/pass effects require a live REV generation. Actual CON root
-storage and ordinal allocation remain required before either trigger creates
-fulfillment obligations; neither awards nor generic outbox rows substitute. REV-12A4A adds internal Operator transitions for the atomic-participant manifest.
+False/pass effects require a live REV generation. COMP root
+storage and ordinal allocation join the same earning transaction. Finance
+obligation admission and delivery remain unavailable; neither awards nor generic
+outbox rows substitute for the exact immutable root. REV-12A4A adds internal Operator transitions for the atomic-participant manifest.
 Later fulfillment drain work extends this same controller; it is not a prerequisite on live human
 review for the false branch.
 
@@ -1361,8 +1418,9 @@ commit-before-acknowledgment proof. Remediation and selected production composit
 are delivered. A complete supported false guide can activate when the approved
 inventory contains no `human_review` disposition. Conditional award facts remain atomic for paid and unpaid policies.
 The first-contribution manifest keeps fulfillment admission, dispatch and callbacks
-unavailable; obligation/root/ordinal/cutoff storage is required before a reviewed
-successor manifest enables fulfillment, not before this contribution path.
+unavailable. Internal COMP roots and ordinals now accompany earned awards;
+Finance obligation, callback and cutoff/drain execution still require their own
+qualified runtime before a reviewed manifest enables fulfillment.
 False guide activation follows joint proof. A stable Review FK target is
 not live ReviewLease/queue/decision behavior. The shared lifecycle
 fence is required for either acceptance trigger; obligation writers join that same
@@ -1441,7 +1499,7 @@ initiative [conformance matrix](../.commitrail/initiatives/WS-CON-001/CONFORMANC
 At minimum, final proof covers:
 
 - immutable policy publication and both-order freeze races;
-- explicit unpaid, money, project-points, and combined awards;
+- explicit unpaid, selected money and selected project-points awards;
 - one reviewer contribution for every valid Review;
 - accept-only FinalAcceptance and submitter contribution;
 - mutually exclusive contribution source shapes and concurrency uniqueness;

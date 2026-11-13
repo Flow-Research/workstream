@@ -1,5 +1,5 @@
 {
-  "canonical_sha256": "163639e7e28a8864c30e95fa8cc0a3005b1abee477a6563b498350491026624d",
+  "canonical_sha256": "81ec63912433bbffebc088dde648a6a521845d93a151738151d0006ae46ab38f",
   "components": {
     "schemas": {
       "ApiError": {
@@ -498,6 +498,15 @@
             "title": "Status",
             "type": "string"
           },
+          "task_size": {
+            "enum": [
+              "small",
+              "medium",
+              "large"
+            ],
+            "title": "Task Size",
+            "type": "string"
+          },
           "task_type": {
             "anyOf": [
               {
@@ -522,6 +531,7 @@
         "required": [
           "id",
           "project_id",
+          "task_size",
           "locked_contribution_policy_version_id",
           "locked_guide_version",
           "locked_review_policy_id",
@@ -874,6 +884,6 @@
     "method": "POST",
     "openapi_version": "3.1.0",
     "path": "/api/v1/projects/{project_id}/task-import-batches",
-    "repository_sha": "f0431385573eb53353c5ffc3c6cdb6a93d206b73"
+    "repository_sha": "e555aea7cc698f8119a01b0c5e0bd2f2b87c55db"
   }
 }

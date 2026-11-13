@@ -36,6 +36,7 @@ def receipt(action, payload=None):
         k: TASK_RESPONSE[k] for k in ("id", "project_id", "created_at", "updated_at")
     }
     value.update(payload)
+    value.setdefault("task_size", "small")
     value.setdefault("skill_tags", [])
     value.setdefault("source_type", "manual")
     value.update(
@@ -335,3 +336,34 @@ def test_manager_task_credential_denial_uncertainty_and_one_http2_post(cli, tmp_
             assert result.returncode == 1 and result.stdout == ""
             assert json.loads(result.stderr)["error"]["outcome_unknown"] is True
             assert len(requests) == 1
+
+
+def test_manager_task_sizes_bind_current_response(cli, tmp_path):
+    file = tmp_path / "task.json"
+    with http_fixture() as (origin, response, requests):
+        for size in (None, "small", "medium", "large"):
+            payload = INPUT if size is None else INPUT | {"task_size": size}
+            file.write_text(json.dumps(payload))
+            returned = receipt("create", payload) | {"task_size": size or "small"}
+            response.update(status=201, body=json.dumps(returned).encode())
+            result = invoke(cli, origin, "create", file)
+            assert result.returncode == 0, result.stderr
+            assert json.loads(result.stdout)["task_size"] == (size or "small")
+            assert response["commands"][-1][-1] == payload
+            response["body"] = json.dumps(returned | {"task_size": "large" if size != "large" else "small"}).encode()
+            result = invoke(cli, origin, "create", file)
+            assert result.returncode == 1 and result.stdout == ""
+        file.write_text(json.dumps(INPUT))
+        missing = receipt("create")
+        missing.pop("task_size")
+        response["body"] = json.dumps(missing).encode()
+        assert invoke(cli, origin, "create", file).returncode == 1
+        file.write_text(json.dumps(INPUT | {"task_size": "small"}))
+        result = invoke(cli, origin, "create", file)
+        assert result.returncode == 1 and result.stdout == ""
+        prior = len(requests)
+        for size in (None, "Small", "", 3, True):
+            file.write_text(json.dumps(INPUT | {"task_size": size}))
+            result = invoke(cli, origin, "create", file)
+            assert result.returncode == 2 and result.stdout == ""
+        assert len(requests) == prior

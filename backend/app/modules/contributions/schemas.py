@@ -12,7 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 from app.modules.compensation.api import (
     CompensationInstrumentType as ContributionInstrumentType,
 )
-from app.modules.contributions.policy_validation import canonical_award_quantity
+from app.modules.contributions.api.quantities import canonical_award_quantity
 
 
 _PROJECT_ID_PATTERN = r"^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$"

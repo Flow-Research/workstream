@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
+from app.modules.contributions.api import TaskSize
 from app.modules.tasks.api.ready_queue import TaskCompensationTerms, _aware
 from app.modules.tasks.api.assignment_outcome import TaskAssignmentOutcome
 from app.modules.tasks.api.revision import ContributorRevisionContext
@@ -41,6 +42,7 @@ class _TaskDetailFields:
 
     task_id: UUID
     project_id: UUID
+    task_size: TaskSize
     title: str
     description: str
     task_type: str | None
@@ -57,6 +59,7 @@ class _TaskDetailFields:
     def __post_init__(self) -> None:
         if (
             not isinstance(self.task_id, UUID) or not isinstance(self.project_id, UUID)
+            or self.task_size not in ("small", "medium", "large")
             or any(not isinstance(value, str) for value in (self.title, self.description, self.status))
             or any(value is not None and not isinstance(value, str) for value in (
                 self.task_type, self.difficulty, self.acceptance_criteria, self.rejection_criteria,
@@ -79,6 +82,7 @@ class ContributorTaskDetail(_TaskDetailFields):
     def __post_init__(self) -> None:
         _TaskDetailFields.__post_init__(self)
         if (not isinstance(self.compensation, TaskCompensationTerms)
+                or self.compensation.task_size != self.task_size
                 or (self.last_assignment_outcome is not None
                     and not isinstance(self.last_assignment_outcome, TaskAssignmentOutcome))):
             raise ValueError("task detail facts are invalid")

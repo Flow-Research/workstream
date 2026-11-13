@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from copy import deepcopy
 from functools import lru_cache
 from importlib.resources import files
 from pathlib import Path
@@ -710,118 +711,6 @@ WORKSPACE_READ_INPUT_SCHEMAS: dict[str, dict[str, Any]] = {
     },
 }
 
-_POLICY_DEFINITION_INPUT = {
-    "type": "object",
-    "properties": {
-        "instrument_type": {"type": "string", "enum": ["money", "project_points"]},
-        "unit_code": {"type": "string"},
-        "quantity": {"type": "string"},
-        "adapter_binding_id": _UUID_INPUT,
-    },
-    "required": ["instrument_type", "unit_code", "quantity", "adapter_binding_id"],
-    "additionalProperties": False,
-}
-_POLICY_RULE_INPUT = {
-    "type": "object",
-    "properties": {
-        "contribution_type": {
-            "type": "string",
-            "enum": ["accepted_submission", "completed_review"],
-        },
-        "compensation_mode": {"type": "string", "enum": ["unpaid", "compensated"]},
-        "definitions": {"type": "array", "items": _POLICY_DEFINITION_INPUT},
-    },
-    "required": ["contribution_type", "compensation_mode"],
-    "additionalProperties": False,
-}
-CONTRIBUTION_POLICY_INPUT_SCHEMAS: dict[str, dict[str, Any]] = {
-    "contribution_policies_list": {
-        "type": "object",
-        "properties": {"project_id": _UUID_INPUT, **_PAGE_PROPERTIES},
-        "required": ["project_id"],
-        "additionalProperties": False,
-    },
-    "contribution_policy_current_get": {
-        "type": "object",
-        "properties": {"project_id": _UUID_INPUT},
-        "required": ["project_id"],
-        "additionalProperties": False,
-    },
-    "contribution_policy_get": {
-        "type": "object",
-        "properties": {
-            "project_id": _UUID_INPUT,
-            "policy_id": _UUID_INPUT,
-            "version_id": _UUID_INPUT,
-        },
-        "required": ["project_id", "policy_id"],
-        "additionalProperties": False,
-    },
-    "contribution_policy_create": {
-        "type": "object",
-        "properties": {
-            "project_id": _UUID_INPUT,
-            "body": {
-                "type": "object",
-                "properties": {"name": {"type": "string", "minLength": 1, "maxLength": 200}},
-                "required": ["name"],
-                "additionalProperties": False,
-            },
-            "idempotency_key": _IDEMPOTENCY_KEY_INPUT,
-        },
-        "required": ["project_id", "body", "idempotency_key"],
-        "additionalProperties": False,
-    },
-    "contribution_policy_update": {
-        "type": "object",
-        "properties": {
-            "project_id": _UUID_INPUT,
-            "policy_id": _UUID_INPUT,
-            "version_id": _UUID_INPUT,
-            "body": {
-                "type": "object",
-                "properties": {
-                    "rules": {
-                        "type": "array",
-                        "items": _POLICY_RULE_INPUT,
-                        "minItems": 2,
-                        "maxItems": 2,
-                    }
-                },
-                "required": ["rules"],
-                "additionalProperties": False,
-            },
-            "idempotency_key": _IDEMPOTENCY_KEY_INPUT,
-        },
-        "required": ["project_id", "policy_id", "version_id", "body", "idempotency_key"],
-        "additionalProperties": False,
-    },
-    "contribution_policy_publish": {
-        "type": "object",
-        "properties": {
-            "project_id": _UUID_INPUT,
-            "policy_id": _UUID_INPUT,
-            "version_id": _UUID_INPUT,
-            "body": EMPTY_INPUT_SCHEMA,
-            "idempotency_key": _IDEMPOTENCY_KEY_INPUT,
-        },
-        "required": ["project_id", "policy_id", "version_id", "body", "idempotency_key"],
-        "additionalProperties": False,
-    },
-    "contribution_policy_retire": {
-        "type": "object",
-        "properties": {
-            "project_id": _UUID_INPUT,
-            "policy_id": _UUID_INPUT,
-            "version_id": _UUID_INPUT,
-            "body": EMPTY_INPUT_SCHEMA,
-            "idempotency_key": _IDEMPOTENCY_KEY_INPUT,
-        },
-        "required": ["project_id", "policy_id", "version_id", "body", "idempotency_key"],
-        "additionalProperties": False,
-    },
-}
-
 
 _TASK_SELECTOR_PROPERTIES = {"task_id": _UUID_INPUT}
 _TASK_PAGE_PROPERTIES = {
@@ -1095,6 +984,88 @@ def _contract_document(name: str) -> dict[str, Any]:
     return document
 
 
+CONTRIBUTION_POLICY_INPUT_SCHEMAS: dict[str, dict[str, Any]] = {
+    "contribution_policies_list": {
+        "type": "object",
+        "properties": {"project_id": _UUID_INPUT, **_PAGE_PROPERTIES},
+        "required": ["project_id"],
+        "additionalProperties": False,
+    },
+    "contribution_policy_current_get": {
+        "type": "object",
+        "properties": {"project_id": _UUID_INPUT},
+        "required": ["project_id"],
+        "additionalProperties": False,
+    },
+    "contribution_policy_get": {
+        "type": "object",
+        "properties": {
+            "project_id": _UUID_INPUT,
+            "policy_id": _UUID_INPUT,
+            "version_id": _UUID_INPUT,
+        },
+        "required": ["project_id", "policy_id"],
+        "additionalProperties": False,
+    },
+    "contribution_policy_create": {
+        "type": "object",
+        "properties": {
+            "project_id": _UUID_INPUT,
+            "body": {
+                "type": "object",
+                "properties": {"name": {"type": "string", "minLength": 1, "maxLength": 200}},
+                "required": ["name"],
+                "additionalProperties": False,
+            },
+            "idempotency_key": _IDEMPOTENCY_KEY_INPUT,
+        },
+        "required": ["project_id", "body", "idempotency_key"],
+        "additionalProperties": False,
+    },
+    "contribution_policy_update": {
+        "type": "object",
+        "properties": {
+            "project_id": _UUID_INPUT,
+            "policy_id": _UUID_INPUT,
+            "version_id": _UUID_INPUT,
+            "body": _resolve_schema_refs(
+                _contract_document("contribution_policy_update")["operation"]["requestBody"][
+                    "content"
+                ]["application/json"]["schema"],
+                _contract_document("contribution_policy_update")["components"]["schemas"],
+            ),
+            "idempotency_key": _IDEMPOTENCY_KEY_INPUT,
+        },
+        "required": ["project_id", "policy_id", "version_id", "body", "idempotency_key"],
+        "additionalProperties": False,
+    },
+    "contribution_policy_publish": {
+        "type": "object",
+        "properties": {
+            "project_id": _UUID_INPUT,
+            "policy_id": _UUID_INPUT,
+            "version_id": _UUID_INPUT,
+            "body": EMPTY_INPUT_SCHEMA,
+            "idempotency_key": _IDEMPOTENCY_KEY_INPUT,
+        },
+        "required": ["project_id", "policy_id", "version_id", "body", "idempotency_key"],
+        "additionalProperties": False,
+    },
+    "contribution_policy_retire": {
+        "type": "object",
+        "properties": {
+            "project_id": _UUID_INPUT,
+            "policy_id": _UUID_INPUT,
+            "version_id": _UUID_INPUT,
+            "body": EMPTY_INPUT_SCHEMA,
+            "idempotency_key": _IDEMPOTENCY_KEY_INPUT,
+        },
+        "required": ["project_id", "policy_id", "version_id", "body", "idempotency_key"],
+        "additionalProperties": False,
+    },
+}
+
+
 @lru_cache(maxsize=128)
 def _contract_output_schema(name: str) -> dict[str, Any]:
     document = _contract_document(name)
@@ -1249,8 +1220,17 @@ def contribution_policy_output_schema(name: str) -> dict[str, Any]:
     return _contract_output_schema(name)
 
 
+@lru_cache(maxsize=8)
 def contribution_policy_output_validator(name: str) -> Draft202012Validator:
-    contribution_policy_output_schema(name)
+    schema = contribution_policy_output_schema(name)
+    if name in {"contribution_policy_get", "contribution_policies_list"}:
+        from workstream_mcp.contribution_policy_contract import policy_view_output_validator
+
+        return policy_view_output_validator(
+            schema,
+            collection=name == "contribution_policies_list",
+            format_checker=_OUTPUT_FORMAT_CHECKER,
+        )
     return _contract_output_validator(name)
 
 
@@ -1619,7 +1599,13 @@ def task_operation_output_schema(name: str) -> dict[str, Any]:
         raise ContractError("unknown task operation contract")
     if name == "task_import_source_content_get":
         return TASK_IMPORT_SOURCE_CONTENT_OUTPUT_SCHEMA
-    return _contract_output_schema(name)
+    schema = _contract_output_schema(name)
+    if name in {"task_import_batch_create", "task_import_batch_get"}:
+        schema = deepcopy(schema)
+        batch_schema = schema["properties"]["creation"] if name.endswith("get") else schema
+        task_schema = batch_schema["properties"]["tasks"]["items"]
+        task_schema["required"] = sorted(task_schema["properties"])
+    return schema
 
 
 def task_operation_output_validator(name: str) -> Draft202012Validator:

@@ -9,6 +9,7 @@ from app.core.identifiers import new_record_id
 from app.core.hashing import canonical_json_hash
 from app.db.session import get_session_factory
 from app.adapters.auth import lifecycle_transition_authorization
+from app.adapters.compensation import compensation_fulfillment_readiness
 from app.modules.authorization.runtime import (
     ActorKind, ActorStatus, HumanAuthorizationContext, IdentityLinkStatus,
 )
@@ -42,7 +43,10 @@ def controller(session, command):
         identity_link_status=IdentityLinkStatus.ACTIVE,
         request_id=new_record_id(), correlation_id=command.operation_id,
     )
-    return JointLifecycleController(session, authorization=lifecycle_transition_authorization(session, context))
+    return JointLifecycleController(
+        session, authorization=lifecycle_transition_authorization(session, context),
+        source_readiness=compensation_fulfillment_readiness(session),
+    )
 
 
 async def transition(command):

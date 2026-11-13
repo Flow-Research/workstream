@@ -1,5 +1,5 @@
 {
-  "canonical_sha256": "d3b931a43ceed0bb4dd1a61d36c054d74f3082c1514ef31a8f0aceab472b810d",
+  "canonical_sha256": "4f95f6ef7a16323d0fd6ff28acfa8d01c76f5bf959d21e38776802872e0e454c",
   "components": {
     "schemas": {
       "ApiError": {
@@ -205,7 +205,7 @@
             "items": {
               "$ref": "#/components/schemas/ContributionAwardView"
             },
-            "maxItems": 2,
+            "maxItems": 1,
             "title": "Awards",
             "type": "array"
           },
@@ -342,6 +342,22 @@
             "title": "Task Id",
             "type": "string"
           },
+          "task_size": {
+            "anyOf": [
+              {
+                "enum": [
+                  "small",
+                  "medium",
+                  "large"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Task Size"
+          },
           "task_title": {
             "title": "Task Title",
             "type": "string"
@@ -349,6 +365,7 @@
         },
         "required": [
           "contribution_id",
+          "task_size",
           "project_id",
           "task_id",
           "submission_id",
@@ -785,6 +802,6 @@
     "method": "GET",
     "openapi_version": "3.1.0",
     "path": "/api/v1/projects/{project_id}/contributions/export",
-    "repository_sha": "bb39ac10aed24e3484f3155706f7a8902ef97694"
+    "repository_sha": "b0f4d7189192c5aa21cf30a1ec34baddbe4903ba"
   }
 }

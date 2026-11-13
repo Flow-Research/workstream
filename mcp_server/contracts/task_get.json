@@ -1,5 +1,5 @@
 {
-  "canonical_sha256": "308b9007c563ee66799b9066daf1697b72d078a4d33e70a37e682d7da853205d",
+  "canonical_sha256": "1e26eb43031152d73ff0e30b0456a6678c1148ca56e48277fb481d57ede6b007",
   "components": {
     "schemas": {
       "ApiError": {
@@ -163,6 +163,15 @@
             "title": "Task Id",
             "type": "string"
           },
+          "task_size": {
+            "enum": [
+              "small",
+              "medium",
+              "large"
+            ],
+            "title": "Task Size",
+            "type": "string"
+          },
           "task_type": {
             "anyOf": [
               {
@@ -187,6 +196,7 @@
         "required": [
           "task_id",
           "project_id",
+          "task_size",
           "title",
           "description",
           "task_type",
@@ -340,10 +350,20 @@
             "format": "uuid",
             "title": "Contribution Policy Version Id",
             "type": "string"
+          },
+          "task_size": {
+            "enum": [
+              "small",
+              "medium",
+              "large"
+            ],
+            "title": "Task Size",
+            "type": "string"
           }
         },
         "required": [
           "contribution_policy_version_id",
+          "task_size",
           "accepted_submission",
           "completed_review"
         ],
@@ -620,6 +640,6 @@
     "method": "GET",
     "openapi_version": "3.1.0",
     "path": "/api/v1/tasks/{task_id}",
-    "repository_sha": "f0431385573eb53353c5ffc3c6cdb6a93d206b73"
+    "repository_sha": "f5d795910be6f5e8256d7261857de1ce82f2fa39"
   }
 }

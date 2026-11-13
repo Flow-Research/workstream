@@ -53,14 +53,18 @@ does not author or approve Workstream's machine-readable internal policy schema.
 The stable project policy that determines what canonical contributions can
 earn. Its immutable published `ContributionPolicyVersion` contains one explicit
 `ContributionRule` for each contribution type. Unpaid rules create no award;
-payable rules reference immutable `ContributionAwardDefinition` rows for money,
-project points, or both. A Finance Authority publishes the policy. Project
-owners provide business terms but do not author the machine policy directly.
+payable v2 rules reference immutable `ContributionAwardDefinition` rows under
+one common money or project-points header. Submitter work has three size tiers;
+reviewer work has one fixed quantity. Retained v1 rules can contain both
+instruments. A covering Project Manager or Finance Authority manages and
+publishes the policy. Unit and adapter-binding administration stays Finance-only.
 
 ## CompensationAward
 
-CON-03C supplies immutable storage; live award creation and fulfillment remain
-separate, unavailable operations.
+An immutable earned fact produced atomically with its ContributionRecord when
+the locked contribution rule is compensated. An award establishes earned terms;
+fulfillment evidence establishes delivery. Current exposure and qualification
+remain recorded in the [capability ledger](roadmap_status.md).
 
 The immutable result of evaluating one `ContributionRecord` against its frozen
 `ContributionPolicyVersion`. Its instrument is `money` or `project_points`.

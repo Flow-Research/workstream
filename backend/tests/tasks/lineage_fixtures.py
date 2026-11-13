@@ -21,6 +21,7 @@ async def seed_started_task_for_artifact_test(connection, params):
     async with AsyncSession(bind=connection, expire_on_commit=False) as session:
         task = WorkstreamTask(
             id=params["task"],
+            task_size="small",
             project_id=params["project"],
             title="Evidence task",
             description="Complete the work described by the approved guide.",
@@ -53,6 +54,8 @@ async def seed_started_task_for_artifact_test(connection, params):
                 assigned_by=params["actor"],
                 status="active",
                 submitter_contribution_policy_version_id=task.locked_contribution_policy_version_id,
+                submitter_task_size=task.task_size,
+                submitter_award_definition_id=task.locked_submission_award_definition_id,
             )
         )
         task.assigned_to = params["actor"]

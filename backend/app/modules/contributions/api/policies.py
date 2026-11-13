@@ -2,12 +2,20 @@
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Literal, Protocol, TypeAlias
+from typing import Annotated, Literal, Protocol, TypeAlias
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, with_config
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Discriminator,
+    Tag,
+    with_config,
+)
 
 from app.modules.compensation.api import CompensationInstrumentType
+from app.modules.contributions.api.quantities import PolicyQuantity
+from app.modules.contributions.api.reward_selection import TaskSize
 from app.modules.contributions.api.compensation_units import (
     CompensationUnitAction,
     CompensationUnitCreateAuthorizationFacts,
@@ -42,25 +50,57 @@ class ContributionPolicyConflict(RuntimeError):
     """Conceal stale, duplicate, foreign, or invalid mutations."""
 
 
-@with_config(ConfigDict(extra="forbid"))
-@dataclass(frozen=True, slots=True, kw_only=True)
-class PolicyDefinitionInput:
-    """One requested immutable compensation definition."""
+class TaskSizeQuantities(BaseModel):
+    """The exact three alternatives; no missing-tier or amount fallback."""
 
-    instrument_type: CompensationInstrumentType
-    unit_code: str
-    quantity: str
-    adapter_binding_id: UUID
+    model_config = ConfigDict(extra="forbid", frozen=True, revalidate_instances="always")
+
+    small: PolicyQuantity
+    medium: PolicyQuantity
+    large: PolicyQuantity
 
 
-@with_config(ConfigDict(extra="forbid"))
-@dataclass(frozen=True, slots=True, kw_only=True)
-class PolicyRuleInput:
-    """One complete contribution rule replacement."""
+class _PolicyRuleBase(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True, revalidate_instances="always")
+
+
+class UnpaidPolicyRuleInput(_PolicyRuleBase):
+    """An explicit unpaid rule has no financial-value members."""
 
     contribution_type: ContributionType
-    compensation_mode: CompensationMode
-    definitions: tuple[PolicyDefinitionInput, ...] = ()
+    compensation_mode: Literal["unpaid"]
+
+
+class AcceptedSubmissionPolicyRuleInput(_PolicyRuleBase):
+    """Exactly three size alternatives under the version's common header."""
+
+    contribution_type: Literal["accepted_submission"]
+    compensation_mode: Literal["compensated"]
+    quantities: TaskSizeQuantities
+
+
+class CompletedReviewPolicyRuleInput(_PolicyRuleBase):
+    """Reviewer work has its own single fixed quantity, independent of task size."""
+
+    contribution_type: Literal["completed_review"]
+    compensation_mode: Literal["compensated"]
+    quantity: PolicyQuantity
+
+
+def _policy_rule_kind(value) -> str:
+    if not isinstance(value, (dict, _PolicyRuleBase)):
+        return "invalid"
+    mode = value.get("compensation_mode") if isinstance(value, dict) else value.compensation_mode
+    kind = value.get("contribution_type") if isinstance(value, dict) else value.contribution_type
+    return "unpaid" if mode == "unpaid" else kind
+
+
+PolicyRuleInput: TypeAlias = Annotated[
+    Annotated[UnpaidPolicyRuleInput, Tag("unpaid")]
+    | Annotated[AcceptedSubmissionPolicyRuleInput, Tag("accepted_submission")]
+    | Annotated[CompletedReviewPolicyRuleInput, Tag("completed_review")],
+    Discriminator(_policy_rule_kind),
+]
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -110,6 +150,9 @@ class ContributionPolicyUpdateDraftRequest:
     project_id: UUID
     contribution_policy_id: UUID
     contribution_policy_version_id: UUID
+    instrument_type: CompensationInstrumentType | None
+    unit_code: str | None
+    adapter_binding_id: UUID | None
     rules: tuple[PolicyRuleInput, ...]
 
 
@@ -143,6 +186,7 @@ PolicyMutationRequest: TypeAlias = (
 )
 
 
+@with_config(ConfigDict(extra="forbid"))
 @dataclass(frozen=True, slots=True, kw_only=True)
 class PolicyDefinitionView:
     """Server-owned immutable compensation definition facts."""
@@ -152,8 +196,10 @@ class PolicyDefinitionView:
     unit_code: str
     quantity: str
     adapter_binding_id: UUID
+    task_size: TaskSize | None
 
 
+@with_config(ConfigDict(extra="forbid"))
 @dataclass(frozen=True, slots=True, kw_only=True)
 class PolicyRuleView:
     """Server-owned immutable contribution rule facts."""
@@ -164,6 +210,7 @@ class PolicyRuleView:
     definitions: tuple[PolicyDefinitionView, ...]
 
 
+@with_config(ConfigDict(extra="forbid"))
 @dataclass(frozen=True, slots=True, kw_only=True)
 class ContributionPolicyView:
     """Authorized immutable view of one exact policy version graph."""
@@ -175,6 +222,9 @@ class ContributionPolicyView:
     contribution_policy_version_id: UUID
     version_number: int
     version_status: ContributionPolicyVersionStatus
+    instrument_type: CompensationInstrumentType | None
+    unit_code: str | None
+    adapter_binding_id: UUID | None
     rules: tuple[PolicyRuleView, ...]
 
 
@@ -219,10 +269,14 @@ class ContributionPolicyMutationResult:
 
 
 class ContributionPolicyVersionListPort(Protocol):
-    """The lock-free version list behind the Finance D1 read; no policy operation."""
+    """Authorized project policy-version list; no policy mutation."""
 
     async def read_versions(
-        self, project_id: UUID, *, after: tuple[datetime, UUID] | None, limit: int,
+        self,
+        project_id: UUID,
+        *,
+        after: tuple[datetime, UUID] | None,
+        limit: int,
     ) -> tuple[tuple[ContributionPolicyVersionListItem, ...], bool]:
         """Every stored version oldest first; the caller has already authorized the project read."""
         ...
@@ -231,12 +285,22 @@ class ContributionPolicyVersionListPort(Protocol):
 class ContributionPolicyOperationsPort(Protocol):
     """Caller-owned policy operations used by public delivery composition."""
 
-    async def read_current(self, request: ContributionPolicyProjectReadRequest) -> ContributionPolicyProjectSelection: ...
+    async def read_current(
+        self, request: ContributionPolicyProjectReadRequest
+    ) -> ContributionPolicyProjectSelection: ...
     async def read(self, request: ContributionPolicyReadRequest) -> ContributionPolicyView: ...
-    async def create_draft(self, request: ContributionPolicyCreateDraftRequest) -> ContributionPolicyMutationResult: ...
-    async def update_draft(self, request: ContributionPolicyUpdateDraftRequest) -> ContributionPolicyMutationResult: ...
-    async def publish(self, request: ContributionPolicyPublishRequest) -> ContributionPolicyMutationResult: ...
-    async def retire(self, request: ContributionPolicyRetireRequest) -> ContributionPolicyMutationResult: ...
+    async def create_draft(
+        self, request: ContributionPolicyCreateDraftRequest
+    ) -> ContributionPolicyMutationResult: ...
+    async def update_draft(
+        self, request: ContributionPolicyUpdateDraftRequest
+    ) -> ContributionPolicyMutationResult: ...
+    async def publish(
+        self, request: ContributionPolicyPublishRequest
+    ) -> ContributionPolicyMutationResult: ...
+    async def retire(
+        self, request: ContributionPolicyRetireRequest
+    ) -> ContributionPolicyMutationResult: ...
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -307,7 +371,10 @@ class ContributionPolicyMutationAuthorizationPort(Protocol):
     """Prepare, consume, and close opaque mutation authority."""
 
     async def lock_contribution_policy_mutation_scope(
-        self, *, action: PolicyAction | CompensationUnitAction, actor_profile_id: UUID,
+        self,
+        *,
+        action: PolicyAction | CompensationUnitAction,
+        actor_profile_id: UUID,
         project_id: UUID,
     ) -> None:
         """Retain scoped authority locks before product rows without issuing a handle."""
@@ -337,12 +404,15 @@ class DenyContributionPolicyAuthorization:
         raise ContributionPolicyUnavailable("contribution_policy_unavailable")
 
     async def lock_contribution_policy_mutation_scope(
-        self, *, action: PolicyAction | CompensationUnitAction, actor_profile_id: UUID,
+        self,
+        *,
+        action: PolicyAction | CompensationUnitAction,
+        actor_profile_id: UUID,
         project_id: UUID,
     ) -> None:
         """Retain scoped authority locks before product rows without issuing a handle."""
 
-        raise ContributionPolicyUnavailable('contribution_policy_unavailable')
+        raise ContributionPolicyUnavailable("contribution_policy_unavailable")
 
     async def prepare_contribution_policy_mutation(
         self, facts: ContributionPolicyAuthorizationFacts

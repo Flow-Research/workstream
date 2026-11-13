@@ -14,6 +14,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal, Self
 from urllib.parse import urlsplit, urlunsplit
+from uuid import UUID
 
 from dotenv import dotenv_values
 from pydantic import Field, PrivateAttr, SecretStr, field_validator, model_validator
@@ -97,6 +98,26 @@ class Settings(BaseSettings):
     ] = "production"
     auth_provider: Literal["dev", "flow"] = "flow"
     database_url: str | None = None
+    source_instance_id: UUID | None = None
+
+    @field_validator("source_instance_id", mode="before")
+    @classmethod
+    def canonical_source_instance(cls, value: object) -> UUID | None:
+        """One explicitly configured deployment identity; never mint per process."""
+        if value is None:
+            return None
+        if isinstance(value, UUID):
+            parsed = value
+        elif isinstance(value, str):
+            parsed = UUID(value)
+            if str(parsed) != value:
+                raise ValueError("source instance must be a canonical UUIDv7")
+        else:
+            raise ValueError("source instance must be a canonical UUIDv7")
+        if parsed.version != 7:
+            raise ValueError("source instance must be a canonical UUIDv7")
+        return parsed
+
     dev_auth_token: str | None = None
     dev_auth_subject: str | None = None
     dev_auth_issuer: str | None = None

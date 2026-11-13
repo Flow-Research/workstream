@@ -9,14 +9,16 @@ from test_contributor_task_mutations import KEY, POLICY, canonical_error
 from test_contribution_policy_reads import VERSION
 
 RULES = {
+    "instrument_type": None,
+    "unit_code": None,
+    "adapter_binding_id": None,
     "rules": [
         {"contribution_type": "accepted_submission", "compensation_mode": "unpaid"},
         {
             "contribution_type": "completed_review",
             "compensation_mode": "unpaid",
-            "definitions": [],
         },
-    ]
+    ],
 }
 
 
@@ -156,22 +158,14 @@ def test_finance_decisions_exact_wire_and_complete_receipts(cli, tmp_path):
 
         # Complete replacement retains exact decimal strings and server-owned economics.
         body = deepcopy(RULES)
+        body.update(instrument_type="money", unit_code="USD", adapter_binding_id=ACTOR)
         body["rules"][0].update(
             compensation_mode="compensated",
-            definitions=[
-                {
-                    "instrument_type": "money",
-                    "unit_code": "USD",
-                    "quantity": "99999999999999999999.123456789012345678",
-                    "adapter_binding_id": ACTOR,
-                },
-                {
-                    "instrument_type": "project_points",
-                    "unit_code": "research_points",
-                    "quantity": "9007199254740993",
-                    "adapter_binding_id": KEY,
-                },
-            ],
+            quantities={
+                "small": "99999999999999999999.123456789012345678",
+                "medium": "20",
+                "large": "10",
+            },
         )
         file.write_text(json.dumps(body))
         response.update(status=200, body=json.dumps(receipt("update")).encode())

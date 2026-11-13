@@ -54,7 +54,7 @@ async def test_contribution_evidence_real_socket_exact_export_and_fresh_authorit
     async with authorized_submitter_source(
         tmp_path,
         auth_database_env,
-        contribution_awards=("money", "project_points"),
+        contribution_awards=("money",),
     ) as h:
         owner = await source_actor(signed, h)
         project = h.submitter_record.project_id
@@ -112,10 +112,7 @@ async def test_contribution_evidence_real_socket_exact_export_and_fresh_authorit
             (item,) = own["items"]
             assert item["contribution_id"] == str(h.submitter_record.id)
             assert item["source_final_acceptance_id"] == str(h.acceptance.id)
-            assert {award["instrument"] for award in item["awards"]} == {
-                "money",
-                "project_points",
-            }
+            assert {award["instrument"] for award in item["awards"]} == {"money"}
             empty = await call(stranger, "contributions")
             assert empty["items"] == []
             excluded = await call(

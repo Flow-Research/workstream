@@ -3,6 +3,7 @@
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from app.core.identifiers import new_record_id
+from app.modules.compensation.api import CompensationInstrumentType
 
 import pytest
 
@@ -33,7 +34,9 @@ def recovered_event(fixture: SimpleNamespace, request: object) -> SimpleNamespac
         actor_profile_id=str(fixture.actor_id),
         project_id=str(fixture.project_id),
         contribution_policy_id=getattr(request, "contribution_policy_id", new_record_id()),
-        contribution_policy_version_id=getattr(request, "contribution_policy_version_id", new_record_id()),
+        contribution_policy_version_id=getattr(
+            request, "contribution_policy_version_id", new_record_id()
+        ),
         version_number=1,
         prior_current_version_id=None,
         prior_current_version_number=None,
@@ -52,6 +55,9 @@ def update_request(fixture: SimpleNamespace) -> ContributionPolicyUpdateDraftReq
         project_id=fixture.project_id,
         contribution_policy_id=new_record_id(),
         contribution_policy_version_id=new_record_id(),
+        instrument_type=CompensationInstrumentType.MONEY,
+        unit_code="USD",
+        adapter_binding_id=new_record_id(),
         rules=complete_rules(),
     )
 

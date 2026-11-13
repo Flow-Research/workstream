@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 )
 
@@ -26,6 +27,9 @@ type ContributionPolicyVersion struct {
 	ContributionPolicyVersionID string                   `json:"contribution_policy_version_id"`
 	VersionNumber               *big.Int                 `json:"version_number"`
 	VersionStatus               string                   `json:"version_status"`
+	InstrumentType              *string                  `json:"instrument_type"`
+	UnitCode                    *string                  `json:"unit_code"`
+	AdapterBindingID            *string                  `json:"adapter_binding_id"`
 	Rules                       []ContributionPolicyRule `json:"rules"`
 }
 
@@ -37,11 +41,12 @@ type ContributionPolicyRule struct {
 }
 
 type ContributionPolicyDefinition struct {
-	DefinitionID     string `json:"definition_id"`
-	InstrumentType   string `json:"instrument_type"`
-	UnitCode         string `json:"unit_code"`
-	Quantity         string `json:"quantity"`
-	AdapterBindingID string `json:"adapter_binding_id"`
+	TaskSize         *string `json:"task_size"`
+	DefinitionID     string  `json:"definition_id"`
+	InstrumentType   string  `json:"instrument_type"`
+	UnitCode         string  `json:"unit_code"`
+	Quantity         string  `json:"quantity"`
+	AdapterBindingID string  `json:"adapter_binding_id"`
 }
 
 func contributionPolicyPath(project string) (string, error) {
@@ -114,15 +119,20 @@ var policyVersionFields = []string{
 func validPolicyVersion(fields map[string]json.RawMessage, value *ContributionPolicyVersion) bool {
 	if !validUUID(value.ProjectID) || !validUUID(value.ContributionPolicyID) || !validUUID(value.ContributionPolicyVersionID) ||
 		strings.TrimSpace(value.Name) == "" || value.VersionNumber == nil || value.VersionNumber.Sign() <= 0 ||
-		(value.PolicyStatus != "draft" && value.PolicyStatus != "active" && value.PolicyStatus != "retired") ||
-		(value.VersionStatus != "draft" && value.VersionStatus != "published" && value.VersionStatus != "retired") ||
-		value.Rules == nil || len(value.Rules) > 2 {
+		!oneOf(value.PolicyStatus, "draft", "active", "retired") || !oneOf(value.VersionStatus, "draft", "published", "retired") ||
+		value.Rules == nil || (len(value.Rules) != 0 && len(value.Rules) != 2) || !requiredNullable(fields, "instrument_type", "unit_code", "adapter_binding_id") {
 		return false
 	}
 	var rules []json.RawMessage
 	if err := json.Unmarshal(fields["rules"], &rules); err != nil {
 		return false
 	}
+	headerPresent := value.InstrumentType != nil && value.UnitCode != nil && value.AdapterBindingID != nil
+	headerAbsent := value.InstrumentType == nil && value.UnitCode == nil && value.AdapterBindingID == nil
+	if (!headerPresent && !headerAbsent) || (headerPresent && (!validUUID(*value.AdapterBindingID) || !validPolicyAmount(*value.InstrumentType, *value.UnitCode, "1"))) {
+		return false
+	}
+	paid := false
 	seenRules, seenDefinitions := make(map[[16]byte]bool), make(map[[16]byte]bool)
 	seenTypes := make(map[string]bool)
 	for index, rawRule := range rules {
@@ -130,8 +140,8 @@ func validPolicyVersion(fields map[string]json.RawMessage, value *ContributionPo
 		members, err := contextObject(rawRule, rule, []string{"rule_id", "contribution_type", "compensation_mode", "definitions"}, nil)
 		id, valid := uuidIdentity(rule.RuleID)
 		if err != nil || !valid || seenRules[id] || seenTypes[rule.ContributionType] ||
-			(rule.ContributionType != "accepted_submission" && rule.ContributionType != "completed_review") ||
-			(rule.CompensationMode != "unpaid" && rule.CompensationMode != "compensated") || rule.Definitions == nil || len(rule.Definitions) > 2 {
+			!oneOf(rule.ContributionType, "accepted_submission", "completed_review") ||
+			!oneOf(rule.CompensationMode, "unpaid", "compensated") || rule.Definitions == nil {
 			return false
 		}
 		seenRules[id], seenTypes[rule.ContributionType] = true, true
@@ -139,20 +149,55 @@ func validPolicyVersion(fields map[string]json.RawMessage, value *ContributionPo
 		if err := json.Unmarshal(members["definitions"], &definitions); err != nil {
 			return false
 		}
-		seenInstruments := make(map[string]bool)
-		for index, rawDefinition := range definitions {
-			definition := &rule.Definitions[index]
-			_, err := contextObject(rawDefinition, definition, []string{"definition_id", "instrument_type", "unit_code", "quantity", "adapter_binding_id"}, nil)
-			id, valid := uuidIdentity(definition.DefinitionID)
-			award := CompensationAward{Instrument: definition.InstrumentType, Unit: definition.UnitCode, Quantity: definition.Quantity}
-			if err != nil || !valid || seenDefinitions[id] || !validUUID(definition.AdapterBindingID) ||
-				!validCompensationAward(award) || seenInstruments[definition.InstrumentType] {
+		paid = paid || rule.CompensationMode == "compensated"
+		if rule.CompensationMode == "unpaid" && len(rule.Definitions) != 0 {
+			return false
+		}
+		if rule.CompensationMode == "compensated" {
+			expected := 1
+			if rule.ContributionType == "accepted_submission" {
+				expected = 3
+			}
+			if len(rule.Definitions) != expected || !headerPresent {
 				return false
 			}
-			seenDefinitions[id], seenInstruments[definition.InstrumentType] = true, true
+		}
+		seenSizes := make(map[string]bool)
+		for index, rawDefinition := range definitions {
+			definition := &rule.Definitions[index]
+			definitionFields, err := contextObject(rawDefinition, definition, []string{"definition_id", "instrument_type", "unit_code", "quantity", "adapter_binding_id"}, nil)
+			id, valid := uuidIdentity(definition.DefinitionID)
+			if err != nil || !valid || seenDefinitions[id] || !validUUID(definition.AdapterBindingID) ||
+				!validPolicyAmount(definition.InstrumentType, definition.UnitCode, definition.Quantity) || !requiredNullable(definitionFields, "task_size") {
+				return false
+			}
+			if !headerPresent || definition.InstrumentType != *value.InstrumentType || definition.UnitCode != *value.UnitCode || !sameUUID(definition.AdapterBindingID, *value.AdapterBindingID) {
+				return false
+			}
+			if rule.ContributionType == "accepted_submission" {
+				if definition.TaskSize == nil || !oneOf(*definition.TaskSize, "small", "medium", "large") || seenSizes[*definition.TaskSize] {
+					return false
+				}
+				seenSizes[*definition.TaskSize] = true
+			} else if definition.TaskSize != nil {
+				return false
+			}
+			seenDefinitions[id] = true
 		}
 	}
-	return true
+	return (value.VersionStatus == "draft" || len(value.Rules) == 2) && paid == headerPresent
+}
+
+var policyQuantity = regexp.MustCompile(`^(0|[1-9][0-9]{0,19})(\.[0-9]{1,18})?$`)
+var policyCurrency = regexp.MustCompile(`^[A-Z]{3}$`)
+var policyUnit = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9._:-]{0,31}$`)
+
+func validPolicyAmount(instrument, unit, quantity string) bool {
+	if !policyQuantity.MatchString(quantity) || !strings.ContainsAny(quantity, "123456789") {
+		return false
+	}
+	return instrument == "money" && policyCurrency.MatchString(unit) ||
+		instrument == "project_points" && policyUnit.MatchString(unit) && !strings.Contains(quantity, ".")
 }
 
 // ContributionPolicyVersionItem is one stored version with its lifecycle instants.

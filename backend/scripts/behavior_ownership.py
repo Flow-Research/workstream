@@ -69,15 +69,30 @@ TASK_CHECKER_CLEANUP_TARGETS = frozenset({
     "backend/app/modules/authorization/domain/submission_history.py",
     "backend/app/modules/authorization/history_authorization.py",
 })
-PILOT_08_REVISION_TARGETS = frozenset({
-    "backend/app/modules/tasks/api/assignment_outcome.py",
+REWARD_RECOVERY_REMOVED_TARGETS = frozenset({
     "backend/app/modules/tasks/api/revision_exhaustion.py",
-    "backend/app/modules/tasks/post_submit_routing/terminal_replay.py",
-    "backend/app/modules/tasks/revision/blocked_notice.py",
     "backend/app/modules/tasks/revision/exhausted_notice.py",
-    "backend/app/modules/tasks/revision/exhaustion.py",
     "backend/app/modules/tasks/revision/exhaustion_event.py",
     "backend/app/modules/tasks/revision/exhaustion_recovery.py",
+})
+FINANCE_REWARD_TARGETS = frozenset({
+    "backend/app/core/financial_wire.py",
+    "backend/app/modules/compensation/api/fulfillment_contracts.py",
+    "backend/app/modules/contributions/api/quantities.py",
+    "backend/app/modules/contributions/api/reward_selection.py",
+    "backend/app/modules/finance/api/contract_schema.py",
+    "backend/app/modules/finance/api/fulfillment_contracts.py",
+})
+FULFILLMENT_ROOT_TARGETS = frozenset({
+    "backend/app/modules/compensation/api/fulfillment.py",
+    "backend/app/modules/compensation/fulfillment/models.py",
+    "backend/app/modules/compensation/fulfillment/service.py",
+})
+PILOT_08_REVISION_TARGETS = frozenset({
+    "backend/app/modules/tasks/api/assignment_outcome.py",
+    "backend/app/modules/tasks/post_submit_routing/terminal_replay.py",
+    "backend/app/modules/tasks/revision/blocked_notice.py",
+    "backend/app/modules/tasks/revision/exhaustion.py",
     "backend/app/modules/tasks/revision/terminal_read.py",
     "backend/app/modules/authorization/domain/revision_expiry.py",
     "backend/app/modules/authorization/domain/revision_recovery.py",
@@ -1112,7 +1127,7 @@ def _validate_additive_partition_transition(
     ]
     if (
         trusted_targets != sorted(trusted_targets)
-        or removed - (NEUTRAL_GUIDE_RUNTIME_REMOVED_TARGETS | REV_04C_REMOVED_TARGETS | ARCH_04D2_REMOVED_TARGETS | ARCH_03D_REMOVED_TARGETS | TASK_CHECKER_CLEANUP_REMOVED_TARGETS | ARCH_03C2_REMOVED_TARGETS | OUTBOX_IDENTITY_REMOVED_TARGETS | V01_BASELINE_REMOVED_TARGETS | POL_03B_REMOVED_TARGETS | POL_04B_REMOVED_TARGETS | POL_05A_REMOVED_TARGETS | ARCH_03A_GUIDE_CONTEXT_REMOVED_TARGETS | ARCH_04B_SEAM_REMOVED_TARGETS | PILOT_04_RETIRED_CATALOGUE_TARGETS | FORGE_PROOF_FACTS_REMOVED_TARGETS)
+        or removed - (REWARD_RECOVERY_REMOVED_TARGETS | NEUTRAL_GUIDE_RUNTIME_REMOVED_TARGETS | REV_04C_REMOVED_TARGETS | ARCH_04D2_REMOVED_TARGETS | ARCH_03D_REMOVED_TARGETS | TASK_CHECKER_CLEANUP_REMOVED_TARGETS | ARCH_03C2_REMOVED_TARGETS | OUTBOX_IDENTITY_REMOVED_TARGETS | V01_BASELINE_REMOVED_TARGETS | POL_03B_REMOVED_TARGETS | POL_04B_REMOVED_TARGETS | POL_05A_REMOVED_TARGETS | ARCH_03A_GUIDE_CONTEXT_REMOVED_TARGETS | ARCH_04B_SEAM_REMOVED_TARGETS | PILOT_04_RETIRED_CATALOGUE_TARGETS | FORGE_PROOF_FACTS_REMOVED_TARGETS)
         or [current_by_target[item["target"]] for item in retained_trusted]
         != retained_trusted
     ):
@@ -1120,7 +1135,7 @@ def _validate_additive_partition_transition(
     additions = set(current_by_target) - set(trusted_targets)
     approved_additions = (
         AUTH_BOUNDARY_FOUNDATION_TARGETS | TASK_CHECKER_CLEANUP_TARGETS
-        | PILOT_08_REVISION_TARGETS
+        | PILOT_08_REVISION_TARGETS | FINANCE_REWARD_TARGETS | FULFILLMENT_ROOT_TARGETS
         | PILOT_READ_1_TARGETS
         | AWS_ARTIFACT_ACTIVATION_TARGETS
         | AUTH_ART_OPERATOR_TARGETS

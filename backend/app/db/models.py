@@ -119,6 +119,7 @@ from app.modules.reviews.acceptance.models import FinalAcceptance  # noqa: F401
 
 from app.modules.contributions.records.models import ContributionRecord  # noqa: F401
 from app.modules.compensation.awards.models import CompensationAward  # noqa: F401
+from app.modules.compensation.fulfillment.models import CompensationFulfillmentRoot  # noqa: F401
 
 from app.modules.reviews.lifecycle.models import JointLifecycleReleaseControl  # noqa: F401
 

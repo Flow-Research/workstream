@@ -66,7 +66,9 @@ async def test_task_read_contributor_visibility(admin_access, kind):
             if contributor:
                 session.add(TaskAssignment(id=str(new_record_id()), task_id=row.id, project_id=row.project_id,
                     contributor_id=contributor, assigned_by=str(actor.id), status=assignment_status,
-                    submitter_contribution_policy_version_id=row.locked_contribution_policy_version_id))
+                    submitter_contribution_policy_version_id=row.locked_contribution_policy_version_id,
+                    submitter_task_size=row.task_size,
+                    submitter_award_definition_id=row.locked_submission_award_definition_id))
         async with factory() as session:
             row = await session.get(WorkstreamTask, str(target))
             assignment = await session.scalar(select(TaskAssignment).where(TaskAssignment.task_id == row.id))

@@ -370,6 +370,10 @@
     },
     {
       "group": "shared",
+      "target": "backend/app/core/financial_wire.py"
+    },
+    {
+      "group": "shared",
       "target": "backend/app/core/hashing.py"
     },
     {
@@ -1438,6 +1442,14 @@
     },
     {
       "group": "shared",
+      "target": "backend/app/modules/compensation/api/fulfillment.py"
+    },
+    {
+      "group": "shared",
+      "target": "backend/app/modules/compensation/api/fulfillment_contracts.py"
+    },
+    {
+      "group": "shared",
       "target": "backend/app/modules/compensation/api/instruments.py"
     },
     {
@@ -1455,6 +1467,14 @@
     {
       "group": "shared",
       "target": "backend/app/modules/compensation/awards/read_repository.py"
+    },
+    {
+      "group": "shared",
+      "target": "backend/app/modules/compensation/fulfillment/models.py"
+    },
+    {
+      "group": "shared",
+      "target": "backend/app/modules/compensation/fulfillment/service.py"
     },
     {
       "group": "shared",
@@ -1498,7 +1518,15 @@
     },
     {
       "group": "lifecycle",
+      "target": "backend/app/modules/contributions/api/quantities.py"
+    },
+    {
+      "group": "lifecycle",
       "target": "backend/app/modules/contributions/api/records.py"
+    },
+    {
+      "group": "lifecycle",
+      "target": "backend/app/modules/contributions/api/reward_selection.py"
     },
     {
       "group": "lifecycle",
@@ -1595,6 +1623,14 @@
     {
       "group": "lifecycle",
       "target": "backend/app/modules/contributions/units/service.py"
+    },
+    {
+      "group": "shared",
+      "target": "backend/app/modules/finance/api/contract_schema.py"
+    },
+    {
+      "group": "shared",
+      "target": "backend/app/modules/finance/api/fulfillment_contracts.py"
     },
     {
       "group": "shared",
@@ -2142,10 +2178,6 @@
     },
     {
       "group": "lifecycle",
-      "target": "backend/app/modules/tasks/api/revision_exhaustion.py"
-    },
-    {
-      "group": "lifecycle",
       "target": "backend/app/modules/tasks/api/revision_expiry.py"
     },
     {
@@ -2278,19 +2310,7 @@
     },
     {
       "group": "lifecycle",
-      "target": "backend/app/modules/tasks/revision/exhausted_notice.py"
-    },
-    {
-      "group": "lifecycle",
       "target": "backend/app/modules/tasks/revision/exhaustion.py"
-    },
-    {
-      "group": "lifecycle",
-      "target": "backend/app/modules/tasks/revision/exhaustion_event.py"
-    },
-    {
-      "group": "lifecycle",
-      "target": "backend/app/modules/tasks/revision/exhaustion_recovery.py"
     },
     {
       "group": "lifecycle",
@@ -2593,7 +2613,7 @@
       "target": "backend/scripts/validate_test_lane_evidence.py"
     }
   ],
-  "authority_digest": "a35f53b2939c6ce611f86f44336bfe43f0aec5e08fcfa9d688804b57661d3b46",
+  "authority_digest": "a3fe04a7a274894783d5aabcf9aff3a19a1839e093a58f28d860b89ace4f5c22",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }

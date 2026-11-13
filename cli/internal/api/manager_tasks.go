@@ -31,6 +31,7 @@ type ManagerTask struct {
 }
 
 type taskCreateInput struct {
+	TaskSize             string   `json:"task_size"`
 	Title                string   `json:"title"`
 	Description          string   `json:"description"`
 	TaskType             *string  `json:"task_type"`
@@ -52,12 +53,14 @@ func (c *Client) CreateTask(ctx context.Context, project string, body json.RawMe
 	if !validUUID(project) || project != canonicalUUID(project) || !validUUID(key) || len(key) > 100 {
 		return result, errors.New("PROJECT_ID must be a canonical UUID and --idempotency-key a UUID")
 	}
-	input := taskCreateInput{SourceType: "manual", SkillTags: []string{}}
+	input := taskCreateInput{SourceType: "manual", TaskSize: "small", SkillTags: []string{}}
 	var fields map[string]json.RawMessage
 	err := jsonv2.Unmarshal(body, &fields)
 	if len(body) > MaxGuideInputBytes || err != nil || fields == nil ||
 		decodeTaskFields(body, &input, []string{"title", "description"}, nil) != nil ||
 		(fields["source_type"] != nil && bytes.Equal(bytes.TrimSpace(fields["source_type"]), []byte("null"))) ||
+		!oneOf(input.TaskSize, "small", "medium", "large") ||
+		(fields["task_size"] != nil && bytes.Equal(bytes.TrimSpace(fields["task_size"]), []byte("null"))) ||
 		(input.SourceType != "manual" && input.SourceType != "markdown_import" && input.SourceType != "csv_import") ||
 		(input.EstimatedTimeMinutes != nil && input.EstimatedTimeMinutes.Sign() <= 0) ||
 		(input.DeadlineAt != nil && !validTime(*input.DeadlineAt)) {
@@ -117,6 +120,9 @@ func decodeManagerTask(raw json.RawMessage, project, selector, status string) (M
 	if err := jsonv2.Unmarshal(raw, &fields); err != nil {
 		return task, err
 	}
+	if !validTaskSizeField(fields, task.TaskSize) {
+		return task, errors.New("invalid task size")
+	}
 	for _, key := range locks {
 		field, present := fields[key]
 		null := bytes.Equal(bytes.TrimSpace(field), []byte("null"))
@@ -137,7 +143,16 @@ func decodeManagerTask(raw json.RawMessage, project, selector, status string) (M
 	return task, nil
 }
 
+func validTaskSizeField(fields map[string]json.RawMessage, size string) bool {
+	_, present := fields["task_size"]
+	return present && oneOf(size, "small", "medium", "large")
+}
+
 func sameTaskDeclaration(t ManagerTask, input taskCreateInput) bool {
+	if t.TaskSize != input.TaskSize {
+		return false
+	}
+
 	minutes := (*big.Int)(nil)
 	if t.EstimatedTimeMinutes != nil {
 		minutes = big.NewInt(int64(*t.EstimatedTimeMinutes))

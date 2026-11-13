@@ -40,6 +40,7 @@ SOURCE_COLUMNS = (
     "assignment_id",
     "contributor_id",
     "contribution_policy_version_id",
+    "task_size", "contribution_award_definition_id",
     "checker_run_id",
     "evaluation_request_id",
     "request_digest",
@@ -111,6 +112,8 @@ async def source_values(h, run_id=None) -> dict:
         "contribution_policy_version_id": as_uuid(
             submission.contribution_policy_version_id
         ),
+        "task_size": submission.task_size,
+        "contribution_award_definition_id": submission.contribution_award_definition_id,
         "checker_run_id": as_uuid(run.id),
         "evaluation_request_id": as_uuid(run.evaluation_request_id),
         "request_digest": run.request_digest,
@@ -233,7 +236,7 @@ async def completed_source(
         result = await live_executor(h).evaluate_post_submission(h.request)
         async with h.factory() as session:
             run = await session.get(CheckerRun, str(result.attempt_id))
-            assert result.outcome == "completed"
+            assert result.outcome == "completed", (result.outcome, result.infrastructure_failure_code)
             assert run.routing_recommendation == "allow_review"
             material = dict(run.material_custody)
         h.result, h.material = result, material
@@ -392,7 +395,9 @@ async def _successor_human_attachments(factory):
     }
 
 
-async def activate_successor_guide(h, *, max_revision_rounds=2, version="v2"):
+async def activate_successor_guide(h, *, max_revision_rounds=2, version="v2", human_review_required=True,
+                                 contribution_awards=(), submission_quantities=None,
+                                 contribution_binding_id=None):
     """Activate a genuine successor guide in the source Submission's project."""
     from uuid import uuid4
 
@@ -450,6 +455,7 @@ async def activate_successor_guide(h, *, max_revision_rounds=2, version="v2"):
     )
     await seed_selected_review_revision_inputs(
         h.factory, finalization, manager, max_revision_rounds=max_revision_rounds,
+        human_review_required=human_review_required,
     )
     _, derived = await prepare_post_policy(
         h.factory,
@@ -467,7 +473,10 @@ async def activate_successor_guide(h, *, max_revision_rounds=2, version="v2"):
         "approve",
         PostPolicyApproval(target=derived.target, idempotency_key=uuid4()),
     )
-    _, contribution_policy = await publish_policy(h.factory, finalization.project_id)
+    _, contribution_policy = await publish_policy(
+        h.factory, finalization.project_id, contribution_awards=contribution_awards,
+        submission_quantities=submission_quantities, contribution_binding_id=contribution_binding_id,
+    )
     command = await activation_command(h.factory, approved, contribution_policy)
     async with h.factory() as session:
         current = await session.scalar(

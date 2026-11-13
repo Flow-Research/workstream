@@ -130,7 +130,7 @@ async def test_completion_handler_true_commits_before_ack_without_rev(
         await commit_before_ack(h, monkeypatch, human=True, award_count=0)
 
 
-@pytest.mark.parametrize("awards", [(), ("money", "project_points")])
+@pytest.mark.parametrize("awards", [()])
 async def test_completion_handler_false_commits_acceptance_before_ack(
     tmp_path,
     isolated_database_env,
@@ -288,7 +288,7 @@ async def test_production_registry_delivers_request_then_completion_exactly_once
     """Production registration must consume its own emitted completion event."""
     from app.adapters import artifacts as artifact_adapters
 
-    awards = () if human else ("money", "project_points")
+    awards = () if human else ("money",)
     async with material_fixture(
         tmp_path,
         isolated_database_env,

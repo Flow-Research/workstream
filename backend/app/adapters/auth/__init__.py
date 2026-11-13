@@ -523,7 +523,7 @@ def _routing_resource(
         raise PreparedAuthorizationHandleInvalid("routing consequence unavailable")
     consequence = (
         CheckerExhaustionConsequence(**source.exhaustion.model_dump())
-        if source.exhaustion is not None and not source.recovered_exhaustion
+        if source.exhaustion is not None
         else CheckerRemediationConsequence()
         if source.source.routing_recommendation == "needs_revision"
         else HumanAdmissionConsequence()

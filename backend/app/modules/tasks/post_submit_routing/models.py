@@ -29,6 +29,7 @@ class TaskPostSubmitRoutingManifest(Base):
 
     __tablename__ = "task_post_submit_routing_manifests"
     __table_args__ = (
+        CheckConstraint("task_size in ('small','medium','large')", name="reward_size"),
         CheckConstraint(
             "(get_byte(uuid_send(id), 6) >> 4) = 7 and (get_byte(uuid_send(id), 8) & 192) = 128",
             name="id_uuid7",
@@ -96,6 +97,10 @@ class TaskPostSubmitRoutingManifest(Base):
     assignment_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), nullable=False)
     contributor_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), nullable=False)
     contribution_policy_version_id: Mapped[UUID] = mapped_column(Uuid(), nullable=False)
+    task_size: Mapped[str] = mapped_column(String(8), nullable=False)
+    contribution_award_definition_id: Mapped[UUID | None] = mapped_column(
+        Uuid(), ForeignKey("contribution_award_definitions.id", name="fk_routing_selected_reward")
+    )
     checker_run_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), nullable=False)
     evaluation_request_id: Mapped[UUID] = mapped_column(Uuid(), nullable=False)
     request_digest: Mapped[str] = mapped_column(String(71), nullable=False)

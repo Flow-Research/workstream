@@ -29,6 +29,7 @@ def values(**changes):
         "submission_version": 1,
         "contributor_id": new_record_id(),
         "contribution_policy_version_id": new_record_id(),
+        "task_size": "small", "contribution_award_definition_id": None,
         "content_id": new_record_id(),
         "content_sha256": SHA,
         "final_acceptance_id": new_record_id(),

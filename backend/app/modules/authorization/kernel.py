@@ -951,7 +951,7 @@ class AuthorizationService:
             grant_filters.update(adapter_bindings.finance_authority_grant_filters(action.action_id))
         grant_filters.update(
             {
-                **contribution_policies.policy_finance_grant_filters(action.action_id),
+                **contribution_policies.policy_grant_filters(action.action_id),
                 **checker_registry.checker_registry_grant_filters(action.action_id),
             }
         )

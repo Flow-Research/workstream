@@ -22,7 +22,7 @@ async def accepted_effects_source(tmp_path, database_url):
                     text(
                         """
                         SELECT s.task_assignment_id, s.contributor_id,
-                               s.contribution_policy_version_id, s.artifact_content_id,
+                               s.contribution_policy_version_id, s.task_size, s.contribution_award_definition_id, s.artifact_content_id,
                                c.sha256, t.locked_review_policy_id
                         FROM public.submissions s
                         JOIN public.workstream_tasks t ON t.id=s.task_id
@@ -56,6 +56,7 @@ async def accepted_effects_source(tmp_path, database_url):
             submission_version=h.review.submission_version,
             contributor_id=UUID(str(row["contributor_id"])),
             contribution_policy_version_id=row["contribution_policy_version_id"],
+            task_size=row["task_size"], contribution_award_definition_id=row["contribution_award_definition_id"],
             content_id=UUID(str(row["artifact_content_id"])),
             content_sha256=row["sha256"],
             final_acceptance_id=new_record_id(),

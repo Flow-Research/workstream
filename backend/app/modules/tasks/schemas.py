@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from app.modules.tasks.api.transition_audit import TaskPolicyLineage
+from app.modules.contributions.api import TaskSize
 from app.modules.tasks.api.revision import ContributorRevisionContext
 from app.modules.tasks.api import ReadyTaskSummary, ManagementTaskSummary, OperationalTaskSummary
 
@@ -82,6 +83,7 @@ class TaskCreate(BaseModel):
 
     title: str
     description: str
+    task_size: TaskSize = "small"
     task_type: str | None = None
     difficulty: str | None = None
     skill_tags: list[str] = Field(default_factory=list)
@@ -165,6 +167,7 @@ class TaskResponse(BaseModel):
 
     id: str
     project_id: str
+    task_size: TaskSize
     locked_contribution_policy_version_id: UUID | None
     locked_guide_version: str | None
     locked_review_policy_id: str | None
@@ -200,8 +203,11 @@ class TaskResponse(BaseModel):
     updated_at: datetime
 
 
+
 class ContributorClaimTaskResponse(BaseModel):
     """Claim task facts without management-only source or policy coordinates."""
+
+    task_size: TaskSize
 
     model_config = ConfigDict(from_attributes=True, extra="forbid", frozen=True)
 

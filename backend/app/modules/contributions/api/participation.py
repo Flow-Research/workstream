@@ -45,7 +45,7 @@ class ParticipationLifecycleFence(Protocol):
 
 
 class SubmitterParticipationRequest(BaseModel):
-    """Exact scalar FinalAcceptance source lineage selected by its future owner."""
+    """Exact scalar FinalAcceptance and immutable Submission reward selection."""
 
     model_config = _STRICT_FROZEN
 
@@ -57,9 +57,13 @@ class SubmitterParticipationRequest(BaseModel):
     task_assignment_id: UUID
     contributor_id: UUID
     contribution_policy_version_id: UUID
+    task_size: Literal["small", "medium", "large"]
+    contribution_award_definition_id: UUID | None
     artifact_hash: _Digest
     correlation_id: UUID
     expected_generation: _Generation
+    source_authorization_decision_id: UUID
+    source_routing_manifest_id: UUID
 
 
 class SubmitterContributionFacts(BaseModel):
@@ -85,7 +89,7 @@ class SubmitterParticipationResult(BaseModel):
     model_config = _STRICT_FROZEN
 
     contribution: SubmitterContributionFacts
-    awards: tuple[CompensationAwardFacts, ...] = Field(max_length=2)
+    awards: tuple[CompensationAwardFacts, ...] = Field(max_length=1)
 
 
 class SubmitterParticipationPort(Protocol):

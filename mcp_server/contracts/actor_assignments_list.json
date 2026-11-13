@@ -1,5 +1,5 @@
 {
-  "canonical_sha256": "23488b5ab933184dadb3bcfb7b4b7540b83d43a1c53b3461a2f31bb8bdfda3a5",
+  "canonical_sha256": "ce83d14083bd8cdeddb12875577b2a16c80edbc143f466e77b38aac39d03cb57",
   "components": {
     "schemas": {
       "ApiError": {
@@ -7,19 +7,24 @@
         "description": "Canonical machine-readable API error.",
         "properties": {
           "code": {
+            "title": "Code",
             "type": "string"
           },
           "correlation_id": {
+            "title": "Correlation Id",
             "type": "string"
           },
           "details": {
             "additionalProperties": true,
+            "title": "Details",
             "type": "object"
           },
           "message": {
+            "title": "Message",
             "type": "string"
           },
           "retryable": {
+            "title": "Retryable",
             "type": "boolean"
           }
         },
@@ -30,6 +35,7 @@
           "correlation_id",
           "retryable"
         ],
+        "title": "ApiError",
         "type": "object"
       },
       "ApiErrorResponse": {
@@ -42,7 +48,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Detail"
           },
           "error": {
             "$ref": "#/components/schemas/ApiError"
@@ -51,6 +58,7 @@
         "required": [
           "error"
         ],
+        "title": "ApiErrorResponse",
         "type": "object"
       },
       "ContributorAssignment": {
@@ -59,6 +67,7 @@
         "properties": {
           "assignment_id": {
             "format": "uuid",
+            "title": "Assignment Id",
             "type": "string"
           },
           "assignment_status": {
@@ -69,10 +78,12 @@
               "revision_exhausted",
               "authority_revoked"
             ],
+            "title": "Assignment Status",
             "type": "string"
           },
           "claimed_at": {
             "format": "date-time",
+            "title": "Claimed At",
             "type": "string"
           },
           "compensation": {
@@ -96,7 +107,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Locked Guide Version"
           },
           "next_action": {
             "enum": [
@@ -105,10 +117,12 @@
               "revise",
               "none"
             ],
+            "title": "Next Action",
             "type": "string"
           },
           "project_id": {
             "format": "uuid",
+            "title": "Project Id",
             "type": "string"
           },
           "released_at": {
@@ -120,7 +134,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Released At"
           },
           "revision": {
             "anyOf": [
@@ -141,17 +156,20 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Started At"
           },
           "state": {
             "enum": [
               "active",
               "closed"
             ],
+            "title": "State",
             "type": "string"
           },
           "task_id": {
             "format": "uuid",
+            "title": "Task Id",
             "type": "string"
           },
           "task_status": {
@@ -173,14 +191,17 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Task Status"
           },
           "title": {
+            "title": "Title",
             "type": "string"
           },
           "updated_at": {
             "description": "Activity time: the latest own assignment, submission or revision stamp, plus the task stamp while active. Orders the list and drives updated_since.",
             "format": "date-time",
+            "title": "Updated At",
             "type": "string"
           }
         },
@@ -202,6 +223,7 @@
           "next_action",
           "updated_at"
         ],
+        "title": "ContributorAssignment",
         "type": "object"
       },
       "ContributorAssignmentPage": {
@@ -211,6 +233,7 @@
             "items": {
               "$ref": "#/components/schemas/ContributorAssignment"
             },
+            "title": "Items",
             "type": "array"
           },
           "next_cursor": {
@@ -221,13 +244,15 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Next Cursor"
           }
         },
         "required": [
           "items",
           "next_cursor"
         ],
+        "title": "ContributorAssignmentPage",
         "type": "object"
       },
       "ContributorLatestSubmission": {
@@ -243,7 +268,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Decided At"
           },
           "status": {
             "enum": [
@@ -253,6 +279,7 @@
               "needs_revision",
               "rejected"
             ],
+            "title": "Status",
             "type": "string"
           },
           "status_reason": {
@@ -268,18 +295,22 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Status Reason"
           },
           "submission_id": {
             "format": "uuid",
+            "title": "Submission Id",
             "type": "string"
           },
           "submitted_at": {
             "format": "date-time",
+            "title": "Submitted At",
             "type": "string"
           },
           "version": {
             "exclusiveMinimum": 0.0,
+            "title": "Version",
             "type": "integer"
           }
         },
@@ -291,6 +322,7 @@
           "submitted_at",
           "decided_at"
         ],
+        "title": "ContributorLatestSubmission",
         "type": "object"
       },
       "ContributorRevisionContext": {
@@ -302,6 +334,7 @@
               "$ref": "#/components/schemas/RevisionContextChange"
             },
             "maxItems": 8,
+            "title": "Changes",
             "type": "array"
           },
           "clock_state": {
@@ -309,6 +342,7 @@
               "running",
               "paused"
             ],
+            "title": "Clock State",
             "type": "string"
           },
           "deadline_at": {
@@ -320,7 +354,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Deadline At"
           },
           "direction": {
             "anyOf": [
@@ -335,23 +370,26 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Direction"
           },
           "disposition": {
             "enum": [
               "ready",
               "context_blocked",
-              "revision_limit_reached",
               "revision_deadline_expired"
             ],
+            "title": "Disposition",
             "type": "string"
           },
           "max_revision_rounds": {
             "minimum": 0.0,
+            "title": "Max Revision Rounds",
             "type": "integer"
           },
           "next_revision_round": {
             "minimum": 0.0,
+            "title": "Next Revision Round",
             "type": "integer"
           },
           "outcome": {
@@ -360,6 +398,7 @@
               "rebased",
               "blocked"
             ],
+            "title": "Outcome",
             "type": "string"
           },
           "predecessor_preparation_id": {
@@ -371,18 +410,24 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Predecessor Preparation Id"
           },
           "preparation_id": {
             "format": "uuid",
+            "title": "Preparation Id",
             "type": "string"
           },
           "preparation_sha256": {
             "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Preparation Sha256",
             "type": "string"
           },
           "prior": {
             "$ref": "#/components/schemas/RevisionContextSnapshot"
+          },
+          "prior_reward_selection": {
+            "$ref": "#/components/schemas/ContributorRewardSelection"
           },
           "remaining_microseconds": {
             "anyOf": [
@@ -393,28 +438,43 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Remaining Microseconds"
           },
           "requested_at": {
             "format": "date-time",
+            "title": "Requested At",
             "type": "string"
           },
           "sequence": {
             "exclusiveMinimum": 0.0,
+            "title": "Sequence",
             "type": "integer"
           },
           "source_routing_manifest_id": {
             "format": "uuid",
+            "title": "Source Routing Manifest Id",
             "type": "string"
           },
           "source_submission_id": {
             "format": "uuid",
+            "title": "Source Submission Id",
             "type": "string"
           },
           "target": {
             "anyOf": [
               {
                 "$ref": "#/components/schemas/RevisionContextSnapshot"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "target_reward_selection": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ContributorRewardSelection"
               },
               {
                 "type": "null"
@@ -440,8 +500,80 @@
           "direction",
           "prior",
           "target",
+          "prior_reward_selection",
+          "target_reward_selection",
           "changes"
         ],
+        "title": "ContributorRevisionContext",
+        "type": "object"
+      },
+      "ContributorRewardSelection": {
+        "additionalProperties": false,
+        "description": "Exact earned terms for revision acknowledgement, without internal bindings.",
+        "properties": {
+          "compensation_mode": {
+            "enum": [
+              "unpaid",
+              "compensated"
+            ],
+            "title": "Compensation Mode",
+            "type": "string"
+          },
+          "instrument": {
+            "anyOf": [
+              {
+                "enum": [
+                  "money",
+                  "project_points"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Instrument"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quantity"
+          },
+          "task_size": {
+            "enum": [
+              "small",
+              "medium",
+              "large"
+            ],
+            "title": "Task Size",
+            "type": "string"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          }
+        },
+        "required": [
+          "compensation_mode",
+          "task_size",
+          "instrument",
+          "unit",
+          "quantity"
+        ],
+        "title": "ContributorRewardSelection",
         "type": "object"
       },
       "RevisionContextChange": {
@@ -451,11 +583,13 @@
           "after": {
             "maxLength": 200,
             "minLength": 1,
+            "title": "After",
             "type": "string"
           },
           "before": {
             "maxLength": 200,
             "minLength": 1,
+            "title": "Before",
             "type": "string"
           },
           "component": {
@@ -469,6 +603,7 @@
               "revision",
               "contribution"
             ],
+            "title": "Component",
             "type": "string"
           }
         },
@@ -477,6 +612,7 @@
           "before",
           "after"
         ],
+        "title": "RevisionContextChange",
         "type": "object"
       },
       "RevisionContextSnapshot": {
@@ -485,18 +621,22 @@
         "properties": {
           "activated_at": {
             "format": "date-time",
+            "title": "Activated At",
             "type": "string"
           },
           "activation_generation": {
             "exclusiveMinimum": 0.0,
+            "title": "Activation Generation",
             "type": "integer"
           },
           "activation_operation_id": {
             "format": "uuid",
+            "title": "Activation Operation Id",
             "type": "string"
           },
           "guide_id": {
             "format": "uuid",
+            "title": "Guide Id",
             "type": "string"
           },
           "lineage": {
@@ -510,6 +650,7 @@
           "activated_at",
           "lineage"
         ],
+        "title": "RevisionContextSnapshot",
         "type": "object"
       },
       "TaskCompensationAward": {
@@ -520,12 +661,15 @@
               "money",
               "project_points"
             ],
+            "title": "Instrument",
             "type": "string"
           },
           "quantity": {
+            "title": "Quantity",
             "type": "string"
           },
           "unit": {
+            "title": "Unit",
             "type": "string"
           }
         },
@@ -534,6 +678,7 @@
           "unit",
           "quantity"
         ],
+        "title": "TaskCompensationAward",
         "type": "object"
       },
       "TaskCompensationTerms": {
@@ -551,7 +696,8 @@
                 },
                 "type": "array"
               }
-            ]
+            ],
+            "title": "Accepted Submission"
           },
           "completed_review": {
             "anyOf": [
@@ -565,18 +711,31 @@
                 },
                 "type": "array"
               }
-            ]
+            ],
+            "title": "Completed Review"
           },
           "contribution_policy_version_id": {
             "format": "uuid",
+            "title": "Contribution Policy Version Id",
+            "type": "string"
+          },
+          "task_size": {
+            "enum": [
+              "small",
+              "medium",
+              "large"
+            ],
+            "title": "Task Size",
             "type": "string"
           }
         },
         "required": [
           "contribution_policy_version_id",
+          "task_size",
           "accepted_submission",
           "completed_review"
         ],
+        "title": "TaskCompensationTerms",
         "type": "object"
       },
       "TaskPolicyLineage": {
@@ -585,70 +744,87 @@
         "properties": {
           "locked_contribution_policy_version_id": {
             "format": "uuid",
+            "title": "Locked Contribution Policy Version Id",
             "type": "string"
           },
           "locked_effective_project_submission_artifact_policy_hash": {
             "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Locked Effective Project Submission Artifact Policy Hash",
             "type": "string"
           },
           "locked_effective_project_submission_artifact_policy_id": {
             "format": "uuid",
+            "title": "Locked Effective Project Submission Artifact Policy Id",
             "type": "string"
           },
           "locked_guide_source_snapshot_hash": {
             "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Locked Guide Source Snapshot Hash",
             "type": "string"
           },
           "locked_guide_source_snapshot_id": {
             "format": "uuid",
+            "title": "Locked Guide Source Snapshot Id",
             "type": "string"
           },
           "locked_guide_version": {
             "pattern": "\\S",
+            "title": "Locked Guide Version",
             "type": "string"
           },
           "locked_post_submit_checker_policy_hash": {
             "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Locked Post Submit Checker Policy Hash",
             "type": "string"
           },
           "locked_post_submit_checker_policy_id": {
             "format": "uuid",
+            "title": "Locked Post Submit Checker Policy Id",
             "type": "string"
           },
           "locked_post_submit_checker_policy_version": {
             "pattern": "\\S",
+            "title": "Locked Post Submit Checker Policy Version",
             "type": "string"
           },
           "locked_pre_submit_checker_bundle_hash": {
             "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Locked Pre Submit Checker Bundle Hash",
             "type": "string"
           },
           "locked_pre_submit_checker_policy_id": {
             "format": "uuid",
+            "title": "Locked Pre Submit Checker Policy Id",
             "type": "string"
           },
           "locked_review_policy_generation": {
             "exclusiveMinimum": 0.0,
+            "title": "Locked Review Policy Generation",
             "type": "integer"
           },
           "locked_review_policy_hash": {
             "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Locked Review Policy Hash",
             "type": "string"
           },
           "locked_review_policy_id": {
             "format": "uuid",
+            "title": "Locked Review Policy Id",
             "type": "string"
           },
           "locked_revision_policy_generation": {
             "exclusiveMinimum": 0.0,
+            "title": "Locked Revision Policy Generation",
             "type": "integer"
           },
           "locked_revision_policy_hash": {
             "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Locked Revision Policy Hash",
             "type": "string"
           },
           "locked_revision_policy_id": {
             "format": "uuid",
+            "title": "Locked Revision Policy Id",
             "type": "string"
           }
         },
@@ -671,6 +847,7 @@
           "locked_revision_policy_hash",
           "locked_contribution_policy_version_id"
         ],
+        "title": "TaskPolicyLineage",
         "type": "object"
       }
     }
@@ -692,7 +869,8 @@
             {
               "type": "null"
             }
-          ]
+          ],
+          "title": "Project Id"
         }
       },
       {
@@ -711,7 +889,8 @@
             {
               "type": "null"
             }
-          ]
+          ],
+          "title": "State"
         }
       },
       {
@@ -727,7 +906,8 @@
             {
               "type": "null"
             }
-          ]
+          ],
+          "title": "Updated Since"
         }
       },
       {
@@ -738,6 +918,7 @@
           "default": 50,
           "maximum": 100,
           "minimum": 1,
+          "title": "Limit",
           "type": "integer"
         }
       },
@@ -755,7 +936,8 @@
             {
               "type": "null"
             }
-          ]
+          ],
+          "title": "Cursor"
         }
       },
       {
@@ -1011,6 +1193,6 @@
     "method": "GET",
     "openapi_version": "3.1.0",
     "path": "/api/v1/actors/me/assignments",
-    "repository_sha": "8b068f2b788f159b1085d47f162c39ce3323d5b6"
+    "repository_sha": "f5d795910be6f5e8256d7261857de1ce82f2fa39"
   }
 }

@@ -16,7 +16,7 @@ class ContributionTaskSourceReadAdapter:
         self._source = source
 
     async def read_contribution_tasks(
-        self, selectors: tuple[tuple[UUID, UUID], ...],
+        self, selectors: tuple[tuple[UUID, UUID, UUID], ...],
     ) -> tuple[ContributionTaskSourceFacts, ...]:
         """Preserve each actual selected source value; CON verifies the selector set."""
         return tuple(ContributionTaskSourceFacts.model_validate(row.model_dump())

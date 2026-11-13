@@ -8,6 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.hashing import canonical_json_hash
 from app.core.identifiers import new_record_id
+from app.modules.compensation.api.awards import CompensationAwardConflict
+from app.modules.compensation.api.fulfillment import CompensationFulfillmentReadinessPort
 from app.modules.reviews.api.lifecycle import (
     JointLifecyclePhase, JointLifecycleUnavailable, LifecycleTransitionAuthorization,
     LifecycleTransitionCommand, LifecycleTransitionFacts, LifecycleTransitionReceipt,
@@ -18,7 +20,8 @@ from app.modules.reviews.lifecycle.models import JointLifecycleReleaseControl, J
 # The selected production completion handler is the reviewed automatic writer.
 # New effects still require this controller's authorized live generation.
 FIRST_CONTRIBUTION_MANIFEST_DIGEST = canonical_json_hash({
-    "participants": ["reviews.acceptance", "tasks.accepted_effects", "contributions.records"],
+    "participants": ["reviews.acceptance", "tasks.accepted_effects", "contributions.records",
+                     "compensation.awards", "compensation.fulfillment", "outbox.append"],
     "new_effects": "live_root_transaction",
     "replay": "current_generation_select_only",
     "live_readiness": "no_pre_authority_final_acceptances",
@@ -34,10 +37,12 @@ _EDGES = frozenset({
 class JointLifecycleController:
     """Flush-only REV owner; the shared fence precedes AUTH principal custody."""
 
-    def __init__(self, session: AsyncSession, *, authorization: LifecycleTransitionAuthorization):
+    def __init__(self, session: AsyncSession, *, authorization: LifecycleTransitionAuthorization,
+                 source_readiness: CompensationFulfillmentReadinessPort):
         self._session = session
         self._authorization = authorization
         self._fence = PostgresJointLifecycleMutationFence(session)
+        self._source_readiness = source_readiness
 
     async def transition(self, command: LifecycleTransitionCommand) -> LifecycleTransitionReceipt:
         """Commit control, history and exact AUTH together, or let the caller roll back."""
@@ -79,6 +84,11 @@ class JointLifecycleController:
             )
             if checked.target_phase == JointLifecyclePhase.LIVE and retained_acceptance:
                 raise JointLifecycleUnavailable("pre-authority acceptance blocks lifecycle readiness")
+            if checked.target_phase == JointLifecyclePhase.LIVE:
+                try:
+                    await self._source_readiness.require_source_ready()
+                except CompensationAwardConflict as exc:
+                    raise JointLifecycleUnavailable("fulfillment source configuration unavailable") from exc
             facts = LifecycleTransitionFacts(
                 command=checked,
                 observations_digest=canonical_json_hash({

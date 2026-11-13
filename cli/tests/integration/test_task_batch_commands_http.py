@@ -143,6 +143,7 @@ def creation(count=2):
         row.update(
             id=str(UUID(int=UUID(ACTOR).int + 1000 + index)),
             project_id=PROJECT,
+            task_size="small",
             external_task_id=f"brief-{index}",
             title="Caption café",
             description="Quoted\nbrief",
@@ -426,3 +427,34 @@ def test_uncertain_batch_writes_are_once_only_and_preserve_manual_recovery(
     assert result.returncode == 1 and connections == ["h2"]
     assert bodies == [b'{"reason":"Decision"}']
     assert json.loads(result.stderr)["error"]["outcome_unknown"] is True
+
+
+def test_current_import_receipts_reject_size_omissions_and_partial_rows(cli):
+    with http_fixture() as (origin, response, requests):
+        for operation in ("import", "status"):
+            for change in ("valid", "null", "missing_size", "unknown", "partial"):
+                original = creation()
+                original["tasks"][1]["task_size"] = "large"
+                if change == "null":
+                    original["tasks"][0]["task_size"] = None
+                elif change == "missing_size":
+                    original["tasks"][0].pop("task_size")
+                elif change == "unknown":
+                    original["tasks"][0]["task_size"] = "Small"
+                elif change == "partial":
+                    original["tasks"][0].pop("difficulty")
+                value = original
+                if operation == "status":
+                    value = status() | {"creation": original}
+                response.update(status=201 if operation == "import" else 200,
+                                body=json.dumps(value).encode())
+                result = invoke(cli, origin, operation)
+                if change == "valid":
+                    assert result.returncode == 0, result.stderr
+                    assert json.loads(result.stdout) == value
+                else:
+                    assert result.returncode == 1 and result.stdout == "", result.stderr
+                    error = json.loads(result.stderr)["error"]
+                    assert error["code"] == "invalid_api_response"
+                    assert error.get("outcome_unknown", False) == (operation == "import")
+        assert len(requests) == 10

@@ -5,6 +5,7 @@ import json
 from uuid import UUID
 
 import pytest
+from app.modules.contributions.api import RewardSelectionFacts
 from sqlalchemy import func, select, text
 from sqlalchemy.exc import DBAPIError, IntegrityError
 
@@ -260,7 +261,13 @@ def test_revision_projection_preserves_deadline_and_distinguishes_policy_changes
         activation_generation=1, activated_at=start - timedelta(days=1),
         lineage=TaskPolicyLineage(**fields),
     )
+    reward = RewardSelectionFacts(
+        policy_version_id=prior.lineage.locked_contribution_policy_version_id,
+        task_size="small", compensation_mode="unpaid", award_definition_id=None,
+        instrument_type=None, unit_code=None, quantity=None, adapter_binding_id=None,
+    )
     candidate = RevisionCandidate(
+        prior_reward_selection=reward, target_reward_selection=reward,
         prior=prior, target=prior, target_post_policy_json="{}",
         max_revision_rounds=2, target_max_revision_rounds=2, revision_deadline_hours=24,
     )
@@ -284,7 +291,9 @@ def test_revision_projection_preserves_deadline_and_distinguishes_policy_changes
         "activated_at": start,
         "lineage": prior.lineage.model_copy(update={"locked_contribution_policy_version_id": new_record_id()}),
     })
-    row.packet = {"candidate": candidate.model_copy(update={"target": target}).model_dump(mode="json")}
+    row.packet = {"candidate": candidate.model_copy(update={"target": target, "target_reward_selection": reward.model_copy(update={
+        "policy_version_id": target.lineage.locked_contribution_policy_version_id,
+    })}).model_dump(mode="json")}
     row.outcome = "rebased"
     row.predecessor_id, row.id = row.id, new_record_id()
     row.sequence = 2
@@ -293,10 +302,7 @@ def test_revision_projection_preserves_deadline_and_distinguishes_policy_changes
     assert repaired.direction == "forward"
     assert [change.component for change in repaired.changes] == ["guide", "contribution"]
     assert repaired.prior == prior and repaired.target == target
-    row.blocked_reason = "revision_limit_reached"
-    row.next_revision_round = 3
-    row.outcome = "blocked"
-    assert project_revision(row, row.deadline_at).disposition == "revision_limit_reached"
+
 
 
 async def test_rebase_keeps_history_and_requires_exact_acknowledgement(

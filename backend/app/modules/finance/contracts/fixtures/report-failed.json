@@ -1,0 +1,19 @@
+{
+  "source_instance_id": "019a78b0-0000-7000-8000-000000000040",
+  "fulfillment_root_id": "019a78b0-0000-7000-8000-000000000060",
+  "award_id": "019a78b0-0000-7000-8000-000000000011",
+  "project_id": "019a78b0-0000-7000-8000-000000000001",
+  "adapter_binding_id": "019a78b0-0000-7000-8000-000000000010",
+  "correlation_id": "019a78b0-0000-7000-8000-000000000012",
+  "contract_version": 1,
+  "route_key": "finance.primary",
+  "external_event_id": "019a78b0-0000-7000-8000-000000000070",
+  "instrument_type": "project_points",
+  "unit_code": "FLOW",
+  "reported_status": "failed",
+  "fulfilled_quantity": null,
+  "fulfilled_at": null,
+  "external_reference": null,
+  "failure_code": "PROVIDER_UNAVAILABLE",
+  "reported_at": "2026-11-12T05:01:01.000000Z"
+}

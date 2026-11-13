@@ -35,25 +35,15 @@ def policy(*, empty=False, compensated=False):
                 }
             )
     if compensated:
-        rules[0].update(
-            compensation_mode="compensated",
-            definitions=[
-                {
-                    "definition_id": PROJECT,
-                    "instrument_type": "money",
-                    "unit_code": "USD",
-                    "quantity": "99999999999999999999.123456789012345678",
-                    "adapter_binding_id": KEY,
-                },
-                {
-                    "definition_id": VERSION,
-                    "instrument_type": "project_points",
-                    "unit_code": "research_points",
-                    "quantity": "9007199254740993.000000000000000000",
-                    "adapter_binding_id": ACTOR,
-                },
-            ],
-        )
+        rules[0].update(compensation_mode="compensated", definitions=[
+            {"task_size": size, "definition_id": identifier, "instrument_type": "money",
+             "unit_code": "USD", "quantity": quantity, "adapter_binding_id": KEY}
+            for size, identifier, quantity in (
+                ("small", PROJECT, "99999999999999999999.123456789012345678"),
+                ("medium", VERSION, "9007199254740993"),
+                ("large", POLICY, "10"),
+            )
+        ])
     return {
         "project_id": PROJECT,
         "contribution_policy_id": POLICY,
@@ -61,6 +51,9 @@ def policy(*, empty=False, compensated=False):
         "policy_status": "draft" if empty else "active",
         "contribution_policy_version_id": VERSION,
         "version_number": 1,
+        "instrument_type": "money" if compensated else None,
+        "unit_code": "USD" if compensated else None,
+        "adapter_binding_id": KEY if compensated else None,
         "version_status": "draft" if empty else "published",
         "rules": rules,
     }
@@ -76,7 +69,7 @@ def invoke(
     output="json",
     token=TOKEN,
 ):
-    selectors = (project,) if action == "current" else (project, selected)
+    selectors = (project,) if action in {"current", "list"} else (project, selected)
     return cli(
         origin,
         token,
@@ -225,7 +218,9 @@ def test_policy_view_binds_full_nested_facts_and_normalized_identities(cli):
         good | {"rules": [None]},
     ]
     for key in good:
-        invalid += [{k: v for k, v in good.items() if k != key}, good | {key: None}]
+        invalid.append({k: v for k, v in good.items() if k != key})
+        if good[key] is not None:
+            invalid.append(good | {key: None})
     for key in good["rules"][0]:
         for value in (None, "unknown" if key != "definitions" else [None]):
             altered = deepcopy(good)
@@ -238,9 +233,10 @@ def test_policy_view_binds_full_nested_facts_and_normalized_identities(cli):
         altered = deepcopy(good)
         del altered["rules"][0]["definitions"][0][key]
         invalid.append(altered)
-        altered = deepcopy(good)
-        altered["rules"][0]["definitions"][0][key] = None
-        invalid.append(altered)
+        if good["rules"][0]["definitions"][0][key] is not None:
+            altered = deepcopy(good)
+            altered["rules"][0]["definitions"][0][key] = None
+            invalid.append(altered)
     for change in (
         {"definition_id": "bad"},
         {"adapter_binding_id": "bad"},
@@ -265,7 +261,7 @@ def test_policy_view_binds_full_nested_facts_and_normalized_identities(cli):
         invalid.append(altered)
     for change in (
         {"definition_id": PROJECT.replace("-", "")},
-        {"instrument_type": "money"},
+        {"instrument_type": "project_points"},
     ):
         altered = deepcopy(good)
         altered["rules"][0]["definitions"][1].update(change)
@@ -323,3 +319,77 @@ def test_policy_read_credential_safety_bounds_and_backend_denial(cli):
             )
             assert len(requests) == before + 1
             response["status"] = 200
+
+
+def test_policy_read_preserves_three_tiers_and_rejects_wrong_selection(cli):
+    value = policy(compensated=True)
+    value.update(
+        instrument_type="money",
+        unit_code="USD",
+        adapter_binding_id=KEY,
+    )
+    template = value["rules"][0]["definitions"][0]
+    value["rules"][0]["definitions"] = [
+        template
+        | {
+            "definition_id": identifier,
+            "task_size": size,
+            "quantity": amount,
+        }
+        for identifier, size, amount in (
+            (PROJECT, "small", "2.125000000000000001"),
+            (VERSION, "medium", "4"),
+            (KEY, "large", "8"),
+        )
+    ]
+    invalid = []
+    for change in (
+        {"task_size": "medium"},
+        {"task_size": None},
+        {"unit_code": "NGN"},
+    ):
+        bad = deepcopy(value)
+        bad["rules"][0]["definitions"][0].update(change)
+        invalid.append(bad)
+    bad = deepcopy(value)
+    bad["rules"][0]["definitions"].pop()
+    invalid.append(bad)
+    with http_fixture() as (origin, response, _):
+        response["body"] = json.dumps(value).encode()
+        result = invoke(cli, origin, "show", "--version", VERSION)
+        assert result.returncode == 0, result.stderr
+        assert json.loads(result.stdout) == value
+        for bad in invalid:
+            response["body"] = json.dumps(bad).encode()
+            assert_failure(
+                invoke(cli, origin, "show", "--version", VERSION),
+                "invalid_api_response",
+            )
+
+
+def test_policy_read_rejects_partial_draft_and_invalid_revision_numbers(cli):
+    partial = policy()
+    partial.update(version_status="draft", rules=partial["rules"][:1])
+    invalid = [partial, policy() | {"version_number": 1.0}]
+    child = policy(compensated=True)
+    child["rules"][0]["definitions"][0]["quantity"] = "0"
+    invalid.append(child)
+    with http_fixture() as (origin, response, _):
+        for value in invalid:
+            for action in ("show", "list"):
+                if action == "list":
+                    item = value | {
+                        "created_at": "2026-10-23T10:00:00Z",
+                        "published_at": None
+                        if value["version_status"] == "draft"
+                        else "2026-10-23T10:00:00Z",
+                        "retired_at": None,
+                    }
+                    response["body"] = json.dumps(
+                        {"items": [item], "next_cursor": None}
+                    ).encode()
+                    result = invoke(cli, origin, action)
+                else:
+                    response["body"] = json.dumps(value).encode()
+                    result = invoke(cli, origin, action, "--version", VERSION)
+                assert_failure(result, "invalid_api_response")

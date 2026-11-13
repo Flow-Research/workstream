@@ -1,5 +1,5 @@
 {
-  "canonical_sha256": "4c01300a25a772dcc59db17069d2efcc6449e2ff228b81787a2085da9028f5c0",
+  "canonical_sha256": "82769d4c8631a9c63cabd7f16fd91a3aa788a7df443331a60cd7942804f2bb76",
   "components": {
     "schemas": {
       "ApiError": {
@@ -7,19 +7,24 @@
         "description": "Canonical machine-readable API error.",
         "properties": {
           "code": {
+            "title": "Code",
             "type": "string"
           },
           "correlation_id": {
+            "title": "Correlation Id",
             "type": "string"
           },
           "details": {
             "additionalProperties": true,
+            "title": "Details",
             "type": "object"
           },
           "message": {
+            "title": "Message",
             "type": "string"
           },
           "retryable": {
+            "title": "Retryable",
             "type": "boolean"
           }
         },
@@ -30,6 +35,7 @@
           "correlation_id",
           "retryable"
         ],
+        "title": "ApiError",
         "type": "object"
       },
       "ApiErrorResponse": {
@@ -42,7 +48,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Detail"
           },
           "error": {
             "$ref": "#/components/schemas/ApiError"
@@ -51,6 +58,7 @@
         "required": [
           "error"
         ],
+        "title": "ApiErrorResponse",
         "type": "object"
       },
       "ContributorTaskQueueResponse": {
@@ -61,6 +69,7 @@
             "items": {
               "$ref": "#/components/schemas/ReadyTaskSummary"
             },
+            "title": "Items",
             "type": "array"
           },
           "next_cursor": {
@@ -71,10 +80,12 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Next Cursor"
           },
           "project_id": {
             "format": "uuid",
+            "title": "Project Id",
             "type": "string"
           }
         },
@@ -83,6 +94,7 @@
           "items",
           "next_cursor"
         ],
+        "title": "ContributorTaskQueueResponse",
         "type": "object"
       },
       "HTTPValidationError": {
@@ -112,6 +124,7 @@
           },
           "created_at": {
             "format": "date-time",
+            "title": "Created At",
             "type": "string"
           },
           "difficulty": {
@@ -122,7 +135,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Difficulty"
           },
           "estimated_time_minutes": {
             "anyOf": [
@@ -132,20 +146,24 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Estimated Time Minutes"
           },
           "project_id": {
             "format": "uuid",
+            "title": "Project Id",
             "type": "string"
           },
           "skill_tags": {
             "items": {
               "type": "string"
             },
+            "title": "Skill Tags",
             "type": "array"
           },
           "task_id": {
             "format": "uuid",
+            "title": "Task Id",
             "type": "string"
           },
           "task_type": {
@@ -156,9 +174,11 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "title": "Task Type"
           },
           "title": {
+            "title": "Title",
             "type": "string"
           }
         },
@@ -173,6 +193,7 @@
           "created_at",
           "compensation"
         ],
+        "title": "ReadyTaskSummary",
         "type": "object"
       },
       "TaskCompensationAward": {
@@ -183,12 +204,15 @@
               "money",
               "project_points"
             ],
+            "title": "Instrument",
             "type": "string"
           },
           "quantity": {
+            "title": "Quantity",
             "type": "string"
           },
           "unit": {
+            "title": "Unit",
             "type": "string"
           }
         },
@@ -197,6 +221,7 @@
           "unit",
           "quantity"
         ],
+        "title": "TaskCompensationAward",
         "type": "object"
       },
       "TaskCompensationTerms": {
@@ -214,7 +239,8 @@
                 },
                 "type": "array"
               }
-            ]
+            ],
+            "title": "Accepted Submission"
           },
           "completed_review": {
             "anyOf": [
@@ -228,18 +254,31 @@
                 },
                 "type": "array"
               }
-            ]
+            ],
+            "title": "Completed Review"
           },
           "contribution_policy_version_id": {
             "format": "uuid",
+            "title": "Contribution Policy Version Id",
+            "type": "string"
+          },
+          "task_size": {
+            "enum": [
+              "small",
+              "medium",
+              "large"
+            ],
+            "title": "Task Size",
             "type": "string"
           }
         },
         "required": [
           "contribution_policy_version_id",
+          "task_size",
           "accepted_submission",
           "completed_review"
         ],
+        "title": "TaskCompensationTerms",
         "type": "object"
       }
     }
@@ -254,6 +293,7 @@
         "required": true,
         "schema": {
           "format": "uuid",
+          "title": "Project Id",
           "type": "string"
         }
       },
@@ -265,6 +305,7 @@
           "default": 50,
           "maximum": 100,
           "minimum": 1,
+          "title": "Limit",
           "type": "integer"
         }
       },
@@ -281,7 +322,8 @@
             {
               "type": "null"
             }
-          ]
+          ],
+          "title": "Cursor"
         }
       },
       {
@@ -538,6 +580,6 @@
     "method": "GET",
     "openapi_version": "3.1.0",
     "path": "/api/v1/projects/{project_id}/tasks/ready",
-    "repository_sha": "59c52cc81179611ea316935552cc177f83eec687"
+    "repository_sha": "b0f4d7189192c5aa21cf30a1ec34baddbe4903ba"
   }
 }

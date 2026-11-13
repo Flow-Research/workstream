@@ -13,7 +13,7 @@ from app.modules.contributions.records.read_repository import ContributionReadRe
 from tests.contributions.records.support import authorized_submitter_source, rows
 
 
-@pytest.mark.parametrize("instruments", [(), ("money",), ("money", "project_points")])
+@pytest.mark.parametrize("instruments", [(), ("money",), ("project_points",)])
 async def test_projection_reads_actual_immutable_source_and_complete_awards(
     tmp_path, isolated_database_env, live_acceptance_lifecycle, instruments,
 ):
@@ -25,7 +25,7 @@ async def test_projection_reads_actual_immutable_source_and_complete_awards(
             before = {table: await rows(session, table) for table in
                       ("contribution_records", "compensation_awards", "final_acceptances")}
             page = await ContributionReadRepository(
-                session, cursor_codec=ContributionExportCursorCodec(b"r" * 32),
+                session, tasks=contribution_task_evidence_port(session), cursor_codec=ContributionExportCursorCodec(b"r" * 32),
             ).read(ContributionReadRequest(
                 audience="self", actor_profile_id=h.actor_context.actor_profile_id,
             ))
@@ -45,7 +45,7 @@ async def test_projection_reads_actual_immutable_source_and_complete_awards(
             assert acceptance.accepted_at == h.acceptance.accepted_at
             assert acceptance.source_routing_manifest_id == h.acceptance.source_routing_manifest_id
             task, = await contribution_task_evidence_port(session).read_contribution_tasks(
-                ((record.project_id, record.task_id),),
+                ((record.project_id, record.task_id, record.submission_id),),
             )
             assert task.task_id == record.task_id
             assert {table: await rows(session, table) for table in before} == before
@@ -56,7 +56,7 @@ async def test_award_totals_sum_the_contributors_real_awards_in_the_selected_pro
     tmp_path, isolated_database_env, live_acceptance_lifecycle,
 ):
     async with authorized_submitter_source(
-        tmp_path, isolated_database_env, contribution_awards=("money", "project_points"),
+        tmp_path, isolated_database_env, contribution_awards=("money",),
     ) as h:
         async with h.factory() as session:
             record = h.submitter_record
@@ -67,7 +67,7 @@ async def test_award_totals_sum_the_contributors_real_awards_in_the_selected_pro
                 expected[key] = expected.get(key, 0) + award.quantity
             totals = contributor_award_totals_port(session)
             selected = await totals.read_award_totals(record.contributor_id, frozenset({record.project_id}))
-            assert len(expected) == 2
+            assert len(expected) == 1
             assert {(item.instrument_type, item.unit_code): item.quantity for item in selected} == expected
             assert [(item.instrument_type, item.unit_code) for item in selected] == sorted(expected)
             assert await totals.read_award_totals(uuid4(), frozenset({record.project_id})) == ()

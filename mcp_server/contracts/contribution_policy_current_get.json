@@ -1,5 +1,5 @@
 {
-  "canonical_sha256": "395db628dcfcce936bb6a98af33c9930b76a197cb678f6a5c87b8a4d11fe93fd",
+  "canonical_sha256": "30e6b0d93b7d87d113f1ab75339d355e6b378ae81e750bc01dfe807ce82ac0ed",
   "components": {
     "schemas": {
       "ApiError": {
@@ -98,7 +98,7 @@
     }
   },
   "operation": {
-    "description": "Recover exact draft and published selectors under current Finance authority.",
+    "description": "Recover exact draft and published selectors under current scoped policy authority.",
     "operationId": "discover_policy_api_v1_projects__project_id__contribution_policies_current_get",
     "parameters": [
       {
@@ -389,6 +389,6 @@
     "method": "GET",
     "openapi_version": "3.1.0",
     "path": "/api/v1/projects/{project_id}/contribution-policies/current",
-    "repository_sha": "59c52cc81179611ea316935552cc177f83eec687"
+    "repository_sha": "3c847262030009b416a46d12d2838f2c2ce460ee"
   }
 }

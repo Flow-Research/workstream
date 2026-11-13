@@ -21,6 +21,9 @@ class SelectedPreSubmitAdmissionLineage:
     predecessor_submission_id: UUID | None
     predecessor_submission_version: int | None
     checker_remediation_manifest_id: UUID | None
+    task_size: Literal["small", "medium", "large"]
+    contribution_policy_version_id: UUID
+    contribution_award_definition_id: UUID | None
     guide_id: UUID
     guide_version: str
     source_snapshot_id: UUID
@@ -46,6 +49,7 @@ class SelectedPreSubmitAdmissionLineage:
     def __post_init__(self) -> None:
         identifiers = (
             self.guide_id,
+            self.contribution_policy_version_id,
             self.source_snapshot_id,
             self.effective_policy_id,
             self.pre_submit_policy_id,
@@ -64,7 +68,10 @@ class SelectedPreSubmitAdmissionLineage:
             self.packet_sha256,
         )
         if (
-            any(type(value) is not UUID for value in identifiers)
+            self.task_size not in {"small", "medium", "large"}
+            or (self.contribution_award_definition_id is not None
+                and type(self.contribution_award_definition_id) is not UUID)
+            or any(type(value) is not UUID for value in identifiers)
             or (self.predecessor_submission_id is None)
             != (self.predecessor_submission_version is None)
             or (
@@ -131,6 +138,11 @@ class SelectedPreSubmitAdmissionLineage:
                 if self.checker_remediation_manifest_id is not None
                 else None
             ),
+            "task_size": self.task_size,
+            "contribution_policy_version_id": str(self.contribution_policy_version_id),
+            "contribution_award_definition_id": (
+                str(self.contribution_award_definition_id) if self.contribution_award_definition_id else None
+            ),
             "guide_id": str(self.guide_id),
             "guide_version": self.guide_version,
             "source_snapshot_id": str(self.source_snapshot_id),
@@ -151,8 +163,8 @@ class SelectedPreSubmitAdmissionLineage:
             "packet_sha256": self.packet_sha256,
             "storage_scheme": self.storage_scheme,
         }
-        # Preserve the exact canonical bytes of retained requests without an
-        # acknowledgement; new revision requests include both frozen facts.
+        # Only revision intake has a preparation acknowledgement. Initial
+        # intake has no revision receipt to acknowledge.
         if self.revision_preparation_id is not None:
             body["revision_preparation_id"] = str(self.revision_preparation_id)
             body["revision_preparation_sha256"] = self.revision_preparation_sha256
@@ -165,6 +177,7 @@ class SelectedPreSubmitAdmissionLineage:
             "predecessor_submission_id",
             "predecessor_submission_version",
             "checker_remediation_manifest_id",
+            "task_size", "contribution_policy_version_id", "contribution_award_definition_id",
             "guide_id",
             "guide_version",
             "source_snapshot_id",
@@ -202,6 +215,12 @@ class SelectedPreSubmitAdmissionLineage:
                 UUID(str(body["checker_remediation_manifest_id"]))
                 if body["checker_remediation_manifest_id"] is not None
                 else None
+            ),
+            task_size=body["task_size"],
+            contribution_policy_version_id=UUID(body["contribution_policy_version_id"]),
+            contribution_award_definition_id=(
+                UUID(body["contribution_award_definition_id"])
+                if body["contribution_award_definition_id"] is not None else None
             ),
             guide_id=UUID(str(body["guide_id"])),
             guide_version=body["guide_version"],

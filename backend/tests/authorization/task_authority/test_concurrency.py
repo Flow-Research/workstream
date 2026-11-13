@@ -91,6 +91,9 @@ async def test_two_granted_claimants_have_one_atomic_winner(task_client, monkeyp
         assert len(assignments) == 1 and assignments[0].id == winner.assignment.id
         stored_task = await session.get(WorkstreamTask, task["id"])
         assert stored_task.status == "in_progress" and stored_task.assigned_to == winner.assignment.contributor_id
+        assert assignments[0].submitter_task_size == stored_task.task_size
+        assert assignments[0].submitter_award_definition_id == stored_task.locked_submission_award_definition_id
+        assert assignments[0].submitter_contribution_policy_version_id == stored_task.locked_contribution_policy_version_id
         decisions = list(await session.scalars(select(AuditEvent).where(AuditEvent.action_id == "task.claim")))
         assert len(decisions) == 1 and decisions[0].after_facts["allowed"] is True
         events = list(await session.scalars(select(AuditEvent).where(

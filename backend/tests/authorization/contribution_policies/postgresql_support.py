@@ -1,4 +1,4 @@
-"""Real CON/AUTH composition with signed Finance grants and historical parents."""
+"""Real current CON/AUTH composition with signed Finance grants."""
 
 from dataclasses import dataclass
 from uuid import UUID, uuid4
@@ -21,10 +21,8 @@ from app.modules.contributions.api import (
     ContributionPolicyPublishRequest,
     ContributionPolicyRetireRequest,
     ContributionPolicyReadRequest,
-    PolicyRuleInput,
-    PolicyDefinitionInput,
 )
-from app.modules.compensation.api import CompensationInstrumentType
+from app.modules.contributions.api.policy_http import PolicyUpdateInput
 from tests.test_contributions import _seed_project
 
 
@@ -45,7 +43,8 @@ class PolicyWorld:
             session, read_authorization=auth, mutation_authorization=auth
         )
 
-    def request(self, operation, prior=None, *, compensated=False, award_bindings=()):
+    def request(self, operation, prior=None, *, compensated=False, financial_header=None,
+                submission_quantities=None):
         """Prepare a valid caller request from a previous immutable result."""
         common = dict(actor_profile_id=self.context.actor_profile_id, project_id=self.project)
         if operation == "create_draft":
@@ -60,43 +59,48 @@ class PolicyWorld:
             return ContributionPolicyReadRequest(**common)
         common["operation_id"] = uuid4()
         if operation == "update_draft":
-            if award_bindings:
-                definitions = tuple(
-                    PolicyDefinitionInput(
-                        instrument_type=CompensationInstrumentType(instrument),
-                        unit_code="USD" if instrument == "money" else "PTS",
-                        quantity="2.125000000000000001" if instrument == "money" else "7",
-                        adapter_binding_id=binding,
-                    )
-                    for instrument, binding in award_bindings
-                )
-            else:
-                definitions = (
-                    (
-                        PolicyDefinitionInput(
-                            instrument_type=CompensationInstrumentType.MONEY,
-                            unit_code="USD",
-                            quantity="2",
-                            adapter_binding_id=self.binding,
-                        ),
-                    )
-                    if compensated
-                    else ()
-                )
+            paid = bool(compensated or financial_header)
+            instrument, binding = financial_header if financial_header else ("money", self.binding)
+            quantity = "2.125000000000000001" if instrument == "money" else "7"
+            body = PolicyUpdateInput.model_validate(
+                {
+                    "instrument_type": instrument if paid else None,
+                    "unit_code": ("USD" if instrument == "money" else "PTS") if paid else None,
+                    "adapter_binding_id": str(binding) if paid else None,
+                    "rules": [
+                        {
+                            "contribution_type": "accepted_submission",
+                            "compensation_mode": "compensated",
+                            "quantities": submission_quantities if submission_quantities is not None else {
+                                "small": quantity,
+                                "medium": "4.250000000000000002" if instrument == "money" else "14",
+                                "large": "6.375000000000000003" if instrument == "money" else "21",
+                            },
+                        }
+                        if paid
+                        else {
+                            "contribution_type": "accepted_submission",
+                            "compensation_mode": "unpaid",
+                        },
+                        {
+                            "contribution_type": "completed_review",
+                            "compensation_mode": "compensated",
+                            "quantity": quantity,
+                        }
+                        if financial_header
+                        else {
+                            "contribution_type": "completed_review",
+                            "compensation_mode": "unpaid",
+                        },
+                    ],
+                }
+            )
             return ContributionPolicyUpdateDraftRequest(
                 **common,
-                rules=(
-                    PolicyRuleInput(
-                        contribution_type="accepted_submission",
-                        compensation_mode="compensated" if definitions else "unpaid",
-                        definitions=definitions,
-                    ),
-                    PolicyRuleInput(
-                        contribution_type="completed_review",
-                        compensation_mode="compensated" if award_bindings else "unpaid",
-                        definitions=definitions if award_bindings else (),
-                    ),
-                ),
+                instrument_type=body.instrument_type,
+                unit_code=body.unit_code,
+                adapter_binding_id=body.adapter_binding_id,
+                rules=body.rules,
             )
         if operation == "publish":
             return ContributionPolicyPublishRequest(**common)

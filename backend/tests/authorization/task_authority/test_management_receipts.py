@@ -72,8 +72,8 @@ async def test_pending_create_requires_task_by_commit(task_client):
             if insert_task:
                 await session.execute(
                     text("""insert into workstream_tasks
-                    (id,project_id,title,description,status,created_by,skill_tags,source_type)
-                    values(:task,:project,'Draft','Task body','draft',:actor,'[]','manual')"""),
+                    (id,project_id,title,description,status,created_by,skill_tags,source_type,task_size)
+                    values(:task,:project,'Draft','Task body','draft',:actor,'[]','manual','small')"""),
                     {"task": task_id, "project": project["id"], "actor": existing["created_by"]},
                 )
                 await session.commit()

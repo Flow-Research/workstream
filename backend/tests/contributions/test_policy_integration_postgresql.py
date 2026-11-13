@@ -13,6 +13,11 @@ from app.adapters.projects import project_contribution_policy_eligibility_port
 from app.core.config import get_settings
 from app.db import session as db_session
 from app.modules.compensation.api import CompensationInstrumentType
+from app.modules.contributions.api.policies import (
+    AcceptedSubmissionPolicyRuleInput,
+    TaskSizeQuantities,
+    UnpaidPolicyRuleInput,
+)
 from app.modules.contributions.api import (
     ContributionPolicyConflict,
     ContributionPolicyCreateDraftRequest,
@@ -22,8 +27,6 @@ from app.modules.contributions.api import (
     ContributionPolicyReadRequest,
     ContributionPolicyRetireRequest,
     ContributionPolicyUpdateDraftRequest,
-    PolicyDefinitionInput,
-    PolicyRuleInput,
 )
 from app.modules.contributions.models import (
     ContributionAwardDefinition,
@@ -65,6 +68,7 @@ class _LateFailingRepository(ContributionPolicyRepository):
         await super().replace_graph(version, rules, definitions, event)
         raise RuntimeError("late_product_write_failed")
 
+
 class _LateFailingPublicationRepository(ContributionPolicyRepository):
     def __init__(
         self,
@@ -79,17 +83,22 @@ class _LateFailingPublicationRepository(ContributionPolicyRepository):
         self._policy_id = policy_id
         self._version_id = version_id
         self.observed_staged_publication = False
+
     async def flush_transition_event(self, event) -> None:
         await super().flush_transition_event(event)
         policy = await self._session.get(ContributionPolicy, self._policy_id)
         version = await self._session.get(ContributionPolicyVersion, self._version_id)
-        custody_query = select(func.count()).select_from(
-            ContributionPolicyTransitionCustody
-        ).where(ContributionPolicyTransitionCustody.operation_id == self._operation_id)
+        custody_query = (
+            select(func.count())
+            .select_from(ContributionPolicyTransitionCustody)
+            .where(ContributionPolicyTransitionCustody.operation_id == self._operation_id)
+        )
         custody_count = await self._session.scalar(custody_query)
-        event_query = select(func.count()).select_from(
-            ContributionPolicyLifecycleEvent
-        ).where(ContributionPolicyLifecycleEvent.operation_id == self._operation_id)
+        event_query = (
+            select(func.count())
+            .select_from(ContributionPolicyLifecycleEvent)
+            .where(ContributionPolicyLifecycleEvent.operation_id == self._operation_id)
+        )
         event_count = await self._session.scalar(event_query)
         authorization_query = text(
             "select count(*) from cp04a_staged_authorization_effects "
@@ -109,6 +118,7 @@ class _LateFailingPublicationRepository(ContributionPolicyRepository):
         assert authorization_count == 1
         self.observed_staged_publication = True
         raise RuntimeError("late_publication_write_failed")
+
 
 @pytest.fixture(name="policy_database_env")
 def _policy_database_env(
@@ -156,22 +166,19 @@ async def _exercise_policy() -> tuple[
                     project_id=project_id,
                     contribution_policy_id=created.contribution_policy_id,
                     contribution_policy_version_id=created.contribution_policy_version_id,
+                    instrument_type=CompensationInstrumentType.MONEY,
+                    unit_code="USD",
+                    adapter_binding_id=money_binding,
                     rules=(
-                        PolicyRuleInput(
+                        AcceptedSubmissionPolicyRuleInput(
                             contribution_type="accepted_submission",
                             compensation_mode="compensated",
-                            definitions=(
-                                PolicyDefinitionInput(
-                                    instrument_type=CompensationInstrumentType.MONEY,
-                                    unit_code="USD",
-                                    quantity="25.50",
-                                    adapter_binding_id=money_binding,
-                                ),
+                            quantities=TaskSizeQuantities(
+                                small="25.50", medium="25.50", large="25.50"
                             ),
                         ),
-                        PolicyRuleInput(
-                            contribution_type="completed_review",
-                            compensation_mode="unpaid",
+                        UnpaidPolicyRuleInput(
+                            contribution_type="completed_review", compensation_mode="unpaid"
                         ),
                     ),
                 )
@@ -338,22 +345,19 @@ async def test_late_database_failure_rolls_back_product_and_authorization_effect
                         project_id=project_id,
                         contribution_policy_id=created.contribution_policy_id,
                         contribution_policy_version_id=(created.contribution_policy_version_id),
+                        instrument_type=CompensationInstrumentType.MONEY,
+                        unit_code="USD",
+                        adapter_binding_id=money_binding,
                         rules=(
-                            PolicyRuleInput(
+                            AcceptedSubmissionPolicyRuleInput(
                                 contribution_type="accepted_submission",
                                 compensation_mode="compensated",
-                                definitions=(
-                                    PolicyDefinitionInput(
-                                        instrument_type=CompensationInstrumentType.MONEY,
-                                        unit_code="USD",
-                                        quantity="25.50",
-                                        adapter_binding_id=money_binding,
-                                    ),
+                                quantities=TaskSizeQuantities(
+                                    small="25.50", medium="25.50", large="25.50"
                                 ),
                             ),
-                            PolicyRuleInput(
-                                contribution_type="completed_review",
-                                compensation_mode="unpaid",
+                            UnpaidPolicyRuleInput(
+                                contribution_type="completed_review", compensation_mode="unpaid"
                             ),
                         ),
                     )
@@ -419,28 +423,26 @@ async def test_late_publication_failure_rolls_back_custody_state_and_authorizati
                     project_id=project_id,
                     contribution_policy_id=created.contribution_policy_id,
                     contribution_policy_version_id=created.contribution_policy_version_id,
+                    instrument_type=CompensationInstrumentType.MONEY,
+                    unit_code="USD",
+                    adapter_binding_id=money_binding,
                     rules=(
-                        PolicyRuleInput(
+                        AcceptedSubmissionPolicyRuleInput(
                             contribution_type="accepted_submission",
                             compensation_mode="compensated",
-                            definitions=(
-                                PolicyDefinitionInput(
-                                    instrument_type=CompensationInstrumentType.MONEY,
-                                    unit_code="USD",
-                                    quantity="25.50",
-                                    adapter_binding_id=money_binding,
-                                ),
+                            quantities=TaskSizeQuantities(
+                                small="25.50", medium="25.50", large="25.50"
                             ),
                         ),
-                        PolicyRuleInput(
-                            contribution_type="completed_review",
-                            compensation_mode="unpaid",
+                        UnpaidPolicyRuleInput(
+                            contribution_type="completed_review", compensation_mode="unpaid"
                         ),
                     ),
                 )
             )
         repository = _LateFailingPublicationRepository(
-            session, operation_id=operation_id,
+            session,
+            operation_id=operation_id,
             policy_id=created.contribution_policy_id,
             version_id=created.contribution_policy_version_id,
         )
@@ -454,9 +456,7 @@ async def test_late_publication_failure_rolls_back_custody_state_and_authorizati
                         actor_profile_id=actor_id,
                         project_id=project_id,
                         contribution_policy_id=created.contribution_policy_id,
-                        contribution_policy_version_id=(
-                            created.contribution_policy_version_id
-                        ),
+                        contribution_policy_version_id=(created.contribution_policy_version_id),
                     )
                 )
         assert authorization.closed[-1] is authorization.prepared_handles[-1]

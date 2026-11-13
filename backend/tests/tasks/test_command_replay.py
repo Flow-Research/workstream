@@ -1,6 +1,7 @@
 """Real task retries preserve authority, atomicity and immutable result custody."""
 
 import asyncio
+import json
 from copy import deepcopy
 from uuid import UUID, uuid4
 
@@ -97,7 +98,7 @@ async def test_task_key_namespace_is_per_actor(task_client, monkeypatch):
     assert await _counts(first["id"]) == await _counts(second["id"]) == (1, 1, 1)
 
 
-@pytest.mark.parametrize("target", ["task", "assignment", "locked_context", "historical_claimed"])
+@pytest.mark.parametrize("target", ["task", "assignment", "locked_context", "historical_claimed", "task_size"])
 async def test_validly_shaped_snapshot_cannot_substitute_identity(task_client, monkeypatch, target):
     _, task, _ = await _setup(task_client, monkeypatch)
     headers = auth_headers()
@@ -105,21 +106,23 @@ async def test_validly_shaped_snapshot_cannot_substitute_identity(task_client, m
     first = await task_client.post(path, headers=headers)
     assert first.status_code == 200, first.text
     original = TaskCommandReplay.recover
-    def substituted(receipt, *args, **kwargs):
+    async def substituted(owner, receipt, *args, **kwargs):
         # Simulate corrupted in-memory custody without relying on DB triggers
         # to reject it first: the application identity assertion must catch it.
         if target == "locked_context":
             set_committed_value(receipt, "locked_context_hash", "sha256:" + "0" * 64)
         else:
             snapshot = deepcopy(receipt.response)
-            if target == "historical_claimed":
+            if target == "task_size":
+                snapshot["task"]["task_size"] = "large"
+            elif target == "historical_claimed":
                 snapshot["task"]["status"] = "claimed"
             else:
                 snapshot[target]["id"] = str(uuid4())
             set_committed_value(receipt, "response", snapshot)
-        return original(receipt, *args, **kwargs)
+        return await original(owner, receipt, *args, **kwargs)
     with monkeypatch.context() as patch:
-        patch.setattr(TaskCommandReplay, "recover", staticmethod(substituted))
+        patch.setattr(TaskCommandReplay, "recover", substituted)
         rejected = await task_client.post(path, headers=headers)
     assert rejected.status_code == 409, rejected.text
     assert rejected.json()["error"]["code"] == "task_replay_state_changed"
@@ -215,17 +218,24 @@ async def test_receipt_sql_shape_and_assignment_ownership(task_client, monkeypat
     claimed = await task_client.post(f"/api/v1/tasks/{first['id']}/claim", headers=auth_headers())
     assert claimed.status_code == 200, claimed.text
     assignment_id = claimed.json()["assignment"]["id"]
+    async with db_session.get_session_factory()() as session:
+        original_response = await session.scalar(select(TaskCommandReceipt.response).where(
+            TaskCommandReceipt.task_id == first["id"],
+            TaskCommandReceipt.assignment_id == assignment_id,
+        ))
+    # Keep unrelated size custody valid so each probe reaches its intended
+    # assignment/action/state constraint rather than the earlier size guard.
     values = {
         "receipt_id": new_record_id(), "idempotency_key": new_record_id(),
         "actor": grant["actor_profile_id"], "task": first["id"], "assignment": assignment_id,
         "contributor": grant["actor_profile_id"], "status": "committed", "action": "task.claim",
-        "digest": "sha256:" + "0" * 64,
+        "digest": "sha256:" + "0" * 64, "response": json.dumps(original_response),
     }
     statement = text("""insert into task_command_receipts
         (id, actor_profile_id, action_id, idempotency_key, request_digest, task_id,
          status, assignment_id, contributor_id, locked_context_hash, response, committed_at)
         values (:receipt_id, :actor, :action, :idempotency_key, :digest, :task,
-                :status, :assignment, :contributor, :digest, '{}'::jsonb, now())""")
+                :status, :assignment, :contributor, :digest, CAST(:response AS jsonb), now())""")
     for changes, constraint in (
         ({"task": second["id"]}, "fk_task_command_assignment"),
         ({"contributor": str(uuid4())}, "task_command_contributor"),
@@ -233,9 +243,12 @@ async def test_receipt_sql_shape_and_assignment_ownership(task_client, monkeypat
         ({"action": "task.unknown"}, "task_command_action"),
         ({"digest": "invalid"}, "task_command_request_digest"),
     ):
+        parameters = {**values, **changes}
+        if parameters["action"] != "task.claim":
+            parameters["response"] = json.dumps(original_response["task"])
         async with db_session.get_session_factory()() as session:
             with pytest.raises(IntegrityError, match=constraint):
-                await session.execute(statement, {**values, **changes})
+                await session.execute(statement, parameters)
             await session.rollback()
     assert await _counts(first["id"]) == (1, 1, 1)
     assert await _counts(second["id"]) == (0, 0, 0)

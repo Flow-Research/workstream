@@ -67,7 +67,7 @@ func (f *fakeClient) MySubmissions(_ context.Context, q api.PageQuery) (api.Resu
 	return api.Result[api.ContributorSubmissionPage]{Value: api.ContributorSubmissionPage{Items: []api.ContributorSubmission{{SubmissionID: submissionID, ProjectID: projectID, TaskID: taskID, Title: "Attempt", Status: "review_pending"}}}}, nil
 }
 func taskDetail() api.ContributorTaskDetail {
-	return api.ContributorTaskDetail{TaskSummary: api.TaskSummary{TaskID: taskID, ProjectID: projectID, Title: "Task title", Status: "ready"}, Description: "Exact instructions", Compensation: api.CompensationTerms{ContributionPolicyVersionID: policyID, AcceptedSubmission: []byte(`"unpaid"`), CompletedReview: []byte(`"unpaid"`)}}
+	return api.ContributorTaskDetail{TaskSize: "small", TaskSummary: api.TaskSummary{TaskID: taskID, ProjectID: projectID, Title: "Task title", Status: "ready"}, Description: "Exact instructions", Compensation: api.CompensationTerms{TaskSize: "small", ContributionPolicyVersionID: policyID, AcceptedSubmission: []byte(`"unpaid"`), CompletedReview: []byte(`"unpaid"`)}}
 }
 func (f *fakeClient) ContributorTask(ctx context.Context, id string) (api.Result[api.ContributorTaskDetail], error) {
 	f.calls = append(f.calls, "task")

@@ -2372,6 +2372,7 @@ async def _unrelated_checker_task(session, canonical_task):
     session.add(
         WorkstreamTask(
             id=unrelated_task_id,
+            task_size=canonical_task.task_size,
             project_id=canonical_task.project_id,
             locked_guide_version=canonical_task.locked_guide_version,
             locked_post_submit_checker_policy_id=(

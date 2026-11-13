@@ -8,6 +8,7 @@ from test_task_http_boundary import DETAIL, SUMMARY, SUMMARY_TEXT, TASK
 
 POLICY = "22222222-2222-4222-8222-222222222222"
 COMPENSATION = {
+    "task_size": "small",
     "contribution_policy_version_id": POLICY,
     "accepted_submission": [
         {
@@ -15,7 +16,6 @@ COMPENSATION = {
             "unit": "USD",
             "quantity": "2.125000000000000001",
         },
-        {"instrument": "project_points", "unit": "PTS", "quantity": "7"},
     ],
     "completed_review": "unpaid",
 }
@@ -51,15 +51,13 @@ READY_TEXT = (
     f"Task: {TASK}\nProject: {PROJECT}\nTitle: Work é\\u000A\\u001B[31m\n"
     "Type: evaluation\nDifficulty: medium\nSkills: analysis, tag\\u000A\n"
     "Estimated minutes: 17\nCreated: 2026-10-01T00:00:00Z\n"
-    f"Contribution policy version: {POLICY}\n"
+    f"Contribution policy version: {POLICY}\nTask size: small\n"
     "Accepted submission compensation: money USD 2.125000000000000001\n"
-    "Accepted submission compensation: project_points PTS 7\n"
     "Completed review compensation: unpaid\n"
 )
 DETAIL_TEXT = SUMMARY_TEXT.replace("Status: draft", "Status: ready") + (
-    f"Contribution policy version: {POLICY}\n"
+    f"Contribution policy version: {POLICY}\nTask size: small\n"
     "Accepted submission compensation: money USD 2.125000000000000001\n"
-    "Accepted submission compensation: project_points PTS 7\n"
     "Completed review compensation: unpaid\n"
     "Description: Instructions\\u000A\\u001B[32m\n"
     "Acceptance criteria: Accurate\nRejection criteria: Missing\n"
@@ -304,6 +302,8 @@ def test_contributor_reads_reject_malformed_and_management_disclosure(cli):
             {},
             CONTRIBUTOR | {"task_id": ACTOR},
             CONTRIBUTOR | {"project_id": "bad"},
+            CONTRIBUTOR | {"task_size": "medium"},
+            CONTRIBUTOR | {"task_size": "extra_large"},
             CONTRIBUTOR | {"deadline_at": "bad"},
             CONTRIBUTOR | {"skill_tags": [None]},
             CONTRIBUTOR | {"compensation": COMPENSATION | {"binding_status": "active"}},
@@ -311,6 +311,7 @@ def test_contributor_reads_reject_malformed_and_management_disclosure(cli):
         required = (
             "task_id",
             "project_id",
+            "task_size",
             "title",
             "description",
             "status",

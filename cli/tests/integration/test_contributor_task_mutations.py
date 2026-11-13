@@ -19,6 +19,7 @@ KEY = "018f0ebc-7966-7e8d-bc4d-1cae1e000004"
 POLICY = "018f0ebc-7966-7e8d-bc4d-1cae1e000005"
 ASSIGNMENT = "018f0ebc-7966-7e8d-bc4d-1cae1e000006"
 TASK_RESPONSE = {
+    "task_size": "small",
     "id": TASK,
     "project_id": PROJECT,
     "locked_contribution_policy_version_id": POLICY,

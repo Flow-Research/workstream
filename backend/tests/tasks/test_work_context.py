@@ -9,6 +9,7 @@ from uuid import UUID
 from app.core.identifiers import new_record_id
 
 import pytest
+from app.modules.contributions.api import RewardSelectionFacts
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from pydantic import TypeAdapter, ValidationError
@@ -44,7 +45,7 @@ from tests.test_tasks import (
     admit_and_grant_project_submitter, set_dev_actor, auth_headers,
 )
 
-COMMON = {"task_id", "project_id", "title", "description", "task_type", "difficulty", "skill_tags",
+COMMON = {"task_id", "project_id", "task_size", "title", "description", "task_type", "difficulty", "skill_tags",
           "estimated_time_minutes", "status", "acceptance_criteria", "rejection_criteria",
           "deadline_at", "created_at", "updated_at"}
 MANAGEMENT = {"source_type", "source_ref", "source_payload_hash", "import_batch_id", "external_task_id",
@@ -57,9 +58,9 @@ ACTIONS = ("task.work_context.read", "project.task.work_context.read")
 def context_values():
     project_id, now = new_record_id(), datetime.now(UTC)
     task = ContributorTaskDetail(
-        new_record_id(), project_id, "Title", "Work", None, None, ("tag",), None,
+        new_record_id(), project_id, "small", "Title", "Work", None, None, ("tag",), None,
         "in_progress", None, None, None, now, now,
-        TaskCompensationTerms(new_record_id(), "unpaid", "unpaid"),
+        TaskCompensationTerms(new_record_id(), "small", "unpaid", "unpaid"),
     )
     selection = GuidePolicySelection(policy_id=new_record_id(), generation=1, policy_hash="sha256:" + "1" * 64)
     values = dict(project=ProjectDisplayFacts(project_id, "Project", "project", None),
@@ -457,7 +458,13 @@ def test_revision_repair_decodes_serialized_strict_source_lineage():
         activation_generation=1, activated_at=datetime.now(UTC),
         lineage=schemas.TaskPolicyLineage(**lineage),
     )
+    reward = RewardSelectionFacts(
+        policy_version_id=source.lineage.locked_contribution_policy_version_id,
+        task_size="small", compensation_mode="unpaid", award_definition_id=None,
+        instrument_type=None, unit_code=None, quantity=None, adapter_binding_id=None,
+    )
     candidate = RevisionCandidate(
+        prior_reward_selection=reward, target_reward_selection=reward,
         prior=source, target=source, target_post_policy_json="{}",
         max_revision_rounds=2, revision_deadline_hours=24, target_max_revision_rounds=2,
     )
@@ -485,7 +492,6 @@ def test_revision_repair_decodes_serialized_strict_source_lineage():
     ("ready", "context_blocked"),
     ("context_blocked", "context_blocked"),
     ("revision_deadline_expired", "revision_deadline_expired"),
-    ("revision_limit_reached", "revision_limit_reached"),
 ])
 async def test_revision_projection_stale_source_preserves_deadline_and_limit_priority(
     monkeypatch, disposition, expected,

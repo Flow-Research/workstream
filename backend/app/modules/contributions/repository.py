@@ -13,6 +13,11 @@ from app.modules.contributions.api import (
     ContributionPolicyProjectSelection,
     LockedCompensationAward,
     LockedCompensationTerms,
+    LockedCompensationSelection,
+    RewardSelectionFacts,
+    RewardSelectionRequest,
+    ContributionPolicyUnavailable,
+    ContributionPolicyConflict,
 )
 from app.modules.compensation.api import CompensationInstrumentType
 from app.modules.contributions.api.published_selection import PublishedContributionPolicySelection
@@ -27,6 +32,8 @@ from app.modules.contributions.models import (
     ProjectCompensationUnit,
 )
 from app.modules.contributions.units.models import ProjectCompensationUnitCreationEvent
+from app.modules.contributions.policy_eligibility import require_complete_policy_graph
+from app.core.financial_wire import format_award_quantity
 
 
 def policy_operation_lock_key(operation_id: UUID) -> int:
@@ -42,152 +49,211 @@ class ContributionPolicyRepository:
         """Bind persistence to the caller-owned session and transaction."""
         self._session = session
 
+    async def resolve_reward_selection(
+        self, request: RewardSelectionRequest
+    ) -> RewardSelectionFacts:
+        """Resolve only the requested policy version/tier, without choosing a current policy."""
+        if not self._session.in_transaction():
+            raise ContributionPolicyUnavailable("reward_selection_unavailable")
+        try:
+            checked = RewardSelectionRequest.model_validate(request)
+        except (TypeError, ValueError) as exc:
+            raise ContributionPolicyUnavailable("reward_selection_unavailable") from exc
+        version = await self._session.scalar(
+            select(ContributionPolicyVersion)
+            .where(
+                ContributionPolicyVersion.id == checked.policy_version_id,
+                ContributionPolicyVersion.project_id == str(checked.project_id),
+                ContributionPolicyVersion.status.in_(("published", "retired")),
+            )
+            .options(
+                selectinload(ContributionPolicyVersion.rules).selectinload(
+                    ContributionRule.award_definitions,
+                )
+            )
+            .execution_options(populate_existing=True)
+        )
+        return self._reward_selection(version, checked)
+
+    @staticmethod
+    def _reward_selection(version, checked: RewardSelectionRequest) -> RewardSelectionFacts:
+        """Validate one complete policy graph and select the exact requested size."""
+        if version is None:
+            raise ContributionPolicyUnavailable("reward_selection_unavailable")
+        rules = list(version.rules)
+        definitions = [definition for rule in rules for definition in rule.award_definitions]
+        try:
+            require_complete_policy_graph(version, rules, definitions)
+        except ContributionPolicyConflict as exc:
+            raise ContributionPolicyUnavailable("reward_selection_unavailable") from exc
+        rule = next(rule for rule in rules if rule.contribution_type == "accepted_submission")
+        common = dict(
+            policy_version_id=version.id,
+            task_size=checked.task_size,
+            compensation_mode=rule.compensation_mode,
+        )
+        if rule.compensation_mode == "unpaid":
+            return RewardSelectionFacts(
+                **common,
+                award_definition_id=None,
+                instrument_type=None,
+                unit_code=None,
+                quantity=None,
+                adapter_binding_id=None,
+            )
+        selected = next(
+            item for item in rule.award_definitions if item.task_size == checked.task_size
+        )
+        return RewardSelectionFacts(
+            **common,
+            award_definition_id=selected.id,
+            instrument_type=CompensationInstrumentType(selected.instrument_type),
+            unit_code=selected.unit_code,
+            quantity=format_award_quantity(selected.quantity),
+            adapter_binding_id=selected.adapter_binding_id,
+        )
+
     async def current_policy_candidates(self, project_id: UUID) -> list[UUID]:
         """Select IDs only, without locks; a second candidate means ambiguity."""
-        return list(await self._session.scalars(select(ContributionPolicy.id).where(
-            ContributionPolicy.project_id == str(project_id),
-            ContributionPolicy.status != "retired",
-        ).limit(2)))
+        return list(
+            await self._session.scalars(
+                select(ContributionPolicy.id)
+                .where(
+                    ContributionPolicy.project_id == str(project_id),
+                    ContributionPolicy.status != "retired",
+                )
+                .limit(2)
+            )
+        )
 
     async def current_policy_selection(
-        self, project_id: UUID, policy_id: UUID,
+        self,
+        project_id: UUID,
+        policy_id: UUID,
     ) -> ContributionPolicyProjectSelection | None:
         """Read one post-authorization snapshot; never switch selected aggregates."""
-        candidate_count = select(func.count()).select_from(ContributionPolicy).where(
-            ContributionPolicy.project_id == str(project_id),
-            ContributionPolicy.status != "retired",
-        ).correlate(None).scalar_subquery()
-        rows = (await self._session.execute(select(
-            ContributionPolicy.id, ContributionPolicy.current_published_version_id,
-            ContributionPolicyVersion.id.label("open_draft_version_id"),
-        ).outerjoin(ContributionPolicyVersion, and_(
-            ContributionPolicyVersion.contribution_policy_id == ContributionPolicy.id,
-            ContributionPolicyVersion.project_id == ContributionPolicy.project_id,
-            ContributionPolicyVersion.status == "draft",
-        )).where(
-            ContributionPolicy.project_id == str(project_id),
-            ContributionPolicy.id == policy_id, ContributionPolicy.status != "retired",
-            candidate_count == 1,
-        ).limit(2))).all()
+        candidate_count = (
+            select(func.count())
+            .select_from(ContributionPolicy)
+            .where(
+                ContributionPolicy.project_id == str(project_id),
+                ContributionPolicy.status != "retired",
+            )
+            .correlate(None)
+            .scalar_subquery()
+        )
+        rows = (
+            await self._session.execute(
+                select(
+                    ContributionPolicy.id,
+                    ContributionPolicy.current_published_version_id,
+                    ContributionPolicyVersion.id.label("open_draft_version_id"),
+                )
+                .outerjoin(
+                    ContributionPolicyVersion,
+                    and_(
+                        ContributionPolicyVersion.contribution_policy_id == ContributionPolicy.id,
+                        ContributionPolicyVersion.project_id == ContributionPolicy.project_id,
+                        ContributionPolicyVersion.status == "draft",
+                    ),
+                )
+                .where(
+                    ContributionPolicy.project_id == str(project_id),
+                    ContributionPolicy.id == policy_id,
+                    ContributionPolicy.status != "retired",
+                    candidate_count == 1,
+                )
+                .limit(2)
+            )
+        ).all()
         if len(rows) != 1:
             return None
         row = rows[0]
         if row.current_published_version_id is None and row.open_draft_version_id is None:
             return None
         return ContributionPolicyProjectSelection(
-            project_id=project_id, contribution_policy_id=row.id,
+            project_id=project_id,
+            contribution_policy_id=row.id,
             current_published_version_id=row.current_published_version_id,
             open_draft_version_id=row.open_draft_version_id,
         )
 
-    async def published_selection(self, project_id: UUID) -> PublishedContributionPolicySelection | None:
+    async def published_selection(
+        self, project_id: UUID
+    ) -> PublishedContributionPolicySelection | None:
         """Read only one active aggregate's exact current published version."""
-        rows = (await self._session.execute(select(
-            ContributionPolicy.project_id, ContributionPolicy.id, ContributionPolicyVersion.id,
-        ).join(ContributionPolicyVersion, and_(
-            ContributionPolicyVersion.id == ContributionPolicy.current_published_version_id,
-            ContributionPolicyVersion.contribution_policy_id == ContributionPolicy.id,
-            ContributionPolicyVersion.project_id == ContributionPolicy.project_id,
-        )).where(
-            ContributionPolicy.project_id == str(project_id),
-            ContributionPolicy.status == "active", ContributionPolicyVersion.status == "published",
-        ).limit(2))).all()
+        rows = (
+            await self._session.execute(
+                select(
+                    ContributionPolicy.project_id,
+                    ContributionPolicy.id,
+                    ContributionPolicyVersion.id,
+                )
+                .join(
+                    ContributionPolicyVersion,
+                    and_(
+                        ContributionPolicyVersion.id
+                        == ContributionPolicy.current_published_version_id,
+                        ContributionPolicyVersion.contribution_policy_id == ContributionPolicy.id,
+                        ContributionPolicyVersion.project_id == ContributionPolicy.project_id,
+                    ),
+                )
+                .where(
+                    ContributionPolicy.project_id == str(project_id),
+                    ContributionPolicy.status == "active",
+                    ContributionPolicyVersion.status == "published",
+                )
+                .limit(2)
+            )
+        ).all()
         if not rows:
             return None
         if len(rows) != 1:
             from app.modules.contributions.api import ContributionPolicyUnavailable
+
             raise ContributionPolicyUnavailable("contribution_policy_unavailable")
         project, policy, version = rows[0]
         return PublishedContributionPolicySelection(UUID(project), policy, version)
 
     async def read_locked_compensation_terms(
-        self, project_id: UUID, contribution_policy_version_ids: tuple[UUID, ...]
+        self, project_id: UUID, selections: tuple[LockedCompensationSelection, ...]
     ) -> tuple[LockedCompensationTerms, ...]:
-        """Project complete terms for exact published or retired version selectors."""
-        if (
-            not isinstance(project_id, UUID)
-            or type(contribution_policy_version_ids) is not tuple
-            or not 1 <= len(contribution_policy_version_ids) <= 100
-            or any(not isinstance(value, UUID) for value in contribution_policy_version_ids)
-            or len(set(contribution_policy_version_ids)) != len(contribution_policy_version_ids)
-        ):
+        """Batch exact recorded selections; two sizes under one policy remain distinct."""
+        if (not isinstance(project_id, UUID) or type(selections) is not tuple
+                or not 1 <= len(selections) <= 100
+                or any(type(item) is not LockedCompensationSelection for item in selections)
+                or len(set(selections)) != len(selections)):
             raise ValueError("locked compensation selectors are invalid")
-        version, rule, definition = (
-            ContributionPolicyVersion,
-            ContributionRule,
-            ContributionAwardDefinition,
-        )
-        rows = (
-            await self._session.execute(
-                select(
-                    version.id.label("version_id"),
-                    rule.id.label("rule_id"),
-                    rule.contribution_type,
-                    rule.compensation_mode,
-                    definition.instrument_type,
-                    definition.unit_code,
-                    definition.quantity,
-                )
-                .join(
-                    rule,
-                    and_(
-                        rule.contribution_policy_version_id == version.id,
-                        rule.project_id == version.project_id,
-                    ),
-                )
-                .outerjoin(
-                    definition,
-                    and_(
-                        definition.contribution_rule_id == rule.id,
-                        definition.contribution_policy_version_id == version.id,
-                        definition.project_id == version.project_id,
-                        definition.contribution_type == rule.contribution_type,
-                    ),
-                )
-                .where(
-                    version.project_id == str(project_id),
-                    version.id.in_(contribution_policy_version_ids),
-                    version.status.in_(("published", "retired")),
-                )
-                .order_by(version.id, rule.contribution_type, definition.instrument_type)
+        versions = (await self._session.scalars(select(ContributionPolicyVersion).where(
+            ContributionPolicyVersion.project_id == str(project_id),
+            ContributionPolicyVersion.id.in_({item.contribution_policy_version_id for item in selections}),
+            ContributionPolicyVersion.status.in_(("published", "retired")),
+        ).options(selectinload(ContributionPolicyVersion.rules).selectinload(
+            ContributionRule.award_definitions,
+        )).execution_options(populate_existing=True))).all()
+        by_id = {version.id: version for version in versions}
+        result = []
+        for key in selections:
+            version = by_id.get(key.contribution_policy_version_id)
+            selected = self._reward_selection(version, RewardSelectionRequest(
+                project_id=project_id, policy_version_id=key.contribution_policy_version_id,
+                task_size=key.task_size,
+            ))
+            if selected.award_definition_id != key.award_definition_id:
+                raise ValueError("locked compensation selection differs")
+            reviewer = next(rule for rule in version.rules if rule.contribution_type == "completed_review")
+            reviewer_terms = "unpaid" if reviewer.compensation_mode == "unpaid" else tuple(
+                LockedCompensationAward(CompensationInstrumentType(d.instrument_type),
+                                        d.unit_code, format_award_quantity(d.quantity))
+                for d in reviewer.award_definitions
             )
-        ).all()
-        grouped: dict[UUID, dict[str, tuple[str, list[LockedCompensationAward]]]] = {}
-        for row in rows:
-            rules = grouped.setdefault(row.version_id, {})
-            current = rules.setdefault(row.contribution_type, (row.compensation_mode, []))
-            if current[0] != row.compensation_mode:
-                raise ValueError("locked compensation graph is invalid")
-            if row.instrument_type is not None:
-                current[1].append(
-                    LockedCompensationAward(
-                        instrument=CompensationInstrumentType(row.instrument_type),
-                        unit=row.unit_code,
-                        quantity=format(row.quantity, "f"),
-                    )
-                )
-
-        result: list[LockedCompensationTerms] = []
-        for version_id in contribution_policy_version_ids:
-            rules = grouped.get(version_id)
-            if rules is None or set(rules) != {"accepted_submission", "completed_review"}:
-                continue
-
-            def exposed(contribution_type: str):
-                mode, awards = rules[contribution_type]
-                if mode == "unpaid" and not awards:
-                    return "unpaid"
-                if mode == "compensated" and 1 <= len(awards) <= 2:
-                    return tuple(awards)
-                raise ValueError("locked compensation graph is invalid")
-
-            result.append(
-                LockedCompensationTerms(
-                    contribution_policy_version_id=version_id,
-                    accepted_submission=exposed("accepted_submission"),
-                    completed_review=exposed("completed_review"),
-                )
-            )
+            result.append(LockedCompensationTerms(
+                selection=key,
+                accepted_submission="unpaid" if selected.compensation_mode == "unpaid" else (
+                    LockedCompensationAward(selected.instrument_type, selected.unit_code, selected.quantity),
+                ),
+                completed_review=reviewer_terms,
+            ))
         return tuple(result)
 
     async def lock_operation(self, operation_id: UUID) -> None:
@@ -310,24 +376,33 @@ class ContributionPolicyRepository:
         return await self.get_version(UUID(policy.project_id), policy.id, selected, graph=True)
 
     async def read_policy_versions(
-        self, project_id: UUID, *, after: tuple[datetime, UUID] | None, limit: int,
+        self,
+        project_id: UUID,
+        *,
+        after: tuple[datetime, UUID] | None,
+        limit: int,
     ) -> tuple[list[tuple[ContributionPolicy, ContributionPolicyVersion]], bool]:
         """One page of the project's versions by ``(created_at, id)`` with their graphs, no locks."""
         version = ContributionPolicyVersion
         query = (
             select(version, ContributionPolicy)
-            .join(ContributionPolicy, and_(
-                ContributionPolicy.id == version.contribution_policy_id,
-                ContributionPolicy.project_id == version.project_id,
-            ))
+            .join(
+                ContributionPolicy,
+                and_(
+                    ContributionPolicy.id == version.contribution_policy_id,
+                    ContributionPolicy.project_id == version.project_id,
+                ),
+            )
             .where(version.project_id == str(project_id))
             .options(selectinload(version.rules).selectinload(ContributionRule.award_definitions))
         )
         if after is not None:
             query = query.where(tuple_(version.created_at, version.id) > after)
-        rows = (await self._session.execute(
-            query.order_by(version.created_at, version.id).limit(limit + 1)
-        )).all()
+        rows = (
+            await self._session.execute(
+                query.order_by(version.created_at, version.id).limit(limit + 1)
+            )
+        ).all()
         return [(policy, row) for row, policy in rows[:limit]], len(rows) > limit
 
     async def lock_unit(

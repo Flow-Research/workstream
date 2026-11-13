@@ -1,0 +1,19 @@
+{
+  "source_instance_id": "019a78b0-0000-7000-8000-000000000040",
+  "fulfillment_root_id": "019a78b0-0000-7000-8000-000000000060",
+  "award_id": "019a78b0-0000-7000-8000-000000000011",
+  "project_id": "019a78b0-0000-7000-8000-000000000001",
+  "adapter_binding_id": "019a78b0-0000-7000-8000-000000000010",
+  "correlation_id": "019a78b0-0000-7000-8000-000000000012",
+  "contract_version": 1,
+  "route_key": "finance.primary",
+  "external_event_id": "019a78b0-0000-7000-8000-000000000070",
+  "instrument_type": "money",
+  "unit_code": "NGN",
+  "reported_status": "fulfilled",
+  "fulfilled_quantity": "2000.01",
+  "fulfilled_at": "2026-11-12T05:01:00.000000Z",
+  "external_reference": "fin_019a78b0000070008000000000000071",
+  "failure_code": null,
+  "reported_at": "2026-11-12T05:01:01.000000Z"
+}

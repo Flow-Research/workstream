@@ -1,4 +1,4 @@
-"""Source-neutral TASK participant contract for future final acceptance."""
+"""Source-neutral TASK participant contract for shared final acceptance."""
 
 from typing import Annotated, Literal, Protocol
 from uuid import UUID
@@ -29,6 +29,8 @@ class TaskAcceptedEffectsRequest(BaseModel):
     submission_version: _PositiveVersion
     contributor_id: UUID
     contribution_policy_version_id: UUID
+    task_size: Literal["small", "medium", "large"]
+    contribution_award_definition_id: UUID | None
     content_id: UUID
     content_sha256: _Sha256
     final_acceptance_id: UUID

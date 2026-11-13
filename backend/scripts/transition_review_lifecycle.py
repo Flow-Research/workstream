@@ -39,6 +39,7 @@ from app.modules.reviews.lifecycle.service import (
     FIRST_CONTRIBUTION_MANIFEST_DIGEST,
     JointLifecycleController,
 )
+from app.adapters.compensation import compensation_fulfillment_readiness
 
 ACTIVATION_ORDER = ("disabled", "shadow", "live")
 TARGET_PHASES = (JointLifecyclePhase.SHADOW, JointLifecyclePhase.LIVE)
@@ -98,6 +99,7 @@ async def _transition_once(actor_profile_id: UUID, target: str, reason: str) -> 
         controller = JointLifecycleController(
             session,
             authorization=lifecycle_transition_authorization(session, context),
+            source_readiness=compensation_fulfillment_readiness(session),
         )
         receipt = await controller.transition(command)
         return {

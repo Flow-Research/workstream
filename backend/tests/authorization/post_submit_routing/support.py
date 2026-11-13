@@ -92,6 +92,7 @@ def accepted_effects_for(source: TaskPostSubmitSourceProposal) -> TaskAcceptedEf
         submission_version=source.submission_version,
         contributor_id=source.contributor_id,
         contribution_policy_version_id=source.contribution_policy_version_id,
+        task_size=source.task_size, contribution_award_definition_id=source.contribution_award_definition_id,
         content_id=source.content_id,
         content_sha256=source.content_sha256,
         final_acceptance_id=new_record_id(),

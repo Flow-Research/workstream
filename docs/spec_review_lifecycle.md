@@ -746,10 +746,11 @@ Extract foundations from existing owner work, not a new initiative:
    fabricating allows.
    REV-12A4A supplies authorized transitions and atomic writer/stop composition
    on this fence before the first contribution path. Applicable award facts remain atomic. Actual
-   CON fulfillment roots own immutable ordinal allocation before fulfillment
-   admission is enabled; no award or outbox row substitutes for a root. Payment
-   obligation storage and its root/cutoff proof are not prerequisites of a
-   manifest that keeps fulfillment admission, dispatch and callbacks unavailable.
+   COMP now stages immutable root/ordinal and selector-only outbox custody with
+   each award under the held REV fence. The current manifest names those internal
+   participants and keeps Finance admission, dispatch and callbacks unavailable.
+   Exact source UUID readiness precedes live activation. Finance obligation,
+   callback and cutoff/drain proof remain required before fulfillment activation.
 4. ARCH-04E2-B delivers mandatory actual source receipts, database-enforced
    complete outcomes and shared audit/outbox in one caller transaction. False
    acquires the existing REV fence before TASK and later AUTH; true acquires no
@@ -818,10 +819,11 @@ The target CON boundary exposes two operation-specific flush-only inputs:
 - delivered submitter input only after accept creates FinalAcceptance and applies
   accepted task effects, containing immutable scalar FinalAcceptance,
   TaskAssignment, submitter, assignment-frozen ContributionPolicyVersion,
-  stabilized artifact, correlation and expected-generation facts. It carries no
-  authorization decision or receipt-shaped authority value. Before production
-  consumption, the enclosing REV participant input must separately require the
-  exact AUTH decision-event receipt; this absence is not an optional authority path.
+  stabilized artifact, correlation and expected-generation facts. REV additionally
+  forwards the original authorization-decision and routing-manifest IDs through
+  CON into COMP root custody. They are provenance checked against the actual
+  stored source; scalar IDs never replace current authorization or the held
+  canonical transaction fence.
 
 Database constraints keep the source shapes mutually exclusive and enforce one
 `completed_review` per Review and one `accepted_submission` per
@@ -829,7 +831,11 @@ FinalAcceptance. Explicitly unpaid rules create no CompensationAward. Payable
 money or project-points rules create immutable awards in the canonical
 transaction as defined by CON.
 
-External points/payment delivery occurs after commit through the shared outbox
+Each current compensated accepted contribution stages its exact COMP root and
+initial outbox event in that same transaction; missing custody rolls back all
+participants. Unpaid outcomes stage neither. The new event has no registered
+financial handler. External points/payment delivery remains future work and
+occurs after commit through the shared outbox
 and adapter boundary. Delivery failure cannot roll back or change Review,
 FinalAcceptance, ContributionRecord, CompensationAward, or task acceptance.
 Reputation policy and reputation-event implementation are deferred; the review
