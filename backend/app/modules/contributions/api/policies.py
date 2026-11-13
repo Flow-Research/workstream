@@ -15,7 +15,7 @@ from pydantic import (
 
 from app.modules.compensation.api import CompensationInstrumentType
 from app.modules.contributions.api.quantities import PolicyQuantity
-from app.modules.contributions.api.reward_selection import TaskSize
+from app.core.financial_wire import TaskSize
 from app.modules.contributions.api.compensation_units import (
     CompensationUnitAction,
     CompensationUnitCreateAuthorizationFacts,

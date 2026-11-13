@@ -12,7 +12,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
 from pydantic_core import PydanticCustomError
-from app.modules.contributions.api import TaskSize
+from app.core.financial_wire import TaskSize
 
 
 TASK_IMPORT_MAXIMUM_BYTES = 8 * 1024 * 1024

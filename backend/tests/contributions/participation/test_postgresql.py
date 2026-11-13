@@ -106,6 +106,13 @@ async def test_create_and_exact_replay_all_frozen_award_shapes(
                 .all()
             )
             assert len(stored) == len(instruments)
+            assert await session.scalar(text(
+                "SELECT count(*) FROM public.compensation_fulfillment_roots"
+            )) == len(instruments)
+            assert await session.scalar(text(
+                "SELECT count(*) FROM public.outbox_events "
+                "WHERE event_type='compensation.obligation.deliver'"
+            )) == len(instruments)
             stored_awards = tuple(
                 CompensationAwardFacts(
                     id=award["id"],

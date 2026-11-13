@@ -1518,7 +1518,7 @@ admission-backed Submission creation; the complete public API and Celery
 service drill starts from public guide inputs with recorded inference.
 
 Internal root custody is implemented through the existing earning transaction;
-Finance runtime and full-suite/worker/S3 qualification remain pending. The
+Finance runtime and full-suite/Celery worker/S3 qualification remain pending. The
 [Finance change record](../.commitrail/changes/finance-rewards-fulfillment.md)
 distinguishes bounded development proof from whole-journey readiness.
 

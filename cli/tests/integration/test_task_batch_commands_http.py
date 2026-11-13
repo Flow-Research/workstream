@@ -446,8 +446,10 @@ def test_current_import_receipts_reject_size_omissions_and_partial_rows(cli):
                 value = original
                 if operation == "status":
                     value = status() | {"creation": original}
-                response.update(status=201 if operation == "import" else 200,
-                                body=json.dumps(value).encode())
+                response.update(
+                    status=201 if operation == "import" else 200,
+                    body=json.dumps(value).encode(),
+                )
                 result = invoke(cli, origin, operation)
                 if change == "valid":
                     assert result.returncode == 0, result.stderr
@@ -456,5 +458,7 @@ def test_current_import_receipts_reject_size_omissions_and_partial_rows(cli):
                     assert result.returncode == 1 and result.stdout == "", result.stderr
                     error = json.loads(result.stderr)["error"]
                     assert error["code"] == "invalid_api_response"
-                    assert error.get("outcome_unknown", False) == (operation == "import")
+                    assert error.get("outcome_unknown", False) == (
+                        operation == "import"
+                    )
         assert len(requests) == 10

@@ -31,11 +31,7 @@ from tests.reviews.lifecycle.transition_support import (
 )
 
 
-
-
-
-
-async def _routing_acceptance_validity(session, manifest_id):
+async def _routing_acceptance_validity(session, manifest_id, expected_generation):
     return dict(
         (
             await session.execute(
@@ -46,28 +42,20 @@ async def _routing_acceptance_validity(session, manifest_id):
                     "m.router_actor_id,m.project_id,m.task_id,m.submission_id,"
                     "(m.authority_context#>>"
                     "'{source,locked_policy,locked_review_policy_id}')::uuid,"
-                    "m.authorized_lifecycle_generation,true) AS new_valid,"
+                    ":generation,true) AS new_valid,"
                     "public.task_routing_acceptance_matches("
                     "m.id,m.final_acceptance_id,m.authorization_decision_id,"
                     "m.router_actor_id,m.project_id,m.task_id,m.submission_id,"
                     "(m.authority_context#>>"
                     "'{source,locked_policy,locked_review_policy_id}')::uuid,"
-                    "m.authorized_lifecycle_generation,false) AS replay_valid "
+                    ":generation,false) AS replay_valid "
                     "FROM public.task_post_submit_routing_manifests m "
                     "WHERE m.id=:manifest"
                 ),
-                {"manifest": manifest_id},
+                {"manifest": manifest_id, "generation": expected_generation},
             )
         ).mappings().one()
     )
-
-
-
-
-
-
-
-
 
 
 @pytest.mark.parametrize("instruments", [(), ("money",), ("project_points",)])
@@ -103,9 +91,15 @@ async def test_stopped_terminal_replay_is_select_only(
             assert replay == original.model_copy(update={"replayed": True})
             assert writes == []
             async with h.factory() as session:
-                assert await _routing_acceptance_validity(session, original.routing_manifest_id) == {
+                assert await _routing_acceptance_validity(
+                    session, original.routing_manifest_id, receipt.generation,
+                ) == {
                     "new_valid": False, "replay_valid": True,
                 }
+                # Replay needs fresh custody, not the original admission generation.
+                assert await _routing_acceptance_validity(
+                    session, original.routing_manifest_id, 2,
+                ) == {"new_valid": False, "replay_valid": False}
         # Valid retained receipts remain evidence after a later lifecycle restart.
         await transition(await command_for(access.target.id, "shadow"))
         restarted = await transition(await command_for(access.target.id, "live"))
@@ -114,8 +108,6 @@ async def test_stopped_terminal_replay_is_select_only(
             facts = await stored_effects(session, h.request.task_id)
             assert facts["acceptances"] == facts["contributions"] == 1
             assert facts["awards"] == len(instruments)
-
-
 
 
 async def test_current_generation_cannot_admit_new_effects_when_stopped(

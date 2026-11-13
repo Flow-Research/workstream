@@ -73,10 +73,20 @@ REVISION_CONTEXT = {
     "outcome": "kept",
     "disposition": "ready",
     "direction": "kept",
-    "prior_reward_selection": {"compensation_mode": "unpaid", "task_size": "small",
-                               "instrument": None, "unit": None, "quantity": None},
-    "target_reward_selection": {"compensation_mode": "unpaid", "task_size": "small",
-                                "instrument": None, "unit": None, "quantity": None},
+    "prior_reward_selection": {
+        "compensation_mode": "unpaid",
+        "task_size": "small",
+        "instrument": None,
+        "unit": None,
+        "quantity": None,
+    },
+    "target_reward_selection": {
+        "compensation_mode": "unpaid",
+        "task_size": "small",
+        "instrument": None,
+        "unit": None,
+        "quantity": None,
+    },
     "prior": REVISION_SNAPSHOT,
     "target": REVISION_SNAPSHOT,
     "changes": [],
@@ -399,8 +409,10 @@ def test_work_context_rejects_foreign_guide_project(cli):
 def test_work_context_rejects_incomplete_nested_or_management_facts(cli):
     with http_fixture() as (origin, response, _requests):
         cases = [None, [], {}, CONTEXT | {"unexpected": True}]
-        cases.extend(CONTEXT | {"task": CONTEXT["task"] | {"task_size": size}}
-                     for size in (None, "medium", "extra_large"))
+        cases.extend(
+            CONTEXT | {"task": CONTEXT["task"] | {"task_size": size}}
+            for size in (None, "medium", "extra_large")
+        )
         without_size = deepcopy(CONTEXT)
         del without_size["task"]["task_size"]
         cases.append(without_size)

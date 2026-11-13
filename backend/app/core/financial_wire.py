@@ -4,8 +4,11 @@ import json
 from datetime import datetime
 from decimal import Decimal
 import re
+from typing import Literal
 from uuid import UUID
 
+
+TaskSize = Literal["small", "medium", "large"]
 
 def decode_financial_object(body: bytes) -> dict:
     """Reject ambiguous or oversized wire input before ordinary JSON parsing."""

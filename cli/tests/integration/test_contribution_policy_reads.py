@@ -35,15 +35,24 @@ def policy(*, empty=False, compensated=False):
                 }
             )
     if compensated:
-        rules[0].update(compensation_mode="compensated", definitions=[
-            {"task_size": size, "definition_id": identifier, "instrument_type": "money",
-             "unit_code": "USD", "quantity": quantity, "adapter_binding_id": KEY}
-            for size, identifier, quantity in (
-                ("small", PROJECT, "99999999999999999999.123456789012345678"),
-                ("medium", VERSION, "9007199254740993"),
-                ("large", POLICY, "10"),
-            )
-        ])
+        rules[0].update(
+            compensation_mode="compensated",
+            definitions=[
+                {
+                    "task_size": size,
+                    "definition_id": identifier,
+                    "instrument_type": "money",
+                    "unit_code": "USD",
+                    "quantity": quantity,
+                    "adapter_binding_id": KEY,
+                }
+                for size, identifier, quantity in (
+                    ("small", PROJECT, "99999999999999999999.123456789012345678"),
+                    ("medium", VERSION, "9007199254740993"),
+                    ("large", POLICY, "10"),
+                )
+            ],
+        )
     return {
         "project_id": PROJECT,
         "contribution_policy_id": POLICY,

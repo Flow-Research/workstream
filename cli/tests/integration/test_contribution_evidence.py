@@ -182,7 +182,8 @@ def test_contributions_empty_review_and_filter_validation(cli):
         for value in ({"exported_at": STAMP, "items": []}, evidence()):
             if value["items"]:
                 value["items"][0].update(
-                    contribution_type="completed_review", task_size=None,
+                    contribution_type="completed_review",
+                    task_size=None,
                     source_review_id=identity(20),
                     source_review_lease_id=identity(21),
                     source_final_acceptance_id=None,
@@ -230,7 +231,16 @@ def test_contributions_refuse_wrong_scope_shape_lineage_and_duplicate_identity(c
             {"policy_version_number": 0},
             {"artifact_hash": "sha256:bad"},
             {"awards": [original["items"][0]["awards"][0] | {"quantity": "1e2"}]},
-            {"awards": [original["items"][0]["awards"][0] | {"instrument": "project_points", "unit": "POINTS", "quantity": "1.0"}]},
+            {
+                "awards": [
+                    original["items"][0]["awards"][0]
+                    | {
+                        "instrument": "project_points",
+                        "unit": "POINTS",
+                        "quantity": "1.0",
+                    }
+                ]
+            },
         ]
         for patch in mutations:
             value = deepcopy(original)
@@ -468,8 +478,13 @@ def test_contributions_redaction_and_failure_never_publish(cli, tmp_path):
             assert not target.exists()
 
 
-@pytest.mark.parametrize("instrument,unit,quantity", [("money", "USD", "000001.2300"), ("project_points", "POINTS", "00012")])
-def test_contributions_human_acceptance_and_leading_zero_quantities(cli, tmp_path, instrument, unit, quantity):
+@pytest.mark.parametrize(
+    "instrument,unit,quantity",
+    [("money", "USD", "000001.2300"), ("project_points", "POINTS", "00012")],
+)
+def test_contributions_human_acceptance_and_leading_zero_quantities(
+    cli, tmp_path, instrument, unit, quantity
+):
     value = evidence()
     item = value["items"][0]
     item.update(

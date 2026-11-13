@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from app.modules.tasks.api.transition_audit import TaskPolicyLineage
-from app.modules.contributions.api import TaskSize
+from app.core.financial_wire import TaskSize
 from app.modules.tasks.api.revision import ContributorRevisionContext
 from app.modules.tasks.api import ReadyTaskSummary, ManagementTaskSummary, OperationalTaskSummary
 

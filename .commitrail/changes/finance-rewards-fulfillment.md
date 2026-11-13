@@ -755,3 +755,57 @@ builder/current participation contracts passed 18 tests. The first external
 schema probe failed because its temporary script lacked the backend import
 path; the corrected probe used its actual backend working directory, completed
 and cleaned up its owned database/MinIO resources. No schema gate was bypassed.
+
+
+### Frozen root verification and current-custody probe correction
+
+Clean `0848d4bb9` passed 266 controls, both migration tests (282.83 seconds),
+and all six new root tests, including distinct-source commit/rollback contention.
+The combined native run then failed the newly lifted stopped-phase SQL probe:
+application replay had succeeded without writes, but the probe passed original
+admission generation 2 to a predicate requiring the current controller generation.
+This was a test-input error, not evidence for changing the production guard.
+The probe now passes the current transition receipt generation, independently
+asserts old-generation denial, and retains new-effect denial. No predicate or
+assertion was relaxed. The affected unpaid/money/points participation test also
+explicitly asserts zero-or-one root and exact initial handoff-event cardinality,
+including zero for unpaid. Both owned jobs completed PostgreSQL/MinIO cleanup.
+Further affected native tests were not executed after fail-fast and remain pending.
+
+
+Hosted checks on the frozen commit found affected consumer gaps: the TASK public
+API still imported CON solely for the size literal; the immutable-export
+inventory omitted the new frozen selection dataclass; MCP's valid runtime check
+needed explicit task-type narrowing for mypy; and five changed CLI fixtures
+needed canonical formatting. Repair scope includes those exact existing owners,
+`tests/architecture/test_module_boundaries.py`, shared `core/financial_wire.py`,
+CON size consumers and the five CLI fixture files. Move the one size literal to
+shared core and update every current import, removing the CON re-export without
+an alias. Keep TASK's no-business-dependency assertion and exact immutable-export
+inventory intact. Explicitly narrow malformed MCP task input before access and
+preserve its rejection behavior. Formatting changes do not alter test assertions.
+Two current docs also need the precise term Celery worker so the existing stale
+actor-vocabulary guard recognizes technical execution; the guard stays unchanged.
+Proof: actual architecture tests, MCP mypy/affected gateway contracts, formatting
+checks, current docs gates and affected native generation/participation cases.
+
+TASK revision candidates also deliberately reuse CON's canonical immutable
+`RewardSelectionFacts`, beyond the primitive size literal. That existing public
+edge carries governed selected terms and passes the repository dependency graph;
+replacing it with a duplicate TASK selection schema would add a parallel rule.
+The architecture test therefore retains exact inventory of that single public
+module and rejects every other cross-owner dependency, alongside its existing
+private-reexport and mutation denial probes. This explicitly supersedes the
+above intended no-business-dependency wording: no private or unregistered public
+edge is permitted; canonical CON immutable selection reuse remains intentional.
+No validator, ledger or CI gate is weakened or exempted.
+
+The CI repair development checks passed MCP strict mypy (26 source files), all
+31 existing task-execution/size gateway cases, all 98 CLI test-file formatting
+checks and Ruff. All current Markdown link, authorization, artifact and review
+wording gates passed. The broader control run had 302 passes and the one TASK
+public-edge inventory failure described above; the three repaired architecture
+probes then passed, including actual private-reexport denial and frozen selected
+terms. A mistaken initial MCP `-k` selector selected no tests and is not counted
+as evidence; the complete two actual task modules were run afterward. Native
+stopped-phase generation and affected contribution checks remain running.

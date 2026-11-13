@@ -418,7 +418,7 @@ Fulfillment state MUST NOT be stored by mutating the award.
 
 Before entering the live lifecycle phase, configure `WORKSTREAM_SOURCE_INSTANCE_ID`
 with one canonical UUIDv7 provisioned through `app.core.identifiers.new_record_id()`.
-Persist that value in deployment configuration and use it across all API and worker
+Persist that value in deployment configuration and use it across all API and Celery worker
 replicas and restarts. Missing configuration prevents activation; a value different
 from committed roots prevents further earning. Never mint an identity per process
 or rotate it to bypass retained source custody.

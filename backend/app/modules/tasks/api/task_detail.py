@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Protocol
 from uuid import UUID
 
-from app.modules.contributions.api import TaskSize
+from app.core.financial_wire import TaskSize
 from app.modules.tasks.api.ready_queue import TaskCompensationTerms, _aware
 from app.modules.tasks.api.assignment_outcome import TaskAssignmentOutcome
 from app.modules.tasks.api.revision import ContributorRevisionContext

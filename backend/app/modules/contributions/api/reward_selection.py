@@ -6,10 +6,9 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, StrictStr, model_validator
 
-from app.core.financial_wire import require_canonical_quantity
+from app.core.financial_wire import TaskSize, require_canonical_quantity
 from app.modules.compensation.api.instruments import CompensationInstrumentType
 
-TaskSize = Literal["small", "medium", "large"]
 _STRICT = ConfigDict(frozen=True, extra="forbid", strict=True, revalidate_instances="always")
 _Unit = Annotated[StrictStr, Field(pattern=r"^[A-Za-z][A-Za-z0-9._:-]{0,31}$")]
 

@@ -350,7 +350,9 @@ def test_manager_task_sizes_bind_current_response(cli, tmp_path):
             assert result.returncode == 0, result.stderr
             assert json.loads(result.stdout)["task_size"] == (size or "small")
             assert response["commands"][-1][-1] == payload
-            response["body"] = json.dumps(returned | {"task_size": "large" if size != "large" else "small"}).encode()
+            response["body"] = json.dumps(
+                returned | {"task_size": "large" if size != "large" else "small"}
+            ).encode()
             result = invoke(cli, origin, "create", file)
             assert result.returncode == 1 and result.stdout == ""
         file.write_text(json.dumps(INPUT))

@@ -1612,7 +1612,9 @@ class WorkstreamGateway:
             task = data.get("task")
             project = data.get("project")
             if name == "task_work_context_get":
-                terms = task.get("compensation") if isinstance(task, dict) else None
+                if not isinstance(task, dict):
+                    return False
+                terms = task.get("compensation")
                 if (not isinstance(terms, dict)
                         or task.get("task_size") not in ("small", "medium", "large")
                         or task["task_size"] != terms.get("task_size")):

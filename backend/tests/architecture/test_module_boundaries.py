@@ -250,10 +250,13 @@ def test_tasks_public_api_has_no_private_or_mutable_dependency() -> None:
     for path in api_files:
         imports.update(boundary.exact_source_imports(path, ROOT))
     assert imports
-    assert all(
-        not target.startswith("app.modules.") or target.startswith("app.modules.tasks.api")
-        for target in imports
-    )
+    cross_owner = {
+        target for target in imports
+        if target.startswith("app.modules.") and not target.startswith("app.modules.tasks.api")
+    }
+    # RevisionCandidate carries CON's canonical immutable selected terms.
+    # Keep this exact public edge; no other owner or private dependency is allowed.
+    assert cross_owner == {"app.modules.contributions.api.reward_selection"}
 
 
 def test_projects_public_api_has_no_private_or_mutable_dependency() -> None:
@@ -558,6 +561,7 @@ def test_policy_public_api_exports_immutable_contracts() -> None:
             "PolicyRuleView",
             "LockedCompensationAward",
             "LockedCompensationTerms",
+            "LockedCompensationSelection",
             "CompensationUnitCreateAuthorizationFacts",
             "ProjectCompensationUnitCreateRequest",
             "ProjectCompensationUnitCreateResult",
@@ -565,7 +569,8 @@ def test_policy_public_api_exports_immutable_contracts() -> None:
     }
     assert all(value.__dataclass_params__.frozen for value in public_dataclasses.values())
     for name in ("AcceptedSubmissionPolicyRuleInput", "CompletedReviewPolicyRuleInput",
-                 "UnpaidPolicyRuleInput", "TaskSizeQuantities"):
+                 "UnpaidPolicyRuleInput", "TaskSizeQuantities",
+                 "RewardSelectionRequest", "RewardSelectionFacts"):
         model = getattr(policy_api, name)
         assert model.model_config["frozen"] is True
         assert model.model_config["extra"] == "forbid"
