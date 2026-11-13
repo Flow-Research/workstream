@@ -147,7 +147,10 @@ async def test_expired_cleanup_claim_cannot_confirm_after_takeover(intake):
     await age_fixture(intake, operation)
     async with intake.factory.begin() as session:
         first = await owner(session).claim(operation, new_record_id(), lease_duration=timedelta(seconds=3))
-    await asyncio.sleep(3.1)
+    async with intake.factory() as session:
+        async with asyncio.timeout(15):
+            while not await session.scalar(text("SELECT clock_timestamp()>:expiry"), {"expiry": first.lease_expires_at}):
+                await asyncio.sleep(0.05)
     with pytest.raises(IntakeCustodyConflict, match="cleanup_stale"):
         async with intake.factory.begin() as session:
             await owner(session).claim(operation, first.claim_id, lease_duration=timedelta(minutes=5))
@@ -178,6 +181,17 @@ async def test_cleanup_lease_bound_is_enforced_by_owner_and_database(intake):
                 "(operation_id,claim_id,generation,source,claimed_at,lease_expires_at) "
                 "VALUES (:id,:claim,1,CAST(:source AS jsonb),clock_timestamp(),clock_timestamp()+interval '10 years')"),
                 {"id": operation, "claim": new_record_id(), "source": source})
+    # Caller clock samples are not authoritative. Preserve the finite duration,
+    # but rebase BOTH timestamps onto the trigger's single authoritative sample.
+    async with intake.factory.begin() as session:
+        await session.execute(text("INSERT INTO submission_source_cleanup_claims "
+            "(operation_id,claim_id,generation,source,claimed_at,lease_expires_at) "
+            "VALUES (:id,:claim,1,CAST(:source AS jsonb),statement_timestamp()+interval '1 hour',"
+            "statement_timestamp()+interval '1 hour 1 minute')"),
+            {"id": operation, "claim": new_record_id(), "source": source})
+        assert await session.scalar(text("SELECT claimed_at<=clock_timestamp() "
+            "AND lease_expires_at=claimed_at+interval '1 minute' "
+            "FROM submission_source_cleanup_claims WHERE operation_id=:id"), {"id": operation})
 
 
 async def retain_exact_key(session, operation):
@@ -212,3 +226,45 @@ async def test_retained_key_blocks_claim_and_claim_blocks_new_retention(intake):
     with pytest.raises(DBAPIError, match="claimed source cannot become retained"):
         async with intake.factory.begin() as session:
             await retain_exact_key(session, other)
+
+
+@pytest.mark.parametrize("first", ["claim", "retain"])
+async def test_claim_and_retention_serialize_at_database_lock(intake, first):
+    """Observe the competing SQL blocked on custody, then commit the winner."""
+    operation = await terminal_source(intake)
+    await age_fixture(intake, operation)
+    pid_ready = asyncio.get_running_loop().create_future()
+
+    async def act(session, action):
+        if action == "claim":
+            await owner(session).claim(operation, new_record_id(), lease_duration=timedelta(minutes=5))
+        else:
+            await retain_exact_key(session, operation)
+
+    async def competing():
+        try:
+            async with intake.factory.begin() as session:
+                pid_ready.set_result(await session.scalar(text("SELECT pg_backend_pid()")))
+                await act(session, "retain" if first == "claim" else "claim")
+        except DBAPIError as error:
+            return str(error)
+        return "unexpected success"
+
+    competitor = None
+    try:
+        async with intake.factory.begin() as session:
+            await act(session, first)
+            competitor = asyncio.create_task(competing())
+            async with asyncio.timeout(15):
+                pid = await pid_ready
+                while not await session.scalar(text("SELECT cardinality(pg_blocking_pids(:pid))"), {"pid": pid}):
+                    assert not competitor.done(), "competing operation escaped custody lock"
+                    await asyncio.sleep(0.01)
+            assert not competitor.done()
+        result = await asyncio.wait_for(competitor, timeout=15)
+        expected = "claimed source cannot become retained" if first == "claim" else "cleanup is protected"
+        assert expected in result
+    finally:
+        if competitor is not None and not competitor.done():
+            competitor.cancel()
+            await asyncio.gather(competitor, return_exceptions=True)

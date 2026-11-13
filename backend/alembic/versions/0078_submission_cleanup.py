@@ -88,7 +88,7 @@ BEGIN
 END $$;
 CREATE FUNCTION public.guard_submission_source_cleanup()
 RETURNS trigger LANGUAGE plpgsql SET search_path=pg_catalog,public,pg_temp AS $$
-DECLARE o public.submission_intake_operations%ROWTYPE; task_key uuid; expected jsonb;
+DECLARE o public.submission_intake_operations%ROWTYPE; task_key uuid; expected jsonb; lease_span interval;
 BEGIN
  IF TG_OP IN ('DELETE','TRUNCATE') THEN
    RAISE EXCEPTION 'source cleanup tombstone is retained' USING ERRCODE='23514'; END IF;
@@ -105,7 +105,9 @@ BEGIN
  IF TG_OP='INSERT' THEN
    IF NEW.generation<>1 OR NEW.confirmed_at IS NOT NULL THEN
      RAISE EXCEPTION 'source cleanup initial claim differs' USING ERRCODE='23514'; END IF;
+   lease_span:=NEW.lease_expires_at-NEW.claimed_at;
    NEW.claimed_at:=clock_timestamp();
+   NEW.lease_expires_at:=NEW.claimed_at+lease_span;
  ELSE
    IF OLD.confirmed_at IS NOT NULL THEN
      IF NEW IS DISTINCT FROM OLD THEN
@@ -122,7 +124,9 @@ BEGIN
    ELSE
      IF OLD.lease_expires_at>clock_timestamp() OR NEW.generation<>OLD.generation+1 OR NEW.confirmed_at IS NOT NULL THEN
        RAISE EXCEPTION 'source cleanup claim is busy' USING ERRCODE='23514'; END IF;
+     lease_span:=NEW.lease_expires_at-NEW.claimed_at;
      NEW.claimed_at:=clock_timestamp();
+     NEW.lease_expires_at:=NEW.claimed_at+lease_span;
    END IF;
  END IF;
  IF NEW.lease_expires_at<=clock_timestamp() THEN

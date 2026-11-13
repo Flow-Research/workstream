@@ -3445,3 +3445,20 @@ role that owns only its asserted `workstream_test_` database, and drains deferre
 checks before restoring the immutable-history trigger. No runner permissions or
 credential exposure changes. The focused final run includes all new cleanup
 cases, model parity, stalled accepted protection and existing T5 finalization.
+
+Focused repair run:9 passed/1 failed in225.63seconds, database cleanup complete
+(`/tmp/source-cleanup-custody2.log/json`). Stalled acceptance, both existing T5
+cases, serial retention barriers and the other cleanup paths passed. The failure
+occurred on a valid300-second claim: owner clock sample00:08:32.832117 preceded
+a trigger sample00:08:32.354489, so resetting only claimed_at made the duration
+appear overlong. Rebase both timestamps from one trigger sample while preserving
+the requested interval; the SQL300-second constraint still rejects long spans.
+A raw shifted-timestamp regression proves this correction. The new actual schema
+fingerprint is `ea88b39d4ba01e345a6ea036184cda3194d1aa95f303555bad005243acde50ca`.
+
+Add two-session races for both claim-first and retention-first, waiting for actual
+`pg_blocking_pids` evidence before committing the winner and asserting rejection
+of the loser. Lease-expiry tests likewise observe database time before takeover.
+The separate admission-pointer trigger remains code-inspected rather than directly
+race-tested; source acceptance/finalization protection is covered independently.
+No full admission-retention or provider-cleanup qualification claim follows.
