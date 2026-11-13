@@ -12,7 +12,7 @@ use std::path::{Component, Path, PathBuf};
 use std::process::Command;
 use std::sync::mpsc::{self, Sender, SyncSender};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use workstream_checker_guest::confinement::install_workload_filter;
 use workstream_checker_guest::{
     GuestCapabilities, GuestIoChannel, GuestIoHeader, GuestJob, GuestPurpose, MaterialRoot,
@@ -21,6 +21,7 @@ use workstream_checker_guest::{
 };
 use workstream_checker_sdk::parse_request;
 
+mod pre;
 mod trial;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
@@ -51,19 +52,22 @@ fn private_mounts() -> Result<()> {
     syscall_ok(unsafe { libc::unshare(libc::CLONE_NEWNS) })?;
     mount("", "/", "", libc::MS_REC | libc::MS_PRIVATE, "")
 }
-fn cgroups(cpu: u64, memory: u64) -> Result<()> {
+fn cgroups(cpu: u64, memory: u64, pids: u64) -> Result<()> {
     let root = Path::new("/sys/fs/cgroup");
     fs::write(root.join("cgroup.subtree_control"), "+cpu +memory +pids")?;
     let group = root.join("workstream-checker");
     fs::create_dir(&group)?;
-    fs::write(group.join("cpu.max"), format!("{} 100000", cpu * 100))?;
+    fs::write(
+        group.join("cpu.max"),
+        format!(
+            "{} 100000",
+            cpu.checked_mul(100).ok_or("CPU quota overflow")?
+        ),
+    )?;
     fs::write(group.join("memory.max"), memory.to_string())?;
     disable_swap(&group, Path::new("/proc/meminfo"))?;
     fs::write(group.join("memory.oom.group"), "1")?;
-    fs::write(
-        group.join("pids.max"),
-        (memory / (16 * 1024 * 1024)).clamp(16, 256).to_string(),
-    )?;
+    fs::write(group.join("pids.max"), pids.to_string())?;
     Ok(())
 }
 // Some fixed guest kernels omit the swap controller. In that case only a
@@ -285,11 +289,14 @@ fn create_capability_socket(path: &str, uid: u32, gid: u32) -> Result<UnixListen
 }
 
 fn write_guest_header(header: &GuestIoHeader) -> Result<()> {
+    write_guest_header_to(header, &mut std::io::stdout().lock())
+}
+
+fn write_guest_header_to(header: &GuestIoHeader, output: &mut impl Write) -> Result<()> {
     let bytes = serde_json::to_vec(header)?;
     if bytes.is_empty() || bytes.len() > 4096 {
         return Err("guest I/O header invalid".into());
     }
-    let mut output = std::io::stdout().lock();
     output.write_all(&(bytes.len() as u32).to_be_bytes())?;
     output.write_all(&bytes)?;
     output.flush()?;
@@ -531,7 +538,7 @@ fn confined_devices() -> Result<()> {
     Ok(())
 }
 
-fn readonly_filesystem() -> Result<()> {
+fn readonly_filesystem(scratch_bytes: u64) -> Result<()> {
     // mount_setattr recursively freezes every existing mount, including image
     // overlays and material. Then install the sole writable, bounded scratch.
     #[repr(C)]
@@ -586,7 +593,7 @@ fn readonly_filesystem() -> Result<()> {
         "/tmp",
         "tmpfs",
         libc::MS_NOSUID | libc::MS_NODEV | libc::MS_NOEXEC,
-        "size=16777216,mode=1777",
+        &format!("size={scratch_bytes},mode=1777"),
     )?;
     // Hide the management filesystem, cgroup controls and agent storage. Mounts
     // are private, so the supervisor outside this namespace remains functional.
@@ -617,6 +624,25 @@ fn drop_privileges(uid: u32, gid: u32) -> Result<()> {
     syscall_ok(unsafe { libc::prctl(libc::PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) })?;
     Ok(())
 }
+fn seal_exec_descriptors() -> Result<()> {
+    // Mark every non-stdio descriptor close-on-exec in the forked child. The
+    // command's intended stdin/stdout/stderr are duplicated onto 0/1/2 by exec.
+    // This also covers future trusted-worker pipes held by the PRE supervisor.
+    let result = unsafe {
+        libc::syscall(
+            libc::SYS_close_range,
+            3u32,
+            u32::MAX,
+            libc::CLOSE_RANGE_CLOEXEC,
+        )
+    };
+    if result == 0 {
+        Ok(())
+    } else {
+        Err(std::io::Error::last_os_error().into())
+    }
+}
+
 fn supervised_exit(status: i32, oom_kills: u64) -> i32 {
     if oom_kills > 0 {
         CAPACITY_EXIT_CODE
@@ -627,12 +653,15 @@ fn supervised_exit(status: i32, oom_kills: u64) -> i32 {
     }
 }
 
-fn finish_workload_cgroup() -> Result<u64> {
+fn finish_workload_cgroup(deadline: Option<Instant>) -> Result<u64> {
     let group = Path::new("/sys/fs/cgroup/workstream-checker");
     if group.join("cgroup.kill").exists() {
         fs::write(group.join("cgroup.kill"), "1")?;
     }
     for _ in 0..5000 {
+        if deadline.is_some_and(|value| Instant::now() >= value) {
+            return Err("project cleanup deadline exceeded".into());
+        }
         let events = fs::read_to_string(group.join("cgroup.events"))?;
         if events.lines().any(|line| line == "populated 0") {
             let memory = fs::read_to_string(group.join("memory.events"))?;
@@ -647,15 +676,145 @@ fn finish_workload_cgroup() -> Result<u64> {
     Err("workload descendants did not stop".into())
 }
 
+/// Captured child evidence. Returning it leaves the trusted supervisor alive
+/// for combined PRE validation; ordinary project execution emits its wire frame.
+struct ProjectOutcome {
+    status: i32,
+    oom_kills: u64,
+    output_exceeded: bool,
+    stdout: Vec<u8>,
+    stderr: Vec<u8>,
+}
+
+impl ProjectOutcome {
+    fn exit_code(&self) -> i32 {
+        if self.output_exceeded && self.oom_kills == 0 {
+            125
+        } else {
+            supervised_exit(self.status, self.oom_kills)
+        }
+    }
+
+    fn write_completion(&self, output: &mut impl Write) -> Result<()> {
+        write_guest_header_to(
+            &GuestIoHeader::Completed {
+                protocol_version: GUEST_IO_PROTOCOL.into(),
+                exit_code: libc::WIFEXITED(self.status).then(|| libc::WEXITSTATUS(self.status)),
+                signal: libc::WIFSIGNALED(self.status).then(|| libc::WTERMSIG(self.status)),
+                oom_kills: self.oom_kills,
+                output_exceeded: self.output_exceeded,
+                stdout_bytes: u32::try_from(self.stdout.len())?,
+                stderr_bytes: u32::try_from(self.stderr.len())?,
+            },
+            output,
+        )?;
+        output.write_all(&self.stdout)?;
+        output.write_all(&self.stderr)?;
+        output.flush()?;
+        Ok(())
+    }
+}
+
+/// Explicit project-child bounds. Ordinary Project retains its established
+/// policy-derived controls; PRE supplies its qualified partition and deadlines.
+#[derive(Clone, Copy)]
+struct ProjectLimits {
+    cpu_millis: u64,
+    memory_bytes: u64,
+    maximum_processes: u64,
+    scratch_bytes: u64,
+    maximum_output_bytes: usize,
+    maximum_log_bytes: usize,
+    deadline: Option<Instant>,
+    cleanup_deadline: Option<Instant>,
+}
+
+impl ProjectLimits {
+    fn check_run_deadline(&self) -> Result<()> {
+        if self
+            .deadline
+            .is_some_and(|deadline| Instant::now() >= deadline)
+        {
+            return Err("project deadline exceeded".into());
+        }
+        Ok(())
+    }
+
+    fn fork_project(&self) -> Result<libc::pid_t> {
+        self.check_run_deadline()?;
+        let child = unsafe { libc::fork() };
+        if child < 0 {
+            return Err(std::io::Error::last_os_error().into());
+        }
+        Ok(child)
+    }
+
+    fn validate(&self, capabilities: GuestCapabilities) -> Result<()> {
+        // PRE cannot enter a blocking model/trial relay while relying on this
+        // local deadline. Ordinary POST relays retain their host-owned budget.
+        if self.deadline.is_some() && (capabilities.model || capabilities.execution) {
+            return Err("deadline-controlled project capabilities invalid".into());
+        }
+        if self.cpu_millis == 0
+            || self.cpu_millis.checked_mul(100).is_none()
+            || self.memory_bytes == 0
+            || self.maximum_processes == 0
+            || self.scratch_bytes == 0
+            || self.maximum_output_bytes == 0
+            || self.maximum_log_bytes == 0
+            || u32::try_from(self.maximum_output_bytes).is_err()
+            || u32::try_from(self.maximum_log_bytes).is_err()
+        {
+            return Err("project resource bounds invalid".into());
+        }
+        match (self.deadline, self.cleanup_deadline) {
+            (None, None) => Ok(()),
+            (Some(run), Some(cleanup)) if Instant::now() < run && run <= cleanup => Ok(()),
+            _ => Err("project deadline bounds invalid".into()),
+        }
+    }
+}
+
+fn stop_project(child: libc::pid_t, group: &Path, deadline: Instant) -> Result<i32> {
+    // Kill the owned PID as well: it may not have joined its cgroup yet. The
+    // unreaped child PID cannot be reused for an unrelated process.
+    let group_kill = fs::write(group.join("cgroup.kill"), "1");
+    let killed = unsafe { libc::kill(child, libc::SIGKILL) };
+    if killed != 0 && std::io::Error::last_os_error().raw_os_error() != Some(libc::ESRCH) {
+        return Err(std::io::Error::last_os_error().into());
+    }
+    let mut status = 0;
+    loop {
+        let waited = unsafe { libc::waitpid(child, &mut status, libc::WNOHANG) };
+        if waited == child {
+            group_kill?;
+            return Ok(status);
+        }
+        if waited < 0 && std::io::Error::last_os_error().kind() != std::io::ErrorKind::Interrupted {
+            return Err(std::io::Error::last_os_error().into());
+        }
+        if Instant::now() >= deadline {
+            return Err("project cleanup deadline exceeded".into());
+        }
+        thread::sleep(Duration::from_millis(2));
+    }
+}
+
+fn exec_workload(setup: impl FnOnce() -> Result<()>) -> ! {
+    let _ = setup();
+    // Failed exec/setup belongs only to this child. Do not unwind into the
+    // PRE supervisor's worker guard or emit a trusted supervisor completion.
+    unsafe { libc::_exit(125) }
+}
+
 fn run_project(
     job: GuestJob,
     capabilities: GuestCapabilities,
     staged: StagedJob,
     mut input: File,
-    cpu: u64,
-    memory: u64,
-    maximum_output_bytes: usize,
-) -> Result<()> {
+    limits: ProjectLimits,
+) -> Result<ProjectOutcome> {
+    limits.validate(capabilities)?;
     bind_project_materials(&staged)?;
     let model = capabilities
         .model
@@ -667,66 +826,93 @@ fn run_project(
         .transpose()?;
     let (stdout_parent, stdout_child) = socket_pair()?;
     let (stderr_parent, stderr_child) = socket_pair()?;
-    cgroups(cpu, memory).map_err(|error| format!("cgroup: {error}"))?;
+    cgroups(
+        limits.cpu_millis,
+        limits.memory_bytes,
+        limits.maximum_processes,
+    )
+    .map_err(|error| format!("cgroup: {error}"))?;
     // The supervisor retains the trusted stream and capability listeners. The
     // workload receives separate output pipes, so it cannot forge mux frames.
-    let child = unsafe { libc::fork() };
-    if child < 0 {
-        return Err(std::io::Error::last_os_error().into());
-    }
+    let child = limits.fork_project()?;
     if child == 0 {
-        drop(stdout_parent);
-        drop(stderr_parent);
-        drop(model);
-        drop(execution);
-        drop(input);
-        private_mounts().map_err(|error| format!("workload mount namespace: {error}"))?;
-        fs::write(
-            "/sys/fs/cgroup/workstream-checker/cgroup.procs",
-            std::process::id().to_string(),
-        )?;
-        confined_devices().map_err(|error| format!("devices: {error}"))?;
-        readonly_filesystem().map_err(|error| format!("filesystem: {error}"))?;
-        drop_privileges(job.uid, job.gid).map_err(|error| format!("privileges: {error}"))?;
-        // SAFETY: both streams are live child-owned descriptors and dup2
-        // atomically replaces the conventional output descriptors.
-        if unsafe { libc::dup2(stdout_child.as_raw_fd(), 1) } < 0
-            || unsafe { libc::dup2(stderr_child.as_raw_fd(), 2) } < 0
-        {
-            return Err(std::io::Error::last_os_error().into());
-        }
-        drop(stdout_child);
-        drop(stderr_child);
-        install_workload_filter().map_err(|error| format!("syscall policy: {error}"))?;
-        let mut command = Command::new(&job.command[0]);
-        command
-            .args(&job.command[1..])
-            .env_clear()
-            .stdin(staged.request);
-        for entry in &job.environment {
-            let (key, value) = entry.split_once('=').ok_or("invalid image environment")?;
-            command.env(key, value);
-        }
-        command.current_dir(if job.working_directory.is_empty() {
-            "/"
-        } else {
-            &job.working_directory
+        exec_workload(|| {
+            drop(stdout_parent);
+            drop(stderr_parent);
+            drop(model);
+            drop(execution);
+            drop(input);
+            private_mounts().map_err(|error| format!("workload mount namespace: {error}"))?;
+            fs::write(
+                "/sys/fs/cgroup/workstream-checker/cgroup.procs",
+                std::process::id().to_string(),
+            )?;
+            confined_devices().map_err(|error| format!("devices: {error}"))?;
+            readonly_filesystem(limits.scratch_bytes)
+                .map_err(|error| format!("filesystem: {error}"))?;
+            drop_privileges(job.uid, job.gid).map_err(|error| format!("privileges: {error}"))?;
+            // SAFETY: both streams are live child-owned descriptors and dup2
+            // atomically replaces the conventional output descriptors.
+            if unsafe { libc::dup2(stdout_child.as_raw_fd(), 1) } < 0
+                || unsafe { libc::dup2(stderr_child.as_raw_fd(), 2) } < 0
+            {
+                return Err(std::io::Error::last_os_error().into());
+            }
+            drop(stdout_child);
+            drop(stderr_child);
+            seal_exec_descriptors().map_err(|error| format!("descriptor policy: {error}"))?;
+            install_workload_filter().map_err(|error| format!("syscall policy: {error}"))?;
+            let mut command = Command::new(&job.command[0]);
+            command
+                .args(&job.command[1..])
+                .env_clear()
+                .stdin(staged.request);
+            for entry in &job.environment {
+                let (key, value) = entry.split_once('=').ok_or("invalid image environment")?;
+                command.env(key, value);
+            }
+            command.current_dir(if job.working_directory.is_empty() {
+                "/"
+            } else {
+                &job.working_directory
+            });
+            limits.check_run_deadline()?;
+            Err(command.exec().into())
         });
-        return Err(command.exec().into());
     }
     drop(stdout_child);
     drop(stderr_child);
-    let stdout_reader = thread::spawn(move || read_bounded(stdout_parent, maximum_output_bytes));
-    let stderr_reader = thread::spawn(move || read_bounded(stderr_parent, 64 * 1024));
+    let stdout_reader =
+        thread::spawn(move || read_bounded(stdout_parent, limits.maximum_output_bytes));
+    let stderr_reader =
+        thread::spawn(move || read_bounded(stderr_parent, limits.maximum_log_bytes));
     let (exchange_sender, exchange_receiver) = mpsc::channel::<CapabilityExchange>();
     let mut sessions = Vec::new();
     let mut model_accepted = false;
     let mut execution_accepted = false;
     let mut sequence = 0_u32;
     let mut status = 0_i32;
+    let deadline_exceeded;
     loop {
         let waited = unsafe { libc::waitpid(child, &mut status, libc::WNOHANG) };
         if waited == child {
+            deadline_exceeded = limits
+                .deadline
+                .is_some_and(|deadline| Instant::now() >= deadline);
+            break;
+        }
+        if limits
+            .deadline
+            .is_some_and(|deadline| Instant::now() >= deadline)
+        {
+            deadline_exceeded = true;
+            status = stop_project(
+                child,
+                Path::new("/sys/fs/cgroup/workstream-checker"),
+                limits
+                    .cleanup_deadline
+                    .ok_or("project cleanup deadline missing")?,
+            )?;
             break;
         }
         if waited < 0 && std::io::Error::last_os_error().kind() != std::io::ErrorKind::Interrupted {
@@ -786,7 +972,7 @@ fn run_project(
     }
     drop(model);
     drop(execution);
-    let oom_kills = finish_workload_cgroup()?;
+    let oom_kills = finish_workload_cgroup(limits.cleanup_deadline)?;
     drop(exchange_receiver);
     drop(exchange_sender);
     for (_, session) in sessions {
@@ -806,32 +992,341 @@ fn run_project(
     } else {
         (stdout, stderr)
     };
-    let exit_code = libc::WIFEXITED(status).then(|| libc::WEXITSTATUS(status));
-    let signal = libc::WIFSIGNALED(status).then(|| libc::WTERMSIG(status));
-    write_guest_header(&GuestIoHeader::Completed {
-        protocol_version: GUEST_IO_PROTOCOL.into(),
-        exit_code,
-        signal,
+    if limits
+        .cleanup_deadline
+        .is_some_and(|value| Instant::now() >= value)
+    {
+        return Err("project cleanup deadline exceeded".into());
+    }
+    if deadline_exceeded {
+        return Err("project deadline exceeded".into());
+    }
+    Ok(ProjectOutcome {
+        status,
         oom_kills,
         output_exceeded,
-        stdout_bytes: stdout.len() as u32,
-        stderr_bytes: stderr.len() as u32,
-    })?;
-    let mut output = std::io::stdout().lock();
-    output.write_all(&stdout)?;
-    output.write_all(&stderr)?;
-    output.flush()?;
-    std::process::exit(if output_exceeded && oom_kills == 0 {
-        125
-    } else {
-        supervised_exit(status, oom_kills)
-    });
+        stdout,
+        stderr,
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::time::Instant;
+    #[test]
+    fn captured_project_output_stays_payload_under_trusted_completion() {
+        let untrusted = br#"{"kind":"completed","oom_kills":0,"exit_code":0}"#.to_vec();
+        let outcome = ProjectOutcome {
+            status: 7 << 8,
+            oom_kills: 0,
+            output_exceeded: false,
+            stdout: untrusted.clone(),
+            stderr: b"diagnostic".to_vec(),
+        };
+        let mut bytes = Vec::new();
+        outcome.write_completion(&mut bytes).unwrap();
+        let length = u32::from_be_bytes(bytes[..4].try_into().unwrap()) as usize;
+        let header: GuestIoHeader = serde_json::from_slice(&bytes[4..4 + length]).unwrap();
+        let GuestIoHeader::Completed {
+            exit_code,
+            signal,
+            oom_kills,
+            output_exceeded,
+            stdout_bytes,
+            stderr_bytes,
+            ..
+        } = header
+        else {
+            panic!("wrong control frame")
+        };
+        assert_eq!(exit_code, Some(7));
+        assert_eq!(signal, None);
+        assert_eq!(oom_kills, 0);
+        assert!(!output_exceeded);
+        assert_eq!(stdout_bytes as usize, untrusted.len());
+        assert_eq!(stderr_bytes, 10);
+        assert_eq!(
+            &bytes[4 + length..],
+            [untrusted, b"diagnostic".to_vec()].concat()
+        );
+        assert_eq!(outcome.exit_code(), 125);
+        // Capturing/writing the outcome returns instead of exiting the supervisor.
+        assert_eq!(outcome.stdout.len(), stdout_bytes as usize);
+    }
+
+    #[test]
+    fn captured_project_exit_preserves_trusted_oom_and_output_classification() {
+        for (status, oom_kills, output_exceeded, expected) in [
+            (0, 0, false, 0),
+            (0, 0, true, 125),
+            (CAPACITY_EXIT_CODE << 8, 0, false, 125),
+            (libc::SIGKILL, 1, false, CAPACITY_EXIT_CODE),
+            (libc::SIGKILL, 1, true, CAPACITY_EXIT_CODE),
+        ] {
+            let outcome = ProjectOutcome {
+                status,
+                oom_kills,
+                output_exceeded,
+                stdout: Vec::new(),
+                stderr: Vec::new(),
+            };
+            assert_eq!(outcome.exit_code(), expected);
+        }
+    }
+
+    #[test]
+    fn exec_descriptor_sealing_is_child_local_and_keeps_stdio() {
+        let source = File::open("/dev/null").unwrap();
+        // Deliberately inheritable, unlike Rust's normal CLOEXEC file opens.
+        let descriptor = unsafe { libc::fcntl(source.as_raw_fd(), libc::F_DUPFD, 200) };
+        assert!(descriptor >= 200);
+        let owned = unsafe { File::from_raw_fd(descriptor) };
+        assert_eq!(
+            unsafe { libc::fcntl(descriptor, libc::F_GETFD) } & libc::FD_CLOEXEC,
+            0
+        );
+        let (mut output, child_output) = UnixStream::pair().unwrap();
+        output
+            .set_read_timeout(Some(Duration::from_secs(5)))
+            .unwrap();
+        let mut command = Command::new("/bin/sh");
+        command
+            .arg("-c")
+            .arg(format!(
+                "test ! -e /proc/self/fd/{descriptor} && printf 'sealed'"
+            ))
+            .stdin(source)
+            .stdout(std::process::Stdio::from(File::from(
+                std::os::fd::OwnedFd::from(child_output),
+            )))
+            .stderr(std::process::Stdio::null());
+        let child = unsafe { libc::fork() };
+        assert!(child >= 0);
+        if child == 0 {
+            if seal_exec_descriptors().is_err() {
+                unsafe { libc::_exit(1) };
+            }
+            // Same Command::exec stdio setup used by the workload path. The
+            // high inherited descriptor must disappear, while stdout survives.
+            let _error = command.exec();
+            unsafe { libc::_exit(2) };
+        }
+        drop(command);
+        let mut status = 0;
+        assert_eq!(unsafe { libc::waitpid(child, &mut status, 0) }, child);
+        assert!(libc::WIFEXITED(status));
+        assert_eq!(libc::WEXITSTATUS(status), 0);
+        let mut bytes = Vec::new();
+        output.read_to_end(&mut bytes).unwrap();
+        assert_eq!(bytes, b"sealed");
+        assert_eq!(
+            unsafe { libc::fcntl(owned.as_raw_fd(), libc::F_GETFD) } & libc::FD_CLOEXEC,
+            0
+        );
+    }
+
+    #[test]
+    fn explicit_project_limits_refuse_zero_overflow_and_partial_deadlines() {
+        let valid = ProjectLimits {
+            cpu_millis: 1000,
+            memory_bytes: 1024,
+            maximum_processes: 3,
+            scratch_bytes: 4096,
+            maximum_output_bytes: 1024,
+            maximum_log_bytes: 512,
+            deadline: Some(Instant::now() + Duration::from_secs(5)),
+            cleanup_deadline: Some(Instant::now() + Duration::from_secs(6)),
+        };
+        let closed = GuestCapabilities {
+            model: false,
+            execution: false,
+        };
+        assert!(valid.validate(closed).is_ok());
+        assert!(valid
+            .validate(GuestCapabilities {
+                model: true,
+                execution: false
+            })
+            .is_err());
+        assert!(valid
+            .validate(GuestCapabilities {
+                model: false,
+                execution: true
+            })
+            .is_err());
+        for limits in [
+            ProjectLimits {
+                cpu_millis: u64::MAX,
+                ..valid
+            },
+            ProjectLimits {
+                memory_bytes: 0,
+                ..valid
+            },
+            ProjectLimits {
+                maximum_processes: 0,
+                ..valid
+            },
+            ProjectLimits {
+                scratch_bytes: 0,
+                ..valid
+            },
+            ProjectLimits {
+                maximum_output_bytes: 0,
+                ..valid
+            },
+            ProjectLimits {
+                maximum_log_bytes: 0,
+                ..valid
+            },
+            ProjectLimits {
+                deadline: None,
+                ..valid
+            },
+            ProjectLimits {
+                cleanup_deadline: None,
+                ..valid
+            },
+            ProjectLimits {
+                deadline: Some(Instant::now()),
+                ..valid
+            },
+            ProjectLimits {
+                cleanup_deadline: Some(Instant::now()),
+                ..valid
+            },
+        ] {
+            assert!(limits.validate(closed).is_err());
+        }
+    }
+
+    #[test]
+    fn failed_child_setup_cannot_unwind_supervisor_custody() {
+        struct Guard(i32);
+        impl Drop for Guard {
+            fn drop(&mut self) {
+                unsafe {
+                    libc::write(self.0, b"x".as_ptr().cast(), 1);
+                }
+            }
+        }
+        let (mut parent, child_pipe) = socket_pair().unwrap();
+        let child = unsafe { libc::fork() };
+        assert!(child >= 0);
+        if child == 0 {
+            drop(parent);
+            let _guard = Guard(child_pipe.as_raw_fd());
+            exec_workload(|| Err("controlled setup failure".into()));
+        }
+        drop(child_pipe);
+        let mut status = 0;
+        assert_eq!(unsafe { libc::waitpid(child, &mut status, 0) }, child);
+        let mut marker = [0];
+        assert_eq!(
+            parent.read(&mut marker).unwrap(),
+            0,
+            "child ran supervisor destructor"
+        );
+        assert!(libc::WIFEXITED(status));
+        assert_eq!(libc::WEXITSTATUS(status), 125);
+    }
+
+    #[test]
+    fn project_launch_refuses_deadline_consumed_by_setup() {
+        let mut limits = ProjectLimits {
+            cpu_millis: 1000,
+            memory_bytes: 1024,
+            maximum_processes: 3,
+            scratch_bytes: 4096,
+            maximum_output_bytes: 1024,
+            maximum_log_bytes: 512,
+            deadline: None,
+            cleanup_deadline: None,
+        };
+        let child = limits.fork_project().unwrap();
+        if child == 0 {
+            unsafe { libc::_exit(0) };
+        }
+        let mut status = 0;
+        assert_eq!(unsafe { libc::waitpid(child, &mut status, 0) }, child);
+        assert!(libc::WIFEXITED(status));
+        assert_eq!(libc::WEXITSTATUS(status), 0);
+
+        let deadline = Instant::now() + Duration::from_millis(50);
+        limits.deadline = Some(deadline);
+        limits.cleanup_deadline = Some(deadline + Duration::from_secs(1));
+        limits
+            .validate(GuestCapabilities {
+                model: false,
+                execution: false,
+            })
+            .unwrap();
+        // Stand in for setup consuming the allowance after initial validation.
+        while Instant::now() < deadline {
+            thread::sleep(Duration::from_millis(1));
+        }
+        match limits.fork_project() {
+            Err(error) => assert_eq!(error.to_string(), "project deadline exceeded"),
+            Ok(0) => unsafe { libc::_exit(0) },
+            Ok(child) => {
+                unsafe {
+                    libc::waitpid(child, std::ptr::null_mut(), 0);
+                }
+                panic!("expired setup launched a project child");
+            }
+        }
+        assert!(limits.check_run_deadline().is_err());
+    }
+
+    #[test]
+    fn project_stop_kills_and_reaps_child_before_cgroup_membership() {
+        // Real owned PID race; a file stands in only for the cgroup command
+        // sink. Neither case claims kernel cgroup isolation qualification.
+        let root = std::env::temp_dir().join(format!("ws-project-stop-{}", std::process::id()));
+        fs::create_dir(&root).unwrap();
+        for group_available in [true, false] {
+            let child = unsafe { libc::fork() };
+            assert!(child >= 0);
+            if child == 0 {
+                loop {
+                    unsafe {
+                        libc::pause();
+                    }
+                }
+            }
+            let group = if group_available {
+                root.clone()
+            } else {
+                root.join("missing")
+            };
+            let stopped = stop_project(child, &group, Instant::now() + Duration::from_secs(5));
+            // Observe custody before fallback cleanup: even a failed cgroup
+            // command must kill/reap the directly owned child and fail closed.
+            let reaped = unsafe { libc::waitpid(child, std::ptr::null_mut(), libc::WNOHANG) };
+            let error = std::io::Error::last_os_error().raw_os_error();
+            if reaped == 0 {
+                unsafe {
+                    libc::kill(child, libc::SIGKILL);
+                    libc::waitpid(child, std::ptr::null_mut(), 0);
+                }
+            }
+            if reaped != -1 || error != Some(libc::ECHILD) {
+                fs::remove_dir_all(&root).unwrap();
+                panic!("owned project child was not reaped");
+            }
+            if group_available {
+                let status = stopped.unwrap();
+                assert!(libc::WIFSIGNALED(status));
+                assert_eq!(libc::WTERMSIG(status), libc::SIGKILL);
+                assert_eq!(fs::read(group.join("cgroup.kill")).unwrap(), b"1");
+            } else {
+                assert!(stopped.is_err());
+            }
+        }
+        fs::remove_dir_all(root).unwrap();
+    }
+
     #[test]
     fn mount_targets_reject_image_symlinks_and_non_directories() {
         let root = std::env::temp_dir().join(format!("ws-guest-mounts-{}", std::process::id()));
@@ -1087,7 +1582,15 @@ fn main() {
     }
 }
 fn run() -> Result<()> {
-    let bootstrap_limits = trial::parse_bootstrap_limits(std::env::args_os().skip(1))?;
+    let mut arguments = std::env::args_os().skip(1).peekable();
+    if arguments
+        .peek()
+        .is_some_and(|value| value == workstream_checker_guest::pre_bootstrap::PRE_LIMITS_ARGUMENT)
+    {
+        arguments.next();
+        return pre::bootstrap::run(arguments);
+    }
+    let bootstrap_limits = trial::parse_bootstrap_limits(arguments)?;
     let trial_envelope = bootstrap_limits
         .map(trial::TrialEnvelope::prepare)
         .transpose()?;
@@ -1176,15 +1679,24 @@ fn run() -> Result<()> {
     }
     if let GuestPurpose::Project { capabilities, .. } = &purpose {
         let request = parse_request(&serde_json::to_vec(&job.request)?)?;
-        return run_project(
+        let outcome = run_project(
             job,
             *capabilities,
             staged,
             input,
-            cpu,
-            memory,
-            request.maximum_output_bytes,
-        );
+            ProjectLimits {
+                cpu_millis: cpu,
+                memory_bytes: memory,
+                maximum_processes: (memory / (16 * 1024 * 1024)).clamp(16, 256),
+                scratch_bytes: 16 * 1024 * 1024,
+                maximum_output_bytes: request.maximum_output_bytes,
+                maximum_log_bytes: 64 * 1024,
+                deadline: None,
+                cleanup_deadline: None,
+            },
+        )?;
+        outcome.write_completion(&mut std::io::stdout().lock())?;
+        std::process::exit(outcome.exit_code());
     }
     drop(input);
     bind_material_root(&staged, "archive", INPUT_ROOT)?;
@@ -1194,7 +1706,8 @@ fn run() -> Result<()> {
         syscall_ok(unsafe { libc::chown(c("/work/scratch")?.as_ptr(), job.uid, job.gid) })?;
         fs::set_permissions("/work/scratch", fs::Permissions::from_mode(0o700))?;
     }
-    cgroups(cpu, memory).map_err(|e| format!("cgroup: {e}"))?;
+    cgroups(cpu, memory, (memory / (16 * 1024 * 1024)).clamp(16, 256))
+        .map_err(|e| format!("cgroup: {e}"))?;
     // The trusted, single-threaded supervisor stays outside the workload cgroup
     // so an OOM cannot destroy the kernel evidence before it is classified.
     // stdin's lock has been dropped and no other threads exist at this fork.
@@ -1229,7 +1742,7 @@ fn run() -> Result<()> {
         std::process::id().to_string(),
     )?;
     confined_devices().map_err(|e| format!("devices: {e}"))?;
-    readonly_filesystem().map_err(|e| format!("filesystem: {e}"))?;
+    readonly_filesystem(16 * 1024 * 1024).map_err(|e| format!("filesystem: {e}"))?;
     if matches!(purpose, GuestPurpose::TrustedIntake { .. }) {
         // Only the trusted worker receives private VM-disk scratch. Project
         // workloads retain their existing bounded tmpfs-only writable surface.
@@ -1242,6 +1755,7 @@ fn run() -> Result<()> {
         )?;
     }
     drop_privileges(job.uid, job.gid).map_err(|e| format!("privileges: {e}"))?;
+    seal_exec_descriptors().map_err(|e| format!("descriptor policy: {e}"))?;
     install_workload_filter().map_err(|e| format!("syscall policy: {e}"))?;
     let mut command = Command::new(&job.command[0]);
     command.args(&job.command[1..]).env_clear();

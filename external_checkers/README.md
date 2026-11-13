@@ -458,3 +458,77 @@ This matrix proves the adapter/ART boundary. The separate
 connects the same node to API uploads and durable workers, including the public
 Operator retry and both governed policy branches. Its recorded Flow/inference
 fixtures do not certify production identity, live models or hosted deployment.
+
+### Trusted root provisioning for single-session PRE development
+
+`backend/scripts/checker_trusted_root.py` provisions a separate pinned Python
+root for the single-session PRE supervisor under development. This command and
+the guest bundle reader do not yet replace the current submission PRE flow or
+establish native runtime qualification.
+
+The command constructs its root directly from the approved local image graph
+validated by the existing Smol cache provisioner. Docker-exported files are not
+used: live verification demonstrated changed file bytes behind an unchanged
+Docker image ID. Ordered layers supply exact content, regular hardlink identities,
+whiteouts and replacements. A restricted platform profile rejects unsupported
+entries and ambiguous link ancestry instead of treating this as a generic image
+extractor. Files are held in a bounded private byte spool, never extracted to
+host paths, and rehashed while writing the final bundle.
+
+Run the module from `backend/` with `--archive`, `--repository`, `--manifest`,
+`--archive-output` and `--config-output` as for the cache command. Also supply
+new `--bundle-output` and `--descriptor-output` paths,
+`--default-behavior-sha256`, `--maximum-archive-bytes`, `--maximum-layer-bytes`, `--maximum-root-bytes`,
+`--maximum-entries`, and `--timeout-seconds`. Bounds and identities are explicit;
+the command does not choose deployment values. The archive byte limit bounds
+both the source archive and prepared cache, including zero padding. The layer byte limit bounds
+aggregate expansion per verification pass, including both selected and approved
+layer representations; it also bounds the private content spool. Entry limits
+include replaced layer entries, physical extension headers and implicit final
+directories. A raw-header pass admits only one bounded local PAX path/linkpath
+override before a supported entry; global, stacked, size-changing and
+other extension semantics are refused before the tar parser runs. Temporary storage
+must accommodate the verified cache, one bounded expanded layer, the content
+spool and output bundle. Keep emitted artifacts operator-controlled and pin their
+identities independently before use. Completed cache files may remain if later
+bundle provisioning fails; a partial bundle/descriptor never establishes readiness.
+
+The `WSROOT1` format carries bounded closed JSON records and inline regular-file
+bytes. Hard links become independently charged file content; symlinks are
+installed last. No image paths are extracted on the host. The guest library
+verifies the entire bounded spool and descriptor, stages into a fresh private
+root, and rechecks consumed bytes before returning. It opens the supervisor-owned
+private parent without following its final symlink and anchors staging through
+that held directory descriptor. The caller must provide the private parent,
+aggregate deadline/cancellation checks, and capacity for both
+the spool and expanded root, then mount the root read-only before executing a
+trusted child. The PRE guest bootstrap calls this verifier. Host `execute_pre`
+dispatch now admits an explicitly configured profile, creates one journaled
+session and streams the root and ZIP into it with bounded buffers. Its invocation
+response includes runtime pins, timing and cleanup custody. Python adapter and
+CHECKERS retention of that envelope, the complete qualification/conformance
+contract, and native isolation proof remain required before end-to-end use.
+This library alone does not authorize project execution.
+Cleanup restores owned directory permissions after late staging failures; an
+underlying filesystem cleanup error is propagated and cannot establish released
+capacity. Relative and absolute symlink targets that traverse above the root are
+refused before installation.
+
+### Portable PRE dialogue proof
+
+With the frozen backend environment installed, run from the repository root:
+
+```bash
+WORKSTREAM_PRE_WORKER_PYTHON="$PWD/backend/.venv/bin/python" \
+  cargo +1.84.0 test --manifest-path external_checkers/Cargo.toml --locked \
+  -p workstream-checker-guest --bin workstream-checker-guest \
+  --features pre-dialogue-proof \
+  pre::bootstrap::dialogue_proof::live_python_worker_dialogue -- --exact --test-threads=1
+```
+
+This test runs the real Python worker on ZIP bytes through the Rust supervisor's
+socket dialogue and validates the received completion with Python's typed owner
+contract. The project result is a protocol sentinel; this does not qualify native
+mounts, cgroups, root images or one-VM execution. The checker CI job requires this
+test and rejects empty selection or ignored execution. The Cargo feature affects
+only test code and introduces no runtime entry point.

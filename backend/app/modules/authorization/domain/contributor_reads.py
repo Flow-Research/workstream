@@ -31,12 +31,14 @@ class ActorProjectListResourceContext(BaseModel):
 
 ContributorWorkResourceType = Literal[
     "actor_assignment_collection", "actor_submission_collection", "actor_work_summary",
+    "submission_operation_read",
     "task_submission_bundle_preparation_collection", "submission_bundle_preparation_read",
 ]
 _ACTOR_WIDE = frozenset({
     "actor_assignment_collection", "actor_submission_collection", "actor_work_summary",
 })
 WORK_RESOURCE_BY_ACTION = {
+    ActionId.TASK_SUBMISSION_OPERATION_READ: "submission_operation_read",
     ActionId.ACTOR_ASSIGNMENT_LIST: "actor_assignment_collection",
     ActionId.ACTOR_SUBMISSION_LIST: "actor_submission_collection",
     ActionId.ACTOR_WORK_SUMMARY_READ: "actor_work_summary",

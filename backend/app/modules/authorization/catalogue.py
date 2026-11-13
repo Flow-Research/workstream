@@ -97,6 +97,7 @@ class PermissionId(StrEnum):
     ARTIFACT_RECOVERY_ATTEMPT_READ = "artifact.recovery_attempt.read"
     ARTIFACT_AUDIT_READ = "artifact.audit.read"
     ARTIFACT_GUIDE_SOURCE_INGEST = "artifact.guide_source.ingest"
+    ARTIFACT_SOURCE_CLEANUP = "artifact.submission_source.cleanup"
     ARTIFACT_BINDING_CREATE = "artifact.binding.create"
     ARTIFACT_VERIFICATION_EXECUTE = "artifact.verification.execute"
     ARTIFACT_PENDING_WORK_SCAN = "artifact.pending_work.scan"
@@ -113,6 +114,8 @@ class PermissionId(StrEnum):
 class ActionId(StrEnum):
     """Closed action identifiers reserved by approved owner chunks."""
 
+    SUBMISSION_INTAKE_RESERVE = "submission.intake.reserve"
+    TASK_SUBMISSION_OPERATION_READ = "task.submission_operation.read"
     TASK_SUBMISSION_LIST = "task.submission.list"
     SUBMISSION_READ = "submission.read"
     SUBMISSION_CHECKER_RUN_LIST = "submission.checker_run.list"
@@ -270,6 +273,8 @@ class ActionId(StrEnum):
     ARTIFACT_TASK_IMPORT_SOURCE_READ = "artifact.task_import_source.read"
     ARTIFACT_GUIDE_SOURCE_READ = "artifact.guide_source.read"
     ARTIFACT_SUBMISSION_BUNDLE_PREPARE = "artifact.submission_bundle.prepare"
+    ARTIFACT_SOURCE_CLEANUP = "artifact.submission_source.cleanup"
+    ARTIFACT_SUBMISSION_FINALIZE = "artifact.submission.finalize"
     ARTIFACT_SUBMISSION_BINDING_CREATE = "artifact.submission.binding.create"
     ARTIFACT_CHECKER_OUTPUT_BINDING_CREATE = "artifact.checker_output.binding.create"
     ARTIFACT_VERIFICATION_EXECUTE = "artifact.verification.execute"
@@ -325,6 +330,7 @@ CONTRIBUTOR_WORK_READ_ACTIONS = frozenset(
         ActionId.ACTOR_WORK_SUMMARY_READ,
         ActionId.TASK_SUBMISSION_BUNDLE_PREPARATION_LIST,
         ActionId.TASK_SUBMISSION_BUNDLE_PREPARATION_READ,
+        ActionId.TASK_SUBMISSION_OPERATION_READ,
     }
 )
 CONTRIBUTOR_READ_ACTIONS = CONTRIBUTOR_WORK_READ_ACTIONS | {ActionId.ACTOR_PROJECT_LIST}
@@ -396,6 +402,7 @@ class ActionOwner(StrEnum):
     PILOT_05 = "PILOT-05"
     PILOT_08 = "PILOT-08"
     PILOT_10 = "PILOT-10"
+    SUBMISSION_INTAKE = "WS-SUBMIT-001"
     PILOT_READ_2 = "PILOT-READ-2"
     CLI_46 = "WS-CLI-001-46"
     PILOT_READ_3 = "PILOT-READ-3"
@@ -548,6 +555,7 @@ NEW_PERMISSION_IDS = frozenset(
         PermissionId.ARTIFACT_AUDIT_READ,
         PermissionId.TASK_POST_SUBMIT_ROUTE,
         PermissionId.ARTIFACT_GUIDE_SOURCE_INGEST,
+        PermissionId.ARTIFACT_SOURCE_CLEANUP,
         PermissionId.ARTIFACT_BINDING_CREATE,
         PermissionId.ARTIFACT_VERIFICATION_EXECUTE,
         PermissionId.ARTIFACT_PENDING_WORK_SCAN,
@@ -563,9 +571,9 @@ HISTORICAL_PERMISSION_IDS = PERMISSION_IDS - NEW_PERMISSION_IDS
 
 def _require_catalogue_counts() -> None:
     """Keep the closed action inventory and permission boundary exact."""
-    if len(PERMISSION_IDS) != 94 or len(ACTION_IDS) != 190:
+    if len(PERMISSION_IDS) != 95 or len(ACTION_IDS) != 194:
         raise RuntimeError("authorization catalogue count mismatch")
-    if len(HISTORICAL_PERMISSION_IDS) != 49 or len(NEW_PERMISSION_IDS) != 45:
+    if len(HISTORICAL_PERMISSION_IDS) != 49 or len(NEW_PERMISSION_IDS) != 46:
         raise RuntimeError("authorization permission boundary mismatch")
 
 
@@ -693,9 +701,12 @@ _ACTIVE_ACTION_BOUNDARY = frozenset(
         ActionId.OPERATIONS_ARTIFACT_STORAGE_ADMISSION_READ,
         ActionId.ARTIFACT_GUIDE_SOURCE_INGEST,
         ActionId.ARTIFACT_GUIDE_SOURCE_READ,
+        ActionId.SUBMISSION_INTAKE_RESERVE,
         ActionId.ARTIFACT_SUBMISSION_BUNDLE_PREPARE,
         ActionId.SUBMISSION_CREATE,
         ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE,
+        ActionId.ARTIFACT_SOURCE_CLEANUP,
+        ActionId.ARTIFACT_SUBMISSION_FINALIZE,
         ActionId.ARTIFACT_CHECKER_OUTPUT_BINDING_CREATE,
         ActionId.ARTIFACT_VERIFICATION_EXECUTE,
         ActionId.ARTIFACT_PENDING_WORK_SCAN,
@@ -764,6 +775,7 @@ def _index_actions(
         ActionId.PROJECT_TASK_SUBMISSION_REQUIREMENTS_READ,
         ActionId.AUDIT_TASK_EVIDENCE_READ,
         ActionId.OPERATIONS_CHECKER_RETRY,
+        ActionId.OPERATIONS_SUBMISSION_GATE_REPAIR,
         ActionId.OPERATIONS_CHECKER_RETRY_SOURCE_LIST,
         ActionId.OPERATIONS_POST_SUBMIT_DELIVERY_LIST,
         ActionId.OPERATIONS_POST_SUBMIT_DELIVERY_RECONCILE,
@@ -806,9 +818,11 @@ _SERVICE_ACTIONS = {
     ServiceIdentity.ARTIFACT_VERIFIER: frozenset({ActionId.ARTIFACT_VERIFICATION_EXECUTE}),
     ServiceIdentity.ARTIFACT_PUT_RESOLVER: frozenset({ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE}),
     ServiceIdentity.ARTIFACT_SCHEDULER: frozenset({ActionId.ARTIFACT_PENDING_WORK_SCAN}),
+    ServiceIdentity.ARTIFACT_SOURCE_CLEANUP: frozenset({ActionId.ARTIFACT_SOURCE_CLEANUP}),
     ServiceIdentity.ARTIFACT_BINDING: frozenset(
         {
             ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE,
+            ActionId.ARTIFACT_SUBMISSION_FINALIZE,
             ActionId.ARTIFACT_CHECKER_OUTPUT_BINDING_CREATE,
             ActionId.ARTIFACT_REVIEW_EVIDENCE_BINDING_CREATE,
         }
@@ -872,6 +886,8 @@ _EXPECTED_SERVICE_ACTION_MEMBERSHIPS = frozenset(
         (ServiceIdentity.ARTIFACT_PUT_RESOLVER, ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE),
         (ServiceIdentity.ARTIFACT_SCHEDULER, ActionId.ARTIFACT_PENDING_WORK_SCAN),
         (ServiceIdentity.ARTIFACT_BINDING, ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE),
+        (ServiceIdentity.ARTIFACT_SOURCE_CLEANUP, ActionId.ARTIFACT_SOURCE_CLEANUP),
+        (ServiceIdentity.ARTIFACT_BINDING, ActionId.ARTIFACT_SUBMISSION_FINALIZE),
         (ServiceIdentity.ARTIFACT_BINDING, ActionId.ARTIFACT_CHECKER_OUTPUT_BINDING_CREATE),
         (ServiceIdentity.ARTIFACT_BINDING, ActionId.ARTIFACT_REVIEW_EVIDENCE_BINDING_CREATE),
         (ServiceIdentity.ARTIFACT_GUIDE_READER, ActionId.ARTIFACT_GUIDE_SOURCE_READ),
@@ -938,6 +954,8 @@ _ACTIVE_SERVICE_ACTIONS = {
     ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE,
     ActionId.ARTIFACT_PENDING_WORK_SCAN,
     ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE,
+    ActionId.ARTIFACT_SOURCE_CLEANUP,
+    ActionId.ARTIFACT_SUBMISSION_FINALIZE,
     ActionId.ARTIFACT_CHECKER_OUTPUT_BINDING_CREATE,
     ActionId.ARTIFACT_GUIDE_SOURCE_READ,
     ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE,
@@ -1027,6 +1045,12 @@ _SERVICE_ACTION_METADATA = {
     ActionId.ARTIFACT_PENDING_WORK_SCAN: (
         PermissionId.ARTIFACT_PENDING_WORK_SCAN,
         ActionOwner.AUTH_ART_02D_INTERNAL,
+    ),
+    ActionId.ARTIFACT_SOURCE_CLEANUP: (
+        PermissionId.ARTIFACT_SOURCE_CLEANUP, ActionOwner.AUTH_ART_02D_INTERNAL,
+    ),
+    ActionId.ARTIFACT_SUBMISSION_FINALIZE: (
+        PermissionId.ARTIFACT_BINDING_CREATE, ActionOwner.AUTH_ART_05,
     ),
     ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE: (
         PermissionId.ARTIFACT_BINDING_CREATE,

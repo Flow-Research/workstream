@@ -18,6 +18,7 @@ from pathlib import Path
 import re
 import stat
 import tarfile
+import time
 
 from scripts.checker_image_manifest import DIGEST, verify_platform_manifest
 from scripts.checker_image_process import ImageError
@@ -28,11 +29,22 @@ MAX_HEADERS = 4096
 BLOCK = 512
 
 
-def digest(stream) -> str:
-    value = hashlib.sha256()
+def _counted_digest(stream, maximum_bytes=None, deadline=None):
+    value, count = hashlib.sha256(), 0
     while chunk := stream.read(1024 * 1024):
+        count += len(chunk)
+        if maximum_bytes is not None and count > maximum_bytes:
+            raise ImageError("image verification byte limit exceeded")
+        if deadline is not None and time.monotonic() >= deadline:
+            raise ImageError("image verification deadline exceeded")
         value.update(chunk)
-    return "sha256:" + value.hexdigest()
+    if deadline is not None and time.monotonic() >= deadline:
+        raise ImageError("image verification deadline exceeded")
+    return "sha256:" + value.hexdigest(), count
+
+
+def digest(stream, *, maximum_bytes=None, deadline=None) -> str:
+    return _counted_digest(stream, maximum_bytes, deadline)[0]
 
 
 @dataclass(frozen=True)
@@ -44,15 +56,20 @@ class Member:
 class MemberReader:
     """Read one preflighted regular member without interpreting tar extensions."""
 
-    def __init__(self, source, member: Member):
+    def __init__(self, source, member: Member, deadline=None):
         self.source, self.member, self.position = source, member, 0
+        self.deadline = deadline
         self.hash = hashlib.sha256()
 
     def read(self, size=-1):
+        if self.deadline is not None and time.monotonic() >= self.deadline:
+            raise ImageError("image member deadline exceeded")
         remaining = self.member.size - self.position
         size = remaining if size < 0 else min(size, remaining)
         self.source.seek(self.member.offset + self.position)
         data = self.source.read(size)
+        if self.deadline is not None and time.monotonic() >= self.deadline:
+            raise ImageError("image member deadline exceeded")
         if len(data) != size:
             raise ImageError("image member changed while reading")
         self.position += len(data)
@@ -81,13 +98,17 @@ def _path(name: str) -> None:
         raise ImageError("noncanonical archive path")
 
 
-def _preflight(source, length: int) -> dict[str, Member]:
+def _preflight(source, length: int, *, maximum_bytes=None, deadline=None) -> dict[str, Member]:
     """Bound raw headers before any tar parser can consume extension metadata."""
     if not length or length % BLOCK:
         raise ImageError("invalid archive length")
+    if maximum_bytes is not None and length > maximum_bytes:
+        raise ImageError("image archive byte limit exceeded")
     files, directories, ancestors = {}, set(), set()
     offset = count = 0
     while offset + BLOCK <= length:
+        if deadline is not None and time.monotonic() >= deadline:
+            raise ImageError("image archive preflight deadline exceeded")
         source.seek(offset)
         header = source.read(BLOCK)
         if len(header) != BLOCK:
@@ -98,10 +119,14 @@ def _preflight(source, length: int) -> dict[str, Member]:
             source.seek(offset)
             remaining = length - offset
             while remaining:
+                if deadline is not None and time.monotonic() >= deadline:
+                    raise ImageError("image archive preflight deadline exceeded")
                 chunk = source.read(min(remaining, 1024 * 1024))
                 if not chunk or any(chunk):
                     raise ImageError("archive trailer contains data")
                 remaining -= len(chunk)
+            if deadline is not None and time.monotonic() >= deadline:
+                raise ImageError("image archive preflight deadline exceeded")
             return files
         count += 1
         if count > MAX_HEADERS:
@@ -150,10 +175,10 @@ def _json(raw: bytes):
     return json.loads(raw, object_pairs_hook=unique)
 
 
-def _graph(source, members, manifest_digest):
+def _graph(source, members, manifest_digest, *, maximum_layer_bytes=None, deadline=None):
     def regular(name):
         _path(name)
-        return MemberReader(source, members[name])
+        return MemberReader(source, members[name], deadline)
 
     def metadata(name, maximum=MAX_METADATA):
         if not 0 < members[name].size <= maximum:
@@ -186,6 +211,7 @@ def _graph(source, members, manifest_digest):
         raise ImageError("rootfs layer count differs")
     expected = {platform_path: manifest_digest, config_path: config_id}
     approved_layers = set()
+    remaining = maximum_layer_bytes
     for name, diff_id, descriptor in zip(layers, diff_ids, descriptors, strict=True):
         if not isinstance(diff_id, str) or DIGEST.fullmatch(diff_id) is None:
             raise ImageError("rootfs digest is invalid")
@@ -201,14 +227,17 @@ def _graph(source, members, manifest_digest):
         for selected, approved_digest in ((approved, descriptor["digest"]), (name, None)):
             if not isinstance(selected, str) or selected == "manifest.json":
                 raise ImageError("invalid selected layer")
-            raw_digest = digest(regular(selected))
+            raw_digest = digest(regular(selected), maximum_bytes=maximum_layer_bytes, deadline=deadline)
             if approved_digest is not None and raw_digest != approved_digest:
                 raise ImageError("approved layer blob digest differs")
             reader = regular(selected)
             magic = reader.read(2)
             reader = regular(selected)
             expanded = gzip.GzipFile(fileobj=reader) if magic == b"\x1f\x8b" else reader
-            if digest(expanded) != diff_id:
+            observed, count = _counted_digest(expanded, remaining, deadline)
+            if remaining is not None:
+                remaining -= count
+            if observed != diff_id:
                 raise ImageError("rootfs layer digest differs")
             if selected in expected and expected[selected] != raw_digest:
                 raise ImageError("image graph path conflicts")
@@ -239,15 +268,16 @@ def _tar_info(name, size):
     return info
 
 
-def _copy_member(bundle, source, name, member, expected_digest):
-    reader = MemberReader(source, member)
+def _copy_member(bundle, source, name, member, expected_digest, deadline=None):
+    reader = MemberReader(source, member, deadline)
     bundle.addfile(_tar_info(name, member.size), reader)
     if reader.position != member.size or "sha256:" + reader.hash.hexdigest() != expected_digest:
         raise ImageError("source image graph changed during copy")
 
 
 def provision(archive: Path, repository: str, manifest_digest: str, *,
-              archive_output: Path, config_output: Path) -> dict:
+              archive_output: Path, config_output: Path,
+              maximum_layer_bytes=None, maximum_archive_bytes=None, deadline=None) -> dict:
     created = []
     try:
         if DIGEST.fullmatch(manifest_digest) is None:
@@ -262,8 +292,9 @@ def provision(archive: Path, repository: str, manifest_digest: str, *,
             if not stat.S_ISREG(before.st_mode):
                 raise ImageError("source archive is not regular")
             identity = _identity(before)
-            members = _preflight(source, before.st_size)
-            manifest, config_id, raw_config, wrapper, expected = _graph(source, members, manifest_digest)
+            members = _preflight(source, before.st_size, maximum_bytes=maximum_archive_bytes, deadline=deadline)
+            manifest, config_id, raw_config, wrapper, expected = _graph(
+                source, members, manifest_digest, maximum_layer_bytes=maximum_layer_bytes, deadline=deadline)
             for name in expected:
                 _tar_info(name, members[name].size)
             _unchanged(source, archive, identity)
@@ -271,7 +302,9 @@ def provision(archive: Path, repository: str, manifest_digest: str, *,
                 with tarfile.open(fileobj=cache, mode="w", format=tarfile.USTAR_FORMAT) as bundle:
                     bundle.addfile(_tar_info("manifest.json", len(wrapper)), io.BytesIO(wrapper))
                     for name in sorted(expected):
-                        _copy_member(bundle, source, name, members[name], expected[name])
+                        _copy_member(bundle, source, name, members[name], expected[name], deadline)
+                if maximum_archive_bytes is not None and cache.tell() > maximum_archive_bytes:
+                    raise ImageError("prepared image archive byte limit exceeded")
                 # This body is the same approved config copied and rehashed above.
                 config.write(raw_config)
                 _unchanged(source, archive, identity)
@@ -280,7 +313,7 @@ def provision(archive: Path, repository: str, manifest_digest: str, *,
                     os.fchmod(output.fileno(), 0o400)
                     os.fsync(output.fileno())
                 cache.seek(0)
-                archive_digest = digest(cache)
+                archive_digest = digest(cache, deadline=deadline)
                 for path, device, inode in created:
                     current = path.lstat()
                     if (current.st_dev, current.st_ino) != (device, inode):

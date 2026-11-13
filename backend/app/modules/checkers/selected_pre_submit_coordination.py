@@ -13,6 +13,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.identifiers import new_record_id
+from app.modules.artifacts.api.submission_intake import SubmissionIntakePreSourcePort
 from app.modules.checkers.api.selected_pre_submit import (
     PreparedSelectedPreSubmitExecution,
     PreparedSelectedPreSubmitFinalization,
@@ -20,6 +21,7 @@ from app.modules.checkers.api.selected_pre_submit import (
     SelectedPreSubmitCurrentFacts,
     SelectedPreSubmitExecuteFacts,
     SelectedPreSubmitExecutionFacts,
+    SelectedPreSubmitInvocationReceipt,
     SelectedPreSubmitFinalizeFacts,
     SelectedPreSubmitLeaseFacts,
     SelectedPreSubmitReservationFacts,
@@ -28,6 +30,7 @@ from app.modules.checkers.api.selected_pre_submit import (
     SelectedPreSubmitUnavailable,
 )
 from app.modules.checkers.models import SelectedPreSubmitRun
+from app.modules.checkers.selected_pre_submit_records import matches_source_request, matches_terminal
 
 
 class SelectedPreSubmitTaskGuard(Protocol):
@@ -182,26 +185,6 @@ def _require_root(session: AsyncSession) -> None:
         raise RuntimeError("selected PRE coordination requires one root transaction")
 
 
-def _matches(row: SelectedPreSubmitRun, facts: SelectedPreSubmitReservationFacts) -> bool:
-    return (
-        row.request_json == facts.canonical_body()
-        and row.request_digest == facts.request_digest
-        and row.id == str(facts.attempt_id)
-        and row.actor_profile_id == str(facts.actor_profile_id)
-        and row.identity_link_id == str(facts.identity_link_id)
-        and row.project_id == str(facts.project_id)
-        and row.task_id == str(facts.task_id)
-        and row.assignment_id == str(facts.assignment_id)
-        and row.idempotency_key == str(facts.idempotency_key)
-        and row.prepared_generation_id == str(facts.prepared_generation_id)
-        and row.policy_sha256 == facts.policy_sha256
-        and row.default_behavior_sha256 == facts.default_behavior_sha256
-        and row.default_input_sha256 == facts.default_input_sha256
-        and row.archive_sha256 == facts.archive_sha256
-        and row.archive_byte_count == facts.archive_byte_count
-        and row.semantic_manifest_sha256 == facts.semantic_manifest_sha256
-        and row.execution_budget_ms == facts.execution_budget_ms
-    )
 
 
 class SelectedPreSubmitCoordinator:
@@ -212,9 +195,11 @@ class SelectedPreSubmitCoordinator:
         session: AsyncSession,
         *,
         tasks: SelectedPreSubmitTaskGuard,
+        sources: SubmissionIntakePreSourcePort,
     ) -> None:
         self._session = session
         self._tasks = tasks
+        self._sources = sources
         self._capability: SelectedPreSubmitAdmissionCapability | None = None
         self._execution_capability: SelectedPreSubmitExecutionCapability | None = None
 
@@ -225,7 +210,7 @@ class SelectedPreSubmitCoordinator:
         _require_root(self._session)
         if type(facts) is not SelectedPreSubmitReservationFacts:
             raise TypeError("selected PRE reservation facts are invalid")
-        await self._tasks.lock_selected_pre_submit_scope(facts)
+        await self._lock_source(facts)
         row = await self._session.scalar(
             select(SelectedPreSubmitRun)
             .where(
@@ -239,6 +224,10 @@ class SelectedPreSubmitCoordinator:
         )
         if row is None:
             return None
+        if row.request_json.get("schema_version") != "workstream.selected_pre_submit_reservation.v2":
+            raise SelectedPreSubmitRequestConflict("selected_pre_submit_request_conflict")
+        if row.terminal_json is not None and row.terminal_json.get("schema_version") != "workstream.selected_pre_submit_terminal.v3":
+            raise SelectedPreSubmitRequestConflict("selected_pre_submit_request_conflict")
         try:
             stored = SelectedPreSubmitReservationFacts.from_canonical_body(
                 row.request_json
@@ -246,30 +235,22 @@ class SelectedPreSubmitCoordinator:
             normalized = replace(
                 facts,
                 attempt_id=stored.attempt_id,
-                prepared_generation_id=stored.prepared_generation_id,
             )
             terminal = (
                 SelectedPreSubmitTerminalFacts.from_canonical_body(row.terminal_json)
                 if row.terminal_json is not None
                 else None
             )
+            terminal_matches = matches_terminal(row, stored, terminal)
         except (TypeError, ValueError):
             raise SelectedPreSubmitUnavailable(
                 "selected_pre_submit_stored_facts_invalid"
             ) from None
         if (
             normalized != stored
-            or not _matches(row, stored)
+            or not matches_source_request(row, stored)
             or row.request_digest != stored.request_digest
-            or (
-                terminal is not None
-                and (
-                    terminal.terminal_digest != row.terminal_digest
-                    or terminal.lease.reservation != stored
-                    or terminal.execution is not None
-                    and terminal.execution.eligible != row.eligible
-                )
-            )
+            or not terminal_matches
         ):
             raise SelectedPreSubmitRequestConflict(
                 "selected_pre_submit_request_conflict"
@@ -281,12 +262,58 @@ class SelectedPreSubmitCoordinator:
             terminal=terminal,
         )
 
+    async def read_accepted_terminal(self, *, run_id: UUID, source_operation_id: UUID,
+                                     terminal_digest: str) -> SelectedPreSubmitTerminalFacts:
+        """Read exact retained v3 evidence; ART independently owns accepted custody."""
+        _require_root(self._session)
+        row = await self._session.get(SelectedPreSubmitRun, str(run_id))
+        if (row is None or row.source_operation_id != str(source_operation_id)
+                or row.status != "completed" or row.eligible is not True
+                or row.terminal_digest != terminal_digest or row.execute_evidence_id is None
+                or row.finalize_evidence_id is None
+                or row.request_json.get("schema_version") != "workstream.selected_pre_submit_reservation.v2"
+                or row.terminal_json.get("schema_version") != "workstream.selected_pre_submit_terminal.v3"):
+            raise SelectedPreSubmitUnavailable("selected_pre_submit_stored_facts_invalid")
+        try:
+            request = SelectedPreSubmitReservationFacts.from_canonical_body(row.request_json)
+            terminal = SelectedPreSubmitTerminalFacts.from_canonical_body(row.terminal_json)
+            if not matches_source_request(row, request) or not matches_terminal(row, request, terminal):
+                raise ValueError("retained PRE differs")
+        except (TypeError, ValueError):
+            raise SelectedPreSubmitUnavailable("selected_pre_submit_stored_facts_invalid") from None
+        await self._session.execute(text("SELECT public.require_selected_pre_invocation(r) "
+            "FROM public.selected_pre_submit_runs r WHERE id=:id"), {"id": row.id})
+        return terminal
+
+    async def lock_acceptance(
+        self, *, run_id: UUID, facts: SelectedPreSubmitReservationFacts, terminal_digest: str,
+    ) -> SelectedPreSubmitTerminalFacts:
+        """Lock an exact current eligible terminal for the caller's T4 transaction.
+
+        Unlike ordinary actor/key replay, acceptance cannot normalize another run
+        identity. The ART accepted reference consumes this evidence atomically;
+        this read neither mutates immutable PRE facts nor issues a capability.
+        """
+        if type(facts) is not SelectedPreSubmitReservationFacts or facts.attempt_id != run_id:
+            raise SelectedPreSubmitRequestConflict("selected_pre_submit_request_conflict")
+        current = await self.read_current(facts)
+        if (current is None or current.run_id != run_id or current.reservation != facts
+                or current.status != "completed" or current.terminal is None
+                or current.terminal.terminal_digest != terminal_digest
+                or current.terminal.execution is None or current.terminal.execution.eligible is not True
+                or current.terminal.invocation_receipt is None):
+            raise SelectedPreSubmitUnavailable("selected_pre_submit_acceptance_unavailable")
+        row = await self._session.get(SelectedPreSubmitRun, str(run_id))
+        if row.execute_evidence_id is None or row.finalize_evidence_id is None:
+            raise SelectedPreSubmitUnavailable("selected_pre_submit_acceptance_unavailable")
+        return current.terminal
+
     async def reserve(self, facts: SelectedPreSubmitReservationFacts) -> UUID:
         """Acquire TASK custody before the CHECKERS key and exact request row."""
         _require_root(self._session)
         if type(facts) is not SelectedPreSubmitReservationFacts:
             raise TypeError("selected PRE reservation facts are invalid")
-        await self._tasks.lock_selected_pre_submit_scope(facts)
+        await self._lock_source(facts)
         await self._session.execute(
             text("select pg_advisory_xact_lock(hashtextextended(:key,0))"),
             {
@@ -310,7 +337,7 @@ class SelectedPreSubmitCoordinator:
             .execution_options(populate_existing=True)
         )
         if row is not None:
-            if not _matches(row, facts):
+            if not matches_source_request(row, facts):
                 raise SelectedPreSubmitUnavailable("selected_pre_submit_request_conflict")
             return UUID(row.id)
         row = SelectedPreSubmitRun(
@@ -321,15 +348,16 @@ class SelectedPreSubmitCoordinator:
             task_id=str(facts.task_id),
             assignment_id=str(facts.assignment_id),
             idempotency_key=str(facts.idempotency_key),
-            prepared_generation_id=str(facts.prepared_generation_id),
+            source_operation_id=str(facts.source.location.operation_id),
+            prepared_generation_id=None,
             request_json=facts.canonical_body(),
             request_digest=facts.request_digest,
             policy_sha256=facts.policy_sha256,
             default_behavior_sha256=facts.default_behavior_sha256,
-            default_input_sha256=facts.default_input_sha256,
+            default_input_sha256=None,
             archive_sha256=facts.archive_sha256,
             archive_byte_count=facts.archive_byte_count,
-            semantic_manifest_sha256=facts.semantic_manifest_sha256,
+            semantic_manifest_sha256=None,
             execution_budget_ms=facts.execution_budget_ms,
             status="queued",
             lease_generation=0,
@@ -354,11 +382,15 @@ class SelectedPreSubmitCoordinator:
             raise SelectedPreSubmitUnavailable("selected_pre_submit_lease_unavailable")
         now = await self._session.scalar(select(func.clock_timestamp()))
         assert now is not None
+        if now >= facts.pre_deadline_at:
+            raise SelectedPreSubmitUnavailable("selected_pre_submit_deadline_expired")
         lease = SelectedPreSubmitLeaseFacts(
             reservation=facts,
             lease_id=new_record_id(),
             lease_generation=row.lease_generation + 1,
-            lease_expires_at=now + timedelta(milliseconds=facts.execution_budget_ms),
+            lease_expires_at=min(
+                facts.pre_deadline_at, now + timedelta(milliseconds=facts.execution_budget_ms)
+            ),
         )
         execute_facts = SelectedPreSubmitExecuteFacts(lease)
         evidence = await authority.consume(execute_facts)
@@ -431,6 +463,7 @@ class SelectedPreSubmitCoordinator:
         lease: SelectedPreSubmitLeaseFacts,
         authority: PreparedSelectedPreSubmitFinalization,
         execution: SelectedPreSubmitExecutionFacts | None,
+        invocation_receipt: SelectedPreSubmitInvocationReceipt | None,
         infrastructure_failure_code: str | None,
     ) -> SelectedPreSubmitCompletion:
         """Fence the lease and persist one exact terminal value under fresh TASK custody."""
@@ -451,6 +484,7 @@ class SelectedPreSubmitCoordinator:
         finalize_facts = SelectedPreSubmitFinalizeFacts(
             lease=lease,
             execution=execution,
+            invocation_receipt=invocation_receipt,
             infrastructure_failure_code=infrastructure_failure_code,
         )
         evidence = await authority.consume(finalize_facts)
@@ -460,6 +494,7 @@ class SelectedPreSubmitCoordinator:
             lease=lease,
             outcome=outcome,
             execution=execution,
+            invocation_receipt=invocation_receipt,
             infrastructure_failure_code=infrastructure_failure_code,
             queued_at=row.queued_at,
             started_at=row.started_at,
@@ -472,15 +507,31 @@ class SelectedPreSubmitCoordinator:
         row.finalize_evidence_id = str(evidence.evidence_id)
         row.completed_at = completed_at
         await self._session.flush()
-        capability = (
-            SelectedPreSubmitAdmissionCapability._issued(
-                owner=self, run_id=run_id, terminal=terminal
-            )
-            if execution is not None and execution.eligible
-            else None
+        # Source-bound evidence cannot mint the removed prepared-bundle handoff.
+        # Acceptance is the separate fresh-fenced T4 transaction.
+        return SelectedPreSubmitCompletion(terminal=terminal, capability=None)
+
+    async def _lock_source(self, facts: SelectedPreSubmitReservationFacts) -> None:
+        """Hold TASK then exact live ART custody before any CHECKERS row lock."""
+        await self._tasks.lock_selected_pre_submit_scope(facts)
+        current = await self._sources.lock_pre_source(
+            source=facts.source, lease_id=facts.foreground_lease_id,
+            generation=facts.foreground_lease_generation,
         )
-        self._capability = capability
-        return SelectedPreSubmitCompletion(terminal=terminal, capability=capability)
+        if (
+            current.source != facts.source
+            or current.project_id != facts.project_id
+            or current.task_id != facts.task_id
+            or current.assignment_id != facts.assignment_id
+            or current.actor_profile_id != facts.actor_profile_id
+            or current.identity_link_id != facts.identity_link_id
+            or current.metadata_sha256 != facts.metadata_sha256
+            or current.locked_context_sha256 != facts.locked_context_sha256
+            or current.lease_id != facts.foreground_lease_id
+            or current.lease_generation != facts.foreground_lease_generation
+            or current.pre_deadline_at != facts.pre_deadline_at
+        ):
+            raise SelectedPreSubmitUnavailable("selected_pre_submit_source_changed")
 
     async def _lock(
         self, *, run_id: UUID, facts: SelectedPreSubmitReservationFacts
@@ -488,7 +539,7 @@ class SelectedPreSubmitCoordinator:
         _require_root(self._session)
         if not isinstance(run_id, UUID) or type(facts) is not SelectedPreSubmitReservationFacts:
             raise SelectedPreSubmitUnavailable("selected_pre_submit_run_unavailable")
-        await self._tasks.lock_selected_pre_submit_scope(facts)
+        await self._lock_source(facts)
         row = await self._session.scalar(
             select(SelectedPreSubmitRun)
             .where(
@@ -500,7 +551,7 @@ class SelectedPreSubmitCoordinator:
             .with_for_update()
             .execution_options(populate_existing=True)
         )
-        if row is None or not _matches(row, facts):
+        if row is None or not matches_source_request(row, facts):
             raise SelectedPreSubmitUnavailable("selected_pre_submit_run_unavailable")
         return row
 

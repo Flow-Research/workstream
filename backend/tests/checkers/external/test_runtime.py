@@ -25,6 +25,7 @@ from app.adapters.checkers import (
 from app.adapters.checkers.external_service import (
     EXTERNAL_CHECKER_CAPABILITY_KEY,
     EXTERNAL_CHECKER_PROVIDER_KEY,
+    UnixSocketExternalCheckerAdapter,
 )
 from app.core.config import Settings
 from app.core.hashing import canonical_json_hash
@@ -90,7 +91,8 @@ def _request(*, identity=None, archive_sha256=SHA, archive_byte_count=4):
         materials=(
             PreSubmitExternalCheckerMaterial(
                 role="submission_archive",
-                prepared_generation_id=identity.prepared_generation_id,
+                operation_id=identity.operation_id, source_sha256=identity.source_sha256,
+            lease_id=identity.lease_id, lease_generation=identity.lease_generation,
                 attempt_id=identity.attempt_id,
                 attempt_request_digest=identity.attempt_request_digest,
                 archive_sha256=archive_sha256,
@@ -112,7 +114,7 @@ def test_shared_rust_fixtures_preserve_python_contract_and_derived_digests():
     result.validate_request(request)
     assert request.configuration == {"threshold": 1e-6}
     assert request.request_digest == (
-        "sha256:a06707b14348ffe5ef22a55de8d4ec4845c9029da7180d5731fb2c120b5591f3"
+        "sha256:147cd4a72624caf97ec7ee167d00e1f76d2a9c89d0bda84134b6f1ac01a47a79"
     )
     changed = request.model_dump(mode="json")
     changed["configuration"]["threshold"] = 2e-6
@@ -420,9 +422,8 @@ async def test_prepared_zip_issues_request_bound_grant_only_inside_callback(tmp_
     )
     inspection = await prepared.inspect(inspector)
     manifest = build_submission_manifest(inspection)
-    identity = execution_identity().model_copy(
-        update={"prepared_generation_id": prepared.generation_id}
-    )
+    # Scratch lifetime is private ART custody, not part of the source PRE wire identity.
+    identity = execution_identity()
     request = _request(
         identity=identity,
         archive_sha256=prepared.commitment.sha256,
@@ -1115,3 +1116,211 @@ async def test_public_trace_preserves_execution_arguments(monkeypatch, tmp_path,
     assert [json.loads(line)["event"] for line in trace.read_text().splitlines()] == [
         "project_started", "project_completed",
     ]
+
+
+def _pre_transport_processor(lease, socket, changed):
+    """Exercise direct transport and both real production composition wrappers."""
+    from app.modules.checkers.selected_pre_submit_execution import SelectedPreSubmitProcessor
+    adapter = UnixSocketExternalCheckerAdapter(
+        socket_path=socket, timeout_seconds=0.2 if changed == "slow_decode" else 5.0,
+    )
+    if changed in {"configured", "model_wrapper"}:
+        from app.adapters.checkers import (
+            selected_pre_submit_checker_execution, configured_post_submit_external_execution,
+            SelectedPreSubmitCheckerExecutionAdapter,
+        )
+        settings = Settings(
+            external_checker_service_socket=socket,
+            external_checker_material_root=socket.parent / "scratch",
+            artifact_scratch_root=socket.parent / "scratch",
+        )
+        if changed == "configured":
+            processor = selected_pre_submit_checker_execution(settings=settings).build(lease)
+        else:
+            def forbidden_sessions():
+                raise AssertionError("PRE must not request model authority")
+            wrapped = configured_post_submit_external_execution(settings, sessions=forbidden_sessions)
+            processor = SelectedPreSubmitCheckerExecutionAdapter(external_execution=wrapped).build(lease)
+    else:
+        processor = SelectedPreSubmitProcessor(lease=lease, execution=adapter)
+    return processor
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("changed", [None, "source_hash", "source_short", "source_long", "result_fence", "trailing", "chunk_oversized", "slow_decode", "managed_runtime", "provider_from_wire", "configured", "model_wrapper"])
+async def test_single_pre_transport_streams_source_and_validates_combined_result(tmp_path, monkeypatch, changed):
+    from dataclasses import replace
+    from app.modules.checkers.api.selected_pre_submit import SelectedPreSubmitLeaseFacts
+    from app.modules.checkers.api.selected_pre_submit import SelectedPreSubmitInfrastructureUnavailable
+    from tests.checkers.external.test_selected_pre_submit_coordination import (
+        _source_reservation, _source_completed_execution,
+    )
+
+    payload = b"controlled transport bytes" * 4000
+    reservation = _source_reservation()
+    reservation = replace(reservation, source=reservation.source.model_copy(update={
+        "raw_sha256": "sha256:" + hashlib.sha256(payload).hexdigest(),
+        "raw_byte_count": len(payload),
+    }))
+    execution = _source_completed_execution(reservation)
+    lease = SelectedPreSubmitLeaseFacts(
+        reservation, execution.lease_id, execution.lease_generation, reservation.pre_deadline_at,
+    )
+    from tests.checkers.external.test_pre_invocation import receipt_body
+    body = receipt_body(lease, managed=changed == "managed_runtime")
+    body.pop("adapter_provider_key")
+    if changed == "provider_from_wire":
+        body["adapter_provider_key"] = "unix_socket"
+    body["execution"] = execution.canonical_body()
+    if changed == "result_fence":
+        body["invocation"]["lease_generation"] += 1
+    received = bytearray()
+    sizes = []
+    finished = asyncio.Event()
+    requests = []
+
+    async def handle(reader, writer):
+        try:
+            size = struct.unpack(">I", await reader.readexactly(4))[0]
+            requests.append(json.loads(await reader.readexactly(size)))
+            while True:
+                size = struct.unpack(">I", await reader.readexactly(4))[0]
+                if size == 0:
+                    break
+                sizes.append(size)
+                received.extend(await reader.readexactly(size))
+            response = json.dumps(body).encode()
+            writer.write(struct.pack(">I", len(response)) + response)
+            if changed == "trailing":
+                writer.write(b"extra")
+            await writer.drain()
+        except (asyncio.IncompleteReadError, ConnectionResetError):
+            pass  # A refused source must close transport before the EOF marker.
+        finally:
+            writer.close()
+            await writer.wait_closed()
+            finished.set()
+
+    class Grant:
+        closed = False
+        calls = 0
+
+        async def open_source(self, *, lease):
+            assert lease == expected_lease
+            self.calls += 1
+            try:
+                data = (payload[:-1] if changed == "source_short" else
+                        payload + b"!" if changed == "source_long" else
+                        b"x" * len(payload) if changed == "source_hash" else payload)
+                if changed == "chunk_oversized":
+                    yield data
+                else:
+                    for offset in range(0, len(data), 16 * 1024):
+                        yield data[offset:offset + 16 * 1024]
+            finally:
+                self.closed = True
+
+    decode_called = []
+    if changed == "slow_decode":
+        import time
+        from app.modules.checkers.api.selected_pre_submit import SelectedPreSubmitExecutionFacts
+        decode = SelectedPreSubmitExecutionFacts.from_canonical_body
+        def delayed_decode(cls, value):
+            decode_called.append(True)
+            time.sleep(0.3)
+            return decode(value)
+        monkeypatch.setattr(SelectedPreSubmitExecutionFacts, "from_canonical_body", classmethod(delayed_decode))
+    expected_lease = lease
+    grant = Grant()
+    socket = tmp_path / "pre.sock"
+    server = await asyncio.start_unix_server(handle, socket)
+    processor = _pre_transport_processor(lease, socket, changed)
+    try:
+        if changed in {None, "configured", "model_wrapper"}:
+            assert (await processor.process(grant)).execution == execution
+            assert bytes(received) == payload
+            assert sizes and max(sizes) <= 64 * 1024
+            with pytest.raises(SelectedPreSubmitInfrastructureUnavailable, match="material_unavailable"):
+                await processor.process(grant)
+        else:
+            code = "deadline_exceeded" if changed == "slow_decode" else "invalid_output"
+            with pytest.raises(SelectedPreSubmitInfrastructureUnavailable, match=code):
+                await processor.process(grant)
+        if changed == "slow_decode":
+            assert decode_called == [True]
+        if changed == "chunk_oversized":
+            assert not sizes
+        await asyncio.wait_for(finished.wait(), 2)
+        assert grant.closed and grant.calls == 1
+        assert len(requests) == 1 and requests[0]["operation"] == "execute_pre"
+        assert requests[0]["reservation"] == reservation.canonical_body()
+        assert "grant" not in requests[0] and "prepared_generation_id" not in requests[0]
+    finally:
+        server.close()
+        await server.wait_closed()
+
+
+@pytest.mark.asyncio
+async def test_single_pre_expired_lease_does_not_open_source_or_runtime(tmp_path):
+    from datetime import datetime, timedelta, timezone
+    from app.modules.checkers.api.selected_pre_submit import (
+        SelectedPreSubmitLeaseFacts, SelectedPreSubmitInfrastructureUnavailable,
+    )
+    from tests.checkers.external.test_selected_pre_submit_coordination import _source_reservation
+
+    lease = SelectedPreSubmitLeaseFacts(
+        _source_reservation(), uuid4(), 1, datetime.now(timezone.utc) - timedelta(seconds=1),
+    )
+    class NoSource:
+        def open_source(self, **kwargs):
+            raise AssertionError("expired execution opened source")
+
+    adapter = UnixSocketExternalCheckerAdapter(socket_path=tmp_path / "absent.sock", timeout_seconds=5.0)
+    with pytest.raises(SelectedPreSubmitInfrastructureUnavailable, match="deadline_exceeded"):
+        await adapter.execute_pre(lease, NoSource())
+
+
+@pytest.mark.asyncio
+async def test_single_pre_cancellation_closes_source_and_transport(tmp_path):
+    from app.modules.checkers.api.selected_pre_submit import SelectedPreSubmitLeaseFacts
+    from app.modules.checkers.selected_pre_submit_execution import SelectedPreSubmitProcessor
+    from tests.checkers.external.test_selected_pre_submit_coordination import _source_reservation
+
+    entered, source_closed, connection_closed = asyncio.Event(), asyncio.Event(), asyncio.Event()
+    reservation = _source_reservation()
+    lease = SelectedPreSubmitLeaseFacts(reservation, uuid4(), 1, reservation.pre_deadline_at)
+    class Grant:
+        async def open_source(self, *, lease):
+            try:
+                entered.set()
+                await asyncio.Event().wait()
+                yield b"unreachable"
+            finally:
+                source_closed.set()
+
+    async def handle(reader, writer):
+        try:
+            await reader.read()
+        finally:
+            writer.close()
+            await writer.wait_closed()
+            connection_closed.set()
+
+    socket = tmp_path / "cancel.sock"
+    server = await asyncio.start_unix_server(handle, socket)
+    adapter = UnixSocketExternalCheckerAdapter(socket_path=socket, timeout_seconds=5.0)
+    processor = SelectedPreSubmitProcessor(lease=lease, execution=adapter)
+    task = asyncio.create_task(processor.process(Grant()))
+    try:
+        await asyncio.wait_for(entered.wait(), 2)
+        processor.abort()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        await asyncio.wait_for(connection_closed.wait(), 2)
+        assert source_closed.is_set()
+    finally:
+        if not task.done():
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+        server.close()
+        await server.wait_closed()

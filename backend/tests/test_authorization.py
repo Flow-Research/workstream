@@ -97,9 +97,6 @@ from app.modules.artifacts.authorization import (
     PreparedGuideSourceReadAuthorization,
     PreparedPreSubmitMaterializationAuthorization,
 )
-from app.modules.artifacts.submission_materialization import (
-    PreSubmitMaterializationAuthorityFacts,
-)
 from app.modules.artifacts.schemas import (
     ArtifactAuthorityDeniedError,
     GuideSourceReadAuthorityFacts,
@@ -214,7 +211,6 @@ from app.modules.authorization.runtime import (
     ActorStatus,
     ArtifactVerificationJobResourceContext,
     GuideSourceReadResourceContext,
-    PreSubmitCheckerInputPreparationContext,
     PreSubmitCheckerInputResourceContext,
     AdminRoleDefinitionsResourceContext,
     AdminRoleGrantCollectionResourceContext,
@@ -4739,7 +4735,7 @@ async def test_prepared_guide_service_authority_is_exact_and_single_use(
 
 
 @pytest.mark.asyncio
-async def test_real_prepared_materializer_binds_preflight_and_final_evidence() -> None:
+async def test_real_prepared_materializer_binds_exact_source_read_evidence() -> None:
     context = _runtime_context(
         actor_kind=ActorKind.SERVICE,
         service_identity=ServiceIdentity.ARTIFACT_MATERIALIZER,
@@ -4775,37 +4771,15 @@ async def test_real_prepared_materializer_binds_preflight_and_final_evidence() -
         authorization,
         repository,
     )
-    generation_id = new_record_id()
-    common = {
-        "resource_type": "pre_submit_checker_input",
-        "resource_id": generation_id,
-        "task_id": new_record_id(),
-        "assignment_id": new_record_id(),
-        "project_id": new_record_id(),
-        "guide_id": new_record_id(),
-        "guide_version": "v0.1",
-        "source_snapshot_id": new_record_id(),
-        "source_snapshot_hash": "sha256:" + "1" * 64,
-        "submission_artifact_policy_id": new_record_id(),
-        "submission_artifact_policy_hash": "sha256:" + "2" * 64,
-        "checker_policy_id": new_record_id(),
-        "checker_policy_hash": "sha256:" + "3" * 64,
-        "prepared_generation_id": generation_id,
-        "plan_sha256": "sha256:" + "4" * 64,
-        "catalogue_manifest_sha256": "sha256:" + "5" * 64,
-        "archive_sha256": "sha256:" + "6" * 64,
-        "archive_byte_count": 10,
-        "storage_scheme": "s3",
-    }
-    preflight = PreSubmitCheckerInputPreparationContext(**common)
-    assert preflight.guide_version == common["guide_version"]
+    from tests.authorization.test_pre_submit_attempt_authority import _facts
+    facts = _facts()
+    generation_id = facts.source.location.operation_id
     final = PreSubmitCheckerInputResourceContext(
-        **common,
-        semantic_manifest_sha256="sha256:" + "7" * 64,
+        resource_id=generation_id, scope_project_id=facts.project_id, facts=facts,
     )
     caller = PreparedAuthorizationInput(
         idempotency_key=new_record_id(),
-        request_value=preflight.model_dump(mode="json"),
+        request_value=final.model_dump(mode="json"),
     )
     scope = PreparedAuthorityScope(
         kind=PreparedAuthorityScopeKind.ARTIFACT_INTERNAL,
@@ -4822,7 +4796,7 @@ async def test_real_prepared_materializer_binds_preflight_and_final_evidence() -
             handle,
             ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE,
             caller,
-            final.model_copy(update={"assignment_id": new_record_id()}),
+            final.model_copy(update={"facts": facts.model_copy(update={"assignment_id": new_record_id()})}),
         )
     decision = await prepared.consume(
         handle,
@@ -4838,9 +4812,9 @@ async def test_real_prepared_materializer_binds_preflight_and_final_evidence() -
     )
     assert evidence.events[0].resource_type == "pre_submit_checker_input"
     assert evidence.events[0].resource_id == str(generation_id)
-    assert evidence.events[0].project_id == str(final.project_id)
+    assert evidence.events[0].project_id == str(final.scope_project_id)
     assert evidence.events[0].target_ref_kind == "project"
-    assert evidence.events[0].target_ref_id == str(final.project_id)
+    assert evidence.events[0].target_ref_id == str(final.scope_project_id)
     with pytest.raises(PreparedAuthorizationHandleInvalid):
         await prepared.consume(
             handle,
@@ -5208,46 +5182,28 @@ async def test_pre_submit_materializer_adapter_binds_every_fact_and_service(
         fixed_context,
     )
     monkeypatch.setattr(artifact_authorization, "PreparedAuthorizationService", FakePrepared)
-    facts = PreSubmitMaterializationAuthorityFacts(
-        task_id=new_record_id(),
-        assignment_id=new_record_id(),
-        project_id=new_record_id(),
-        guide_id=new_record_id(),
-        guide_version="1",
-        source_snapshot_id=new_record_id(),
-        source_snapshot_hash="sha256:" + "1" * 64,
-        submission_artifact_policy_id=new_record_id(),
-        submission_artifact_policy_hash="sha256:" + "2" * 64,
-        checker_policy_id=new_record_id(),
-        checker_policy_hash="sha256:" + "3" * 64,
-        prepared_generation_id=new_record_id(),
-        plan_sha256="sha256:" + "4" * 64,
-        catalogue_manifest_sha256="sha256:" + "5" * 64,
-        archive_sha256="sha256:" + "6" * 64,
-        archive_byte_count=10,
-        semantic_manifest_sha256="sha256:" + "7" * 64,
-        storage_scheme="s3",
-    )
+    from tests.authorization.test_pre_submit_attempt_authority import _facts
+    facts = _facts()
     authority = PreparedPreSubmitMaterializationAuthorization(
         session,  # type: ignore[arg-type]
         request_id=new_record_id(),
         correlation_id=new_record_id(),
     )
-    handle = await authority.prepare(facts=facts.preparation, idempotency_key=new_record_id())
+    handle = await authority.prepare(facts=facts, idempotency_key=new_record_id())
     prepared_instance = prepared_instances[0]
     prepared_action, caller_input, scope = prepared_instance.prepared_args
     assert prepared_action is ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE
-    assert caller_input.request_value == PreSubmitCheckerInputPreparationContext(
+    assert caller_input.request_value == PreSubmitCheckerInputResourceContext(
         resource_type="pre_submit_checker_input",
-        resource_id=facts.prepared_generation_id,
-        **asdict(facts.preparation),
+        resource_id=facts.source.location.operation_id,
+        scope_project_id=facts.project_id, facts=facts,
     ).model_dump(mode="json")
     assert scope == PreparedAuthorityScope(
         kind=PreparedAuthorityScopeKind.ARTIFACT_INTERNAL,
         artifact_resource_type="pre_submit_checker_input",
-        artifact_resource_id=facts.prepared_generation_id,
+        artifact_resource_id=facts.source.location.operation_id,
     )
-    for field_name in facts.preparation.__dataclass_fields__:
+    for field_name in type(facts).model_fields:
         original = getattr(facts, field_name)
         changed = (
             new_record_id()
@@ -5257,7 +5213,7 @@ async def test_pre_submit_materializer_adapter_binds_every_fact_and_service(
         with pytest.raises(ArtifactAuthorityDeniedError, match="invalid"):
             await authority.consume(
                 prepared_authorization=handle,
-                facts=replace(facts, **{field_name: changed}),
+                facts=facts.model_copy(update={field_name: changed}),
             )
     await authority.consume(
         prepared_authorization=handle,
@@ -5268,9 +5224,8 @@ async def test_pre_submit_materializer_adapter_binds_every_fact_and_service(
     assert consumed_input is caller_input
     assert consumed_resource == PreSubmitCheckerInputResourceContext(
         resource_type="pre_submit_checker_input",
-        resource_id=facts.prepared_generation_id,
-        **asdict(facts.preparation),
-        semantic_manifest_sha256=facts.semantic_manifest_sha256,
+        resource_id=facts.source.location.operation_id,
+        scope_project_id=facts.project_id, facts=facts,
     )
     with pytest.raises(ArtifactAuthorityDeniedError, match="invalid"):
         await authority.consume(

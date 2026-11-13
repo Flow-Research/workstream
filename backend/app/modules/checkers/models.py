@@ -513,6 +513,12 @@ class SelectedPreSubmitRun(Base):
 
     __tablename__ = "selected_pre_submit_runs"
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["source_operation_id", "task_id"],
+            ["submission_intake_operations.id", "submission_intake_operations.task_id"],
+            name="fk_selected_pre_run_source_operation",
+        ),
+        UniqueConstraint("source_operation_id", name="uq_selected_pre_run_source_operation"),
         CheckConstraint(
             "(get_byte(uuid_send(id), 6) >> 4) = 7 and "
             "(get_byte(uuid_send(id), 8) & 192) = 128",
@@ -597,15 +603,16 @@ class SelectedPreSubmitRun(Base):
     task_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), nullable=False)
     assignment_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), nullable=False)
     idempotency_key: Mapped[str] = mapped_column(Uuid(as_uuid=False), nullable=False)
-    prepared_generation_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), nullable=False)
+    source_operation_id: Mapped[str | None] = mapped_column(Uuid(as_uuid=False))
+    prepared_generation_id: Mapped[str | None] = mapped_column(Uuid(as_uuid=False))
     request_json: Mapped[dict] = mapped_column(JSONB(), nullable=False)
     request_digest: Mapped[str] = mapped_column(String(71), nullable=False)
     policy_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
     default_behavior_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
-    default_input_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
+    default_input_sha256: Mapped[str | None] = mapped_column(String(71))
     archive_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
     archive_byte_count: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    semantic_manifest_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
+    semantic_manifest_sha256: Mapped[str | None] = mapped_column(String(71))
     execution_budget_ms: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[str] = mapped_column(String(32), nullable=False)
     lease_id: Mapped[str | None] = mapped_column(Uuid(as_uuid=False))

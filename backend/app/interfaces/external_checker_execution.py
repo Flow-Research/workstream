@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from collections.abc import AsyncGenerator
 import re
-from typing import Protocol
+from typing import Literal, Protocol
 
 from app.interfaces.external_services import ExternalServiceAdapter
+from app.modules.checkers.api.selected_pre_submit import (
+    SelectedPreSubmitLeaseFacts, SelectedPreSubmitInvocationResult,
+)
 from app.modules.checkers.api.forge_locator import ExternalCheckerForgeLocator
 from app.modules.checkers.api.external import (
     ExternalCheckerExecutionRequest,
@@ -14,6 +18,9 @@ from app.modules.checkers.api.external import (
     Identifier,
     Sha256,
 )
+
+
+MAXIMUM_PRE_SOURCE_CHUNK_BYTES = 64 * 1024
 
 
 _REPOSITORY = re.compile(
@@ -143,8 +150,31 @@ class ExternalCheckerServiceHealth:
             raise ValueError("external checker service health is invalid")
 
 
+class ExternalPreSubmitSourceGrant(Protocol):
+    """ART-issued expiring read authority, separate from durable request identity.
+
+    The issuer must consume the exact committed lease and authorize the immutable
+    source generation before returning this process-local capability. Reads stay
+    in the issuing foreground task; the capability cannot be delegated to a
+    detached task beyond that callback lifetime.
+    """
+
+    def open_source(self, *, lease: SelectedPreSubmitLeaseFacts) -> AsyncGenerator[bytes, None]:
+        """Yield nonempty chunks up to MAXIMUM_PRE_SOURCE_CHUNK_BYTES outside DB roots."""
+
+
 class ExternalCheckerExecutionAdapter(ExternalServiceAdapter, Protocol):
     """Execute one normalized request through the trusted checker service."""
+
+    @property
+    def pre_runtime_provider(self) -> Literal["smolvm", "managed"]:
+        """Factory-owned expected PRE evidence family; never taken from a response."""
+        ...
+
+    async def execute_pre(
+        self, lease: SelectedPreSubmitLeaseFacts, grant: ExternalPreSubmitSourceGrant,
+    ) -> SelectedPreSubmitInvocationResult:
+        """Run source verification, defaults and selected project in one session."""
 
     async def locate_forge_change(
         self,
@@ -169,6 +199,8 @@ class ExternalCheckerExecutionAdapter(ExternalServiceAdapter, Protocol):
 
 __all__ = (
     "ExternalCheckerExecutionAdapter",
+    "ExternalPreSubmitSourceGrant",
+    "MAXIMUM_PRE_SOURCE_CHUNK_BYTES",
     "ExternalCheckerExecutionResponse",
     "ExternalCheckerIsolationReceipt",
     "ExternalCheckerMaterialGrant",

@@ -733,12 +733,16 @@ actor, project, role, and cause event before a consumer changes product state.
 Revoking one role must leave the other project roles and all AdminRoleGrants
 unchanged.
 
-The closed registry now has seventeen fixed-service identities: sixteen
-action-bearing identities with twenty-five matrix memberships, plus the
+The closed registry has twenty-two fixed-service identities: twenty-one
+action-bearing identities with forty-four matrix memberships, plus the
 target-only `workstream.compensation.adapter` identity. The action-bearing
-set comprises seven ART identities, project setup, six exact REV identities,
-the active shared outbox dispatcher, and the task assignment reconciler. Missing
-provisioned rows deny without stopping the application.
+set comprises eight ART identities, project setup, six exact REV identities,
+the shared outbox dispatcher, three TASK identities and two CHECKER identities.
+The dedicated `workstream.artifact.source_cleanup` identity has only the
+`artifact.submission_source.cleanup` action. Its prepared authority binds the
+operation, project, task, source digest, claim ID/generation and cleanup phase;
+claim and confirmation mutations require matching persisted audit decisions.
+Provider deletion remains uncomposed. Missing provisioned rows deny without stopping the application.
 The target-only identity has no matrix membership, and the REV actions remain
 unavailable. Dispatcher authority grants no feature permission. Do not create a
 shared review service or a database service-grant table.
@@ -958,8 +962,8 @@ their canonical 401/503 and 429/503 behavior before private lookup.
 | Operation | Authority | Required controls |
 |---|---|---|
 | Normal covered task/setup repair | Covered Project Manager `project.task.manage` | Exact project, lifecycle guard, reason/evidence where mutation is corrective. |
-| Submission gate repair (planned; unavailable) | Operator `operations.submission_gate.repair` | No submission/review rewrite; reason, matched authority, immutable checker evidence. |
-| Checker retry (planned; unavailable) | Operator `operations.checker.retry` | New attempt/supersession evidence; no prior result deletion. |
+| Accepted-finalization recovery (internal owner; no public endpoint) | Operator `operations.submission_gate.repair` | Exact accepted operation and exhausted UNKNOWN event; reason and current system grant; one audited recovery child, preserving original attempts and PRE/source evidence. |
+| Checker terminal-failure retry (active public operation) | Operator `operations.checker.retry` | New attempt/supersession evidence; no prior result deletion. |
 | Review lease force release | Operator `review.lease.force_release` under WS-REV-001 | Review-owned lease guards and evidence; no review decision. |
 
 Conceptual historical “admin override” statements are not operations. No

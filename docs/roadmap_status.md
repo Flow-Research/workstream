@@ -107,6 +107,21 @@ CLI and MCP cannot edit email. Optional issuer name seeds first admission; subse
 display-name edits, including clearing it, remain local. Identity and authority remain
 bound to issuer/subject, not email; signed email is not proof of mailbox verification.
 
+The [single-request submission specification](spec_submission_execution.md) is
+the approved target for [WS-SUBMIT-001](../.commitrail/initiatives/WS-SUBMIT-001/OVERVIEW.md).
+Its hidden owner boundaries define immutable command/source values and durable
+foreground intake custody with a matching TASK pointer, source/lease fences and
+per-operation physical source reservations under explicit limits. Hidden bounded
+receipt and S3-compatible source capabilities cover conditional completion and
+exact-version reads. Local source methods preserve one ZIP inode through sealing
+and completed bytes on late abort. Private upload composition commits intent
+before provider begin, handle before parts, and EOF before provider completion,
+then binds the resulting source under the current fence.
+Full foreground authorization/heartbeat integration, cleanup orchestration, AWS
+source qualification, one-session PRE, accepted handoff,
+finalization and client cutover remain planned;
+the active API still uses preparation followed by admission-consuming submission.
+
 ## Product Goal
 
 Workstream turns governed work into trusted `ContributionRecord` facts:

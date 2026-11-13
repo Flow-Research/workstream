@@ -22,12 +22,12 @@ def worker(delivery_harness, monkeypatch):
     from app.workers import outbox as worker
 
     # Shared SQL/timeout proofs isolate topology, covered by the real broker drill.
-    monkeypatch.setattr(worker, "require_outbox_worker", lambda _task: None)
+    monkeypatch.setattr(worker, "require_outbox_worker", lambda _task, **_kwargs: None)
     monkeypatch.setattr(worker, "get_database_url", lambda: h.factory.kw["bind"].url)
     monkeypatch.setattr(
         worker,
         "production_outbox_delivery",
-        lambda factory: outbox_delivery(
+        lambda factory, **_kwargs: outbox_delivery(
             factory,
             authorization_factory=outbox_dispatch_authorization,
             registry=HandlerRegistry([("ContributionRecorded", 1, h.handle)]),
@@ -165,7 +165,7 @@ async def test_worker_infrastructure_failure_has_bounded_sanitized_retry(
 async def test_worker_scan_continues_after_failed_publication(worker, monkeypatch):
     from app.modules.outbox.api import DeliveryCandidate, DeliveryCandidatePage
 
-    selectors = (DeliveryCandidate(event_id=new_record_id(), project_id=new_record_id()),)
+    selectors = (DeliveryCandidate(event_id=new_record_id(), project_id=new_record_id(), event_type="ContributionRecorded"),)
     cursor = selectors[-1].event_id
 
     async def page(after):
@@ -198,6 +198,8 @@ async def test_production_registry_claims_only_registered_features(delivery_harn
     event = await h.append()
     production = production_outbox_delivery(h.factory)
     assert production._registry.keys == (
+        ("SubmissionFinalizationRequested", 1),
+        ("SubmissionFinalizationRecoveryRequested", 1),
         ("TaskAssignmentAuthorityInvalidationRequested", 1),
         ("TaskRevisionExpiryRequested", 1),
         ("TaskRevisionExpired", 1),
@@ -350,3 +352,27 @@ def test_delivery_task_has_independent_hard_limit(worker):
     assert task.acks_late and task.acks_on_failure_or_timeout
     assert task.reject_on_worker_lost is True
     assert task.soft_time_limit is None
+
+
+@pytest.mark.parametrize("expired", [False, True])
+async def test_finalization_worker_cannot_deliver_or_recover_post_event(delivery_harness, expired):
+    from app.adapters.outbox import production_outbox_delivery
+    h = delivery_harness
+    kind = "PostSubmissionEvaluationRequested"
+    event = await h.append(event_type=kind)
+    if expired:
+        owner = h.build(HandlerRegistry([(kind, 1, h.handle)]))
+        assert await owner.claim(event.event_id, h.project, "post-worker") is not None
+        async with h.factory() as session:
+            await session.execute(text("select pg_sleep(3.05)"))
+    finalization = production_outbox_delivery(h.factory, finalization_worker=True)
+    assert finalization._registry.keys == (("SubmissionFinalizationRequested", 1), ("SubmissionFinalizationRecoveryRequested", 1))
+    assert await finalization.deliver(event.event_id, h.project, "wrong-worker", registered_only=True) is None
+    async with h.factory() as session:
+        stored = await session.get(OutboxEvent, event.event_id)
+        assert stored.delivery_state == ("claimed" if expired else "pending")
+        attempts = list(await session.scalars(select(OutboxDeliveryAttempt)))
+        assert len(attempts) == int(expired)
+        if expired:
+            assert attempts[0].stage == "claimed"
+    assert h.handled == []

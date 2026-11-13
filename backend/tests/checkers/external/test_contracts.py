@@ -161,7 +161,8 @@ def test_execution_request_rejects_duplicate_material_roles() -> None:
     identity = execution_identity()
     material = PreSubmitExternalCheckerMaterial(
         role="submission_archive",
-        prepared_generation_id=identity.prepared_generation_id,
+        operation_id=identity.operation_id, source_sha256=identity.source_sha256,
+            lease_id=identity.lease_id, lease_generation=identity.lease_generation,
         attempt_id=identity.attempt_id,
         attempt_request_digest=identity.attempt_request_digest,
         archive_sha256=SHA,
@@ -341,3 +342,68 @@ def test_finding_paths_must_be_safe_relative_archive_paths(path) -> None:
         check_id="paths.check", code="paths.code", level="warning", message="m",
         path="src/naïve/main.rs",
     ).path == "src/naïve/main.rs"
+
+
+@pytest.mark.parametrize("field", [
+    "operation_id", "source_sha256", "lease_id", "lease_generation", "attempt_id", "attempt_request_digest",
+])
+def test_pre_request_binds_source_and_execution_fence(field):
+    identity = execution_identity()
+    material = execution_material(identity)
+    value = (uuid4() if field.endswith("_id") else
+             2 if field == "lease_generation" else "sha256:" + "f" * 64)
+    material = material.model_copy(update={field: value})
+    with pytest.raises(ValueError, match="source material identity mismatch"):
+        make_external_checker_execution_request(
+            registry=registry_entry(), identity=identity, configuration={},
+            configuration_sha256=external_checker_json_hash({}), input={"task_version": "v3"},
+            input_sha256=external_checker_json_hash({"task_version": "v3"}), materials=(material,),
+        )
+
+
+def test_pre_request_refuses_prepared_bundle_identity():
+    identity = execution_identity()
+    value = identity.model_dump() | {"prepared_generation_id": uuid4()}
+    with pytest.raises(ValueError, match="prepared_generation_id"):
+        type(identity).model_validate(value)
+
+
+def test_post_source_custody_preserves_retained_material_and_closes_new_witness():
+    import json
+    from pathlib import Path
+    from app.modules.checkers.api.external import PostSubmitExternalCheckerMaterial
+    from app.modules.checkers.api.post_material_custody import PostSubmitArtifactCustody
+
+    fixture = Path(__file__).resolve().parents[4] / "external_checkers/fixtures/post_request.json"
+    retained = json.loads(fixture.read_text())["materials"][0]
+    original = PostSubmitExternalCheckerMaterial.model_validate_json(json.dumps(retained))
+    assert original.model_dump(mode="json") == retained
+    source = {k: v for k, v in retained.items() if not k.startswith("verification_")}
+    source.update(source_operation_id=str(new_record_id()), accepted_source_sha256=SHA,
+                  acceptance_receipt_sha256="sha256:" + "b" * 64)
+    material = PostSubmitExternalCheckerMaterial.model_validate_json(json.dumps(source))
+    assert material.model_dump(mode="json") == source
+    assert PostSubmitExternalCheckerMaterial.model_validate_json(material.model_dump_json()) == material
+    witness = {k: v for k, v in source.items() if k in PostSubmitArtifactCustody.model_fields}
+    assert PostSubmitArtifactCustody.model_validate_json(json.dumps(witness)).model_dump(mode="json") == witness
+    for field in witness:
+        with pytest.raises(ValidationError):
+            PostSubmitExternalCheckerMaterial.model_validate_json(json.dumps({k: v for k, v in source.items() if k != field}))
+    for field in ("verification_receipt_id", "verification_job_id", "verification_generation"):
+        with pytest.raises(ValidationError):
+            PostSubmitExternalCheckerMaterial.model_validate_json(json.dumps(source | {field: retained[field]}))
+
+
+def test_source_predecessor_custody_keeps_exact_witness_on_roundtrip():
+    from app.modules.checkers.api.evaluation_context import PostSubmitPredecessorCustody
+    custody = PostSubmitPredecessorCustody(
+        submission_id=new_record_id(), submission_version=1, content_sha256=SHA,
+        byte_count=4, semantic_manifest_sha256=SHA, admission_id=new_record_id(),
+        binding_id=new_record_id(), content_id=new_record_id(), replica_id=new_record_id(),
+        evidence_id=new_record_id(), namespace_fingerprint=SHA, semantic_manifest_id=new_record_id(),
+        source_operation_id=new_record_id(), accepted_source_sha256=SHA, acceptance_receipt_sha256=SHA,
+    )
+    body = custody.model_dump(mode="json")
+    assert not any(key.startswith("verification_") for key in body)
+    assert body["source_operation_id"] == str(custody.source_operation_id)
+    assert PostSubmitPredecessorCustody.model_validate_json(custody.model_dump_json()) == custody

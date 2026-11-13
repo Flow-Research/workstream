@@ -9,6 +9,9 @@ from app.db.base import Base
 
 # These keys express business uniqueness, not generated record identities.
 NATURAL_PRIMARY_KEYS = {
+    "submission_source_capacity_profiles": ("namespace_id",),
+    "submission_source_charges": ("operation_id",),
+    "submission_source_upload_receipts": ("operation_id",),
     "submission_dispatches": ("submission_id",),
     "submission_binding_receipts": ("admission_id",),
     "review_packet_guide_items": ("packet_id", "source_item_id"),

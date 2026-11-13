@@ -202,8 +202,13 @@ class OutboxDelivery:
         async with self._sessions() as session:
             return await DeliveryRepository(session).candidates(self._registry.keys, after=after, limit=limit)
 
-    async def deliver(self, event_id: UUID, project_id: UUID, owner: str) -> DeliveryReceipt | None:
+    async def deliver(self, event_id: UUID, project_id: UUID, owner: str, *, registered_only: bool = False) -> DeliveryReceipt | None:
         """Reuse recovery and claim/invoke; duplicate transport cannot bypass custody."""
+        if registered_only:
+            async with self._sessions() as session:
+                event = await DeliveryRepository(session).event(event_id, project_id)
+                if event is None or self._registry.get(event.event_type, event.event_version) is None:
+                    return None
         recovered = await self.recover(event_id, project_id)
         if recovered is not None:
             return recovered

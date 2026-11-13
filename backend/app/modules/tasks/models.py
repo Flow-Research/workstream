@@ -102,6 +102,12 @@ class WorkstreamTask(Base):
 
     __tablename__ = "workstream_tasks"
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["active_submission_operation_id", "id"],
+            ["submission_intake_operations.id", "submission_intake_operations.task_id"],
+            name="fk_task_active_submission_intake", deferrable=True, initially="DEFERRED",
+            use_alter=True,
+        ),
         CheckConstraint("(get_byte(uuid_send(id), 6) >> 4) = 7 and (get_byte(uuid_send(id), 8) & 192) = 128", name="id_uuid7"),
         CheckConstraint(
             "status in ('draft','screening','ready','in_progress','submitted','evaluation_pending','review_pending','needs_revision','accepted')",
@@ -328,6 +334,7 @@ class WorkstreamTask(Base):
     deadline_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_by: Mapped[str] = mapped_column(String(100), nullable=False)
     assigned_to: Mapped[str | None] = mapped_column(Uuid(as_uuid=False), index=True)
+    active_submission_operation_id: Mapped[str | None] = mapped_column(Uuid(as_uuid=False))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     # PostgreSQL owns this stamp on every committed change, including raw SQL updates.
     updated_at: Mapped[datetime] = mapped_column(

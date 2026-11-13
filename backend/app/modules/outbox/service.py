@@ -18,6 +18,7 @@ from app.modules.outbox.api import (
     OutboxIdempotencyConflict,
     OutboxInputError,
     OutboxPersistenceError,
+    OutboxDeliveryObservation,
 )
 
 
@@ -77,8 +78,8 @@ class OutboxService:
         """Bind the participant to one caller session; never commit or publish."""
         self._repository = OutboxRepository(session)
 
-    async def require_existing(self, event_id: UUID | None, value: OutboxAppendInput) -> UUID:
-        """Validate exact immutable custody without inserting or locking delivery state."""
+    async def _require_record(self, event_id: UUID | None, value: OutboxAppendInput) -> OutboxEvent:
+        """One exact custody check shared by identity and operational reads."""
         validated = _validated_input(value)
         digest = canonical_json_hash(validated.payload)
         try:
@@ -87,7 +88,20 @@ class OutboxService:
             _raise_persistence_error()
         if record is None or not _matches(record, validated, digest):
             _raise_idempotency_conflict()
-        return UUID(str(record.event_id))
+        return record
+
+    async def require_existing(self, event_id: UUID | None, value: OutboxAppendInput) -> UUID:
+        """Validate exact immutable custody without inserting or locking delivery state."""
+        return UUID(str((await self._require_record(event_id, value)).event_id))
+
+    async def observe_delivery(self, event_id: UUID, value: OutboxAppendInput) -> OutboxDeliveryObservation:
+        """Observe durable progress without claiming, retrying or publishing work."""
+        record = await self._require_record(event_id, value)
+        return OutboxDeliveryObservation(
+            event_id=UUID(str(record.event_id)), state=record.delivery_state,
+            attempt_count=record.attempt_count, next_attempt_at=record.next_attempt_at,
+            finalized_at=record.finalized_at, error_code=record.last_error_code,
+        )
 
     async def append(self, value: OutboxAppendInput) -> OutboxAppendResult:
         """Create one event or return its exact idempotent replay."""

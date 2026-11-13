@@ -983,13 +983,16 @@ ARCH-04C adds neither full-log reads nor retry/repair controls.
 
 `operations.checker.retry` has a hidden reason-bound Operator owner with fresh
 authority and immutable attempt/audit custody. `operations.submission_gate.repair`
-remains unavailable. Neither grants a public override or bypasses checker results.
+has an internal accepted-finalization recovery owner with exact operation/event,
+reason and current system Operator authority. It retains the original attempt and
+runs the same finalizer through one bounded recovery child. Neither grants a
+public override or bypasses checker results.
 
 Critical- and high-severity checker failures cannot be converted into review
 readiness by an administrative grant. Covered Project Manager authority under
 `project.task.manage` remains limited to existing lifecycle/context-repair
 operations; it does not implement the future post-submit setup-fault hold.
-Future Operator submission-gate repair and current hidden checker retry must
+Operator accepted-finalization recovery and checker retry must
 remain limited to their exact registered recovery purposes.
 
 Recovery requires:

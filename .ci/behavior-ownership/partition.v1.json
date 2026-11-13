@@ -22,6 +22,10 @@
     },
     {
       "group": "artifacts",
+      "target": "backend/app/adapters/artifacts/local_submission_source.py"
+    },
+    {
+      "group": "artifacts",
       "target": "backend/app/adapters/artifacts/s3_compatible.py"
     },
     {
@@ -554,6 +558,10 @@
     },
     {
       "group": "artifacts",
+      "target": "backend/app/modules/artifacts/api/submission_intake.py"
+    },
+    {
+      "group": "artifacts",
       "target": "backend/app/modules/artifacts/api/submission_preparation.py"
     },
     {
@@ -591,6 +599,34 @@
     {
       "group": "artifacts",
       "target": "backend/app/modules/artifacts/guide_formats.py"
+    },
+    {
+      "group": "artifacts",
+      "target": "backend/app/modules/artifacts/intake/capacity.py"
+    },
+    {
+      "group": "artifacts",
+      "target": "backend/app/modules/artifacts/intake/foreground_admission.py"
+    },
+    {
+      "group": "artifacts",
+      "target": "backend/app/modules/artifacts/intake/foreground_lease.py"
+    },
+    {
+      "group": "artifacts",
+      "target": "backend/app/modules/artifacts/intake/foreground_upload.py"
+    },
+    {
+      "group": "artifacts",
+      "target": "backend/app/modules/artifacts/intake/models.py"
+    },
+    {
+      "group": "artifacts",
+      "target": "backend/app/modules/artifacts/intake/repository.py"
+    },
+    {
+      "group": "artifacts",
+      "target": "backend/app/modules/artifacts/intake/streaming.py"
     },
     {
       "group": "artifacts",
@@ -803,6 +839,10 @@
     {
       "group": "auth",
       "target": "backend/app/modules/authorization/api/project_setup_finalization.py"
+    },
+    {
+      "group": "auth",
+      "target": "backend/app/modules/authorization/api/submission_intake.py"
     },
     {
       "group": "auth",
@@ -1034,6 +1074,10 @@
     },
     {
       "group": "auth",
+      "target": "backend/app/modules/authorization/domain/submission_intake.py"
+    },
+    {
+      "group": "auth",
       "target": "backend/app/modules/authorization/domain/task_authority.py"
     },
     {
@@ -1154,6 +1198,10 @@
     },
     {
       "group": "auth",
+      "target": "backend/app/modules/authorization/prepared_preflight.py"
+    },
+    {
+      "group": "auth",
       "target": "backend/app/modules/authorization/prepared_projection_replay.py"
     },
     {
@@ -1238,6 +1286,10 @@
     },
     {
       "group": "auth",
+      "target": "backend/app/modules/authorization/submission_intake.py"
+    },
+    {
+      "group": "auth",
       "target": "backend/app/modules/authorization/submission_preparation.py"
     },
     {
@@ -1291,6 +1343,10 @@
     {
       "group": "artifacts",
       "target": "backend/app/modules/checkers/api/forge_locator.py"
+    },
+    {
+      "group": "artifacts",
+      "target": "backend/app/modules/checkers/api/historical_selected_pre_submit.py"
     },
     {
       "group": "artifacts",
@@ -2122,6 +2178,10 @@
     },
     {
       "group": "lifecycle",
+      "target": "backend/app/modules/tasks/api/intake_custody.py"
+    },
+    {
+      "group": "lifecycle",
       "target": "backend/app/modules/tasks/api/management_queue.py"
     },
     {
@@ -2223,6 +2283,10 @@
     {
       "group": "lifecycle",
       "target": "backend/app/modules/tasks/evaluation_revision.py"
+    },
+    {
+      "group": "lifecycle",
+      "target": "backend/app/modules/tasks/intake_custody.py"
     },
     {
       "group": "lifecycle",
@@ -2494,7 +2558,15 @@
     },
     {
       "group": "artifacts",
+      "target": "backend/scripts/checker_root_layers.py"
+    },
+    {
+      "group": "artifacts",
       "target": "backend/scripts/checker_smol_cache.py"
+    },
+    {
+      "group": "artifacts",
+      "target": "backend/scripts/checker_trusted_root.py"
     },
     {
       "group": "shared",
@@ -2593,7 +2665,7 @@
       "target": "backend/scripts/validate_test_lane_evidence.py"
     }
   ],
-  "authority_digest": "a35f53b2939c6ce611f86f44336bfe43f0aec5e08fcfa9d688804b57661d3b46",
+  "authority_digest": "b6cc06f83827bf37427589437c71a084255f91a27b66bcc4109eebe8ba0160b2",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }

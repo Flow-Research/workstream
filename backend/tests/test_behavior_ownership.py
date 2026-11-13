@@ -2757,3 +2757,30 @@ def test_art_operator_ownership_accepts_only_exact_new_modules():
         wrong_group["authority_digest"] = ownership._digest(authority)
         with pytest.raises(ownership.BehaviorOwnershipError, match="untrusted_partition_change"):
             ownership._validate_additive_partition_transition(wrong_group, trusted)
+
+
+def test_submission_intake_partition_addition_is_exact_and_retains_existing_targets() -> None:
+    retained = "backend/app/core/config.py"
+    target = "backend/app/modules/artifacts/api/submission_intake.py"
+    additions = {
+        target, "backend/app/modules/artifacts/intake/models.py",
+        "backend/app/modules/artifacts/intake/capacity.py",
+        "backend/app/modules/artifacts/intake/streaming.py",
+        "backend/app/modules/authorization/api/submission_intake.py",
+        "backend/app/modules/authorization/domain/submission_intake.py",
+        "backend/app/modules/authorization/prepared_preflight.py",
+        "backend/app/modules/authorization/submission_intake.py",
+        "backend/app/modules/artifacts/intake/foreground_admission.py",
+        "backend/app/modules/artifacts/intake/foreground_lease.py",
+        "backend/app/modules/artifacts/intake/foreground_upload.py",
+        "backend/app/adapters/artifacts/local_submission_source.py",
+        "backend/app/modules/artifacts/intake/repository.py",
+        "backend/app/modules/tasks/api/intake_custody.py",
+        "backend/app/modules/tasks/intake_custody.py",
+    }
+    assert ownership.SUBMISSION_INTAKE_TARGETS == additions
+    trusted = _partition([retained])
+    ownership._validate_additive_partition_transition(_partition(sorted({retained, *additions})), trusted)
+    for targets in (additions, {retained, *additions, "backend/app/modules/artifacts/api/intake_override.py"}):
+        with pytest.raises(ownership.BehaviorOwnershipError, match="untrusted_partition_change"):
+            ownership._validate_additive_partition_transition(_partition(sorted(targets)), trusted)

@@ -19,6 +19,7 @@ class SubmissionArtifactAdmissionRequest:
     task_context: TaskSubmissionContextFacts
     project_context: ProjectLockedPolicyContextFacts
     packet: SubmissionPacketView
+    accepted_operation_id: UUID | None = None
 
 
 @dataclass(frozen=True, slots=True)

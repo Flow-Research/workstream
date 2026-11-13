@@ -73,6 +73,9 @@ async def _seed(database_url, task, submission, *, preparations=PREPARATIONS):
                 "terminal_json", "terminal_digest", "eligible", "lease_id", "lease_expires_at", "started_at",
                 "completed_at", "execute_evidence_id", "finalize_evidence_id",
             ), "NULL")})
+            # Settle deferred foreign keys (including the nullable intake pointer)
+            # before ALTER TABLE; none are disabled during this fixture restore.
+            await connection.execute("SET CONSTRAINTS ALL IMMEDIATE")
             for table in _TABLES:
                 await connection.execute(f"ALTER TABLE public.{table} ENABLE TRIGGER USER")
         for table in _TABLES:

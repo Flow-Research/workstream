@@ -14,12 +14,14 @@ _planned = _catalogue._planned
 
 
 ACTION_DEFINITIONS = (
+    _active(ActionId.SUBMISSION_INTAKE_RESERVE, PermissionId.SUBMISSION_CREATE, ActionOwner.SUBMISSION_INTAKE),
+    _active(ActionId.TASK_SUBMISSION_OPERATION_READ, PermissionId.SUBMISSION_READ_OWN, ActionOwner.SUBMISSION_INTAKE),
     _active(
         ActionId.ACTOR_PROJECT_LIST, PermissionId.ACTOR_PROFILE_READ_SELF, ActionOwner.PILOT_READ_2
     ),
     *(
         _active(action, PermissionId.SUBMISSION_READ_OWN, ActionOwner.PILOT_READ_2)
-        for action in sorted(CONTRIBUTOR_WORK_READ_ACTIONS)
+        for action in sorted(CONTRIBUTOR_WORK_READ_ACTIONS - {ActionId.TASK_SUBMISSION_OPERATION_READ})
     ),
     *(
         _active(a, PermissionId.PROJECT_GUIDE_MANAGE, ActionOwner.PILOT_READ_3)
@@ -393,7 +395,7 @@ ACTION_DEFINITIONS = (
         PermissionId.PROJECT_TASK_MANAGE,
         ActionOwner.TASK_PROJECT_GRANT,
     ),
-    _planned(
+    _active(
         ActionId.OPERATIONS_SUBMISSION_GATE_REPAIR,
         PermissionId.OPERATIONS_SUBMISSION_GATE_REPAIR,
         ActionOwner.AUTH_14,
@@ -565,6 +567,16 @@ ACTION_DEFINITIONS = (
         ActionId.ARTIFACT_SUBMISSION_BUNDLE_PREPARE,
         PermissionId.SUBMISSION_CREATE,
         ActionOwner.XINT_002_05A,
+    ),
+    _active(
+        ActionId.ARTIFACT_SOURCE_CLEANUP,
+        PermissionId.ARTIFACT_SOURCE_CLEANUP,
+        ActionOwner.AUTH_ART_02D_INTERNAL,
+    ),
+    _active(
+        ActionId.ARTIFACT_SUBMISSION_FINALIZE,
+        PermissionId.ARTIFACT_BINDING_CREATE,
+        ActionOwner.AUTH_ART_05,
     ),
     _active(
         ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE,

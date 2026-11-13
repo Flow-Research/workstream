@@ -120,6 +120,10 @@ class OutboxEvent(Base):
             name="delivery_state_shape",
         ),
         Index(
+            "uq_submission_finalization_recovery_original", "causation_event_id", unique=True,
+            postgresql_where=text("event_type='SubmissionFinalizationRecoveryRequested'"),
+        ),
+        Index(
             "ix_outbox_events_eligible",
             "event_type",
             "delivery_state",

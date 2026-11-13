@@ -1687,8 +1687,11 @@ class SubmissionBundleAdmission(Base):
             name="revision_preparation_digest",
         ),
         CheckConstraint(
-            "((put_operation_receipt_id is not null)::int + "
-            "(put_observation_receipt_id is not null)::int) = 1",
+            "(source_operation_id is null and durable_intent_id is not null and put_attempt_id is not null "
+            "and verification_receipt_id is not null and ((put_operation_receipt_id is not null)::int + "
+            "(put_observation_receipt_id is not null)::int) = 1) or (source_operation_id is not null "
+            "and durable_intent_id is null and put_attempt_id is null and verification_receipt_id is null "
+            "and put_operation_receipt_id is null and put_observation_receipt_id is null)",
             name="write_receipt_shape",
         ),
         CheckConstraint(
@@ -1705,9 +1708,13 @@ class SubmissionBundleAdmission(Base):
         ),
     )
 
+    source_operation_id: Mapped[str | None] = mapped_column(
+        ForeignKey("submission_intake_operations.id", ondelete="RESTRICT", deferrable=True, initially="DEFERRED"),
+        unique=True,
+    )
     id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True)
-    durable_intent_id: Mapped[str] = mapped_column(
-        ForeignKey("submission_bundle_durable_intents.id", ondelete="RESTRICT"), nullable=False
+    durable_intent_id: Mapped[str | None] = mapped_column(
+        ForeignKey("submission_bundle_durable_intents.id", ondelete="RESTRICT"), nullable=True
     )
     pre_submit_evidence_set_id: Mapped[str | None] = mapped_column(
         ForeignKey("pre_submit_evidence_sets.id", ondelete="RESTRICT"), nullable=True, index=True
@@ -1715,8 +1722,8 @@ class SubmissionBundleAdmission(Base):
     selected_pre_submit_run_id: Mapped[str | None] = mapped_column(
         ForeignKey("selected_pre_submit_runs.id", ondelete="RESTRICT"), nullable=True, index=True
     )
-    put_attempt_id: Mapped[str] = mapped_column(
-        ForeignKey("artifact_put_attempts.id", ondelete="RESTRICT"), nullable=False
+    put_attempt_id: Mapped[str | None] = mapped_column(
+        ForeignKey("artifact_put_attempts.id", ondelete="RESTRICT"), nullable=True
     )
     artifact_content_id: Mapped[str] = mapped_column(
         ForeignKey("artifact_contents.id", ondelete="RESTRICT"), nullable=False, index=True
@@ -1724,8 +1731,8 @@ class SubmissionBundleAdmission(Base):
     verified_replica_id: Mapped[str] = mapped_column(
         ForeignKey("artifact_replicas.id", ondelete="RESTRICT"), nullable=False
     )
-    verification_receipt_id: Mapped[str] = mapped_column(
-        ForeignKey("artifact_verification_receipts.id", ondelete="RESTRICT"), nullable=False
+    verification_receipt_id: Mapped[str | None] = mapped_column(
+        ForeignKey("artifact_verification_receipts.id", ondelete="RESTRICT"), nullable=True
     )
     put_operation_receipt_id: Mapped[str | None] = mapped_column(
         ForeignKey("artifact_operation_receipts.id", ondelete="RESTRICT")
@@ -1837,6 +1844,10 @@ class ArtifactReplica(Base):
         ),
     )
 
+    source_operation_id: Mapped[str | None] = mapped_column(
+        ForeignKey("submission_intake_operations.id", ondelete="RESTRICT", deferrable=True, initially="DEFERRED"),
+        unique=True,
+    )
     id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True)
     content_id: Mapped[str] = mapped_column(
         ForeignKey("artifact_contents.id", ondelete="RESTRICT"), nullable=False, index=True

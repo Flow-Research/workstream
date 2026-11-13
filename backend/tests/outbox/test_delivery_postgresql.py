@@ -396,3 +396,37 @@ async def test_effect_fence_holds_custody_until_caller_transaction_ends(delivery
         async with session.begin():
             assert await DeliveryRepository(session).fence_invocation(envelope) is None
             assert await DeliveryRepository(session).fence_invocation(object()) is None
+
+
+async def test_delivery_observation_requires_exact_feature_custody(delivery_harness):
+    from app.modules.outbox.api import OutboxAppendInput, OutboxIdempotencyConflict
+    from app.modules.outbox.service import OutboxService
+    h = delivery_harness
+    event = await h.append()
+    value = OutboxAppendInput(**{name: getattr(event, name) for name in OutboxAppendInput.model_fields})
+    async with h.factory() as session:
+        service = OutboxService(session)
+        pending = await service.observe_delivery(event.event_id, value)
+        assert pending.state == "pending" and pending.attempt_count == 0
+        assert pending.finalized_at is pending.error_code is None
+        for changes in (
+            {"project_id": new_record_id()}, {"aggregate_id": new_record_id()},
+            {"aggregate_type": "other"}, {"event_type": "DifferentEvent"}, {"event_version": 2},
+            {"correlation_id": "different"}, {"causation_event_id": new_record_id()},
+            {"idempotency_key": "different"}, {"payload": {"different": True}},
+            {"not_before_at": pending.next_attempt_at + timedelta(seconds=1)},
+        ):
+            with pytest.raises(OutboxIdempotencyConflict):
+                await service.observe_delivery(event.event_id, value.model_copy(update=changes))
+        with pytest.raises(OutboxIdempotencyConflict):
+            await service.observe_delivery(new_record_id(), value)
+        assert (await session.get(OutboxEvent, event.event_id)).attempt_count == 0
+        assert list(await session.scalars(select(OutboxDeliveryAttempt))) == []
+        claim = await h.delivery.claim(event.event_id, h.project, "observed-worker")
+        active = await service.observe_delivery(event.event_id, value)
+        assert active.state == "claimed" and active.attempt_count == 1
+        assert active.next_attempt_at is None
+        assert await h.delivery.invoke(claim) is not None
+        acknowledged = await service.observe_delivery(event.event_id, value)
+        assert acknowledged.state == "acknowledged" and acknowledged.finalized_at is not None
+        assert acknowledged.attempt_count == 1

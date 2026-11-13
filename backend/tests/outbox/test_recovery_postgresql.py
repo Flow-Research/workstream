@@ -75,11 +75,11 @@ def _configure_recovery_worker(h, monkeypatch: pytest.MonkeyPatch):
     get_settings.cache_clear()
     from app.workers import outbox as worker
 
-    monkeypatch.setattr(worker, "require_outbox_worker", lambda _task: None)
+    monkeypatch.setattr(worker, "require_outbox_worker", lambda _task, **_kwargs: None)
     monkeypatch.setattr(worker, "get_database_url", lambda: h.factory.kw["bind"].url)
     worker_factories = []
 
-    def compose_delivery(factory):
+    def compose_delivery(factory, **_kwargs):
         worker_factories.append(factory)
         return outbox_delivery(
             factory,
@@ -534,12 +534,21 @@ async def test_cancelled_invocation_leaves_custody_for_unknown_recovery(delivery
     assert await h.delivery.invoke(claim) is None and len(h.handled) == 1
 
 
-async def test_handler_suppressing_cancellation_cannot_ack_after_deadline(delivery_harness):
+async def test_handler_suppressing_cancellation_cannot_ack_after_deadline(delivery_harness, monkeypatch):
     h = delivery_harness
     h.options = h.options.model_copy(update={"lease_seconds": 30, "handler_timeout_seconds": 1})
     h.delivery = h.build()
     claim = await h.claim()
     cancelled, release = asyncio.Event(), asyncio.Event()
+    finalizing, allow_finalize = asyncio.Event(), asyncio.Event()
+    real_finalize = h.delivery.finalize
+
+    async def observe_finalize(*args, **kwargs):
+        finalizing.set()
+        await allow_finalize.wait()
+        return await real_finalize(*args, **kwargs)
+
+    monkeypatch.setattr(h.delivery, "finalize", observe_finalize)
 
     async def suppress_cancellation(envelope):
         try:
@@ -552,8 +561,13 @@ async def test_handler_suppressing_cancellation_cannot_ack_after_deadline(delive
     invocation = asyncio.create_task(h.delivery.invoke(claim))
     try:
         await asyncio.wait_for(cancelled.wait(), 3)
-        # The dispatcher returns while the uncooperative handler remains running.
-        receipt = await asyncio.wait_for(asyncio.shield(invocation), 2)
+        # The dispatcher must reach finalization promptly without awaiting the
+        # uncooperative handler. Database latency is a separate observation.
+        await asyncio.wait_for(finalizing.wait(), 2)
+        assert not release.is_set() and not invocation.done()
+        assert h.delivery._running_handlers
+        allow_finalize.set()
+        receipt = await asyncio.wait_for(asyncio.shield(invocation), 10)
         assert h.delivery._running_handlers
         assert json.loads(receipt.outcome_json)["error_code"] == "INVOKE_OUTCOME_UNKNOWN"
         assert (await h.delivery.drain(h.project)).unresolved == 1
@@ -562,6 +576,7 @@ async def test_handler_suppressing_cancellation_cannot_ack_after_deadline(delive
         assert await h.delivery.finalize(claim, FinalizationCause.UNKNOWN) == receipt
         assert await h.delivery.invoke(claim) is None and len(h.handled) == 1
     finally:
+        allow_finalize.set()
         release.set()
         await asyncio.gather(invocation, return_exceptions=True)
         await asyncio.gather(*tuple(h.delivery._running_handlers), return_exceptions=True)

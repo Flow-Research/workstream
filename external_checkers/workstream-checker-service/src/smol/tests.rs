@@ -99,6 +99,7 @@ fn foreign_lease_refuses_recovery_before_any_runtime_or_owned_cleanup() {
         root: leases.clone(),
         runtime,
         private_home_root: None,
+        pre: None,
     };
     let owned = lease.path();
     fs::write(&owned, serde_json::to_vec(&lease).unwrap()).unwrap();
@@ -233,6 +234,31 @@ fn cached_image_config_must_match_its_pinned_digest_and_platform() {
     fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
     fs::write(&path, b"{}").unwrap();
     assert!(inspect_image(cache).is_err());
+    fs::write(&path, raw).unwrap();
+    assert_eq!(
+        image_configuration(cache).unwrap()["config"]["Cmd"],
+        serde_json::json!(["--json"])
+    );
+    OpenOptions::new()
+        .write(true)
+        .open(&path)
+        .unwrap()
+        .set_len(MAX_REQUEST_BYTES as u64 + 1)
+        .unwrap();
+    assert_eq!(
+        inspect_image(cache).unwrap_err(),
+        "image configuration custody invalid"
+    );
+    fs::write(&path, raw).unwrap();
+    fs::set_permissions(&path, fs::Permissions::from_mode(0o666)).unwrap();
+    assert_eq!(
+        inspect_image(cache).unwrap_err(),
+        "image configuration custody invalid"
+    );
+    fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
+    fs::rename(&path, root.join("retained-image")).unwrap();
+    std::os::unix::fs::symlink(root.join("retained-image"), &path).unwrap();
+    assert!(inspect_image(cache).is_err());
     fs::remove_dir_all(root).unwrap();
 }
 
@@ -261,6 +287,7 @@ fn private_child_home_is_derived_from_the_exact_lease() {
         root: lease_root,
         runtime,
         private_home_root: Some(child_home_root),
+        pre: None,
     };
     assert!(lease.valid());
     lease.runtime.home = root.join("shared-or-foreign-home");
@@ -346,12 +373,24 @@ fn intake_overlay_is_explicit_in_runtime_argv_and_project_creation_is_unchanged(
         root: root.join("leases"),
         runtime,
         private_home_root: None,
+        pre: None,
     };
     fs::create_dir_all(lease.cgroup()).unwrap();
     // A private ordinary file substitutes the cgroup control, with no host effect.
     fs::write(lease.cgroup().join("cgroup.procs"), b"").unwrap();
+    fs::create_dir_all(&lease.root).unwrap();
+    let bytes = serde_json::to_vec(&lease).unwrap();
+    let mut file = OpenOptions::new()
+        .create_new(true)
+        .write(true)
+        .mode(0o600)
+        .open(lease.path())
+        .unwrap();
+    file.write_all(&bytes).unwrap();
+    let journal = pre::Journal::capture(&file, &bytes).unwrap();
     let mut machine = Machine {
         lease,
+        journal,
         guardian: Command::new("/bin/true").spawn().unwrap(),
         keeper: None,
         consumed: false,

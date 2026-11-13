@@ -1,5 +1,7 @@
 """Compose optional project-image model callbacks into the sole POST execution path."""
 
+from typing import Literal
+
 from app.interfaces.external_services import ExternalServiceUnavailableError
 from app.modules.model_usage.api import (
     ModelCallExecutionFacts,
@@ -40,9 +42,18 @@ class ModelAwareExternalExecution:
         """Keep the same fixed Rust provider identity."""
         return self._execution.identity
 
+    @property
+    def pre_runtime_provider(self) -> Literal["smolvm", "managed"]:
+        """Preserve the selected execution adapter's PRE evidence family."""
+        return self._execution.pre_runtime_provider
+
     async def health(self):
         """Use the existing external execution health contract."""
         return await self._execution.health()
+
+    async def execute_pre(self, lease, grant):
+        """PRE receives no model authority or paid slot from this POST wrapper."""
+        return await self._execution.execute_pre(lease, grant)
 
     async def locate_forge_change(self, request, grant):
         """Locator gets no model grant, paid slot or trial callback."""

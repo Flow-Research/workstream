@@ -1,5 +1,7 @@
 """CHECKER-owned composition adapters."""
 
+from typing import Literal
+
 from app.adapters.checkers.external_service import (
     EXTERNAL_CHECKER_CAPABILITY_KEY,
     EXTERNAL_CHECKER_PROVIDER_KEY,
@@ -32,18 +34,15 @@ from app.modules.checkers.api.selected_post_submit import (
 from app.modules.checkers.api.history import CheckerHistoryReadPort
 from app.modules.checkers.api.revision_feedback import RevisionFeedbackPort
 from app.modules.checkers.api.execution import EvaluationCoordinationPort
-from typing import Any, Protocol
 from pathlib import Path
 
 
 from app.modules.checkers.api.external import (
     ExternalCheckerExecutionRequest,
-    PreSubmitExternalCheckerIdentity,
-    PreSubmitExternalCheckerMaterial,
 )
 from app.modules.checkers.selected_pre_submit_execution import SelectedPreSubmitProcessor
 from app.modules.checkers.api.selected_pre_submit import (
-    SelectedPreSubmitInfrastructureUnavailable,
+    SelectedPreSubmitLeaseFacts,
 )
 
 
@@ -170,6 +169,11 @@ class _ConfiguredExternalCheckerExecution:
         """Expose the sole provider identity without constructing its transport."""
         return self._identity
 
+    @property
+    def pre_runtime_provider(self) -> Literal["smolvm", "managed"]:
+        """The explicitly selected socket factory supplies native Smol evidence."""
+        return "smolvm"
+
     def _resolve(self) -> ExternalCheckerExecutionAdapter:
         """Create the fixed provider or report absent runtime configuration."""
         if (
@@ -180,6 +184,10 @@ class _ConfiguredExternalCheckerExecution:
         return configured_external_checker_execution_factory(self._settings).create(
             EXTERNAL_CHECKER_PROVIDER_KEY
         )
+
+    async def execute_pre(self, lease, grant):
+        """Resolve the same provider for the source-bound single PRE session."""
+        return await self._resolve().execute_pre(lease, grant)
 
     async def locate_forge_change(self, request, grant):
         """Resolve the same provider for the isolated locator operation."""
@@ -260,6 +268,7 @@ def external_checker_registry_service(session, authority):
 def selected_pre_submit_coordinator(session):
     """Compose selected PRE custody through CHECKERS' public adapter root."""
     from app.adapters.tasks import selected_pre_submit_task_guard
+    from app.adapters.artifacts import submission_intake_pre_source_port
     from app.modules.checkers.selected_pre_submit_coordination import (
         SelectedPreSubmitCoordinator,
     )
@@ -267,67 +276,19 @@ def selected_pre_submit_coordinator(session):
     return SelectedPreSubmitCoordinator(
         session,
         tasks=selected_pre_submit_task_guard(session),
+        sources=submission_intake_pre_source_port(session),
     )
 
 
-class _ExecutionRequest(Protocol):
-    project_id: Any
-    task_id: Any
-    assignment_id: Any
-    commitment: Any
-    inspection: Any
-    manifest: Any
-    change_gate: Any
-    packet: Any
-    prepared_generation_id: Any
-    storage_scheme: str
-
-
 class SelectedPreSubmitCheckerExecutionAdapter:
-    """Build the selected default-plus-external PRE processor from exact ART facts."""
+    """Compose the source-bound PRE processor through the existing adapter factory."""
 
-    def __init__(self, *, external_execution) -> None:
+    def __init__(self, *, external_execution: ExternalCheckerExecutionAdapter) -> None:
         self._external_execution = external_execution
 
-    def build(self, request: _ExecutionRequest) -> SelectedPreSubmitProcessor:
-        """Reject any incomplete pre-admission identity before projecting bytes."""
-        policy = getattr(request, "external_policy", None)
-        default_input = getattr(request, "default_checker_input", None)
-        attempt_id = getattr(request, "attempt_id", None)
-        attempt_request_digest = getattr(request, "attempt_request_digest", None)
-        if (
-            policy is None
-            or default_input is None
-            or attempt_id is None
-            or attempt_request_digest is None
-        ):
-            raise SelectedPreSubmitInfrastructureUnavailable("material_unavailable")
-        identity = PreSubmitExternalCheckerIdentity(
-            project_id=request.project_id,
-            task_id=request.task_id,
-            assignment_id=request.assignment_id,
-            prepared_generation_id=request.prepared_generation_id,
-            attempt_id=attempt_id,
-            attempt_request_digest=attempt_request_digest,
-            effective_plan_sha256=policy.policy_sha256,
-        )
-        material = PreSubmitExternalCheckerMaterial(
-            role="submission_archive",
-            prepared_generation_id=request.prepared_generation_id,
-            attempt_id=attempt_id,
-            attempt_request_digest=attempt_request_digest,
-            archive_sha256=request.commitment.sha256,
-            archive_byte_count=request.commitment.byte_count,
-            semantic_manifest_sha256=request.manifest.sha256,
-            media_type="application/zip",
-        )
-        return SelectedPreSubmitProcessor(
-            policy=policy,
-            default_input=default_input,
-            identity=identity,
-            material=material,
-            execution=self._external_execution,
-        )
+    def build(self, lease: SelectedPreSubmitLeaseFacts) -> SelectedPreSubmitProcessor:
+        """Bind the single invocation to the committed CHECKERS lease."""
+        return SelectedPreSubmitProcessor(lease=lease, execution=self._external_execution)
 
 
 def checker_history_repository(session) -> CheckerHistoryReadPort:

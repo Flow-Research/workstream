@@ -4,13 +4,20 @@ from __future__ import annotations
 
 import asyncio
 import json
+import hashlib
+from datetime import datetime, timezone
 from pathlib import Path
 import struct
+from typing import Literal
 
 from pydantic import ValidationError
 
+from app.core.cancellation import await_cancellation_resistant
+
 from app.interfaces.external_checker_execution import (
     ExternalCheckerExecutionResponse,
+    ExternalPreSubmitSourceGrant,
+    MAXIMUM_PRE_SOURCE_CHUNK_BYTES,
     ExternalCheckerForgeLocatorResponse,
     ExternalCheckerIsolationReceipt,
     ExternalCheckerMaterialGrant,
@@ -28,6 +35,11 @@ from app.modules.checkers.api.external import (
     ExternalCheckerContractError,
     ExternalCheckerExecutionRequest,
     ExternalCheckerExecutionResult,
+)
+
+from app.modules.checkers.api.selected_pre_submit import (
+    SelectedPreSubmitLeaseFacts, SelectedPreSubmitInvocationResult,
+    SelectedPreSubmitInfrastructureUnavailable,
 )
 
 from app.modules.checkers.api.forge_locator import (
@@ -66,6 +78,87 @@ class UnixSocketExternalCheckerAdapter:
     def identity(self) -> ExternalServiceAdapterIdentity:
         """Return the exact explicitly registered provider identity."""
         return self._identity
+
+    @property
+    def pre_runtime_provider(self) -> Literal["smolvm"]:
+        """The native socket factory accepts only Smol runtime evidence."""
+        return "smolvm"
+
+    async def execute_pre(
+        self, lease: SelectedPreSubmitLeaseFacts, grant: ExternalPreSubmitSourceGrant,
+    ) -> SelectedPreSubmitInvocationResult:
+        """Stream authorized source bytes into one PRE call without a host spool."""
+        try:
+            if type(lease) is not SelectedPreSubmitLeaseFacts:
+                raise ValueError("PRE lease is invalid")
+            reservation = lease.reservation
+            payload = json.dumps({
+                "protocol_version": _PROTOCOL, "operation": "execute_pre",
+                "reservation": reservation.canonical_body(),
+                "request_digest": reservation.request_digest,
+                "lease_id": str(lease.lease_id), "lease_generation": lease.lease_generation,
+                "lease_expires_at": lease.lease_expires_at.isoformat(),
+            }, ensure_ascii=False, allow_nan=False, separators=(",", ":")).encode("utf-8")
+            if len(payload) > 2 * 1024 * 1024:
+                raise ValueError("PRE request is too large")
+            remaining = (lease.lease_expires_at - datetime.now(timezone.utc)).total_seconds()
+            timeout = min(remaining, reservation.execution_budget_ms / 1000, self._timeout_seconds)
+            if timeout <= 0:
+                raise SelectedPreSubmitInfrastructureUnavailable("deadline_exceeded")
+            deadline = asyncio.get_running_loop().time() + timeout
+            async with asyncio.timeout_at(deadline):
+                reader, writer = await asyncio.open_unix_connection(self._socket_path)
+                try:
+                    writer.write(struct.pack(">I", len(payload)) + payload)
+                    await writer.drain()
+                    digest, count = hashlib.sha256(), 0
+                    stream = grant.open_source(lease=lease)
+                    try:
+                        async for chunk in stream:
+                            if type(chunk) is not bytes or not 0 < len(chunk) <= MAXIMUM_PRE_SOURCE_CHUNK_BYTES:
+                                raise ValueError("PRE source chunk is invalid")
+                            count += len(chunk)
+                            if count > reservation.source.raw_byte_count:
+                                raise ValueError("PRE source identity differs")
+                            digest.update(chunk)
+                            writer.write(struct.pack(">I", len(chunk)) + chunk)
+                            await writer.drain()
+                    finally:
+                        await await_cancellation_resistant(stream.aclose())
+                    if (count != reservation.source.raw_byte_count
+                            or "sha256:" + digest.hexdigest() != reservation.source.raw_sha256):
+                        raise ValueError("PRE source identity differs")
+                    writer.write(struct.pack(">I", 0))
+                    await writer.drain()
+                    size = struct.unpack(">I", await reader.readexactly(4))[0]
+                    if size == 0 or size > 64 * 1024 * 1024:
+                        raise ValueError("PRE response is too large")
+                    raw = await reader.readexactly(size)
+                    if await reader.read(1):
+                        raise ValueError("PRE response contains trailing data")
+                finally:
+                    writer.close()
+                    await await_cancellation_resistant(writer.wait_closed())
+            body = json.loads(raw)
+            if type(body) is not dict or "adapter_provider_key" in body:
+                raise ValueError("PRE provider context is invalid")
+            body["adapter_provider_key"] = self.identity.provider_key
+            result = SelectedPreSubmitInvocationResult.from_canonical_body(body)
+            if result.receipt.runtime.provider != "smolvm":
+                raise ValueError("PRE runtime provider differs")
+            result.validate_lease(lease)
+            if (asyncio.get_running_loop().time() >= deadline
+                    or datetime.now(timezone.utc) >= lease.lease_expires_at):
+                raise SelectedPreSubmitInfrastructureUnavailable("deadline_exceeded")
+            return result
+        except ExternalServiceProtocolError:
+            raise
+        except TimeoutError as exc:
+            raise SelectedPreSubmitInfrastructureUnavailable("deadline_exceeded") from exc
+        except (OSError, asyncio.IncompleteReadError) as exc:
+            raise ExternalServiceUnavailableError(self._identity) from exc
+        except (TypeError, ValueError, KeyError, UnicodeError, RecursionError) as exc:
+            raise ExternalServiceProtocolError(self._identity) from exc
 
     async def execute(
         self,

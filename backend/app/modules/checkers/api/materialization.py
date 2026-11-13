@@ -1,5 +1,6 @@
 """Exact post-submit byte access; neither durable execution nor live authority."""
 
+from app.modules.checkers.api.post_material_custody import PostSubmitArtifactCustody
 from dataclasses import dataclass
 from abc import ABC, abstractmethod
 from contextlib import AbstractAsyncContextManager, AbstractContextManager
@@ -14,10 +15,8 @@ from app.modules.checkers.api.execution import (
 )
 from app.modules.checkers.api.material import SubmissionMaterialEntry
 from app.modules.checkers.api.canonical_values import (
-    CheckerValue,
     ResourceId,
     Sha256,
-    VersionNumber,
 )
 
 from app.modules.checkers.api.evaluation_contract import (
@@ -45,14 +44,11 @@ class PostSubmissionMaterializationFailure(RuntimeError):
     """Retain a known post-authorization material failure after successful cleanup."""
 
 
-class MaterializationMaterialFacts(CheckerValue):
+class MaterializationMaterialFacts(PostSubmitArtifactCustody):
     """Exact selected ancestry without provider coordinates or scratch authority."""
 
     material: VerifiedMaterialFacts
     evidence_id: ResourceId
-    verification_receipt_id: ResourceId
-    verification_job_id: ResourceId
-    verification_generation: VersionNumber
     namespace_fingerprint: Sha256
     semantic_manifest_id: ResourceId
 

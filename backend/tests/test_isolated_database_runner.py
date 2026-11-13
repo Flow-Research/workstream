@@ -535,3 +535,68 @@ def test_cleanup_defers_repeated_signals_and_preserves_child_result(
         os.kill(os.getpid(), signal.SIGTERM)
     _mock_successful_main(tmp_path, monkeypatch, signalled_drop)
     assert runner.main() == 0
+
+
+@pytest.mark.parametrize("delete_error", [False, True])
+def test_minio_cleanup_removes_versions_markers_and_uploads(monkeypatch, delete_error):
+    """Hidden versions and incomplete uploads cannot survive successful cleanup."""
+    bucket = "workstream-ci-isolated-012345abcdef"
+    remaining = {("source", "old"), ("source", "new"), ("source", "marker"), ("plain", "null")}
+    uploads = {("partial", "upload")}
+    removed = []
+
+    class Pages:
+        def __init__(self, pages):
+            self.pages = pages
+
+        async def paginate(self, **kwargs):
+            assert kwargs == {"Bucket": bucket}
+            for page in self.pages:
+                yield page
+
+    class Client:
+        async def __aenter__(self): return self
+        async def __aexit__(self, *_): return False
+
+        def get_paginator(self, operation):
+            if operation == "list_multipart_uploads":
+                return Pages([{"Uploads": [{"Key": "partial", "UploadId": "upload"}]}])
+            assert operation == "list_object_versions"
+            return Pages([
+                {"Versions": [{"Key": "source", "VersionId": "old"}, {"Key": "plain", "VersionId": "null"}]},
+                {"Versions": [{"Key": "source", "VersionId": "new"}],
+                 "DeleteMarkers": [{"Key": "source", "VersionId": "marker"}]},
+            ])
+
+        async def list_objects_v2(self, **kwargs):
+            assert kwargs == {"Bucket": bucket}
+            return {"Contents": []}  # Marker hides retained versions.
+
+        async def abort_multipart_upload(self, **kwargs):
+            assert kwargs["Bucket"] == bucket
+            uploads.remove((kwargs["Key"], kwargs["UploadId"]))
+
+        async def delete_objects(self, **kwargs):
+            assert kwargs["Bucket"] == bucket
+            if delete_error:
+                return {"Errors": [{"Code": "AccessDenied"}]}
+            for item in kwargs["Delete"]["Objects"]:
+                remaining.remove((item["Key"], item["VersionId"]))
+            return {}
+
+        async def delete_bucket(self, **kwargs):
+            assert kwargs == {"Bucket": bucket}
+            assert not remaining and not uploads, "versioned bytes or uploads survived cleanup"
+            removed.append(bucket)
+
+        async def list_buckets(self):
+            return {"Buckets": [{"Name": "foreign-retained-bucket"}]}
+
+    monkeypatch.setattr(runner, "_minio_client", lambda _: Client())
+    if delete_error:
+        with pytest.raises(runner.RunnerError, match="minio_cleanup_failed"):
+            asyncio.run(runner._drop_minio("http://localhost:9000", bucket, "ci/test/run"))
+        assert remaining and not removed
+    else:
+        asyncio.run(runner._drop_minio("http://localhost:9000", bucket, "ci/test/run"))
+        assert removed == [bucket] and not remaining and not uploads

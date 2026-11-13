@@ -100,7 +100,8 @@ class Docker:
         return value
 
 
-def test_sample(docker: Docker, image_id: str, request, directory: Path, runtime: str) -> bytes:
+def test_sample(docker: Docker, image_id: str, request, directory: Path, runtime: str,
+                evidence: dict, checkpoint) -> bytes:
     """Exercise image compatibility under the closed sandbox profile, then confirm cleanup."""
     limits = request.registry.resources
     name = "workstream-image-test-" + uuid4().hex
@@ -110,8 +111,12 @@ def test_sample(docker: Docker, image_id: str, request, directory: Path, runtime
         time.monotonic() + limits.deadline_ms / 1000, limits.maximum_output_bytes
     )
     cleaned = False
+    created = False
+    cleanup = {"container_name": name, "image_id": image_id, "state": "create_pending"}
     try:
         docker.inspect(image_id, budget=budget)
+        evidence["sample_cleanup"] = cleanup
+        checkpoint()
         docker.call(
             "create",
             "--name",
@@ -145,6 +150,9 @@ def test_sample(docker: Docker, image_id: str, request, directory: Path, runtime
             budget=budget,
             timeout=limits.deadline_ms / 1000,
         )
+        created = True
+        cleanup["state"] = "removal_pending"
+        checkpoint()
         raw = docker.call(
             "start",
             "--attach",
@@ -170,11 +178,18 @@ def test_sample(docker: Docker, image_id: str, request, directory: Path, runtime
             raise ImageError("sample did not exit cleanly")
         remove_sample(docker, name, budget)
         cleaned = True
+        cleanup["state"] = "confirmed"
+        checkpoint()
         return raw
     finally:
         if not cleaned:
             # Emergency cleanup cannot turn an over-budget sample into a passing one.
             remove_sample(docker, name, ExecutionBudget(time.monotonic() + 30, 65536))
+            if created:
+                cleanup["state"] = "confirmed"
+                checkpoint()
+            # Without a create acknowledgement, absence is only a snapshot. The
+            # daemon may still publish this name; preserve its durable obligation.
 
 
 def remove_sample(docker: Docker, name: str, budget: ExecutionBudget) -> None:
@@ -210,13 +225,15 @@ def run_samples(
     image_id: str,
     request_image_digest: str,
     runtime: str,
+    evidence: dict,
+    checkpoint,
 ) -> list[dict]:
     """Check expected work outcomes and exact findings using canonical CHECKERS validation."""
     observations = []
     for sample, path, digest in samples:
         print(f"Testing {sample.name} ({sample.expected})…", file=sys.stderr)
         request = sample_request(descriptor, sample, request_image_digest, digest)
-        raw = test_sample(docker, image_id, request, path, runtime)
+        raw = test_sample(docker, image_id, request, path, runtime, evidence, checkpoint)
         result = ExternalCheckerExecutionResult.model_validate_json(raw)
         result.validate_request(request)
         if (
@@ -431,7 +448,9 @@ def execute(args, evidence: dict, checkpoint) -> dict:
         if f"{image['Os']}/{image['Architecture']}" != args.platform or image["Id"] != image_id:
             raise ImageError("built image platform/identity differs")
         evidence["tested_image_id"] = image_id
-        evidence["samples"] = run_samples(docker, descriptor, samples, image_id, image_id, runtime)
+        evidence["samples"] = run_samples(
+            docker, descriptor, samples, image_id, image_id, runtime, evidence, checkpoint,
+        )
         if not args.publish:
             return {}
         print("Publishing tested image to ECR…", file=sys.stderr)
@@ -447,6 +466,8 @@ def execute(args, evidence: dict, checkpoint) -> dict:
             image_id,
             cache["platform_manifest_digest"],
             runtime,
+            evidence,
+            checkpoint,
         )
         evidence["publication"] = "verified"
         return {
@@ -455,6 +476,15 @@ def execute(args, evidence: dict, checkpoint) -> dict:
                 mode="json"
             ),
         }
+
+
+def sync_directory(path: Path) -> None:
+    """Persist directory entries before relying on a published cleanup receipt."""
+    descriptor = os.open(path, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
 
 
 def write_json(path: Path, value: dict) -> None:
@@ -466,6 +496,7 @@ def write_json(path: Path, value: dict) -> None:
         handle.flush()
         os.fsync(handle.fileno())
     temporary.replace(path)
+    sync_directory(path.parent)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -506,6 +537,9 @@ def main(argv: list[str] | None = None) -> int:
     try:
         output.mkdir(mode=0o700, parents=True, exist_ok=False)
         owned_output = True
+        # Persist newly created ancestors too, including the default receipt root.
+        for directory in (output, *output.parents):
+            sync_directory(directory)
         outputs = execute(args, evidence, lambda: write_json(output / "receipt.json", evidence))
         for name, value in outputs.items():
             write_json(output / name, value)

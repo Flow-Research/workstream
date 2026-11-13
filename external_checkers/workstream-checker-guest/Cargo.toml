@@ -5,6 +5,10 @@ edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
 
+[features]
+# Only enables the live Python/Rust protocol test; no runtime entry point.
+pre-dialogue-proof = []
+
 [dependencies]
 serde.workspace = true
 serde_json.workspace = true

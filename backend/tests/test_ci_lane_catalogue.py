@@ -101,6 +101,7 @@ def test_checker_delivery_and_routing_preparation_partition_every_node_once() ->
         "tests/checkers/external/test_public_api.py",
         "tests/checkers/external/test_registry.py",
         "tests/checkers/external/test_runtime.py",
+        "tests/checkers/external/test_pre_invocation.py",
         "tests/checkers/external/test_policy.py",
         "tests/checkers/external/test_selected_post_submit.py",
         "tests/checkers/external/test_forge_locator.py",
@@ -317,12 +318,12 @@ def test_semantic_family_membership_has_an_independent_fingerprint() -> None:
     """A catalogue-internal move across semantic families must fail this contract."""
     expected = {
         "shared": (
-            268,
-            "9ff668cabce1f8017f8784bd1233bed7aae0b892cf6aa9da82b3249a06cd819b",
+            275,
+            "d59b427b71f98d981bd188dbc4d1690498481d5a93c9cf74c382f748600dc609",
         ),
         "project": (
-            255,
-            "8e8f8155a5e3929613fb81e5b6bc8d5ac858aa2578dab559b8f403de6298d87a",
+            256,
+            "65376b7218792edcf026d5f851fb85d909a59ad7df363f6904e04e501ba5118d",
         ),
         "task": (
             94,
@@ -394,9 +395,9 @@ def test_project_lane_ownership_has_an_independent_fingerprint() -> None:
         )
         + "\n"
     )
-    assert len(catalogue.PROJECT_PARTITIONED_MODULES) == 255
+    assert len(catalogue.PROJECT_PARTITIONED_MODULES) == 256
     assert hashlib.sha256(canonical.encode()).hexdigest() == (
-        "3782b6f2df688f48755b50db0295f9660d9960ec7c58e1c1e3659f874f27f909"
+        "ed9527add277491e0b20f495767bdf844cecdffa518ce8854109e3b3bcfbe56b"
     )
 
 

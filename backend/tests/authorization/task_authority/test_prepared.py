@@ -375,3 +375,99 @@ async def test_service_task_denials_have_canonical_restageable_evidence(identity
     assert len(evidence.events) == 1
     assert evidence.events[0].after_facts == first.after_facts
     assert evidence.events[0].project_id == first.project_id
+
+
+@pytest.mark.parametrize("mutation", ["operation", "task", "key", "metadata", "status", "foreign_resource"])
+async def test_intake_prepared_binding_rejects_cross_operation_and_wrong_resource(mutation):
+    from app.core.identifiers import new_record_id
+    from app.modules.authorization.domain.submission_intake import IntakeReservationResourceContext
+    _, _, prepared, task, evidence = setup()
+    resource = IntakeReservationResourceContext(resource_id=new_record_id(), scope_project_id=task.scope_project_id,
+        task_id=new_record_id(), assignment_id=new_record_id(), actor_profile_id=task.actor_profile_id,
+        identity_link_id=task.identity_link_id, idempotency_key=new_record_id(),
+        metadata_sha256="sha256:" + "a" * 64, locked_context_sha256="sha256:" + "b" * 64,
+        task_status="in_progress")
+    changes = {"operation": {"resource_id": new_record_id()}, "task": {"task_id": new_record_id()},
+               "key": {"idempotency_key": new_record_id()}, "metadata": {"metadata_sha256": "sha256:" + "c" * 64},
+               "status": {"task_status": "accepted"}}
+    wrong = task if mutation == "foreign_resource" else resource.model_copy(update=changes[mutation])
+    try:
+        handle, value = await prepare(prepared, resource, ActionId.SUBMISSION_INTAKE_RESERVE)
+        with pytest.raises(PreparedAuthorizationHandleInvalid):
+            await prepared.consume(handle, ActionId.SUBMISSION_INTAKE_RESERVE, value, wrong)
+        assert evidence.events == []
+    finally:
+        prepared.close()
+
+
+@pytest.mark.parametrize("identity", list(ServiceIdentity))
+@pytest.mark.parametrize("phase", ["preflight", "prepare"])
+async def test_fixed_services_cannot_reserve_submission_intake(identity, phase):
+    from app.core.identifiers import new_record_id
+    from app.modules.authorization.api.submission_intake import IntakeAuthorityDenied, IntakeReservationAuthorityFacts
+    from app.modules.authorization.submission_intake import SubmissionIntakeAuthorization
+    context = ServiceAuthorizationContext(
+        actor_profile_id=uuid4(), actor_kind=ActorKind.SERVICE,
+        actor_status=ActorStatus.ACTIVE, identity_link_id=uuid4(),
+        identity_link_status=IdentityLinkStatus.ACTIVE, service_identity=identity,
+        request_id=uuid4(), correlation_id=uuid4(),
+    )
+    authority = SubmissionIntakeAuthorization(Session(), context)
+    evidence = Evidence()
+    authority._kernel._audit = evidence
+    facts = IntakeReservationAuthorityFacts(new_record_id(), uuid4(), uuid4(), uuid4(),
+        context.actor_profile_id, context.identity_link_id, uuid4(),
+        "sha256:" + "a" * 64, "sha256:" + "b" * 64, "in_progress")
+    if phase == "preflight":
+        from dataclasses import fields
+        from app.modules.authorization.api.submission_intake import IntakeReservationPreflightFacts
+        facts = IntakeReservationPreflightFacts(**{
+            field.name: getattr(facts, field.name) for field in fields(IntakeReservationPreflightFacts)
+        })
+    try:
+        with pytest.raises(IntakeAuthorityDenied) as caught:
+            await getattr(authority, phase)(facts)
+        assert isinstance(caught.value.__cause__, AuthorizationDenied)
+        assert caught.value.__cause__.decision.denial_code.value == "permission_not_granted"
+        assert len(evidence.events) == 1 and evidence.events[0].resource_id == str(facts.operation_id)
+        assert evidence.events[0].after_facts["allowed"] is False
+    finally:
+        authority.close()
+
+
+@pytest.mark.parametrize("mutation", [None, "project", "task", "key", "extra", "full"])
+async def test_intake_preflight_selectors_cannot_issue_prepared_handle(mutation):
+    from app.core.identifiers import new_record_id
+    from app.modules.authorization.domain.submission_intake import IntakeReservationPreflightResourceContext
+    _, _, prepared, task, evidence = setup()
+    resource = IntakeReservationPreflightResourceContext(
+        resource_id=new_record_id(), scope_project_id=task.scope_project_id,
+        task_id=new_record_id(), assignment_id=new_record_id(), actor_profile_id=task.actor_profile_id,
+        identity_link_id=task.identity_link_id, idempotency_key=new_record_id(),
+        metadata_sha256="sha256:" + "a" * 64,
+    )
+    request = resource.model_dump(mode="json")
+    if mutation == "project":
+        request["scope_project_id"] = str(new_record_id())
+    elif mutation == "task":
+        request["task_id"] = str(new_record_id())
+    elif mutation == "key":
+        request["idempotency_key"] = str(new_record_id())
+    elif mutation == "extra":
+        request["unexpected"] = True
+    elif mutation == "full":
+        request.update(resource_type="submission_intake_reservation", task_status="in_progress",
+                       locked_context_sha256="sha256:" + "b" * 64)
+    value = PreparedAuthorizationInput(idempotency_key=resource.idempotency_key, request_value=request)
+    scope = PreparedAuthorityScope(kind=PreparedAuthorityScopeKind.PROJECT, project_id=resource.scope_project_id)
+    try:
+        if mutation is None:
+            assert await prepared.preflight(ActionId.SUBMISSION_INTAKE_RESERVE, value, scope, resource) is None
+            with pytest.raises(PreparedAuthorizationHandleInvalid):
+                await prepared.prepare(ActionId.SUBMISSION_INTAKE_RESERVE, value, scope)
+        else:
+            with pytest.raises(PreparedAuthorizationHandleInvalid):
+                await prepared.preflight(ActionId.SUBMISSION_INTAKE_RESERVE, value, scope, resource)
+        assert evidence.events == []
+    finally:
+        prepared.close()

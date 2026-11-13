@@ -207,7 +207,10 @@ pub fn parse_request(bytes: &[u8]) -> Result<ValidatedRequest, ContractError> {
                 &[
                     "phase",
                     "role",
-                    "prepared_generation_id",
+                    "operation_id",
+                    "source_sha256",
+                    "lease_id",
+                    "lease_generation",
                     "attempt_id",
                     "attempt_request_digest",
                     "archive_sha256",
@@ -222,8 +225,11 @@ pub fn parse_request(bytes: &[u8]) -> Result<ValidatedRequest, ContractError> {
             digest(material, "attempt_request_digest")?;
             digest(material, "archive_sha256")?;
             digest(material, "semantic_manifest_sha256")?;
-            if string(material, "prepared_generation_id")?
-                != string(identity, "prepared_generation_id")?
+            if string(material, "operation_id")? != string(identity, "operation_id")?
+                || digest(material, "source_sha256")? != digest(identity, "source_sha256")?
+                || string(material, "lease_id")? != string(identity, "lease_id")?
+                || unsigned(material, "lease_generation")?
+                    != unsigned(identity, "lease_generation")?
                 || string(material, "attempt_id")? != string(identity, "attempt_id")?
                 || digest(material, "attempt_request_digest")?
                     != digest(identity, "attempt_request_digest")?
@@ -231,30 +237,9 @@ pub fn parse_request(bytes: &[u8]) -> Result<ValidatedRequest, ContractError> {
                 return Err(ContractError("request material identity differs"));
             }
         } else {
-            exact_map(
-                material,
-                &[
-                    "phase",
-                    "role",
-                    "submission_id",
-                    "submission_version",
-                    "binding_id",
-                    "content_id",
-                    "replica_id",
-                    "content_sha256",
-                    "byte_count",
-                    "media_type",
-                    "evidence_id",
-                    "verification_receipt_id",
-                    "verification_job_id",
-                    "verification_generation",
-                    "namespace_fingerprint",
-                    "semantic_manifest_sha256",
-                ],
-            )?;
+            validate_post_material_custody(material)?;
             if unsigned(material, "byte_count")? > i64::MAX as u64
                 || unsigned(material, "submission_version")? == 0
-                || unsigned(material, "verification_generation")? == 0
             {
                 return Err(ContractError("request material is invalid"));
             }
@@ -483,7 +468,12 @@ pub fn completed_result(
     Ok(value)
 }
 
-fn validate_registry(registry: &Map<String, Value>, phase: &str) -> Result<(), ContractError> {
+/// Validate the immutable selection without requiring source-derived input.
+/// PRE admission uses this before the guest can produce that input.
+pub fn validate_registry(registry: &Map<String, Value>, phase: &str) -> Result<(), ContractError> {
+    if !matches!(phase, "pre_submit" | "post_submit") || string(registry, "phase")? != phase {
+        return Err(ContractError("registry phase differs"));
+    }
     exact_map(
         registry,
         &[
@@ -581,7 +571,10 @@ fn validate_identity(identity: &Map<String, Value>, phase: &str) -> Result<(), C
             "project_id",
             "task_id",
             "assignment_id",
-            "prepared_generation_id",
+            "operation_id",
+            "source_sha256",
+            "lease_id",
+            "lease_generation",
             "attempt_id",
             "attempt_request_digest",
             "effective_plan_sha256",
@@ -1225,6 +1218,59 @@ fn exact_object<'a>(
     Ok(object)
 }
 
+/// Validate the closed POST material shape and its one complete custody witness.
+pub fn validate_post_material_custody(material: &Map<String, Value>) -> Result<(), ContractError> {
+    let mut fields = vec![
+        "phase",
+        "role",
+        "submission_id",
+        "submission_version",
+        "binding_id",
+        "content_id",
+        "replica_id",
+        "content_sha256",
+        "byte_count",
+        "media_type",
+        "evidence_id",
+        "namespace_fingerprint",
+        "semantic_manifest_sha256",
+    ];
+    if material.contains_key("source_operation_id") {
+        fields.extend([
+            "source_operation_id",
+            "accepted_source_sha256",
+            "acceptance_receipt_sha256",
+        ]);
+        let operation = string(material, "source_operation_id")?;
+        if operation.len() != 36
+            || !operation.bytes().enumerate().all(|(index, byte)| {
+                if [8, 13, 18, 23].contains(&index) {
+                    byte == b'-'
+                } else {
+                    byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase()
+                }
+            })
+        {
+            return Err(ContractError("source operation is invalid"));
+        }
+        digest(material, "accepted_source_sha256")?;
+        digest(material, "acceptance_receipt_sha256")?;
+    } else {
+        fields.extend([
+            "verification_receipt_id",
+            "verification_job_id",
+            "verification_generation",
+        ]);
+        if string(material, "verification_receipt_id")?.is_empty()
+            || string(material, "verification_job_id")?.is_empty()
+            || unsigned(material, "verification_generation")? == 0
+        {
+            return Err(ContractError("verified custody is invalid"));
+        }
+    }
+    exact_map(material, &fields)
+}
+
 fn exact_map(object: &Map<String, Value>, fields: &[&str]) -> Result<(), ContractError> {
     let expected: BTreeSet<_> = fields.iter().copied().collect();
     let actual: BTreeSet<_> = object.keys().map(String::as_str).collect();
@@ -1293,6 +1339,48 @@ mod tests {
         body.remove("request_digest");
         request["request_digest"] = Value::String(canonical_hash(&Value::Object(body)).unwrap());
         request
+    }
+
+    #[test]
+    fn pre_source_identity_and_fence_are_bound_to_material() {
+        let original: Value =
+            serde_json::from_slice(include_bytes!("../../fixtures/request.json")).unwrap();
+        for field in [
+            "operation_id",
+            "source_sha256",
+            "lease_id",
+            "lease_generation",
+            "attempt_id",
+            "attempt_request_digest",
+        ] {
+            let mut request = original.clone();
+            request["materials"][0][field] = if field == "lease_generation" {
+                serde_json::json!(4)
+            } else if field.ends_with("_id") {
+                serde_json::json!("019b0000-0000-7000-8000-000000000003")
+            } else {
+                serde_json::json!(format!("sha256:{}", "f".repeat(64)))
+            };
+            let request = resign_request(request);
+            assert!(
+                parse_request(&serde_json::to_vec(&request).unwrap()).is_err(),
+                "{field}"
+            );
+        }
+        let mut request = original.clone();
+        request["identity"]["prepared_generation_id"] =
+            serde_json::json!("019b0000-0000-7000-8000-000000000003");
+        assert!(parse_request(&serde_json::to_vec(&resign_request(request)).unwrap()).is_err());
+        for generation in [
+            serde_json::json!(0),
+            serde_json::json!(-1),
+            serde_json::json!(true),
+        ] {
+            let mut request = original.clone();
+            request["identity"]["lease_generation"] = generation.clone();
+            request["materials"][0]["lease_generation"] = generation;
+            assert!(parse_request(&serde_json::to_vec(&resign_request(request)).unwrap()).is_err());
+        }
     }
 
     fn post_context_request(kind: &str, selected_roles: &[&str]) -> Value {
@@ -1555,7 +1643,7 @@ mod tests {
             .expect("Python request fixture must satisfy the Rust contract");
         assert_eq!(
             request.request_digest,
-            "sha256:a06707b14348ffe5ef22a55de8d4ec4845c9029da7180d5731fb2c120b5591f3"
+            "sha256:147cd4a72624caf97ec7ee167d00e1f76d2a9c89d0bda84134b6f1ac01a47a79"
         );
         let result: Value = serde_json::from_slice(include_bytes!("../../fixtures/result.json"))
             .expect("result fixture is JSON");
@@ -1643,6 +1731,44 @@ mod tests {
         let mut uppercase_check = coverage;
         uppercase_check["findings"][0]["check_id"] = Value::String("Coverage".into());
         assert!(validate_result(&resign(uppercase_check), &request).is_err());
+    }
+
+    #[test]
+    fn post_source_custody_requires_one_complete_witness_for_each_archive() {
+        let mut request = post_context_request("checker_remediation", &[PREDECESSOR_ARCHIVE_ROLE]);
+        for material in request["materials"].as_array_mut().unwrap() {
+            let material = material.as_object_mut().unwrap();
+            for key in [
+                "verification_receipt_id",
+                "verification_job_id",
+                "verification_generation",
+            ] {
+                material.remove(key);
+            }
+            material.insert(
+                "source_operation_id".into(),
+                Value::String("018f6f49-66b8-7d2a-bf4d-0e2eeaa00001".into()),
+            );
+            material.insert(
+                "accepted_source_sha256".into(),
+                Value::String(format!("sha256:{}", "a".repeat(64))),
+            );
+            material.insert(
+                "acceptance_receipt_sha256".into(),
+                Value::String(format!("sha256:{}", "b".repeat(64))),
+            );
+        }
+        let request = resign_request(request);
+        assert!(parse_request(&serde_json::to_vec(&request).unwrap()).is_ok());
+        let mut mixed = request.clone();
+        mixed["materials"][1]["verification_generation"] = Value::from(1);
+        assert!(parse_request(&serde_json::to_vec(&resign_request(mixed)).unwrap()).is_err());
+        let mut incomplete = request;
+        incomplete["materials"][0]
+            .as_object_mut()
+            .unwrap()
+            .remove("acceptance_receipt_sha256");
+        assert!(parse_request(&serde_json::to_vec(&resign_request(incomplete)).unwrap()).is_err());
     }
 
     #[test]

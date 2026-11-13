@@ -107,6 +107,8 @@ CHECKER_IMAGE_PUBLISH_TARGETS = frozenset({
     "backend/scripts/checker_image_process.py",
     "backend/scripts/checker_image_manifest.py",
     "backend/scripts/checker_smol_cache.py",
+    "backend/scripts/checker_trusted_root.py",
+    "backend/scripts/checker_root_layers.py",
     "backend/scripts/checker_image_samples.py",
 })
 AWS_ARTIFACT_ACTIVATION_TARGETS = frozenset({
@@ -354,6 +356,7 @@ PILOT_04_SELECTED_FLOW_TARGETS = frozenset(
         "backend/app/modules/checkers/api/pre_submit_material.py",
         "backend/app/modules/checkers/api/selected_post_submit.py",
         "backend/app/modules/checkers/api/selected_pre_submit.py",
+        "backend/app/modules/checkers/api/historical_selected_pre_submit.py",
         "backend/app/modules/checkers/selected_post_submit_execution.py",
         "backend/app/modules/checkers/selected_pre_submit_coordination.py",
         "backend/app/modules/checkers/selected_pre_submit_execution.py",
@@ -932,6 +935,23 @@ PROJECT_CATALOGUE_TARGETS = frozenset({
     "backend/app/modules/authorization/domain/project_catalogue.py",
     "backend/app/modules/authorization/project_catalogue.py",
 })
+SUBMISSION_INTAKE_TARGETS = frozenset({
+    "backend/app/modules/artifacts/api/submission_intake.py",
+    "backend/app/modules/artifacts/intake/models.py",
+    "backend/app/modules/artifacts/intake/capacity.py",
+    "backend/app/modules/artifacts/intake/streaming.py",
+    "backend/app/modules/authorization/api/submission_intake.py",
+    "backend/app/modules/authorization/domain/submission_intake.py",
+    "backend/app/modules/authorization/prepared_preflight.py",
+    "backend/app/modules/authorization/submission_intake.py",
+    "backend/app/modules/artifacts/intake/foreground_admission.py",
+    "backend/app/modules/artifacts/intake/foreground_lease.py",
+    "backend/app/modules/artifacts/intake/foreground_upload.py",
+    "backend/app/adapters/artifacts/local_submission_source.py",
+    "backend/app/modules/artifacts/intake/repository.py",
+    "backend/app/modules/tasks/api/intake_custody.py",
+    "backend/app/modules/tasks/intake_custody.py",
+})
 FORGE_PROOF_FACTS_TARGETS = frozenset({
     "backend/app/adapters/github/app_facts.py",
     "backend/app/interfaces/forge_facts.py",
@@ -1221,6 +1241,7 @@ def _validate_additive_partition_transition(
         | PILOT_02C_BULK_TRANSITION_TARGETS
         | PROJECT_CATALOGUE_TARGETS
         | FORGE_PROOF_FACTS_TARGETS
+        | SUBMISSION_INTAKE_TARGETS
     )
     expected_additions = (approved_additions & additions) - set(trusted_targets)
     if POL_03A_DECLARATIVE_MODEL_TARGET in additions:

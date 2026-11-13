@@ -58,13 +58,62 @@ from app.modules.authorization.domain.guide_compilation_projections import (
 from app.modules.authorization.domain.project_setup_finalization import (
     ProjectSetupFinalizationResourceContext,
 )
+from app.modules.authorization.domain.submission_finalization import SubmissionFinalizationResourceContext
+from app.modules.authorization.domain.submission_cleanup import SubmissionSourceCleanupResourceContext
 from app.modules.authorization.runtime import (
+    ArtifactPendingWorkResourceContext,
+    ArtifactPutAttemptResourceContext,
+    ArtifactVerificationJobResourceContext,
+    GuideSourceReadResourceContext,
+    SubmissionBindingResourceContext,
+    PreSubmitCheckerInputResourceContext,
     AuthorizationResourceContext,
     PreparedAuthorityScope,
     PreparedAuthorityScopeKind,
     ProjectGuideSufficiencyMutationResourceContext,
     ProjectSubmissionArtifactPolicyMutationResourceContext,
 )
+
+ARTIFACT_INTERNAL_RESOURCES = {
+    ActionId.ARTIFACT_GUIDE_SOURCE_READ: ("guide_source_read", GuideSourceReadResourceContext),
+    ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE: (
+        "pre_submit_checker_input",
+        PreSubmitCheckerInputResourceContext,
+    ),
+    ActionId.ARTIFACT_SOURCE_CLEANUP: (
+        "submission_source_cleanup", SubmissionSourceCleanupResourceContext,
+    ),
+    ActionId.ARTIFACT_SUBMISSION_FINALIZE: (
+        "submission_finalization", SubmissionFinalizationResourceContext,
+    ),
+    ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE: (
+        "submission_binding",
+        SubmissionBindingResourceContext,
+    ),
+    ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE: (
+        "artifact_put_attempt",
+        ArtifactPutAttemptResourceContext,
+    ),
+    ActionId.ARTIFACT_VERIFICATION_EXECUTE: (
+        "artifact_verification_job",
+        ArtifactVerificationJobResourceContext,
+    ),
+    ActionId.ARTIFACT_PENDING_WORK_SCAN: (
+        "artifact_pending_work",
+        ArtifactPendingWorkResourceContext,
+    ),
+}
+
+EXACT_ARTIFACT_RESOURCE_BY_ACTION = {
+    action: ARTIFACT_INTERNAL_RESOURCES[action]
+    for action in (
+        ActionId.ARTIFACT_GUIDE_SOURCE_READ,
+        ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE,
+        ActionId.ARTIFACT_SOURCE_CLEANUP,
+        ActionId.ARTIFACT_SUBMISSION_FINALIZE,
+        ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE,
+    )
+}
 
 _PROJECT_SETUP_ACTIONS = frozenset(
     {

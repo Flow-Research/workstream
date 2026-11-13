@@ -80,10 +80,10 @@ services:
       retries: 20
       start_period: 15s
 
-  worker:
+  worker: &general-worker
     <<: *backend-runtime
     group_add: ["10001"]
-    environment:
+    environment: &worker-environment
       <<: *backend-environment
       WORKSTREAM_GUIDE_DOCUMENT_PARSER_SOCKET: /var/lib/workstream/guide-runtime/guide.sock
     volumes:
@@ -100,6 +100,7 @@ services:
       - --pool=prefork
       - --concurrency=${WORKSTREAM_CELERY_WORKER_CONCURRENCY:-2}
       - --hostname=worker@%h
+      - --queues=celery,workstream.outbox
       - --pidfile=/tmp/celery-worker.pid
       - --loglevel=INFO
     depends_on:
@@ -119,6 +120,22 @@ services:
       timeout: 8s
       retries: 12
       start_period: 20s
+
+  submission-finalizer:
+    <<: *general-worker
+    profiles: ["submission-intake"]
+    environment:
+      <<: *worker-environment
+      WORKSTREAM_SUBMISSION_FINALIZATION_CONCURRENCY: ${WORKSTREAM_SUBMISSION_FINALIZATION_CONCURRENCY:-}
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        n="$${WORKSTREAM_SUBMISSION_FINALIZATION_CONCURRENCY:?set an approved finalization concurrency}"
+        case "$$n" in *[!0-9]*|0) echo "finalization concurrency must be positive" >&2; exit 1;; esac
+        test "$$n" -gt 0
+        exec python -m celery -A app.workers.celery_app worker --pool=prefork --concurrency="$$n" --queues=workstream.submission_finalization --hostname=submission-finalizer@%h --pidfile=/tmp/celery-worker.pid --loglevel=INFO
+    stop_grace_period: 420s
 
   model-proxy:
     <<: *backend-runtime

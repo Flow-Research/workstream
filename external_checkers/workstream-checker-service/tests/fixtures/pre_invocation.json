@@ -1,0 +1,326 @@
+{
+  "reservation": {
+    "schema_version": "workstream.selected_pre_submit_reservation.v2",
+    "actor_profile_id": "01a1d081-9045-703e-b321-a3af5eb248e7",
+    "identity_link_id": "01a1d081-9046-7c5b-8d55-f69f5e2888ad",
+    "project_id": "01a1d081-9047-7565-b9b9-1c9a1b52be0c",
+    "task_id": "01a1d081-9048-7b57-a304-749722a193f5",
+    "assignment_id": "01a1d081-9049-7cba-ad30-ff0a6c524e68",
+    "attempt_id": "01a1d081-904a-7cd6-bf45-c036db3e8925",
+    "idempotency_key": "01a1d081-904b-7d1f-b6a0-02e08d816da2",
+    "foreground_lease_id": "01a1d081-904d-70de-8e80-4c3a59e856b3",
+    "source": {
+      "location": {
+        "operation_id": "01a1d081-904c-7af4-86de-39b1eaf72a71",
+        "namespace_id": "primary",
+        "namespace_fingerprint": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "provider_profile": "local-v2"
+      },
+      "provider_generation": "test-generation",
+      "raw_sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "raw_byte_count": 1024,
+      "sealed_upload_fence": 1,
+      "media_type": "application/zip"
+    },
+    "source_sha256": "sha256:1367a097f9992e93c264eb38bed1ab998a8bd482b3490fe267341785bcfa32db",
+    "metadata_sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "locked_context_sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "foreground_lease_generation": 1,
+    "pre_deadline_at": "2026-11-12T16:07:14.438757+00:00",
+    "policy": {
+      "schema_version": "external_pre_submit_policy.v1",
+      "workstream_default": {
+        "checker_id": "workstream.default",
+        "checker_version": "v1",
+        "behavior_sha256": "sha256:af2c604f792c4456d3b222036c772161b1503eace65ff90c3d3a23d9d348c28f"
+      },
+      "entries": [
+        {
+          "requirement_id": "project.archive_rules",
+          "stage": "pre_submit",
+          "registry": {
+            "capability_id": "acme.safe_archive",
+            "capability_version": "v1.2.3",
+            "phase": "pre_submit",
+            "image_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "configuration_schema": {
+              "schema_id": "acme.safe_archive.configuration",
+              "schema_version": "v1",
+              "document": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+                "additionalProperties": false
+              },
+              "schema_sha256": "sha256:d746974fa9afd5e951f76f9af38954b0ad7f436f2120dc974da65e5ee39f856f"
+            },
+            "input_schema": {
+              "schema_id": "external_checker_pre_submit_input",
+              "schema_version": "v1",
+              "document": {
+                "type": "object"
+              },
+              "schema_sha256": "sha256:a2c799262a3ce3c19ef5cdd983bf3d12b43ab3c426227091b909dcb7054738c0"
+            },
+            "output_schema": {
+              "schema_id": "external_checker_result",
+              "schema_version": "v1",
+              "document": {
+                "type": "object"
+              },
+              "schema_sha256": "sha256:a2c799262a3ce3c19ef5cdd983bf3d12b43ab3c426227091b909dcb7054738c0"
+            },
+            "resources": {
+              "cpu_millis": 500,
+              "memory_bytes": 134217728,
+              "deadline_ms": 30000,
+              "maximum_output_bytes": 32768
+            },
+            "registry_entry_id": "01a1d081-9007-7185-bd6f-999eb02663a5",
+            "entry_digest": "sha256:2666891954c7e14a486c548a5395991ee5ff92a353495a43baee729779282e2d",
+            "registration_operation_id": "400a1172-5796-4952-bed3-8e3b0904cc35",
+            "registered_by_actor_profile_id": "c27b8967-33ee-4cf9-bcf8-fe287aed107b",
+            "authorization_decision_event_id": "b871ca54-6c5f-4309-9a78-380bdd5c0cf6",
+            "created_at": "2026-11-12T16:05:14.377817Z"
+          },
+          "configuration": {},
+          "configuration_sha256": "sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a"
+        }
+      ],
+      "policy_sha256": "sha256:1a17480a855a29be12ce3e470fda2fed4b8d95226ed37e12bf29861b1796a7d2"
+    },
+    "default_context": {
+      "predecessor": null,
+      "predecessor_exists": false,
+      "current_predecessor": null,
+      "current_rules_sha256": "sha256:8888888888888888888888888888888888888888888888888888888888888888",
+      "predecessor_rules_sha256": null,
+      "packet": {
+        "summary": "",
+        "contributor_attestation": ""
+      }
+    },
+    "runtime_profile": {
+      "profile_id": "test-only",
+      "platform_root_sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "cpu_millis": 2000,
+      "memory_bytes": 2147483648,
+      "temporary_disk_bytes": 4294967296,
+      "maximum_processes": 64,
+      "maximum_output_bytes": 1048576,
+      "maximum_log_bytes": 1048576,
+      "aggregate_deadline_ms": 120000,
+      "archive_limits": {
+        "maximum_entries": 2000,
+        "maximum_path_bytes": 1024,
+        "maximum_path_depth": 32,
+        "maximum_central_directory_bytes": 8388608,
+        "maximum_entry_bytes": 134217728,
+        "maximum_expanded_bytes": 536870912,
+        "maximum_compression_ratio": 100,
+        "maximum_inspection_seconds": 60.0
+      }
+    },
+    "admission_lineage": {
+      "predecessor_submission_id": null,
+      "predecessor_submission_version": null,
+      "checker_remediation_manifest_id": null,
+      "guide_id": "01a1cf4c-d6c4-7ede-add7-f9bd12e64560",
+      "guide_version": "v2",
+      "source_snapshot_id": "01a1cf4c-d6c5-798a-98ae-e349ea3ac7e7",
+      "source_snapshot_sha256": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+      "locked_guide_sha256": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+      "effective_policy_id": "01a1cf4c-d6c6-7418-8bca-8e321bc3348e",
+      "effective_policy_sha256": "sha256:3333333333333333333333333333333333333333333333333333333333333333",
+      "pre_submit_policy_id": "01a1cf4c-d6c7-777d-8bdf-eb0e12879148",
+      "pre_submit_policy_sha256": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+      "effective_plan_sha256": "sha256:1a17480a855a29be12ce3e470fda2fed4b8d95226ed37e12bf29861b1796a7d2",
+      "rules_sha256": "sha256:8888888888888888888888888888888888888888888888888888888888888888",
+      "external_checker_policies_sha256": "sha256:9999999999999999999999999999999999999999999999999999999999999999",
+      "post_submit_policy_sha256": "sha256:ffcd8b8e350f4d11a53731faf9b41c97e09562a78178bdbfb96c300b4994d401",
+      "post_submit_policy_body": {
+        "entries": [],
+        "policy_sha256": "sha256:ffcd8b8e350f4d11a53731faf9b41c97e09562a78178bdbfb96c300b4994d401",
+        "schema_version": "external_post_submit_policy.v1"
+      },
+      "locked_policy_context_hash": "sha256:6666666666666666666666666666666666666666666666666666666666666666",
+      "packet_sha256": "sha256:f2906043a657a5b513767cfd552c88301775c6f663c5d483765d499cb1b3192d",
+      "storage_scheme": "s3"
+    }
+  },
+  "lease_expires_at": "2026-11-12T16:07:14.438757+00:00",
+  "wire": {
+    "schema_version": "workstream.pre_submit_invocation.v1",
+    "operation": "execute_pre",
+    "phase": "pre_submit",
+    "invocation": {
+      "operation": "execute_pre",
+      "run_id": "01a1d081-904a-7cd6-bf45-c036db3e8925",
+      "source_operation_id": "01a1d081-904c-7af4-86de-39b1eaf72a71",
+      "request_digest": "sha256:481aacdca19ea1b3dea7d6ad72c726cfc1ff33a23fb852d9eb09bc0de4b7f72f",
+      "source_sha256": "sha256:1367a097f9992e93c264eb38bed1ab998a8bd482b3490fe267341785bcfa32db",
+      "profile_sha256": "sha256:44c6f836848e2d7f1c500919dc24448ca9d17817b8914a03a185f449c62cdb3e",
+      "image_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "config_image_id": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "lease_id": "01a1d081-904e-76d9-8737-92b55ae577fc",
+      "lease_generation": 1
+    },
+    "provider_invocation_id": "test-invocation",
+    "outcome": "completed",
+    "reason": null,
+    "runtime": {
+      "provider": "smolvm",
+      "version": "1.31.4",
+      "profile": {
+        "profile_id": "test-only",
+        "platform_root_sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "cpu_millis": 2000,
+        "memory_bytes": 2147483648,
+        "temporary_disk_bytes": 4294967296,
+        "maximum_processes": 64,
+        "maximum_output_bytes": 1048576,
+        "maximum_log_bytes": 1048576,
+        "aggregate_deadline_ms": 120000,
+        "archive_limits": {
+          "maximum_entries": 2000,
+          "maximum_path_bytes": 1024,
+          "maximum_path_depth": 32,
+          "maximum_central_directory_bytes": 8388608,
+          "maximum_entry_bytes": 134217728,
+          "maximum_expanded_bytes": 536870912,
+          "maximum_compression_ratio": 100,
+          "maximum_inspection_seconds": 60.0
+        }
+      },
+      "binary_sha256": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "guest_sha256": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    },
+    "cleanup": {
+      "obligation_id": "test-invocation",
+      "disposition": "destroyed",
+      "journal_sha256": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+    },
+    "timings_ms": {
+      "admission": 1,
+      "preparation": 2,
+      "execution": 3,
+      "cleanup": 4,
+      "total": 10
+    },
+    "execution": {
+      "schema_version": "workstream.selected_pre_submit_execution.v2",
+      "request_digest": "sha256:481aacdca19ea1b3dea7d6ad72c726cfc1ff33a23fb852d9eb09bc0de4b7f72f",
+      "lease_id": "01a1d081-904e-76d9-8737-92b55ae577fc",
+      "lease_generation": 1,
+      "observed_source": {
+        "location": {
+          "operation_id": "01a1d081-904c-7af4-86de-39b1eaf72a71",
+          "namespace_id": "primary",
+          "namespace_fingerprint": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "provider_profile": "local-v2"
+        },
+        "provider_generation": "test-generation",
+        "raw_sha256": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "raw_byte_count": 1024,
+        "sealed_upload_fence": 1,
+        "media_type": "application/zip"
+      },
+      "manifest_body": {
+        "entries": [
+          {
+            "entry_type": "directory",
+            "normalized_path": "evidence"
+          },
+          {
+            "byte_count": 9,
+            "entry_type": "file",
+            "executable": false,
+            "normalized_path": "evidence/results",
+            "sha256": "sha256:672eb8316fec83f94119a4193f9fc552513d56a147502f8be4830e017d817831"
+          },
+          {
+            "byte_count": 20,
+            "entry_type": "file",
+            "executable": false,
+            "normalized_path": "task.toml",
+            "sha256": "sha256:db827bb156a8942c9c3f6f9a6c734959f667f0e84a8682ad1827df1e9cfc0744"
+          }
+        ],
+        "schema_version": "workstream.submission_bundle_manifest.v1"
+      },
+      "manifest_sha256": "sha256:dc88d211b1a40342e06eaaed145c35a1b1e9ca18c000eaf74946677ecabc502e",
+      "default_input_sha256": "sha256:03f00a22258fbcce6665c5b3ab4b833022672b8233085919e67d59ab4cbdf74d",
+      "policy_sha256": "sha256:1a17480a855a29be12ce3e470fda2fed4b8d95226ed37e12bf29861b1796a7d2",
+      "workstream_default": {
+        "schema_version": "workstream.default_checker_result.v1",
+        "checker_id": "workstream.default",
+        "checker_version": "v1",
+        "behavior_sha256": "sha256:af2c604f792c4456d3b222036c772161b1503eace65ff90c3d3a23d9d348c28f",
+        "eligible": true,
+        "checks": [
+          {
+            "check_id": "archive_safe",
+            "status": "passed",
+            "failure_code": null,
+            "finding_count": 0
+          },
+          {
+            "check_id": "received_identity_exact",
+            "status": "passed",
+            "failure_code": null,
+            "finding_count": 0
+          },
+          {
+            "check_id": "high_confidence_secrets_absent",
+            "status": "passed",
+            "failure_code": null,
+            "finding_count": 0
+          },
+          {
+            "check_id": "submission_changed_for_current_rules",
+            "status": "passed",
+            "failure_code": null,
+            "finding_count": 0
+          }
+        ],
+        "warnings": []
+      },
+      "required_external_count": 1,
+      "external_members": [
+        {
+          "order": 0,
+          "requirement_id": "project.archive_rules",
+          "registry_entry_id": "01a1d081-9007-7185-bd6f-999eb02663a5",
+          "registry_entry_digest": "sha256:2666891954c7e14a486c548a5395991ee5ff92a353495a43baee729779282e2d",
+          "request_digest": "sha256:bcfe1e32990cc814b8471c2e0d2626f14fc6a6653bf4d92320d9a27dc01612b6",
+          "result": {
+            "schema_version": "external_checker_result.v1",
+            "request_digest": "sha256:bcfe1e32990cc814b8471c2e0d2626f14fc6a6653bf4d92320d9a27dc01612b6",
+            "registry_entry_id": "01a1d081-9007-7185-bd6f-999eb02663a5",
+            "registry_entry_digest": "sha256:2666891954c7e14a486c548a5395991ee5ff92a353495a43baee729779282e2d",
+            "phase": "pre_submit",
+            "outcome": "completed",
+            "verdict": "passed",
+            "findings": [],
+            "infrastructure_failure_code": null,
+            "result_digest": "sha256:15fbdcc75b46c4cbe09282128b87efb0163d02c364f86c44531bbcc3ce11fda0"
+          },
+          "isolation": {
+            "repository": "registry.example/workstream/checker",
+            "platform_manifest_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "platform_manifest_media_type": "application/vnd.oci.image.manifest.v1+json",
+            "platform_manifest_byte_count": 1024,
+            "operating_system": "linux",
+            "architecture": "amd64",
+            "config_image_id": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "runtime": "smolvm",
+            "isolation_mode": "smol-microvm",
+            "sandbox_uid": 65532,
+            "sandbox_gid": 65532
+          }
+        }
+      ],
+      "eligible": true
+    }
+  }
+}
