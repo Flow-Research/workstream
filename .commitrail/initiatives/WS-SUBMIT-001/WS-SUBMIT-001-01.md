@@ -3606,3 +3606,16 @@ inventory initially failed on the three stale sample classifications noted above
 the precise repair passed (`/tmp/source-cleanup-decisions-inventory2.log`, 18.80s).
 This worktree proof precedes its frozen review commit, not exact-head launch
 proof. Provider deletion, settlement evidence and scheduling are still required.
+
+Review at frozen2407d522b found CLEANUP-AUTH-RACE-01: unlocked service preflight
+could become stale while replay waited for TASK custody. The new two-session
+regression waits until the exact TASK holder blocks replay, commits identity-link
+revocation, then releases custody. Both existing-claim and confirmed replay
+failed before the fix (`/tmp/source-cleanup-replay-red.log`: 2 failed, 50.79s),
+reproducing receipt return after revocation. The repair revalidates and locks
+fresh actor/link facts after TASK/operation locks, matching prepared consumption
+lock order and retaining those locks until the root transaction ends.
+QA also requested wrong non-null confirmation decisions with a complete attempted
+charge-release transaction. Added phase, generation and source-digest probes;
+all must leave confirmation empty and charge unchanged. Replay proof is pending
+for this repair; the prior 20-pass result does not prove the new race guard.

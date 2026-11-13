@@ -52,6 +52,7 @@ class SealedSourceCleanup:
     async def _locked(self, operation_id):
         await self._authorization.authorize()
         operation = await self._intake._lock(operation_id)
+        await self._authorization.revalidate()
         await self._session.execute(text(
             "SELECT public.require_sealed_source_cleanup(o) "
             "FROM public.submission_intake_operations o WHERE id=:id"

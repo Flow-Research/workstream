@@ -388,3 +388,75 @@ async def test_cleanup_decisions_and_mutations_rollback_together(intake):
                                     {"id": operation}) == 100
         assert await session.scalar(text("SELECT count(*) FROM audit_events WHERE resource_id=:id "
             "AND action_id='artifact.submission_source.cleanup'"), {"id": str(operation)}) == 1
+
+
+@pytest.mark.parametrize("phase", ["claim", "confirmed_replay"])
+async def test_cleanup_replay_rechecks_revocation_after_task_wait(intake, provision_cleanup_identity, phase):
+    """Revocation commits after preflight but before replay acquires custody."""
+    from app.modules.artifacts.schemas import ArtifactAuthorityDeniedError
+    from app.modules.authorization.runtime import PreparedAuthorizationUnsupported
+    operation = await terminal_source(intake)
+    await age_fixture(intake, operation)
+    async with intake.factory.begin() as session:
+        claim = await owner(session).claim(operation, new_record_id(), lease_duration=timedelta(minutes=5))
+    if phase == "confirmed_replay":
+        async with intake.factory.begin() as session:
+            await owner(session).confirm(claim, object_absent=True, writes_settled=True, parts_absent=True)
+    waiting_pid = asyncio.Queue()
+
+    async def replay():
+        async with intake.factory.begin() as session:
+            await waiting_pid.put(await session.scalar(text("SELECT pg_backend_pid()")))
+            with pytest.raises((ArtifactAuthorityDeniedError, PreparedAuthorizationUnsupported)):
+                if phase == "claim":
+                    await owner(session).claim(operation, claim.claim_id, lease_duration=timedelta(minutes=5))
+                else:
+                    await owner(session).confirm(claim, object_absent=True, writes_settled=True, parts_absent=True)
+
+    contender = None
+    try:
+        async with intake.factory.begin() as blocker:
+            winner_pid = await blocker.scalar(text("SELECT pg_backend_pid()"))
+            await blocker.execute(text("SELECT id FROM workstream_tasks WHERE id=:task FOR UPDATE"),
+                                  {"task": intake.task})
+            contender = asyncio.create_task(replay())
+            async with asyncio.timeout(15):
+                pid = await waiting_pid.get()
+                async with intake.factory() as observer:
+                    while not await observer.scalar(text("SELECT :winner=ANY(pg_blocking_pids(:waiter))"),
+                                                    {"winner": winner_pid, "waiter": pid}):
+                        await asyncio.sleep(0.02)
+            assert not contender.done()
+            async with intake.factory.begin() as revoker:
+                await revoker.execute(text("UPDATE actor_identity_links SET status='revoked',revoked_by='test',"
+                    "revoked_reason='test',revoked_at=clock_timestamp() WHERE actor_profile_id=:actor"),
+                    {"actor": provision_cleanup_identity})
+        async with asyncio.timeout(15):
+            await contender
+    finally:
+        if contender is not None and not contender.done():
+            contender.cancel()
+            await asyncio.gather(contender, return_exceptions=True)
+
+
+@pytest.mark.parametrize("substitution", ["phase", "generation", "source"])
+async def test_confirmation_rejects_wrong_decision_even_with_atomic_release(intake, substitution):
+    operation = await terminal_source(intake)
+    await age_fixture(intake, operation)
+    async with intake.factory.begin() as session:
+        claim = await owner(session).claim(operation, new_record_id(), lease_duration=timedelta(minutes=5))
+    changes = {"phase": {"phase": "claim"}, "generation": {"claim_generation": 2},
+               "source": {"source_sha256": "sha256:" + "e" * 64}}[substitution]
+    with pytest.raises(DBAPIError, match="authority differs"):
+        async with intake.factory.begin() as session:
+            decision = await cleanup_decision(session, operation, claim.claim_id, phase="confirm", changes=changes)
+            await session.execute(text("UPDATE submission_source_cleanup_claims "
+                "SET confirmed_at=clock_timestamp(),confirmation_decision_id=:decision WHERE operation_id=:id"),
+                {"id": operation, "decision": decision})
+            await session.execute(text("UPDATE submission_source_charges SET state='released',accounted_bytes=0 "
+                                       "WHERE operation_id=:id"), {"id": operation})
+    async with intake.factory() as session:
+        assert await session.scalar(text("SELECT confirmed_at IS NULL AND confirmation_decision_id IS NULL "
+            "FROM submission_source_cleanup_claims WHERE operation_id=:id"), {"id": operation}) is True
+        assert await session.scalar(text("SELECT accounted_bytes FROM submission_source_charges WHERE operation_id=:id"),
+                                    {"id": operation}) == 100

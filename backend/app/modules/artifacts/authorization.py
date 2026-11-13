@@ -693,6 +693,23 @@ class PreparedSubmissionSourceCleanupAuthorization(_PreparedArtifactServiceAutho
         )
 
 
+    async def revalidate(self) -> None:
+        """Lock fresh service lifecycle facts after TASK/operation custody."""
+        from app.modules.authorization.runtime import ActorStatus, IdentityLinkStatus
+        context = await fixed_service_action_context(
+            self._session, service_identity=ServiceIdentity.ARTIFACT_SOURCE_CLEANUP,
+            action_id=ActionId.ARTIFACT_SOURCE_CLEANUP,
+            request_id=self._request_id, correlation_id=self._correlation_id,
+        )
+        revalidate = fixed_service_context_revalidator(
+            AdminAuthorizationRepository(self._session), ServiceIdentity.ARTIFACT_SOURCE_CLEANUP,
+        )
+        current = await revalidate(context, ActionId.ARTIFACT_SOURCE_CLEANUP)
+        if (current is None or current.actor_status is not ActorStatus.ACTIVE
+                or current.identity_link_status is not IdentityLinkStatus.ACTIVE):
+            raise ArtifactAuthorityDeniedError("artifact cleanup service is unavailable")
+
+
 class PreparedSubmissionFinalizationAuthorization(_PreparedArtifactServiceAuthorization):
     """Accepted continuation authority belongs only to the existing binding service."""
 
