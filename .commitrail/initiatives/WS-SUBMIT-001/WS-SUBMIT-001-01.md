@@ -3553,3 +3553,8 @@ The repair states the actual 22 identities, 21 action-bearing identities,
 44 memberships and eight ART identities, names cleanup's sole action and keeps
 uncomposed custody/provider work explicit. Review replay remains scoped to that
 repair; the full objective remains active and incomplete.
+
+Documentation replay closed DOC-CLEANUP-AUTH-01 at clean 5fe3443a5, independently
+confirming the registry counts and incomplete cleanup-composition boundary.
+No scoped review finding remains for the authority prerequisite. Durable claim
+and confirmation decision enforcement is the next implementation step.
