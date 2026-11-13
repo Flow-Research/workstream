@@ -3537,3 +3537,19 @@ This checkpoint does not yet require these decisions in cleanup claims or
 confirmations, expose provider deletion, or provision a cleanup principal.
 Database decision binding and provider composition remain required work under
 the active full objective; no cleanup end-to-end completion is claimed.
+
+The post-refactor replay `/tmp/source-cleanup-authority3.log` passed all 17 tests
+in 28.71 seconds, with Alembic0079 and database cleanup confirmed in its JSON.
+It launched at e66dd6457 with final worktree content and is scope-compatible,
+not an exact-head launch receipt. Structure validation
+`/tmp/source-cleanup-authority-structure2.log` exited zero. After fetching origin,
+`git rev-list --count HEAD..origin/main` returned zero.
+At frozen clean 482062fd5, architecture/security and QA/test-delta passed this
+preparatory authority scope; CI integrity passed. Review independently compared
+all seven existing resource mappings and the four-action prepared subset with
+their predecessors, and the unchanged 105-line debt function. Documentation
+found DOC-CLEANUP-AUTH-01: a current operations page had obsolete service counts.
+The repair states the actual 22 identities, 21 action-bearing identities,
+44 memberships and eight ART identities, names cleanup's sole action and keeps
+uncomposed custody/provider work explicit. Review replay remains scoped to that
+repair; the full objective remains active and incomplete.

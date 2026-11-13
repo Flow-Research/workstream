@@ -733,12 +733,16 @@ actor, project, role, and cause event before a consumer changes product state.
 Revoking one role must leave the other project roles and all AdminRoleGrants
 unchanged.
 
-The closed registry now has seventeen fixed-service identities: sixteen
-action-bearing identities with twenty-five matrix memberships, plus the
+The closed registry has twenty-two fixed-service identities: twenty-one
+action-bearing identities with forty-four matrix memberships, plus the
 target-only `workstream.compensation.adapter` identity. The action-bearing
-set comprises seven ART identities, project setup, six exact REV identities,
-the active shared outbox dispatcher, and the task assignment reconciler. Missing
-provisioned rows deny without stopping the application.
+set comprises eight ART identities, project setup, six exact REV identities,
+the shared outbox dispatcher, three TASK identities and two CHECKER identities.
+The dedicated `workstream.artifact.source_cleanup` identity has only the
+`artifact.submission_source.cleanup` action. Its prepared authority binds the
+operation, project, task, source digest, claim ID/generation and cleanup phase;
+provider deletion and binding decisions to durable cleanup custody remain
+uncomposed. Missing provisioned rows deny without stopping the application.
 The target-only identity has no matrix membership, and the REV actions remain
 unavailable. Dispatcher authority grants no feature permission. Do not create a
 shared review service or a database service-grant table.
