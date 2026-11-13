@@ -34,12 +34,14 @@ async def test_stalled_accepted_source_is_protected_from_cleanup(recovery_intake
     """Exhausted finalizer delivery never turns accepted input into garbage."""
     from sqlalchemy.exc import DBAPIError
     from sqlalchemy import text
-    from app.adapters.tasks import intake_task_custody_port
-    from app.modules.artifacts.intake.cleanup import SealedSourceCleanup
+    from tests.artifacts.test_submission_source_cleanup import owner
+    from tests.checkers.execution.support import provision_post_submit_service
+    from app.modules.actors.api import ServiceIdentity
     f, operation = recovery_intake.f, recovery_intake.owner.operation_id
+    await provision_post_submit_service(f.factory, ServiceIdentity.ARTIFACT_SOURCE_CLEANUP)
     with pytest.raises(DBAPIError, match="cleanup is protected"):
         async with f.factory.begin() as session:
-            await SealedSourceCleanup(session, intake_task_custody_port(session)).claim(
+            await owner(session).claim(
                 operation, new_record_id(), lease_duration=timedelta(minutes=5))
     async with f.factory() as session:
         assert await session.scalar(text("SELECT state FROM submission_intake_operations WHERE id=:id"),

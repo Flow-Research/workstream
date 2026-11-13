@@ -684,6 +684,15 @@ class PreparedSubmissionSourceCleanupAuthorization(_PreparedArtifactServiceAutho
                          request_id=request_id, correlation_id=correlation_id)
 
 
+    async def authorize(self) -> None:
+        """Resolve current cleanup service before custody reads, including replay."""
+        await fixed_service_action_context(
+            self._session, service_identity=ServiceIdentity.ARTIFACT_SOURCE_CLEANUP,
+            action_id=ActionId.ARTIFACT_SOURCE_CLEANUP,
+            request_id=self._request_id, correlation_id=self._correlation_id,
+        )
+
+
 class PreparedSubmissionFinalizationAuthorization(_PreparedArtifactServiceAuthorization):
     """Accepted continuation authority belongs only to the existing binding service."""
 

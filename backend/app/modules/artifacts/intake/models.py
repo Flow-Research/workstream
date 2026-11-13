@@ -166,6 +166,8 @@ class SubmissionSourceCleanupClaim(Base):
 
     __tablename__ = "submission_source_cleanup_claims"
     __table_args__ = (
+        ForeignKeyConstraint(["claim_decision_id"], ["audit_events.id"], name="fk_source_cleanup_claim_decision"),
+        ForeignKeyConstraint(["confirmation_decision_id"], ["audit_events.id"], name="fk_source_cleanup_confirmation_decision"),
         ForeignKeyConstraint(["operation_id"], ["submission_intake_operations.id"],
                              name="fk_source_cleanup_operation"),
         CheckConstraint("generation>0 and lease_expires_at>claimed_at and lease_expires_at<=claimed_at+interval '300 seconds'", name="claim_bounds"),
@@ -182,6 +184,8 @@ class SubmissionSourceCleanupClaim(Base):
     claimed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     lease_expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    claim_decision_id: Mapped[str | None] = mapped_column(Uuid(as_uuid=False))
+    confirmation_decision_id: Mapped[str | None] = mapped_column(Uuid(as_uuid=False))
 
 
 class SubmissionSourceUploadReceipt(Base):

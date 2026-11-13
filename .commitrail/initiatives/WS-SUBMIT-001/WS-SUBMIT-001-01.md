@@ -31,8 +31,8 @@ independent worker capacity and public progress/operator endpoints remain unfini
 Internal audited finalization recovery now reuses the existing Operator gate-repair
 action, preserves the original delivery and runs the same T5 under a live child lease.
 Private sealed-source cleanup claims, retention barriers and atomic charge-release
-custody are now implemented and database-tested. Provider deletion, cleanup service
-authority, scheduling and uncertain/unsealed reconciliation remain uncomposed.
+custody are now implemented and database-tested. Cleanup claims and confirmations now require exact audited service decisions.
+Provider deletion, scheduling and uncertain/unsealed reconciliation remain uncomposed.
 Remaining work includes durable-worker deployment, complete cleanup, public API/CLI/MCP
 cutover, real revision/review/ContributionRecord journeys, policy cardinality and
 the A01–A35/C01–C07 completion audit. No public end-to-end readiness is claimed.
@@ -3558,3 +3558,51 @@ Documentation replay closed DOC-CLEANUP-AUTH-01 at clean 5fe3443a5, independentl
 confirming the registry counts and incomplete cleanup-composition boundary.
 No scoped review finding remains for the authority prerequisite. Durable claim
 and confirmation decision enforcement is the next implementation step.
+
+### Durable cleanup decision binding
+
+Continue the declared L0 cleanup scope by requiring current fixed-service
+resolution before locked custody/replay and consuming exact phase facts before
+claim/takeover/confirmation mutations. Persist separate claim/confirmation audit
+IDs; extend the database guard to validate action, principal, target and full
+context digest. Existing retained claims are not rewritten: unaudited pending
+claims must expire and be taken over with fresh authority; historical confirmed
+tombstones remain immutable. Update the existing cleanup/custody tests and the
+accepted-stall protection test to use real cleanup authorization. Prove denied
+and substituted decisions cannot acquire cleanup custody or release charges,
+while successful confirmation/replay, rollback, retention and lease protections
+remain intact. Provider I/O remains the following required composition step.
+
+The identifier inventory check exposed a stale classification from the earlier
+checker-image PRE sample repair: its removed prepared-generation expression was
+still listed while the new synthetic operation/lease expressions were not.
+Repair only those exact entries in
+`backend/scripts/identifier_generation_classifications.json`, preserving the
+existing synthetic-protocol-fixture category and all production classifications.
+The sample helper explicitly creates isolated wire envelopes, not product rows.
+This is a branch regression repair, not permission to relax the identifier gate.
+
+Durable cleanup authority evidence: migration0080 adds two nullable audit FKs
+without backfilling authority, one exact audit validation function and a narrowly
+extended existing cleanup trigger. The measured canonical schema is
+`847165363b1b89c72011b450992ab83512f5984faa6def5e751eb019423b7370`
+(`/tmp/source-cleanup-decisions-schema2.log/json`, migrated0080, cleanup true).
+An earlier invocation ran from the repository root and failed importing the
+migration helper; it supplies no schema evidence. Owner mutations obtain the
+audit decision before dirtying the claim, so audit flushing cannot prematurely
+publish an unaudited target. Live replay checks current service and the persisted
+claim decision; preexisting unaudited pending claims require expiry/takeover.
+Confirmed historical tombstones remain unchanged and protected.
+
+`/tmp/source-cleanup-decisions.log` passed all 20 selected PostgreSQL tests in
+332.14 seconds: cleanup authority substitutions (missing, phase, claim ID,
+generation, source digest and task), revoked service at claim/confirmation/replay,
+audit+claim/charge rollback, existing leases and both retention race orders,
+model/schema parity and stalled accepted-source protection. Existing raw-SQL
+charge release, source substitution and atomic confirmation proof remain: the
+atomicity probe now supplies valid confirmation authority before intentionally
+omitting charge release. Ruff and structure validation passed. Identifier
+inventory initially failed on the three stale sample classifications noted above;
+the precise repair passed (`/tmp/source-cleanup-decisions-inventory2.log`, 18.80s).
+This worktree proof precedes its frozen review commit, not exact-head launch
+proof. Provider deletion, settlement evidence and scheduling are still required.

@@ -20,9 +20,37 @@ from tests.artifacts.test_submission_intake_custody import (
 pytestmark = pytest.mark.asyncio
 
 
+@pytest.fixture(autouse=True)
+async def provision_cleanup_identity(intake):
+    from app.modules.actors.api import ServiceIdentity
+    from tests.checkers.execution.support import provision_post_submit_service
+    return await provision_post_submit_service(intake.factory, ServiceIdentity.ARTIFACT_SOURCE_CLEANUP)
+
+
 def owner(session):
     """Use the same TASK custody adapter as foreground and finalization."""
-    return SealedSourceCleanup(session, intake_task_custody_port(session))
+    from app.modules.artifacts.authorization import PreparedSubmissionSourceCleanupAuthorization
+    return SealedSourceCleanup(session, intake_task_custody_port(session),
+        PreparedSubmissionSourceCleanupAuthorization(session, request_id=new_record_id(), correlation_id=new_record_id()))
+
+
+async def cleanup_decision(session, operation, claim_id, *, phase="claim", generation=1, changes=None):
+    """Issue a real exact decision for SQL boundary counterprobes."""
+    from app.modules.artifacts.api.submission_cleanup import SubmissionSourceCleanupAuthorityFacts
+    from app.modules.artifacts.authorization import PreparedSubmissionSourceCleanupAuthorization
+    from app.modules.artifacts.intake.models import SubmissionIntakeOperation
+    row = await session.get(SubmissionIntakeOperation, str(operation))
+    facts = SubmissionSourceCleanupAuthorityFacts(
+        operation_id=operation, project_id=UUID(row.project_id), task_id=UUID(row.task_id),
+        source_sha256=repository(session)._sealed_source(row).source_sha256(),
+        claim_id=claim_id, claim_generation=generation, phase=phase,
+    )
+    if changes:
+        facts = replace(facts, **changes)
+    authority = PreparedSubmissionSourceCleanupAuthorization(
+        session, request_id=new_record_id(), correlation_id=new_record_id())
+    handle = await authority.prepare(facts=facts, idempotency_key=claim_id)
+    return await authority.consume(prepared_authorization=handle, facts=facts)
 
 
 async def terminal_source(intake):
@@ -103,11 +131,17 @@ async def test_cleanup_sql_rejects_release_without_confirmation_and_target_subst
     for sql, error in (
         ("UPDATE submission_source_charges SET state='released',accounted_bytes=0 WHERE operation_id=:id", "confirmed cleanup"),
         ("UPDATE submission_source_cleanup_claims SET source=jsonb_set(source,'{provider_generation}','\"foreign\"') WHERE operation_id=:id", "target differs"),
-        ("UPDATE submission_source_cleanup_claims SET confirmed_at=clock_timestamp() WHERE operation_id=:id", "release must be atomic"),
+        ("UPDATE submission_source_cleanup_claims SET confirmed_at=clock_timestamp() WHERE operation_id=:id", "authority differs"),
     ):
         with pytest.raises(DBAPIError, match=error):
             async with intake.factory.begin() as session:
                 await session.execute(text(sql), {"id": operation})
+    with pytest.raises(DBAPIError, match="release must be atomic"):
+        async with intake.factory.begin() as session:
+            decision = await cleanup_decision(session, operation, claim.claim_id, phase="confirm")
+            await session.execute(text("UPDATE submission_source_cleanup_claims "
+                "SET confirmed_at=clock_timestamp(),confirmation_decision_id=:decision WHERE operation_id=:id"),
+                {"id": operation, "decision": decision})
     async with intake.factory.begin() as session:
         replay = await owner(session).claim(operation, claim.claim_id, lease_duration=timedelta(minutes=5))
         assert replay == claim
@@ -175,20 +209,23 @@ async def test_cleanup_lease_bound_is_enforced_by_owner_and_database(intake):
     async with intake.factory() as session:
         row = await session.get(SubmissionIntakeOperation, str(operation))
         source = repository(session)._sealed_source(row).model_dump_json()
+    claim_id = new_record_id()
     with pytest.raises(DBAPIError, match="claim_bounds"):
         async with intake.factory.begin() as session:
+            decision = await cleanup_decision(session, operation, claim_id)
             await session.execute(text("INSERT INTO submission_source_cleanup_claims "
-                "(operation_id,claim_id,generation,source,claimed_at,lease_expires_at) "
-                "VALUES (:id,:claim,1,CAST(:source AS jsonb),clock_timestamp(),clock_timestamp()+interval '10 years')"),
-                {"id": operation, "claim": new_record_id(), "source": source})
+                "(operation_id,claim_id,generation,source,claimed_at,lease_expires_at,claim_decision_id) "
+                "VALUES (:id,:claim,1,CAST(:source AS jsonb),clock_timestamp(),clock_timestamp()+interval '10 years',:decision)"),
+                {"id": operation, "claim": claim_id, "source": source, "decision": decision})
     # Caller clock samples are not authoritative. Preserve the finite duration,
     # but rebase BOTH timestamps onto the trigger's single authoritative sample.
     async with intake.factory.begin() as session:
+        decision = await cleanup_decision(session, operation, claim_id)
         await session.execute(text("INSERT INTO submission_source_cleanup_claims "
-            "(operation_id,claim_id,generation,source,claimed_at,lease_expires_at) "
+            "(operation_id,claim_id,generation,source,claimed_at,lease_expires_at,claim_decision_id) "
             "VALUES (:id,:claim,1,CAST(:source AS jsonb),statement_timestamp()+interval '1 hour',"
-            "statement_timestamp()+interval '1 hour 1 minute')"),
-            {"id": operation, "claim": new_record_id(), "source": source})
+            "statement_timestamp()+interval '1 hour 1 minute',:decision)"),
+            {"id": operation, "claim": claim_id, "source": source, "decision": decision})
         assert await session.scalar(text("SELECT claimed_at<=clock_timestamp() "
             "AND lease_expires_at=claimed_at+interval '1 minute' "
             "FROM submission_source_cleanup_claims WHERE operation_id=:id"), {"id": operation})
@@ -268,3 +305,86 @@ async def test_claim_and_retention_serialize_at_database_lock(intake, first):
         if competitor is not None and not competitor.done():
             competitor.cancel()
             await asyncio.gather(competitor, return_exceptions=True)
+
+
+@pytest.mark.parametrize("substitution", ["missing", "phase", "claim", "generation", "source", "task"])
+async def test_database_cleanup_claim_requires_exact_decision(intake, substitution):
+    operation = await terminal_source(intake)
+    await age_fixture(intake, operation)
+    claim_id = new_record_id()
+    from app.modules.artifacts.intake.models import SubmissionIntakeOperation
+    with pytest.raises(DBAPIError, match="authority differs"):
+        async with intake.factory.begin() as session:
+            row = await session.get(SubmissionIntakeOperation, str(operation))
+            source = repository(session)._sealed_source(row).model_dump_json()
+            changes = {
+                "phase": {"phase": "confirm"}, "claim": {"claim_id": new_record_id()},
+                "generation": {"claim_generation": 2}, "source": {"source_sha256": "sha256:" + "f" * 64},
+                "task": {"task_id": new_record_id()}, "missing": {},
+            }[substitution]
+            decision = None if substitution == "missing" else await cleanup_decision(
+                session, operation, claim_id, changes=changes)
+            await session.execute(text("INSERT INTO submission_source_cleanup_claims "
+                "(operation_id,claim_id,generation,source,claimed_at,lease_expires_at,claim_decision_id) "
+                "VALUES (:id,:claim,1,CAST(:source AS jsonb),clock_timestamp(),clock_timestamp()+interval '5 minutes',:decision)"),
+                {"id": operation, "claim": claim_id, "source": source, "decision": decision})
+    async with intake.factory() as session:
+        assert await session.scalar(text("SELECT count(*) FROM submission_source_cleanup_claims WHERE operation_id=:id"),
+                                    {"id": operation}) == 0
+        assert await session.scalar(text("SELECT accounted_bytes FROM submission_source_charges WHERE operation_id=:id"),
+                                    {"id": operation}) == 100
+
+
+@pytest.mark.parametrize("stage", ["claim", "confirm", "replay"])
+async def test_cleanup_owner_requires_current_service_even_on_replay(intake, provision_cleanup_identity, stage):
+    from app.modules.artifacts.schemas import ArtifactAuthorityDeniedError
+    from app.modules.authorization.runtime import PreparedAuthorizationUnsupported
+    operation = await terminal_source(intake)
+    await age_fixture(intake, operation)
+    claim_id = new_record_id()
+    if stage != "claim":
+        async with intake.factory.begin() as session:
+            claim = await owner(session).claim(operation, claim_id, lease_duration=timedelta(minutes=5))
+        if stage == "replay":
+            async with intake.factory.begin() as session:
+                await owner(session).confirm(claim, object_absent=True, writes_settled=True, parts_absent=True)
+    async with intake.factory.begin() as session:
+        await session.execute(text("UPDATE actor_identity_links SET status='revoked',revoked_by='test',"
+            "revoked_reason='test',revoked_at=clock_timestamp() WHERE actor_profile_id=:actor"),
+            {"actor": provision_cleanup_identity})
+    with pytest.raises((ArtifactAuthorityDeniedError, PreparedAuthorizationUnsupported)):
+        async with intake.factory.begin() as session:
+            if stage == "claim":
+                await owner(session).claim(operation, claim_id, lease_duration=timedelta(minutes=5))
+            else:
+                await owner(session).confirm(claim, object_absent=True, writes_settled=True, parts_absent=True)
+    async with intake.factory() as session:
+        assert await session.scalar(text("SELECT accounted_bytes FROM submission_source_charges WHERE operation_id=:id"),
+                                    {"id": operation}) == (0 if stage == "replay" else 100)
+
+
+async def test_cleanup_decisions_and_mutations_rollback_together(intake):
+    operation = await terminal_source(intake)
+    await age_fixture(intake, operation)
+    with pytest.raises(RuntimeError, match="rollback probe"):
+        async with intake.factory.begin() as session:
+            await owner(session).claim(operation, new_record_id(), lease_duration=timedelta(minutes=5))
+            raise RuntimeError("rollback probe")
+    async with intake.factory() as session:
+        assert await session.scalar(text("SELECT count(*) FROM submission_source_cleanup_claims WHERE operation_id=:id"),
+                                    {"id": operation}) == 0
+        assert await session.scalar(text("SELECT count(*) FROM audit_events WHERE resource_id=:id "
+            "AND action_id='artifact.submission_source.cleanup'"), {"id": str(operation)}) == 0
+    async with intake.factory.begin() as session:
+        claim = await owner(session).claim(operation, new_record_id(), lease_duration=timedelta(minutes=5))
+    with pytest.raises(RuntimeError, match="rollback probe"):
+        async with intake.factory.begin() as session:
+            await owner(session).confirm(claim, object_absent=True, writes_settled=True, parts_absent=True)
+            raise RuntimeError("rollback probe")
+    async with intake.factory() as session:
+        assert await session.scalar(text("SELECT confirmed_at IS NULL AND confirmation_decision_id IS NULL "
+            "FROM submission_source_cleanup_claims WHERE operation_id=:id"), {"id": operation}) is True
+        assert await session.scalar(text("SELECT accounted_bytes FROM submission_source_charges WHERE operation_id=:id"),
+                                    {"id": operation}) == 100
+        assert await session.scalar(text("SELECT count(*) FROM audit_events WHERE resource_id=:id "
+            "AND action_id='artifact.submission_source.cleanup'"), {"id": str(operation)}) == 1

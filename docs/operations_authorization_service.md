@@ -741,8 +741,8 @@ the shared outbox dispatcher, three TASK identities and two CHECKER identities.
 The dedicated `workstream.artifact.source_cleanup` identity has only the
 `artifact.submission_source.cleanup` action. Its prepared authority binds the
 operation, project, task, source digest, claim ID/generation and cleanup phase;
-provider deletion and binding decisions to durable cleanup custody remain
-uncomposed. Missing provisioned rows deny without stopping the application.
+claim and confirmation mutations require matching persisted audit decisions.
+Provider deletion remains uncomposed. Missing provisioned rows deny without stopping the application.
 The target-only identity has no matrix membership, and the REV actions remain
 unavailable. Dispatcher authority grants no feature permission. Do not create a
 shared review service or a database service-grant table.
