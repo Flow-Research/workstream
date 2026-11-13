@@ -182,6 +182,29 @@ async def test_medium_public_claim_to_selected_automatic_acceptance(
             for table in ("final_acceptances", "contribution_records"):
                 assert await session.scalar(text(f"SELECT count(*) FROM public.{table}")) == int(not human_review_required)
             assert await session.scalar(text("SELECT count(*) FROM public.reviews")) == 0
+            roots = (await session.execute(text("""SELECT r.obligation_body,r.source_award_digest,
+                r.obligation_digest,r.initial_outbox_event_id,r.ordinal,r.admission_generation,
+                e.payload,e.event_type,e.delivery_state,public.compensation_fulfillment_is_complete(r.award_id)
+                FROM public.compensation_fulfillment_roots r
+                JOIN public.outbox_events e ON e.event_id=r.initial_outbox_event_id"""))).all()
+            assert len(roots) == int(not human_review_required)
+            if roots:
+                (root,) = roots
+                from app.modules.compensation.api.fulfillment_contracts import decode_obligation
+                import json
+                body = decode_obligation(json.dumps(root[0]).encode())
+                assert body["task_size"] == "medium"
+                assert body["submission_id"] == str(h.created.submission_id)
+                assert body["award_definition_id"] == str(copied[5])
+                assert (body["source_award_digest"], body["obligation_digest"]) == root[1:3]
+                assert root[4:6] == (1, 2)
+                assert set(root[6]) == {"fulfillment_root_id", "award_id", "adapter_binding_id",
+                                       "admission_generation", "source_award_digest", "obligation_digest"}
+                assert root[7:] == ("compensation.obligation.deliver", "pending", True)
+        if roots:
+            # This root-only slice has no financial delivery handler or replay-safe key.
+            assert await delivery.claim(root[3], h.request.project_id, "unavailable-finance") is None
+            assert root[3] not in {item.event_id for item in (await delivery.candidates()).items}
         evidence = await h.client.get("/api/v1/actors/me/contributions")
         assert evidence.status_code == 200, evidence.text
         if human_review_required:
@@ -214,7 +237,7 @@ async def test_original_claim_replay_after_rebase(tmp_path, isolated_database_en
         h.result = await live_executor(h, selected_execution=ControlledSelectedExecution(verdict="failed")).evaluate_post_submission(h.request)
         async with h.factory() as session:
             run = await session.get(CheckerRun, str(h.result.attempt_id))
-            assert run.routing_recommendation == "needs_revision"
+            assert run.routing_recommendation == "needs_revision", (run.status, run.failure_code)
             h.material = dict(run.material_custody)
         h.source = {}
         h.source = await source_values(h)

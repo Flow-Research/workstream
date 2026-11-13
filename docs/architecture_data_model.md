@@ -2325,8 +2325,9 @@ not replace it; reputation projection remains deferred.
 
 ## CompensationAward
 
-CON-03C implements immutable exact-definition storage; no payment/points
-delivery or runtime creation is activated.
+Governed automatic acceptance creates the exact immutable selected award and
+COMP root/outbox custody in one transaction. Payment/points delivery remains
+unavailable.
 
 Fields:
 
@@ -2345,8 +2346,27 @@ Fields:
 
 The award is immutable and copies its instrument, unit, quantity, and binding
 from the published definition without conversion or rounding. Explicit unpaid
-rules create no award. At most one award exists per contribution and instrument
-type; fulfillment state is not stored on the award.
+rules create no award. At most one award exists per contribution; fulfillment
+state is not stored on the award.
+
+## CompensationFulfillmentRoot
+
+Immutable COMP-owned fields:
+
+- `id`, `award_id`, `project_id`
+- unique increasing `ordinal` and original `admission_generation`
+- configured stable `source_instance_id`
+- original `adapter_binding_id` and `route_key`
+- `source_final_acceptance_id`, `source_authorization_decision_id`, `source_routing_manifest_id`
+- `source_award_digest`, `obligation_digest`, complete canonical `obligation_body`
+- exact `initial_outbox_event_id` and server `created_at`
+
+One root belongs to one award. New roots require the canonical live REV fence;
+replay retains the original generation and exact event without allocation or
+repair. Native guards enforce a single source identity, sequential allocation,
+immutable evidence and deferred award/root/event closure. Suspended bindings do
+not change earned facts. The new selector/digest event stays unregistered; root
+custody does not implement Finance admission, receipts, payment or cutoff/drain.
 
 ## CompensationFulfillmentReceipt
 

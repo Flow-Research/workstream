@@ -1442,6 +1442,10 @@
     },
     {
       "group": "shared",
+      "target": "backend/app/modules/compensation/api/fulfillment.py"
+    },
+    {
+      "group": "shared",
       "target": "backend/app/modules/compensation/api/fulfillment_contracts.py"
     },
     {
@@ -1463,6 +1467,14 @@
     {
       "group": "shared",
       "target": "backend/app/modules/compensation/awards/read_repository.py"
+    },
+    {
+      "group": "shared",
+      "target": "backend/app/modules/compensation/fulfillment/models.py"
+    },
+    {
+      "group": "shared",
+      "target": "backend/app/modules/compensation/fulfillment/service.py"
     },
     {
       "group": "shared",
@@ -2601,7 +2613,7 @@
       "target": "backend/scripts/validate_test_lane_evidence.py"
     }
   ],
-  "authority_digest": "ee610c0f0a91e8bf5001c90d68d851b955e0d2bfcc069e104aab28a88dc2b53b",
+  "authority_digest": "a3fe04a7a274894783d5aabcf9aff3a19a1839e093a58f28d860b89ace4f5c22",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }

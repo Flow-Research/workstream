@@ -63,11 +63,15 @@ flush-only consumer of a real stored FinalAcceptance and assignment lineage. It
 runs only inside the caller-owned root transaction after acquiring the supplied
 canonical lifecycle fence. It creates or exactly replays one
 `accepted_submission` ContributionRecord and the complete frozen award set:
-zero awards for unpaid work, one for money-only or points-only work, and two for
-combined work. Compensated replay checks the original correlation UUID and
+zero awards for unpaid work, or the one exact size-selected definition under
+the version's common money or project-points header. Compensated replay checks the original correlation UUID and
 award IDs; unpaid replay retains no correlation to compare. This participant
-adds no acceptance/source writer, TASK transition, authorization claim, route,
-fulfillment root or reviewer contribution.
+adds no acceptance/source writer, TASK transition, authorization claim, route
+or reviewer contribution. COMP now stages one immutable fulfillment root and
+selector-only outbox event with each award in the same transaction. The root
+retains the original authorization decision and routing manifest as provenance;
+those IDs do not independently authorize work. No Finance delivery handler is
+registered by this internal custody step.
 
 The boundary MUST preserve four distinct facts:
 
@@ -326,7 +330,9 @@ route, reviewer participant or fulfillment consumer is registered. Human decisio
 authority remains future work. Migration refuses retained pre-authority sources
 and dependent contribution/award rows unchanged, never backfilling receipts or
 deleting evidence. REV-12A4A supplies scoped lifecycle control;
-fulfillment-root ordinal custody is required only before fulfillment activation.
+COMP fulfillment-root ordinal custody is staged atomically with current awards;
+Finance obligation admission, callbacks and cutoff/drain qualification remain
+required before external fulfillment activation.
 
 Canonical fields:
 
@@ -407,6 +413,34 @@ fixed-point quantity are byte-for-byte/decimal-equal to the definition; award
 creation never recalculates, converts, rounds, or accepts binary floating point.
 
 Fulfillment state MUST NOT be stored by mutating the award.
+
+### CompensationFulfillmentRoot
+
+Before entering the live lifecycle phase, configure `WORKSTREAM_SOURCE_INSTANCE_ID`
+with one canonical UUIDv7 provisioned through `app.core.identifiers.new_record_id()`.
+Persist that value in deployment configuration and use it across all API and worker
+replicas and restarts. Missing configuration prevents activation; a value different
+from committed roots prevents further earning. Never mint an identity per process
+or rotate it to bypass retained source custody.
+
+The current COMP owner stages one root and its exact initial shared-outbox event
+with each earned award. Unpaid and human-review handoff branches create neither.
+The root stores UUIDv7 identity, unique award and increasing ordinal, original
+admission generation, configured source UUID, original binding/route,
+FinalAcceptance/authorization-decision/routing-manifest references, the complete
+canonical obligation, both digests and initial outbox event ID. PostgreSQL
+checks source equality, immutable evidence and deferred award/root/event closure.
+
+Allocation uses the existing held REV fence. Replay requires the stored root and
+event without repair or a new ordinal, including after lifecycle generations
+advance. A suspended original binding remains the earned source. Missing source
+configuration or disagreement with existing roots blocks live activation/new
+custody; no per-request deployment identity is generated.
+
+The event contains selectors and digests only and stays unregistered for delivery
+in this step. Finance HTTP admission, receipts/exceptions, execution, callbacks,
+status/quote reads and cutoff/drain qualification remain unfinished. See the
+[implementation record](../.commitrail/changes/finance-rewards-fulfillment.md).
 
 ### CompensationFulfillmentReceipt
 
@@ -1241,9 +1275,10 @@ includes delivered hidden AUTH preparation, CON-07 participation, REV-04C
 FinalAcceptance/TASK/CON composition and ARCH-04E2-B mandatory persisted receipt
 custody and complete authorized outcomes. B8 supplies completion delivery and the
 selected request/completion handlers are registered in production composition.
-False/pass effects require a live REV generation. Actual CON root
-storage and ordinal allocation remain required before either trigger creates
-fulfillment obligations; neither awards nor generic outbox rows substitute. REV-12A4A adds internal Operator transitions for the atomic-participant manifest.
+False/pass effects require a live REV generation. COMP root
+storage and ordinal allocation join the same earning transaction. Finance
+obligation admission and delivery remain unavailable; neither awards nor generic
+outbox rows substitute for the exact immutable root. REV-12A4A adds internal Operator transitions for the atomic-participant manifest.
 Later fulfillment drain work extends this same controller; it is not a prerequisite on live human
 review for the false branch.
 
@@ -1383,8 +1418,9 @@ commit-before-acknowledgment proof. Remediation and selected production composit
 are delivered. A complete supported false guide can activate when the approved
 inventory contains no `human_review` disposition. Conditional award facts remain atomic for paid and unpaid policies.
 The first-contribution manifest keeps fulfillment admission, dispatch and callbacks
-unavailable; obligation/root/ordinal/cutoff storage is required before a reviewed
-successor manifest enables fulfillment, not before this contribution path.
+unavailable. Internal COMP roots and ordinals now accompany earned awards;
+Finance obligation, callback and cutoff/drain execution still require their own
+qualified runtime before a reviewed manifest enables fulfillment.
 False guide activation follows joint proof. A stable Review FK target is
 not live ReviewLease/queue/decision behavior. The shared lifecycle
 fence is required for either acceptance trigger; obligation writers join that same
@@ -1463,7 +1499,7 @@ initiative [conformance matrix](../.commitrail/initiatives/WS-CON-001/CONFORMANC
 At minimum, final proof covers:
 
 - immutable policy publication and both-order freeze races;
-- explicit unpaid, money, project-points, and combined awards;
+- explicit unpaid, selected money and selected project-points awards;
 - one reviewer contribution for every valid Review;
 - accept-only FinalAcceptance and submitter contribution;
 - mutually exclusive contribution source shapes and concurrency uniqueness;

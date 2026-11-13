@@ -2792,3 +2792,20 @@ def test_reward_recovery_partition_removal_is_exact():
     ownership._validate_additive_partition_transition(_partition([retained]), trusted)
     with pytest.raises(ownership.BehaviorOwnershipError, match="untrusted_partition_change"):
         ownership._validate_additive_partition_transition(_partition([]), trusted)
+
+
+def test_fulfillment_root_partition_additions_are_exact():
+    targets = {
+        "backend/app/modules/compensation/api/fulfillment.py",
+        "backend/app/modules/compensation/fulfillment/models.py",
+        "backend/app/modules/compensation/fulfillment/service.py",
+    }
+    assert ownership.FULFILLMENT_ROOT_TARGETS == targets
+    retained = "backend/app/modules/tasks/revision/exhaustion.py"
+    trusted = _partition([retained])
+    ownership._validate_additive_partition_transition(_partition(sorted([retained, *targets])), trusted)
+    with pytest.raises(ownership.BehaviorOwnershipError, match="untrusted_partition_change"):
+        ownership._validate_additive_partition_transition(_partition(sorted([retained, *targets,
+            "backend/app/modules/compensation/fulfillment/other.py"])), trusted)
+    with pytest.raises(ownership.BehaviorOwnershipError, match="untrusted_partition_change"):
+        ownership._validate_additive_partition_transition(_partition(sorted(targets)), trusted)

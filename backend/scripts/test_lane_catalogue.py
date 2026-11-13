@@ -47,6 +47,7 @@ class TestLane:
 
 
 SHARED_FOUNDATION_MODULES = (
+    "tests/finance/test_fulfillment_obligation.py",
     "tests/finance/test_fulfillment_contracts.py",
     "tests/finance/test_obligation_contracts.py",
     "tests/finance/test_policy_contract.py",
@@ -319,6 +320,7 @@ SHARED_FOUNDATION_MODULES = (
 ) + STATIC_FOUNDATION_MODULES
 
 PROJECT_MODULES = (
+    "tests/finance/test_fulfillment_roots.py",
     "tests/finance/test_selected_reward_journey.py",
     "tests/finance/test_selected_reward_storage.py",
     "tests/finance/test_selected_award_closure.py",
@@ -775,6 +777,7 @@ LANES = (
             SCHEMA_MODULE,
             "tests/finance/test_reward_transition.py",
             "tests/finance/test_selected_reward_migration.py",
+            "tests/finance/test_fulfillment_root_migration.py",
             "tests/migrations/test_assignment_outcome_backfill.py",
             "tests/test_checker_evidence_migrations.py",
             "tests/migrations/test_project_catalogue_read.py",

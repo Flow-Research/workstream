@@ -592,7 +592,7 @@ Plan:
   Allocate max ordinal+1 only while holding the canonical global REV fence; a
   unique constraint and native source/closure guards independently enforce it.
   No new counter/controller or clock-derived business ordering is introduced.
-- Append a selector/digest-only `compensation.fulfillment.requested` event through
+- Append a selector/digest-only `compensation.obligation.deliver` event through
   the shared outbox in the same transaction. No amount, payee/provider data,
   broker publish or external I/O. Replay must require exact stored event custody,
   never append/repair/reallocate missing roots on replay.
@@ -647,7 +647,7 @@ original-binding preservation and no activation of unimplemented delivery.
   its sole-use migration/config/operator/fence/runtime-hash helpers in
   `tests/reviews/lifecycle/test_participant_control.py`. Replace the old SQL/hash
   swapping test in `test_transitions.py` with current operation replay and
-  unknown/current-manifest denial. Lift its distinct forged-Python-fact/native-
+  unknown/stale-manifest denial and current-manifest acceptance. Lift its distinct forged-Python-fact/native-
   SQL rejection into current stopped-generation fixtures. Retain immutable
   authority, current phase/restart select-only replay and actual migration proof.
 - `PLAN-FULFILL-002`: extend `test_medium_public_claim_to_selected_automatic_acceptance`
@@ -682,3 +682,76 @@ original-binding preservation and no activation of unimplemented delivery.
   `docs/spec_review_lifecycle.md` and `docs/spec_contribution_compensation.md`.
   Wording stays root-only: no Finance source-read/HTTP/worker/payment or
   cutoff/drain qualification from this change. Those remain full-goal work.
+
+
+Root implementation dependency checks found two concrete public dependency
+cycles. COMP uses a consumer-owned fence contract with an adapter translating the
+same held REV capability; no second lock/controller is created. The existing
+exact quantity formatter moves from CON into shared `core/financial_wire.py`,
+with every current caller updated and the old definition removed. This closes
+COMP→CON and COMP→REV cycles without aliases or duplicated formatting. These
+shared formatter and adapter files are explicitly within the affected scope.
+
+The affected configuration scope also includes `backend/.env.example` and current
+COMP source-provisioning instructions: a once-provisioned UUIDv7 is retained across
+all replicas and restarts; no example or process generates a deployment default.
+
+
+### Atomic fulfillment custody implementation and development evidence
+
+The earning path now forwards exact source acceptance/AUTH/routing facts through
+CON to COMP, using the same caller-held REV fence. COMP creates one immutable
+source-root/envelope and selector-only shared-outbox event per selected award.
+Native PostgreSQL validates original immutable Submission selection, exact
+binding/route, authority generation, canonical digests, singleton source and
+serialized ordinal allocation, with deferred award/root/event closure. Replay
+requires original custody and does not repair, allocate or append. The existing
+lifecycle checks explicit source configuration before target-live authority.
+The new event remains unregistered; Finance delivery is still unavailable.
+
+Observed development checks (dirty worktree; not frozen review evidence):
+- Pure contract/current participation and CI lane/ownership controls: 266 passed.
+  The new schema test is explicitly owned by the schema-contract lane and its
+  exact inventory expectation; no test is exempted or removed from discovery.
+- Real PostgreSQL guarded public selected acceptance and human/unpaid branches:
+  four passed, including complete initial-root/event custody and inability to
+  claim the unregistered event. Owned PostgreSQL/MinIO cleanup completed.
+- Native incomplete-earning rollback, named-guard discriminating probe,
+  immutable roots, exact replay, original suspended binding and source restart,
+  and missing-source live activation: three passed; direct ROOT closed/stale/
+  nested/raw-savepoint denial: one passed. Owned infrastructure cleanup completed.
+- Exact 0071-to-0072/fresh/repeated-head and retained-native-award refusal:
+  two passed in 239.49 seconds, with every preflight-retained row unchanged and
+  owned PostgreSQL/MinIO cleanup completed. This caught and repaired the missing
+  supported-0071 Alembic entry; no compatibility reader was added.
+- Distinct-source contention commit diagnostic passed, but the final combined
+  commit/rollback/lifecycle/contribution run is still pending. Earlier setup PRE
+  timing and POST infrastructure failures remain unexplained; an isolated pass
+  is not a disposition of those failures or whole-matrix qualification.
+- Ruff and module dependency checks passed before final documentation edits;
+  final full collection, stale wording, links and frozen review remain pending.
+
+The full specification, full-suite and durable external Finance/worker journey
+remain required in this same draft PR. This slice does not establish Finance
+admission, source reads, callbacks, receipts, cutoff/drain or payment readiness.
+
+
+Specification reconciliation corrected the initial event to the exact
+`compensation.obligation.deliver` key required by execution section 14.3,
+replacing the temporary name everywhere rather than adding another event path.
+The combined dirty-development native run was deliberately interrupted after
+its first two passes before changing runtime files; its owned infrastructure
+cleanup completed. It is not claimed as suite evidence. The changed event SQL
+requires a fresh schema fingerprint, native rerun and subsequent frozen review.
+A separate 200-sample database-clock probe found no backwards step during its
+6.28-second observation; this does not explain or dismiss the earlier timing
+failure. No timing validation or test assertion has been relaxed.
+
+The corrected native event guard's fresh PostgreSQL 16 schema fingerprint is
+`2d902e3bd209bf8fcae7f0907b66b108ad839e79b1c0ae38aa5dd9ea312a76e3`.
+Full collection discovered 11,882 tests without errors; collection is not suite
+execution. Final current Markdown links and stale wording passed. The corrected
+builder/current participation contracts passed 18 tests. The first external
+schema probe failed because its temporary script lacked the backend import
+path; the corrected probe used its actual backend working directory, completed
+and cleaned up its owned database/MinIO resources. No schema gate was bypassed.

@@ -1,28 +1,19 @@
 """Actual acceptance effects against authorized controller changes and shutdown."""
 
 import asyncio
-import importlib.util
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from alembic import command as alembic_command
-from alembic.config import Config
-from pydantic import ValidationError
 from sqlalchemy import event, select, text
 from sqlalchemy.exc import DBAPIError
 
-from app.db import session as db_session
 from app.db.session import get_session_factory
 from app.modules.reviews.acceptance.repository import FinalAcceptanceRepository
 from app.modules.reviews.api.acceptance import FinalAcceptanceConflict
 from app.modules.reviews.api.lifecycle import (
-    JointLifecycleControlFacts,
-    JointLifecyclePhase,
     JointLifecycleUnavailable,
 )
 from app.modules.reviews.lifecycle.fence import (
-    JOINT_LIFECYCLE_LOCK_KEY,
     PostgresJointLifecycleMutationFence,
 )
 from app.modules.reviews.lifecycle.models import JointLifecycleReleaseControl
@@ -36,25 +27,12 @@ from tests.reviews.lifecycle.test_fence import observe_advisory_wait
 from tests.reviews.lifecycle.transition_support import (
     command_for,
     controller,
-    snapshot,
     transition,
 )
 
 
-def _migration_config() -> Config:
-    return Config(Path(__file__).resolve().parents[3] / "alembic.ini")
 
 
-def _activation_migration():
-    path = (
-        Path(__file__).resolve().parents[3]
-        / "alembic/versions/0039_false_guide_activation.py"
-    )
-    spec = importlib.util.spec_from_file_location("activation_migration_0039", path)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
 
 
 async def _routing_acceptance_validity(session, manifest_id):
@@ -84,120 +62,12 @@ async def _routing_acceptance_validity(session, manifest_id):
     )
 
 
-async def _reset_to_0038(isolated_database_env, migration_lock) -> None:
-    from tests.test_alembic import _execute
-
-    await db_session.dispose_engine()
-    with migration_lock():
-        await _execute(
-            isolated_database_env,
-            "drop schema public cascade; create schema public",
-        )
-        await asyncio.to_thread(
-            alembic_command.upgrade,
-            _migration_config(),
-            "0038_task_batch_transitions",
-        )
-    await db_session.dispose_engine()
-    async with get_session_factory()() as session:
-        assert await session.scalar(text("SELECT version_num FROM alembic_version")) == (
-            "0038_task_batch_transitions"
-        )
-        assert await session.scalar(
-            text(
-                "SELECT pg_catalog.to_regprocedure("
-                "'public.joint_lifecycle_new_effects_enabled("
-                "public.joint_lifecycle_release_control)') IS NULL"
-            )
-        ) is True
 
 
-async def _provision_0038_operator(admin_access):
-    from scripts.bootstrap_access_administrator import _run as run_bootstrap
-    from tests.authorization.admin_access.support import AdminAccess
-
-    admin = await admin_access.signed.actor("administrator", roles=("viewer",))
-    target = await admin_access.signed.actor("target", roles=("admin",))
-    code, bootstrap = await run_bootstrap(admin.id, execute=True)
-    assert code == 0 and bootstrap["result_code"] == "bootstrapped"
-    access = AdminAccess(
-        admin_access.signed,
-        admin,
-        target,
-        bootstrap["grant_id"],
-    )
-    await access.signed.grant(access.admin, access.target)
-    return access
 
 
-async def _predecessor_lock_controller(owner):
-    """Project only 0038's phase/generation fact while retaining its real locks."""
-    transaction = owner._session.get_transaction()
-    if (
-        transaction is None
-        or not transaction.is_active
-        or owner._session.in_nested_transaction()
-    ):
-        raise JointLifecycleUnavailable(
-            "lifecycle requires a root transaction and exact generation"
-        )
-    connection = await owner._session.connection()
-    if connection.in_nested_transaction():
-        raise JointLifecycleUnavailable("lifecycle requires a root database transaction")
-    try:
-        await owner._session.execute(text("SELECT pg_catalog.pg_export_snapshot()"))
-    except DBAPIError as exc:
-        if getattr(exc.orig, "sqlstate", None) != "25001":
-            raise
-        raise JointLifecycleUnavailable(
-            "lifecycle requires a root database transaction"
-        ) from exc
-    await owner._session.execute(
-        text("SELECT pg_catalog.pg_advisory_xact_lock(:key)"),
-        {"key": JOINT_LIFECYCLE_LOCK_KEY},
-    )
-    row = (
-        await owner._session.execute(
-            select(
-                JointLifecycleReleaseControl.id,
-                JointLifecycleReleaseControl.phase,
-                JointLifecycleReleaseControl.generation,
-                JointLifecycleReleaseControl.created_at,
-            )
-            .where(JointLifecycleReleaseControl.singleton.is_(True))
-            .with_for_update()
-        )
-    ).one_or_none()
-    if row is None:
-        raise JointLifecycleUnavailable(
-            "lifecycle controller missing or generation changed"
-        )
-    try:
-        return JointLifecycleControlFacts(
-            singleton_id=row.id,
-            phase=JointLifecyclePhase(row.phase),
-            generation=row.generation,
-            new_effects_enabled=row.phase == "live" and row.generation > 0,
-            created_at=row.created_at,
-        )
-    except (ValueError, ValidationError) as exc:
-        raise JointLifecycleUnavailable("lifecycle controller malformed") from exc
 
 
-def _set_runtime_manifest(monkeypatch, digest) -> None:
-    import app.modules.reviews.lifecycle.service as lifecycle_service
-    import tests.reviews.lifecycle.transition_support as transition_support
-
-    monkeypatch.setattr(
-        lifecycle_service,
-        "FIRST_CONTRIBUTION_MANIFEST_DIGEST",
-        digest,
-    )
-    monkeypatch.setattr(
-        transition_support,
-        "FIRST_CONTRIBUTION_MANIFEST_DIGEST",
-        digest,
-    )
 
 
 @pytest.mark.parametrize("instruments", [(), ("money",), ("project_points",)])
@@ -232,6 +102,10 @@ async def test_stopped_terminal_replay_is_select_only(
                 event.remove(engine, "before_cursor_execute", observe)
             assert replay == original.model_copy(update={"replayed": True})
             assert writes == []
+            async with h.factory() as session:
+                assert await _routing_acceptance_validity(session, original.routing_manifest_id) == {
+                    "new_valid": False, "replay_valid": True,
+                }
         # Valid retained receipts remain evidence after a later lifecycle restart.
         await transition(await command_for(access.target.id, "shadow"))
         restarted = await transition(await command_for(access.target.id, "live"))
@@ -242,126 +116,6 @@ async def test_stopped_terminal_replay_is_select_only(
             assert facts["awards"] == len(instruments)
 
 
-@pytest.mark.postgres_schema_contract
-async def test_0038_old_manifest_live_upgrade_denies_new_effects_until_renewed(
-    tmp_path,
-    isolated_database_env,
-    admin_access,
-    migration_lock,
-    monkeypatch,
-):
-    """Upgrade retains old facts/replay but requires current Operator review for new effects."""
-    migration = _activation_migration()
-    await _reset_to_0038(isolated_database_env, migration_lock)
-    # Current ACTORS reads need this nullable projection while seeding 0038.
-    # Remove it before the real migration introduces the column.
-    async with db_session.get_engine().begin() as connection:
-        await connection.execute(text(
-            "ALTER TABLE actor_identity_links ADD COLUMN email_observed_issued_at bigint"
-        ))
-    access = await _provision_0038_operator(admin_access)
-    _set_runtime_manifest(monkeypatch, migration._OLD_MANIFEST)
-    with monkeypatch.context() as predecessor:
-        predecessor.setattr(
-            PostgresJointLifecycleMutationFence,
-            "lock_controller",
-            _predecessor_lock_controller,
-        )
-        await transition(await command_for(access.target.id, "shadow"))
-        old_live_command = await command_for(access.target.id, "live")
-        old_live_receipt = await transition(old_live_command)
-    assert old_live_receipt.generation == 2
-    retained_lifecycle = await snapshot()
-
-    _set_runtime_manifest(monkeypatch, migration._NEW_MANIFEST)
-    await db_session.dispose_engine()
-    with migration_lock():
-        await asyncio.to_thread(
-            alembic_command.upgrade,
-            _migration_config(),
-            "0039_false_guide_activation",
-        )
-    assert await transition(old_live_command) == old_live_receipt
-    assert await snapshot() == retained_lifecycle
-
-    async with db_session.get_engine().begin() as connection:
-        await connection.execute(text(
-            "ALTER TABLE actor_identity_links DROP COLUMN email_observed_issued_at"
-        ))
-    # The retained 0039 control is unchanged; current runtime owners require
-    # their complete schema before exercising new submissions and acceptance.
-    await db_session.dispose_engine()
-    with migration_lock():
-        await asyncio.to_thread(alembic_command.upgrade, _migration_config(), "head")
-    assert await transition(old_live_command) == old_live_receipt
-    assert await snapshot() == retained_lifecycle
-
-    async with authorized_routing_source(
-        tmp_path, isolated_database_env
-    ) as pending:
-        async with pending.factory() as session:
-            pending_before = await stored_effects(session, pending.request.task_id)
-        async with pending.factory() as session:
-            with pytest.raises(
-                TaskRoutingLifecycleDeferred,
-                match="routing lifecycle is not live",
-            ):
-                async with session.begin():
-                    await apply_outcome(session, pending, old_live_receipt.generation)
-        async with pending.factory() as session:
-            assert await stored_effects(session, pending.request.task_id) == pending_before
-
-        original_lock = PostgresJointLifecycleMutationFence.lock_controller
-
-        async def forge_python_fact(owner):
-            facts = await original_lock(owner)
-            return facts.model_copy(update={"new_effects_enabled": True})
-
-        with monkeypatch.context() as bypass:
-            bypass.setattr(
-                PostgresJointLifecycleMutationFence,
-                "lock_controller",
-                forge_python_fact,
-            )
-            async with pending.factory() as session:
-                with pytest.raises(
-                    DBAPIError,
-                    match="routing acceptance generation unavailable",
-                ):
-                    async with session.begin():
-                        await apply_outcome(
-                            session,
-                            pending,
-                            old_live_receipt.generation,
-                        )
-        async with pending.factory() as session:
-            assert await stored_effects(session, pending.request.task_id) == pending_before
-
-        for phase in ("draining", "disabled", "shadow"):
-            await transition(await command_for(access.target.id, phase))
-        renewed = await transition(await command_for(access.target.id, "live"))
-        async with pending.factory() as session, session.begin():
-            original = await apply_outcome(session, pending, renewed.generation)
-        async with pending.factory() as session:
-            await session.begin()
-            await session.execute(
-                text(
-                    "CREATE OR REPLACE FUNCTION "
-                    "public.joint_lifecycle_new_effects_enabled("
-                    "c public.joint_lifecycle_release_control) RETURNS boolean "
-                    "LANGUAGE sql STABLE SET search_path=pg_catalog,public,pg_temp AS $$ "
-                    "SELECT false $$"
-                )
-            )
-            assert await _routing_acceptance_validity(
-                session,
-                original.routing_manifest_id,
-            ) == {"new_valid": False, "replay_valid": True}
-            await session.rollback()
-        stopped = await transition(await command_for(access.target.id, "draining"))
-        async with pending.factory() as session, session.begin():
-            replay = await apply_outcome(session, pending, stopped.generation)
-        assert replay == original.model_copy(update={"replayed": True})
 
 
 async def test_current_generation_cannot_admit_new_effects_when_stopped(
@@ -381,6 +135,28 @@ async def test_current_generation_cannot_admit_new_effects_when_stopped(
                         await apply_outcome(session, h, receipt.generation)
             async with h.factory() as session:
                 assert await stored_effects(session, h.request.task_id) == before, phase
+
+
+async def test_forged_live_python_fact_cannot_bypass_current_native_generation(
+    tmp_path, isolated_database_env, live_acceptance_lifecycle, monkeypatch,
+):
+    access = live_acceptance_lifecycle
+    async with authorized_routing_source(tmp_path, isolated_database_env) as h:
+        stopped = await transition(await command_for(access.target.id, "draining"))
+        async with h.factory() as session:
+            before = await stored_effects(session, h.request.task_id)
+        original = PostgresJointLifecycleMutationFence.lock_controller
+
+        async def forged(owner):
+            return (await original(owner)).model_copy(update={"new_effects_enabled": True})
+
+        monkeypatch.setattr(PostgresJointLifecycleMutationFence, "lock_controller", forged)
+        async with h.factory() as session:
+            with pytest.raises(DBAPIError, match="routing acceptance generation unavailable"):
+                async with session.begin():
+                    await apply_outcome(session, h, stopped.generation)
+        async with h.factory() as session:
+            assert await stored_effects(session, h.request.task_id) == before
 
 
 async def test_operator_who_is_submitter_does_not_deadlock_prior_acceptance(
@@ -566,6 +342,8 @@ async def test_each_owner_rejects_manifest_disabled_live_facts(
                         task_size=request.task_effects.task_size,
                         contribution_award_definition_id=request.task_effects.contribution_award_definition_id,
                         artifact_hash=request.task_effects.content_sha256,
+                        source_authorization_decision_id=request.acceptance.source_authorization_decision_id,
+                        source_routing_manifest_id=request.acceptance.source_routing_manifest_id,
                         correlation_id=request.correlation_id,
                         expected_generation=2,
                     )
@@ -660,6 +438,8 @@ async def test_each_owner_independently_rejects_new_effects(
                             task_size=request.task_effects.task_size,
                         contribution_award_definition_id=request.task_effects.contribution_award_definition_id,
                         artifact_hash=request.task_effects.content_sha256,
+                        source_authorization_decision_id=request.acceptance.source_authorization_decision_id,
+                        source_routing_manifest_id=request.acceptance.source_routing_manifest_id,
                             correlation_id=request.correlation_id,
                             expected_generation=generation,
                         )

@@ -62,6 +62,8 @@ class SubmitterParticipationRequest(BaseModel):
     artifact_hash: _Digest
     correlation_id: UUID
     expected_generation: _Generation
+    source_authorization_decision_id: UUID
+    source_routing_manifest_id: UUID
 
 
 class SubmitterContributionFacts(BaseModel):

@@ -34,6 +34,8 @@ def request():
         artifact_hash="sha256:" + "a" * 64,
         correlation_id=new_record_id(),
         expected_generation=0,
+        source_authorization_decision_id=new_record_id(),
+        source_routing_manifest_id=new_record_id(),
     )
 
 
@@ -79,6 +81,8 @@ def award_request():
         contributor_id=new_record_id(),
         contribution_policy_version_id=new_record_id(),
         contribution_type="accepted_submission",
+        task_id=new_record_id(), submission_id=new_record_id(),
+        final_acceptance_id=new_record_id(), task_size="small",
     )
     definition = AwardDefinitionFacts(
         id=new_record_id(),
@@ -96,6 +100,8 @@ def award_request():
         contribution=contribution,
         definitions=(definition,),
         correlation_id=new_record_id(),
+        expected_generation=2,
+        source_authorization_decision_id=new_record_id(), source_routing_manifest_id=new_record_id(),
     )
 
 

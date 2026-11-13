@@ -109,6 +109,8 @@ class FinalAcceptanceParticipant:
             contribution_award_definition_id=task.contribution_award_definition_id,
             artifact_hash=task.content_sha256, correlation_id=request.correlation_id,
             expected_generation=request.expected_generation,
+            source_authorization_decision_id=source.source_authorization_decision_id,
+            source_routing_manifest_id=source.source_routing_manifest_id,
         )
         participation = SubmitterParticipationResult.model_validate(
             await contributions.participate_submitter(participation_request)

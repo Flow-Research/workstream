@@ -27,6 +27,7 @@ class AwardDefinitionFacts(BaseModel):
     project_id: UUID
     contribution_policy_version_id: UUID
     contribution_type: Literal["accepted_submission"]
+
     instrument_type: CompensationInstrumentType
     unit_code: str = Field(min_length=1, max_length=32)
     quantity: _Quantity
@@ -43,6 +44,10 @@ class AwardContributionFacts(BaseModel):
     contributor_id: UUID
     contribution_policy_version_id: UUID
     contribution_type: Literal["accepted_submission"]
+    task_id: UUID
+    submission_id: UUID
+    final_acceptance_id: UUID
+    task_size: Literal["small", "medium", "large"]
 
 
 class CompleteAwardSetRequest(BaseModel):
@@ -55,6 +60,9 @@ class CompleteAwardSetRequest(BaseModel):
     contribution: AwardContributionFacts
     definitions: tuple[AwardDefinitionFacts, ...] = Field(max_length=1)
     correlation_id: UUID
+    expected_generation: int = Field(ge=0, le=9_223_372_036_854_775_807)
+    source_authorization_decision_id: UUID
+    source_routing_manifest_id: UUID
 
     @model_validator(mode="after")
     def validate_complete_definition_set(self) -> Self:

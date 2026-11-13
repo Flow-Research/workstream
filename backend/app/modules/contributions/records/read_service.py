@@ -15,7 +15,7 @@ from app.modules.contributions.api.records import (
     ContributionReadAuthorizationPort,
     ContributionReadRequest, ContributionRecordView,
 )
-from app.modules.contributions.api.quantities import format_award_quantity
+from app.core.financial_wire import format_award_quantity
 from app.modules.contributions.api.source_reads import (
     ContributionAcceptanceSourceFacts, ContributionAcceptanceSourceReadPort,
     ContributionTaskSourceFacts, ContributionTaskSourceReadPort,

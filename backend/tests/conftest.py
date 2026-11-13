@@ -23,7 +23,7 @@ from scripts.run_isolated_tests import LOOPBACK, NAME_RE, ROLE_RE
 DDL_LOCK_DIRECTORY = Path("/tmp")
 # Match the PostgreSQL 16 engine used by Backend CI. Catalog identity rendering
 # differs across major versions; regenerate only after comparing actual objects.
-EXPECTED_PUBLIC_SCHEMA_SHA256 = "5507ad05976f9d8982e241a403a215973b7802314177a8fdd75f3146b6bb1d29"
+EXPECTED_PUBLIC_SCHEMA_SHA256 = "2d902e3bd209bf8fcae7f0907b66b108ad839e79b1c0ae38aa5dd9ea312a76e3"
 PROTECTED_TEST_TABLES = (
     "actor_profile_migration_state",
     "alembic_version",
@@ -132,6 +132,7 @@ RESETTABLE_TEST_TABLES = (
     "contribution_export_snapshots",
     "contribution_records",
     "compensation_awards",
+    "compensation_fulfillment_roots",
     "reviews",
     "review_findings",
     "finding_resolutions",
@@ -250,6 +251,7 @@ TRUNCATE_GUARDED_TABLES = (
     "final_acceptances",
     "contribution_records",
     "compensation_awards",
+    "compensation_fulfillment_roots",
     "reviews",
     "review_findings",
     "finding_resolutions",
@@ -272,6 +274,15 @@ TestDatabaseReset = Callable[..., Awaitable[None]]
 DatabaseLock = Callable[[], AbstractContextManager[None]]
 ResetHook = Callable[[], Awaitable[None]]
 PAGINATION_CURSOR_HMAC_SECRET = base64.b64encode(bytes(range(32))).decode("ascii")
+
+
+@pytest.fixture(autouse=True)
+def configured_source_instance_id(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """Provision one explicit non-secret identity for this isolated deployment."""
+    monkeypatch.setenv("WORKSTREAM_SOURCE_INSTANCE_ID", "019a78b0-0000-7000-8000-000000000040")
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
 
 
 @pytest.fixture(autouse=True)

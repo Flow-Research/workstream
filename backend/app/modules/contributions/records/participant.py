@@ -67,9 +67,16 @@ class SubmitterContributionParticipant:
                 contributor_id=contribution.contributor_id,
                 contribution_policy_version_id=(contribution.contribution_policy_version_id),
                 contribution_type="accepted_submission",
+                task_id=contribution.task_id,
+                submission_id=contribution.submission_id,
+                final_acceptance_id=contribution.source_final_acceptance_id,
+                task_size=checked.task_size,
             ),
             definitions=rule.definitions,
             correlation_id=checked.correlation_id,
+            expected_generation=checked.expected_generation,
+            source_authorization_decision_id=checked.source_authorization_decision_id,
+            source_routing_manifest_id=checked.source_routing_manifest_id,
         )
         try:
             award_result = CompleteAwardSetResult.model_validate(

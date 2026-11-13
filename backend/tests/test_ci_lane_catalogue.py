@@ -251,6 +251,7 @@ def test_expanded_lane_families_keep_exact_semantic_owners() -> None:
         "tests/test_checker_evidence_migrations.py",
         "tests/finance/test_reward_transition.py",
         "tests/finance/test_selected_reward_migration.py",
+        "tests/finance/test_fulfillment_root_migration.py",
         "tests/migrations/test_assignment_outcome_backfill.py",
         "tests/migrations/test_project_catalogue_read.py",
         "tests/migrations/test_guide_check_specification.py",
@@ -320,12 +321,12 @@ def test_semantic_family_membership_has_an_independent_fingerprint() -> None:
     """A catalogue-internal move across semantic families must fail this contract."""
     expected = {
         "shared": (
-            273,
-            "dacd87e71f1ab935d775593ad12dc6d3039d926ce12656e43e4feaee31cb6447",
+            274,
+            "985a23dfad3dc2d5a56d2df5365c8843e286185a7d21f7c065f47155a4066167",
         ),
         "project": (
-            256,
-            "1c9bf2ad828dba621333129436038ae13cedda5eedb95199be579ff93480530f",
+            257,
+            "2286f1223bdb8ff85b252a9bd6c1e0b5cd03ef796acd2036171f62eb617dbd92",
         ),
         "task": (
             96,
@@ -392,9 +393,9 @@ def test_project_lane_ownership_has_an_independent_fingerprint() -> None:
         )
         + "\n"
     )
-    assert len(catalogue.PROJECT_PARTITIONED_MODULES) == 256
+    assert len(catalogue.PROJECT_PARTITIONED_MODULES) == 257
     assert hashlib.sha256(canonical.encode()).hexdigest() == (
-        "a7539d11d3b707590c8fa0beb817e58e93e5a79b073fb5ce66ffce50f1970bb1"
+        "a708b435a5bdc3b7b07f37999174739ce7f3c6a81b8fe1dafd5d3543d02e11a1"
     )
 
 

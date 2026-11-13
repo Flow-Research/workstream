@@ -88,7 +88,7 @@ def test_fresh_install_and_empty_current_upgrade(isolated_database_env, migratio
         command.upgrade(config, "head")
         asyncio.run(_verify_test_database_schema(isolated_database_env))
         current = asyncio.run(_snapshot(isolated_database_env))
-        assert current[0]["alembic_version"] == ['{"version_num":"0071_selected_task_reward"}']
+        assert current[0]["alembic_version"] == ['{"version_num":"0072_fulfillment_roots"}']
         for table, rows in before[0].items():
             if table != "alembic_version":
                 assert current[0][table] == rows

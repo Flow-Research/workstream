@@ -69,3 +69,11 @@ def require_canonical_quantity(quantity: str, instrument_type: str) -> None:
         raise ValueError("noncanonical positive quantity")
     if instrument_type == "project_points" and "." in quantity:
         raise ValueError("points must be whole")
+
+
+def format_award_quantity(value: Decimal) -> str:
+    """Render an exact stored decimal without exponent or redundant zeros."""
+    rendered = format(value, "f")
+    if "." in rendered:
+        rendered = rendered.rstrip("0").rstrip(".")
+    return rendered

@@ -11,7 +11,7 @@ from app.modules.contributions.api import (
 )
 from app.modules.contributions.api.policies import ContributionPolicyVersionListItem
 from app.modules.contributions.models import ContributionPolicy, ContributionPolicyVersion
-from app.modules.contributions.api.quantities import format_award_quantity
+from app.core.financial_wire import format_award_quantity
 
 
 def _rule_views(version: ContributionPolicyVersion) -> tuple[PolicyRuleView, ...]:

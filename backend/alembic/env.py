@@ -21,7 +21,7 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 _BASELINE_REVISION = "0001_uuid7_v01"
-_CURRENT_HEAD_REVISION = "0071_selected_task_reward"
+_CURRENT_HEAD_REVISION = "0072_fulfillment_roots"
 _RECREATE_GUIDANCE = (
     "Workstream v0.1 requires a fresh database; recreate this database before "
     "running the 0001_uuid7_v01 migration"
@@ -125,6 +125,7 @@ def do_run_migrations(connection: Connection) -> None:
             ("0068_issuer_profile_email",),
             ("0069_sized_reward_policy",),
             ("0070_task_size",),
+            ("0071_selected_task_reward",),
             (_CURRENT_HEAD_REVISION,),
         ):
             raise RuntimeError(_RECREATE_GUIDANCE)

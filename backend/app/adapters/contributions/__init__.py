@@ -99,7 +99,7 @@ def submitter_contribution_participant(session, fence):
     from app.adapters.compensation import compensation_award_participant
 
     return SubmitterContributionParticipant(
-        session, fence=fence, awards=compensation_award_participant(session)
+        session, fence=fence, awards=compensation_award_participant(session, fence)
     )
 
 

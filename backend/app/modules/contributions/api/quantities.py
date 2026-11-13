@@ -53,11 +53,3 @@ PolicyQuantity = Annotated[
     ),
     AfterValidator(_policy_quantity_string),
 ]
-
-
-def format_award_quantity(value: Decimal) -> str:
-    """Render an exact stored decimal without exponent or redundant zeros."""
-    rendered = format(value, "f")
-    if "." in rendered:
-        rendered = rendered.rstrip("0").rstrip(".")
-    return rendered

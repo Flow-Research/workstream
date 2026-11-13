@@ -5,7 +5,7 @@ from __future__ import annotations
 from uuid import UUID
 
 from app.core.hashing import canonical_json_hash
-from app.modules.contributions.api.quantities import format_award_quantity
+from app.core.financial_wire import format_award_quantity
 from app.modules.contributions.models import ContributionPolicyVersion
 
 

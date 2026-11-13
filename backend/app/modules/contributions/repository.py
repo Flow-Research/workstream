@@ -33,7 +33,7 @@ from app.modules.contributions.models import (
 )
 from app.modules.contributions.units.models import ProjectCompensationUnitCreationEvent
 from app.modules.contributions.policy_eligibility import require_complete_policy_graph
-from app.modules.contributions.api.quantities import format_award_quantity
+from app.core.financial_wire import format_award_quantity
 
 
 def policy_operation_lock_key(operation_id: UUID) -> int:

@@ -236,7 +236,7 @@ async def completed_source(
         result = await live_executor(h).evaluate_post_submission(h.request)
         async with h.factory() as session:
             run = await session.get(CheckerRun, str(result.attempt_id))
-            assert result.outcome == "completed"
+            assert result.outcome == "completed", (result.outcome, result.infrastructure_failure_code)
             assert run.routing_recommendation == "allow_review"
             material = dict(run.material_custody)
         h.result, h.material = result, material

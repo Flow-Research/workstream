@@ -6,26 +6,23 @@ from sqlalchemy import text
 
 from app.core.identifiers import new_record_id
 from app.modules.compensation.api import (
-    AwardContributionFacts,
-    AwardDefinitionFacts,
-    CompleteAwardSetRequest,
     CompensationAwardFacts,
     CompensationInstrumentType,
     CompensationAwardConflict,
 )
 from app.modules.compensation.awards.participant import CompensationAwardParticipant
+from app.adapters.compensation import compensation_award_participant
 from app.modules.contributions.api import (
     ContributionParticipationConflict,
     SubmitterContributionFacts,
 )
 from app.modules.reviews.lifecycle.fence import PostgresJointLifecycleMutationFence
 from tests.contributions.records.support import (
-    award_values,
     authorized_submitter_source,
     rows,
 )
 
-from .support import participant, request_for
+from .support import participant, request_for, complete_award_request_for
 
 pytestmark = pytest.mark.usefixtures("live_acceptance_lifecycle")
 
@@ -305,9 +302,15 @@ async def test_partial_same_transaction_replay_rejects_without_backfill(
         async with h.factory() as session:
             await session.begin()
             await PostgresJointLifecycleMutationFence(session).acquire(2)
-            expected_awards = [award for award in await award_values(session, h.submitter_record)
-                               if award["award_definition_id"] == h.participation.awards[0].award_definition_id]
             # Isolate replay from storage immutability; this corruption never commits.
+            # Remove the dependent root first so its FK does not mask award replay.
+            await session.execute(text(
+                "ALTER TABLE public.compensation_fulfillment_roots "
+                "DISABLE TRIGGER compensation_fulfillment_root_immutable"
+            ))
+            await session.execute(text(
+                "DELETE FROM public.compensation_fulfillment_roots WHERE award_id=:id"
+            ), {"id": h.participation.awards[0].id})
             await session.execute(
                 text(
                     "ALTER TABLE public.compensation_awards DISABLE TRIGGER compensation_award_immutable"
@@ -321,35 +324,8 @@ async def test_partial_same_transaction_replay_rejects_without_backfill(
                 await participant(session).participate_submitter(request)
             assert len(await rows(session, "compensation_awards")) == 0
 
-            owner = CompensationAwardParticipant(session)
-            definitions = tuple(
-                AwardDefinitionFacts(
-                    id=award["award_definition_id"],
-                    project_id=h.submitter_record.project_id,
-                    contribution_policy_version_id=(
-                        h.submitter_record.contribution_policy_version_id
-                    ),
-                    contribution_type="accepted_submission",
-                    instrument_type=CompensationInstrumentType(award["instrument_type"]),
-                    unit_code=award["unit_code"],
-                    quantity=award["quantity"],
-                    adapter_binding_id=award["adapter_binding_id"],
-                )
-                for award in expected_awards
-            )
-            rule_request = CompleteAwardSetRequest(
-                disposition="replay",
-                compensation_mode="compensated",
-                contribution=AwardContributionFacts(
-                    id=h.submitter_record.id,
-                    project_id=h.submitter_record.project_id,
-                    contributor_id=h.submitter_record.contributor_id,
-                    contribution_policy_version_id=h.submitter_record.contribution_policy_version_id,
-                    contribution_type="accepted_submission",
-                ),
-                definitions=definitions,
-                correlation_id=request.correlation_id,
-            )
+            owner = compensation_award_participant(session, PostgresJointLifecycleMutationFence(session))
+            rule_request = complete_award_request_for(h, request)
             with pytest.raises(CompensationAwardConflict):
                 await owner.complete_award_set(rule_request)
             assert len(await rows(session, "compensation_awards")) == 0
