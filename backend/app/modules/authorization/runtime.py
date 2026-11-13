@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
 
 from app.modules.artifacts.api.submission_intake import PreSubmitSourceReadFacts
 from app.modules.authorization.domain.submission_finalization import SubmissionFinalizationResourceContext
+from app.modules.authorization.domain.submission_cleanup import SubmissionSourceCleanupResourceContext
 from app.modules.authorization.domain.submission_recovery import SubmissionRecoveryResourceContext
 from app.modules.authorization.domain.guide_compilation import ProjectGuideCompilationExecuteResourceContext, ProjectGuideCompilationRequestResourceContext
 from app.modules.authorization.domain.resource_digest import authorization_resource_digest as authorization_resource_digest
@@ -161,6 +162,7 @@ class PreparedAuthorityScope(BaseModel):
             "pre_submit_checker_input",
             "submission_binding",
             "submission_finalization",
+            "submission_source_cleanup",
         ] | None = None
     artifact_resource_id: UUID | Literal["workstream:artifact_pending_work"] | None = None
 
@@ -216,7 +218,7 @@ class PreparedAuthorityScope(BaseModel):
                             "guide_source_binding",
                             "guide_source_read",
                             "pre_submit_checker_input",
-                            "submission_binding", "submission_finalization"}
+                            "submission_binding", "submission_finalization", "submission_source_cleanup"}
                         and isinstance(self.artifact_resource_id, UUID)
                     )
                 )
@@ -1114,6 +1116,7 @@ AuthorizationResourceContext = (
     | ArtifactOperatorReadResourceContext
     | ArtifactOperatorRetryResourceContext
     | GuideSourceReadResourceContext
+    | SubmissionSourceCleanupResourceContext
     | SubmissionFinalizationResourceContext
     | SubmissionRecoveryResourceContext
     | SubmissionCreationResourceContext | SubmissionBindingResourceContext | IntakeAcceptanceResourceContext

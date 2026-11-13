@@ -81,3 +81,75 @@ async def test_finalization_refuses_missing_wrong_or_revoked_service(clean_postg
                 AuditEvent.event_type=="SensitiveAuthorizationAllowed"))).all()
     finally:
         await engine.dispose()
+
+
+def cleanup_facts(phase="claim"):
+    from app.modules.artifacts.api.submission_cleanup import SubmissionSourceCleanupAuthorityFacts
+    return SubmissionSourceCleanupAuthorityFacts(
+        operation_id=new_record_id(), project_id=new_record_id(), task_id=new_record_id(),
+        source_sha256="sha256:" + "c" * 64, claim_id=new_record_id(), claim_generation=1, phase=phase,
+    )
+
+
+@pytest.mark.parametrize("phase", ["claim", "confirm"])
+async def test_cleanup_authority_binds_every_target_fact(clean_postgres_database, phase):
+    from app.modules.artifacts.authorization import PreparedSubmissionSourceCleanupAuthorization
+    from app.modules.authorization.domain.resource_digest import authorization_resource_digest
+    from app.modules.authorization.domain.submission_cleanup import SubmissionSourceCleanupResourceContext
+    from dataclasses import asdict
+    engine = create_async_engine(clean_postgres_database)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    try:
+        actor = await provision_post_submit_service(factory, ServiceIdentity.ARTIFACT_SOURCE_CLEANUP)
+        original = cleanup_facts(phase)
+        async with factory.begin() as session:
+            authority = PreparedSubmissionSourceCleanupAuthorization(
+                session, request_id=new_record_id(), correlation_id=original.operation_id)
+            handle = await authority.prepare(facts=original, idempotency_key=original.claim_id)
+            mutations = dict(operation_id=new_record_id(), project_id=new_record_id(), task_id=new_record_id(),
+                             source_sha256="sha256:" + "d" * 64, claim_id=new_record_id(), claim_generation=2,
+                             phase="confirm" if phase == "claim" else "claim")
+            for name, value in mutations.items():
+                with pytest.raises(ArtifactAuthorityDeniedError):
+                    await authority.consume(prepared_authorization=handle, facts=replace(original, **{name: value}))
+            decision = await authority.consume(prepared_authorization=handle, facts=original)
+            assert isinstance(decision, UUID)
+            with pytest.raises(ArtifactAuthorityDeniedError):
+                await authority.consume(prepared_authorization=handle, facts=original)
+        async with factory() as session:
+            event = await session.get(AuditEvent, str(decision))
+            assert event.actor_id == actor and event.matched_grant_id is None
+            assert event.action_id == event.permission_id == "artifact.submission_source.cleanup"
+            assert event.resource_type == "submission_operation" and event.resource_id == str(original.operation_id)
+            assert event.target_ref_id == str(original.project_id)
+            context = SubmissionSourceCleanupResourceContext(resource_id=original.operation_id, **asdict(original))
+            assert event.after_facts["resource_context_digest"] == authorization_resource_digest(context)
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.parametrize("principal", ["missing", "binding", "revoked"])
+async def test_cleanup_refuses_missing_binding_or_revoked_service(clean_postgres_database, principal):
+    from app.modules.artifacts.authorization import PreparedSubmissionSourceCleanupAuthorization
+    engine = create_async_engine(clean_postgres_database)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    try:
+        if principal != "missing":
+            identity = ServiceIdentity.ARTIFACT_BINDING if principal == "binding" else ServiceIdentity.ARTIFACT_SOURCE_CLEANUP
+            actor = await provision_post_submit_service(factory, identity)
+            if principal == "revoked":
+                async with factory.begin() as session:
+                    from sqlalchemy import func
+                    await session.execute(update(ActorIdentityLink).where(ActorIdentityLink.actor_profile_id == actor)
+                        .values(status="revoked", revoked_by="test", revoked_reason="test", revoked_at=func.now()))
+        async with factory.begin() as session:
+            authority = PreparedSubmissionSourceCleanupAuthorization(
+                session, request_id=new_record_id(), correlation_id=new_record_id())
+            with pytest.raises(ArtifactAuthorityDeniedError):
+                await authority.prepare(facts=cleanup_facts(), idempotency_key=new_record_id())
+        async with factory() as session:
+            assert not (await session.scalars(select(AuditEvent).where(
+                AuditEvent.action_id == "artifact.submission_source.cleanup",
+                AuditEvent.event_type == "SensitiveAuthorizationAllowed"))).all()
+    finally:
+        await engine.dispose()

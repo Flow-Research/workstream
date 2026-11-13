@@ -569,6 +569,11 @@ ACTION_DEFINITIONS = (
         ActionOwner.XINT_002_05A,
     ),
     _active(
+        ActionId.ARTIFACT_SOURCE_CLEANUP,
+        PermissionId.ARTIFACT_SOURCE_CLEANUP,
+        ActionOwner.AUTH_ART_02D_INTERNAL,
+    ),
+    _active(
         ActionId.ARTIFACT_SUBMISSION_FINALIZE,
         PermissionId.ARTIFACT_BINDING_CREATE,
         ActionOwner.AUTH_ART_05,

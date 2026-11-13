@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.modules.authorization.catalogue import ActionId
 from app.modules.authorization.domain.submission_finalization import SubmissionFinalizationResourceContext
+from app.modules.authorization.domain.submission_cleanup import SubmissionSourceCleanupResourceContext
 from app.modules.authorization.domain.submission_intake import IntakeAcceptanceResourceContext
 
 _STRICT_FROZEN = ConfigDict(extra="forbid", frozen=True, strict=True)
@@ -127,6 +128,7 @@ class SubmissionBindingResourceContext(BaseModel):
 
 
 RESOURCE_BY_ACTION = {
+    ActionId.ARTIFACT_SOURCE_CLEANUP: SubmissionSourceCleanupResourceContext,
     ActionId.ARTIFACT_SUBMISSION_FINALIZE: SubmissionFinalizationResourceContext,
     ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE: SubmissionBindingResourceContext,
     ActionId.SUBMISSION_CREATE: SubmissionCreationResourceContext,

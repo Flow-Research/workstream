@@ -2,6 +2,7 @@
 
 from uuid import UUID
 from app.modules.authorization.domain.submission_finalization import SubmissionFinalizationResourceContext
+from app.modules.authorization.domain.submission_cleanup import SubmissionSourceCleanupResourceContext
 from app.modules.authorization.domain.submission_intake import IntakeReservationResourceContext, IntakeReservationPreflightResourceContext, IntakeAcceptanceResourceContext
 from app.modules.authorization.domain.contributor_reads import ContributorWorkReadResourceContext
 
@@ -85,7 +86,7 @@ def _submission_operation_target(resource):
     if type(resource) is SubmissionRecoveryResourceContext:
         return (str(resource.scope_project_id), "submission_operation", str(resource.resource_id),
                 "submission_operation", str(resource.resource_id))
-    if type(resource) in {IntakeAcceptanceResourceContext, SubmissionFinalizationResourceContext}:
+    if type(resource) in {IntakeAcceptanceResourceContext, SubmissionFinalizationResourceContext, SubmissionSourceCleanupResourceContext}:
         project_id = str(getattr(resource, "scope_project_id", None) or resource.project_id)
         return project_id, "submission_operation", str(resource.operation_id), "project", project_id
     if type(resource) in {IntakeReservationResourceContext, IntakeReservationPreflightResourceContext} or (

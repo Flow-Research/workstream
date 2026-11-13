@@ -1,6 +1,5 @@
 """Deny-by-default request-scoped authorization kernel."""
 from __future__ import annotations
-from app.modules.authorization.domain.submission_finalization import SubmissionFinalizationResourceContext
 from app.modules.authorization.domain.submission_recovery import SubmissionRecoveryResourceContext
 from app.modules.authorization.domain.guide_proposals import GUIDE_PROPOSAL_RESOURCE_BY_ACTION
 from app.modules.authorization.catalogue import POST_POLICY_ACTION_IDS
@@ -48,6 +47,7 @@ from app.modules.authorization.domain.audit import CONTEXT_DIGEST_RESOURCE_TYPES
 from app.modules.authorization.domain.audit_targets import project_authority_audit_target
 from app.modules.authorization.domain.lifecycle import ReviewLifecycleActivationContract
 from app.modules.authorization.domain.prepared_service import (
+    ARTIFACT_INTERNAL_RESOURCES as _ARTIFACT_INTERNAL_RESOURCES,
     fixed_service_scope_project,
     fixed_service_resource_matches,
 )
@@ -77,12 +77,6 @@ from app.modules.authorization.runtime import (
     ActorProfileLifecycleResourceContext,
     ActorSelfResourceContext,
     ActorStatus,
-    ArtifactPendingWorkResourceContext,
-    ArtifactPutAttemptResourceContext,
-    ArtifactVerificationJobResourceContext,
-    GuideSourceReadResourceContext,
-    SubmissionBindingResourceContext,
-    PreSubmitCheckerInputResourceContext,
     AdminRoleDefinitionsResourceContext,
     AdminRoleGrantCollectionResourceContext,
     AdminRoleGrantIssueResourceContext,
@@ -147,32 +141,6 @@ async def prelock_serialized_admin_read_actor(authorization: AuthorizationServic
             authorization._context.actor_profile_id,
         )
 
-_ARTIFACT_INTERNAL_RESOURCES = {
-    ActionId.ARTIFACT_GUIDE_SOURCE_READ: ("guide_source_read", GuideSourceReadResourceContext),
-    ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE: (
-        "pre_submit_checker_input",
-        PreSubmitCheckerInputResourceContext,
-    ),
-    ActionId.ARTIFACT_SUBMISSION_FINALIZE: (
-        "submission_finalization", SubmissionFinalizationResourceContext,
-    ),
-    ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE: (
-        "submission_binding",
-        SubmissionBindingResourceContext,
-    ),
-    ActionId.ARTIFACT_PUT_ATTEMPT_RESOLVE: (
-        "artifact_put_attempt",
-        ArtifactPutAttemptResourceContext,
-    ),
-    ActionId.ARTIFACT_VERIFICATION_EXECUTE: (
-        "artifact_verification_job",
-        ArtifactVerificationJobResourceContext,
-    ),
-    ActionId.ARTIFACT_PENDING_WORK_SCAN: (
-        "artifact_pending_work",
-        ArtifactPendingWorkResourceContext,
-    ),
-}
 
 _ADMIN_EXPECTED_RESOURCES = MappingProxyType(
     {

@@ -162,6 +162,7 @@ ADMIN_MUTATIONS = (
 def supports_prepared_denial(action_id: ActionId, resource_context: object) -> bool:
     """Admit only the existing action/context pairs for prepare-time denial evidence."""
     from app.modules.authorization.domain.submission_finalization import SubmissionFinalizationResourceContext
+    from app.modules.authorization.domain.submission_cleanup import SubmissionSourceCleanupResourceContext
     from app.modules.authorization.domain.submission_intake import IntakeReservationResourceContext, IntakeReservationPreflightResourceContext, IntakeAcceptanceResourceContext
     from app.modules.authorization.domain.task_authority import TASK_ACTIONS, TaskAuthorityResourceContext
     from app.modules.authorization.domain.project_create import ProjectCreateResourceContext
@@ -174,7 +175,8 @@ def supports_prepared_denial(action_id: ActionId, resource_context: object) -> b
         ProjectPolicyMutationPrepareDenialResourceContext, ProjectSubmissionArtifactPolicyMutationResourceContext,
     )
     return (
-        (action_id is ActionId.ARTIFACT_SUBMISSION_FINALIZE and type(resource_context) is SubmissionFinalizationResourceContext)
+        (action_id is ActionId.ARTIFACT_SOURCE_CLEANUP and type(resource_context) is SubmissionSourceCleanupResourceContext)
+        or (action_id is ActionId.ARTIFACT_SUBMISSION_FINALIZE and type(resource_context) is SubmissionFinalizationResourceContext)
         or (action_id is ActionId.SUBMISSION_CREATE and type(resource_context) is IntakeAcceptanceResourceContext)
         or (action_id is ActionId.SUBMISSION_INTAKE_RESERVE and type(resource_context) in {IntakeReservationResourceContext, IntakeReservationPreflightResourceContext})
         or (

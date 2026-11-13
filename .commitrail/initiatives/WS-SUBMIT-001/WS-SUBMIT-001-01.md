@@ -3478,3 +3478,62 @@ Final structure and Commitrail checks passed. Earlier partial/red runs remain
 separately recorded and are not relabeled green. Provider deletion, current cleanup
 service authority, scheduling, unsealed reconciliation and direct admission-pointer
 race proof remain required; the full goal is not complete.
+
+## Cleanup service authority integration scope
+
+The remaining concrete gap is that private cleanup custody cannot yet authorize
+provider deletion. Extend the existing prepared ART service authorization with a
+dedicated fixed cleanup identity/action/permission and exact operation, project,
+task, source digest, claim ID/generation and claim/confirm phase facts. Then bind
+claim and confirmation custody to those audited decisions before composing any
+provider deletion. Allowed files are ACTORS service identity vocabulary, AUTH
+catalogue/context/prepared/audit owners, ART API/authorization/cleanup owners,
+required migrations and their focused tests/catalogues, plus this record.
+Provider capability/adapters and composition may follow under this same scope
+only with committed-claim validation and exact-generation retention protection.
+No general delete-by-key route, human cleanup grant, retained-source deletion,
+quota release from an acknowledgement, or AWS qualification claim is permitted.
+
+Risk is L0 (authorization and deletion). Acceptance requires wrong/missing/revoked
+service denial, exact fact/phase/generation binding, one-use transaction-bound
+handles, audit target/digest proof, database enforcement of matching decisions,
+and uncertainty retaining the charge. Run focused AUTH and cleanup PostgreSQL
+proof, catalogue/boundary/lint/docs checks; review the frozen candidate through
+architecture/security, QA/test-delta and affected docs/CI tracks. Human review
+focus is authority-to-durable-claim continuity and retained-object exclusion.
+This scope remains incomplete until the authority and provider composition are
+proved; adding an action alone does not enable cleanup.
+
+### Cleanup authority implementation checkpoint (not composed)
+
+The dedicated cleanup service now has one exact action/permission, a strict
+phase-bound resource context and an ART prepared-authorization adapter. Existing
+binding and scheduler principals receive no cleanup membership. Audit targets
+remain the submission operation/project and bind every cleanup fact by digest.
+Migration 0079 extends only the actor service-identity constraint and the two
+closed audit permission/action constraints; no retained row is rewritten.
+The measured migrated schema fingerprint is
+`c7cb5c74bf2ff569927f804af635572743c76b3cc2dd9ae376d348c72d3ae423`.
+The kernel/prepared resource maps moved into the existing fixed-service guard
+owner, sharing the common entries without changing the prepared subset. This
+keeps both files within structural limits; the debt ledger only relocates the
+unchanged 105-line kernel function, with its content hash preserved.
+
+Evidence: `/tmp/source-cleanup-authority.log` had 7 passing and 3 failing tests
+because the initial implementation lacked the database service-identity change.
+`/tmp/source-cleanup-authority-schema2.log` measured the expected new fingerprint;
+its runner metadata confirms database cleanup and Alembic 0079. An earlier schema
+attempt launched before the migration file existed and ended with a head
+mismatch; it is not positive evidence. After the migration and exact catalogue
+count repairs, `/tmp/source-cleanup-authority2.log` passed all 17 selected tests
+in 17.03 seconds, with database cleanup confirmed. The tests cover both phases,
+all seven changed fact selectors, single consumption, exact audit digest and
+missing/binding-only/revoked service denial, alongside existing finalization
+proof. That run precedes the resource-map refactor; the refactor replay is
+recorded separately when finished. Ruff, catalogue, Commitrail, stale AUTH docs
+and Markdown link checks passed at their recorded worktree states.
+
+This checkpoint does not yet require these decisions in cleanup claims or
+confirmations, expose provider deletion, or provision a cleanup principal.
+Database decision binding and provider composition remain required work under
+the active full objective; no cleanup end-to-end completion is claimed.

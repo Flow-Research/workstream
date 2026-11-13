@@ -11,6 +11,7 @@ FIXED_SERVICE_ACTION_EXPECTATIONS = {
     ServiceIdentity.ARTIFACT_VERIFIER: {"artifact.verification.execute"},
     ServiceIdentity.ARTIFACT_PUT_RESOLVER: {"artifact.put_attempt.resolve"},
     ServiceIdentity.ARTIFACT_SCHEDULER: {"artifact.pending_work.scan"},
+    ServiceIdentity.ARTIFACT_SOURCE_CLEANUP: {"artifact.submission_source.cleanup"},
     ServiceIdentity.ARTIFACT_BINDING: {
         "artifact.submission.binding.create",
         "artifact.submission.finalize",
@@ -137,6 +138,7 @@ ART_CUSTODY_EXPECTATIONS = {
         "WS-XINT-002-06A",
         "active",
     ),
+    "artifact.submission_source.cleanup": ("artifact.submission_source.cleanup", "WS-AUTH-001-ART-02D-INTERNAL", "active"),
     "artifact.submission.finalize": ("artifact.binding.create", "WS-AUTH-001-ART-05", "active"),
     "artifact.submission.binding.create": (
         "artifact.binding.create",
@@ -280,7 +282,7 @@ new_permissions = frozenset(
     operations.checker.retry artifact.binding.read artifact.replica.read
     artifact.receipt.read artifact.verification_job.read
     artifact.verification_job.retry artifact.recovery_attempt.read artifact.audit.read
-    artifact.guide_source.ingest artifact.binding.create
+    artifact.guide_source.ingest artifact.binding.create artifact.submission_source.cleanup
     artifact.verification.execute artifact.pending_work.scan artifact.put_attempt.resolve
     artifact.guide_source.read artifact.checker_input.materialize
     artifact.checker_output.write artifact.review_packet.materialize
@@ -702,6 +704,7 @@ AUDIT_ALLOWED_ACTION_VALUES = {
     "artifact.replica.read",
     "artifact.submission.binding.create",
     "artifact.submission.finalize",
+    "artifact.submission_source.cleanup",
     "artifact.submission_bundle.prepare",
     "artifact.verification.execute",
     "artifact.verification_job.read",

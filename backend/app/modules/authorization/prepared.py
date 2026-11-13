@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 from app.modules.authorization.domain.submission_finalization import SubmissionFinalizationResourceContext
+from app.modules.authorization.domain.submission_cleanup import SubmissionSourceCleanupResourceContext
+from app.modules.authorization.domain.prepared_service import (
+    EXACT_ARTIFACT_RESOURCE_BY_ACTION as _EXACT_ARTIFACT_RESOURCE_BY_ACTION,
+)
 from app.modules.authorization.prepared_preflight import preflight_authority
 from app.modules.authorization.domain.submission_intake import IntakeReservationResourceContext, IntakeReservationPreflightResourceContext, intake_preflight_matches, parse_intake_binding
 from app.modules.authorization.catalogue import GUIDE_PROPOSAL_ACTION_IDS, POST_POLICY_ACTION_IDS
@@ -97,7 +101,6 @@ from app.modules.authorization.runtime import (
     ArtifactPendingWorkResourceContext,
     ArtifactPutAttemptResourceContext,
     ArtifactVerificationJobResourceContext,
-    GuideSourceReadResourceContext,
     SubmissionBindingResourceContext,
     SubmissionCreationResourceContext,
     IntakeAcceptanceResourceContext,
@@ -188,23 +191,6 @@ class PreparedAuthorizationHandle:
 
 _HANDLE_CONSTRUCTOR_TOKEN = object()
 
-_EXACT_ARTIFACT_RESOURCE_BY_ACTION = {
-    ActionId.ARTIFACT_GUIDE_SOURCE_READ: (
-        "guide_source_read",
-        GuideSourceReadResourceContext,
-    ),
-    ActionId.ARTIFACT_PRE_SUBMIT_CHECKER_INPUT_MATERIALIZE: (
-        "pre_submit_checker_input",
-        PreSubmitCheckerInputResourceContext,
-    ),
-    ActionId.ARTIFACT_SUBMISSION_FINALIZE: (
-        "submission_finalization", SubmissionFinalizationResourceContext,
-    ),
-    ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE: (
-        "submission_binding",
-        SubmissionBindingResourceContext,
-    ),
-}
 
 
 @dataclass(frozen=True, slots=True)
@@ -653,7 +639,7 @@ class PreparedAuthorizationService:
             (
                 PreSubmitCheckerInputResourceContext, SubmissionBindingResourceContext,
                 SubmissionCreationResourceContext, IntakeAcceptanceResourceContext,
-                SubmissionFinalizationResourceContext, TaskImportSourceResourceContext,
+                SubmissionSourceCleanupResourceContext, SubmissionFinalizationResourceContext, TaskImportSourceResourceContext,
             ),
         ) and not exact_artifact_binding_matches(
             issuance.binding.exact_artifact_context,

@@ -10,6 +10,7 @@ class ServiceIdentity(StrEnum):
     ARTIFACT_VERIFIER = "workstream.artifact.verifier"
     ARTIFACT_PUT_RESOLVER = "workstream.artifact.put_resolver"
     ARTIFACT_SCHEDULER = "workstream.artifact.scheduler"
+    ARTIFACT_SOURCE_CLEANUP = "workstream.artifact.source_cleanup"
     ARTIFACT_BINDING = "workstream.artifact.binding"
     ARTIFACT_GUIDE_READER = "workstream.artifact.guide_reader"
     ARTIFACT_MATERIALIZER = "workstream.artifact.materializer"
