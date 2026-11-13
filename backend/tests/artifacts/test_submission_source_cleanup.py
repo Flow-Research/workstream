@@ -2,14 +2,11 @@
 from dataclasses import replace
 import asyncio
 from datetime import timedelta
-import os
 from uuid import UUID
 
 import pytest
 from sqlalchemy import text
-from sqlalchemy.engine import make_url
 from sqlalchemy.exc import DBAPIError
-from sqlalchemy.ext.asyncio import create_async_engine
 
 from app.adapters.tasks import intake_task_custody_port
 from app.core.identifiers import new_record_id
@@ -48,23 +45,20 @@ async def age_fixture(intake, operation):
     """Seed historical timestamps in an isolated test DB; all cleanup guards stay enabled."""
     database = intake.engine.url.database
     assert database.startswith("workstream_test_")
-    url = make_url(os.environ["WORKSTREAM_TEST_ADMIN_DATABASE_URL"]).set(database=database)
-    engine = create_async_engine(url)
-    try:
-        async with engine.begin() as connection:
-            # Only timestamp fixture setup bypasses the immutable foreground
-            # history guard, restored in this transaction before cleanup runs.
-            await connection.execute(text("ALTER TABLE submission_intake_operations DISABLE TRIGGER submission_intake_mutation"))
-            await connection.execute(text("UPDATE submission_intake_operations SET " + ",".join(
-                f"{column}={column}-interval '3 hours'" for column in (
-                    "created_at", "upload_deadline_at", "lease_expires_at", "pre_deadline_at",
-                    "eof_at", "sealed_at", "terminal_at",
-                )
-            ) + " WHERE id=:id"), {"id": operation})
-            await connection.execute(text("ALTER TABLE submission_intake_operations ENABLE TRIGGER submission_intake_mutation"))
-    finally:
-        await engine.dispose()
-
+    # The isolated runner's restricted role owns only this test database. It can
+    # prepare history without exposing the runner's server administrator secret.
+    async with intake.engine.begin() as connection:
+        # Only timestamp fixture setup bypasses the immutable foreground
+        # history guard, restored in this transaction before cleanup runs.
+        await connection.execute(text("ALTER TABLE submission_intake_operations DISABLE TRIGGER submission_intake_mutation"))
+        await connection.execute(text("UPDATE submission_intake_operations SET " + ",".join(
+            f"{column}={column}-interval '3 hours'" for column in (
+                "created_at", "upload_deadline_at", "lease_expires_at", "pre_deadline_at",
+                "eof_at", "sealed_at", "terminal_at",
+            )
+        ) + " WHERE id=:id"), {"id": operation})
+        await connection.execute(text("SET CONSTRAINTS ALL IMMEDIATE"))
+        await connection.execute(text("ALTER TABLE submission_intake_operations ENABLE TRIGGER submission_intake_mutation"))
 
 async def test_cleanup_requires_age_then_confirms_charge_once(intake):
     operation = await terminal_source(intake)
@@ -166,3 +160,55 @@ async def test_expired_cleanup_claim_cannot_confirm_after_takeover(intake):
             await owner(session).confirm(first, object_absent=True, writes_settled=True, parts_absent=True)
     async with intake.factory.begin() as session:
         await owner(session).confirm(second, object_absent=True, writes_settled=True, parts_absent=True)
+
+
+async def test_cleanup_lease_bound_is_enforced_by_owner_and_database(intake):
+    operation = await terminal_source(intake)
+    await age_fixture(intake, operation)
+    with pytest.raises(ValueError, match="lease is invalid"):
+        async with intake.factory.begin() as session:
+            await owner(session).claim(operation, new_record_id(), lease_duration=timedelta(days=3650))
+    from app.modules.artifacts.intake.models import SubmissionIntakeOperation
+    async with intake.factory() as session:
+        row = await session.get(SubmissionIntakeOperation, str(operation))
+        source = repository(session)._sealed_source(row).model_dump_json()
+    with pytest.raises(DBAPIError, match="claim_bounds"):
+        async with intake.factory.begin() as session:
+            await session.execute(text("INSERT INTO submission_source_cleanup_claims "
+                "(operation_id,claim_id,generation,source,claimed_at,lease_expires_at) "
+                "VALUES (:id,:claim,1,CAST(:source AS jsonb),clock_timestamp(),clock_timestamp()+interval '10 years')"),
+                {"id": operation, "claim": new_record_id(), "source": source})
+
+
+async def retain_exact_key(session, operation):
+    """Create an ordinary generic replica referencing the managed key, without bypassing guards."""
+    from app.modules.artifacts.intake.models import SubmissionIntakeOperation
+    from app.modules.artifacts.models import ArtifactContent, ArtifactReplica, ArtifactStorageNamespace
+    from app.modules.artifacts.repository import ArtifactRepository
+    row = await session.get(SubmissionIntakeOperation, str(operation))
+    namespace = await session.get(ArtifactStorageNamespace, row.namespace_id)
+    content = await ArtifactRepository(session).get_or_create_content(ArtifactContent(
+        id=str(new_record_id()), sha256=row.raw_sha256, byte_count=row.raw_byte_count,
+        media_type="application/zip", normalized_display_name="submission.zip"))
+    session.add(ArtifactReplica(id=str(new_record_id()), content_id=content.id, source_operation_id=None,
+        storage_namespace_id=row.namespace_id, namespace_fingerprint=row.namespace_fingerprint,
+        adapter=namespace.adapter, provider_profile=row.provider_profile, provider_object_ref=row.object_ref,
+        verification_state="pending", availability_state="unknown", integrity_state="unknown"))
+    await session.flush()
+
+
+async def test_retained_key_blocks_claim_and_claim_blocks_new_retention(intake):
+    operation = await terminal_source(intake)
+    await age_fixture(intake, operation)
+    async with intake.factory.begin() as session:
+        await retain_exact_key(session, operation)
+    with pytest.raises(DBAPIError, match="cleanup is protected"):
+        async with intake.factory.begin() as session:
+            await owner(session).claim(operation, new_record_id(), lease_duration=timedelta(minutes=5))
+    other = await terminal_source(intake)
+    await age_fixture(intake, other)
+    async with intake.factory.begin() as session:
+        await owner(session).claim(other, new_record_id(), lease_duration=timedelta(minutes=5))
+    with pytest.raises(DBAPIError, match="claimed source cannot become retained"):
+        async with intake.factory.begin() as session:
+            await retain_exact_key(session, other)

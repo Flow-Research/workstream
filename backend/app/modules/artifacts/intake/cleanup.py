@@ -15,6 +15,9 @@ from app.modules.artifacts.intake.capacity import SubmissionSourceCapacity
 from app.modules.artifacts.intake.models import SubmissionSourceCleanupClaim
 from app.modules.artifacts.intake.repository import IntakeCustodyConflict, SubmissionIntakeRepository
 
+# Match the existing bounded durable finalization delivery lease, not a default.
+MAXIMUM_CLEANUP_LEASE = timedelta(seconds=300)
+
 
 @dataclass(frozen=True, slots=True)
 class SealedSourceCleanupClaim:
@@ -58,7 +61,8 @@ class SealedSourceCleanup:
     async def claim(self, operation_id: UUID, claim_id: UUID, *, lease_duration: timedelta) -> SealedSourceCleanupClaim:
         """Claim only a stable eligible source; never resume foreground work."""
         if (type(claim_id) is not UUID or claim_id.version != 7
-                or type(lease_duration) is not timedelta or lease_duration <= timedelta(0)):
+                or type(lease_duration) is not timedelta
+                or not timedelta(0) < lease_duration <= MAXIMUM_CLEANUP_LEASE):
             raise ValueError("source cleanup lease is invalid")
         operation, row = await self._locked(operation_id)
         now = await self._session.scalar(select(func.clock_timestamp()))

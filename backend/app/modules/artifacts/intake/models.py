@@ -168,7 +168,7 @@ class SubmissionSourceCleanupClaim(Base):
     __table_args__ = (
         ForeignKeyConstraint(["operation_id"], ["submission_intake_operations.id"],
                              name="fk_source_cleanup_operation"),
-        CheckConstraint("generation>0 and lease_expires_at>claimed_at", name="claim_bounds"),
+        CheckConstraint("generation>0 and lease_expires_at>claimed_at and lease_expires_at<=claimed_at+interval '300 seconds'", name="claim_bounds"),
         CheckConstraint("jsonb_typeof(source)='object'", name="source_shape"),
         CheckConstraint("(get_byte(uuid_send(claim_id),6)>>4)=7 and (get_byte(uuid_send(claim_id),8)&192)=128",
                         name="claim_uuid7"),

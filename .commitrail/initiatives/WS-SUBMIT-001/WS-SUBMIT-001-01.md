@@ -3423,3 +3423,25 @@ Ruff, initial structure, migration application and whitespace checks passed.
 The first custody run began before two additional cleanup tests were added;
 its collection/output and the final focused rerun will be reported distinctly.
 Do not use that initial launch as frozen final test evidence.
+
+Review repair batch: CLEANUP-LEASE-01 bounds cleanup leases to the existing
+300-second durable delivery upper bound in Python and SQL; callers still supply
+an explicit duration. QA's retained-reference gap led to a reachable generic
+replica conflict test (same namespace/key, no source-operation pointer). Add a
+retention-side guard for replicas/admissions, locking TASK/operation and refusing
+new references once a cleanup claim exists; checking only at claim/confirm would
+leave a deletion race. All matching operation identities are checked, including
+ambiguous pointer/key combinations. These add one function and two triggers.
+The repaired migration fingerprint observed on fresh PostgreSQL is
+`9f3d2ac2ea97b956a262561e272aeb41ff7fdf03c9e0e265ad76da63ca3946eb`.
+
+CI-CLEANUP-01 updates only shared semantic-family count274→275 and its exact
+verified digest for the new cleanup module; independent fingerprint enforcement
+remains. Initial static run:106 passed/1 failed, not a green run.
+Initial database run:56 passed/2 failed in669.51seconds, cleanup complete. Both
+new tests failed before cleanup claims because the isolated runner deliberately
+removes server-admin credentials. Historical fixture setup now uses the restricted
+role that owns only its asserted `workstream_test_` database, and drains deferred
+checks before restoring the immutable-history trigger. No runner permissions or
+credential exposure changes. The focused final run includes all new cleanup
+cases, model parity, stalled accepted protection and existing T5 finalization.

@@ -63,7 +63,8 @@ CREATE TABLE public.submission_source_cleanup_claims (
  confirmed_at timestamptz,
  CONSTRAINT pk_submission_source_cleanup_claims PRIMARY KEY(operation_id),
  CONSTRAINT fk_source_cleanup_operation FOREIGN KEY(operation_id) REFERENCES public.submission_intake_operations(id),
- CONSTRAINT ck_submission_source_cleanup_claims_claim_bounds CHECK (generation>0 AND lease_expires_at>claimed_at),
+ CONSTRAINT ck_submission_source_cleanup_claims_claim_bounds CHECK
+   (generation>0 AND lease_expires_at>claimed_at AND lease_expires_at<=claimed_at+interval '300 seconds'),
  CONSTRAINT ck_submission_source_cleanup_claims_source_shape CHECK (jsonb_typeof(source)='object'),
  CONSTRAINT ck_submission_source_cleanup_claims_claim_uuid7 CHECK
    ((get_byte(uuid_send(claim_id),6)>>4)=7 AND (get_byte(uuid_send(claim_id),8)&192)=128)
@@ -145,6 +146,30 @@ BEGIN
 END $$;
 CREATE CONSTRAINT TRIGGER source_cleanup_release_atomic AFTER INSERT OR UPDATE ON public.submission_source_cleanup_claims
 DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION public.check_source_cleanup_release();
+CREATE FUNCTION public.guard_cleanup_retention_barrier()
+RETURNS trigger LANGUAGE plpgsql SET search_path=pg_catalog,public,pg_temp AS $$
+DECLARE candidate record; namespace_key text; fingerprint text; object_key text;
+BEGIN
+ IF TG_TABLE_NAME='artifact_replicas' THEN
+   namespace_key:=NEW.storage_namespace_id;
+   fingerprint:=NEW.namespace_fingerprint;
+   object_key:=NEW.provider_object_ref;
+ END IF;
+ FOR candidate IN SELECT id,task_id FROM public.submission_intake_operations
+     WHERE id=NEW.source_operation_id OR (namespace_id=namespace_key
+       AND namespace_fingerprint=fingerprint AND object_ref=object_key)
+     ORDER BY task_id,id LOOP
+   PERFORM 1 FROM public.workstream_tasks WHERE id=candidate.task_id FOR UPDATE;
+   PERFORM 1 FROM public.submission_intake_operations WHERE id=candidate.id FOR UPDATE;
+   IF EXISTS(SELECT 1 FROM public.submission_source_cleanup_claims WHERE operation_id=candidate.id) THEN
+     RAISE EXCEPTION 'cleanup claimed source cannot become retained' USING ERRCODE='23514'; END IF;
+ END LOOP;
+ RETURN NEW;
+END $$;
+CREATE TRIGGER source_cleanup_replica_retention BEFORE INSERT OR UPDATE ON public.artifact_replicas
+FOR EACH ROW EXECUTE FUNCTION public.guard_cleanup_retention_barrier();
+CREATE TRIGGER source_cleanup_admission_retention BEFORE INSERT OR UPDATE ON public.submission_bundle_admissions
+FOR EACH ROW EXECUTE FUNCTION public.guard_cleanup_retention_barrier();
 """
 
 _RELEASE = """
