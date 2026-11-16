@@ -947,11 +947,11 @@ Administrator provisioning. Startup MAY fail on closed catalogue, matrix,
 context, evaluator, or active-behavior parity drift.
 
 `workstream.compensation.adapter` is eligible to be referenced by an adapter
-binding and has exactly three planned fulfillment action memberships. Planned
-membership and binding eligibility grant no executable feature authority and
-do not make this service a human Finance Authority caller. Runtime activation
-requires the exact prepared authority, native evidence guards and public API
-proof; the catalogue wiring alone does not establish those operations.
+binding and has exactly three active fulfillment action memberships. Each
+operation requires exact request-local prepared authority, original source and
+binding custody, and native evidence guards. The four public service APIs cover
+report, exception, source evidence and exact-event lookup; they do not make this
+service a human Finance Authority caller or authorize provider execution.
 
 Merged AUTH-09B provides the human-administrator-controlled
 `POST /api/v1/service-actors` provisioning route and activates only
@@ -1045,7 +1045,9 @@ remain unchanged, and downgrade refuses retained binding audit evidence.
 | `contribution.policy.publish` | `compensation.policy.manage` | covering human PM or Finance / complete draft | T | WS-ARCH-001-CP05 (active AUTH; CP04B owner; CP05A public composition; CP01B registration custody) |
 | `contribution.policy.retire` | `compensation.policy.manage` | covering human PM or Finance / published version | T | WS-ARCH-001-CP05 (active AUTH; CP04B owner; CP05A public composition; CP01B registration custody) |
 | `contribution.compensation_unit.create` | `compensation.policy.manage` | covered human Finance Authority / exact project | T | project-points-unit-creation (active; internal composition only; migration `0058_compensation_unit_create` admits its audit pair) |
-| `compensation.fulfillment.report` | proposed `compensation.fulfillment.report` | exact bound service / award and binding | T | CON-08B |
+| `compensation.fulfillment.report` | `compensation.fulfillment.report` | original bound active service / award, binding, source and exact event | T | COMP evidence API and native receipt owner |
+| `compensation.fulfillment.exception.report` | `compensation.fulfillment.exception.report` | original bound active service / immutable successful receipt and exact exception event | T | COMP evidence API and native exception owner |
+| `compensation.fulfillment.source.read` | `compensation.fulfillment.source.read` | original bound active service / disjoint source or exact-event lookup resource | Q | COMP evidence API |
 | `contribution.read_self` | `contribution.read_self` | active human / own records and complete awards | Q | PILOT-10A |
 | `contribution.read_project` | `contribution.read_project` | covering PM or exact-project Finance / project records and complete awards | Q | PILOT-10A |
 | `compensation.delivery.reconcile` | `compensation.delivery.reconcile` | D11 role set / delivery request | T | CON-10B |
@@ -1445,10 +1447,11 @@ covered; B8 supplies completion delivery with invocation, generation and
 commit-before-acknowledgment proof. Remediation and selected production composition
 are delivered. A complete supported false guide can activate when the approved
 inventory contains no `human_review` disposition. Conditional award facts remain atomic for paid and unpaid policies.
-The first-contribution manifest keeps fulfillment admission, dispatch and callbacks
-unavailable. Internal COMP roots and ordinals now accompany earned awards;
-Finance obligation, callback and cutoff/drain execution still require their own
-qualified runtime before a reviewed manifest enables fulfillment.
+The first-contribution manifest keeps Finance admission and financial dispatch
+unavailable. Internal COMP roots and ordinals accompany earned awards; the four
+original-bound evidence APIs retain service observations without executing a
+payment. Finance obligation admission, durable callback delivery and cutoff/drain
+still require their qualified runtime before a reviewed manifest enables execution.
 False guide activation follows joint proof. A stable Review FK target is
 not live ReviewLease/queue/decision behavior. The shared lifecycle
 fence is required for either acceptance trigger; obligation writers join that same

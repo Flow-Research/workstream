@@ -735,12 +735,13 @@ unchanged.
 
 The closed registry has twenty-one fixed-service identities and forty-five
 registered service-action memberships. The compensation adapter has exactly
-three PLANNED memberships: `compensation.fulfillment.source.read`,
+three active memberships: `compensation.fulfillment.source.read`,
 `compensation.fulfillment.report`, and `compensation.fulfillment.exception.report`.
-Its provisioned identity can be selected as a binding target, but those planned
-actions grant no executable source read or callback authority. Request-local
-prepared authorization binds the actual actor/link and original source; native
-receipt enforcement and public route activation remain unfinished. Missing
+Its provisioned identity can be selected as a binding target. Request-local
+prepared authorization binds the actual active actor/link and original source
+for report, exception and the disjoint source-evidence/exact-event reads. The
+four service APIs require the original binding actor even after binding
+suspension; their evidence does not authorize Finance/provider execution. Missing
 provisioned rows deny without stopping the application. Dispatcher authority
 grants no feature permission. Do not create a shared review service or a
 database service-grant table.
@@ -855,8 +856,9 @@ assignment, or service-action-matrix data.
 
 Controlled provisioning may create the `workstream.compensation.adapter`
 profile and service identity link for a binding target. Its exact three
-fulfillment matrix memberships remain PLANNED and do not grant executable
-callback or source-read authority. Operators must not add ad hoc memberships.
+fulfillment matrix memberships are active for the four original-bound evidence
+APIs, each requiring fresh request authority and current custody. They grant no
+provider execution authority. Operators must not add ad hoc memberships.
 CP03A originally established target eligibility; CP03B separately activated the
 human Finance Authority binding actions. Binding management does not activate
 service fulfillment actions.
