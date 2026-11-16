@@ -779,6 +779,7 @@ LANES = (
             "tests/finance/test_reward_transition.py",
             "tests/finance/test_selected_reward_migration.py",
             "tests/finance/test_fulfillment_root_migration.py",
+            "tests/finance/test_fulfillment_receipt_migration.py",
             "tests/migrations/test_assignment_outcome_backfill.py",
             "tests/test_checker_evidence_migrations.py",
             "tests/migrations/test_project_catalogue_read.py",

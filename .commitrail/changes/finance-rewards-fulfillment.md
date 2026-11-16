@@ -1889,3 +1889,39 @@ and record the actual backend capture SHA. A scanned export fragment has no API
 change and is left untouched. Extend affected scope only to those two snapshots
 and two read-test modules; no MCP production gateway or schema-validator change,
 new tool, compatibility count or feature permission activation.
+
+
+## Receipt native storage implementation
+
+Continue the already approved receipt L0 boundary on isolatedb3be45e62 while
+MCP contract tests retain their frozen source. Implement native0073 for the two
+current immutable evidence tables and exact source/AUTH/body/clock/ordinal/
+closure guards. Preserve the0072 pending root/outbox/source/allow rows without
+rewriting data or adding a compatibility path. Installation requires disabled
+REV under the canonical lock, then AUTH and COMP installation custody. Factual
+evidence uses current generation in any phase, original root admission lineage,
+actual bound active reporter/link, same-transaction canonical allow and exact
+resource digest. READ COMMITTED is mandatory before clock/ordinal/write; native
+root mutex assigns one receiver clock and positive cross-table ordinal. Missing
+parent success or changed-source/body facts fail closed. No evidence mutation or
+orphan report/exception allow may commit. Existing earning manifest/admission
+rules are unchanged; callback actions remain PLANNED until full operation proof.
+Follow with the declared realistic route/native/projection/migration tests,
+including retained pending-root upgrade, RC contention, RR/SERIALIZABLE zero-
+effect rejection and rollback-contained guard-removal counterexamples. This
+initial schema/guard code is unqualified until those proofs and reviews pass.
+
+Native storage now declares the two registered ORM tables and frozen0073 DDL,
+with separate async-compatible DDL operations, native source/principal/AUTH
+closure, closed bodies/digests and skew checks, immutable rows, one receiver
+clock and cross-table root ordinal. The migration retains the earning manifest
+and requires disabled installation without rewriting prior facts. Current test
+reset/truncate inventory adds only the two real tables; no roles or guards are
+weakened. Add actual empty0072 upgrade/idempotency and genuinely earned pending-
+root retention/refusal tests using unchanged0072 owners and real signed Operator
+transitions. They do not project a later row shape or replace an owner validator.
+Register that module directly in the existing schema lane. The current head
+fingerprint is still the previous0072 literal pending native capture and pinning;
+this intermediate source is deliberately unqualified, with no passing migration
+or callback claim. Capture the new schema under owned isolation, pin its exact
+fingerprint, and complete the declared native/body/ordinal/API proof next.
