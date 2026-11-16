@@ -846,3 +846,79 @@ helpers, adds an independent source-digest-column substitution and forces deferr
 closure after the trigger-removal control before rolling it back. Final-source
 execution and reviewer replay are still required; the prior development pass is
 not attributed to that final source.
+
+
+### Collected implementation findings and bounded repair plan
+
+Both combined implementation reviews closed BLOCKED on clean `3f53c74a8`,
+base/merge-base `b22134f5e`; these are engineering findings, not product review
+outcomes. `QA-FULFILL-001` / `FULFILLMENT-IMPL-001` expose the previously missed
+zero-root source race. `QA-FULFILL-002` / `FULFILLMENT-IMPL-002` expose required
+paid reviewer storage/export regression. `TEST-FULFILL-001` requires independent
+event-to-root closure proof; `DOC-FULFILL-001` identifies two stale current root/
+ordinal claims. CI inventory was structurally sound; no final runtime or whole-PR
+passing verdict exists. The earlier plan's first-root-only anchor assumption is
+superseded by the concrete A-activation/B-first-root counterexample.
+
+This repair stays L0 and in this same PR. Additional allowed owners are existing
+REV lifecycle model/fence/public protocol and native control/history guards,
+COMP consumer fence adapter/API/service, affected current lifecycle/AUTH fixtures,
+0072 and its actual predecessor-data fixture, current reviewer storage/export
+proofs, the existing root tests, schema fingerprint and affected current docs/
+roadmap/record. No separate registry/controller, historical decoder, old-hash
+fallback, fabricated Review/FinalAcceptance, human-review runtime or new handler
+registration. Retain current reviewer-policy, immutable storage/export and its
+tests; these are required business branches, not compatibility behavior.
+
+1. Add a nullable `fulfillment_source_instance_id` scalar to the existing REV
+   control and transition rows. Null represents the real pre-activation state;
+   do not fabricate source IDs for retained rows. First authorized LIVE anchors
+   the configured UUIDv7 atomically. Thereafter transitions retain that same
+   value across disabled/shadow/draining/restart; changing/clearing it fails.
+   Bind the transition's scalar into its existing observations digest and exact
+   AUTH/native transition/control closure. Keep LifecycleTransitionFacts' JSON
+   shape unchanged: its digest can commit this new server observation without
+   adding a historical parser/default. Native history carries the scalar needed
+   to reconstruct and independently check the observation, including first LIVE
+   before the control update. Existing retained JSON/AUTH evidence is not rewritten.
+2. Extend the same REV-owned held-fence capability with explicit source matching,
+   exposed to COMP through its consumer-owned fence port/adapter. COMP checks
+   configured identity against that held canonical source before root/outbox
+   insertion. Its earlier generic custody check remains phase/generation-only;
+   no new source registry or private cross-owner read is introduced. The native
+   root INSERT guard also compares the control's anchored UUID, including when
+   roots are empty. Existing canonical lock order and transaction ownership stay.
+   Keep generic fence scalar selection unchanged so real predecessor-schema data
+   preparation need not reconstruct an old application runtime.
+3. Scope the current award-to-root closure to `accepted_submission`. Retain
+   `completed_review` fixed award copying, lineage, immutability and public exports
+   under their existing storage rules. Current root construction still requires
+   actual automatic FinalAcceptance; never synthesize reviewer root authority.
+   Reconcile migration refusal with this exact supported boundary: refuse retained
+   accepted-submission awards lacking original roots, while preserving genuine
+   reviewer award rows unchanged. Use actual 0071 native-data preparation, explicit
+   installed-schema columns and actual AUTH/fence custody in that migration fixture;
+   do not invoke a current ORM field that does not exist in the predecessor schema.
+4. Add named event-to-root closure proof: real OUTBOX selector with no root must
+   fail `compensation_event_fulfillment_closure` and roll back; removing only that
+   trigger inside a rolled-back transaction must defeat the assertion. Retain
+   all award/root/event independent guards and existing raw substitution cases.
+5. Correct current data-model/lifecycle root/ordinal claims and describe durable
+   source activation and accepted-submission root scope consistently across their
+   related current spec/roadmap claims. Finance admission/callback/status/cutoff
+   and live human review remain unavailable until implemented and qualified.
+
+Acceptance/proof: LIVE under A with zero roots durably records A in actual
+control/history/AUTH observation; B's first paid earning fully rolls back;
+A succeeds and later restarts retain A. Direct SQL cannot substitute B even with
+no root anchor, rewrite/clear control source, or reuse authority observed for A.
+Accepted-submission omission and stray-event closure retain discriminating native
+proof. Current active/retired money/points reviewer awards and paid JSON/CSV
+pagination commit/read without fabricated roots. Fresh/actual0071/repeated-head,
+retained accepted-award refusal and retained reviewer-row preservation are native
+migration proofs. Run affected lifecycle authority/storage, root/public journey,
+reviewer storage/export and catalogue/architecture controls; regenerate schema
+fingerprint from actual PostgreSQL. Then freeze and replay the same reviewer
+tracks, including formerly passing structure/docs tracks. Human focus: immutable
+source anchor, AUTH/observation/control coupling, supported business scope and
+independent closure guards. Full Finance objective remains active and unfinished.
