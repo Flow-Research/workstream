@@ -1473,3 +1473,12 @@ native PostgreSQL char representation in trigger metadata: tgenabled is bytes.
 Read that metadata explicitly as text, preserving the exact enabled-state and
 full-definition comparison. The failed run completed owned database/MinIO cleanup;
 its result is not a full lineage proof pass.
+
+Exact8ffcded replay discriminated the earlier assumption: with complete current
+selection fields the existing assignment contribution guard fires first (its
+trigger name sorts before assignment_reward_selection). Keep the original exact
+stamp rejection plus SQLSTATE and existing valid positive controls. Remove the
+unnecessary trigger-drop helper entirely; no native guard must be changed to
+prove this boundary. The failed replay completed owned cleanup. The preceding
+proposal to discriminate an earlier reward guard is superseded by this observed
+ordering; neither failed run counts as a successful complete module proof.

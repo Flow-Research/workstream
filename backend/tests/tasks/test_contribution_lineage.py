@@ -48,38 +48,6 @@ async def test_no_payment_screen_claim_and_start_copy_exact_guide_policy(task_cl
 
 
 
-async def _reject_assignment_selection_and_stamp(session, statement, params):
-    """Prove both current selection and the independent policy stamp guard."""
-    trigger_query = text(
-        "SELECT pg_get_triggerdef(oid), tgenabled::text AS tgenabled FROM pg_trigger "
-        "WHERE tgrelid='public.task_assignments'::regclass "
-        "AND tgname='assignment_reward_selection'"
-    )
-    trigger_before = (await session.execute(trigger_query)).one()
-    assert trigger_before.tgenabled == "O"
-    rows_query = text("SELECT to_jsonb(a) FROM public.task_assignments a ORDER BY id")
-    rows_before = list(await session.scalars(rows_query))
-    with pytest.raises(DBAPIError, match="assignment reward selection differs") as failure:
-        async with session.begin_nested():
-            await session.execute(statement, params)
-    assert failure.value.orig.sqlstate == "23514"
-    assert list(await session.scalars(rows_query)) == rows_before
-    # The earlier stamp guard must still reject the tuple independently. Drop
-    # only the newer trigger inside a savepoint that is always rolled back.
-    async with session.begin_nested() as discriminator:
-        await session.execute(text(
-            "DROP TRIGGER assignment_reward_selection ON public.task_assignments"
-        ))
-        with pytest.raises(DBAPIError, match="assignment contribution stamp differs from task") as failure:
-            async with session.begin_nested():
-                await session.execute(statement, params)
-                await session.execute(text("SET CONSTRAINTS ALL IMMEDIATE"))
-        assert failure.value.orig.sqlstate == "23514"
-        await discriminator.rollback()
-    assert (await session.execute(trigger_query)).one() == trigger_before
-    assert list(await session.scalars(rows_query)) == rows_before
-
-
 async def test_assignment_insert_rejects_same_project_wrong_stamp_direct_sql(task_client):
     project = await create_active_project(task_client)
     task = await create_ready_task(task_client, project["id"])
@@ -105,7 +73,10 @@ async def test_assignment_insert_rejects_same_project_wrong_stamp_direct_sql(tas
             size=stored.task_size,
             definition=stored.locked_submission_award_definition_id,
         )
-        await _reject_assignment_selection_and_stamp(session, statement, params)
+        with pytest.raises(DBAPIError, match="assignment contribution stamp differs from task") as failure:
+            async with session.begin_nested():
+                await session.execute(statement, params)
+        assert failure.value.orig.sqlstate == "23514"
         assert (
             await session.scalar(select(TaskAssignment).where(TaskAssignment.task_id == task["id"]))
             is None
@@ -327,7 +298,10 @@ async def test_assignment_insert_rejects_foreign_project_tuples_direct_sql(task_
             {"policy": other.locked_contribution_policy_version_id},
             {"project": other.project_id, "policy": other.locked_contribution_policy_version_id},
         ):
-            await _reject_assignment_selection_and_stamp(session, statement, params | changed)
+            with pytest.raises(DBAPIError, match="assignment contribution stamp differs from task") as failure:
+                async with session.begin_nested():
+                    await session.execute(statement, params | changed)
+            assert failure.value.orig.sqlstate == "23514"
             assert await session.get(TaskAssignment, params["id"]) is None
         await session.execute(statement, params)
         await session.commit()
