@@ -2237,7 +2237,7 @@ and the explicit serialization/validation/commit owner below. Security's
 claimed executed.
  (closing PLAN-PUBLIC-OPS-001/002)
 
-These are future required selectors, not executed evidence. Pure/read-schema modules join STATIC_FOUNDATION_MODULES; AUTH registration/owner proofs join SHARED_FOUNDATION_MODULES. Their exact eligible lanes are shared_foundations_a, shared_foundations_b and shared_foundations_c under the existing deterministic per-node partition. The four native API/transaction/concurrency/direct-SQL modules join PROJECT_MODULES; their exact eligible lanes are project_lifecycle_a, project_lifecycle_b, project_lifecycle_c, project_lifecycle_d, project_lifecycle_e, project_lifecycle_f and project_lifecycle_g through PARTITION_LANES_BY_MODULE. Do not add overrides or new lanes without measured need. Collected manifest validation must bind each selector to exactly one of its declared lanes. Update independent literal family counts/digests by exact added names while recovering all old membership/placement digests; do not derive expected fingerprints from production at test runtime. Existing migration proof stays schema_contracts.
+These are future required selectors, not executed evidence. Pure/read-schema and AUTH registration/owner proof modules join SHARED_FOUNDATION_MODULES directly. Keep STATIC_FOUNDATION_MODULES as its exact six-file architecture/identifier inventory. Their exact eligible lanes are shared_foundations_a, shared_foundations_b and shared_foundations_c under the existing deterministic per-node partition. The four native API/transaction/concurrency/direct-SQL modules join PROJECT_MODULES; their exact eligible lanes are project_lifecycle_a, project_lifecycle_b, project_lifecycle_c, project_lifecycle_d, project_lifecycle_e, project_lifecycle_f and project_lifecycle_g through PARTITION_LANES_BY_MODULE. Do not add overrides or new lanes without measured need. Collected manifest validation must bind each selector to exactly one of its declared lanes. Update independent literal family counts/digests by exact added names while recovering all old membership/placement digests; do not derive expected fingerprints from production at test runtime. Existing migration proof stays schema_contracts.
 
 | Future selector (under backend/) | Custody / forbidden side effect |
 | --- | --- |
@@ -2280,3 +2280,13 @@ function coordinates. Every remaining frozen function body/hash/length and
 every hard limit/policy digest is unchanged; no new debt or exemption is added.
 The matrix repair shrinks the owner while retaining its no-lock/no-handle/
 no-event assertions. Re-run the unchanged structural validator before review.
+
+
+0151718 CI/test consumer review passes all assigned tracks with60+35 cases
+and exact source bridges; no runtime code or capability changed. Plan replay
+closes the named-proof and response-owner findings. Correct its one remaining
+CI placement mistake (PLAN-PUBLIC-OPS-003): the future finance read-contract
+module belongs directly in SHARED_FOUNDATION_MODULES, not the exact six-file
+STATIC_FOUNDATION_MODULES architecture inventory. Keep the same shared A/B/C
+partition, independent fingerprints and manifest proof; no lane/source changes
+are made by this plan correction. No future operation proof is claimed.
