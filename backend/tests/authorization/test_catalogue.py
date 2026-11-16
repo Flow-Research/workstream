@@ -118,8 +118,8 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
     }
     assert all(not owner.value.startswith("WS-REV-") for owner in ActionOwner)
     assert Counter(definition.availability for definition in ACTION_DEFINITIONS) == {
-        ActionAvailability.ACTIVE: 165,
-        ActionAvailability.PLANNED: 28,
+        ActionAvailability.ACTIVE: 168,
+        ActionAvailability.PLANNED: 25,
     }
     assert (
         resolve_executable_action(ActionId.ACTOR_PROFILE_READ_SELF).permission_id
@@ -174,8 +174,7 @@ def test_fixed_service_action_matrix_and_activation_are_exact_and_immutable() ->
         set().union(*SERVICE_ACTIONS_BY_IDENTITY.values())
     )
     for action in SERVICE_ACTIONS_BY_IDENTITY[ServiceIdentity.COMPENSATION_ADAPTER]:
-        with pytest.raises(ValueError, match="not active"):
-            resolve_executable_action(action)
+        assert resolve_executable_action(action) == ACTION_BY_ID[action]
     project_setup_actions = SERVICE_ACTIONS_BY_IDENTITY[ServiceIdentity.PROJECT_SETUP]
     assert {
         action: (
@@ -241,6 +240,9 @@ def test_fixed_service_action_matrix_and_activation_are_exact_and_immutable() ->
 def test_active_fixed_service_actions_are_exact():
     """Only the explicitly active fixed-service actions are executable."""
     active_internal = {
+        ActionId.COMPENSATION_FULFILLMENT_REPORT,
+        ActionId.COMPENSATION_FULFILLMENT_EXCEPTION_REPORT,
+        ActionId.COMPENSATION_FULFILLMENT_SOURCE_READ,
         ActionId.CHECKER_PRE_SUBMIT_EXECUTE,
         ActionId.CHECKER_PRE_SUBMIT_FINALIZE,
         ActionId.CHECKER_POST_SUBMIT_EXECUTE,

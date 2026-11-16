@@ -47,6 +47,7 @@ class TestLane:
 
 
 SHARED_FOUNDATION_MODULES = (
+    "tests/authorization/test_fulfillment_evidence_registration.py",
     "tests/finance/test_fulfillment_obligation.py",
     "tests/finance/test_fulfillment_contracts.py",
     "tests/finance/test_fulfillment_evidence_commands.py",
@@ -323,6 +324,7 @@ SHARED_FOUNDATION_MODULES = (
 ) + STATIC_FOUNDATION_MODULES
 
 PROJECT_MODULES = (
+    "tests/finance/test_fulfillment_evidence_public_api.py",
     "tests/finance/test_fulfillment_roots.py",
     "tests/finance/test_fulfillment_evidence_native_bodies.py",
     "tests/finance/test_fulfillment_audit_vocabulary.py",

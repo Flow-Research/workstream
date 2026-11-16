@@ -4,6 +4,13 @@ from app.modules.reviews.acceptance.participant import FinalAcceptanceParticipan
 from app.modules.reviews.api.acceptance import FinalAcceptancePort
 
 
+def fulfillment_current_custody(session):
+    """Acquire current REV custody before request AUTH for factual evidence."""
+    from app.modules.reviews.lifecycle.fence import PostgresJointLifecycleMutationFence
+
+    return PostgresJointLifecycleMutationFence(session)
+
+
 def final_acceptance_participant(session) -> FinalAcceptancePort:
     from app.adapters.tasks import task_accepted_effects_participant
     from app.adapters.contributions import submitter_contribution_participant

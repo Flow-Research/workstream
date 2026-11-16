@@ -34,6 +34,15 @@ def policy_adapter_binding_port(session: AsyncSession) -> PolicyAdapterBindingPo
     return PolicyAdapterBindingLookup(session)
 
 
+def fulfillment_evidence_service(session, *, context, authorization, lifecycle, source_instance_id):
+    """Compose factual operations with explicit request AUTH and existing REV custody."""
+    from app.modules.compensation.fulfillment.evidence_service import FulfillmentEvidenceService
+
+    return FulfillmentEvidenceService(session, source_instance_id=source_instance_id,
+        actor_profile_id=context.actor_profile_id, identity_link_id=context.identity_link_id,
+        authorization=authorization, lifecycle=FulfillmentEvidenceCurrentCustodyAdapter(lifecycle))
+
+
 def compensation_award_participant(session, fence):
     """Construct the existing complete immutable award-set writer."""
     from app.modules.compensation.awards.participant import CompensationAwardParticipant

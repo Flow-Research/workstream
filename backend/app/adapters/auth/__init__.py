@@ -95,6 +95,15 @@ def task_authorization(
     return PreparedTaskAuthorization(session, context)
 
 
+def fulfillment_evidence_authorization(session: AsyncSession, context: ServiceAuthorizationContext):
+    """Retain the actual request principal and its issuing denial kernel."""
+    from app.modules.authorization.fulfillment_evidence_authorization import (
+        FulfillmentEvidenceAuthorizationAdapter,
+    )
+
+    return FulfillmentEvidenceAuthorizationAdapter(session, context)
+
+
 def task_import_source_authorization(
     session: AsyncSession, context: AuthorizationContext,
 ) -> PreparedTaskImportSourceAuthorization:

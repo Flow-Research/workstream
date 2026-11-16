@@ -724,17 +724,17 @@ ACTION_DEFINITIONS = (
         PermissionId.COMPENSATION_POLICY_MANAGE,
         ActionOwner.PROJECT_POINTS_UNIT_CREATION,
     ),
-    _planned(
+    _active(
         ActionId.COMPENSATION_FULFILLMENT_REPORT,
         PermissionId.COMPENSATION_FULFILLMENT_REPORT,
         ActionOwner.COMPENSATION_FULFILLMENT,
     ),
-    _planned(
+    _active(
         ActionId.COMPENSATION_FULFILLMENT_EXCEPTION_REPORT,
         PermissionId.COMPENSATION_FULFILLMENT_EXCEPTION_REPORT,
         ActionOwner.COMPENSATION_FULFILLMENT,
     ),
-    _planned(
+    _active(
         ActionId.COMPENSATION_FULFILLMENT_SOURCE_READ,
         PermissionId.COMPENSATION_FULFILLMENT_SOURCE_READ,
         ActionOwner.COMPENSATION_FULFILLMENT,

@@ -33,3 +33,15 @@ async def test_command_refuses_substituted_identity_or_missing_transaction_befor
         with pytest.raises(expected):
             await getattr(service, family)(award_id, event_id, encode(value))
         assert not session.in_transaction()
+
+
+@pytest.mark.parametrize("operation", ("source_evidence", "lookup"))
+async def test_read_requires_root_transaction_before_locator_or_authority(operation):
+    async with AsyncSession() as session:
+        service = FulfillmentEvidenceService(session, source_instance_id=new_record_id(),
+            actor_profile_id=new_record_id(), identity_link_id=new_record_id(),
+            authorization=object(), lifecycle=object())
+        args = (new_record_id(),) if operation == "source_evidence" else (new_record_id(), new_record_id())
+        with pytest.raises(FulfillmentEvidenceUnavailable, match="requires_read_committed"):
+            await getattr(service, operation)(*args)
+        assert not session.in_transaction()

@@ -209,6 +209,10 @@
       "target": "backend/app/api/deps/checker_registry.py"
     },
     {
+      "group": "shared",
+      "target": "backend/app/api/deps/compensation_fulfillment.py"
+    },
+    {
       "group": "lifecycle",
       "target": "backend/app/api/deps/contribution_exports.py"
     },
@@ -291,6 +295,10 @@
     {
       "group": "auth",
       "target": "backend/app/api/routes/auth.py"
+    },
+    {
+      "group": "shared",
+      "target": "backend/app/api/routes/compensation_fulfillment.py"
     },
     {
       "group": "lifecycle",
@@ -2637,7 +2645,7 @@
       "target": "backend/scripts/validate_test_lane_evidence.py"
     }
   ],
-  "authority_digest": "90b8aad355b7998a7f37e7a342b1b9bdfa0678e763593f6499420e531f77ff35",
+  "authority_digest": "ead245012e80f31d416f4b65a9b92362134b7207c5c882dc60554a090e02738d",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }

@@ -2309,3 +2309,29 @@ source evidence, not a native/API or final-target pass. Register the exact new
 pure module directly in shared ownership, preserve the exact six static
 architecture modules and reconcile its one added-name independent fingerprint.
 The API ownership record stays candidate pending actual operation proof.
+
+### Public operation implementation checkpoint
+
+Implement the approved four-route boundary through existing COMP/PREP/AUTH/REV
+owners. Source and exact-event reads use disjoint resources, fresh current
+custody and the same binding/root lock order as factual appends. Reuse the
+bounded status queries to construct validated source evidence. A lookup miss
+consumes only its read allow. The HTTP dependency rejects human subjects before
+automatic admission, separates resolver reads from the operation root, bounds
+actual streamed bytes at65536, and constructs validated detached response bytes
+before commit. Genuine denial restaging stays with the issuing request kernel;
+AUTH errors are translated inside the adapter, adding no private-import debt.
+
+Replace exactly three obsolete PLANNED expectations with active registrations;
+retain every other service identity's before-lock denial in the new registration
+module. The first registration run caught missing canonical action-definition
+activation despite updated catalogue inventories; correct those exact rows.
+The working focused selection passes168 cases in13.93s; module boundaries and
+changed-file Ruff pass. This is not native/API qualification. The native public
+journey uses real signed Flow/JWKS service provisioning and owner-earned paid
+roots, and tests committed-response loss without fabricating an allow. It has
+not yet run at this checkpoint. Keep ownership candidate and complete the
+remaining approved native, rollback, isolation, concurrency and denial proofs
+before integrating or marking this public capability ready. Shared/project
+membership fingerprints preserve all old members with exactly one added module
+per family; the six static architecture modules and hard CI limits stay intact.

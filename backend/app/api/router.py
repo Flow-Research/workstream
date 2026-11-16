@@ -12,6 +12,7 @@ from app.api.routes.project_guide_reads import router as project_guide_reads_rou
 from app.api.routes.project_preparation_reads import router as project_preparation_reads_router
 from app.api.routes.project_work_reads import router as project_work_reads_router
 from app.api.routes.project_catalogue import router as project_catalogue_router
+from app.api.routes.compensation_fulfillment import router as compensation_fulfillment_router
 
 from fastapi import APIRouter
 
@@ -55,3 +56,4 @@ api_router.include_router(contribution_policy_router, prefix="/api/v1")
 api_router.include_router(contributions_router, prefix="/api/v1")
 
 api_router.include_router(guide_activation_router, prefix="/api/v1")
+api_router.include_router(compensation_fulfillment_router, prefix="/api/v1")

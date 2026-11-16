@@ -1,0 +1,14 @@
+{
+  "behavior_id": "finance.fulfillment.compensation-fulfillment-http-routes",
+  "callables": [
+    "app.api.routes.compensation_fulfillment.exception",
+    "app.api.routes.compensation_fulfillment.lookup",
+    "app.api.routes.compensation_fulfillment.report",
+    "app.api.routes.compensation_fulfillment.source_evidence"
+  ],
+  "group": "shared",
+  "schema": "workstream.behavior-ownership.v1",
+  "status": "candidate",
+  "target": "backend/app/api/routes/compensation_fulfillment.py",
+  "unresolved_reason": "Public operation implementation awaits complete signed PostgreSQL journey, transaction rollback, native concurrency and internal review qualification."
+}

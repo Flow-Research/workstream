@@ -19,6 +19,10 @@ class CompensationStatusReader:
         self._session = session
 
     async def read(self, root: CompensationFulfillmentRoot) -> CompensationStatusProjection:
+        status, _, _, _ = await self.read_evidence(root)
+        return status
+
+    async def read_evidence(self, root: CompensationFulfillmentRoot):
         """Use bounded owner queries and actual append order for every latest value."""
         receipts = select(CompensationFulfillmentReceipt).where(
             CompensationFulfillmentReceipt.fulfillment_root_id == root.id,
@@ -45,7 +49,7 @@ class CompensationStatusReader:
             (value for value in (latest, exception) if value is not None),
             key=lambda value: value.evidence_ordinal, default=None,
         )
-        return CompensationStatusProjection(
+        status = CompensationStatusProjection(
             delivery_status=("acknowledged_by_adapter" if latest is not None else "pending_delivery"),
             fulfillment_status=("fulfilled" if fulfilled is not None else
                                 "failed" if failed is not None else "pending"),
@@ -55,3 +59,4 @@ class CompensationStatusReader:
             last_failure_code=failed.report_body["failure_code"] if failed is not None else None,
             updated_at=latest_evidence.received_at if latest_evidence is not None else root.created_at,
         )
+        return status, latest, fulfilled, exception

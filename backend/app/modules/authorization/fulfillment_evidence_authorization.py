@@ -11,11 +11,14 @@ from app.modules.authorization.kernel import AuthorizationService
 from app.modules.authorization.prepared import PreparedAuthorizationService
 from app.modules.authorization.repository import AdminAuthorizationRepository
 from app.modules.authorization.runtime import (
+    AuthorizationDenied, AuthorizationEvidenceUnavailable,
+    PreparedAuthorizationHandleInvalid, PreparedAuthorizationUnsupported,
     PreparedAuthorizationInput, PreparedAuthorityScope, PreparedAuthorityScopeKind,
     ServiceAuthorizationContext,
 )
 from app.modules.compensation.api.fulfillment_evidence import (
     FulfillmentEvidenceAuthority, FulfillmentEvidenceDenied,
+    FulfillmentEvidenceUnavailable,
     FulfillmentReportAuthorityFacts, FulfillmentExceptionAuthorityFacts,
 )
 
@@ -45,6 +48,18 @@ class FulfillmentEvidenceAuthorizationAdapter:
 
     def __init__(self, session, context):
         self._session, self._context = session, context
+        self._repository = AdminAuthorizationRepository(session)
+        self._kernel = AuthorizationService(session, context, admin_repository=self._repository)
+
+    async def restage_denial(self, error: FulfillmentEvidenceDenied) -> bool:
+        """Restage only this kernel's exact pending decision after caller rollback."""
+        if isinstance(error.__cause__, AuthorizationDenied):
+            try:
+                await self._kernel.restage_denial(error.__cause__.decision)
+            except AuthorizationEvidenceUnavailable as exc:
+                raise FulfillmentEvidenceUnavailable("fulfillment evidence authority unavailable") from exc
+            return True
+        return False
 
     @asynccontextmanager
     async def prepare(self, facts):
@@ -64,18 +79,24 @@ class FulfillmentEvidenceAuthorizationAdapter:
             action, operation_id = ActionId.COMPENSATION_FULFILLMENT_EXCEPTION_REPORT, facts.exception_event_id
         else:
             action, operation_id = ActionId.COMPENSATION_FULFILLMENT_SOURCE_READ, context.request_id
-        repository = AdminAuthorizationRepository(self._session)
-        kernel = AuthorizationService(self._session, context, admin_repository=repository)
-        service = PreparedAuthorizationService(self._session, context, kernel, repository)
+        service = PreparedAuthorizationService(self._session, context, self._kernel, self._repository)
         caller_input = PreparedAuthorizationInput(
             idempotency_key=operation_id, request_value=resource.model_dump(mode="json"),
         )
         try:
-            handle = await service.prepare(
-                action, caller_input, PreparedAuthorityScope(
-                    kind=PreparedAuthorityScopeKind.PROJECT, project_id=facts.project_id,
-                ),
-            )
+            try:
+                handle = await service.prepare(
+                    action, caller_input, PreparedAuthorityScope(
+                        kind=PreparedAuthorityScopeKind.PROJECT, project_id=facts.project_id,
+                    ),
+                )
+            except PreparedAuthorizationUnsupported as exc:
+                await service.deny_unsupported(action, caller_input, resource, exc)
+                raise FulfillmentEvidenceUnavailable("fulfillment evidence authority unavailable") from exc
             yield _PreparedEvidence(service, handle, action, caller_input, resource)
+        except AuthorizationDenied as exc:
+            raise FulfillmentEvidenceDenied("fulfillment evidence authority denied") from exc
+        except (PreparedAuthorizationHandleInvalid, AuthorizationEvidenceUnavailable) as exc:
+            raise FulfillmentEvidenceUnavailable("fulfillment evidence authority unavailable") from exc
         finally:
             service.close()

@@ -1,6 +1,7 @@
 """Flush-only factual appends under current REV and request-local AUTH custody."""
 
 from contextlib import asynccontextmanager
+import json
 from uuid import UUID
 
 from sqlalchemy import select, text
@@ -21,12 +22,15 @@ from app.modules.compensation.api.fulfillment_evidence import (
     FulfillmentExceptionAcknowledgement, FulfillmentExceptionAuthorityFacts,
     FulfillmentExceptionConflict, FulfillmentReportAcknowledgement,
     FulfillmentReportAuthorityFacts, FulfillmentReportConflict,
+    FulfillmentSourceReadAuthorityFacts, FulfillmentReportLookupAuthorityFacts,
+    FulfillmentRecordedReport, FulfillmentRecordedException, FulfillmentSourceEvidence,
 )
 from app.modules.compensation.fulfillment.models import (
     CompensationFulfillmentException, CompensationFulfillmentReceipt,
 )
 from app.modules.compensation.fulfillment.models import CompensationFulfillmentRoot
 from app.modules.compensation.models import ProjectCompensationAdapterBinding
+from app.modules.compensation.fulfillment.projection import CompensationStatusReader
 
 
 class FulfillmentEvidenceService:
@@ -39,6 +43,57 @@ class FulfillmentEvidenceService:
         self._session, self._source = session, source_instance_id
         self._actor, self._link = actor_profile_id, identity_link_id
         self._authorization, self._lifecycle = authorization, lifecycle
+
+    async def source_evidence(self, award_id: UUID) -> FulfillmentSourceEvidence:
+        """Disclose bounded original source facts under fresh current authority."""
+        async with self._read_custody(award_id) as root:
+            status, latest, fulfilled, exception = await CompensationStatusReader(
+                self._session,
+            ).read_evidence(root)
+            return FulfillmentSourceEvidence(
+                contract_version=1, source_instance_id=root.source_instance_id,
+                obligation=root.obligation_body, status=status,
+                fulfilled_external_event_id=fulfilled.external_event_id if fulfilled else None,
+                latest_receipt=_recorded_report(latest) if latest else None,
+                fulfilled_receipt=_recorded_report(fulfilled) if fulfilled else None,
+                latest_exception=FulfillmentRecordedException(
+                    acknowledgement=_exception_ack(exception, replay=True),
+                    original_receipt_id=exception.original_receipt_id,
+                    exception_body=exception.exception_body, received_at=exception.received_at,
+                    evidence_ordinal=exception.evidence_ordinal,
+                    recording_lifecycle_generation=exception.recording_lifecycle_generation,
+                ) if exception else None,
+            )
+
+    async def lookup(self, award_id: UUID, event_id: UUID) -> FulfillmentRecordedReport | None:
+        """Consume one disjoint lookup allow, including an authorized exact-event miss."""
+        async with self._read_custody(award_id, event_id=event_id) as root:
+            receipt = await self._session.scalar(select(CompensationFulfillmentReceipt).where(
+                CompensationFulfillmentReceipt.fulfillment_root_id == root.id,
+                CompensationFulfillmentReceipt.external_event_id == event_id,
+            ).execution_options(populate_existing=True))
+            if receipt is None:
+                return None
+            self._decode_report(json.dumps(receipt.report_body, allow_nan=False).encode(),
+                                root.obligation_body, receipt.received_at)
+            return _recorded_report(receipt)
+
+    @asynccontextmanager
+    async def _read_custody(self, award_id, *, event_id=None):
+        root, binding_actor = await self._locate(award_id)
+        async with self._lifecycle.hold_current() as (current, held):
+            if root.source_instance_id != self._source:
+                raise FulfillmentEvidenceUnavailable("fulfillment_source_unavailable")
+            await held.require_source(current.generation, self._source)
+            common = self._source_facts(root, binding_actor)
+            facts = (FulfillmentSourceReadAuthorityFacts(**common,
+                observed_lifecycle_generation=current.generation) if event_id is None else
+                FulfillmentReportLookupAuthorityFacts(**common, external_event_id=event_id,
+                    observed_lifecycle_generation=current.generation))
+            async with self._authorization.prepare(facts) as authority:
+                await self._lock_source(root, held, current.generation)
+                await authority.consume_new()
+                yield root
 
     async def report(self, award_id: UUID, event_id: UUID, body: bytes):
         """Append or recover exactly one full report; never repair prior evidence."""
@@ -135,8 +190,7 @@ class FulfillmentEvidenceService:
                 or await self._session.scalar(text("SHOW transaction_isolation")) != "read committed"):
             raise FulfillmentEvidenceUnavailable("fulfillment_evidence_requires_read_committed")
 
-    @asynccontextmanager
-    async def _custody(self, award_id, value, digest, *, exception):
+    async def _locate(self, award_id):
         await self._require_transaction()
         locator = (await self._session.execute(select(
             CompensationFulfillmentRoot, ProjectCompensationAdapterBinding.adapter_actor_id,
@@ -145,7 +199,11 @@ class FulfillmentEvidenceService:
         ).where(CompensationFulfillmentRoot.award_id == award_id))).one_or_none()
         if locator is None:
             raise FulfillmentEvidenceDenied("fulfillment_evidence_unavailable")
-        root, binding_actor = locator
+        return locator
+
+    @asynccontextmanager
+    async def _custody(self, award_id, value, digest, *, exception):
+        root, binding_actor = await self._locate(award_id)
         async with self._lifecycle.hold_current() as (current, held):
             if root.source_instance_id != self._source:
                 raise FulfillmentEvidenceUnavailable("fulfillment_source_unavailable")
@@ -182,13 +240,16 @@ class FulfillmentEvidenceService:
         # This held view validates custody without taking REV again after AUTH.
         await held.require_source(generation, self._source)
 
-    def _facts(self, root, binding_actor, value, digest, generation, *, exception):
-        common = dict(source_instance_id=root.source_instance_id, fulfillment_root_id=root.id,
+    def _source_facts(self, root, binding_actor):
+        return dict(source_instance_id=root.source_instance_id, fulfillment_root_id=root.id,
             award_id=root.award_id, project_id=UUID(root.project_id),
             adapter_binding_id=root.adapter_binding_id, binding_actor_id=UUID(binding_actor),
             reporter_actor_id=self._actor, reporter_identity_link_id=self._link,
             source_award_digest=root.source_award_digest, obligation_digest=root.obligation_digest,
-            admission_generation=root.admission_generation, recording_lifecycle_generation=generation)
+            admission_generation=root.admission_generation)
+
+    def _facts(self, root, binding_actor, value, digest, generation, *, exception):
+        common = dict(self._source_facts(root, binding_actor), recording_lifecycle_generation=generation)
         if exception:
             return FulfillmentExceptionAuthorityFacts(**common,
                 exception_event_id=UUID(value["exception_event_id"]), exception_digest=digest,
@@ -223,3 +284,10 @@ def _exception_ack(row, *, replay):
         fulfillment_root_id=row.fulfillment_root_id, exception_event_id=row.exception_event_id,
         original_fulfillment_event_id=row.original_fulfillment_event_id,
         exception_digest=row.exception_digest, replay=replay)
+
+
+def _recorded_report(row):
+    return FulfillmentRecordedReport(acknowledgement=_report_ack(row, replay=True),
+        report_body=row.report_body, received_at=row.received_at,
+        evidence_ordinal=row.evidence_ordinal,
+        recording_lifecycle_generation=row.recording_lifecycle_generation)
