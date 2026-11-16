@@ -1,5 +1,5 @@
 {
-  "canonical_sha256": "27d1c2a2dd5e54168106be3f7ffc2b569e5215e7c6ce18a590f86d8a589b628e",
+  "canonical_sha256": "9fe5ef91a0194fd146a31df38761be71666b03ebfcb7f34b545e7518a2f47cf0",
   "components": {
     "schemas": {
       "ApiError": {
@@ -87,7 +87,7 @@
             "type": "array"
           },
           "total": {
-            "const": 94,
+            "const": 97,
             "title": "Total",
             "type": "integer"
           }
@@ -171,6 +171,9 @@
           "compensation.adapter_binding.manage",
           "compensation.award.read",
           "compensation.delivery.reconcile",
+          "compensation.fulfillment.report",
+          "compensation.fulfillment.exception.report",
+          "compensation.fulfillment.source.read",
           "operations.status.read",
           "operations.timer.run",
           "operations.reconcile.run",
@@ -405,7 +408,7 @@
   "schema_version": 1,
   "source": {
     "action_id": "authorization.permission_catalogue.read",
-    "backend_git_sha": "8b068f2b788f159b1085d47f162c39ce3323d5b6",
+    "backend_git_sha": "d92b1a1606ad5b49729396a2a349ecb5b7b838f2",
     "method": "GET",
     "openapi_version": "3.1.0",
     "path": "/api/v1/authorization/permissions"

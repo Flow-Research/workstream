@@ -1879,3 +1879,13 @@ Exacte99886e native routing/PREP module passed9 cases in326.00s with complete
 PostgreSQL/MinIO cleanup. Its259 pure/CI/docs controls passed in60.94s; module and
 structure validators pass. Behavior partition/ownership repair is metadata-only;
 reconcile it on the next clean target with original execution provenance intact.
+
+Trace the same97-permission change through the independent MCP adapter: refresh
+only permissions_list/admin_roles_list frozen OpenAPI fragments and exact read
+fixtures, including installed read parity. The new captured fragments differ
+only in PermissionId and PermissionDefinitionsResponse; operations and all other
+transitive schemas are unchanged. Preserve their tamper-evident fragment hashes
+and record the actual backend capture SHA. A scanned export fragment has no API
+change and is left untouched. Extend affected scope only to those two snapshots
+and two read-test modules; no MCP production gateway or schema-validator change,
+new tool, compatibility count or feature permission activation.
