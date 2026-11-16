@@ -2001,3 +2001,13 @@ AUTH/receipt proof. Strip generated DDL trailing whitespace (CI-RECEIPT-STORAGE-
 002). Model consolidation and current-result notes are already in the separate
 b5859b1 command checkout, not retroactively qualified at415. Capture and pin the
 new strict schema fingerprint before rerunning receipt migration/guard proof.
+
+
+Add one no-write native vocabulary probe using the actual three installed CHECK
+expressions over explicit audit composites. All four current action/resource
+combinations must satisfy every predicate; unknown resources/permissions,
+substituted action-permission pairs and extra facts must fail their exact guard.
+This isolates RECEIPT-STORAGE-001 without minting a synthetic allow, inserting
+an audit row, disabling a trigger or claiming real AUTH receipt admission.
+Register it in the existing project lane. Actual authorized receipt insertion
+and closure remain required separately.

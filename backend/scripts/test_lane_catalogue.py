@@ -323,6 +323,7 @@ SHARED_FOUNDATION_MODULES = (
 PROJECT_MODULES = (
     "tests/finance/test_fulfillment_roots.py",
     "tests/finance/test_fulfillment_evidence_native_bodies.py",
+    "tests/finance/test_fulfillment_audit_vocabulary.py",
     "tests/finance/test_selected_reward_journey.py",
     "tests/finance/test_selected_reward_storage.py",
     "tests/finance/test_selected_award_closure.py",
