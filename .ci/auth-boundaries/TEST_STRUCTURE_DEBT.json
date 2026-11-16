@@ -86,7 +86,7 @@
     },
     {
       "capability": "oversized_authorization_structure",
-      "content_sha256": "83e22112a91dc19952da68aa220dd6a55d7834d2824cd3fd1fa8af20480c89be",
+      "content_sha256": "989df8969082c9f2005df3ee0d3e24c364f88566204d88fdc05574df00eee422",
       "end_line": 10709,
       "hard_limit": 1200,
       "kind": "test_file",

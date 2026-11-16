@@ -5270,3 +5270,26 @@ error-only diagnostic edit, with no grant implementation changes afterward.
 Rustfmt, Commitrail, Markdown link and whitespace checks pass. Freeze this
 bounded removal for ARCH/SEC, QA/test-delta and affected documentation review;
 full goal still requires the failed gate and all other lifecycle work to close.
+
+All three bounded runtime reviews close on b67d02a12 without required repairs.
+QA independently runs the retired-protocol refusal test in an isolated copy and
+confirms a permissive-v1 mutant fails its precise protocol assertion. The initial
+compiler SIGSEGV remains unexplained; single-job/larger compiler stack diagnostic
+completes. This does not close the recorded full-workspace transport failures.
+
+### Structural ledger reconciliation after import repair
+
+CI8989 preflight fails exact structural-debt parity. Inventory isolates one change:
+backend/tests/test_authorization.py has the same10709 lines but its hash changed
+when8989 removed unused asdict from the existing import. Protected main has10754
+lines; the earlier route-test migration already shrank this item. Allowed scope:
+this record and that single content_sha256 in TEST_STRUCTURE_DEBT.json. No source,
+assertions, policy, exceptions, limits or other ledger entries change. Acceptance:
+exact current inventory parity and full trusted-transition/assertion-map validation.
+Risk is CI evidence consistency; focused CI reviewer inspects the one-entry delta.
+Human review focus is confirming the digest corresponds to the already-reviewed
+import-only edit, without accepting new or growing structural debt.
+
+Full structural validator passes exit0 with the reconciled digest, including
+trusted-main transition and assertion-map checks; log:
+/tmp/submission-structure-reconciliation.log. No test or policy edit was needed.
