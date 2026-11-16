@@ -188,6 +188,7 @@ SHARED_FOUNDATION_MODULES = (
     "tests/test_local_artifact_store.py",
     "tests/migrations/test_task_queue_authority.py",
     "tests/migrations/test_claim_starts_work.py",
+    "tests/migrations/test_source_pre_cutover.py",
     "tests/migrations/test_compensation_unit_create_migration.py",
     "tests/migrations/test_task_read_authority.py",
     "tests/migrations/test_task_context_authority.py",

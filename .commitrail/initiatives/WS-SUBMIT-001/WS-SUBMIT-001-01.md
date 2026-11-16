@@ -6608,3 +6608,61 @@ changedrules exception and unconditional unchanged acceptance; other test/helper
 ASTs unchanged (/tmp/submission-current-builders-qa-probe.log). No scoped findings.
 Fresh origin/main fetch has0missing main commits (190ahead beforethiscommit).
 Same draftPR708; no broad CI or retained publisher completion claim.
+
+Source PRE cutover scope: 0071_source_first_pre.py and focused migration proofs.
+The migration currently installs a read-only guard on all v1 PRE rows without
+refusing queued/running rows, stranding existing execution owners. Require an
+exclusive table lock and refuse those rows before schema mutation. Preserve
+terminal history byte-for-byte; never auto-complete, delete, or reinterpret it.
+Allowed follow-up files are predecessor migration fixtures and their targeted
+tests. Prohibited: restoring the retired admission publisher, changing current
+submission authority, or claiming this check drains old put attempts/admissions.
+High lifecycle/migration risk; architecture and QA review required. Acceptance:
+real PostgreSQL queued/running refusal with rollback, completed historical-row
+preservation, and serialization against concurrent old writes. Human review
+focus: cutover refusal happens before historical execution becomes read-only.
+Architecture agrees this is independently valid but not full spec20.2 cutover.
+Archive inventory found completed selected PRE rows only; refusal fixtures still
+need a genuine predecessor writer capture, not rewritten completed evidence.
+
+Cutover preflight draft: syntax, whitespace and Commitrail validation pass.
+Fresh isolated PostgreSQL migration through0083 and current PRE source custody
+smoke pass (1test23.11s; /tmp/submission-pre-cutover-smoke-v1.json). This verifies
+empty-database upgrade and current custody only, not queued/running refusal,
+historical preservation or lock concurrency. Those acceptance checks and QA
+remain pending; the migration change is not yet committed or qualified.
+
+Historical refusal proof uses a detached e2b926288 owner checkout and captures
+the same real run before execute, after committed claim, and after finalize.
+Capture code only observes committed rows through a separate connection; it does
+not replace owner decisions or rewrite terminal evidence. First capture passed
+but omitted Alembic metadata; corrected capture rerun pending. Test files:
+tests/migrations/test_source_pre_cutover.py and checksum-bound fixture/recipe
+under tests/fixtures; register the test in scripts/test_lane_catalogue.py so CI
+executes it. No gate weakening or current old-writer implementation is allowed.
+
+Capture v2 passed1test56.11s with complete cleanup; archive SHA256
+49156dd714478ba5d9b446440842b6b40d8372c4f05dcd38e7edb3b6e59f4b59.
+The unchanged predecessor owns issuance at0065; current migrations carry each
+restored snapshot to0070 before testing the cutover. No snapshot rows rewritten.
+CI registration also requires tests/test_ci_lane_catalogue.py fingerprint update:
+independently compared old/new sets, exactly one module added and none removed.
+First catalogue run58pass1fail detects stale pinned count; exact fingerprint repair
+rerun pending. Structural validator and Ruff pass. Migration run remains live.
+
+Cutover migration proof terminal0:3passed421.85s, database/MinIO cleanup complete
+(/tmp/submission-pre-cutover-migration-v1.json). Queued/running refusal preserves
+rows/schema/guard/version; queued case observes blocked exclusive lock behind an
+old writer; completed evidence upgrades to0083 byte-identically apart from the
+new null source column and historical terminal digest still validates. ARCH/SEC
+scoped PASS. Catalogue fingerprint repair59passed6.57s. QA omission probes pending.
+This evidence is for the dirty candidate based on d5b809bb9, not full-spec CI.
+
+QA omission proofs: removing only the refusal block makes the exact running case
+fail DID NOT RAISE DBAPIError (133.36s); removing only the explicit lock makes the
+exact queued case fail "cutover checked rows before excluding old writers"
+(124.53s), with observed early drain exception, not an unrelated setup error.
+Both isolated probes cleaned database and MinIO completely; current files were
+unchanged. Historical reader probe accepts the captured completed row and rejects
+an indexed request-digest substitution. Fresh main fetch:191ahead/0missing before
+this commit. Full old put/admission cutover and publisher retirement remain open.

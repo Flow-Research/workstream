@@ -229,6 +229,17 @@ def _update_guard():
 def upgrade():
     """Retain historical bytes while restricting new writes to source-bound runs."""
     op.execute("SET LOCAL search_path=pg_catalog,public,pg_temp")
+    # Serialize the drain check with old writers before making their rows
+    # read-only. A running historical lease must finish under its old guards.
+    op.execute("LOCK TABLE public.selected_pre_submit_runs IN ACCESS EXCLUSIVE MODE")
+    op.execute("""DO $$ BEGIN
+      IF EXISTS (SELECT 1 FROM public.selected_pre_submit_runs
+        WHERE request_json->>'schema_version'='workstream.selected_pre_submit_reservation.v1'
+          AND status IN ('queued','running')) THEN
+        RAISE EXCEPTION 'drain historical PRE runs before source-first cutover'
+          USING ERRCODE='55000';
+      END IF;
+    END $$""")
     op.execute("ALTER TABLE public.selected_pre_submit_runs ADD COLUMN source_operation_id uuid")
     for column in ("prepared_generation_id", "default_input_sha256", "semantic_manifest_sha256"):
         op.execute(f"ALTER TABLE public.selected_pre_submit_runs ALTER COLUMN {column} DROP NOT NULL")
