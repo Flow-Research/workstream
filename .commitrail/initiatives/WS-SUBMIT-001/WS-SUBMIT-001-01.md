@@ -6563,3 +6563,10 @@ and schema fingerprint teardown passes. Exact lock/revocation/rollback/replay
 proofs retained; QA no findings. Ruff/record/whitespace pass, shared structure prior
 run passed. This commit includes only retry-authority implementation; material
 integrity and binding unit followups remain in progress separately.
+
+Material integrity run terminal0:7passed8deselected242.68s, database+MinIO cleanup
+complete (/tmp/submission-material-failures-v1.json). Actual source missing/corrupt
+cases and all5 nonrecordable cases preserve finalize authority, no checker access,
+recoverability, scratch cleanup and exact unchanged T4+POST event set. QA no scoped
+findings; final structural validator terminal0, Ruff/record/whitespace pass. This
+commit includes material tests only; bindingunit strengthening remains separate.
