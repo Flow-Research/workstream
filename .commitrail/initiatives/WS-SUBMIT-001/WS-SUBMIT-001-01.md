@@ -6032,3 +6032,33 @@ changes; they are not clean-commit CI attestations. ARCH/SEC and QA code reviews
 found no remaining scoped defect; final clean-candidate review is still required.
 Downstream completion tests remain running, and full specification qualification,
 roadmap reconciliation, provider qualification and complete CI remain unfinished.
+
+Downstream current-source run completes 3 passed/2 failed in 263.13s, cleanup
+complete. Both production-registry cases still assume an empty POST policy and
+remove execution configuration; current selected policy correctly produces an
+infrastructure failure. Bounded repair scope: test_completion.py and this record.
+Use the existing ControlledSelectedExecution at the configured external port,
+assert one selected execution/member, retain actual production OUTBOX registration,
+AUTH, materialization, completion, atomic acceptance/awards and replay assertions.
+No production owner, policy bypass, new fake acceptance, or provider qualification
+claim. Risk: test validity; QA review and both production-registry cases required.
+
+Frozen pending review found CLI omission accepted as null although the field is
+required by the wire schema. Repair scope: contributor_tasks.go, task_context.go,
+tasks.go shared management detail decoder, and test_task_pending_http.py. Require
+key presence while retaining explicit null; prove omission rejection and null
+success in all four readers. No backend authority or schema change. Replay Go
+API and four HTTP readers; ARCH/SEC closure required on the final clean commit.
+
+Corrected production-registry cases pass 2 in 185.64s with cleanup complete
+(/tmp/submission-current-source-outcome-v2.log/json). CLI omission regression
+fails against prior v2 binary as intended; corrected Go API passes. Expanded CLI
+run passes 24 and fails 1 because the existing manager minimal-response fixture
+omits the newly required nullable field. Extend repair scope to that fixture in
+test_task_http_boundary.py: retain explicit null in its required-key projection.
+Focused unchanged-behavior replay follows; no decoder weakening.
+
+Final manager minimal-response replay passes 1 in 5.20s. The expanded CLI run's
+other 24 cases remain passing, including all four omitted-key/explicit-null
+regressions. Changed Python Ruff and diff whitespace checks pass. Final clean
+review replay remains required; no full-spec readiness claim.

@@ -204,7 +204,7 @@ func decodeTask(raw json.RawMessage, value any, detail bool) error {
 	required = append(required, "skill_tags")
 	if detail {
 		strings = append(strings, "description", "source_type", "created_by")
-		required = append(required, "description", "source_type", "created_by")
+		required = append(required, "description", "source_type", "created_by", "pending_submission_operation")
 	} else {
 		required = append(required, "task_type", "difficulty", "estimated_time_minutes", "deadline_at")
 	}

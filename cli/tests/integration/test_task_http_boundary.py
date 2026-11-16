@@ -130,6 +130,7 @@ def test_manager_task_reads_preserve_fields_and_wire(cli):
                 "description",
                 "source_type",
                 "created_by",
+                "pending_submission_operation",
             }
         }
         for value in (

@@ -142,7 +142,7 @@ func (c *Client) ContributorTask(ctx context.Context, selector string) (Result[C
 	var value ContributorTaskDetail
 	err = decodeTaskFields(raw, &value,
 		[]string{"task_id", "project_id", "title", "description", "status", "created_at", "updated_at"},
-		[]string{"skill_tags", "compensation"})
+		[]string{"skill_tags", "compensation", "pending_submission_operation"})
 	returned, valid := uuidIdentity(value.TaskID)
 	if err != nil || !valid || returned != selected || !validTask(value.TaskSummary, value.ProjectID) || !ValidCompensation(value.Compensation) || !validPendingSubmission(value.PendingSubmissionOperation) {
 		return result, &Failure{Code: "invalid_api_response"}

@@ -39,3 +39,11 @@ def test_pending_task_projection_uses_exact_server_identity(cli, command, origin
             task["pending_submission_operation"] = invalid
             response["body"] = json.dumps(body).encode()
             assert_failure(cli(origin, TOKEN, *command, "-o", "json"), "invalid_api_response")
+        task["pending_submission_operation"] = None
+        response["body"] = json.dumps(body).encode()
+        explicit_null = cli(origin, TOKEN, *command, "-o", "json")
+        assert explicit_null.returncode == 0, explicit_null.stderr
+        assert json.loads(explicit_null.stdout) == body
+        del task["pending_submission_operation"]
+        response["body"] = json.dumps(body).encode()
+        assert_failure(cli(origin, TOKEN, *command, "-o", "json"), "invalid_api_response")
