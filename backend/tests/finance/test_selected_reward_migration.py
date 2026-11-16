@@ -88,7 +88,7 @@ def test_fresh_install_and_empty_current_upgrade(isolated_database_env, migratio
         command.upgrade(config, "head")
         asyncio.run(_verify_test_database_schema(isolated_database_env))
         current = asyncio.run(_snapshot(isolated_database_env))
-        assert current[0]["alembic_version"] == ['{"version_num":"0072_fulfillment_roots"}']
+        assert current[0]["alembic_version"] == ['{"version_num":"0073_fulfillment_evidence"}']
         for table, rows in before[0].items():
             if table == "joint_lifecycle_release_control":
                 assert len(rows) == len(current[0][table]) == 1

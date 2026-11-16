@@ -53,7 +53,7 @@ def test_fulfillment_root_migration_fresh_and_0071_upgrade(isolated_database_env
         asyncio.run(_verify_test_database_schema(isolated_database_env))
         after = asyncio.run(_snapshot(isolated_database_env))
         assert after[0]["compensation_fulfillment_roots"] == []
-        assert after[0]["alembic_version"] == ['{"version_num":"0072_fulfillment_roots"}']
+        assert after[0]["alembic_version"] == ['{"version_num":"0073_fulfillment_evidence"}']
         _assert_preserved_0071_rows(before, after)
         command.upgrade(config, "head")
         assert asyncio.run(_snapshot(isolated_database_env)) == after

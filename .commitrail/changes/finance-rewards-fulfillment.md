@@ -1935,3 +1935,14 @@ All owned PostgreSQL/MinIO cleanup completed. Pin exactly that observed new
 object inventory; retain every schema/table/custody check. The initial capture
 is not a passing migration test. Run both actual empty/idempotent and pending-
 root/authority retention/refusal cases next on the clean pinned candidate.
+
+
+Exact674a0ad migration replay passed the first0072→0073 installation, retained
+row/physical-evidence assertions and the strict new schema fingerprint, then
+failed at repeated upgrade because the Alembic preflight still identified0072
+as current head. Both owned services cleaned up; no successful module claim.
+Register0073 as the sole current head and retain0072 as its explicit supported
+prior schema. Update the two existing upgrade-to-head assertions to0073; their
+actual predecessor targets, full snapshots and refusal checks remain intact.
+No historical migration, allowlist enforcement, schema fingerprint or data is
+rewritten. Replay both new migration cases before qualifying this storage.
