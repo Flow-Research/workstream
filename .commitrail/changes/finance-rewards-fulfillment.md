@@ -1946,3 +1946,26 @@ prior schema. Update the two existing upgrade-to-head assertions to0073; their
 actual predecessor targets, full snapshots and refusal checks remain intact.
 No historical migration, allowlist enforcement, schema fingerprint or data is
 rewritten. Replay both new migration cases before qualifying this storage.
+
+
+Continue the existing approved receipt operation boundary in a separate checkout
+while415acfadd migration proof stays frozen. Add COMP's flush-only report and
+exception commands under the already declared fulfillment owner. Actual root
+transaction/READ COMMITTED checks precede lifecycle/AUTH/clock effects; only
+nonlocking locators precede REV. Exact request actor/link facts enter AUTH before
+original binding/root locks. Suspended original bindings remain factual sources.
+Replay keeps original generation/allow/ID/time/ordinal; changed binding-event
+payload and second success conflict, linked exceptions require actual success.
+Native insertion assigns the receiver time and service reuses RETURNING's value
+for the independent full wire decoder. No commit, route/action activation,
+provider operation or new status cache is introduced. This command source is
+unqualified until real AUTH/native/public-operation proof; planned action
+availability remains unchanged.
+
+Add separately scoped installed-SQL body tests for exact source, quantity,
+closed shape and inclusive300-second report/exception boundaries. They exercise
+actual0073 functions with explicit pure-validator time inputs and an explicit
+composite original success; they do not insert evidence, forge AUTH or override
+the insertion clock. Register the module in the existing project test family.
+These tests supplement existing portable owner tests and cannot qualify actual
+insert/source/principal/ordinal/rollback or command behavior on their own.
