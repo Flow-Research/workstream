@@ -66,6 +66,16 @@ class JointLifecycleMutationFence(Protocol):
         ...
 
 
+class JointLifecycleCurrentCustodyPort(Protocol):
+    """Acquire current REV custody before AUTH, without a caller generation."""
+
+    def hold_current(self) -> AbstractAsyncContextManager[
+        tuple[JointLifecycleControlFacts, JointLifecycleMutationFence]
+    ]:
+        """Yield locked facts and a root-bound view; neither grants authority."""
+        ...
+
+
 class LifecycleTransitionCommand(BaseModel):
     """Exact Operator request; none of these selectors grants authority."""
 

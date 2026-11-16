@@ -47,11 +47,15 @@ class PostgresJointLifecycleMutationFence:
     async def hold(self, expected_generation: int):
         """Issue a root-bound view after the sole controller lock acquisition."""
         facts = await self.acquire(expected_generation)
-        held = _HeldLifecycleFence(self._session, facts)
-        try:
+        async with _held_fence(self._session, facts) as held:
             yield held
-        finally:
-            held.close()
+
+    @asynccontextmanager
+    async def hold_current(self):
+        """Read the actual generation under REV custody before caller AUTH locks."""
+        facts = await self.lock_controller()
+        async with _held_fence(self._session, facts) as held:
+            yield facts, held
 
     async def acquire(self, expected_generation: int) -> JointLifecycleControlFacts:
         """Return current locked scalar facts only for the expected generation."""
@@ -123,6 +127,16 @@ class PostgresJointLifecycleMutationFence:
             )
         except (ValueError, ValidationError) as exc:
             raise JointLifecycleUnavailable("lifecycle controller malformed") from exc
+
+
+@asynccontextmanager
+async def _held_fence(session: AsyncSession, facts: JointLifecycleControlFacts):
+    """One capability lifetime for current and expected-generation acquisition."""
+    held = _HeldLifecycleFence(session, facts)
+    try:
+        yield held
+    finally:
+        held.close()
 
 
 class _HeldLifecycleFence:
