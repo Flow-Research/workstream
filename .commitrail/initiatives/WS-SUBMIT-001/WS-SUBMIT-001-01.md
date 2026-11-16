@@ -6370,3 +6370,23 @@ remaining scoped code issue. Ruff, whitespace, record and structure checks pass.
 Hosted8bfd gates/images pass but Backend was pending behind superseded27531 run;
 requested cancellation of that old same-PR run, retaining its artifacts. No full
 CI/spec/provider readiness claim; remaining old public producers still need migration.
+
+Initial public replay migration scope: tasks/test_public_submission_intake.py only.
+Replace obsolete prepare/admission JSON test with signed raw ZIP T1/PRE/T4 and
+real OUTBOX T5. Preserve duplicate-header refusal, authorized foreign contributor
+concealment, uncaused predecessor refusal, rejection of caller-owned JSON URI,
+exact replay without a second provider upload/PRE, immutable metadata, history,
+fresh suspension and exact one-source/admission/Submission/PRE/POST counts.
+No production changes, compatibility route or weakened authority oracle. Medium
+contract risk; isolated PostgreSQL test, Ruff/structure and focused QA review.
+Human review focus: obsolete response semantics replaced by accepted receipt plus
+finalized history without dropping replay ownership or packet integrity checks.
+
+Initial replay first run reached all HTTP/T5/suspension checks then failed on test
+model attribute submission_version (stored model uses version); corrected assertion.
+Final isolated replay passes1 in34.43s (/tmp/submission-initial-replay-v2), database
+and MinIO cleanup complete. QA finds no scoped findings; unrelated function ASTs
+unchanged, independent assertion probes detect second PRE and lost replay feedback.
+Ruff, structural boundary, record and whitespace checks pass. This closes current
+initial replay proof only; remediation/deadline and other remaining spec work stay
+open. Hosted953 backend lanes now running; no final full-CI qualification claim.

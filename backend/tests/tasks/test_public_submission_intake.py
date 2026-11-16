@@ -20,12 +20,11 @@ from app.core.identifiers import new_record_id
 from app.api.deps.rate_controls import get_rate_control_service
 from app.db.session import get_db_session
 from app.main import create_app
-from app.modules.artifacts.models import ArtifactPutAttempt, SubmissionBundleAdmission
+from app.modules.artifacts.models import SubmissionBundleAdmission
 from app.modules.checkers.models import CheckerRun, SelectedPreSubmitRun
 from app.modules.checkers.api.pre_submit_material import SubmissionPacketView
 from app.modules.outbox.models import OutboxEvent
 from app.modules.tasks.models import Submission
-from app.modules.tasks.models import WorkstreamTask
 from app.modules.api_controls.service import AUTHORIZATION_READ_SCOPE, RateControlService
 from app.modules.actors.models import ActorProfile
 from tests.tasks.test_submission_lineage import _prepared_packet
@@ -37,8 +36,6 @@ from tests.artifacts.test_submission_intake_admission import (
     auth_database_env as auth_database_env,
     clear_settings_cache as clear_settings_cache,
 )
-from tests.test_artifact_admission import _context, _seed_human_actor
-from tests.submission_preparation_auth_helpers import install_submitter_grant
 from tests.tasks.post_submit_routing.backfill_support import assert_upgrade_refuses_stale_findings
 from tests.tasks.post_submit_routing.remediation_support import remediation_source
 from tests.tasks.post_submit_routing.support import revision_archive
@@ -345,124 +342,116 @@ async def test_public_submission_infrastructure_error_is_retryable_only_for_sql(
         await command.submit(None, None, **arguments)
 
 
-async def test_public_initial_submission_replays_and_recovers_ready_upload(
-    isolated_database_env, tmp_path, monkeypatch,
+async def test_public_initial_submission_replays_and_recovers_accepted_upload(
+    admission_intake, tmp_path, monkeypatch,
 ):
-    async with _prepared_packet(isolated_database_env, tmp_path) as h:
-        route = f"/api/v1/tasks/{h.task_id}/submissions"
-        async with _client(h, monkeypatch, isolated_database_env) as client:
-            duplicate = await client.post(
-                f"/api/v1/tasks/{h.task_id}/submission-bundle-preparations",
-                headers=[
-                    ("Authorization", "Bearer public-intake-token"),
-                    ("Content-Type", "application/zip"),
-                    ("X-Task-Assignment-Id", str(h.assignment_id)),
-                    ("Idempotency-Key", str(h.preparation_request.idempotency_key)),
-                    ("Idempotency-Key", str(h.preparation_request.idempotency_key)),
-                ],
-                content=h.archive_bytes,
-            )
-            assert duplicate.status_code == 422, duplicate.text
-            assert duplicate.json()["error"]["code"] == "submission_preparation_headers_invalid"
+    """Lost acceptance recovers without upload/PRE and retains current authority."""
+    from uuid import UUID
+    from sqlalchemy import text
+    from app.adapters.artifacts.local import LocalStorageAdapter
+    from tests.artifacts.test_submission_foreground_command import configure_source_http
+    from tests.authorization.task_authority.test_postgresql import grant
+    from tests.retained_material_fixtures import finalize_retained_intake
+    from tests.test_artifact_admission import _local_store
+    from tests.test_trusted_intake import _archive
 
-            # Losing a ready response can be recovered with the exact ZIP and key.
-            from app.adapters.artifacts.local import LocalStorageAdapter
-            from app.modules.artifacts.selected_pre_submit_execution import SelectedPreSubmitExecutionService
+    f, payload = admission_intake, _archive()
+    client, settings, errors, calls = await configure_source_http(
+        f.factory, f.access.signed.client, tmp_path, monkeypatch, payload, "completed",
+    )
+    route = f"/api/v1/tasks/{f.task}/submissions"
+    headers = f.access.target.headers | {
+        "Content-Type": "application/zip", "X-Task-Assignment-Id": str(f.assignment),
+        "Idempotency-Key": str(new_record_id()), "X-Submission-Summary": "Completed work",
+        "X-Contributor-Attestation": "I completed this work",
+    }
+    duplicate = await client.post(route, headers=list(headers.items()) + [
+        ("Idempotency-Key", headers["Idempotency-Key"]),
+    ], content=payload)
+    assert duplicate.status_code == 422, duplicate.text
+    assert duplicate.json()["error"]["code"] == "submission_packet_invalid"
 
-            async def no_new_put(*_args, **_kwargs):
-                raise AssertionError("ready replay invoked a second provider PUT")
+    foreign = await f.access.signed.actor("foreign-submission-contributor")
+    await grant(SimpleNamespace(signed=f.access.signed, target=foreign), f.manager, f.project)
+    denied_actor = await client.post(route, headers=headers | foreign.headers, content=payload)
+    assert denied_actor.status_code == 404, denied_actor.text
+    assert denied_actor.json()["error"]["code"] == "submission_unavailable"
+    denied_predecessor = await client.post(route, headers=headers | {
+        "X-Predecessor-Submission-Id": str(new_record_id()),
+    }, content=payload)
+    assert denied_predecessor.status_code == 409, denied_predecessor.text
+    assert denied_predecessor.json()["error"]["code"] == "task_submission_predecessor_changed"
+    denied_uri = await client.post(route, headers=headers | {"Content-Type": "application/json"},
+                                  json={"package_uri": "s3://caller-controlled/bundle.zip"})
+    assert denied_uri.status_code == 415, denied_uri.text
+    assert denied_uri.json()["error"]["code"] == "submission_media_type_unsupported"
+    assert calls == []
+    async with f.factory() as session:
+        assert await session.scalar(text("SELECT count(*) FROM submission_intake_operations")) == 0
+        assert await session.scalar(text("SELECT count(*) FROM submission_source_charges")) == 0
 
-            async def no_new_checker(*_args, **_kwargs):
-                raise AssertionError("ready replay invoked selected PRE again")
+    first = await client.post(route, headers=headers, content=payload)
+    assert not errors, "\n".join(errors)
+    assert first.status_code == 202, first.text
+    receipt = first.json()
+    assert receipt["status"] == "accepted" and receipt["replayed"] is False
 
-            with monkeypatch.context() as patch:
-                patch.setattr(LocalStorageAdapter, "put", no_new_put)
-                patch.setattr(SelectedPreSubmitExecutionService, "execute", no_new_checker)
-                prepared = await client.post(
-                    f"/api/v1/tasks/{h.task_id}/submission-bundle-preparations",
-                    headers={
-                        "Content-Type": "application/zip",
-                        "X-Task-Assignment-Id": str(h.assignment_id),
-                        "Idempotency-Key": str(h.preparation_request.idempotency_key),
-                        "X-Submission-Summary": h.preparation_request.summary,
-                        "X-Contributor-Attestation": h.preparation_request.contributor_attestation,
-                    },
-                    content=h.archive_bytes,
-                )
-            assert prepared.status_code == 202, prepared.text
-            assert prepared.json()["submission_bundle_preparation_status"] == "ready"
-            assert prepared.json()["admission_id"] == str(h.admission_id)
-            assert prepared.json()["replayed"] is True
+    async def no_new_upload(*args, **kwargs):
+        raise AssertionError("accepted replay invoked another provider upload")
 
-            foreign_context = _context()
-            async with h.factory.begin() as session:
-                await _seed_human_actor(session, foreign_context)
-                task = await session.get(WorkstreamTask, str(h.task_id))
-                await install_submitter_grant(await session.connection(), {
-                    "project": task.project_id,
-                    "actor": str(foreign_context.actor_profile_id),
-                })
-            with monkeypatch.context() as foreign_patch:
-                async with _client(
-                    h, foreign_patch, isolated_database_env,
-                    subject=f"human-{foreign_context.actor_profile_id}"
-                ) as foreign:
-                    denied_actor = await foreign.post(route, json=_payload(h.creation, h.admission_id))
-                    assert denied_actor.status_code == 404, denied_actor.text
-                    assert denied_actor.json()["error"]["code"] == "submission_unavailable"
+    with monkeypatch.context() as replay_patch:
+        replay_patch.setattr(LocalStorageAdapter, "begin_source_upload", no_new_upload)
+        replay_patch.setattr(LocalStorageAdapter, "upload_source_part", no_new_upload)
+        replay_patch.setattr(LocalStorageAdapter, "complete_source_upload", no_new_upload)
+        replay = await client.post(route, headers=headers, content=payload)
+        assert replay.status_code == 202 and replay.json() == dict(receipt, replayed=True), replay.text
+        changed = await client.post(route, headers=headers | {"X-Submission-Summary": "changed"},
+                                    content=payload)
+        assert changed.status_code == 409, changed.text
+        assert changed.json()["error"]["code"] == "submission_idempotency_conflict"
+        foreign_replay = await client.post(route, headers=headers | foreign.headers, content=payload)
+        assert foreign_replay.status_code == 404, foreign_replay.text
+        assert foreign_replay.json()["error"]["code"] == "submission_unavailable"
+    assert len(calls) == 1 and not errors, errors
+    async with f.factory() as session:
+        assert await session.scalar(select(func.count()).select_from(Submission)) == 0
 
-            uncaused = _payload(h.creation, h.admission_id)
-            uncaused["predecessor_submission_id"] = str(new_record_id())
-            denied_predecessor = await client.post(route, json=uncaused)
-            assert denied_predecessor.status_code == 409, denied_predecessor.text
-            assert denied_predecessor.json()["error"]["code"] == "task_submission_predecessor_changed"
-
-            client_owned = _payload(h.creation, h.admission_id)
-            client_owned["package_uri"] = "s3://caller-controlled/bundle.zip"
-            denied_uri = await client.post(route, json=client_owned)
-            assert denied_uri.status_code == 422, denied_uri.text
-
-            created = await client.post(route, json=_payload(h.creation, h.admission_id))
-            assert created.status_code == 201, created.text
-            result = created.json()
-            assert result["admission_id"] == str(h.admission_id)
-            assert result["submission_version"] == 1
-            assert result["submission_id"]
-
-            replay = await client.post(route, json=_payload(h.creation, h.admission_id))
-            assert replay.status_code == 201, replay.text
-            assert replay.json() == result
-
-            changed = _payload(h.creation, h.admission_id)
-            changed["summary"] += " changed"
-            denied = await client.post(route, json=changed)
-            assert denied.status_code == 404, denied.text
-            assert denied.json()["error"]["code"] == "submission_unavailable"
-
-            history = await client.get(f"/api/v1/tasks/{h.task_id}/submissions")
-            assert history.status_code == 200, history.text
-            assert [item["id"] for item in history.json()["items"]] == [result["submission_id"]]
-
-            async with h.factory.begin() as session:
-                profile = await session.get(ActorProfile, str(h.context.actor_profile_id))
-                profile.status = "suspended"
-                profile.suspended_by = "intake-test"
-                profile.suspended_at = datetime.now(UTC)
-                profile.suspension_reason = "test suspension"
-            revoked = await client.post(route, json=_payload(h.creation, h.admission_id))
-            assert revoked.status_code == 404, revoked.text
-            assert revoked.json()["error"]["code"] == "submission_unavailable"
-
-        async with h.factory() as session:
-            assert await session.scalar(select(func.count()).select_from(Submission)) == 1
-            assert await session.scalar(select(func.count()).select_from(CheckerRun)) == 1
-            assert await session.scalar(select(func.count()).select_from(OutboxEvent)) >= 1
-            assert await session.scalar(select(func.count()).select_from(SelectedPreSubmitRun)) == 1
-            assert await session.scalar(select(func.count()).select_from(ArtifactPutAttempt).where(
-                ArtifactPutAttempt.producer_request_type == "submission_bundle"
-            )) == 1
-            admission = await session.get(SubmissionBundleAdmission, str(h.admission_id))
-            assert admission.status == "consumed"
+    bootstrap, store = _local_store(settings, f.namespace)
+    try:
+        submission_id = await finalize_retained_intake(f.factory, SimpleNamespace(
+            operation_id=UUID(receipt["operation_id"]), settings=settings,
+            store=store, namespace=f.namespace,
+        ))
+    finally:
+        bootstrap.close()
+    replay = await client.post(route, headers=headers, content=payload)
+    assert replay.status_code == 202 and replay.json() == dict(receipt, replayed=True), replay.text
+    history = await client.get(route, headers=f.access.target.headers)
+    assert history.status_code == 200, history.text
+    assert [item["id"] for item in history.json()["items"]] == [str(submission_id)]
+    async with f.factory.begin() as session:
+        profile = await session.get(ActorProfile, str(f.actor.actor_profile_id))
+        profile.status = "suspended"
+        profile.suspended_by = "intake-test"
+        profile.suspended_at = datetime.now(UTC)
+        profile.suspension_reason = "test suspension"
+    revoked = await client.post(route, headers=headers, content=payload)
+    assert revoked.status_code == 404, revoked.text
+    assert revoked.json()["error"]["code"] == "submission_unavailable"
+    assert len(calls) == 1 and not errors, errors
+    async with f.factory() as session:
+        assert await session.scalar(select(func.count()).select_from(Submission)) == 1
+        stored = await session.get(Submission, submission_id)
+        assert stored.version == 1
+        assert stored.summary == headers["X-Submission-Summary"]
+        assert stored.worker_attestation == headers["X-Contributor-Attestation"]
+        assert await session.scalar(select(func.count()).select_from(CheckerRun)) == 1
+        assert await session.scalar(select(func.count()).select_from(SelectedPreSubmitRun)) == 1
+        assert await session.scalar(text("SELECT count(*) FROM submission_source_charges")) == 1
+        assert await session.scalar(text("SELECT count(*) FROM submission_intake_operations")) == 1
+        admission = (await session.scalars(select(SubmissionBundleAdmission))).one()
+        assert admission.status == "consumed"
+        assert stored.submission_bundle_admission_id == admission.id
 
 
 async def test_public_checker_remediation_uses_exact_predecessor(
