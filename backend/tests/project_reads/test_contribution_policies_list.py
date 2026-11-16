@@ -1,4 +1,4 @@
-"""Finance lists every ContributionPolicy version of a project; other roles are concealed."""
+"""Authorized project managers and Finance list policy versions; other roles are concealed."""
 
 from uuid import UUID
 
@@ -7,7 +7,8 @@ from sqlalchemy import select
 from app.core.identifiers import new_record_id
 from app.db import session as db_session
 from app.modules.tasks.models import AuditEvent
-from tests.test_tasks import auth_headers, create_active_project, set_dev_actor
+from app.modules.authorization.models import AdminRoleGrant
+from tests.test_tasks import actor_id, auth_headers, create_active_project, set_dev_actor
 from .support import (
     AUDITOR, EXACT_MANAGER, FINANCE, MANAGER, OPERATOR, OWNER, as_admin, as_manager, get_ok, project_path,
     submitted_case,
@@ -69,7 +70,7 @@ async def test_finance_pages_every_version_oldest_first(task_client, monkeypatch
     assert tampered.json()["error"]["code"] == "project_read_cursor_invalid"
 
 
-async def test_project_manager_contributor_and_other_roles_are_concealed(task_client, monkeypatch):
+async def test_managers_read_policies_and_unprivileged_roles_are_concealed(task_client, monkeypatch):
     project, _task, _submission = await submitted_case(task_client, monkeypatch)
     await as_admin(task_client, monkeypatch, FINANCE, "finance_authority", project=project)
     assert len((await get_ok(task_client, _path(project)))["items"]) == 1
@@ -77,7 +78,11 @@ async def test_project_manager_contributor_and_other_roles_are_concealed(task_cl
     await as_admin(task_client, monkeypatch, OPERATOR, "operator")
     for subject, role in ((EXACT_MANAGER, "project_manager"), (AUDITOR, "audit_authority")):
         await as_admin(task_client, monkeypatch, subject, role, project=project)
-    for subject in (MANAGER, EXACT_MANAGER, OWNER, OPERATOR, AUDITOR):
+    for subject in (MANAGER, EXACT_MANAGER):
+        set_dev_actor(monkeypatch, roles="", subject=subject)
+        items = (await get_ok(task_client, _path(project)))["items"]
+        assert len(items) == 1 and items[0]["project_id"] == project
+    for subject in (OWNER, OPERATOR, AUDITOR):
         set_dev_actor(monkeypatch, roles="", subject=subject)
         assert await _concealed(task_client, _path(project)) == missing, subject
     # The existing current and exact reads are unchanged by the list route.
@@ -96,19 +101,41 @@ async def test_finance_of_another_project_is_concealed(task_client, monkeypatch)
 
 async def test_each_read_commits_one_exact_decision(task_client, monkeypatch):
     project = (await create_active_project(task_client))["id"]
-    await as_admin(task_client, monkeypatch, FINANCE, "finance_authority", project=project)
+    finance_id = await as_admin(task_client, monkeypatch, FINANCE, "finance_authority", project=project)
     await get_ok(task_client, _path(project))
     as_manager(monkeypatch)
+    await get_ok(task_client, _path(project))
+    manager_id = await actor_id(MANAGER)
+    outsider = "policy-list-unprivileged-reader"
+    set_dev_actor(monkeypatch, roles="", subject=outsider)
     await _concealed(task_client, _path(project))
+    outsider_id = await actor_id(outsider)
     async with db_session.get_session_factory()() as session:
         rows = (await session.scalars(select(AuditEvent).where(
             AuditEvent.action_id == ACTION,
         ).order_by(AuditEvent.created_at))).all()
+        grants = {str(grant.id): grant for grant in (await session.scalars(
+            select(AdminRoleGrant).where(AdminRoleGrant.id.in_(
+                [row.matched_grant_id for row in rows if row.matched_grant_id is not None]
+            ))
+        )).all()}
     assert [(row.event_type, row.permission_id) for row in rows] == [
+        ("SensitiveAuthorizationAllowed", "compensation.policy.manage"),
         ("SensitiveAuthorizationAllowed", "compensation.policy.manage"),
         ("SensitiveAuthorizationDenied", "compensation.policy.manage"),
     ]
-    assert UUID(rows[0].project_id) == UUID(project) and rows[0].matched_grant_id is not None
+    assert [UUID(str(row.actor_id)) for row in rows] == [
+        UUID(str(finance_id)), UUID(str(manager_id)), UUID(str(outsider_id)),
+    ]
+    assert all(UUID(str(row.project_id)) == UUID(project) for row in rows)
+    assert all(row.resource_type == "contribution_policy_collection" and str(row.resource_id) == project for row in rows)
+    assert all(row.matched_grant_id is not None for row in rows[:2])
+    for row, role, scope in zip(rows[:2], ("finance_authority", "project_manager"), ("project", "system"), strict=True):
+        grant = grants[str(row.matched_grant_id)]
+        assert str(grant.target_actor_profile_id) == str(row.actor_id)
+        assert grant.role == role and grant.status == "active" and grant.scope_type == scope
+        assert str(grant.scope_project_id) == project if scope == "project" else grant.scope_project_id is None
+    assert rows[2].matched_grant_id is None
 
 
 async def test_list_keeps_a_retired_version_with_its_retirement_instant(task_client, monkeypatch):

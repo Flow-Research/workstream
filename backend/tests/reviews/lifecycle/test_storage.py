@@ -51,7 +51,7 @@ async def test_genesis_and_sql_immutability(clean_postgres_database):
                 == original
             )
 
-    from conftest import _reset_test_database_state
+    from tests.conftest import _reset_test_database_state
 
     await _reset_test_database_state(clean_postgres_database)
     async with factory() as session:

@@ -1397,3 +1397,21 @@ new required selection facts are asserted, not ignored or defaulted. No capabili
 ledger change is claimed by this test-only repair. Remaining hosted failures
 include predecessor-only fixtures, native negatives and other affected consumers
 and remain blocking.
+
+## Policy-read authority and schema proof consumers
+
+Both plan tracks separate the remaining hosted consumer defects from missing
+historical-window evidence. Implement approved groups1/4 only here: project_reads/
+test_contribution_policies_list.py, projects/public_activation/test_workflow.py,
+finance/test_selected_reward_migration.py, reviews/lifecycle/test_storage.py,
+test_alembic.py exact graph assertion, and this record. PM and FM are authorized
+policy readers; keep all unrelated/foreign-project denials, exact actor/grant/
+resource audit proof, activation retirement replay and revoked activation denial.
+Use the canonical reset import. Current empty upgrade expects only the new
+nullable source-anchor key on genesis, preserving every old key/value; exact
+revision graph includes0068..0071. No migration/schema/runtime/authority/CI or
+fixture-default changes. Risk L1 proof integrity. Verify focused PostgreSQL
+role/audit/activation and schema cases plus pure graph, lint/structure/links and
+assigned reviews. No capability-ledger delta. Group5 historical running-window
+proof lacks a captured preparation and remains unimplemented pending a genuine
+source-commit capture plan; do not fabricate it or permit old runtime lineage.
