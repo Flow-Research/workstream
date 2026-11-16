@@ -1751,3 +1751,26 @@ and lookup digests even with identical resource IDs and reject a different reque
 actor or link. Module boundaries pass. These detached values do not authorize an
 operation: catalogue/PREP/replay wiring, the live request-context adapter, native
 0073 guard/registration and actual public HTTP operations remain in progress.
+
+The closed AUTH catalogue now names exactly the three fulfillment permissions/
+actions and assigns them only to COMPENSATION_ADAPTER in the service matrix.
+They remain PLANNED while native storage, live PREP and HTTP handlers are being
+implemented. Existing exact inventory/service metadata checks remain, updated
+for the three additions; explicit fixture expectations and non-executable-action
+proof change together. No human role gains these permissions or callback access.
+Activation is part of the same reviewed boundary after its required proof, not
+an alternate implementation or a compatibility route.
+
+Catalogue proof exposed two affected current consumers: the permission response's
+closed total remains literal97, and the ACTORS target no longer asserts that the
+adapter has no action row. It now asserts only the exact three fulfillment actions;
+all other service identities remain ineligible binding targets. Rename that
+negative proof accordingly and update its exact behavior reference. No old total,
+empty service row or name alias is retained. These additions remain non-executable
+until the same boundary's activation proof; unchanged human roles gain no grants.
+
+The exact catalogue/ACTORS-focused suite now passes35cases. Its first run exposed
+the stale literal94 response and obsolete no-service-actions assertion; both were
+replaced in the current contract, with no dual total or old proof-name alias.
+The callback action definitions remain PLANNED pending complete same-boundary
+storage/PREP/HTTP proof. This result qualifies catalogue declaration only.

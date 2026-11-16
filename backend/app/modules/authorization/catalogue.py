@@ -82,6 +82,9 @@ class PermissionId(StrEnum):
     COMPENSATION_ADAPTER_BINDING_MANAGE = "compensation.adapter_binding.manage"
     COMPENSATION_AWARD_READ = "compensation.award.read"
     COMPENSATION_DELIVERY_RECONCILE = "compensation.delivery.reconcile"
+    COMPENSATION_FULFILLMENT_REPORT = "compensation.fulfillment.report"
+    COMPENSATION_FULFILLMENT_EXCEPTION_REPORT = "compensation.fulfillment.exception.report"
+    COMPENSATION_FULFILLMENT_SOURCE_READ = "compensation.fulfillment.source.read"
     OPERATIONS_STATUS_READ = "operations.status.read"
     OPERATIONS_TIMER_RUN = "operations.timer.run"
     OPERATIONS_RECONCILE_RUN = "operations.reconcile.run"
@@ -288,6 +291,9 @@ class ActionId(StrEnum):
     COMPENSATION_ADAPTER_BINDING_CREATE = "compensation.adapter_binding.create"
     COMPENSATION_ADAPTER_BINDING_SUSPEND = "compensation.adapter_binding.suspend"
     COMPENSATION_ADAPTER_BINDING_RESUME = "compensation.adapter_binding.resume"
+    COMPENSATION_FULFILLMENT_REPORT = "compensation.fulfillment.report"
+    COMPENSATION_FULFILLMENT_EXCEPTION_REPORT = "compensation.fulfillment.exception.report"
+    COMPENSATION_FULFILLMENT_SOURCE_READ = "compensation.fulfillment.source.read"
     CONTRIBUTION_POLICY_READ = "contribution.policy.read"
     CONTRIBUTION_POLICY_CREATE_DRAFT = "contribution.policy.create_draft"
     CONTRIBUTION_POLICY_UPDATE_DRAFT = "contribution.policy.update_draft"
@@ -454,6 +460,7 @@ class ActionOwner(StrEnum):
     ARCH_CP01A = "WS-ARCH-001-CP01A"
     ARCH_CP01B = "WS-ARCH-001-CP01B"
     PROJECT_POINTS_UNIT_CREATION = "project-points-unit-creation"
+    COMPENSATION_FULFILLMENT = "compensation-fulfillment"
 
 
 @unique
@@ -511,6 +518,9 @@ FUTURE_INTENT_REQUIRED_ACTIONS = frozenset(
 )
 NEW_PERMISSION_IDS = frozenset(
     {
+        PermissionId.COMPENSATION_FULFILLMENT_REPORT,
+        PermissionId.COMPENSATION_FULFILLMENT_EXCEPTION_REPORT,
+        PermissionId.COMPENSATION_FULFILLMENT_SOURCE_READ,
         PermissionId.CHECKER_POST_SUBMIT_EXECUTE,
         PermissionId.CHECKER_POST_SUBMIT_FINALIZE,
         PermissionId.CHECKER_MODEL_CALL_PREPARE,
@@ -563,9 +573,9 @@ HISTORICAL_PERMISSION_IDS = PERMISSION_IDS - NEW_PERMISSION_IDS
 
 def _require_catalogue_counts() -> None:
     """Keep the closed action inventory and permission boundary exact."""
-    if len(PERMISSION_IDS) != 94 or len(ACTION_IDS) != 190:
+    if len(PERMISSION_IDS) != 97 or len(ACTION_IDS) != 193:
         raise RuntimeError("authorization catalogue count mismatch")
-    if len(HISTORICAL_PERMISSION_IDS) != 49 or len(NEW_PERMISSION_IDS) != 45:
+    if len(HISTORICAL_PERMISSION_IDS) != 49 or len(NEW_PERMISSION_IDS) != 48:
         raise RuntimeError("authorization permission boundary mismatch")
 
 
@@ -777,6 +787,11 @@ ACTION_BY_ID = _index_actions(ACTION_DEFINITIONS)
 
 
 _SERVICE_ACTIONS = {
+    ServiceIdentity.COMPENSATION_ADAPTER: frozenset({
+        ActionId.COMPENSATION_FULFILLMENT_REPORT,
+        ActionId.COMPENSATION_FULFILLMENT_EXCEPTION_REPORT,
+        ActionId.COMPENSATION_FULFILLMENT_SOURCE_READ,
+    }),
     ServiceIdentity.TASK_POST_SUBMIT_ROUTER: frozenset({ActionId.TASK_POST_SUBMIT_ROUTE}),
     ServiceIdentity.CHECKER_PRE_SUBMIT: frozenset(
         {ActionId.CHECKER_PRE_SUBMIT_EXECUTE, ActionId.CHECKER_PRE_SUBMIT_FINALIZE}
@@ -848,11 +863,14 @@ _SERVICE_ACTIONS = {
     ServiceIdentity.REVIEW_PROJECTION: frozenset({ActionId.REVIEW_PROJECTION_REBUILD}),
 }
 
-ACTION_BEARING_SERVICE_IDENTITIES = SERVICE_IDENTITIES - {ServiceIdentity.COMPENSATION_ADAPTER}
+ACTION_BEARING_SERVICE_IDENTITIES = SERVICE_IDENTITIES
 
 _EXPECTED_SERVICE_ACTION_MEMBERSHIPS = frozenset(
     (identity, action)
     for identity, action in (
+        (ServiceIdentity.COMPENSATION_ADAPTER, ActionId.COMPENSATION_FULFILLMENT_REPORT),
+        (ServiceIdentity.COMPENSATION_ADAPTER, ActionId.COMPENSATION_FULFILLMENT_EXCEPTION_REPORT),
+        (ServiceIdentity.COMPENSATION_ADAPTER, ActionId.COMPENSATION_FULFILLMENT_SOURCE_READ),
         (ServiceIdentity.TASK_POST_SUBMIT_ROUTER, ActionId.TASK_POST_SUBMIT_ROUTE),
         (ServiceIdentity.CHECKER_PRE_SUBMIT, ActionId.CHECKER_PRE_SUBMIT_EXECUTE),
         (ServiceIdentity.CHECKER_PRE_SUBMIT, ActionId.CHECKER_PRE_SUBMIT_FINALIZE),
@@ -949,6 +967,15 @@ _ACTIVE_SERVICE_ACTIONS = {
 
 
 _SERVICE_ACTION_METADATA = {
+    ActionId.COMPENSATION_FULFILLMENT_REPORT: (
+        PermissionId.COMPENSATION_FULFILLMENT_REPORT, ActionOwner.COMPENSATION_FULFILLMENT,
+    ),
+    ActionId.COMPENSATION_FULFILLMENT_EXCEPTION_REPORT: (
+        PermissionId.COMPENSATION_FULFILLMENT_EXCEPTION_REPORT, ActionOwner.COMPENSATION_FULFILLMENT,
+    ),
+    ActionId.COMPENSATION_FULFILLMENT_SOURCE_READ: (
+        PermissionId.COMPENSATION_FULFILLMENT_SOURCE_READ, ActionOwner.COMPENSATION_FULFILLMENT,
+    ),
     ActionId.TASK_POST_SUBMIT_ROUTE: (
         PermissionId.TASK_POST_SUBMIT_ROUTE,
         ActionOwner.ARCH_04E2,

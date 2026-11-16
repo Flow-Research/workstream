@@ -15,6 +15,6 @@
     "backend/tests/actors/test_compensation_adapter_eligibility.py::test_exact_active_adapter_profile_and_link_are_eligible",
     "backend/tests/actors/test_compensation_adapter_eligibility.py::test_ineligible_profiles_are_concealed",
     "backend/tests/actors/test_compensation_adapter_eligibility.py::test_ineligible_identity_links_are_concealed",
-    "backend/tests/actors/test_compensation_adapter_eligibility.py::test_every_action_bearing_service_identity_is_ineligible"
+    "backend/tests/actors/test_compensation_adapter_eligibility.py::test_every_other_service_identity_is_ineligible"
   ]
 }
