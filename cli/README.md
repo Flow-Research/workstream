@@ -7,7 +7,7 @@ administrative actor, identity-link and grant inspection and explicit writes,
 active-guide/intake-policy inspection,
 contributor work discovery, claim, locked guide documents and governing
 context/intake requirements, explicit batch import/screen/release, Finance
-policy management, explicit ZIP preparation/submission, checker findings,
+policy management, single-request ZIP submission and operation progress, checker findings,
 system-Operator checker registration, terminal recovery and uncertain-delivery reconciliation, and
 contribution-evidence exports and exact Audit Authority task reads:
 
@@ -200,8 +200,8 @@ the [terminal presentation contract](../docs/design/cli-terminal-experience.md).
 | `workstream operations delivery list PROJECT_ID [--limit N] [--cursor TOKEN]` | `GET /api/v1/operations/projects/PROJECT_ID/post-submit-deliveries` |
 | `workstream operations delivery reconcile PROJECT_ID EVENT_ID --reason TEXT --idempotency-key UUID` | `POST /api/v1/operations/projects/PROJECT_ID/post-submit-deliveries/EVENT_ID/reconcile` |
 | `workstream task ready PROJECT_ID` | `GET /api/v1/projects/PROJECT_ID/tasks/ready` |
-| `workstream task prepare TASK_ID --assignment UUID --file ZIP --idempotency-key UUID` (revision: add predecessor and exact preparation ID/SHA-256) | `POST /api/v1/tasks/TASK_ID/submission-bundle-preparations` |
-| `workstream task submit TASK_ID --assignment UUID --admission UUID` | `POST /api/v1/tasks/TASK_ID/submissions` |
+| `workstream task submit TASK_ID --assignment UUID --file ZIP --idempotency-key UUID` | `POST /api/v1/tasks/TASK_ID/submissions` |
+| `workstream task submission-operation TASK_ID --operation-id UUID` (or `--idempotency-key UUID`) | `GET /api/v1/tasks/TASK_ID/submission-operations` |
 | `workstream task submissions TASK_ID [--limit N] [--cursor TOKEN]` | `GET /api/v1/tasks/TASK_ID/submissions` |
 | `workstream submission show SUBMISSION_ID` | `GET /api/v1/submissions/SUBMISSION_ID` |
 | `workstream submission findings SUBMISSION_ID [--limit N] [--cursor TOKEN]` | `GET /api/v1/submissions/SUBMISSION_ID/checker-runs` |
@@ -2242,3 +2242,11 @@ artifact binding, replica and verification evidence through the Operator CLI,
 and checks non-Operator concealment. The separate signed API test exercises
 retry only on a genuinely exhausted verification job. A successful upload is
 never used as an eligible retry fixture.
+
+Submission acceptance returns an operation ID before a formal Submission exists.
+Use `task submission-operation` to inspect it once, using exactly one selector.
+Key lookup uses the current actor; managers may use an authorized operation ID.
+The response preserves nullable IDs, current task context, the operation’s own
+processing stage, bounded PRE findings and the server’s next-action advice.
+Inspection never uploads again or polls automatically. Revisions still require
+the predecessor and exact revision preparation ID and digest.

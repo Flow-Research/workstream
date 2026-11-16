@@ -5050,3 +5050,79 @@ This evidence-only follow-up does not change the reviewed production/test code.
 Next work: client progress commands and pending task/work-context projection,
 real historical/reassignment/new-revision and remaining governed outcome proof,
 obsolete runtime/consumer cleanup, full CI and A01-A35/C01-C07 qualification.
+
+### Client operation inspection
+
+Extend existing CLI submission API/command and MCP task-execution adapter with
+one read-only operation lookup using exactly one operation UUID or actor-scoped
+idempotency UUID. No resubmit, poll loop, provider field or client-owned lifecycle
+inference. Preserve required nullable fields, original task/selector binding,
+closed stage/action enums and bounded feedback through existing safe output paths.
+Allowed: cli/internal/api/submission_progress.go and focused tests, existing
+cli/internal/command/submission.go and command/HTTP tests; MCP existing schemas,
+http_gateway, task_execution tools, catalogue tests/packaging and a snapshot for
+the new read; CLI/MCP README and this record. Keep governed revision preparation.
+MCP key lookup must remain a query parameter, never the mutation-only header or
+filtered out by common submit-field exclusion. Response binding must validate
+task and the supplied selector, including manager ID lookup versus own key lookup.
+Risk: public adapter/security contracts; require ARCH/SEC and QA/test-delta review,
+DOCS/CI for snapshot/catalogue changes. Acceptance: each selector emits one GET,
+invalid/ambiguous selectors make no request, foreign/malformed/extra-field output
+is refused, and accepted/rejected/stalled/governed responses preserve server advice.
+Verify focused Go/CLI HTTP tests, MCP input/output/gateway and actual OpenAPI drift.
+The task/work-context pending projection remains a separate required owner change.
+
+Client worktree evidence: Go API/command packages pass; existing CLI HTTP15cases
+pass, and corrected explicit-json progress cases pass2 in1.79s (initial test
+invocations accidentally requested default text). MCP focused run60passed/2backend
+probes skipped; configured backend drift replay20passed48.81s closes those probes.
+Additional response-negative tests initially omitted authentication and therefore
+failed their one-upstream-request assertion; corrected authentication is required
+also for invalid-selector tests so absence of dispatch cannot pass vacuously.
+
+CI on pushed686 independently confirms92 architecture tests pass, then rejects
+new structural debt: intake_admission.py1330lines and its T5 function220lines.
+Do not refresh the debt ledger to bless growth. Extract cohesive existing proof
+into focused tests/helpers with unchanged assertions and collect/lane membership.
+CLI real-API failures still use removed PRE materialization constructor/fields;
+these require shared consumer migration, alongside the known Rust obsolete grant
+path. Logs /tmp/submission-686-ci-133380152032.log and
+/tmp/submission-686-ci-133382036484.log. Neither is fixed by client progress work.
+
+Client progress negative replay passed10 in56.98s with authenticated calls:
+/tmp/submission-progress-mcp-negative-v2.log. Both selector GETs, no mutation header,
+wrong selector/task refusal, extra/private field, missing nullable, unknown stage
+and invalid input/no-dispatch cases exercised. Built CLI inspection replay passed2
+in2.27s including JSON and safe text paths (/tmp/submission-progress-cli-http-v3.log).
+MCP wheel built successfully and contains the exact new contract bytes
+(/tmp/submission-progress-mcp-dist/workstream_mcp_server-0.1.0-py3-none-any.whl).
+These are local worktree receipts on parent686, not reviewed/pushed client delivery.
+Current client implementation is ready for scoped review after the required test
+structure repair; same PR708 and all remaining goal requirements still apply.
+
+### Preserve T5 proof without structural debt
+
+Move the existing three-parameter T5 proof from test_submission_intake_admission.py
+to focused tests/artifacts/test_submission_intake_progress.py. Extract its existing
+contiguous retained-custody/association assertions into one local helper, return
+only the owner observations needed by the remaining progression assertions, and
+move imports to module scope. Preserve every assertion, parameter, real HTTP call,
+source substitution and real OUTBOX outcome. No skips, new abstractions, debt ledger
+refresh or limit increase. Add the new module beside admission in the existing
+shared-foundation lane catalogue; verify collection and actual lane membership.
+Allowed files are those two tests, scripts/test_lane_catalogue.py and any exact
+catalogue expectation proven stale by this move, plus this record. QA/test-delta
+and CI integrity review must inspect preservation and selection on the frozen
+client/proof checkpoint. Run the three moved cases and structure validation.
+
+Extraction replay passed3 in152.57s,0081,cleanupcomplete
+(/tmp/submission-progress-extracted.log/json), retaining the existing intentional
+forged-context serializer warning. Mechanical AST comparison preserved all42
+assertions and original3-case parametrization. Main test117lines and custody
+helper75lines are below the120line function limit; source admission file shrank
+below1200. Structure validator passes with unchanged debt ledger. Lane/catalogue
+replay passed76 in19.89s; removing only the new progress-module path reproduces the
+prior shared-family fingerprint exactly. Behavior-ownership validation passes.
+Freeze client progress plus proof extraction for ARCH/SEC, QA/test-delta and
+DOCS/CI review. All receipts above are worktree receipts on parent686; no full CI
+or historical/terminal branch qualification is implied.

@@ -32,6 +32,10 @@ _DESCRIPTIONS = {
     "task_claim": "Claim and start one ready task atomically.",
     "task_work_context_get": "Read the current contributor work context for one task.",
     "task_guide_document_content_get": "Read one assigned guide document as bounded bytes.",
+    "submission_operation_get": (
+        "Read one authorized submission operation by operation ID or your idempotency key; "
+        "never resubmits."
+    ),
     "submission_create": "Upload one ZIP for initial checks and durable evaluation acceptance.",
     "task_submissions_list": "List the current contributor's submissions for one task.",
     "submission_get": "Read one submission visible to the current contributor.",

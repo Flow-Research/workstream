@@ -388,6 +388,7 @@ TASK_EXECUTION_OPERATIONS = {
         "/api/v1/tasks/{task_id}/guide/documents/{document_id}/content",
         200,
     ),
+    "submission_operation_get": ("GET", "/api/v1/tasks/{task_id}/submission-operations", 200),
     "submission_create": ("POST", "/api/v1/tasks/{task_id}/submissions", 202),
     "task_submissions_list": ("GET", "/api/v1/tasks/{task_id}/submissions", 200),
     "submission_get": ("GET", "/api/v1/submissions/{submission_id}", 200),
@@ -1499,6 +1500,8 @@ class WorkstreamGateway:
             "revision_preparation_id",
             "revision_preparation_sha256",
         }
+        if name == "submission_operation_get":
+            excluded.remove("idempotency_key")
         params = {
             key: str(value)
             for key, value in arguments.items()
@@ -1529,7 +1532,7 @@ class WorkstreamGateway:
             correlation_id,
             json_body=arguments.get("body"),
             params=params or None,
-            idempotency_key=arguments.get("idempotency_key"),
+            idempotency_key=arguments.get("idempotency_key") if mutation else None,
             expected_status=expected_status,
             mutation=mutation,
             raw_body=upload,
@@ -1565,6 +1568,9 @@ class WorkstreamGateway:
             return False
         if project_id is not None and not isinstance(project_id, str):
             return False
+        if name == "submission_operation_get":
+            selector = "operation_id" if "operation_id" in arguments else "idempotency_key"
+            return cls._fields_match(data, {"task_id": task_id, selector: arguments[selector]})
         if name == "preparations_list":
             return cls._items_match(data, {"task_id": task_id}, unique="preparation_id")
         if name == "preparation_get":

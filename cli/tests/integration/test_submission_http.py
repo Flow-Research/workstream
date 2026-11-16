@@ -721,3 +721,109 @@ def test_submission_response_caps_reject_otherwise_valid_oversized_json(cli, tmp
                 status == 202
             )
         assert len(requests) == len(cases) * 2
+
+
+def operation_progress():
+    return {
+        "operation_id": OPERATION,
+        "task_id": TASK,
+        "assignment_id": ASSIGNMENT,
+        "idempotency_key": KEY,
+        "operation_state": "finalization_pending",
+        "processing_stage": "finalization_pending",
+        "accepted_at": "2026-11-16T12:00:00Z",
+        "task_status_at_acceptance": "evaluation_pending",
+        "current_task_status": None,
+        "submission_id": None,
+        "submission_version": None,
+        "evaluation_request_id": None,
+        "pre_submission_results": [],
+        "failure_code": None,
+        "operationally_stalled": False,
+        "next_action": "wait",
+    }
+
+
+def test_operation_inspection_is_one_read_with_exact_selector(cli):
+    with http_fixture() as (origin, response, requests):
+        respond(response, operation_progress())
+        for flag, value, query in (
+            ("--operation-id", OPERATION, "operation_id"),
+            ("--idempotency-key", KEY, "idempotency_key"),
+        ):
+            result = cli(
+                origin,
+                TOKEN,
+                "--output",
+                "json",
+                "task",
+                "submission-operation",
+                TASK,
+                flag,
+                value,
+            )
+            assert result.returncode == 0, result.stderr
+            assert json.loads(result.stdout) == operation_progress()
+            method, path, authorization = requests[-1]
+            assert method == "GET" and authorization == "Bearer " + TOKEN
+            assert urlsplit(path).path == f"/api/v1/tasks/{TASK}/submission-operations"
+            assert parse_qs(urlsplit(path).query) == {query: [value]}
+        assert len(requests) == 2
+        for flags in (
+            (),
+            ("--operation-id", OPERATION, "--idempotency-key", KEY),
+            ("--operation-id", ""),
+            ("--operation-id", "invalid"),
+        ):
+            result = cli(
+                origin,
+                TOKEN,
+                "--output",
+                "json",
+                "task",
+                "submission-operation",
+                TASK,
+                *flags,
+            )
+            assert result.returncode != 0
+        assert len(requests) == 2
+        text_result = cli(
+            origin,
+            TOKEN,
+            "task",
+            "submission-operation",
+            TASK,
+            "--operation-id",
+            OPERATION,
+        )
+        assert text_result.returncode == 0, text_result.stderr
+        assert (
+            "finalization_pending" in text_result.stdout
+            and "wait" in text_result.stdout
+        )
+        assert len(requests) == 3
+
+
+def test_operation_inspection_refuses_foreign_or_private_response(cli):
+    with http_fixture() as (origin, response, requests):
+        for changed in (
+            {"operation_id": RUN},
+            {"task_id": RUN},
+            {"provider_key": "private"},
+            {"processing_stage": "invented"},
+            {"next_action": "submit_now"},
+        ):
+            respond(response, operation_progress() | changed)
+            result = cli(
+                origin,
+                TOKEN,
+                "--output",
+                "json",
+                "task",
+                "submission-operation",
+                TASK,
+                "--operation-id",
+                OPERATION,
+            )
+            assert_failure(result, "invalid_api_response")
+        assert len(requests) == 5

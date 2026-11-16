@@ -909,6 +909,17 @@ TASK_EXECUTION_INPUT_SCHEMAS: dict[str, dict[str, Any]] = {
         "required": ["task_id", "document_id"],
         "additionalProperties": False,
     },
+    "submission_operation_get": {
+        "type": "object",
+        "properties": {
+            "task_id": _UUID_INPUT,
+            "operation_id": _UUID_INPUT,
+            "idempotency_key": _IDEMPOTENCY_KEY_INPUT,
+        },
+        "required": ["task_id"],
+        "oneOf": [{"required": ["operation_id"]}, {"required": ["idempotency_key"]}],
+        "additionalProperties": False,
+    },
     "submission_create": {
         "type": "object",
         "properties": {

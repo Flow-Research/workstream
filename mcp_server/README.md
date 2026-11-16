@@ -1,6 +1,6 @@
 # Workstream MCP Adapter
 
-An independently installed adapter exposing 131 tools under the caller's authority:
+An independently installed adapter exposing 132 tools under the caller's authority:
 
 - `workstream_profile_get` calls `GET /api/v1/actors/me`.
 - `workstream_profile_update` calls the unkeyed `PATCH /api/v1/actors/me`.
@@ -224,6 +224,11 @@ Submission creation accepts a bounded Base64 ZIP, decodes it once and forwards t
 caller's typed assignment/key and optional submission or revision fields as the
 fixed backend headers. The raw-ZIP POST returns a `202` acceptance snapshot with
 an operation ID; formal Submission creation and evaluation continue durably.
+Use `workstream_submission_operation_get` with `task_id` and exactly one of
+`operation_id` or `idempotency_key` for one authorized progress read. Keys are
+actor-scoped; management reads can select an operation ID. The tool preserves
+nullable fields, PRE feedback and server next-action advice without resubmitting
+or polling. Current task status is context, not the historical operation outcome.
 Revision preparation ID and digest are both required with a predecessor and
 forbidden for initial submission. Workstream owns ZIP validation, pre-submit checks, replay and all task
 state changes. A checker rejection is a normal safe tool failure; an unverified
@@ -251,7 +256,7 @@ retries. A mutation transport failure, upstream 5xx response, or unexpected
 success/redirect response is reported as non-retryable uncertain execution.
 Connections may be pooled, but
 caller credentials and results are not shared or cached. Response validation is
-pinned to the 131 selected public contracts in `contracts/`; upstream drift
+pinned to the 132 selected public contracts in `contracts/`; upstream drift
 must be reviewed, not silently accepted. There is no fallback service or
 backend-private import.
 

@@ -86,6 +86,31 @@ func addSubmissionCommands(root, task *cobra.Command, client func() (*api.Client
 		task.AddCommand(cmd)
 	}
 
+	{
+		var operation, key string
+		progress := &cobra.Command{Use: "submission-operation TASK_ID", Short: "Inspect one submission operation without resubmitting", Args: cobra.ExactArgs(1)}
+		progress.Flags().StringVar(&operation, "operation-id", "", "Operation UUID; choose this or --idempotency-key")
+		progress.Flags().StringVar(&key, "idempotency-key", "", "Your original caller UUID key; choose this or --operation-id")
+		progress.RunE = func(cmd *cobra.Command, args []string) error {
+			if cmd.Flags().Changed("operation-id") == cmd.Flags().Changed("idempotency-key") || (operation == "" && key == "") {
+				return commandError{"invalid_arguments", "provide exactly one nonempty --operation-id or --idempotency-key"}
+			}
+			c, err := client()
+			if err != nil {
+				return err
+			}
+			result, err := c.SubmissionOperation(cmd.Context(), args[0], operation, key)
+			if err != nil {
+				return err
+			}
+			if *output == "json" {
+				return writeSafeJSON(stdout, result.Raw)
+			}
+			return writeTaskContextFields(stdout, []contextField{{"Submission operation", result.Value}})
+		}
+		task.AddCommand(progress)
+	}
+
 	var historyLimit int
 	var historyCursor string
 	history := &cobra.Command{Use: "submissions TASK_ID", Short: "Read one page of authorized immutable submission history", Args: cobra.ExactArgs(1)}

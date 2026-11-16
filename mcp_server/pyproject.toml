@@ -135,6 +135,7 @@ packages = ["workstream_mcp"]
 "contracts/task_claim.json" = "workstream_mcp/contracts/task_claim.json"
 "contracts/task_work_context_get.json" = "workstream_mcp/contracts/task_work_context_get.json"
 "contracts/task_guide_document_content_get.json" = "workstream_mcp/contracts/task_guide_document_content_get.json"
+"contracts/submission_operation_get.json" = "workstream_mcp/contracts/submission_operation_get.json"
 "contracts/submission_create.json" = "workstream_mcp/contracts/submission_create.json"
 "contracts/task_submissions_list.json" = "workstream_mcp/contracts/task_submissions_list.json"
 "contracts/submission_get.json" = "workstream_mcp/contracts/submission_get.json"

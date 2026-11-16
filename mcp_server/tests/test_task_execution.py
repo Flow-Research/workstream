@@ -28,6 +28,7 @@ Adapter = tuple[TestClient, list[httpx.Request], dict[str, Any]]
 
 def _arguments(name: str) -> dict[str, Any]:
     values: dict[str, dict[str, Any]] = {
+        "submission_operation_get": {"task_id": TASK_ID, "operation_id": OPERATION_ID},
         "submission_create": {
             "task_id": TASK_ID,
             "assignment_id": ASSIGNMENT_ID,
@@ -94,6 +95,8 @@ def _bound_response(name: str) -> dict[str, Any]:
             "byte_count": 1,
             "sha256": "sha256:" + "0" * 64,
         }
+    if name == "submission_operation_get":
+        return {"task_id": TASK_ID, "operation_id": OPERATION_ID, "idempotency_key": KEY}
     if name == "submission_create":
         return {"task_id": TASK_ID, "assignment_id": ASSIGNMENT_ID}
     if name in {"submission_get", "management_submission_get"}:
@@ -465,3 +468,114 @@ def test_submission_revision_requires_predecessor_and_both_acknowledgements(
         "revision_preparation_id": PREPARATION_ID,
         "revision_preparation_sha256": "sha256:" + "a" * 64,
     })
+
+
+def _operation_progress() -> dict[str, Any]:
+    return {
+        "operation_id": OPERATION_ID,
+        "task_id": TASK_ID,
+        "assignment_id": ASSIGNMENT_ID,
+        "idempotency_key": KEY,
+        "operation_state": "finalization_pending",
+        "processing_stage": "finalization_pending",
+        "accepted_at": "2026-11-16T12:00:00Z",
+        "task_status_at_acceptance": "evaluation_pending",
+        "current_task_status": None,
+        "submission_id": None,
+        "submission_version": None,
+        "evaluation_request_id": None,
+        "pre_submission_results": [],
+        "failure_code": None,
+        "operationally_stalled": False,
+        "next_action": "wait",
+    }
+
+
+@pytest.mark.parametrize(
+    "selector,value", [("operation_id", OPERATION_ID), ("idempotency_key", KEY)]
+)
+def test_operation_progress_uses_one_get_and_binds_selector(
+    adapter: Adapter, selector, value
+) -> None:
+    client, received, upstream = adapter
+    upstream["json"] = _operation_progress()
+    arguments = {"task_id": TASK_ID, selector: value}
+
+    def read():
+        return client.post(
+            "/mcp",
+            headers={
+                "authorization": "Bearer fixture-token",
+                "accept": "application/json, text/event-stream",
+            },
+            json={
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "tools/call",
+                "params": {"name": "workstream_submission_operation_get", "arguments": arguments},
+            },
+        ).json()["result"]
+
+    assert read()["isError"] is False
+    assert len(received) == 1
+    assert received[0].method == "GET"
+    assert received[0].url.path == f"/api/v1/tasks/{TASK_ID}/submission-operations"
+    assert dict(received[0].url.params) == {selector: value}
+    assert "idempotency-key" not in received[0].headers
+    upstream["json"][selector] = ASSIGNMENT_ID
+    assert read()["isError"] is True
+
+
+@pytest.mark.parametrize(
+    "selectors",
+    [
+        {},
+        {"operation_id": OPERATION_ID, "idempotency_key": KEY},
+        {"operation_id": "bad"},
+        {"idempotency_key": KEY, "actor_id": ASSIGNMENT_ID},
+    ],
+)
+def test_operation_progress_invalid_selectors_never_dispatch(adapter: Adapter, selectors) -> None:
+    client, received, _ = adapter
+    response = client.post(
+        "/mcp",
+        headers={"authorization": "Bearer fixture-token",
+                 "accept": "application/json, text/event-stream"},
+        json={
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {
+                "name": "workstream_submission_operation_get",
+                "arguments": {"task_id": TASK_ID, **selectors},
+            },
+        },
+    )
+    assert response.json()["result"]["isError"] is True
+    assert received == []
+
+
+@pytest.mark.parametrize(
+    "change", ["foreign_task", "private_field", "missing_nullable", "unknown_stage"]
+)
+def test_operation_progress_rejects_unbound_or_noncontract_response(
+    adapter: Adapter, change
+) -> None:
+    client, received, upstream = adapter
+    progress = _operation_progress()
+    if change == "foreign_task":
+        progress["task_id"] = ASSIGNMENT_ID
+    elif change == "private_field":
+        progress["provider_key"] = "private"
+    elif change == "missing_nullable":
+        del progress["evaluation_request_id"]
+    else:
+        progress["processing_stage"] = "invented"
+    upstream["json"] = progress
+    response = client.post("/mcp", headers={"authorization": "Bearer fixture-token",
+                 "accept": "application/json, text/event-stream"},
+        json={"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {
+            "name": "workstream_submission_operation_get",
+            "arguments": {"task_id": TASK_ID, "operation_id": OPERATION_ID}}})
+    assert response.json()["result"]["isError"] is True
+    assert len(received) == 1
