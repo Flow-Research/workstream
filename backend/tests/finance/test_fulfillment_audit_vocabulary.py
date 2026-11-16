@@ -7,14 +7,16 @@ receipt closure. No audit or product row is inserted by these probes.
 import json
 
 from sqlalchemy import text
+from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy.pool import NullPool
 
 from app.core.identifiers import new_record_id
-from app.db.session import get_session_factory
 
 CONSTRAINTS = (
     "ck_audit_events_authority_privacy_bounds",
     "ck_audit_events_authority_registries",
     "ck_audit_events_authorization_action_evidence",
+    "ck_audit_events_fact_bounds",
 )
 PAIRS = (
     ("compensation.fulfillment.report", "compensation_fulfillment_report"),
@@ -40,29 +42,33 @@ def _event(action, resource):
 
 
 async def test_native_fulfillment_vocabulary_admits_exact_tokens_and_stays_closed(isolated_database_env):
-    async with get_session_factory()() as session:
-        expressions = {}
-        for name in CONSTRAINTS:
-            expressions[name] = await session.scalar(text(
-                "SELECT pg_catalog.pg_get_expr(conbin,conrelid) FROM pg_catalog.pg_constraint "
-                "WHERE conrelid='public.audit_events'::regclass AND conname=:name"
-            ), {"name": name})
-            assert expressions[name]
-
-        async def check(event, name):
-            # Expressions come only from the exact installed trusted constraints.
-            return await session.scalar(text(
-                "SELECT " + expressions[name] + " FROM jsonb_populate_record("
-                "NULL::public.audit_events,CAST(:event AS jsonb)) AS a"
-            ), {"event": json.dumps(event)})
-
-        for action, resource in PAIRS:
-            event = _event(action, resource)
+    engine = create_async_engine(isolated_database_env, poolclass=NullPool)
+    try:
+        async with engine.connect() as session:
+            expressions = {}
             for name in CONSTRAINTS:
-                assert await check(event, name) is True, (action, resource, name)
-            assert await check(event | {"resource_type": "unknown_fulfillment"}, CONSTRAINTS[0]) is False
-            assert await check(event | {"permission_id": "compensation.fulfillment.unknown"}, CONSTRAINTS[1]) is False
-            other = "compensation.fulfillment.exception.report" if action.endswith("source.read") else "compensation.fulfillment.source.read"
-            assert await check(event | {"permission_id": other}, CONSTRAINTS[2]) is False
-            leaked = event["after_facts"] | {"provider_payload": "forbidden"}
-            assert await check(event | {"after_facts": leaked}, CONSTRAINTS[0]) is False
+                expressions[name] = await session.scalar(text(
+                    "SELECT pg_catalog.pg_get_expr(conbin,conrelid) FROM pg_catalog.pg_constraint "
+                    "WHERE conrelid='public.audit_events'::regclass AND conname=:name"
+                ), {"name": name})
+                assert expressions[name]
+
+            async def check(event, name):
+                # Expressions come only from the exact installed trusted constraints.
+                return await session.scalar(text(
+                    "SELECT " + expressions[name] + " FROM jsonb_populate_record("
+                    "NULL::public.audit_events,CAST(:event AS jsonb)) AS a"
+                ), {"event": json.dumps(event)})
+
+            for action, resource in PAIRS:
+                event = _event(action, resource)
+                for name in CONSTRAINTS:
+                    assert await check(event, name) is True, (action, resource, name)
+                assert await check(event | {"resource_type": "unknown_fulfillment"}, CONSTRAINTS[0]) is False
+                assert await check(event | {"permission_id": "compensation.fulfillment.unknown"}, CONSTRAINTS[1]) is False
+                other = "compensation.fulfillment.exception.report" if action.endswith("source.read") else "compensation.fulfillment.source.read"
+                assert await check(event | {"permission_id": other}, CONSTRAINTS[2]) is False
+                leaked = event["after_facts"] | {"provider_payload": "forbidden"}
+                assert await check(event | {"after_facts": leaked}, CONSTRAINTS[3]) is False
+    finally:
+        await engine.dispose()

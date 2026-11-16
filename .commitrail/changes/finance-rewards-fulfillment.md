@@ -2073,3 +2073,16 @@ projection descriptions. Reconcile only affected roadmap summary, scoreboard,
 dependency edge and proof gate: internal scaffolding exists; callback/source
 routes, actual native authority/concurrency and Finance execution remain pending.
 No local sheet exports exist. No delivered callback or payment claim is added.
+
+
+Exact1f0c926b1 reached the installed native vocabulary probes: all three
+new-token constraint checks passed, then the extra-facts assertion failed
+because the probe incorrectly expected privacy_bounds to own fact-shape
+validation. Existing ck_audit_events_fact_bounds calls the canonical safe-facts
+function and owns that rejection. Add that exact fourth installed predicate to
+every positive probe and direct the unchanged extra-facts refusal assertion to
+its actual owner; no production guard changes. The probe now uses its own
+NullPool connection, disposed within its async loop, rather than leaking a
+global pooled connection into synchronous fixture teardown. Prior failure and
+loop-close diagnostics remain evidence, not an overall pass. All owned cleanup
+completed; the two migration cases were not reached because -x stopped here.
