@@ -6337,3 +6337,36 @@ remain. Full CLI Ruff/format99files, structural validator, record and whitespace
 checks pass. Fresh origin/main fetch has no commits absent from this branch.
 These focused proofs close the four observed27531 CLI API failures locally;
 hosted rerun and remaining full-spec/current producer migrations remain required.
+
+Optional public packet migration scope: tasks/test_public_submission_intake.py.
+Replace removed nullable admission-JSON contract with raw header metadata:
+omitted/empty ASCII text hashes equally, bounds remain enforced, retained packet
+UTF-8 byte bound remains independently protected. Real signed ZIP accepts with
+warning-only empty text, explicit empty replay keeps one PRE/source, changed
+metadata conflicts before extra work. Drive production OUTBOX T5 then repeat
+replay and inspect exact empty stored packet/consumed admission and one Submission.
+No nullable-header compatibility, fabricated ready admission, skipped guard or
+changed product API. Medium contract/replay risk: targeted pure+PostgreSQL tests,
+Ruff/structure/record checks and focused QA review required.
+
+Public nonblocking-feedback migration extends scope to the existing source runtime
+fixture in artifacts/test_submission_pre_source.py and configure_source_http helper.
+Permit explicit controlled project findings through the worker's existing project
+reply hook, deriving the result digest with the canonical constructor. Guest still
+derives source inspection/defaults and binds request/lease. Convert removed prepare
+endpoint test to signed raw ZIP accepted receipt, exact coverage-incomplete finding,
+no PRE replay, T5 evaluation_pending and existing0049 incompatible-finding refusal.
+No caller-supplied manifest/default or product/runtime changes. Verify converted
+case and unchanged-default optional packet consumer; QA shared-helper review.
+
+Optional packet/bounds first replay passes2 in32.86s with cleanup complete.
+Feedback first pair1pass1fail62.17s: strict constructor correctly rejects JSON UUID
+strings in simulated project reply. QA-FEEDBACK-001 repairs fixture normalization:
+decode original ExternalCheckerExecutionResult, use typed fields, replace findings
+and derive fresh digest. Exact-hook probe preserves request/registry/lease and
+detects lost coverage findings. Final feedback+optional pair passes2 in62.18s,
+including T5 and retained0049 check; database/MinIO cleanup complete. QA finds no
+remaining scoped code issue. Ruff, whitespace, record and structure checks pass.
+Hosted8bfd gates/images pass but Backend was pending behind superseded27531 run;
+requested cancellation of that old same-PR run, retaining its artifacts. No full
+CI/spec/provider readiness claim; remaining old public producers still need migration.

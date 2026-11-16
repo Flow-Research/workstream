@@ -16,7 +16,7 @@ from tests.artifacts.test_submission_intake_admission import (
 )
 
 
-async def configure_source_http(factory, client, tmp_path, monkeypatch, payload, outcome):
+async def configure_source_http(factory, client, tmp_path, monkeypatch, payload, outcome, *, project_findings=()):
     """Bind signed HTTP to real intake owners and the controlled guest transport."""
     from app.adapters import artifacts as composition
     from app.adapters.checkers import SelectedPreSubmitCheckerExecutionAdapter
@@ -25,7 +25,7 @@ async def configure_source_http(factory, client, tmp_path, monkeypatch, payload,
     from tests.checkers.execution.support import provision_post_submit_service
     from tests.checkers.external.test_selected_pre_submit_coordination import _source_reservation
     from tests.test_artifact_admission import _settings
-    runtime, errors = _source_runtime(payload, tmp_path, outcome)
+    runtime, errors = _source_runtime(payload, tmp_path, outcome, project_findings=project_findings)
     calls, original = [], runtime.execute_pre
     async def execute(lease, grant):
         calls.append(lease.reservation.attempt_id)

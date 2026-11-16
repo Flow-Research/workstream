@@ -420,7 +420,7 @@ async def _assert_stored_receipt(factory, run_id, terminal):
         assert stored.finalize_evidence_id is not None
 
 
-def _source_runtime(payload, tmp_path, runtime_outcome):
+def _source_runtime(payload, tmp_path, runtime_outcome, *, project_findings=()):
     """Real intake worker with an explicit simulated project reply or capacity failure."""
     from contextlib import aclosing
     from app.interfaces.external_services import ExternalServiceAdapterIdentity
@@ -429,6 +429,19 @@ def _source_runtime(payload, tmp_path, runtime_outcome):
     )
     from tests.checkers.external.test_pre_invocation import receipt_body
     from tests.test_trusted_intake import _pre_worker, _read
+
+    def project_result(body):
+        import json
+        from app.modules.checkers.api.external import (
+            ExternalCheckerExecutionResult, make_external_checker_execution_result,
+        )
+
+        fields = ExternalCheckerExecutionResult.model_validate_json(
+            json.dumps(body["result"]),
+        ).model_dump(mode="python", exclude={"result_digest"})
+        body["result"] = make_external_checker_execution_result(
+            **(fields | {"findings": project_findings}),
+        ).model_dump(mode="json")
 
     runtime_errors = []
     class SourceRuntime:
@@ -456,6 +469,7 @@ def _source_runtime(payload, tmp_path, runtime_outcome):
             if runtime_outcome in {"completed", "rejected"}:
                 worker, output, reply, actual_lease = _pre_worker(
                     tmp_path, payload, lease=lease,
+                    result_change=project_result if project_findings else None,
                     isolation_override={"runtime": "smolvm", "isolation_mode": "smol-microvm"},
                 )
                 assert actual_lease is lease
