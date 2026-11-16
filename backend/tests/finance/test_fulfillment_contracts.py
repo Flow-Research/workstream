@@ -153,6 +153,7 @@ def test_arbitrarily_late_reports_and_linked_exceptions_remain_valid(owner):
             encode(exception),
             obligation=obligation(owner),
             fulfilled_report=report,
+            fulfilled_received_at=NOW,
             received_at=later,
         )
         == exception
@@ -180,6 +181,7 @@ def test_invalid_exception_linkage_and_times(owner, change):
             encode(fixture("exception-after-fulfillment.json") | change),
             obligation=obligation(owner),
             fulfilled_report=fixture("report-points-fulfilled.json"),
+            fulfilled_received_at=NOW,
             received_at=NOW,
         )
 
@@ -190,5 +192,38 @@ def test_exception_requires_actual_successful_report_shape(owner):
             encode(fixture("exception-after-fulfillment.json")),
             obligation=obligation(owner),
             fulfilled_report=fixture("report-failed.json"),
+            fulfilled_received_at=NOW,
             received_at=NOW,
         )
+
+
+def clock_step_back_evidence():
+    """Retained success was valid at its own receipt; later clock is earlier."""
+    report = fixture("report-points-fulfilled.json") | {
+        "fulfilled_at": "2026-11-12T05:07:50.000000Z",
+        "reported_at": "2026-11-12T05:07:50.000000Z",
+    }
+    exception = fixture("exception-after-fulfillment.json") | {
+        "observed_at": "2026-11-12T05:02:50.000000Z",
+        "reported_at": "2026-11-12T05:02:50.000000Z",
+    }
+    original_received_at = datetime(2026, 11, 12, 5, 3, tzinfo=UTC)
+    exception_received_at = datetime(2026, 11, 12, 5, 1, 20, tzinfo=UTC)
+    return report, exception, original_received_at, exception_received_at
+
+
+def test_exception_keeps_original_success_receiver_time_after_clock_step_back(owner):
+    report, exception, original_received_at, exception_received_at = clock_step_back_evidence()
+    assert owner.decode_fulfillment_report(encode(report), obligation=obligation(owner),
+                                          received_at=original_received_at) == report
+    assert owner.decode_fulfillment_exception(encode(exception), obligation=obligation(owner),
+        fulfilled_report=report, fulfilled_received_at=original_received_at,
+        received_at=exception_received_at) == exception
+
+
+def test_exception_requires_aware_new_receiver_time_independently_of_original(owner):
+    report, exception, original_received_at, exception_received_at = clock_step_back_evidence()
+    with pytest.raises(ValueError, match="receiver time must be timezone aware"):
+        owner.decode_fulfillment_exception(encode(exception), obligation=obligation(owner),
+            fulfilled_report=report, fulfilled_received_at=original_received_at,
+            received_at=exception_received_at.replace(tzinfo=None))

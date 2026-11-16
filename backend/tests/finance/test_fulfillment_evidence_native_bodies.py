@@ -8,9 +8,11 @@ import json
 
 import pytest
 from sqlalchemy import text
+from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy.pool import NullPool
 
 from app.db.session import get_session_factory
-from tests.finance.test_fulfillment_contracts import NOW, fixture
+from tests.finance.test_fulfillment_contracts import NOW, fixture, clock_step_back_evidence
 
 
 @pytest.mark.parametrize("change,valid", [
@@ -70,3 +72,27 @@ async def test_native_exception_body_requires_original_success_and_exact_bounds(
             "obligation": json.dumps(fixture("obligation-money.json")),
             "original": json.dumps(retained), "received_at": NOW})
     assert observed is valid
+
+
+async def test_native_exception_keeps_valid_retained_success_after_clock_step_back(isolated_database_env):
+    report, exception, original_received_at, exception_received_at = clock_step_back_evidence()
+    obligation = fixture("obligation-points.json")
+    original = {"reported_status": "fulfilled", "external_event_id": report["external_event_id"],
+                "report_body": report, "received_at": original_received_at.isoformat()}
+    engine = create_async_engine(isolated_database_env, poolclass=NullPool)
+    try:
+        async with engine.connect() as connection:
+            assert await connection.scalar(text(
+                "SELECT public.compensation_fulfillment_report_valid("
+                "CAST(:body AS jsonb),CAST(:obligation AS jsonb),:received_at)"
+            ), {"body": json.dumps(report), "obligation": json.dumps(obligation),
+                "received_at": original_received_at}) is True
+            assert await connection.scalar(text(
+                "SELECT public.compensation_fulfillment_exception_valid("
+                "CAST(:body AS jsonb),CAST(:obligation AS jsonb),"
+                "jsonb_populate_record(NULL::public.compensation_fulfillment_receipts,"
+                "CAST(:original AS jsonb)),:received_at)"
+            ), {"body": json.dumps(exception), "obligation": json.dumps(obligation),
+                "original": json.dumps(original), "received_at": exception_received_at}) is True
+    finally:
+        await engine.dispose()

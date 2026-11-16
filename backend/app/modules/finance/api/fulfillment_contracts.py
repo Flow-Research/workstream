@@ -103,6 +103,7 @@ def decode_fulfillment_exception(
     *,
     obligation: dict,
     fulfilled_report: dict,
+    fulfilled_received_at: datetime,
     received_at: datetime,
 ) -> dict:
     """Validate a linked post-success observation without authorizing repayment."""
@@ -111,11 +112,14 @@ def decode_fulfillment_exception(
         raise ValueError("invalid fulfillment exception shape")
     if type(value["contract_version"]) is not int:
         raise ValueError("version must be an integer wire value")
-    # Revalidate the exact retained successful event, not a caller's bare event ID.
+    if received_at.tzinfo is None or received_at.utcoffset() is None:
+        raise ValueError("receiver time must be timezone aware")
+    # A retained success keeps its original receiver-time validation. Clock
+    # changes cannot rewrite immutable evidence when recording an exception.
     prior = decode_fulfillment_report(
         json.dumps(fulfilled_report).encode("utf-8"),
         obligation=obligation,
-        received_at=received_at,
+        received_at=fulfilled_received_at,
     )
     if prior["reported_status"] != "fulfilled":
         raise ValueError("exception requires fulfilled receipt")

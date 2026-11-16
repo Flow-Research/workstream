@@ -103,7 +103,8 @@ class FulfillmentEvidenceService:
             await self._flush_evidence()
             try:
                 decode_fulfillment_exception(body, obligation=root.obligation_body,
-                    fulfilled_report=original.report_body, received_at=row.received_at)
+                    fulfilled_report=original.report_body, fulfilled_received_at=original.received_at,
+                    received_at=row.received_at)
             except ValueError as exc:
                 raise FulfillmentEvidenceInvalid("invalid_fulfillment_exception") from exc
             return _exception_ack(row, replay=False)

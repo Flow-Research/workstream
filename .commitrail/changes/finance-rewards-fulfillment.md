@@ -2108,3 +2108,19 @@ spaces and excess final blank lines in the specification/current clock fixture.
 Preserve those line breaks as separate Markdown paragraphs and remove only
 excess EOF whitespace; no specification value, test assertion or runtime logic
 changes. Keep the complete Finance objective Planned and PR draft.
+
+
+Fresh222de2 bounded review closed the native vocabulary, model-boundary,
+whitespace and evidence-record findings. Security found RECEIPT-COMMAND-001:
+exception decoding revalidated an immutable successful report with the new
+receiver clock. A backward clock step can reject an already valid success even
+when the exception satisfies native skew bounds. Both independent public
+decoders now require fulfilled_received_at with no default or fallback; every
+caller supplies the retained receipt's actual clock. The new exception clock
+remains independently timezone-aware and governs only its own bounds. The
+command passes original.received_at; no synthesized clock, timestamp rewrite
+or extra clock call is introduced. Update existing tests without losing their
+assertions and add the exact reproduced step-back pure regression, independent
+new-clock awareness refusal and installed native body alignment proof. Actual
+canonical append/replay/isolation/contention and all public routes remain
+unqualified. Replay affected reviews after focused proof and shared checks.
