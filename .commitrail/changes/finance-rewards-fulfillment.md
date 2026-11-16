@@ -2179,3 +2179,19 @@ keep validators strict. Required review remains security/architecture/reuse
 and QA/test-delta/CI/docs/product-ops. Human focus is identity, clock/source
 lineage, transaction/replay and public failure/recovery proof. Whole Finance
 execution and its complete external-HTTP/durable-worker journey remain required.
+
+
+Hosted811063c5b schema lane (synthetic mergeba13cbf, main unchanged and ancestor)
+completed515 cases and4 failures. All four are omitted independent consumer
+expectations: full Alembic graph misses explicit0072 after current-head0073;
+schema-lane exact set omits the new receipt migration module; project family
+count/hash/placement omit the two native body/vocabulary modules; shared family
+count/hash omits the new pure command-boundary module. Preserve all strict
+assertions and update only those exact memberships/linear adjacency. An offline
+delta proof removes only those explicit3 added module names and recovers every
+previous exact count, family digest and project-lane digest; no old membership
+or assignment changed. New expected fingerprints remain committed literals,
+not computed from production catalogue during tests. Schema ownership still
+includes every existing module. No CI workflow, skip, gate or production schema
+changes. Run the complete lane-catalogue controls and focused Alembic graph
+regression, with a same-cardinality cross-family mutation discriminator.

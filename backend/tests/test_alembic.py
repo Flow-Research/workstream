@@ -388,6 +388,7 @@ def test_v01_graph_has_one_root_and_head() -> None:
 
     assert [revision.revision for revision in revisions] == [
         HEAD_REVISION,
+        "0072_fulfillment_roots",
         "0071_selected_task_reward",
         "0070_task_size",
         "0069_sized_reward_policy",
