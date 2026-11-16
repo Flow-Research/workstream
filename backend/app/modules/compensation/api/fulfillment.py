@@ -14,10 +14,10 @@ OBLIGATION_DELIVERY_EVENT = "compensation.obligation.deliver"
 
 
 class CompensationFulfillmentReadinessPort(Protocol):
-    """Configured local identity, checked against existing immutable roots."""
+    """Configured identity/root consistency; REV owns the durable activation anchor."""
 
     async def require_source_ready(self) -> UUID:
-        """Refuse missing identity or a different source on this deployment."""
+        """Return the configured UUID; callers must match REV's locked anchor."""
         ...
 
 
@@ -36,6 +36,10 @@ class CompensationFulfillmentFence(Protocol):
 
     async def acquire(self, expected_generation: int) -> CompensationFulfillmentLifecycleFacts:
         """Require the current caller root or raise CompensationAwardConflict."""
+        ...
+
+    async def require_source(self, expected_generation: int, source_instance_id: UUID) -> None:
+        """Match the durable activation source under the same current root custody."""
         ...
 
 

@@ -620,8 +620,8 @@ writer/participant described below.
 [CON-07](../.commitrail/initiatives/WS-CON-001/WS-CON-001-07.md) delivers the
 hidden source-neutral submitter participant and complete frozen award-set port.
 After acquiring the supplied canonical REV fence through a CON-owned Protocol,
-it stages or exactly replays one accepted-submission contribution and zero, one
-or two awards inside the caller's existing root transaction. Exact source
+it stages or exactly replays one accepted-submission contribution and zero or
+one exact size-selected award inside the caller's existing root transaction. Exact source
 replay returns the original row IDs. Compensated replay requires the original
 correlation UUID; unpaid replay retains no correlation. It does not write
 FinalAcceptance, change TASK, evaluate AUTH, publish a source, fulfill an award
@@ -747,9 +747,11 @@ Extract foundations from existing owner work, not a new initiative:
    REV-12A4A supplies authorized transitions and atomic writer/stop composition
    on this fence before the first contribution path. Applicable award facts remain atomic. Actual
    COMP now stages immutable root/ordinal and selector-only outbox custody with
-   each award under the held REV fence. The current manifest names those internal
+   each accepted-submission award under the held REV fence. The current manifest names those internal
    participants and keeps Finance admission, dispatch and callbacks unavailable.
-   Exact source UUID readiness precedes live activation. Finance obligation,
+   First LIVE durably anchors the configured source UUID through the existing
+   control, transition observation and AUTH custody. Other configurations are
+   denied even before the first root. Finance obligation,
    callback and cutoff/drain proof remain required before fulfillment activation.
 4. ARCH-04E2-B delivers mandatory actual source receipts, database-enforced
    complete outcomes and shared audit/outbox in one caller transaction. False
@@ -1217,13 +1219,16 @@ The resource still binds singleton, expected generation, phases, operation,
 reviewed manifest and observation digests, deadline and reason. No SQL bootstrap,
 new action, permissive default generation or second availability flag is allowed.
 
-The first-contribution manifest covers its enabled TASK admission/routing and
-shared acceptance/CON contribution and conditional award writers. Payment
-obligation admission, dispatch and callbacks remain unavailable; their absence
-must be checked against actual composition, not represented by fake zero drain
-counts. Paid and unpaid contribution policies retain their full atomic award
-semantics. Neither payment delivery nor its obligation/root/ordinal substrate
-is a prerequisite of this bounded manifest.
+The current first-contribution manifest covers enabled TASK admission/routing,
+shared acceptance/CON contribution, selected submitter awards, COMP roots/ordinals
+and initial outbox custody. Its first authorized LIVE transition durably anchors
+the source UUID in existing REV control/history and exact AUTH observation; later
+phases retain that identity. Payment obligation admission, dispatch and callbacks
+remain unavailable; their absence must be checked against actual composition,
+not represented by fake zero drain counts. Paid and unpaid policies retain their
+atomic award semantics, and existing fixed reviewer storage/export remains
+supported without activating human review. Finance delivery and cutoff/drain
+qualification remain separate; internal root/ordinal custody is current.
 
 The initial controller implementation is
 [REV-12A4A](../.commitrail/initiatives/WS-REV-001/WS-REV-001-12A4A.md).

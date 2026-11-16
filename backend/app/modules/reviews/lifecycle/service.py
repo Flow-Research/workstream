@@ -26,6 +26,8 @@ FIRST_CONTRIBUTION_MANIFEST_DIGEST = canonical_json_hash({
     "replay": "current_generation_select_only",
     "live_readiness": "no_pre_authority_final_acceptances",
     "production_routing": "selected_post_submit_completion",
+    "fulfillment_source": "authorized_activation_anchor",
+    "fulfillment_scope": "accepted_submission",
     "unavailable": ["human_review", "fulfillment_admission", "payment_delivery"],
 })
 _EDGES = frozenset({
@@ -84,24 +86,35 @@ class JointLifecycleController:
             )
             if checked.target_phase == JointLifecyclePhase.LIVE and retained_acceptance:
                 raise JointLifecycleUnavailable("pre-authority acceptance blocks lifecycle readiness")
+            control = await self._session.get(
+                JointLifecycleReleaseControl, current.singleton_id, populate_existing=True,
+            )
+            source_instance_id = control.fulfillment_source_instance_id
             if checked.target_phase == JointLifecyclePhase.LIVE:
                 try:
-                    await self._source_readiness.require_source_ready()
+                    configured_source = await self._source_readiness.require_source_ready()
                 except CompensationAwardConflict as exc:
                     raise JointLifecycleUnavailable("fulfillment source configuration unavailable") from exc
+                if source_instance_id is not None and source_instance_id != configured_source:
+                    raise JointLifecycleUnavailable("fulfillment source configuration differs")
+                source_instance_id = configured_source
+            observations = {
+                "singleton_id": str(current.singleton_id),
+                "generation": current.generation, "phase": current.phase.value,
+                "retained_pre_authority_acceptance": retained_acceptance,
+                "manifest": FIRST_CONTRIBUTION_MANIFEST_DIGEST,
+            }
+            if source_instance_id is not None:
+                observations["fulfillment_source_instance_id"] = str(source_instance_id)
             facts = LifecycleTransitionFacts(
                 command=checked,
-                observations_digest=canonical_json_hash({
-                    "singleton_id": str(current.singleton_id),
-                    "generation": current.generation, "phase": current.phase.value,
-                    "retained_pre_authority_acceptance": retained_acceptance,
-                    "manifest": FIRST_CONTRIBUTION_MANIFEST_DIGEST,
-                }),
+                observations_digest=canonical_json_hash(observations),
             )
             receipt = await authority.consume_new(facts)
             row = JointLifecycleTransition(
                 id=new_record_id(), operation_id=checked.operation_id,
                 singleton_id=current.singleton_id, generation=current.generation + 1,
+                fulfillment_source_instance_id=source_instance_id,
                 previous_phase=current.phase.value, phase=checked.target_phase.value,
                 facts_json=facts.model_dump(mode="json"),
                 resource_context_digest=receipt.resource_context_digest,
@@ -113,6 +126,7 @@ class JointLifecycleController:
                 JointLifecycleReleaseControl, current.singleton_id, populate_existing=True,
             )
             control.phase, control.generation, control.transition_id = row.phase, row.generation, row.id
+            control.fulfillment_source_instance_id = source_instance_id
             await self._session.flush()
             return _receipt(row)
 

@@ -79,13 +79,19 @@ async def test_invalid_edge_stale_generation_deadline_and_manifest_rollback(admi
     assert (await transition(original)).generation == 1
 
 
-async def test_caller_rollback_removes_authority_history_and_phase(admin_access):
+@pytest.mark.parametrize("target_phase", ["shadow", "live"])
+async def test_caller_rollback_removes_authority_history_and_phase(admin_access, target_phase):
     grant = await admin_access.signed.grant(admin_access.admin, admin_access.target)
-    command = await command_for(admin_access.target.id, "shadow")
+    if target_phase == "live":
+        await transition(await command_for(admin_access.target.id, "shadow"))
+    command = await command_for(admin_access.target.id, target_phase)
     before = await snapshot()
     async with get_session_factory()() as session:
         await session.begin()
         await controller(session, command).transition(command)
+        if target_phase == "live":
+            assert await session.scalar(text("SELECT fulfillment_source_instance_id "
+                "FROM public.joint_lifecycle_release_control")) is not None
         # The lifecycle-only NO KEY UPDATE lock still excludes suspension,
         # identity unlinking and grant revocation until the caller finishes.
         for table, identifier in (
@@ -100,7 +106,10 @@ async def test_caller_rollback_removes_authority_history_and_phase(admin_access)
                     ), {"id": identifier})
         await session.rollback()
     assert await snapshot() == before
-    assert (await transition(command)).generation == 1
+    async with get_session_factory()() as session:
+        assert await session.scalar(text("SELECT fulfillment_source_instance_id "
+            "FROM public.joint_lifecycle_release_control")) is None
+    assert (await transition(command)).generation == command.expected_generation + 1
 
 
 async def test_no_operator_revoked_operator_and_operation_collision(admin_access):

@@ -2361,9 +2361,13 @@ Immutable COMP-owned fields:
 - `source_award_digest`, `obligation_digest`, complete canonical `obligation_body`
 - exact `initial_outbox_event_id` and server `created_at`
 
-One root belongs to one award. New roots require the canonical live REV fence;
+One root belongs to one automatically accepted-submission award. Fixed reviewer
+award storage/export remains supported without inventing reviewer execution or
+root authority. New roots require the canonical live REV fence;
 replay retains the original generation and exact event without allocation or
-repair. Native guards enforce a single source identity, sequential allocation,
+repair. First authorized LIVE anchors the configured UUID in the existing REV
+control and transition observation; later phases cannot replace or clear it.
+Native guards enforce that identity even before the first root, sequential allocation,
 immutable evidence and deferred award/root/event closure. Suspended bindings do
 not change earned facts. The new selector/digest event stays unregistered; root
 custody does not implement Finance admission, receipts, payment or cutoff/drain.
@@ -2564,8 +2568,12 @@ identity and creation time remain unchanged. The root fence takes its advisory
 lock before the controller row. The transition operation takes this REV fence
 before AUTH custody; the fence itself grants no business authority. New participant effects
 require live/nonzero, while terminal replay stays read-only under the current
-generation. Fulfillment roots, ordinals and cutoffs remain deferred until
-fulfillment activation; conditional awards are separate atomic facts.
+generation. Automatically accepted-submission awards, COMP roots/ordinals and
+their initial selector-only outbox events now share atomic custody. The existing
+control and transition rows carry nullable `fulfillment_source_instance_id`: null
+before first activation, then one UUIDv7 anchored by the first authorized LIVE
+observation and retained across phase changes. Finance admission, delivery,
+callbacks and cutoff/drain qualification remain deferred.
 
 ### TASK routing request reservation
 

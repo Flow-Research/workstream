@@ -20,7 +20,10 @@ from app.modules.reviews.lifecycle.service import JointLifecycleController, FIRS
 
 async def command_for(actor_id, phase, **changes):
     async with get_session_factory()() as session:
-        control = await session.scalar(select(JointLifecycleReleaseControl))
+        control = (await session.execute(select(
+            JointLifecycleReleaseControl.id, JointLifecycleReleaseControl.phase,
+            JointLifecycleReleaseControl.generation,
+        ))).one()
         identity = await session.scalar(text(
             "SELECT id FROM public.actor_identity_links WHERE actor_profile_id=:actor"
         ), {"actor": actor_id})
@@ -65,15 +68,18 @@ async def snapshot():
         }
 
 
-def facts_for(command):
+def facts_for(command, *, source_instance_id=None):
     """Complete canonical empty-store facts for direct-SQL substitution proofs."""
     from app.modules.reviews.api.lifecycle import LifecycleTransitionFacts
 
-    return LifecycleTransitionFacts(command=command, observations_digest=canonical_json_hash({
+    observations = {
         "singleton_id": str(command.singleton_id), "generation": command.expected_generation,
         "phase": command.current_phase.value, "retained_pre_authority_acceptance": False,
         "manifest": FIRST_CONTRIBUTION_MANIFEST_DIGEST,
-    }))
+    }
+    if source_instance_id is not None:
+        observations["fulfillment_source_instance_id"] = str(source_instance_id)
+    return LifecycleTransitionFacts(command=command, observations_digest=canonical_json_hash(observations))
 
 
 async def issue_authority(session, command):
@@ -84,12 +90,13 @@ async def issue_authority(session, command):
         return await prepared.consume_new(facts_for(command))
 
 
-def history_row(command, receipt, *, facts=None, digest=None):
+def history_row(command, receipt, *, facts=None, digest=None, source_instance_id=None):
     from app.modules.reviews.lifecycle.models import JointLifecycleTransition
 
     return JointLifecycleTransition(
         id=new_record_id(), operation_id=command.operation_id, singleton_id=command.singleton_id,
         generation=command.expected_generation + 1, previous_phase=command.current_phase.value,
+        fulfillment_source_instance_id=source_instance_id,
         phase=command.target_phase.value, facts_json=(facts or facts_for(command)).model_dump(mode="json"),
         resource_context_digest=digest or receipt.resource_context_digest,
         authorization_decision_event_id=str(receipt.decision_event_id),
@@ -101,5 +108,7 @@ async def publish_history(session, row):
     await session.flush()
     await session.execute(text(
         "UPDATE public.joint_lifecycle_release_control "
-        "SET phase=:phase,generation=:generation,transition_id=:transition WHERE id=:id"
-    ), {"phase": row.phase, "generation": row.generation, "transition": row.id, "id": row.singleton_id})
+        "SET phase=:phase,generation=:generation,transition_id=:transition,"
+        "fulfillment_source_instance_id=:source WHERE id=:id"
+    ), {"phase": row.phase, "generation": row.generation, "transition": row.id,
+        "source": row.fulfillment_source_instance_id, "id": row.singleton_id})

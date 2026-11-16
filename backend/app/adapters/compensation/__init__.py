@@ -20,6 +20,12 @@ class FulfillmentLifecycleFenceAdapter:
         except JointLifecycleUnavailable as exc:
             raise CompensationAwardConflict("compensation_fulfillment_unavailable") from exc
 
+    async def require_source(self, expected_generation, source_instance_id):
+        try:
+            await self._fence.require_fulfillment_source(expected_generation, source_instance_id)
+        except JointLifecycleUnavailable as exc:
+            raise CompensationAwardConflict("compensation_source_unavailable") from exc
+
 
 def policy_adapter_binding_port(session: AsyncSession) -> PolicyAdapterBindingPort:
     """Construct the public locked policy-binding lookup."""

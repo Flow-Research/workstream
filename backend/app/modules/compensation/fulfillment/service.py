@@ -21,7 +21,7 @@ from app.modules.outbox.api import (
 
 
 class CompensationFulfillmentReadiness:
-    """One configured source, permanently anchored by committed roots."""
+    """Validate configured identity and consistency with committed root evidence."""
 
     def __init__(self, session: AsyncSession, source_instance_id: UUID | None):
         self._session, self._source = session, source_instance_id
@@ -87,6 +87,7 @@ class CompensationFulfillmentParticipant:
         if not awards:
             return
         source = await self._source.require_source_ready()
+        await self._fence.require_source(request.expected_generation, source)
         for award in awards:
             route = await self._historical_binding_route(award)
             root = await self._session.scalar(select(CompensationFulfillmentRoot).where(

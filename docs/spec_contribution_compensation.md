@@ -424,7 +424,9 @@ from committed roots prevents further earning. Never mint an identity per proces
 or rotate it to bypass retained source custody.
 
 The current COMP owner stages one root and its exact initial shared-outbox event
-with each earned award. Unpaid and human-review handoff branches create neither.
+with each automatically accepted-submission award. Unpaid and human-review
+handoff branches create neither. Fixed completed-review award storage and exports
+remain supported; this root writer does not claim human-review execution.
 The root stores UUIDv7 identity, unique award and increasing ordinal, original
 admission generation, configured source UUID, original binding/route,
 FinalAcceptance/authorization-decision/routing-manifest references, the complete
@@ -434,8 +436,12 @@ checks source equality, immutable evidence and deferred award/root/event closure
 Allocation uses the existing held REV fence. Replay requires the stored root and
 event without repair or a new ordinal, including after lifecycle generations
 advance. A suspended original binding remains the earned source. Missing source
-configuration or disagreement with existing roots blocks live activation/new
-custody; no per-request deployment identity is generated.
+configuration blocks live activation. First LIVE binds that UUID into the existing
+REV control and immutable transition observation under actual AUTH. Later phases
+and restarts retain it; a differently configured process cannot create even the
+first root or reactivate under another UUID. COMP checks through the same held
+REV capability, and native INSERT checks the anchored UUID. No per-request
+deployment identity is generated.
 
 The event contains selectors and digests only and stays unregistered for delivery
 in this step. Finance HTTP admission, receipts/exceptions, execution, callbacks,

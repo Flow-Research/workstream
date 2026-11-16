@@ -13,7 +13,7 @@ depends_on = None
 
 _LOCK = int.from_bytes(hashlib.sha256(b"workstream.review.joint_lifecycle_mutation").digest()[:8],
                        "big", signed=True)
-_MANIFEST = "sha256:c1e2e0a7109efedcab4d4f13fd82d1efac82a6e18da28c989452423604b06616"
+_MANIFEST = "sha256:f529eb5e237142a3b534c583e6bbf9eb844467e3c3984b03f2db89e20f6243aa"
 _PREVIOUS_MANIFEST = "sha256:3a6704c3c79c243f5a032f2db9c4f47080716dfef86928f53e0f20b4d6047273"
 
 
@@ -25,10 +25,21 @@ def upgrade():
     )).scalar_one()
     op.execute("SELECT id FROM public.authority_control WHERE id=1 FOR UPDATE")
     op.execute("LOCK TABLE public.compensation_awards,public.outbox_events IN ACCESS EXCLUSIVE MODE")
-    if op.get_bind().execute(sa.text("SELECT EXISTS(SELECT 1 FROM public.compensation_awards)")).scalar_one():
+    if op.get_bind().execute(sa.text("""SELECT EXISTS(SELECT 1 FROM public.compensation_awards a
+        JOIN public.contribution_records c ON c.id=a.contribution_record_id
+        WHERE c.contribution_type='accepted_submission')""")).scalar_one():
         raise RuntimeError("fulfillment installation refuses retained awards without original root custody")
     if phase != "disabled":
         raise RuntimeError("fulfillment installation requires the lifecycle disabled")
+    for table in ("joint_lifecycle_release_control", "joint_lifecycle_transitions"):
+        op.add_column(table, sa.Column("fulfillment_source_instance_id", sa.Uuid(), nullable=True), schema="public")
+        op.create_check_constraint(
+            "fulfillment_source_uuid7", table,
+            "fulfillment_source_instance_id is null or "
+            "((get_byte(uuid_send(fulfillment_source_instance_id),6)>>4)=7 "
+            "and (get_byte(uuid_send(fulfillment_source_instance_id),8)&192)=128)",
+            schema="public",
+        )
     op.create_table(
         "compensation_fulfillment_roots",
         sa.Column("id", sa.Uuid(), primary_key=True),
@@ -56,7 +67,7 @@ def upgrade():
     )
     _envelope()
     _custody()
-    _manifest()
+    _lifecycle_custody()
 
 
 def _envelope():
@@ -153,6 +164,10 @@ RETURNS boolean LANGUAGE sql STABLE SET search_path=pg_catalog,public,pg_temp AS
        public.project_guide_projection_canonical_json(public.compensation_fulfillment_payload(r)),'UTF8')),'hex'));
 $$;
     """)
+    _admission_and_closure()
+
+
+def _admission_and_closure():
     unsigned = _LOCK & ((1 << 64) - 1)
     op.execute(f"""
 CREATE FUNCTION public.guard_compensation_fulfillment_root() RETURNS trigger
@@ -167,7 +182,8 @@ BEGIN
       AND public.joint_lifecycle_new_effects_enabled(c)) THEN
   RAISE EXCEPTION 'fulfillment admission generation unavailable' USING ERRCODE='23514'; END IF;
  IF NEW.ordinal<>(SELECT coalesce(max(ordinal),0)+1 FROM public.compensation_fulfillment_roots)
-   OR EXISTS(SELECT 1 FROM public.compensation_fulfillment_roots WHERE source_instance_id<>NEW.source_instance_id) THEN
+   OR NOT EXISTS(SELECT 1 FROM public.joint_lifecycle_release_control c
+     WHERE c.singleton AND c.fulfillment_source_instance_id=NEW.source_instance_id) THEN
   RAISE EXCEPTION 'fulfillment ordinal or source differs' USING ERRCODE='23514'; END IF;
  IF NOT public.compensation_fulfillment_root_is_valid(NEW) THEN
   RAISE EXCEPTION 'fulfillment root source differs' USING ERRCODE='23514'; END IF;
@@ -180,7 +196,12 @@ CREATE FUNCTION public.guard_compensation_fulfillment_closure() RETURNS trigger
 LANGUAGE plpgsql SET search_path=pg_catalog,public,pg_temp AS $$
 DECLARE award_uuid uuid;
 BEGIN
- IF TG_TABLE_NAME='compensation_awards' THEN award_uuid:=NEW.id;
+ IF TG_TABLE_NAME='compensation_awards' THEN
+   IF EXISTS(SELECT 1 FROM public.contribution_records c
+     WHERE c.id=NEW.contribution_record_id AND c.contribution_type='completed_review') THEN
+     RETURN NULL;
+   END IF;
+   award_uuid:=NEW.id;
  ELSIF TG_TABLE_NAME='compensation_fulfillment_roots' THEN award_uuid:=NEW.award_id;
  ELSE
    SELECT award_id INTO award_uuid FROM public.compensation_fulfillment_roots WHERE initial_outbox_event_id=NEW.event_id;
@@ -213,7 +234,8 @@ CREATE CONSTRAINT TRIGGER compensation_event_fulfillment_closure AFTER INSERT ON
     """)
 
 
-def _manifest():
+def _lifecycle_custody():
+    """Install one current source-bound authority/control contract, without readers."""
     for signature, occurrences in (
         ("public.joint_lifecycle_transition_valid(public.joint_lifecycle_transitions)", 2),
         ("public.joint_lifecycle_new_effects_enabled(public.joint_lifecycle_release_control)", 1),
@@ -222,7 +244,54 @@ def _manifest():
                                      {"signature": signature}).scalar_one()
         if body.count(_PREVIOUS_MANIFEST) != occurrences or _MANIFEST in body:
             raise RuntimeError("fulfillment lifecycle manifest owner changed")
-        op.execute(body.replace(_PREVIOUS_MANIFEST, _MANIFEST))
+        body = body.replace(_PREVIOUS_MANIFEST, _MANIFEST)
+        if signature.startswith("public.joint_lifecycle_transition_valid("):
+            edits = (
+                ("t.generation>0 AND", "t.generation>0 AND "
+                 "(t.phase<>'live' OR t.fulfillment_source_instance_id IS NOT NULL) AND"),
+                ("public.project_guide_projection_canonical_json(pg_catalog.jsonb_build_object(\n"
+                 "      'singleton_id',", "public.project_guide_projection_canonical_json("
+                 "pg_catalog.jsonb_strip_nulls(pg_catalog.jsonb_build_object(\n"
+                 "      'fulfillment_source_instance_id',t.fulfillment_source_instance_id::text,\n"
+                 "      'singleton_id',"),
+                (f"'manifest','{_MANIFEST}')), 'UTF8'", f"'manifest','{_MANIFEST}'))), 'UTF8'"),
+            )
+            body = _edited(body, edits)
+        op.execute(body)
+    edits_by_signature = {
+        "public.guard_joint_lifecycle_control_change()": (
+            ("OR NEW.created_at IS DISTINCT FROM OLD.created_at OR NEW.generation",
+             "OR NEW.created_at IS DISTINCT FROM OLD.created_at "
+             "OR (OLD.fulfillment_source_instance_id IS NOT NULL AND "
+             "NEW.fulfillment_source_instance_id IS DISTINCT FROM OLD.fulfillment_source_instance_id) "
+             "OR (OLD.fulfillment_source_instance_id IS NULL AND "
+             "NEW.fulfillment_source_instance_id IS NOT NULL AND NEW.phase<>'live') OR NEW.generation"),
+            ("AND t.phase=NEW.phase AND t.previous_phase=OLD.phase",
+             "AND t.phase=NEW.phase AND t.previous_phase=OLD.phase "
+             "AND t.fulfillment_source_instance_id IS NOT DISTINCT FROM NEW.fulfillment_source_instance_id"),
+        ),
+        "public.guard_joint_lifecycle_history_closure()": (
+            ("AND c.phase=NEW.phase", "AND c.phase=NEW.phase "
+             "AND c.fulfillment_source_instance_id IS NOT DISTINCT FROM NEW.fulfillment_source_instance_id"),
+        ),
+        "public.guard_joint_lifecycle_control_closure()": (
+            ("AND t.singleton_id=c.id AND t.generation=c.generation AND t.phase=c.phase",
+             "AND t.singleton_id=c.id AND t.generation=c.generation AND t.phase=c.phase "
+             "AND t.fulfillment_source_instance_id IS NOT DISTINCT FROM c.fulfillment_source_instance_id"),
+        ),
+    }
+    for signature, edits in edits_by_signature.items():
+        body = op.get_bind().execute(sa.text("SELECT pg_get_functiondef(to_regprocedure(:signature))"),
+                                     {"signature": signature}).scalar_one()
+        op.execute(_edited(body, edits))
+
+
+def _edited(body, edits):
+    for old, new in edits:
+        if body.count(old) != 1:
+            raise RuntimeError("fulfillment lifecycle source custody owner changed")
+        body = body.replace(old, new)
+    return body
 
 
 def downgrade():

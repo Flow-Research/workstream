@@ -922,3 +922,86 @@ fingerprint from actual PostgreSQL. Then freeze and replay the same reviewer
 tracks, including formerly passing structure/docs tracks. Human focus: immutable
 source anchor, AUTH/observation/control coupling, supported business scope and
 independent closure guards. Full Finance objective remains active and unfinished.
+
+
+Repair-plan review at clean `366b22588` passed security/architecture/product/reuse/
+senior feasibility and passed QA/test-delta/CI/docs feasibility with low risks.
+Adopted details: source observations omit the member while unanchored, then include
+exact UUID; both scalar columns have nullable UUIDv7 constraints; first-LIVE
+caller rollback proves no source/control/history/AUTH residue. The reviewer
+exception is limited to the award-trigger branch; root/event guards stay strict.
+The stray-event probe must use a committed valid award and a fresh unlinked selector
+so award closure cannot mask event closure. Actual0071 facts/AUTH remain unchanged
+and old operation replay must remain select-only; no JSON parser/default is added.
+The 3f native run was deliberately interrupted before editing runtime guards,
+with owned cleanup complete. It produced progress but no complete terminal test
+summary and is not claimed as a passing suite. Valid review findings, not a test
+observation timeout, motivated the source change and subsequent rerun.
+
+
+Repair development evidence: all 303 architecture/ownership/lane/pure controls
+passed (466.69 seconds). The native regression run passed zero-root A/B source
+and raw-SQL enforcement, independent stray-event closure/removal discriminator,
+shadow/first-LIVE rollback and all four active/retired money/points reviewer award
+storage cases. It then caught the paid export fixture's obsolete two-award CSV
+count/stride. Current policy gives each contribution one instrument/award, so
+that fixture now requires one CSV row and exact zero-or-one JSON award while
+retaining page cursors, IDs/order and cross-format exact award values. This is
+an affected fixture replacement, not removal of paid reviewer export behavior.
+Owned infrastructure cleanup completed for the 8-pass/1-fail run.
+
+The actual migration run completed upgrade/retained-row comparison, then failed
+its repeated-head snapshot read with asyncpg UnicodeDecodeError while decoding
+PostgreSQL constraint metadata. No migration assertion or schema guard has been
+relaxed. A separate owned three-identical-snapshot probe is running to distinguish
+persistent schema metadata corruption from an intermittent transport/decoder
+failure before a qualified rerun. The migration run cleaned up its owned services.
+
+The independent diagnostic now completed three identical metadata-manifest reads
+successfully against a fresh owned PostgreSQL schema, with unchanged reader code
+and normal child exit. This contradicts persistent malformed current constraint
+metadata; it does not explain or erase the earlier decode failure. One diagnostic
+attempt first failed due to importing a pytest-only fixture path, corrected by
+calling the actual metadata reader directly. Another bootstrap failed before the
+probe without a terminal traceback, so the final diagnostic also recorded child
+exit codes without exposing connection data. No runner/schema gate was modified.
+A fresh actual three-case migration run follows this discriminating control;
+retained reviewer storage, original AUTH/facts and exact replay remain required.
+
+
+The next parallel runs exposed an actual owned PostgreSQL backend crash: PID 430
+segfaulted during the unchanged 0001 baseline DO/EXECUTE batch, restarting the
+cluster and closing both jobs' connections. The authority/storage run had 21
+passes before an unpaid export fixture lost its connection; the migration job
+lost its connection during setup. Neither is qualified as a passing run. Both
+MinIO namespaces were removed; after recovery the lead used the canonical
+ownership-checking `_drop` to remove only the two recorded database/role pairs
+and verified cleanup. PostgreSQL is 16.14 and its image matches the exact CI
+pinned digest. No database/schema gate or engine version was changed.
+
+The probe's three identical current metadata reads succeeded but do not explain
+the server fault. A serial owned run now tests both export branches, held-source
+custody and all three migration cases without simultaneous database rebuilds.
+This is a discriminating execution condition, not a feature-code workaround or
+a claim that the underlying crash is solved. Source authority tests now also
+stage genuine new Operator authority for changed/cleared source observations and
+require native control rejection, and separately reject reuse of an A observation
+for a first-LIVE B scalar. All remain subject to final-source review/qualification.
+
+
+Serial recovery proof passed both corrected paid/unpaid export branches, held
+source-capability custody and fresh/actual0071/repeated-head installation. It
+then reached the retained-reviewer fixture and caught its command builder's
+whole-current-ORM SELECT against actual0071 (missing the newly added source
+column). The shared test command builder now reads only its three needed stable
+selectors: id, phase and generation. There is one current helper, with no schema
+version branch or fallback. The actual migration proofs are rerunning serially.
+
+Current repair code is locally coherent and ready for a new frozen candidate,
+with complete migration/final-head execution still pending. The actual manifest
+is `sha256:f529eb5e237142a3b534c583e6bbf9eb844467e3c3984b03f2db89e20f6243aa`;
+fresh PostgreSQL16 source-custody schema fingerprint is
+`4d6b6690d5700a89ad076860bc588bc9237c1a81357cbae116994eb7efbe5937`.
+No local sheet export directory is present. Prior source-binding and reviewer
+findings remain open until fresh implementation review; full Finance runtime,
+full-suite and actual worker/HTTP/S3 qualification are not delivered by this repair.

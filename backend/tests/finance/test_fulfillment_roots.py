@@ -11,6 +11,7 @@ from sqlalchemy.exc import DBAPIError
 from app.core.config import get_settings
 from app.core.hashing import canonical_json_hash
 from app.core.identifiers import new_record_id
+from app.db.session import get_session_factory
 from app.adapters.compensation import (
     FulfillmentLifecycleFenceAdapter, compensation_fulfillment_readiness,
 )
@@ -24,6 +25,7 @@ from app.modules.compensation.fulfillment.service import (
 from app.modules.outbox.api import OutboxAppendDisposition, OutboxAppendInput, OutboxAppendResult
 from app.modules.outbox.service import OutboxService
 from app.modules.reviews.api.lifecycle import JointLifecycleUnavailable
+from app.modules.reviews.api.acceptance import FinalAcceptanceConflict
 from app.modules.reviews.lifecycle.fence import PostgresJointLifecycleMutationFence
 from tests.contributions.records.support import authorized_submitter_source
 from tests.contributions.participation.support import complete_award_request_for, request_for
@@ -153,6 +155,23 @@ async def _insert_native_root(session, values):
     await session.execute(statement, values)
 
 
+def _native_root_candidate(request, award, route, source_instance_id, ordinal):
+    root_id = new_record_id()
+    body = fulfillment_obligation(
+        request, award, source_instance_id=source_instance_id, root_id=root_id, route_key=route,
+    )
+    return dict(
+        id=root_id, award_id=award.id, project_id=award.project_id, ordinal=ordinal,
+        admission_generation=request.expected_generation, source_instance_id=source_instance_id,
+        adapter_binding_id=award.adapter_binding_id, route_key=route,
+        source_final_acceptance_id=request.contribution.final_acceptance_id,
+        source_authorization_decision_id=request.source_authorization_decision_id,
+        source_routing_manifest_id=request.source_routing_manifest_id,
+        source_award_digest=body["source_award_digest"], obligation_digest=body["obligation_digest"],
+        obligation_body=json.dumps(body),
+    ), body
+
+
 async def test_native_root_insert_rejects_independent_source_substitutions(
     tmp_path, isolated_database_env, monkeypatch, live_acceptance_lifecycle,
 ):
@@ -193,18 +212,8 @@ async def test_native_root_insert_rejects_independent_source_substitutions(
                         route = await session.scalar(text(
                             "SELECT route_key FROM public.project_compensation_adapter_bindings WHERE id=:id"
                         ), {"id": award.adapter_binding_id})
-                        root_id = new_record_id()
-                        body = fulfillment_obligation(
-                            request, award, source_instance_id=get_settings().source_instance_id,
-                            root_id=root_id, route_key=route,
-                        )
-                        values = dict(
-                            id=root_id, award_id=award.id, project_id=award.project_id, ordinal=2,
-                            admission_generation=2, source_instance_id=get_settings().source_instance_id,
-                            adapter_binding_id=award.adapter_binding_id, route_key=route,
-                            source_final_acceptance_id=request.contribution.final_acceptance_id,
-                            source_authorization_decision_id=request.source_authorization_decision_id,
-                            source_routing_manifest_id=request.source_routing_manifest_id,
+                        values, body = _native_root_candidate(
+                            request, award, route, get_settings().source_instance_id, 2,
                         )
                         if case in {"source", "source_guard_removed"}:
                             values["source_instance_id"] = new_record_id()
@@ -270,6 +279,106 @@ async def test_native_root_insert_rejects_independent_source_substitutions(
                     FROM public.compensation_fulfillment_roots ORDER BY ordinal"""))).all() == [
                         (1, True), (2, True),
                     ]
+
+
+async def test_activation_source_fences_the_first_root_before_any_anchor_award(
+    tmp_path, isolated_database_env, live_acceptance_lifecycle, monkeypatch,
+):
+    source_a, source_b = get_settings().source_instance_id, new_record_id()
+    async with authorized_routing_source(
+        tmp_path, isolated_database_env, contribution_awards=("money",),
+    ) as h:
+        async with h.factory() as session:
+            assert await session.scalar(text("SELECT count(*) FROM public.compensation_fulfillment_roots")) == 0
+            assert await session.scalar(text("SELECT fulfillment_source_instance_id "
+                "FROM public.joint_lifecycle_release_control")) == source_a
+            assert await session.scalar(text("SELECT fulfillment_source_instance_id "
+                "FROM public.joint_lifecycle_transitions WHERE phase='live'")) == source_a
+        before = await _snapshot(h.factory)
+        try:
+            with monkeypatch.context() as other_process:
+                other_process.setenv("WORKSTREAM_SOURCE_INSTANCE_ID", str(source_b))
+                get_settings.cache_clear()
+                async with h.factory() as session:
+                    with pytest.raises(FinalAcceptanceConflict) as rejected:
+                        async with session.begin():
+                            await apply_outcome(session, h, 2)
+                assert isinstance(rejected.value.__cause__.__cause__, CompensationAwardConflict)
+                assert await _snapshot(h.factory) == before
+                captured = []
+
+                async def capture_root_input(_owner, request, awards):
+                    captured.append((request, awards))
+
+                other_process.setattr(CompensationFulfillmentParticipant, "complete", capture_root_input)
+                async with h.factory() as session:
+                    await session.begin()
+                    try:
+                        await apply_outcome(session, h, 2)
+                        request, (award,) = captured[0]
+                        route = await session.scalar(text("SELECT route_key FROM "
+                            "public.project_compensation_adapter_bindings WHERE id=:id"),
+                            {"id": award.adapter_binding_id})
+                        values, _body = _native_root_candidate(request, award, route, source_b, 1)
+                        values["initial_outbox_event_id"] = await _append_native_root_event(session, award, values)
+                        with pytest.raises(DBAPIError, match="ordinal or source differs"):
+                            await _insert_native_root(session, values)
+                    finally:
+                        await session.rollback()
+        finally:
+            get_settings.cache_clear()
+        assert await _snapshot(h.factory) == before
+        async with h.factory() as session, session.begin():
+            await apply_outcome(session, h, 2)
+        async with h.factory() as session:
+            assert await session.scalar(text("SELECT source_instance_id "
+                "FROM public.compensation_fulfillment_roots")) == source_a
+        operator = live_acceptance_lifecycle.target.id
+        for phase in ("draining", "disabled", "shadow"):
+            await transition(await command_for(operator, phase))
+        stopped = await snapshot()
+        try:
+            with monkeypatch.context() as other_process:
+                other_process.setenv("WORKSTREAM_SOURCE_INSTANCE_ID", str(source_b))
+                get_settings.cache_clear()
+                with pytest.raises(JointLifecycleUnavailable, match="source configuration"):
+                    await transition(await command_for(operator, "live"))
+        finally:
+            get_settings.cache_clear()
+        assert await snapshot() == stopped
+        assert (await transition(await command_for(operator, "live"))).phase == "live"
+
+
+async def test_stray_fulfillment_event_requires_its_exact_root(
+    tmp_path, isolated_database_env, live_acceptance_lifecycle,
+):
+    async with authorized_submitter_source(tmp_path, isolated_database_env, paid=True) as h:
+        async with h.factory() as session:
+            committed = dict((await session.execute(text(
+                "SELECT * FROM public.compensation_fulfillment_roots"
+            ))).mappings().one())
+        before = await _snapshot(h.factory)
+        for remove_guard in (False, True):
+            async with h.factory() as session:
+                await session.begin()
+                try:
+                    if remove_guard:
+                        await session.execute(text("ALTER TABLE public.outbox_events "
+                            "DISABLE TRIGGER compensation_event_fulfillment_closure"))
+                    values = committed | {"id": new_record_id()}
+                    await _append_native_root_event(session, h.participation.awards[0], values)
+                    force_event = text("SET CONSTRAINTS compensation_event_fulfillment_closure IMMEDIATE")
+                    if remove_guard:
+                        with pytest.raises(pytest.fail.Exception, match="DID NOT RAISE"):
+                            with pytest.raises(DBAPIError, match="fulfillment custody incomplete"):
+                                await session.execute(force_event)
+                        await session.execute(text("SET CONSTRAINTS ALL IMMEDIATE"))
+                    else:
+                        with pytest.raises(DBAPIError, match="fulfillment custody incomplete"):
+                            await session.execute(force_event)
+                finally:
+                    await session.rollback()
+            assert await _snapshot(h.factory) == before
 
 
 async def test_root_retains_suspended_original_binding_and_source_on_restart(
@@ -344,6 +453,34 @@ async def test_compensation_root_requires_current_root_fence(
                 finally:
                     await session.rollback()
             assert await _snapshot(h.factory) == before
+
+
+async def test_source_matching_retains_held_root_custody(live_acceptance_lifecycle):
+    source = get_settings().source_instance_id
+    before = await snapshot()
+    for mode in ("closed", "replaced", "nested", "raw_savepoint", "valid"):
+        async with get_session_factory()() as session:
+            await session.begin()
+            try:
+                async with PostgresJointLifecycleMutationFence(session).hold(2) as held:
+                    if mode == "closed":
+                        held.close()
+                    elif mode == "replaced":
+                        await session.rollback()
+                        await session.begin()
+                    elif mode == "nested":
+                        await session.begin_nested()
+                    elif mode == "raw_savepoint":
+                        await session.execute(text("SAVEPOINT source_custody_probe"))
+                    owner = FulfillmentLifecycleFenceAdapter(held)
+                    if mode == "valid":
+                        assert await owner.require_source(2, source) is None
+                    else:
+                        with pytest.raises(CompensationAwardConflict, match="source_unavailable"):
+                            await owner.require_source(2, source)
+            finally:
+                await session.rollback()
+        assert await snapshot() == before
 
 
 @pytest.mark.parametrize("rollback_first", [False, True], ids=["commit", "rollback"])

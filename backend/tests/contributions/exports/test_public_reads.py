@@ -70,17 +70,18 @@ async def test_project_json_and_csv_pages_have_the_same_complete_contributions(
             assert response.status_code == 200, response.text
             page_rows = list(csv.DictReader(StringIO(response.text, newline="")))
             assert len({row["contribution_id"] for row in page_rows}) == 1
-            assert len(page_rows) == (2 if paid else 1)
+            assert len(page_rows) == 1
             csv_rows.extend(page_rows)
             cursor = response.headers.get("X-Workstream-Next-Cursor")
             assert bool(cursor) is (page_number == 0)
 
         expected_ids = {str(h.reviewer_record.id), str(sibling.id)}
         assert {item["contribution_id"] for item in json_items} == expected_ids
-        assert [row["contribution_id"] for row in csv_rows[::(2 if paid else 1)]] == [
+        assert [row["contribution_id"] for row in csv_rows] == [
             item["contribution_id"] for item in json_items
         ]
         for item in json_items:
+            assert len(item["awards"]) == int(paid)
             selected = [row for row in csv_rows if row["contribution_id"] == item["contribution_id"]]
             assert {(row["award_id"], row["quantity"]) for row in selected if row["award_id"]} == {
                 (award["award_id"], award["quantity"]) for award in item["awards"]

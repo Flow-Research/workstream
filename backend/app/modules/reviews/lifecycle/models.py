@@ -34,12 +34,19 @@ class JointLifecycleReleaseControl(Base):
         CheckConstraint("phase in ('disabled','shadow','live','draining')", name="phase"),
         CheckConstraint("generation >= 0", name="generation_nonnegative"),
         CheckConstraint("generation <> 0 or phase='disabled'", name="genesis_disabled"),
+        CheckConstraint(
+            "fulfillment_source_instance_id is null or "
+            "((get_byte(uuid_send(fulfillment_source_instance_id),6)>>4)=7 "
+            "and (get_byte(uuid_send(fulfillment_source_instance_id),8)&192)=128)",
+            name="fulfillment_source_uuid7",
+        ),
     )
 
     id: Mapped[UUID] = mapped_column(Uuid(), primary_key=True)
     singleton: Mapped[bool] = mapped_column(Boolean, nullable=False)
     phase: Mapped[str] = mapped_column(String(16), nullable=False)
     generation: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    fulfillment_source_instance_id: Mapped[UUID | None] = mapped_column(Uuid(), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=text("clock_timestamp()")
     )
@@ -61,6 +68,12 @@ class JointLifecycleTransition(Base):
         UniqueConstraint("singleton_id", "generation"),
         UniqueConstraint("authorization_decision_event_id"),
         CheckConstraint("generation > 0", name="generation_positive"),
+        CheckConstraint(
+            "fulfillment_source_instance_id is null or "
+            "((get_byte(uuid_send(fulfillment_source_instance_id),6)>>4)=7 "
+            "and (get_byte(uuid_send(fulfillment_source_instance_id),8)&192)=128)",
+            name="fulfillment_source_uuid7",
+        ),
     )
 
     id: Mapped[UUID] = mapped_column(Uuid(), primary_key=True)
@@ -69,6 +82,7 @@ class JointLifecycleTransition(Base):
         Uuid(), ForeignKey("joint_lifecycle_release_control.id"), nullable=False,
     )
     generation: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    fulfillment_source_instance_id: Mapped[UUID | None] = mapped_column(Uuid(), nullable=True)
     previous_phase: Mapped[str] = mapped_column(String(16), nullable=False)
     phase: Mapped[str] = mapped_column(String(16), nullable=False)
     facts_json: Mapped[dict] = mapped_column(JSONB, nullable=False)
