@@ -254,6 +254,7 @@ def _fulfillment_service_matrix_inputs(context, action_id):
     else:
         facts = FulfillmentSourceReadAuthorityFacts(**common, observed_lifecycle_generation=1)
     resource = fulfillment_evidence_resource(facts)
-    return context, PreparedAuthorizationInput(idempotency_key=event_id,
+    operation_id = context.request_id if action_id is ActionId.COMPENSATION_FULFILLMENT_SOURCE_READ else event_id
+    return context, PreparedAuthorizationInput(idempotency_key=operation_id,
         request_value=resource.model_dump(mode="json")), PreparedAuthorityScope(
         kind=PreparedAuthorityScopeKind.PROJECT, project_id=facts.project_id)

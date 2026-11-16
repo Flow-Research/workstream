@@ -2212,3 +2212,11 @@ and shrinks the oversized test owner; no production authorization or guard
 ordering changes. These are pure tests, not native authority proof. Once the
 three actions activate, retain their wrong-identity proof in the named active
 registration tests rather than keeping obsolete PLANNED assertions.
+
+
+The first repaired matrix run passed33 cases and isolated two source-read
+fixture failures: its PREP key is the actual request_id, whereas report and
+exception keys are their persisted external event IDs. Correct only that
+fixture key according to the existing guarded owner; retain all production
+checks. Replay the full selected matrix/resource controls rather than weakening
+request/principal parsing or changing the asserted denial order.
