@@ -2,7 +2,6 @@
   "behavior_id": "finance.fulfillment.compensation.fulfillment.projection",
   "callables": [
     "app.modules.compensation.fulfillment.projection.CompensationStatusReader.__init__",
-    "app.modules.compensation.fulfillment.projection.CompensationStatusReader.read",
     "app.modules.compensation.fulfillment.projection.CompensationStatusReader.read_evidence"
   ],
   "group": "lifecycle",

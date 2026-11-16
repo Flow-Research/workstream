@@ -18,10 +18,6 @@ class CompensationStatusReader:
     def __init__(self, session: AsyncSession):
         self._session = session
 
-    async def read(self, root: CompensationFulfillmentRoot) -> CompensationStatusProjection:
-        status, _, _, _ = await self.read_evidence(root)
-        return status
-
     async def read_evidence(self, root: CompensationFulfillmentRoot):
         """Use bounded owner queries and actual append order for every latest value."""
         receipts = select(CompensationFulfillmentReceipt).where(

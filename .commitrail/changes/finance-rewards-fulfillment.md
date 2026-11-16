@@ -2352,3 +2352,27 @@ response-failure case must first observe the real row and canonical allow inside
 the active transaction, then prove both absent from independent reads after
 serialization/detached/identity/digest failures. No production clocks, allows or
 transaction guards are replaced by those probes.
+
+Frozen b858966 native public/transaction batch passes5 tests in222.04s with
+PostgreSQL and MinIO cleanup true. The rollback test exercises12 post-flush
+failures across reports and exceptions: serialization, detached validation,
+award/event/root/digest substitution. Each first observes the real inserted row
+and canonical allow, then proves independent evidence/AUTH state unchanged.
+The batch also proves human rejection before provisioning, actual streamed
+65537-byte/duplicate/identity refusals before locator and AUTH, and an authorized
+lookup404 retaining exactly one disjoint read allow. Source/report/exception
+replay and committed-response loss remain covered by the same batch.
+
+Trace all status-reader consumers: the evidence service alone calls
+read_evidence; no owner or test calls the earlier status-only read wrapper.
+Remove that unused wrapper rather than retaining another access path. The
+bounded query/projection implementation and its sole caller stay unchanged.
+Reconcile the roadmap executive summary, scoreboard, current boundary,
+dependency diagram and remaining gates to distinguish these service evidence
+APIs from unimplemented Finance/provider execution. Native concurrency,
+revocation/three-party lock order, RR/serializable/direct-SQL guard removal,
+exact denial restaging and final-head full-suite/internal review remain required.
+The full Finance objective stays active; this checkpoint is not ready for merge.
+Hosted run43964693605 independently passes all17 backend lanes, CLI API/HTTP,
+MCP real-API proof and full-suite at pushed121c2ec; it does not qualify these
+later local operation commits.
