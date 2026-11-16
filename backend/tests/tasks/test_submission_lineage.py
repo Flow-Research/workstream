@@ -526,4 +526,6 @@ async def test_packet_custody_upgrade_preserves_retained_submission(
                 assert await session.scalar(text(
                     "SELECT count(*) FROM pg_catalog.pg_trigger WHERE tgname='submission_packet_custody'"
                 )) == 1
-        await asyncio.to_thread(command.upgrade, _config(), "head")
+        await asyncio.to_thread(command.upgrade, _config(), "0068_issuer_profile_email")
+        from tests.finance.migration_support import assert_reward_cutover_refusal
+        await assert_reward_cutover_refusal(isolated_database_env)

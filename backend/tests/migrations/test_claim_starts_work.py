@@ -18,9 +18,13 @@ from app.db import session as db_session
 from tests.conftest import _drop_test_database_schema
 from tests.migration_fixtures import _config
 from tests.migration_revision_fixtures import (
-    assert_historical_revision_guards, captured_revision_window, restore_revision_window,
+    assert_historical_revision_guards,
 )
 from tests.test_tasks import task_database_env as task_database_env
+from tests.historical_submission_fixtures import _restore_validated_snapshot_rows
+from tests.test_checker_evidence_migrations import (
+    _assert_exact_0062_schema, _historical_lineage_snapshot,
+)
 
 pytestmark = pytest.mark.postgres_schema_contract
 _PATH = Path(__file__).parents[2] / "alembic/versions/0065_claim_starts_work.py"
@@ -37,8 +41,26 @@ async def predecessor_rows(task_database_env, migration_lock):
     await db_session.dispose_engine()
     with migration_lock():
         await _drop_test_database_schema(task_database_env)
-        await asyncio.to_thread(command.upgrade, _config(), "0047_revision_recovery")
-        seed = await restore_revision_window(task_database_env, captured_revision_window())
+        await asyncio.to_thread(command.upgrade, _config(), "0062_model_usage")
+        await _assert_exact_0062_schema(task_database_env)
+        snapshot = _historical_lineage_snapshot()
+        identities = await _restore_validated_snapshot_rows(
+            task_database_env, snapshot, expected_revision="0062_model_usage",
+        )
+        await _assert_exact_0062_schema(task_database_env)
+        async with db_session.get_session_factory()() as session:
+            source = (await session.execute(text("""
+                SELECT s.task_id,s.contributor_id
+                FROM public.artifact_bindings b
+                JOIN public.checker_runs r ON r.id::text=b.resource_id AND b.resource_type='checker_run'
+                JOIN public.submissions s ON s.id=r.submission_id AND s.task_id=r.task_id
+                JOIN public.workstream_tasks t ON t.id=s.task_id AND t.project_id=r.project_id
+                JOIN public.task_assignments a ON a.id=s.task_assignment_id
+                  AND a.task_id=t.id AND a.project_id=t.project_id AND a.contributor_id=s.contributor_id
+                JOIN public.actor_profiles p ON p.id=s.contributor_id AND p.actor_kind='human'
+                WHERE b.id=:binding AND b.project_id=r.project_id
+            """), {"binding": identities["legacy_binding_id"]})).mappings().one()
+            seed = {"task_id": str(source["task_id"]), "contributor_id": str(source["contributor_id"])}
         await db_session.dispose_engine()
         await asyncio.to_thread(command.upgrade, _config(), "0064_checker_trial_evidence")
     await assert_historical_revision_guards(

@@ -1,6 +1,6 @@
 """Disabled controller installation preserves populated contribution sources."""
 
-from tests.contributions.records.historical_support import historical_contribution_source
+from tests.contributions.records.historical_support import historical_contribution_source, award_values_at_0015
 
 import asyncio
 from uuid import UUID
@@ -11,7 +11,6 @@ from alembic import command
 
 from app.db import session as db_session
 from tests.contributions.records.support import (
-    award_values,
     insert_award,
     insert_record,
 )
@@ -48,7 +47,7 @@ async def test_lifecycle_upgrade_preserves_sources(tmp_path, isolated_database_e
             async with h.factory() as session:
                 for record in (h.reviewer_record, h.submitter_record):
                     await insert_record(session, record)
-                    for values in await award_values(session, record):
+                    for values in await award_values_at_0015(session, record):
                         await insert_award(session, values)
                 await session.commit()
             connection = await asyncpg.connect(url)

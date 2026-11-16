@@ -194,23 +194,14 @@ async def retained_revision_rows(session, manifest_id):
     }
     result = {}
     for table, where in selectors.items():
-        # 0049 backfills every submission and assignment by design, so those
-        # rows keep their bytes minus its columns, not their physical version.
-        rewritten = table in _ATTEMPT_OUTCOME_COLUMNS
-        excluded = ("remaining_microseconds", "clock_observed_at", *_ATTEMPT_OUTCOME_COLUMNS.get(table, ()))
+        excluded = ("remaining_microseconds", "clock_observed_at") if table == "task_revision_preparations" else ()
         values = await session.execute(text(
             f"SELECT (to_jsonb(row)-CAST(:excluded AS text[]))::text,tableoid::bigint,"
-            f"{'NULL' if rewritten else 'xmin::text'} FROM public.{table} row WHERE {where}"
+            f"xmin::text FROM public.{table} row WHERE {where}"
         ), {"id": manifest_id, "excluded": list(excluded)})
         result[table] = [tuple(row) for row in values]
         assert len(result[table]) == 1, table
     return result
-
-
-_ATTEMPT_OUTCOME_COLUMNS = {
-    "submissions": ("attempt_status", "status_reason", "decided_at", "updated_at"),
-    "task_assignments": ("started_at", "updated_at"),
-}
 
 
 async def assert_historical_revision_guards(factory, revision: str) -> None:

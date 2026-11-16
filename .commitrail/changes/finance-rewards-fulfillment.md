@@ -1564,3 +1564,42 @@ the owned synthetic test schema between mutant and valid scenarios; retain all
 restore/FK/trigger validation unchanged. No shared restore helper or native guard
 is weakened. The failed run completed database/MinIO cleanup and is not an adoption
 pass. Rerun the full mapped11case proof on the clean correction.
+
+
+## Exact retained-data refusal boundaries
+
+Both refined plan tracks pass after correcting REFINED-G5-PLAN-001. Actual0981abf
+run passed exact capture restoration and0048 installation, then0049 correctly
+refused immutable checker findings lacking check_id. Original0047 failed-finding
+schema cannot contain that later field. Preserve original captured bytes/digests;
+replace the infeasible0047→0068 assertion with0047→0048 retained facts/null clocks
+and exact0049 refusal, complete unchanged rows/schema/guards/revision. The failed
+run completed owned cleanup and does not qualify adoption.
+
+Allowed extension: six affected migration test modules (reviews/lifecycle,
+tasks/submission_dispatch, tasks/payment_policy, tasks/submission_lineage,
+checkers/execution/checker_retry, test_checker_evidence_migrations), separately
+guarded0015 award helper in contributions/records/historical_support.py, one
+finance/migration_support.py shared refusal assertion, the existing adoption
+files/asset and this record. Preserve all prior negative/rollback/audit/receipt/
+immutable source assertions. Historical positive work stops at its appropriate
+explicit successor (0036 for selected-PRE refusal;0068 for declared later backfills),
+then the four retained graphs prove exact0069 refusal without rewriting evidence.
+The narrow shared test helper reuses the existing complete rows/schema snapshot
+and independently derives exact category/sample/truncation values; no production
+migration map import, copied snapshot owner or runtime framework.
+
+Use the unchanged genuine0062 checker/model archive for claim fixture source and
+0069 proof. Its original checkout e2b926288899bcd9b05e1a560ec19b6bca8cfcfc had
+head0065, while its original exact0062 contract explicitly excluded
+checker_trial_evidence and pinned d14a06c088aae0e8876bebb637a7b3fb0c19344f8cc4fdfd31aa2c1a47348593.
+Commit that literal130-resettable/3-protected inventory; no current-minus-future
+schema inference or runtime Git dependency. Derive contributor/task through the
+captured binding→checker run→Submission→Task/Assignment; all3claim cases rerun.
+No placeholder schema, reconstructed old writer, compatibility reader, changed
+archive bytes, weakened guard, CI/dependency/runtime change or test skip.
+Risk L1 proof integrity; required native proof covers affected migrations,
+0047 mutant/retention/refusal, all3claims, both current replacement branches and
+named current projection/repair cases. Both assigned reviewer groups inspect
+clean implementation/evidence. No capability-ledger delta: synthetic migration
+proof only; full backend/Finance/public HTTP/provider qualification remains open.

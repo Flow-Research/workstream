@@ -15,7 +15,8 @@ from sqlalchemy.exc import IntegrityError
 from app.core.identifiers import new_record_id
 from app.db import session as db_session
 from tests.conftest import _drop_test_database_schema
-from tests.migration_fixtures import _config, current_schema_revision
+from tests.migration_fixtures import _config
+from tests.finance.migration_support import assert_reward_cutover_refusal
 from tests.historical_submission_fixtures import historical_material_fixture
 
 pytestmark = pytest.mark.postgres_schema_contract
@@ -53,7 +54,7 @@ async def _seed_old_policy(connection, task):
         {"id": new_record_id(), "project": task["project_id"], "guide": task["locked_guide_version"]})
 
 
-async def test_payment_cleanup_refuses_each_retained_fact_then_preserves_current_lineage(
+async def test_payment_cleanup_refuses_each_retained_fact_then_preserves_contribution_lineage(
     tmp_path, isolated_database_env, migration_lock,
 ):
     await db_session.dispose_engine()
@@ -115,8 +116,8 @@ async def test_payment_cleanup_refuses_each_retained_fact_then_preserves_current
                         await connection.rollback()
                 async with connection.begin():
                     before = await _snapshot(connection)
-            # Full Alembic upgrade: current records exist, but obsolete facts do not.
-            await asyncio.to_thread(command.upgrade, _config(), "head")
+            # Preserve the removal and later declared backfills before the reward cutover.
+            await asyncio.to_thread(command.upgrade, _config(), "0068_issuer_profile_email")
             async with db_session.get_engine().connect() as connection:
                 assert await connection.scalar(text("SELECT to_regclass('public.payment_policies')")) is None
                 for table, fields in (("workstream_tasks", FIELDS), ("submissions", (FIELDS[-1],))):
@@ -128,7 +129,7 @@ async def test_payment_cleanup_refuses_each_retained_fact_then_preserves_current
                         f"SELECT to_jsonb(t) FROM public.{table} t ORDER BY to_jsonb(t)::text")))
                     removed = FIELDS if table == "workstream_tasks" else (FIELDS[-1],) if table == "submissions" else ()
                     expected = [{k: v for k, v in row.items() if k not in removed} for row in before[0][table]]
-                    # Later migrations add columns; 0048 backfills unrouted attempts
+                    # Later migrations add columns; 0049 backfills unrouted attempts
                     # and unstarted assignments from their own retained timestamps.
                     added = {
                         "submissions": {
@@ -152,5 +153,7 @@ async def test_payment_cleanup_refuses_each_retained_fact_then_preserves_current
                     assert actual == expected, table
                 assert (
                     await connection.scalar(text("SELECT version_num FROM public.alembic_version"))
-                    == current_schema_revision()
+                    == "0068_issuer_profile_email"
                 )
+
+        await assert_reward_cutover_refusal(isolated_database_env)

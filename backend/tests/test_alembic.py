@@ -1377,8 +1377,7 @@ async def test_revision_upgrade_retains_policy_source_and_running_window(
     isolated_database_env,
     migration_lock,
 ):
-    """Preserve genuine 0047 evidence, then refuse the incompatible reward cutover."""
-    import ast
+    """Preserve genuine 0047 evidence through 0048, then refuse incompatible findings."""
     from copy import deepcopy
     from sqlalchemy import text
     from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -1424,63 +1423,32 @@ async def test_revision_upgrade_retains_policy_source_and_running_window(
             async with factory() as session:
                 before = await retained_revision_rows(session, seed["routing_manifest_id"])
                 assert "remaining_microseconds" not in before["task_revision_preparations"][0][0]
-            for successor in ("0048_revision_exhaustion", "0068_issuer_profile_email"):
-                await asyncio.to_thread(command.upgrade, _alembic_config(), successor)
-                async with factory() as session:
-                    assert await retained_revision_rows(session, seed["routing_manifest_id"]) == before
-                    clocks = (await session.execute(text(
-                        "SELECT remaining_microseconds,clock_observed_at,deadline_at "
-                        "FROM public.task_revision_preparations WHERE id=:id"
-                    ), {"id": seed["preparation_id"]})).one()
-                    assert clocks.remaining_microseconds is clocks.clock_observed_at is None
-                    assert clocks.deadline_at.isoformat() == capture["snapshot"]["tables"][
-                        "task_revision_preparations"][0]["deadline_at"]
+            await asyncio.to_thread(command.upgrade, _alembic_config(), "0048_revision_exhaustion")
             async with factory() as session:
-                backfill = (await session.execute(text("""
-                    SELECT s.attempt_status,s.status_reason,s.decided_at,s.updated_at,
-                      a.started_at,a.updated_at AS assignment_updated_at
-                    FROM public.submissions s JOIN public.task_assignments a
-                      ON a.id=s.task_assignment_id WHERE s.id=:id
-                """), {"id": seed["submission_id"]})).one()
-                rows = capture["snapshot"]["tables"]
-                source = rows["submissions"][0]
-                manifest = rows["task_post_submit_routing_manifests"][0]
-                assignment = rows["task_assignments"][0]
-                instant = datetime.fromisoformat
-                assert backfill.attempt_status == "needs_revision"
-                assert backfill.status_reason is None
-                assert backfill.decided_at == instant(manifest["created_at"])
-                assert backfill.updated_at == max(instant(source["submitted_at"]), backfill.decided_at)
-                starts = [instant(event["created_at"]) for event in rows["audit_events"]
-                          if event["entity_type"] == "task" and event["entity_id"] == seed["task_id"]
-                          and event["event_type"] in {"TaskStarted", "TaskStartOverridden"}
-                          and instant(event["created_at"]) >= instant(assignment["assigned_at"])]
-                expected_start = min(starts) if starts else None
-                assert backfill.started_at == expected_start
-                assert backfill.assignment_updated_at == max(
-                    instant(assignment["assigned_at"]), expected_start or instant(assignment["assigned_at"]),
-                )
-            # Compare all retained rows and the full schema/guards at the actual
-            # cutover predecessor, after legitimate earlier backfills have run.
+                assert await retained_revision_rows(session, seed["routing_manifest_id"]) == before
+                clocks = (await session.execute(text(
+                    "SELECT remaining_microseconds,clock_observed_at,deadline_at "
+                    "FROM public.task_revision_preparations WHERE id=:id"
+                ), {"id": seed["preparation_id"]})).one()
+                assert clocks.remaining_microseconds is clocks.clock_observed_at is None
+                assert clocks.deadline_at.isoformat() == capture["snapshot"]["tables"][
+                    "task_revision_preparations"][0]["deadline_at"]
+            # Original findings have no check_id. They are immutable evidence;
+            # the actual 0049 refusal must leave the complete 0048 graph intact.
             cutover_before = await _snapshot(isolated_database_env)
-            with pytest.raises(RuntimeError, match="reward transition requires explicit data resolution:") as failure:
-                await asyncio.to_thread(command.upgrade, _alembic_config(), HEAD_REVISION)
-            actual = ast.literal_eval(str(failure.value).split(": ", 1)[1])
-            expected = {
-                "published_policy_evidence": {
-                    "sample_ids": sorted(row["id"] for row in capture["snapshot"]["tables"][
-                        "contribution_policy_versions"] if row["status"] != "draft"), "truncated": False,
-                },
-                "command_evidence": {
-                    "sample_ids": sorted(row["id"] for row in capture["snapshot"]["tables"][
-                        "task_command_receipts"]), "truncated": False,
-                },
-                "screened_work": {"sample_ids": [seed["task_id"]], "truncated": False},
-            }
-            assert actual == expected
+            with pytest.raises(RuntimeError, match="retained checker findings lack the required check_id") as failure:
+                await asyncio.to_thread(command.upgrade, _alembic_config(), "0049_attempt_outcome_findings")
+            runs = capture["snapshot"]["tables"]["checker_runs"]
+            assert len(runs) == 1
+            assert str(failure.value) == (
+                "retained checker findings lack the required check_id or a safe path, so "
+                "replay would reject them (checker_runs: 1 rows (e.g. " + runs[0]["id"] + ")); "
+                "Workstream v0.1 requires a fresh database; recreate this database before "
+                "running the 0001_uuid7_v01 migration"
+            )
             assert await _snapshot(isolated_database_env) == cutover_before
             async with factory() as session:
-                assert await session.scalar(text("SELECT version_num FROM alembic_version")) == "0068_issuer_profile_email"
+                assert await session.scalar(text("SELECT version_num FROM alembic_version")) == "0048_revision_exhaustion"
         finally:
             await engine.dispose()
 
