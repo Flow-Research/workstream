@@ -348,6 +348,7 @@ async def test_200_row_csv_source_import_screen_release_and_fresh_denial(
             "Accurate, complete work" if index % 2 else None for index in range(200)
         ]
         keys = {}
+        results = {}
         for operation, state in (("screen", "screening"), ("release", "ready")):
             keys[operation] = str(uuid4())
             arguments = (
@@ -360,6 +361,7 @@ async def test_200_row_csv_source_import_screen_release_and_fresh_denial(
             )
             started = monotonic()
             response = await successful(origin, operation, *arguments)
+            results[operation] = response
             record_property(f"cli_200_{operation}_seconds", monotonic() - started)
             assert response["row_count"] == 200
             assert [row["task_id"] for row in response["tasks"]] == [
@@ -381,7 +383,7 @@ async def test_200_row_csv_source_import_screen_release_and_fresh_denial(
         assert all(row["status"] == "ready" for row in observed["current_tasks"])
         before = await _success_facts(project)
         assert len(before[1]) == 2 and all(len(rows) == 400 for rows in before[2:5])
-        stale = await invoke(
+        advanced_replay = await successful(
             origin,
             "screen",
             project,
@@ -391,9 +393,11 @@ async def test_200_row_csv_source_import_screen_release_and_fresh_denial(
             "--reason",
             "All briefs approved",
         )
-        assert stale.returncode == 1 and stale.stdout == ""
-        assert json.loads(stale.stderr)["error"]["status"] == 409
-        assert await _success_facts(project) == before
+        assert advanced_replay == results["screen"]
+        after = await _success_facts(project)
+        assert before[:-1] == after[:-1]
+        assert before[-1] < after[-1] and len(after[-1] - before[-1]) == 200
+        before = after
 
         async with db_session.get_session_factory()() as session:
             grants = list(

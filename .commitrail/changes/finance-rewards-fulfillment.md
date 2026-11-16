@@ -1349,3 +1349,30 @@ parameter reused for UUID contributor_id and varchar assigned_by. Keep the
 predecessor column types and bind those representations separately; no schema
 or guard change. That failed run completed owned cleanup. Rerun the same
 selectors, preserving the original failure artifact and exact source custody.
+
+## CLI current replay and paused-reward fixtures
+
+Hosted5c30 CLI HTTP/API lanes exposed two remaining affected consumers. Allowed:
+cli/tests/integration/test_revision_repair_http.py and test_task_batch_public_api.py,
+plus this record. Complete the current-contract replacement already planned: a
+paused blocked revision has both target and target_reward_selection null; an
+exact screen replay after release returns its original immutable result under
+fresh authority, per specification5.2.8. Preserve all malformed response,
+request/substitution, uncertainty, real200-row source/import/transition and
+revoked-manager denial assertions. Compare business snapshots separately from
+the exact200 new allow IDs, then reset that baseline before revocation denial.
+No production/Go parser, schema, authorization, workflow, skip or threshold change.
+Risk L1 proof integrity. Verify the existing failing socket test and actual
+PostgreSQL/MinIO200-row journey, lint/links and QA/test-delta/CI/reuse reviews.
+No capability-ledger change is claimed by these fixture repairs.
+
+Exactd68131c CLI isolation proof passed68 real Linux PTY tests against a freshly
+built Go binary in the hash-locked minimal CPython3.12 environment. The35 proof
+self-tests also passed on the preceding identical CLI source. Exactd68131c
+real guide/policy socket API execution passed1 case in321.09 seconds, with
+owned database cleanup and no MinIO/S3 claim. The exact25-file AST inventory
+confirms canonical backend fixture reuse and no generic-conftest backend import.
+Exact isolated9ec6a8c claim migration proof passed all3 cases in307.55 seconds
+with complete cleanup; its test source is byte-identical in d68131c. This closes
+execution gaps for these bounded repairs, pending focused implementation review;
+full hosted execution and Finance runtime remain unqualified.
