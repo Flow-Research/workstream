@@ -89,6 +89,8 @@ FULFILLMENT_ROOT_TARGETS = frozenset({
     "backend/app/modules/compensation/fulfillment/service.py",
 })
 FULFILLMENT_EVIDENCE_TARGETS = frozenset({
+    "backend/app/api/deps/compensation_fulfillment.py",
+    "backend/app/api/routes/compensation_fulfillment.py",
     "backend/app/modules/authorization/domain/fulfillment_evidence.py",
     "backend/app/modules/authorization/fulfillment_evidence_authorization.py",
     "backend/app/modules/authorization/prepared_fulfillment_replay.py",

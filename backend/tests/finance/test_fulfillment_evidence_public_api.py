@@ -2,7 +2,6 @@
 
 from datetime import UTC, datetime
 
-import pytest
 from sqlalchemy import text
 
 from app.api.deps.compensation_fulfillment import FulfillmentEvidenceRequest
@@ -44,15 +43,20 @@ async def test_signed_source_report_exception_and_response_loss_journey(fulfillm
     report = report_for(source.obligation)
     headers = source.headers | {"Idempotency-Key": report["external_event_id"]}
     original_finish = FulfillmentEvidenceRequest.finish
+    committed = []
 
     async def lose_response(owner, *args, **kwargs):
         await original_finish(owner, *args, **kwargs)
+        committed.append(True)
         raise RuntimeError("controlled response loss after commit")
 
     with monkeypatch.context() as patch:
         patch.setattr(FulfillmentEvidenceRequest, "finish", lose_response)
-        with pytest.raises(RuntimeError, match="controlled response loss after commit"):
-            await source.client.post(prefix + "/fulfillment-reports", headers=headers, json=report)
+        lost = await source.client.post(prefix + "/fulfillment-reports", headers=headers, json=report)
+        assert committed == [True], lost.text
+        # The actual request-control middleware turns an unstarted response
+        # failure into500. It cannot undo the already committed evidence pair.
+        assert lost.status_code == 500, lost.text
     before_replay = await evidence_rows(source)
     assert len(before_replay[0]) == 1 and before_replay[1] == []
     replay = await source.client.post(prefix + "/fulfillment-reports", headers=headers, json=report)
