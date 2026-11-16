@@ -1,5 +1,6 @@
 """Independent SQL guards for pre-assignment command receipts."""
 
+import json
 from uuid import uuid4
 
 import pytest
@@ -19,8 +20,32 @@ from tests.test_tasks import (
 async def test_manager_receipt_rejects_unproven_sql_shape(task_client):
     project = await create_active_project(task_client)
     task = await create_draft_task(task_client, project["id"])
+    statement = text("""insert into task_command_receipts
+      (id,actor_profile_id,action_id,idempotency_key,request_digest,task_id,status,
+       assignment_id,contributor_id,locked_context_hash,response,committed_at)
+      values(:receipt_id,:actor,:action,gen_random_uuid(),'sha256:'||repeat('a',64),
+             :task,'committed',:assignment,:contributor,:hash,CAST(:response AS jsonb),now())""")
+    base = dict(
+        receipt_id=new_record_id(), actor=task["created_by"], task=task["id"],
+        action="project.task.create", assignment=None, contributor=None,
+        hash="sha256:" + "a" * 64, response=json.dumps(task),
+    )
+    async with db_session.get_session_factory()() as session:
+        # A complete current committed shape reaches the same native INSERT.
+        # This is a storage control, not an authorized application command.
+        async with session.begin_nested() as control:
+            await session.execute(statement, base)
+            await session.execute(text("SET CONSTRAINTS ALL IMMEDIATE"))
+            assert await session.scalar(text(
+                "SELECT response->>'task_size' FROM task_command_receipts WHERE id=:id"
+            ), {"id": base["receipt_id"]}) == task["task_size"]
+            await control.rollback()
+        assert await session.scalar(text(
+            "SELECT count(*) FROM task_command_receipts WHERE id=:id"
+        ), {"id": base["receipt_id"]}) == 0
+    # Missing-task FK custody has separate commit and guard-removal proofs below;
+    # a committed missing-task row now correctly fails the size guard first.
     for field, value, constraint in [
-        ("task", str(uuid4()), "fk_task_command_task"),
         ("assignment", str(uuid4()), "task_command_state_shape"),
         ("contributor", str(uuid4()), "task_command_state_shape"),
         ("hash", None, "task_command_state_shape"),
@@ -28,27 +53,14 @@ async def test_manager_receipt_rejects_unproven_sql_shape(task_client):
         ("action", "task.claim", "task_command_state_shape"),
         ("action", "project.task.unknown", "task_command_action"),
     ]:
-        params = dict(
-            receipt_id=new_record_id(),
-            actor=task["created_by"],
-            task=task["id"],
-            action="project.task.create",
-            assignment=None,
-            contributor=None,
-            hash="sha256:" + "a" * 64,
-        )
-        params[field] = value
+        params = base | {field: value}
+        if params["action"] == "task.claim":
+            params["response"] = json.dumps({"task": task})
         async with db_session.get_session_factory()() as session:
-            with pytest.raises(IntegrityError, match=constraint):
-                await session.execute(
-                    text("""insert into task_command_receipts
-                  (id,actor_profile_id,action_id,idempotency_key,request_digest,task_id,status,
-                   assignment_id,contributor_id,locked_context_hash,response,committed_at)
-                  values(:receipt_id,:actor,:action,gen_random_uuid(),'sha256:'||repeat('a',64),
-                         :task,'committed',:assignment,:contributor,:hash,'{}'::jsonb,now())"""),
-                    params,
-                )
+            with pytest.raises(IntegrityError, match=constraint) as failure:
+                await session.execute(statement, params)
                 await session.commit()
+            assert failure.value.orig.sqlstate == "23514"
             await session.rollback()
 
 

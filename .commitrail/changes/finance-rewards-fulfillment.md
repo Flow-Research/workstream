@@ -1491,3 +1491,20 @@ Assert selection equality first, then exact routing-submission currentness rejec
 23514 and unchanged outcome snapshot; the existing valid original commit remains.
 No new fixture graph/helper or runtime change. Run the affected storage case and
 replay both assigned review tracks against the clean repair source.
+
+
+## Current management receipt shape proof
+
+Implement reviewed group3 only in authorization/task_authority/
+test_management_receipts.py and this record. The native committed-shape matrix
+uses the actual created task response, including exact size; claim-shaped mutant
+uses its task envelope. Add one valid INSERT/savepoint-rollback control so unrelated
+size failures cannot mask state/action assertions. Keep each named state/action
+constraint and SQLSTATE. Remove only the broad matrix's masked missing-task case;
+existing pending-create commit and explicit FK-removal discriminator retain that
+same distinct FK requirement. Keep all exact decision/audit/rollback mutations.
+No production/schema/authorization/CI/dependency changes. Risk L1 proof integrity,
+verify complete management receipt module against isolated PostgreSQL, then both
+assigned review groups on clean source. Human focus: valid current shapes reach
+the intended constraints; no requirement is silently removed. No capability
+ledger delta; full Finance and hosted qualification remain unfinished.
