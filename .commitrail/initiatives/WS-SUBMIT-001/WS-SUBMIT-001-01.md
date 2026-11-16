@@ -4636,3 +4636,138 @@ Freeze the batched transport/catalogue repairs for affected reviewer replay.
 The unchanged666 owner/foreground14 and pure221 receipts remain bounded baseline
 evidence; the new transport cases require the repair's exact-head replay. The
 full goal and public progress wiring remain unfinished on PR708.
+
+
+## Public operation progress contract and authorization composition
+
+Repair121f8dfbb71ea24b2ffb75ee1ac735fffe64ffff exact-head large-ZIP
+replay passed2 in53.62s with migration0080 and isolated cleanup complete
+(`/tmp/submission-asgi-frame-frozen.log/json`). ARCH/SEC, QA and DOCS/CI
+closed the scoped framing/catalogue findings. Commitrail validation passed.
+Native crashes remain unexplained; these receipts do not establish full readiness.
+
+The next change closes specification5.5: an authorized read of one operation,
+never the latest submission. Existing TASK/CHECKERS/OUTBOX observations are reused.
+The first implementation step defines the closed public response and exactly-one
+selector in existing ART submission_command contract; it grants no read authority.
+Allowed files: that contract, existing intake contract tests, ART intake progress
+and repository/composition, canonical ART/AUTH adapters, existing AUTH intake
+contracts/evaluator, TASK read contracts/owners, public submission route and its
+existing tests, affected CLI/MCP contracts/consumers and this record. Broaden this
+list explicitly before unrelated changes. Prohibited: provider coordinates in
+responses, current-task status as historical outcome, ID possession as authority,
+new compatibility readers, data deletion, or weakened tests/CI.
+
+Acceptance: exactly one UUID selector; key lookup scoped to current actor;
+required nullable fields retained; existing TASK status reused; exact operation
+association; current contributor/management authorization; reassignment conceals
+current status; next action derives from current TASK eligibility and original
+assignment/revision; owner-backed stalls. Tests must cover closed shape, selectors,
+authorization substitution, historical revision independence and corruption.
+Risk: authorization/workflow. Required reviews: ARCH/SEC and QA, with DOCS/CI
+for generated contracts and client exposure. Human focus: management access,
+historical concealment and distinction between accepted handoff and governed result.
+The public route and full journey remain unfinished until composed and exercised.
+
+Initial public progress schema/selector checks passed7 (130 deselected) in3.57s;
+targeted Ruff and git diff --check passed. Nullable fields remain required and
+current_task_status reuses TASK TaskStatus. This is contract-only evidence, not
+authorization or public route proof. Response PRE feedback retains the existing
+projection shape pending bounded-feedback reconciliation. No endpoint is exposed
+by this step; contributor/management composition remains the next required work.
+
+
+Authorization extension reuses the existing historical-read evaluator, whose
+contributor branch requires current exact-project Submitter authority and whose
+management branch requires Project Manager authority. Allowed AUTH paths also
+include catalogue.py, action_definitions.py, domain/contributor_reads.py,
+domain/submission_history.py and existing task_authority/test_intake_authority.py.
+Move the existing operation read out of generic own-work dispatch, retain its
+original action/permission, and add its management action using the existing
+project.task.manage permission. A distinct closed operation resource is necessary:
+pre-handoff operations have no Submission ID, so a fabricated history target is
+forbidden. Both paths bind the real operation/task/project/contributor and current
+reader. An explicit internal management selection is an authorization request,
+not a grant; the kernel must independently validate it. Existing replay callers
+continue to request the contributor path. No public management route is added.
+
+The exact AUTH catalogue count increases194 to195 for the management operation
+read action; permissions remain95. Allowed tests include the existing
+authorization/test_catalogue.py exact inventory check. No count check is relaxed.
+
+Audit constraints require a forward migration0081_operation_read_authority;
+allowed paths include that migration, existing catalogue_fixtures.py and
+test_alembic.py. Preserve every existing action/permission pair and all retained
+rows; change only the exact management read pair. Initial catalogue run caught
+the missing independent expected row (6pass1fail), which must be added explicitly.
+The first DB run was deliberately interrupted before collecting proof when this
+missing constraint extension was identified; cleanup metadata confirms complete.
+
+First0081 authority run applied migration but refused reset against the old
+exact schema fingerprint:35 setup errors;20 pure checks passed and one catalogue
+active-count assertion correctly required170 to171. Update the existing
+tests/conftest.py exact fingerprint for the new audit constraint, keeping reset
+validation enabled; migration manifest comparison must prove no unrelated change.
+Separate migration process segfaulted during pytest assertion rewriting/GC before
+test execution (exit245, cleanup complete); unchanged collection-only diagnostic
+passed1 selected/68 deselected in0.93s. This is another retained native failure,
+not proof of migration behavior or a root-cause resolution.
+
+Progress authorization candidate is held unchanged for live v3 authority and
+migration replay processes. Logs/metadata: /tmp/submission-progress-authority-v3
+and /tmp/submission-progress-migration-replay (.log/.json). No pass is credited
+until terminal results are inspected. Latest shared checks: targeted Ruff, module
+boundaries, Commitrail and diff checks passed. All these changes remain uncommitted
+worktree work pending proof/review, not a delivered public progress endpoint.
+
+Migration replay completed1failed/68deselected in161.42s: existing
+alembic/env.py still hard-codes current head0071 and does not admit0080 as an
+upgrade starting revision. This is a forward-upgrade defect masked by fresh
+installs. Allowed repair includes alembic/env.py: enumerate the real intervening
+revisions and name0081 as current, preserving unknown-revision rejection. Apply
+after the frozen authority-v3 process finishes, then replay the manifest proof.
+Authority-v3 remains live (session19779); do not restart while running.
+
+Authority-v3 finished47passed9failed in240.34s, cleanup complete. Eight
+failures expose missing OperationReadResourceContext audit projection (resource_id
+was null); one new Operator negative-control fixture used an invalid project
+scope. Allowed repair includes domain/audit_targets.py and runtime.py closed
+resource union. Replace the obsolete generic operation-resource audit branch
+with the new exact type; preserve operation IDs in allow and denial evidence.
+Use a valid system Operator grant for the negative control, retaining denial.
+
+Repaired AUTH read matrix passed13 (22deselected) in101.52s on worktree
+parent121, migration0081, with complete isolated cleanup
+(`/tmp/submission-progress-authority-fixed.log/json`). Catalogue/audit contracts
+passed21 in1.53s (`/tmp/submission-progress-catalogue-fixed.log`). Lint and diff
+checks pass. Fetch confirms no missing origin/main commits.
+
+First preflight-repair migration run failed during unchanged0053 with a reported
+PostgresSyntaxError before reaching0081 (`/tmp/submission-progress-migration-fixed.log`).
+The exact46708-byte reported SQL has balanced parentheses and succeeded against
+a temporary table inside BEGIN/ROLLBACK on the same PostgreSQL server
+(`/tmp/submission-progress-migration-sql-probe.log`). Do not change0053 or claim
+the native/transport cause resolved from this diagnostic. The unchanged forward
+upgrade proof is replaying under /tmp/submission-progress-migration-fixed-replay.
+
+Preflight-repair replay successfully upgraded0080 to0081 and confirmed only
+the intended constraint changed; its final exact-string assertion failed because
+build_manifest uses PostgreSQL pretty constraint definitions without redundant
+parentheses. Correct the independent expected addition to that actual format;
+retain exact two occurrences and exact equality after removing only the new pair.
+Run ended1failed/68deselected in127.49s with cleanup complete. No production or
+preflight change is needed for this assertion-format repair.
+
+Final upgrade preservation replay passed1 (68deselected) in119.25s,0081
+with complete isolated cleanup (/tmp/submission-progress-migration-preservation.log/json).
+Exact comparison proves only the action-evidence constraint changes and removal
+of its two new manager-action/permission terms recovers the previous definition.
+Independent AST/script inventory confirms preflight recognizes all81 actual
+revisions and names the actual0081 head. Configured backend OpenAPI/MCP task
+contract drift passed25 in35.41s (/tmp/submission-progress-mcp-drift.log).
+Module-boundary validation, Commitrail validation and diff checks passed.
+
+Freeze this contract/authorization checkpoint for required ARCH/SEC and QA review.
+These are worktree receipts on parent121, not an exact committed-head full suite.
+Public route composition, TASK eligibility/concealment, client progress wiring,
+full journeys/CI and native instability remain open. Keep the one PR708 draft.

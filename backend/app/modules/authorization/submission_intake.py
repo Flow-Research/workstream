@@ -11,7 +11,7 @@ from app.modules.authorization.api.submission_intake import (
     IntakeAcceptanceAuthorityFacts,
 )
 from app.modules.authorization.catalogue import ActionId
-from app.modules.authorization.domain.contributor_reads import ContributorWorkReadResourceContext
+from app.modules.authorization.domain.submission_history import OperationReadResourceContext
 from app.modules.authorization.domain.submission_intake import (
     IntakeReservationResourceContext, IntakeReservationPreflightResourceContext, IntakeAcceptanceResourceContext,
 )
@@ -183,18 +183,21 @@ class SubmissionIntakeAuthorization:
                 or event.matched_grant_id is None or event.request_id is None or event.correlation_id is None):
             raise IntakeAuthorityDenied("submission acceptance is unavailable")
 
-    async def authorize_read(self, facts: IntakeOperationReadFacts) -> UUID:
-        """Read own recorded context under current grant, regardless of task status."""
+    async def authorize_read(self, facts: IntakeOperationReadFacts, *, manager: bool = False) -> UUID:
+        """Read retained ownership under fresh contributor or management authority."""
         if (not self._session.in_transaction() or self._session.in_nested_transaction()
                 or type(facts) is not IntakeOperationReadFacts
-                or facts.actor_profile_id != self._context.actor_profile_id):
+                or not isinstance(self._context, HumanAuthorizationContext)):
             raise IntakeAuthorityDenied("submission intake is unavailable")
-        resource = ContributorWorkReadResourceContext(resource_type="submission_operation_read",
-            resource_id=facts.operation_id, actor_profile_id=facts.actor_profile_id,
+        resource = OperationReadResourceContext(
+            resource_id=facts.operation_id, contributor_id=facts.actor_profile_id,
+            actor_profile_id=self._context.actor_profile_id, task_id=facts.task_id,
             scope_project_id=facts.project_id,
             request_digest=canonical_json_hash({key: str(value) for key, value in asdict(facts).items()}))
+        action = (ActionId.PROJECT_TASK_SUBMISSION_OPERATION_READ if manager
+                  else ActionId.TASK_SUBMISSION_OPERATION_READ)
         try:
-            return (await self._kernel.require(ActionId.TASK_SUBMISSION_OPERATION_READ, resource)).decision_id
+            return (await self._kernel.require(action, resource)).decision_id
         except AuthorizationDenied as exc:
             raise IntakeAuthorityDenied("submission intake is unavailable") from exc
 

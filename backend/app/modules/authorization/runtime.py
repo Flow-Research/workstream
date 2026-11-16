@@ -1058,7 +1058,7 @@ AuthorizationResourceContext = (
     | contributor_reads.ActorProjectListResourceContext | contributor_reads.ContributorWorkReadResourceContext
     | project_catalogue.ProjectCatalogueResourceContext
     | management_reads.ProjectManagementReadResourceContext |
-    submission_history.HistoryReadResourceContext | task_queues.QueueReadResourceContext
+    submission_history.HistoryReadResourceContext | submission_history.OperationReadResourceContext | task_queues.QueueReadResourceContext
     | checker_retry_reads.CheckerRetrySourceReadResourceContext
     | post_submit_deliveries.PostSubmitDeliveryReadResourceContext
     | post_submit_deliveries.PostSubmitDeliveryResourceContext

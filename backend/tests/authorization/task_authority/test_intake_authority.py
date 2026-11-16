@@ -271,3 +271,47 @@ async def test_acceptance_authority_rejects_changed_custody(intake_authority, fi
                 AuditEvent.request_id == str(ctx.request_id))))
         finally:
             authority.close()
+
+
+@pytest.mark.parametrize("scope", ["exact", "system", "foreign", "absent", "operator", "revoked"])
+async def test_operation_management_read_uses_current_manager_authority(admin_access, scope):
+    project = await create_project("Operation management read")
+    if scope != "absent":
+        grant_project = (None if scope in {"system", "operator"} else
+                         await create_project("Other operation project") if scope == "foreign" else project)
+        grant_id = await admin_access.signed.grant(
+            admin_access.admin, admin_access.target,
+            role="operator" if scope == "operator" else "project_manager", project_id=grant_project,
+        )
+        if scope == "revoked":
+            revoked = await admin_access.signed.revoke(admin_access.admin, grant_id)
+            assert revoked.status_code == 200, revoked.text
+    ctx = await context(admin_access)
+    read = IntakeOperationReadFacts(new_record_id(), project, new_record_id(), new_record_id())
+    async with db_session.get_session_factory()() as session:
+        authority = SubmissionIntakeAuthorization(session, ctx)
+        try:
+            if scope in {"exact", "system"}:
+                async with session.begin():
+                    decision = await authority.authorize_read(read, manager=True)
+                row = await session.get(AuditEvent, str(decision))
+                assert (row.action_id, row.permission_id, row.matched_grant_id) == (
+                    "project.task.submission_operation.read", "project.task.manage", grant_id)
+                assert row.resource_id == str(read.operation_id)
+                assert row.project_id == str(project)
+                await session.rollback()
+                # Management does not grant the contributor path, even for a known operation.
+                with pytest.raises(IntakeAuthorityDenied):
+                    async with session.begin():
+                        await authority.authorize_read(read)
+            else:
+                with pytest.raises(IntakeAuthorityDenied) as caught:
+                    async with session.begin():
+                        await authority.authorize_read(read, manager=True)
+                assert await authority.restage_denial(caught.value)
+                await session.commit()
+                rows = list(await session.scalars(select(AuditEvent).where(
+                    AuditEvent.request_id == str(ctx.request_id))))
+                assert rows and all(row.after_facts["allowed"] is False for row in rows)
+        finally:
+            authority.close()

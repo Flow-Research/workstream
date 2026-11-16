@@ -4,7 +4,6 @@ from uuid import UUID
 from app.modules.authorization.api.submission_finalization import SubmissionFinalizationResourceContext
 from app.modules.authorization.api.submission_cleanup import SubmissionSourceCleanupResourceContext
 from app.modules.authorization.domain.submission_intake import IntakeReservationResourceContext, IntakeReservationPreflightResourceContext, IntakeAcceptanceResourceContext
-from app.modules.authorization.domain.contributor_reads import ContributorWorkReadResourceContext
 
 from app.modules.authorization.catalogue import ActionId
 from app.modules.authorization.domain.lifecycle import ReviewLifecycleActivationContract
@@ -22,7 +21,7 @@ from app.modules.authorization.domain.action_groups import (
 from app.modules.authorization.domain.project_create import ProjectCreateResourceContext
 from app.modules.authorization.domain.task_authority import TaskAuthorityResourceContext, TaskImportBatchResourceContext
 from app.modules.authorization.domain.task_queues import QueueReadResourceContext
-from app.modules.authorization.domain.submission_history import HistoryReadResourceContext
+from app.modules.authorization.domain.submission_history import HistoryReadResourceContext, OperationReadResourceContext
 
 
 def _checker_retry_read_target(resource):
@@ -89,10 +88,7 @@ def _submission_operation_target(resource):
     if type(resource) in {IntakeAcceptanceResourceContext, SubmissionFinalizationResourceContext, SubmissionSourceCleanupResourceContext}:
         project_id = str(getattr(resource, "scope_project_id", None) or resource.project_id)
         return project_id, "submission_operation", str(resource.operation_id), "project", project_id
-    if type(resource) in {IntakeReservationResourceContext, IntakeReservationPreflightResourceContext} or (
-        type(resource) is ContributorWorkReadResourceContext
-        and resource.resource_type == "submission_operation_read"
-    ):
+    if type(resource) in {IntakeReservationResourceContext, IntakeReservationPreflightResourceContext, OperationReadResourceContext}:
         return (str(resource.scope_project_id), "submission_operation", str(resource.resource_id),
                 "submission_operation", str(resource.resource_id))
     return None

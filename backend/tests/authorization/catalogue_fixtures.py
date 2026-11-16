@@ -300,6 +300,7 @@ new_permissions = frozenset(
 expected = {
     "submission.intake.reserve": ("submission.create", "WS-SUBMIT-001"),
     "task.submission_operation.read": ("submission.read_own", "WS-SUBMIT-001"),
+    "project.task.submission_operation.read": ("project.task.manage", "WS-SUBMIT-001"),
     "actor.project.list": ("actor.profile.read_self", "PILOT-READ-2"),
     "project.catalogue.list": ("project.read", "WS-CLI-001-46"),
     **dict.fromkeys(
@@ -582,6 +583,7 @@ expected = {
 
 AUDIT_ALLOWED_ACTION_VALUES = {
     "submission.intake.reserve", "task.submission_operation.read",
+    "project.task.submission_operation.read",
     "project.catalogue.list",
     "checker.model_call.prepare",
     "checker.model_call.dispatch",

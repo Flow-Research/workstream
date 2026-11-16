@@ -7,6 +7,7 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validato
 
 from app.modules.artifacts.api.submission_intake import SubmissionIntakeMetadata, SubmissionSourceCapacityLimits
 from app.modules.checkers.api.selected_pre_submit import SelectedPreSubmitRuntimeProfile
+from app.modules.tasks.api.management_queue import TaskStatus
 
 Seconds = Annotated[float, Field(gt=0, allow_inf_nan=False)]
 
@@ -65,3 +66,49 @@ class SubmissionIntakeCommand(Protocol):
     ) -> dict:
         """Return committed acceptance or a bounded SubmissionIntakeFailure."""
         ...
+
+
+class SubmissionOperationSelector(BaseModel):
+    """Two selectors for one read; key scope is supplied by authenticated context."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    operation_id: UUID | None = None
+    idempotency_key: UUID | None = None
+
+    @model_validator(mode="after")
+    def exactly_one(self) -> Self:
+        if (self.operation_id is None) == (self.idempotency_key is None):
+            raise ValueError("exactly one submission operation selector is required")
+        return self
+
+
+class SubmissionOperationResponse(BaseModel):
+    """Authorized operation projection; nullable fields are required on the wire."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    operation_id: UUID
+    task_id: UUID
+    assignment_id: UUID
+    idempotency_key: UUID
+    operation_state: Literal[
+        "receiving", "pre_checking", "finalization_pending", "finalized",
+        "rejected", "failed", "abandoned", "cancelled",
+    ]
+    processing_stage: Literal[
+        "receiving", "pre_checking", "finalization_pending", "evaluation_pending",
+        "evaluation_running", "review_pending", "needs_revision", "accepted",
+        "rejected", "failed", "abandoned", "cancelled", "operationally_stalled",
+    ]
+    accepted_at: AwareDatetime | None
+    task_status_at_acceptance: Literal["evaluation_pending"] | None
+    current_task_status: TaskStatus | None
+    submission_id: UUID | None
+    submission_version: Annotated[int, Field(strict=True, gt=0)] | None
+    evaluation_request_id: UUID | None
+    pre_submission_results: list[dict[str, object]]
+    failure_code: str | None
+    operationally_stalled: bool
+    next_action: Literal[
+        "wait", "correct_and_submit_new_key", "retry_new_key_after_terminal",
+        "inspect_governed_outcome",
+    ]

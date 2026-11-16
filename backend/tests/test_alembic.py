@@ -2130,3 +2130,23 @@ def test_intake_authority_upgrade_changes_only_two_audit_constraints(isolated_da
     actions = new[("audit_events", "ck_audit_events_authorization_action_evidence")]["definition"]
     assert "submission.intake.reserve" in actions and "task.submission_operation.read" in actions
     assert "artifact.submission_bundle.prepare" in actions and "submission.create" in actions
+
+
+
+def test_operation_management_read_upgrade_preserves_other_schema(isolated_database_env, migration_lock):
+    config = _alembic_config()
+    with migration_lock():
+        asyncio.run(_execute(isolated_database_env, "drop schema public cascade; create schema public"))
+        command.upgrade(config, "0080_cleanup_decisions")
+        before = asyncio.run(build_manifest(isolated_database_env))
+        command.upgrade(config, "0081_operation_read_authority")
+        after = asyncio.run(build_manifest(isolated_database_env))
+    assert {key for key in before if before[key] != after[key]} == {"constraints"}
+    old = {(row["table_name"], row["name"]): row for row in before["constraints"]}
+    new = {(row["table_name"], row["name"]): row for row in after["constraints"]}
+    assert old.keys() == new.keys()
+    target = ("audit_events", "ck_audit_events_authorization_action_evidence")
+    assert {key for key in old if old[key] != new[key]} == {target}
+    addition = " OR action_id::text = 'project.task.submission_operation.read'::text AND permission_id::text = 'project.task.manage'::text"
+    assert new[target]["definition"].count(addition) == 2
+    assert new[target]["definition"].replace(addition, "") == old[target]["definition"]

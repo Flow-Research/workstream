@@ -656,3 +656,42 @@ async def test_evaluation_progress_follows_only_exact_reconciliation_child(chang
         assert observed_id == child_id and expected.payload == payload.model_dump(mode="json")
         assert expected.causation_event_id == event_id and expected.aggregate_id == event_id
     assert deliveries.read_finalized_unknown.await_args.kwargs["lock"] is False
+
+
+@pytest.mark.parametrize("selectors,valid", [
+    ({}, False), ({"operation_id": OPERATION}, True),
+    ({"idempotency_key": OPERATION}, True),
+    ({"operation_id": OPERATION, "idempotency_key": OPERATION}, False),
+    ({"operation_id": "not-a-uuid"}, False),
+    ({"operation_id": OPERATION, "actor_id": TASK}, False),
+])
+def test_operation_progress_requires_one_selector_without_caller_actor_scope(selectors, valid):
+    from app.modules.artifacts.api.submission_command import SubmissionOperationSelector
+    if valid:
+        assert SubmissionOperationSelector.model_validate(selectors)
+    else:
+        with pytest.raises(ValidationError):
+            SubmissionOperationSelector.model_validate(selectors)
+
+
+def test_operation_progress_wire_contract_keeps_nulls_and_rejects_extra_fields():
+    from app.modules.artifacts.api.submission_command import SubmissionOperationResponse
+    values = dict(operation_id=OPERATION, task_id=TASK, assignment_id=ASSIGNMENT,
+        idempotency_key=REVISION, operation_state="receiving", processing_stage="receiving",
+        accepted_at=None, task_status_at_acceptance=None, current_task_status=None,
+        submission_id=None, submission_version=None, evaluation_request_id=None,
+        pre_submission_results=[], failure_code=None, operationally_stalled=False,
+        next_action="wait")
+    response = SubmissionOperationResponse.model_validate(values)
+    assert response.model_dump(mode="json").keys() == values.keys()
+    for key, value in values.items():
+        if value is None:
+            assert response.model_dump(mode="json")[key] is None
+            with pytest.raises(ValidationError):
+                SubmissionOperationResponse.model_validate({k: v for k, v in values.items() if k != key})
+    for updates in ({"provider_key": "secret"}, {"processing_stage": "submitted"},
+                    {"operation_state": "accepted"}, {"current_task_status": "invented"},
+                    {"submission_version": 0}, {"submission_version": True},
+                    {"next_action": "retry_same_key"}):
+        with pytest.raises(ValidationError):
+            SubmissionOperationResponse.model_validate({**values, **updates})
