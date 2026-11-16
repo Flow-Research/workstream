@@ -116,18 +116,19 @@ The MCP audience scope is included in the returned scope set. Garden's existing
 OAuth client renews that set explicitly; hiding the audience scope would remove
 the MCP audiences on refresh. The API audience and identity mapper scopes remain
 hidden. This does not grant additional Workstream permissions.
-Render the inspected Garden registration separately:
+The current integration drill uses Garden dev. Render its registration separately:
 
 ```sh
 python3 deploy/identity/realm_config.py \
-  --garden-client-id garden-staging \
-  --garden-callback https://garden-staging.flow-research.workers.dev/api/oauth/callback \
+  --garden-client-id garden-dev \
+  --garden-callback https://garden-dev.flow-research.workers.dev/api/oauth/callback \
   --output /private/operator/garden-client.json
 ```
 
 Create it through `POST /admin/realms/flow/clients` using private administration.
-The Garden operator must configure that exact client ID for the Workstream
-connector; generating this document alone does not connect Garden.
+The Garden dev operator must set `WORKSTREAM_MCP_CLIENT_ID=garden-dev` for the
+Workstream connector; generating this document alone does not connect Garden.
+Other deployment environments require their own exact client/callback registration.
 Do not enable open dynamic registration or give Garden the API audience scope.
 The confidential MCP client exchanges an MCP token into a short-lived API token
 for the same subject. Its secret is mounted only into MCP through

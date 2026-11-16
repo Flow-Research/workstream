@@ -42,6 +42,7 @@ A Keycloak account, realm role, or administrative privilege must not confer a Wo
 | Login | Authorization code flow with mandatory PKCE S256; Keycloak's stock UI. |
 | Workstream API audience | `workstream-api`, consistently in all fresh configuration. `API_AUDIENCE` below means this exact value. |
 | MCP resource identifier | `https://workstream.flowresearch.tech/mcp`. |
+| Garden qualification target | Garden dev, using client `garden-dev` and exact callback `https://garden-dev.flow-research.workers.dev/api/oauth/callback`. Configure Garden dev with `WORKSTREAM_MCP_CLIENT_ID=garden-dev`; its primary login remains unchanged. |
 | Existing development state | Disposable. Reset the identified Workstream development state and initialize the supported current schema. |
 | Actor model | Keep the existing one-identity-link-per-actor model and normal first-access provisioning. |
 | Accounts and credentials | Create fresh Keycloak accounts and credentials; no account mapping, password import, or forced correspondence to old IDs. |

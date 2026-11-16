@@ -60,6 +60,10 @@ identify any concrete connector-owner gap and coordinate it explicitly.
 
 Keycloak owns credentials; Workstream owns actor identity and permissions.
 Use exact issuer/audiences, stock browser code+S256 PKCE and Standard Exchange V2.
+The user selected Garden dev for the actual connector drill: client `garden-dev`,
+exact callback `https://garden-dev.flow-research.workers.dev/api/oauth/callback`,
+and Garden binding `WORKSTREAM_MCP_CLIENT_ID=garden-dev`. The existing configurable
+registration and connector support this deployment choice without a new auth path.
 MCP accepts its own resource credentials and exchanges them for an API-only token
 with the same subject. The API still enforces current local authority.
 Use the existing independent MCP package boundary; do not import backend product
