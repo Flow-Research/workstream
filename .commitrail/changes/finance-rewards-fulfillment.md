@@ -1633,3 +1633,18 @@ across0048. Keep all seven existing owner comparisons and original pre-upgrade
 semantic validation. No data, runtime, native guard, scope or requirement changes.
 Rerun the captured-window native case and affected review tracks on clean source;
 prior fifteen-case proof keeps its original59ac attribution and unchanged sources.
+
+### Retained-source repair integration evidence
+
+Both focused reviewer tracks pass exact90d6afa9e8a5f02006102ad44ddcd57f597fa92a;
+G5-IMPL-001 / QA-G5-001 / TEST-G5-001 are closed. The exact captured-window
+case passed in193.97s with database/MinIO cleanup complete. Earlier59ac fifteen-
+case execution and8fad three-claim execution retain their original provenance;
+there is no claimed nineteen-case run on one head. The six cohesive repairs are
+integrated on the existing Finance branch. All13 affected source/fixture files
+are byte-identical to reviewed90d6; only the combined record required retaining
+both independently appended sections. The original pushed task-lineage/receipt/
+CLI repairs are preserved. The bridge is recorded locally at
+`/tmp/workstream-finance-9f65a63-g5-proof-bridge.json`.
+These are fixture and evidence repairs, with no additional capability/roadmap
+claim. Full hosted execution and the actual Finance runtime remain unfinished.
