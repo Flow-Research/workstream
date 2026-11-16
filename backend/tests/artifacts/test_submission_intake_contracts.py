@@ -529,3 +529,51 @@ async def test_non_yielding_final_part_cannot_return_completion_after_deadline()
         await receive_submission_source(BufferedStore(), upload_value(
             upload_deadline_at=datetime.now(UTC) + timedelta(seconds=0.01),
         ), chunks())
+
+
+@pytest.mark.parametrize("changed", ["none", "mapping", "forged", "subclass"])
+def test_checker_source_contracts_reject_non_owner_or_unvalidated_values(changed):
+    from app.adapters.artifacts import selected_pre_submit_source_contracts
+
+    contracts = selected_pre_submit_source_contracts()
+    original = source()
+    class SourceSubclass(SealedSubmissionSource):
+        pass
+    invalid = {
+        "none": None,
+        "mapping": original.model_dump(mode="json"),
+        "forged": original.model_copy(update={"raw_byte_count": True}),
+        "subclass": SourceSubclass.model_validate_json(original.model_dump_json()),
+    }[changed]
+    with pytest.raises(ValueError):
+        contracts.require_source(invalid)
+    recovered = contracts.parse_source(original.model_dump(mode="json"))
+    assert recovered == original
+    assert recovered.source_sha256() == original.source_sha256()
+    assert contracts.require_source(recovered) == original
+
+
+@pytest.mark.parametrize("changed", ["missing", "extra", "coercion", "overflow"])
+def test_checker_source_contracts_preserve_closed_limits_and_source_wire(changed):
+    from app.adapters.artifacts import selected_pre_submit_source_contracts
+    from app.modules.artifacts.api.submission_archive import SubmissionArchiveLimits
+
+    contracts = selected_pre_submit_source_contracts()
+    limits = SubmissionArchiveLimits()
+    body = limits.canonical_body()
+    assert contracts.parse_limits(body) == limits
+    assert contracts.require_limits(limits).canonical_body() == body
+    if changed == "missing":
+        del body["maximum_entries"]
+    elif changed == "extra":
+        body["unbounded"] = True
+    elif changed == "coercion":
+        body["maximum_entries"] = "2000"
+    else:
+        body["maximum_expanded_bytes"] = 512 * 1024 * 1024 + 1
+    with pytest.raises(ValueError):
+        contracts.parse_limits(body)
+    source_body = source().model_dump(mode="json")
+    del source_body["media_type"]
+    with pytest.raises(ValueError, match="not canonical"):
+        contracts.parse_source(source_body)

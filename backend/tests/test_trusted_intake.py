@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from app.adapters.artifacts import selected_pre_submit_source_contracts
+
 import asyncio
 from dataclasses import asdict, replace
 import hashlib
@@ -23,7 +25,9 @@ from app.interfaces.external_services import ExternalServiceProtocolError
 from app.interfaces.trusted_submission_intake import TrustedIntakePreparation
 from app.modules.artifacts.api.submission_archive import SubmissionArchiveLimits
 from app.modules.artifacts.submission_archive import SubmissionArchiveInspector
-from app.modules.artifacts.submission_manifest import build_submission_manifest
+from app.modules.artifacts.api.submission_manifest import (
+    build_submission_manifest,
+)
 from app.modules.checkers.api.default_checker import (
     WORKSTREAM_DEFAULT_BEHAVIOR_SHA256,
     WorkstreamDefaultCheckerInput,
@@ -119,8 +123,6 @@ def _export_result(output, expected: bytes):
     assert _read(output)["operation"] == "export"
 
 
-
-
 @pytest.mark.parametrize(
     "data,code",
     [
@@ -137,8 +139,6 @@ def test_worker_preserves_canonical_zip_rejection_without_export(tmp_path, data,
     assert _read(output)["payload"] == {"code": code}
     assert output.read() == b""
     assert not (tmp_path / "escape").exists()
-
-
 
 
 @pytest.mark.asyncio
@@ -405,8 +405,6 @@ def test_worker_rejects_preparation_size_substitution_before_inspection(tmp_path
     assert output.read() == b""
 
 
-
-
 def _pre_worker(tmp_path, data, *, extra_startup=None, stored_data=None, result_change=None, reservation_change=None, lease=None, isolation_override=None):
     """Real ZIP/worker with simulated supervisor project result; no VM claim."""
     from app.modules.checkers.api.external import make_external_checker_execution_result
@@ -415,7 +413,7 @@ def _pre_worker(tmp_path, data, *, extra_startup=None, stored_data=None, result_
 
     if lease is None:
         reservation = _source_reservation()
-        reservation = replace(reservation, source=reservation.source.model_copy(update={
+        reservation = replace(reservation, source_contracts=selected_pre_submit_source_contracts(), source=reservation.source.model_copy(update={
             "raw_sha256": "sha256:" + hashlib.sha256(data).hexdigest(), "raw_byte_count": len(data),
         }))
         if reservation_change:
@@ -484,8 +482,8 @@ def test_pre_worker_derives_source_manifest_defaults_and_project_request(tmp_pat
     project, completed = _read(output), _read(output)
     assert project["operation"] == "project" and completed["operation"] == "completed"
     assert output.read() == b"" and reply.calls == 1
-    execution = SelectedPreSubmitExecutionFacts.from_canonical_body(completed["payload"])
-    execution.validate_lease(lease)
+    execution = SelectedPreSubmitExecutionFacts.from_canonical_body(completed["payload"], source_contracts=selected_pre_submit_source_contracts())
+    execution.validate_lease(lease, source_contracts=selected_pre_submit_source_contracts())
     assert execution.eligible
     expected_manifest = {"schema_version": "workstream.submission_bundle_manifest.v1", "entries": [{
         "normalized_path": "work.txt", "entry_type": "file", "byte_count": 13,
@@ -592,13 +590,13 @@ def test_pre_worker_blocker_bypasses_incompatible_selected_schema(tmp_path, bloc
         body = reservation.policy.model_dump(mode="json", exclude={"policy_sha256"})
         body["entries"] = [binding.model_dump(mode="json")]
         policy = LockedExternalPreSubmitPolicy.model_validate_json(json.dumps(body | {"policy_sha256": external_checker_json_hash(body)}))
-        reservation = replace(reservation, policy=policy, admission_lineage=replace(
+        reservation = replace(reservation, source_contracts=selected_pre_submit_source_contracts(), policy=policy, admission_lineage=replace(
             reservation.admission_lineage, effective_plan_sha256=policy.policy_sha256,
         ))
         if blocker == "unchanged":
             manifest = build_submission_manifest(SubmissionArchiveInspector(SubmissionArchiveLimits()).inspect(BytesIO(data)))
             predecessor = WorkstreamDefaultPredecessor(new_record_id(), 1, reservation.source.raw_sha256, manifest.sha256)
-            reservation = replace(reservation, default_context=replace(
+            reservation = replace(reservation, source_contracts=selected_pre_submit_source_contracts(), default_context=replace(
                 reservation.default_context, predecessor=predecessor, current_predecessor=predecessor,
                 predecessor_exists=True, predecessor_rules_sha256=reservation.default_context.current_rules_sha256,
             ), admission_lineage=replace(reservation.admission_lineage,

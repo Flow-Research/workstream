@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from app.modules.checkers.api.source_contracts import SelectedPreSubmitSourceContracts
+
 import asyncio
 import json
 import hashlib
@@ -58,7 +60,7 @@ _EXECUTION_OVERHEAD_SECONDS = EXTERNAL_CHECKER_EXECUTION_CLEANUP_MARGIN_MS / 100
 class UnixSocketExternalCheckerAdapter:
     """Speak one length-framed strict request over a private Unix socket."""
 
-    def __init__(self, *, socket_path: Path, timeout_seconds: float) -> None:
+    def __init__(self, *, socket_path: Path, timeout_seconds: float, source_contracts: SelectedPreSubmitSourceContracts) -> None:
         """Validate immutable local transport settings without opening the socket."""
         if (
             not socket_path.is_absolute()
@@ -67,6 +69,7 @@ class UnixSocketExternalCheckerAdapter:
             or not 0.1 <= timeout_seconds <= 3_700.0
         ):
             raise ValueError("external checker service configuration is invalid")
+        self._source_contracts = source_contracts
         self._socket_path = socket_path
         self._timeout_seconds = timeout_seconds
         self._identity = ExternalServiceAdapterIdentity(
@@ -143,10 +146,10 @@ class UnixSocketExternalCheckerAdapter:
             if type(body) is not dict or "adapter_provider_key" in body:
                 raise ValueError("PRE provider context is invalid")
             body["adapter_provider_key"] = self.identity.provider_key
-            result = SelectedPreSubmitInvocationResult.from_canonical_body(body)
+            result = SelectedPreSubmitInvocationResult.from_canonical_body(body, source_contracts=self._source_contracts)
             if result.receipt.runtime.provider != "smolvm":
                 raise ValueError("PRE runtime provider differs")
-            result.validate_lease(lease)
+            result.validate_lease(lease, source_contracts=self._source_contracts)
             if (asyncio.get_running_loop().time() >= deadline
                     or datetime.now(timezone.utc) >= lease.lease_expires_at):
                 raise SelectedPreSubmitInfrastructureUnavailable("deadline_exceeded")

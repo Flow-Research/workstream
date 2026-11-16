@@ -57,6 +57,7 @@ def external_checker_execution_factory(
     *, socket_path: Path, timeout_seconds: float
 ) -> ExternalServiceAdapterFactory[UnixSocketExternalCheckerAdapter]:
     """Compose the sole instance-local external checker adapter factory."""
+    from app.adapters.artifacts import selected_pre_submit_source_contracts
     factory = ExternalServiceAdapterFactory[UnixSocketExternalCheckerAdapter](
         EXTERNAL_CHECKER_CAPABILITY_KEY
     )
@@ -65,6 +66,7 @@ def external_checker_execution_factory(
         lambda: UnixSocketExternalCheckerAdapter(
             socket_path=socket_path,
             timeout_seconds=timeout_seconds,
+            source_contracts=selected_pre_submit_source_contracts(),
         ),
     )
     return factory
@@ -267,8 +269,9 @@ def external_checker_registry_service(session, authority):
 
 def selected_pre_submit_coordinator(session):
     """Compose selected PRE custody through CHECKERS' public adapter root."""
+    from app.adapters.artifacts import selected_pre_submit_source_contracts
     from app.adapters.tasks import selected_pre_submit_task_guard
-    from app.adapters.artifacts import submission_intake_pre_source_port
+    from app.adapters.artifacts import selected_pre_submit_source_guard
     from app.modules.checkers.selected_pre_submit_coordination import (
         SelectedPreSubmitCoordinator,
     )
@@ -276,7 +279,8 @@ def selected_pre_submit_coordinator(session):
     return SelectedPreSubmitCoordinator(
         session,
         tasks=selected_pre_submit_task_guard(session),
-        sources=submission_intake_pre_source_port(session),
+        sources=selected_pre_submit_source_guard(session),
+        source_contracts=selected_pre_submit_source_contracts(),
     )
 
 
@@ -288,7 +292,8 @@ class SelectedPreSubmitCheckerExecutionAdapter:
 
     def build(self, lease: SelectedPreSubmitLeaseFacts) -> SelectedPreSubmitProcessor:
         """Bind the single invocation to the committed CHECKERS lease."""
-        return SelectedPreSubmitProcessor(lease=lease, execution=self._external_execution)
+        from app.adapters.artifacts import selected_pre_submit_source_contracts
+        return SelectedPreSubmitProcessor(lease=lease, execution=self._external_execution, source_contracts=selected_pre_submit_source_contracts())
 
 
 def checker_history_repository(session) -> CheckerHistoryReadPort:
@@ -658,9 +663,10 @@ def post_submit_delivery_reconciliation_handler(*, sessions, materialization):
 
 def selected_pre_submit_run_reader(session):
     """Read retained selected PRE runs for their own contributor; the caller authorizes."""
+    from app.adapters.artifacts import selected_pre_submit_source_contracts
     from app.modules.checkers.selected_pre_submit_reads import SelectedPreSubmitRunReader
 
-    return SelectedPreSubmitRunReader(session)
+    return SelectedPreSubmitRunReader(session, source_contracts=selected_pre_submit_source_contracts())
 
 
 def trial_evidence_reservations(session, request, profiles):

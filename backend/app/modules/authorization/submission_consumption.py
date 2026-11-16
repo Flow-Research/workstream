@@ -7,8 +7,8 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.modules.authorization.catalogue import ActionId
-from app.modules.authorization.domain.submission_finalization import SubmissionFinalizationResourceContext
-from app.modules.authorization.domain.submission_cleanup import SubmissionSourceCleanupResourceContext
+from app.modules.authorization.api.submission_finalization import SubmissionFinalizationResourceContext
+from app.modules.authorization.api.submission_cleanup import SubmissionSourceCleanupResourceContext
 from app.modules.authorization.domain.submission_intake import IntakeAcceptanceResourceContext
 
 _STRICT_FROZEN = ConfigDict(extra="forbid", frozen=True, strict=True)

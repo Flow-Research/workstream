@@ -66,7 +66,9 @@ from app.modules.artifacts.api.submission_archive import (
 from app.modules.artifacts.submission_archive import (
     exported_submission_tree,
 )
-from app.modules.artifacts.submission_manifest import build_submission_manifest
+from app.modules.artifacts.api.submission_manifest import (
+    build_submission_manifest,
+)
 from app.modules.checkers.api.evaluation_contract import (
     PostSubmissionExecutionResult,
     validate_execution_result,

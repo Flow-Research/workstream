@@ -29,7 +29,8 @@ from app.modules.artifacts.submission_archive import (
     SealedSubmissionTree,
     SubmissionArchiveInspector,
 )
-from app.modules.artifacts.submission_manifest import build_submission_manifest
+from app.modules.artifacts.selected_pre_submit_source_contracts import ArtifactPreSubmitSourceContracts
+from app.modules.artifacts.api.submission_manifest import build_submission_manifest
 from app.modules.checkers.api.default_checker import (
     WORKSTREAM_DEFAULT_BEHAVIOR_SHA256,
     workstream_default_input_sha256,
@@ -210,7 +211,7 @@ class PreSubmitWorker:
         })
         if header["protocol_version"] != "external_checker_service.v1" or header["operation"] != "execute_pre":
             raise ValueError("PRE request invalid")
-        reservation = SelectedPreSubmitReservationFacts.from_canonical_body(header["reservation"])
+        reservation = SelectedPreSubmitReservationFacts.from_canonical_body(header["reservation"], source_contracts=ArtifactPreSubmitSourceContracts())
         if header["request_digest"] != reservation.request_digest:
             raise ValueError("PRE request digest differs")
         self._lease = SelectedPreSubmitLeaseFacts(
@@ -284,8 +285,8 @@ class PreSubmitWorker:
             policy_sha256=reservation.policy_sha256, workstream_default=default,
             required_external_count=1, external_members=members,
             eligible=default.eligible and len(members) == 1 and members[0].result.verdict == "passed",
-        )
-        facts.validate_lease(self._lease)
+         source_contracts=ArtifactPreSubmitSourceContracts())
+        facts.validate_lease(self._lease, source_contracts=ArtifactPreSubmitSourceContracts())
         self._reply("completed", facts.canonical_body())
 
     def run(self):
@@ -316,7 +317,7 @@ class PreSubmitWorker:
                 manifest = build_submission_manifest(inspection)
                 value = derive_selected_pre_submit_default_input(
                     self._lease, manifest_body=manifest.as_dict(), manifest_sha256=manifest.sha256,
-                )
+                 source_contracts=ArtifactPreSubmitSourceContracts())
                 with inspector._projected_tree(archive, self._workspace, expected=inspection) as tree:
                     default = evaluate_verified_archive(value, _Material(tree))
             except SubmissionArchiveRejectedError as exc:
@@ -330,7 +331,7 @@ class PreSubmitWorker:
             return
         _, request = derive_selected_pre_submit_input(
             self._lease, manifest_body=manifest.as_dict(), manifest_sha256=manifest.sha256,
-        )
+         source_contracts=ArtifactPreSubmitSourceContracts())
         self._reply("project", {
             "request": request.model_dump(mode="json"), "manifest": manifest.as_dict(),
         })

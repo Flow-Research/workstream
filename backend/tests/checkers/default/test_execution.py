@@ -20,7 +20,9 @@ from app.modules.artifacts.api.submission_archive import (
 from app.modules.artifacts.submission_archive import (
     SubmissionArchiveInspector,
 )
-from app.modules.artifacts.submission_manifest import build_submission_manifest
+from app.modules.artifacts.api.submission_manifest import (
+    build_submission_manifest,
+)
 from app.modules.checkers.api.default_checker import (
     WorkstreamDefaultCheckerInput,
     WorkstreamDefaultContext,
@@ -97,7 +99,6 @@ def _input(
             for item in inspection.entries
         ),
     )
-
 
 
 def _evaluate(value: bytes, request: WorkstreamDefaultCheckerInput, workspace: Path):

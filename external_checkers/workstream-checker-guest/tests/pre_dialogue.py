@@ -16,6 +16,7 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(ROOT / "backend"))
 
+from app.modules.artifacts.selected_pre_submit_source_contracts import ArtifactPreSubmitSourceContracts  # noqa: E402
 from app.core.hashing import canonical_json_hash  # noqa: E402
 from app.modules.checkers.api.selected_pre_submit import (  # noqa: E402
     SelectedPreSubmitExecutionFacts,
@@ -49,7 +50,7 @@ def incompatible_schema(reservation):
     policy = LockedExternalPreSubmitPolicy.model_validate_json(json.dumps(
         body | {"policy_sha256": external_checker_json_hash(body)},
     ))
-    return replace(reservation, policy=policy, admission_lineage=replace(
+    return replace(reservation, source_contracts=ArtifactPreSubmitSourceContracts(), policy=policy, admission_lineage=replace(
         reservation.admission_lineage, effective_plan_sha256=policy.policy_sha256,
     ))
 
@@ -99,13 +100,13 @@ def validate_completion(case: str, directory: Path) -> None:
     """Validate exactly the frame Rust received, through the Python owner type."""
     startup = json.loads((directory / "startup.json").read_bytes())
     header = startup["request"]
-    reservation = SelectedPreSubmitReservationFacts.from_canonical_body(header["reservation"])
+    reservation = SelectedPreSubmitReservationFacts.from_canonical_body(header["reservation"], source_contracts=ArtifactPreSubmitSourceContracts())
     lease = SelectedPreSubmitLeaseFacts(reservation, UUID(header["lease_id"]),
                                        header["lease_generation"], datetime.fromisoformat(header["lease_expires_at"]))
     terminal = json.loads(sys.stdin.buffer.read())
     assert terminal["operation"] == "completed"
-    execution = SelectedPreSubmitExecutionFacts.from_canonical_body(terminal["payload"])
-    execution.validate_lease(lease)
+    execution = SelectedPreSubmitExecutionFacts.from_canonical_body(terminal["payload"], source_contracts=ArtifactPreSubmitSourceContracts())
+    execution.validate_lease(lease, source_contracts=ArtifactPreSubmitSourceContracts())
     archive = (directory / "pre.zip").read_bytes()
     assert execution.observed_source.raw_sha256 == "sha256:" + hashlib.sha256(archive).hexdigest()
     assert execution.observed_source.raw_byte_count == len(archive)

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from app.modules.checkers.api.source_contracts import SelectedPreSubmitSourceContracts
+
 import threading
 from dataclasses import replace
 from datetime import timedelta
@@ -13,7 +15,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.identifiers import new_record_id
-from app.modules.artifacts.api.submission_intake import SubmissionIntakePreSourcePort
+from app.modules.checkers.api.selected_pre_submit import SelectedPreSubmitSourceGuard
 from app.modules.checkers.api.selected_pre_submit import (
     PreparedSelectedPreSubmitExecution,
     PreparedSelectedPreSubmitFinalization,
@@ -195,10 +197,12 @@ class SelectedPreSubmitCoordinator:
         session: AsyncSession,
         *,
         tasks: SelectedPreSubmitTaskGuard,
-        sources: SubmissionIntakePreSourcePort,
+        sources: SelectedPreSubmitSourceGuard,
+        source_contracts: SelectedPreSubmitSourceContracts,
     ) -> None:
         self._session = session
         self._tasks = tasks
+        self._source_contracts = source_contracts
         self._sources = sources
         self._capability: SelectedPreSubmitAdmissionCapability | None = None
         self._execution_capability: SelectedPreSubmitExecutionCapability | None = None
@@ -230,14 +234,15 @@ class SelectedPreSubmitCoordinator:
             raise SelectedPreSubmitRequestConflict("selected_pre_submit_request_conflict")
         try:
             stored = SelectedPreSubmitReservationFacts.from_canonical_body(
-                row.request_json
+                row.request_json,
+                source_contracts=self._source_contracts,
             )
             normalized = replace(
-                facts,
+                facts, source_contracts=self._source_contracts,
                 attempt_id=stored.attempt_id,
             )
             terminal = (
-                SelectedPreSubmitTerminalFacts.from_canonical_body(row.terminal_json)
+                SelectedPreSubmitTerminalFacts.from_canonical_body(row.terminal_json, source_contracts=self._source_contracts)
                 if row.terminal_json is not None
                 else None
             )
@@ -275,8 +280,8 @@ class SelectedPreSubmitCoordinator:
                 or row.terminal_json.get("schema_version") != "workstream.selected_pre_submit_terminal.v3"):
             raise SelectedPreSubmitUnavailable("selected_pre_submit_stored_facts_invalid")
         try:
-            request = SelectedPreSubmitReservationFacts.from_canonical_body(row.request_json)
-            terminal = SelectedPreSubmitTerminalFacts.from_canonical_body(row.terminal_json)
+            request = SelectedPreSubmitReservationFacts.from_canonical_body(row.request_json, source_contracts=self._source_contracts)
+            terminal = SelectedPreSubmitTerminalFacts.from_canonical_body(row.terminal_json, source_contracts=self._source_contracts)
             if not matches_source_request(row, request) or not matches_terminal(row, request, terminal):
                 raise ValueError("retained PRE differs")
         except (TypeError, ValueError):
@@ -486,6 +491,7 @@ class SelectedPreSubmitCoordinator:
             execution=execution,
             invocation_receipt=invocation_receipt,
             infrastructure_failure_code=infrastructure_failure_code,
+            source_contracts=self._source_contracts,
         )
         evidence = await authority.consume(finalize_facts)
         if evidence.facts_digest != finalize_facts.facts_digest:
@@ -499,6 +505,7 @@ class SelectedPreSubmitCoordinator:
             queued_at=row.queued_at,
             started_at=row.started_at,
             completed_at=completed_at,
+            source_contracts=self._source_contracts,
         )
         row.status = outcome
         row.terminal_json = terminal.canonical_body()
@@ -514,24 +521,7 @@ class SelectedPreSubmitCoordinator:
     async def _lock_source(self, facts: SelectedPreSubmitReservationFacts) -> None:
         """Hold TASK then exact live ART custody before any CHECKERS row lock."""
         await self._tasks.lock_selected_pre_submit_scope(facts)
-        current = await self._sources.lock_pre_source(
-            source=facts.source, lease_id=facts.foreground_lease_id,
-            generation=facts.foreground_lease_generation,
-        )
-        if (
-            current.source != facts.source
-            or current.project_id != facts.project_id
-            or current.task_id != facts.task_id
-            or current.assignment_id != facts.assignment_id
-            or current.actor_profile_id != facts.actor_profile_id
-            or current.identity_link_id != facts.identity_link_id
-            or current.metadata_sha256 != facts.metadata_sha256
-            or current.locked_context_sha256 != facts.locked_context_sha256
-            or current.lease_id != facts.foreground_lease_id
-            or current.lease_generation != facts.foreground_lease_generation
-            or current.pre_deadline_at != facts.pre_deadline_at
-        ):
-            raise SelectedPreSubmitUnavailable("selected_pre_submit_source_changed")
+        await self._sources.lock_selected_pre_submit_source(facts)
 
     async def _lock(
         self, *, run_id: UUID, facts: SelectedPreSubmitReservationFacts

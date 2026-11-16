@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from app.adapters.artifacts import selected_pre_submit_source_contracts
+
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
@@ -101,7 +103,7 @@ class _Coordinator:
             lease=self.lease,
             execution=execution,
             infrastructure_failure_code=infrastructure_failure_code,
-        )
+         source_contracts=selected_pre_submit_source_contracts())
         await authority.consume(facts)
         return SimpleNamespace(terminal=facts, capability=None)
 
@@ -135,7 +137,7 @@ def _reservation() -> SelectedPreSubmitReservationFacts:
         archive_byte_count=100,
         semantic_manifest_sha256="sha256:" + "4" * 64,
         execution_budget_ms=60_000,
-    )
+     source_contracts=selected_pre_submit_source_contracts())
 
 
 @pytest.mark.asyncio

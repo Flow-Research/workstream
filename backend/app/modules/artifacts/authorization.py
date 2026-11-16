@@ -30,9 +30,9 @@ from app.modules.artifacts.schemas import (
 )
 from app.modules.artifacts.api.submission_intake import PreSubmitSourceReadFacts
 from app.modules.artifacts.api.submission_cleanup import SubmissionSourceCleanupAuthorityFacts
-from app.modules.authorization.domain.submission_cleanup import SubmissionSourceCleanupResourceContext
+from app.modules.authorization.api.submission_cleanup import SubmissionSourceCleanupResourceContext
 from app.modules.artifacts.api.submission_finalization import SubmissionFinalizationAuthorityFacts
-from app.modules.authorization.domain.submission_finalization import SubmissionFinalizationResourceContext
+from app.modules.authorization.api.submission_finalization import SubmissionFinalizationResourceContext
 
 from app.modules.artifacts.submission_bindings import SubmissionBindingAuthorityFacts
 from app.modules.artifacts.api import SubmissionAdmissionConsumptionError

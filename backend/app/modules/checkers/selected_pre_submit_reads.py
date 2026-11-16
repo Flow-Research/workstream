@@ -1,5 +1,7 @@
 """Read retained selected PRE runs without leasing or finalizing; the caller owns authority."""
 
+from app.modules.checkers.api.source_contracts import SelectedPreSubmitSourceContracts
+
 from uuid import UUID
 
 from sqlalchemy import select, tuple_
@@ -8,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.modules.checkers.api.selected_pre_submit import (
     SelectedPreSubmitRunStatus, SelectedPreSubmitRunView,
     SelectedPreSubmitUnavailable, SelectedPreSubmitReservationFacts,
-    SelectedPreSubmitTerminalFacts, HistoricalSourcePreSubmitTerminal, SelectedPreSubmitLeaseFacts,
+    SelectedPreSubmitTerminalFacts, HistoricalSourcePreSubmitTerminal,
 )
 from app.modules.checkers.api.historical_selected_pre_submit import (
     HistoricalSelectedPreSubmitReservation, HistoricalSelectedPreSubmitTerminal,
@@ -38,7 +40,7 @@ def _request_matches(row: SelectedPreSubmitRun, request: HistoricalSelectedPreSu
     )
 
 
-def _view(row: SelectedPreSubmitRun) -> SelectedPreSubmitRunView:
+def _view(row: SelectedPreSubmitRun, *, source_contracts: SelectedPreSubmitSourceContracts) -> SelectedPreSubmitRunView:
     """Decode each retained schema and bind it to the indexed row without issuing authority."""
     try:
         if (type(row.request_json) is not dict
@@ -49,13 +51,13 @@ def _view(row: SelectedPreSubmitRun) -> SelectedPreSubmitRunView:
             terminal = HistoricalSelectedPreSubmitTerminal.from_canonical_body(row.terminal_json) if row.terminal_json is not None else None
             request_matches = _request_matches(row, request)
         else:
-            request = SelectedPreSubmitReservationFacts.from_canonical_body(row.request_json)
+            request = SelectedPreSubmitReservationFacts.from_canonical_body(row.request_json, source_contracts=source_contracts)
             if row.terminal_json is None:
                 terminal = None
             elif row.terminal_json.get("schema_version") == "workstream.selected_pre_submit_terminal.v2":
-                terminal = HistoricalSourcePreSubmitTerminal.from_canonical_body(row.terminal_json)
+                terminal = HistoricalSourcePreSubmitTerminal.from_canonical_body(row.terminal_json, source_contracts=source_contracts)
             else:
-                terminal = SelectedPreSubmitTerminalFacts.from_canonical_body(row.terminal_json)
+                terminal = SelectedPreSubmitTerminalFacts.from_canonical_body(row.terminal_json, source_contracts=source_contracts)
             request_matches = matches_source_request(row, request)
         if not request_matches or not matches_terminal(row, request, terminal):
             raise ValueError("retained PRE columns differ")
@@ -72,8 +74,9 @@ def _view(row: SelectedPreSubmitRun) -> SelectedPreSubmitRunView:
 class SelectedPreSubmitRunReader:
     """Fixed columns and revalidated terminal bodies, newest first by ``(queued_at, id)``."""
 
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(self, session: AsyncSession, *, source_contracts: SelectedPreSubmitSourceContracts) -> None:
         """Read in the caller's response transaction."""
+        self._source_contracts = source_contracts
         self._session = session
 
     async def _page(self, statement, limit, before):
@@ -84,7 +87,7 @@ class SelectedPreSubmitRunReader:
         rows = (await self._session.scalars(
             statement.order_by(run.queued_at.desc(), run.id.desc()).limit(limit + 1),
         )).all()
-        return tuple(_view(row) for row in rows[:limit]), len(rows) > limit
+        return tuple(_view(row, source_contracts=self._source_contracts) for row in rows[:limit]), len(rows) > limit
 
     async def read_contributor_runs(self, *, actor_profile_id, task_id, run_id, limit, before):
         """One contributor's runs for one task, optionally one exact run."""

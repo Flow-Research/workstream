@@ -1,8 +1,8 @@
 """Transaction-bound, single-use authorization for sensitive mutations."""
 
 from __future__ import annotations
-from app.modules.authorization.domain.submission_finalization import SubmissionFinalizationResourceContext
-from app.modules.authorization.domain.submission_cleanup import SubmissionSourceCleanupResourceContext
+from app.modules.authorization.api.submission_finalization import SubmissionFinalizationResourceContext
+from app.modules.authorization.api.submission_cleanup import SubmissionSourceCleanupResourceContext
 from app.modules.authorization.domain.prepared_service import (
     EXACT_ARTIFACT_RESOURCE_BY_ACTION as _EXACT_ARTIFACT_RESOURCE_BY_ACTION,
 )
@@ -190,7 +190,6 @@ class PreparedAuthorizationHandle:
 
 
 _HANDLE_CONSTRUCTOR_TOKEN = object()
-
 
 
 @dataclass(frozen=True, slots=True)

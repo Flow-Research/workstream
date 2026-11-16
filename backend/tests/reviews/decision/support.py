@@ -13,7 +13,9 @@ from app.api.deps.authorization import compose_hidden_submission_creation_comman
 from app.core.identifiers import new_record_id
 from app.modules.actors.models import ActorIdentityLink
 from app.modules.artifacts.api import SubmissionBundlePreparationRequest
-from app.modules.artifacts.submission_manifest import build_submission_manifest
+from app.modules.artifacts.api.submission_manifest import (
+    build_submission_manifest,
+)
 from app.modules.authorization.api import ActorIdentityFacts, ActorKind
 from app.modules.checkers.models import CheckerRun
 from app.modules.reviews.decision.models import (

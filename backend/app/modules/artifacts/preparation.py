@@ -39,7 +39,10 @@ from app.modules.artifacts.sources import (
     PreparedArtifact,
     PreparedArtifactInspector,
 )
-from app.modules.artifacts.submission_manifest import SubmissionManifest
+from app.core.hashing import validate_sha256
+from app.modules.artifacts.api.submission_manifest import (
+    SubmissionManifest,
+)
 
 
 HARD_MAXIMUM_ARTIFACT_BYTES = 512 * 1024 * 1024
@@ -2732,7 +2735,7 @@ class ArtifactPreparationService:
             raise ArtifactInputMismatchError("artifact media type is invalid") from None
         if expected_sha256 is not None:
             try:
-                ArtifactCommitment.validate_sha256(expected_sha256)
+                validate_sha256(expected_sha256)
             except ValueError:
                 raise ArtifactInputMismatchError("artifact expected digest is invalid") from None
         if expected_size is not None:

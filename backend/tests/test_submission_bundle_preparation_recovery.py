@@ -1,5 +1,7 @@
 """Command recovery distinguishes checked failure, unavailable custody and authority."""
 
+from app.adapters.artifacts import selected_pre_submit_source_contracts
+
 from tests.trusted_intake_fixtures import LocalIntakeAdapter
 from app.modules.artifacts.api.submission_archive import SubmissionArchiveLimits
 
@@ -64,7 +66,7 @@ def _feedback_facts(*, eligible: bool = False) -> SelectedPreSubmitExecutionFact
     return SelectedPreSubmitExecutionFacts(
         policy_sha256="sha256:" + "1" * 64, workstream_default=default,
         required_external_count=0, external_members=(), eligible=eligible,
-    )
+     source_contracts=selected_pre_submit_source_contracts())
 
 
 async def _mounted_preparation_response(error: RuntimeError):

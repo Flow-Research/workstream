@@ -95,7 +95,7 @@ def cleanup_facts(phase="claim"):
 async def test_cleanup_authority_binds_every_target_fact(clean_postgres_database, phase):
     from app.modules.artifacts.authorization import PreparedSubmissionSourceCleanupAuthorization
     from app.modules.authorization.domain.resource_digest import authorization_resource_digest
-    from app.modules.authorization.domain.submission_cleanup import SubmissionSourceCleanupResourceContext
+    from app.modules.authorization.api.submission_cleanup import SubmissionSourceCleanupResourceContext
     from dataclasses import asdict
     engine = create_async_engine(clean_postgres_database)
     factory = async_sessionmaker(engine, expire_on_commit=False)

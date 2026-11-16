@@ -121,10 +121,17 @@ pub(crate) fn serve(
     // Host custody stays outside the worker payload. The backend must retain
     // this invocation envelope along with the typed checker facts at T4.
     let response = serialize_response(
-        &prepared.invocation, &machine.lease,
+        &prepared.invocation,
+        &machine.lease,
         &prepared.job.startup["request"]["reservation"]["runtime_profile"],
         (outcome, reason, execution),
-        [admission_ms, preparation_ms, execution_ms, cleanup_ms, started.elapsed().as_millis() as u64],
+        [
+            admission_ms,
+            preparation_ms,
+            execution_ms,
+            cleanup_ms,
+            started.elapsed().as_millis() as u64,
+        ],
         (&journal_sha256, destroyed),
     )?;
     let sent = if response.len() <= 64 * 1024 * 1024

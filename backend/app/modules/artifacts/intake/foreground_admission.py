@@ -286,8 +286,13 @@ class ForegroundIntakeAdmission:
         draft.acceptance_decision_id = str(await authority.consume_acceptance(
             await authority.prepare_acceptance(facts), facts))
         draft.finalization_event_id = str((await outbox(session).append(finalization_event(draft))).event_id)
-        for name, value in vars(draft).items():
-            setattr(row, name, value)
+        for name in (
+            "accepted_at", "selected_pre_submit_run_id", "selected_pre_submit_request_sha256",
+            "selected_pre_submit_terminal_sha256", "accepted_source_sha256", "accepted_manifest_sha256",
+            "accepted_context", "accepted_context_sha256", "acceptance_receipt", "acceptance_receipt_sha256",
+            "acceptance_decision_id", "finalization_event_id",
+        ):
+            setattr(row, name, getattr(draft, name))
         row.state = "finalization_pending"
         await self._tasks(session).accept(UUID(row.task_id), UUID(row.id), row.eligible_task_status)
         return dict(row.acceptance_receipt)

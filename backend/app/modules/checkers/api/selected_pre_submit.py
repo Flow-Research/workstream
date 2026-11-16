@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import InitVar, asdict, dataclass, field
 from datetime import datetime, timedelta, timezone
 from contextlib import AbstractAsyncContextManager
 from typing import Annotated, Literal, Protocol
@@ -10,11 +10,13 @@ from uuid import UUID
 
 import json
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_serializer, field_validator, model_validator
 
 from app.core.hashing import canonical_json_hash
-from app.modules.artifacts.api.submission_intake import SealedSubmissionSource
-from app.modules.artifacts.api.submission_archive import SubmissionArchiveLimits
+from app.modules.checkers.api.source_contracts import (
+    SealedSubmissionSourceView, SubmissionArchiveLimitsView, SelectedPreSubmitSourceContracts,
+    source_contracts_context, source_contracts_from_context,
+)
 from app.modules.checkers.api.default_checker import WorkstreamDefaultContext, WorkstreamDefaultCheckerInput
 from app.modules.checkers.api.external_policy import LockedExternalPreSubmitPolicy
 from app.modules.checkers.api.default_checker import WorkstreamDefaultCheckerResult
@@ -295,7 +297,7 @@ class SelectedPreSubmitExecutionFacts:
     request_digest: str
     lease_id: UUID
     lease_generation: int
-    observed_source: SealedSubmissionSource
+    observed_source: SealedSubmissionSourceView
     manifest_body: dict[str, object] | None
     manifest_sha256: str | None
     default_input_sha256: str | None
@@ -305,18 +307,19 @@ class SelectedPreSubmitExecutionFacts:
     external_members: tuple[ExternalPreSubmitMemberFacts, ...]
     eligible: bool
 
-    def __post_init__(self) -> None:
+    source_contracts: InitVar[SelectedPreSubmitSourceContracts] = field(kw_only=True)
+
+    def __post_init__(self, source_contracts: SelectedPreSubmitSourceContracts) -> None:
         members = self.external_members
         if (
             type(self.lease_id) is not UUID or type(self.lease_generation) is not int
             or self.lease_generation < 1 or type(self.eligible) is not bool
             or type(self.external_members) is not tuple
-            or type(self.observed_source) is not SealedSubmissionSource
             or (self.manifest_body is None) != (self.manifest_sha256 is None)
             or (self.manifest_body is None) != (self.default_input_sha256 is None)
         ):
             raise ValueError("selected PRE observed evidence is invalid")
-        SealedSubmissionSource.model_validate(self.observed_source)
+        source_contracts.require_source(self.observed_source)
         for digest in (self.request_digest, self.manifest_sha256, self.default_input_sha256):
             if digest is not None and (type(digest) is not str or len(digest) != 71
                     or not digest.startswith("sha256:")
@@ -343,7 +346,7 @@ class SelectedPreSubmitExecutionFacts:
         ):
             raise ValueError("selected PRE execution continued after a blocker")
 
-    def validate_lease(self, lease: SelectedPreSubmitLeaseFacts) -> None:
+    def validate_lease(self, lease: SelectedPreSubmitLeaseFacts, *, source_contracts: SelectedPreSubmitSourceContracts) -> None:
         """Reconstruct expected derived input instead of trusting echoed digests."""
         from app.modules.checkers.api.default_checker import workstream_default_input_sha256
 
@@ -365,10 +368,12 @@ class SelectedPreSubmitExecutionFacts:
             if self.workstream_default.eligible:
                 value, request = derive_selected_pre_submit_input(
                     lease, manifest_body=self.manifest_body, manifest_sha256=self.manifest_sha256,
+                    source_contracts=source_contracts,
                 )
             else:
                 value = derive_selected_pre_submit_default_input(
                     lease, manifest_body=self.manifest_body, manifest_sha256=self.manifest_sha256,
+                    source_contracts=source_contracts,
                 )
                 request = None
             if workstream_default_input_sha256(value) != self.default_input_sha256:
@@ -423,7 +428,7 @@ class SelectedPreSubmitExecutionFacts:
         }
 
     @classmethod
-    def from_canonical_body(cls, body: object) -> SelectedPreSubmitExecutionFacts:
+    def from_canonical_body(cls, body: object, *, source_contracts: SelectedPreSubmitSourceContracts) -> SelectedPreSubmitExecutionFacts:
         """Parse the exact bounded result retained for idempotent work replay."""
         if (
             type(body) is not dict
@@ -446,7 +451,7 @@ class SelectedPreSubmitExecutionFacts:
         value = cls(
             request_digest=body["request_digest"], lease_id=UUID(body["lease_id"]),
             lease_generation=body["lease_generation"],
-            observed_source=SealedSubmissionSource.model_validate_json(json.dumps(body["observed_source"])),
+            observed_source=source_contracts.parse_source(body["observed_source"]),
             manifest_body=body["manifest_body"], manifest_sha256=body["manifest_sha256"],
             default_input_sha256=body["default_input_sha256"],
             policy_sha256=body["policy_sha256"],
@@ -472,6 +477,7 @@ class SelectedPreSubmitExecutionFacts:
                 for item in members
             ),
             eligible=body["eligible"],
+            source_contracts=source_contracts,
         )
         if value.canonical_body() != body:
             raise ValueError("selected PRE execution body is not canonical")
@@ -486,7 +492,7 @@ class SelectedPreSubmitExecutionFacts:
 class SelectedPreSubmitRuntimeProfile(BaseModel):
     """Explicit deployment bounds; structural validity is not qualification."""
 
-    model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
+    model_config = ConfigDict(extra="forbid", strict=True, frozen=True, arbitrary_types_allowed=True)
     profile_id: str = Field(min_length=1, max_length=100, pattern=r"^[a-z0-9_-]+$")
     platform_root_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
     cpu_millis: int = Field(gt=0)
@@ -496,7 +502,18 @@ class SelectedPreSubmitRuntimeProfile(BaseModel):
     maximum_output_bytes: int = Field(gt=0)
     maximum_log_bytes: int = Field(gt=0)
     aggregate_deadline_ms: int = Field(ge=100, le=14_400_000)
-    archive_limits: SubmissionArchiveLimits
+    archive_limits: SubmissionArchiveLimitsView
+
+
+    @field_validator("archive_limits", mode="before")
+    @classmethod
+    def validate_archive_limits(cls, value: object, info: ValidationInfo) -> SubmissionArchiveLimitsView:
+        contracts = source_contracts_from_context(info.context)
+        return contracts.parse_limits(value) if type(value) is dict else contracts.require_limits(value)
+
+    @field_serializer("archive_limits")
+    def serialize_archive_limits(self, value: SubmissionArchiveLimitsView) -> dict[str, int | float]:
+        return value.canonical_body()
 
 
 @dataclass(frozen=True, slots=True)
@@ -510,7 +527,7 @@ class SelectedPreSubmitReservationFacts:
     assignment_id: UUID
     attempt_id: UUID
     idempotency_key: UUID
-    source: SealedSubmissionSource
+    source: SealedSubmissionSourceView
     metadata_sha256: str
     locked_context_sha256: str
     foreground_lease_id: UUID
@@ -521,8 +538,11 @@ class SelectedPreSubmitReservationFacts:
     runtime_profile: SelectedPreSubmitRuntimeProfile
     admission_lineage: SelectedPreSubmitAdmissionLineage
 
-    def __post_init__(self) -> None:
+    source_contracts: InitVar[SelectedPreSubmitSourceContracts] = field(kw_only=True)
+
+    def __post_init__(self, source_contracts: SelectedPreSubmitSourceContracts) -> None:
         """Reject missing source, locked context, selected image or fence facts."""
+        source_contracts.require_source(self.source)
         identifiers = (self.actor_profile_id, self.identity_link_id, self.project_id,
                        self.task_id, self.assignment_id, self.attempt_id,
                        self.idempotency_key, self.foreground_lease_id)
@@ -533,7 +553,6 @@ class SelectedPreSubmitReservationFacts:
                    or not value.startswith("sha256:")
                    or any(char not in "0123456789abcdef" for char in value[7:])
                    for value in digests)
-            or type(self.source) is not SealedSubmissionSource
             or type(self.policy) is not LockedExternalPreSubmitPolicy
             or type(self.default_context) is not WorkstreamDefaultContext
             or type(self.runtime_profile) is not SelectedPreSubmitRuntimeProfile
@@ -544,6 +563,7 @@ class SelectedPreSubmitReservationFacts:
             or self.pre_deadline_at.utcoffset() is None
         ):
             raise ValueError("selected PRE reservation facts are invalid")
+        source_contracts.require_limits(self.runtime_profile.archive_limits)
         lineage = self.admission_lineage
         predecessor = self.default_context.predecessor
         if (
@@ -610,7 +630,7 @@ class SelectedPreSubmitReservationFacts:
         }
 
     @classmethod
-    def from_canonical_body(cls, body: object) -> SelectedPreSubmitReservationFacts:
+    def from_canonical_body(cls, body: object, *, source_contracts: SelectedPreSubmitSourceContracts) -> SelectedPreSubmitReservationFacts:
         """Decode only the live source-first schema; historical data is read-only."""
         if type(body) is not dict or body.get("schema_version") != (
             "workstream.selected_pre_submit_reservation.v2"
@@ -621,7 +641,7 @@ class SelectedPreSubmitReservationFacts:
                 **{name: UUID(body[name]) for name in (
                     "actor_profile_id", "identity_link_id", "project_id", "task_id",
                     "assignment_id", "attempt_id", "idempotency_key", "foreground_lease_id")},
-                source=SealedSubmissionSource.model_validate_json(json.dumps(body["source"])),
+                source=source_contracts.parse_source(body["source"]),
                 metadata_sha256=body["metadata_sha256"],
                 locked_context_sha256=body["locked_context_sha256"],
                 foreground_lease_generation=body["foreground_lease_generation"],
@@ -629,9 +649,10 @@ class SelectedPreSubmitReservationFacts:
                 policy=LockedExternalPreSubmitPolicy.model_validate_json(json.dumps(body["policy"])),
                 default_context=WorkstreamDefaultContext.from_canonical_body(body["default_context"]),
                 runtime_profile=SelectedPreSubmitRuntimeProfile.model_validate_json(
-                    json.dumps(body["runtime_profile"])),
+                    json.dumps(body["runtime_profile"]), context=source_contracts_context(source_contracts)),
                 admission_lineage=SelectedPreSubmitAdmissionLineage.from_canonical_body(
                     body["admission_lineage"]),
+                source_contracts=source_contracts,
             )
             if value.canonical_body() != body:
                 raise ValueError("selected PRE reservation facts are not canonical")
@@ -670,29 +691,26 @@ class SelectedPreSubmitLeaseFacts:
 
 def derive_selected_pre_submit_default_input(
     lease: SelectedPreSubmitLeaseFacts, *, manifest_body: object, manifest_sha256: str,
+    source_contracts: SelectedPreSubmitSourceContracts,
 ) -> WorkstreamDefaultCheckerInput:
     """Derive platform input without consulting an unrun project input schema."""
-    from app.modules.artifacts.api.submission_archive import validate_submission_manifest
-    from app.modules.checkers.api.material import SubmissionMaterialEntry
 
 
     reservation = lease.reservation
     source = reservation.source
-    inspection = validate_submission_manifest(
+    entries = source_contracts.validate_manifest(
         manifest_body, sha256=manifest_sha256, limits=reservation.runtime_profile.archive_limits,
     )
     return reservation.default_context.bind_verified_input(
         archive_sha256=source.raw_sha256, archive_byte_count=source.raw_byte_count,
         archive_media_type=source.media_type, semantic_manifest_sha256=manifest_sha256,
-        entries=tuple(SubmissionMaterialEntry(
-            entry.normalized_path, entry.entry_type.value, entry.byte_count,
-            entry.sha256, entry.executable,
-        ) for entry in inspection.entries),
+        entries=entries,
     )
 
 
 def derive_selected_pre_submit_input(
     lease: SelectedPreSubmitLeaseFacts, *, manifest_body: object, manifest_sha256: str,
+    source_contracts: SelectedPreSubmitSourceContracts,
 ) -> tuple[WorkstreamDefaultCheckerInput, ExternalCheckerExecutionRequest]:
     """Reconstruct the project request only after the platform defaults pass.
 
@@ -705,6 +723,7 @@ def derive_selected_pre_submit_input(
 
     value = derive_selected_pre_submit_default_input(
         lease, manifest_body=manifest_body, manifest_sha256=manifest_sha256,
+        source_contracts=source_contracts,
     )
     reservation = lease.reservation
     source = reservation.source
@@ -838,9 +857,9 @@ class SelectedPreSubmitInvocationReceipt(_PreReceiptValue):
         """Retain all provider and cleanup facts without transport credentials."""
         return self.model_dump(mode="json")
 
-    def validate_lease(self, lease: SelectedPreSubmitLeaseFacts) -> None:
+    def validate_lease(self, lease: SelectedPreSubmitLeaseFacts, *, source_contracts: SelectedPreSubmitSourceContracts) -> None:
         """Revalidate even adapter-created model instances before trusting them."""
-        checked = type(self).model_validate_json(json.dumps(self.canonical_body(), allow_nan=False))
+        checked = type(self).model_validate_json(json.dumps(self.canonical_body(), allow_nan=False), context=source_contracts_context(source_contracts))
         request, identity = lease.reservation, checked.invocation
         if (identity.run_id != str(request.attempt_id)
                 or identity.source_operation_id != str(request.source.location.operation_id)
@@ -865,12 +884,12 @@ class SelectedPreSubmitInvocationResult:
                 or (self.execution is not None and type(self.execution) is not SelectedPreSubmitExecutionFacts)):
             raise ValueError("PRE invocation result differs")
 
-    def validate_lease(self, lease: SelectedPreSubmitLeaseFacts) -> None:
+    def validate_lease(self, lease: SelectedPreSubmitLeaseFacts, *, source_contracts: SelectedPreSubmitSourceContracts) -> None:
         self.__post_init__()
-        self.receipt.validate_lease(lease)
+        self.receipt.validate_lease(lease, source_contracts=source_contracts)
         if self.execution is None:
             return
-        self.execution.validate_lease(lease)
+        self.execution.validate_lease(lease, source_contracts=source_contracts)
         for member in self.execution.external_members:
             isolation = member.isolation
             if isolation.config_image_id != self.receipt.invocation.config_image_id:
@@ -891,14 +910,14 @@ class SelectedPreSubmitInvocationResult:
         }
 
     @classmethod
-    def from_canonical_body(cls, body: object) -> SelectedPreSubmitInvocationResult:
+    def from_canonical_body(cls, body: object, *, source_contracts: SelectedPreSubmitSourceContracts) -> SelectedPreSubmitInvocationResult:
         if type(body) is not dict or "execution" not in body:
             raise ValueError("PRE invocation body is invalid")
         receipt = dict(body)
         execution = receipt.pop("execution")
         value = cls(
-            receipt=SelectedPreSubmitInvocationReceipt.model_validate_json(json.dumps(receipt, allow_nan=False)),
-            execution=SelectedPreSubmitExecutionFacts.from_canonical_body(execution) if execution is not None else None,
+            receipt=SelectedPreSubmitInvocationReceipt.model_validate_json(json.dumps(receipt, allow_nan=False), context=source_contracts_context(source_contracts)),
+            execution=SelectedPreSubmitExecutionFacts.from_canonical_body(execution, source_contracts=source_contracts) if execution is not None else None,
         )
         if value.canonical_body() != body:
             raise ValueError("PRE invocation body is not canonical")
@@ -966,7 +985,9 @@ class SelectedPreSubmitFinalizeFacts:
     invocation_receipt: SelectedPreSubmitInvocationReceipt | None
     infrastructure_failure_code: str | None
 
-    def __post_init__(self) -> None:
+    source_contracts: InitVar[SelectedPreSubmitSourceContracts] = field(kw_only=True)
+
+    def __post_init__(self, source_contracts: SelectedPreSubmitSourceContracts) -> None:
         if type(self.lease) is not SelectedPreSubmitLeaseFacts:
             raise ValueError("selected PRE finalize lease is invalid")
         if (self.execution is None) == (self.infrastructure_failure_code is None):
@@ -974,11 +995,11 @@ class SelectedPreSubmitFinalizeFacts:
         if self.execution is not None:
             if type(self.execution) is not SelectedPreSubmitExecutionFacts:
                 raise ValueError("selected PRE finalize execution is invalid")
-            SelectedPreSubmitInvocationResult(self.invocation_receipt, self.execution).validate_lease(self.lease)
+            SelectedPreSubmitInvocationResult(self.invocation_receipt, self.execution).validate_lease(self.lease, source_contracts=source_contracts)
         else:
             SelectedPreSubmitInfrastructureUnavailable(self.infrastructure_failure_code or "")
             if self.invocation_receipt is not None:
-                SelectedPreSubmitInvocationResult(self.invocation_receipt, None).validate_lease(self.lease)
+                SelectedPreSubmitInvocationResult(self.invocation_receipt, None).validate_lease(self.lease, source_contracts=source_contracts)
                 if (self.invocation_receipt.outcome not in {"infrastructure_failure", "deadline_exceeded"}
                         or self.invocation_receipt.reason != self.infrastructure_failure_code):
                     raise ValueError("PRE infrastructure receipt differs")
@@ -1031,6 +1052,16 @@ class PreparedSelectedPreSubmitFinalization(Protocol):
         self, facts: SelectedPreSubmitFinalizeFacts
     ) -> SelectedPreSubmitAuthorityEvidence:
         """Consume the exact result or infrastructure outcome once."""
+
+
+class SelectedPreSubmitSourceGuard(Protocol):
+    """Require exact live source custody inside the caller-owned transaction."""
+
+    async def lock_selected_pre_submit_source(
+        self, facts: SelectedPreSubmitReservationFacts,
+    ) -> None:
+        """Lock ART after TASK and reject changed source, context or lease facts."""
+        ...
 
 
 class SelectedPreSubmitAuthorityPort(Protocol):
@@ -1120,7 +1151,9 @@ class SelectedPreSubmitTerminalFacts:
     started_at: datetime
     completed_at: datetime
 
-    def __post_init__(self) -> None:
+    source_contracts: InitVar[SelectedPreSubmitSourceContracts] = field(kw_only=True)
+
+    def __post_init__(self, source_contracts: SelectedPreSubmitSourceContracts) -> None:
         """Keep work findings separate from recoverable infrastructure outcomes."""
         if type(self.lease) is not SelectedPreSubmitLeaseFacts:
             raise ValueError("selected PRE terminal lease is invalid")
@@ -1133,7 +1166,7 @@ class SelectedPreSubmitTerminalFacts:
             )
         ) or not (self.queued_at <= self.started_at <= self.completed_at):
             raise ValueError("selected PRE terminal timing is invalid")
-        SelectedPreSubmitFinalizeFacts(self.lease, self.execution, self.invocation_receipt, self.infrastructure_failure_code)
+        SelectedPreSubmitFinalizeFacts(self.lease, self.execution, self.invocation_receipt, self.infrastructure_failure_code, source_contracts=source_contracts)
         if self.outcome == "completed":
             if (
                 type(self.execution) is not SelectedPreSubmitExecutionFacts
@@ -1141,7 +1174,7 @@ class SelectedPreSubmitTerminalFacts:
                 or self.execution.policy_sha256 != self.lease.reservation.policy_sha256
             ):
                 raise ValueError("selected PRE completed outcome is invalid")
-            self.execution.validate_lease(self.lease)
+            self.execution.validate_lease(self.lease, source_contracts=source_contracts)
         elif (self.outcome != "infrastructure_failed" or self.execution is not None
               or self.infrastructure_failure_code not in {
             "capacity_exceeded",
@@ -1173,7 +1206,7 @@ class SelectedPreSubmitTerminalFacts:
         }
 
     @classmethod
-    def from_canonical_body(cls, body: object) -> SelectedPreSubmitTerminalFacts:
+    def from_canonical_body(cls, body: object, *, source_contracts: SelectedPreSubmitSourceContracts) -> SelectedPreSubmitTerminalFacts:
         """Parse and revalidate every persisted lease, result and timing fact."""
         if (
             type(body) is not dict
@@ -1198,7 +1231,7 @@ class SelectedPreSubmitTerminalFacts:
             or body["schema_version"] != "workstream.selected_pre_submit_terminal.v3"
         ):
             raise ValueError("selected PRE terminal facts are invalid")
-        reservation = SelectedPreSubmitReservationFacts.from_canonical_body(body["reservation"])
+        reservation = SelectedPreSubmitReservationFacts.from_canonical_body(body["reservation"], source_contracts=source_contracts)
         if body["request_digest"] != reservation.request_digest:
             raise ValueError("selected PRE terminal request is invalid")
         execution_body = body["execution"]
@@ -1211,15 +1244,16 @@ class SelectedPreSubmitTerminalFacts:
             ),
             outcome=body["outcome"],
             execution=(
-                SelectedPreSubmitExecutionFacts.from_canonical_body(execution_body)
+                SelectedPreSubmitExecutionFacts.from_canonical_body(execution_body, source_contracts=source_contracts)
                 if execution_body is not None
                 else None
             ),
-            invocation_receipt=(SelectedPreSubmitInvocationReceipt.model_validate_json(json.dumps(body["invocation_receipt"], allow_nan=False)) if body["invocation_receipt"] is not None else None),
+            invocation_receipt=(SelectedPreSubmitInvocationReceipt.model_validate_json(json.dumps(body["invocation_receipt"], allow_nan=False), context=source_contracts_context(source_contracts)) if body["invocation_receipt"] is not None else None),
             infrastructure_failure_code=body["infrastructure_failure_code"],
             queued_at=datetime.fromisoformat(body["queued_at"]),
             started_at=datetime.fromisoformat(body["started_at"]),
             completed_at=datetime.fromisoformat(body["completed_at"]),
+            source_contracts=source_contracts,
         )
         if value.canonical_body() != body:
             raise ValueError("selected PRE terminal facts are invalid")
@@ -1243,7 +1277,9 @@ class HistoricalSourcePreSubmitTerminal:
     started_at: datetime
     completed_at: datetime
 
-    def __post_init__(self) -> None:
+    source_contracts: InitVar[SelectedPreSubmitSourceContracts] = field(kw_only=True)
+
+    def __post_init__(self, source_contracts: SelectedPreSubmitSourceContracts) -> None:
         """Keep work findings separate from recoverable infrastructure outcomes."""
         if type(self.lease) is not SelectedPreSubmitLeaseFacts:
             raise ValueError("selected PRE terminal lease is invalid")
@@ -1263,7 +1299,7 @@ class HistoricalSourcePreSubmitTerminal:
                 or self.execution.policy_sha256 != self.lease.reservation.policy_sha256
             ):
                 raise ValueError("selected PRE completed outcome is invalid")
-            self.execution.validate_lease(self.lease)
+            self.execution.validate_lease(self.lease, source_contracts=source_contracts)
         elif (self.outcome != "infrastructure_failed" or self.execution is not None
               or self.infrastructure_failure_code not in {
             "capacity_exceeded",
@@ -1294,7 +1330,7 @@ class HistoricalSourcePreSubmitTerminal:
         }
 
     @classmethod
-    def from_canonical_body(cls, body: object) -> HistoricalSourcePreSubmitTerminal:
+    def from_canonical_body(cls, body: object, *, source_contracts: SelectedPreSubmitSourceContracts) -> HistoricalSourcePreSubmitTerminal:
         """Parse and revalidate every persisted lease, result and timing fact."""
         if (
             type(body) is not dict
@@ -1318,7 +1354,7 @@ class HistoricalSourcePreSubmitTerminal:
             or body["schema_version"] != "workstream.selected_pre_submit_terminal.v2"
         ):
             raise ValueError("selected PRE terminal facts are invalid")
-        reservation = SelectedPreSubmitReservationFacts.from_canonical_body(body["reservation"])
+        reservation = SelectedPreSubmitReservationFacts.from_canonical_body(body["reservation"], source_contracts=source_contracts)
         if body["request_digest"] != reservation.request_digest:
             raise ValueError("selected PRE terminal request is invalid")
         execution_body = body["execution"]
@@ -1331,7 +1367,7 @@ class HistoricalSourcePreSubmitTerminal:
             ),
             outcome=body["outcome"],
             execution=(
-                SelectedPreSubmitExecutionFacts.from_canonical_body(execution_body)
+                SelectedPreSubmitExecutionFacts.from_canonical_body(execution_body, source_contracts=source_contracts)
                 if execution_body is not None
                 else None
             ),
@@ -1339,6 +1375,7 @@ class HistoricalSourcePreSubmitTerminal:
             queued_at=datetime.fromisoformat(body["queued_at"]),
             started_at=datetime.fromisoformat(body["started_at"]),
             completed_at=datetime.fromisoformat(body["completed_at"]),
+            source_contracts=source_contracts,
         )
         if value.canonical_body() != body:
             raise ValueError("selected PRE terminal facts are invalid")
@@ -1464,6 +1501,7 @@ __all__ = (
     "SelectedPreSubmitAuthorityEvidence",
     "SelectedPreSubmitAuthorityUnavailable",
     "SelectedPreSubmitAuthorityPort",
+    "SelectedPreSubmitSourceGuard",
     "SelectedPreSubmitCompletion",
     "SelectedPreSubmitCoordinationPort",
     "SelectedPreSubmitCurrentFacts",

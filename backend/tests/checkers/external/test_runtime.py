@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from app.adapters.artifacts import selected_pre_submit_source_contracts
+
 import asyncio
 from dataclasses import replace
 import hashlib
@@ -57,8 +59,12 @@ from app.modules.artifacts.api.submission_archive import (
 from app.modules.artifacts.submission_archive import (
     SubmissionArchiveInspector,
 )
-from app.modules.artifacts.submission_manifest import build_submission_manifest
-from app.modules.artifacts.submission_manifest import SUBMISSION_MANIFEST_SCHEMA_VERSION
+from app.modules.artifacts.api.submission_manifest import (
+    build_submission_manifest,
+)
+from app.modules.artifacts.api.submission_manifest import (
+    SUBMISSION_MANIFEST_SCHEMA_VERSION,
+)
 from app.modules.checkers.api.external import (
     ExternalCheckerContractError,
     ExternalCheckerExecutionRequest,
@@ -1123,7 +1129,7 @@ def _pre_transport_processor(lease, socket, changed):
     from app.modules.checkers.selected_pre_submit_execution import SelectedPreSubmitProcessor
     adapter = UnixSocketExternalCheckerAdapter(
         socket_path=socket, timeout_seconds=0.2 if changed == "slow_decode" else 5.0,
-    )
+     source_contracts=selected_pre_submit_source_contracts())
     if changed in {"configured", "model_wrapper"}:
         from app.adapters.checkers import (
             selected_pre_submit_checker_execution, configured_post_submit_external_execution,
@@ -1142,7 +1148,7 @@ def _pre_transport_processor(lease, socket, changed):
             wrapped = configured_post_submit_external_execution(settings, sessions=forbidden_sessions)
             processor = SelectedPreSubmitCheckerExecutionAdapter(external_execution=wrapped).build(lease)
     else:
-        processor = SelectedPreSubmitProcessor(lease=lease, execution=adapter)
+        processor = SelectedPreSubmitProcessor(lease=lease, execution=adapter, source_contracts=selected_pre_submit_source_contracts())
     return processor
 
 
@@ -1275,7 +1281,7 @@ async def test_single_pre_expired_lease_does_not_open_source_or_runtime(tmp_path
         def open_source(self, **kwargs):
             raise AssertionError("expired execution opened source")
 
-    adapter = UnixSocketExternalCheckerAdapter(socket_path=tmp_path / "absent.sock", timeout_seconds=5.0)
+    adapter = UnixSocketExternalCheckerAdapter(socket_path=tmp_path / "absent.sock", timeout_seconds=5.0, source_contracts=selected_pre_submit_source_contracts())
     with pytest.raises(SelectedPreSubmitInfrastructureUnavailable, match="deadline_exceeded"):
         await adapter.execute_pre(lease, NoSource())
 
@@ -1308,8 +1314,8 @@ async def test_single_pre_cancellation_closes_source_and_transport(tmp_path):
 
     socket = tmp_path / "cancel.sock"
     server = await asyncio.start_unix_server(handle, socket)
-    adapter = UnixSocketExternalCheckerAdapter(socket_path=socket, timeout_seconds=5.0)
-    processor = SelectedPreSubmitProcessor(lease=lease, execution=adapter)
+    adapter = UnixSocketExternalCheckerAdapter(socket_path=socket, timeout_seconds=5.0, source_contracts=selected_pre_submit_source_contracts())
+    processor = SelectedPreSubmitProcessor(lease=lease, execution=adapter, source_contracts=selected_pre_submit_source_contracts())
     task = asyncio.create_task(processor.process(Grant()))
     try:
         await asyncio.wait_for(entered.wait(), 2)

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from app.modules.artifacts.selected_pre_submit_source_contracts import ArtifactPreSubmitSourceContracts
+
 import asyncio
 from collections.abc import AsyncGenerator, AsyncIterator
 from contextlib import asynccontextmanager
@@ -214,14 +216,14 @@ class SelectedPreSubmitExecutionService:
             capability = await self._coordinator.committed_execution(run_id=run_id, lease=lease)
             async with self._source_reads.issue(lease=lease, execution_authority=capability) as grant:
                 result = await self._execution.build(lease).process(grant)
-                result.validate_lease(lease)
+                result.validate_lease(lease, source_contracts=ArtifactPreSubmitSourceContracts())
                 if result.receipt.outcome == "cancelled":
                     raise asyncio.CancelledError
                 execution, receipt = result.execution, result.receipt
                 failure = receipt.reason if execution is None else None
         except SelectedPreSubmitInfrastructureUnavailable as exc:
             failure = exc.code
-        facts = SelectedPreSubmitFinalizeFacts(lease=lease, execution=execution, invocation_receipt=receipt, infrastructure_failure_code=failure)
+        facts = SelectedPreSubmitFinalizeFacts(lease=lease, execution=execution, invocation_receipt=receipt, infrastructure_failure_code=failure, source_contracts=ArtifactPreSubmitSourceContracts())
         async with self._session.begin():
             async with self._authority.prepare_finalization(facts) as prepared:
                 return await self._coordinator.finalize(

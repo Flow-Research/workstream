@@ -46,7 +46,7 @@ def outbox_delivery(
 def production_outbox_delivery(session_factory, *, finalization_worker: bool | None = None):
     """Compose all handlers for discovery, or one explicit worker group for delivery."""
     from app.adapters.artifacts import worker_post_submission_materialization
-    from app.adapters.artifacts.finalization import (
+    from app.adapters.artifacts import (
         worker_submission_finalization_handler, worker_submission_finalization_recovery_handler,
     )
     from app.modules.artifacts.api.submission_recovery import FINALIZATION_RECOVERY_EVENT

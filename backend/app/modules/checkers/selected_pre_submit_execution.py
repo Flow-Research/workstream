@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from app.modules.checkers.api.source_contracts import SelectedPreSubmitSourceContracts
+
 import asyncio
 
 from app.interfaces.external_checker_execution import (
@@ -24,7 +26,9 @@ class SelectedPreSubmitProcessor:
 
     def __init__(
         self, *, lease: SelectedPreSubmitLeaseFacts, execution: ExternalCheckerExecutionAdapter,
+        source_contracts: SelectedPreSubmitSourceContracts,
     ) -> None:
+        self._source_contracts = source_contracts
         self._lease = lease
         self._execution = execution
         self._aborted = False
@@ -51,7 +55,7 @@ class SelectedPreSubmitProcessor:
             result = await self._execution.execute_pre(self._lease, grant)
             if type(result) is not SelectedPreSubmitInvocationResult:
                 raise ValueError("PRE result is invalid")
-            result.validate_lease(self._lease)
+            result.validate_lease(self._lease, source_contracts=self._source_contracts)
             if (result.receipt.adapter_provider_key != self._execution.identity.provider_key
                     or result.receipt.runtime.provider != self._execution.pre_runtime_provider):
                 raise ValueError("PRE provider differs")

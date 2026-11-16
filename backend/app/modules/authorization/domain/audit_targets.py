@@ -1,8 +1,8 @@
 """Exact project resource audit selectors, without raw product facts."""
 
 from uuid import UUID
-from app.modules.authorization.domain.submission_finalization import SubmissionFinalizationResourceContext
-from app.modules.authorization.domain.submission_cleanup import SubmissionSourceCleanupResourceContext
+from app.modules.authorization.api.submission_finalization import SubmissionFinalizationResourceContext
+from app.modules.authorization.api.submission_cleanup import SubmissionSourceCleanupResourceContext
 from app.modules.authorization.domain.submission_intake import IntakeReservationResourceContext, IntakeReservationPreflightResourceContext, IntakeAcceptanceResourceContext
 from app.modules.authorization.domain.contributor_reads import ContributorWorkReadResourceContext
 

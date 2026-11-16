@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from app.adapters.artifacts import selected_pre_submit_source_contracts
+
 from tests.trusted_intake_fixtures import LocalIntakeSession
 from app.modules.artifacts.trusted_intake import TrustedArchiveInspector
 from app.modules.artifacts.submission_materialization import _TrustedPreSubmitProcessor
@@ -81,9 +83,11 @@ from app.modules.artifacts.api.submission_archive import (
 from app.modules.artifacts.submission_archive import (
     SubmissionArchiveInspector,
 )
+from app.modules.artifacts.api.submission_manifest import (
+    build_submission_manifest,
+)
 from app.modules.artifacts.submission_manifest import (
     SubmissionCanonicalPredecessor,
-    build_submission_manifest,
     semantic_manifest_identity,
     evaluate_submission_change,
 )
@@ -163,7 +167,7 @@ def _selected_admission_reservation():
         semantic_manifest_sha256=canonical_json_hash(manifest),
         execution_budget_ms=120_000,
         admission_lineage=lineage,
-    )
+     source_contracts=selected_pre_submit_source_contracts())
     return manifest, post_policy, selected
 
 
@@ -171,7 +175,7 @@ def test_revision_acknowledgement_changes_selected_request_and_retains_old_bytes
     """A new acknowledgement is frozen; old selected requests keep their digest."""
     _, _, retained = _selected_admission_reservation()
     old_body = retained.canonical_body()
-    assert SelectedPreSubmitReservationFacts.from_canonical_body(old_body).canonical_body() == old_body
+    assert SelectedPreSubmitReservationFacts.from_canonical_body(old_body, source_contracts=selected_pre_submit_source_contracts()).canonical_body() == old_body
     assert "revision_preparation_id" not in old_body["admission_lineage"]
 
     predecessor_id, manifest_id, preparation_id = (
@@ -189,12 +193,12 @@ def test_revision_acknowledgement_changes_selected_request_and_retains_old_bytes
     body = selected.canonical_body()
     assert body["admission_lineage"]["revision_preparation_id"] == str(preparation_id)
     assert body["admission_lineage"]["revision_preparation_sha256"] == _hex_sha("b")
-    assert SelectedPreSubmitReservationFacts.from_canonical_body(body).request_digest == selected.request_digest
+    assert SelectedPreSubmitReservationFacts.from_canonical_body(body, source_contracts=selected_pre_submit_source_contracts()).request_digest == selected.request_digest
     null_ack = dict(body)
     null_ack["admission_lineage"] = dict(body["admission_lineage"])
     null_ack["admission_lineage"]["revision_preparation_id"] = None
     with pytest.raises(ValueError, match="selected PRE admission lineage is invalid"):
-        SelectedPreSubmitReservationFacts.from_canonical_body(null_ack)
+        SelectedPreSubmitReservationFacts.from_canonical_body(null_ack, source_contracts=selected_pre_submit_source_contracts())
 
     request = dict(
         actor_profile_id=selected.actor_profile_id,
@@ -428,7 +432,7 @@ def _processor(*, request, policy, default_input, identity, material, grants, ex
     checker = SelectedPreSubmitProcessor(
         policy=policy, default_input=default_input, identity=identity,
         material=material, execution=execution,
-    )
+     source_contracts=selected_pre_submit_source_contracts())
     request = replace(request, default_checker_input=default_input, external_policy=policy,
                       selected_reservation=replace(request.selected_reservation,
                           policy_sha256=policy.policy_sha256,
@@ -650,7 +654,7 @@ def _assert_terminal_round_trip(identity, policy, default_input, material, resul
         archive_byte_count=material.archive_byte_count,
         semantic_manifest_sha256=material.semantic_manifest_sha256,
         execution_budget_ms=120_000,
-    )
+     source_contracts=selected_pre_submit_source_contracts())
     lease = SelectedPreSubmitLeaseFacts(
         reservation=reservation,
         lease_id=new_record_id(),
@@ -665,15 +669,15 @@ def _assert_terminal_round_trip(identity, policy, default_input, material, resul
         queued_at=now,
         started_at=now + timedelta(milliseconds=25),
         completed_at=now + timedelta(milliseconds=75),
-    )
+     source_contracts=selected_pre_submit_source_contracts())
     assert terminal.canonical_body()["queue_latency_ms"] == 25
     assert terminal.canonical_body()["execution_latency_ms"] == 50
     assert terminal.canonical_body()["request_digest"] == reservation.request_digest
     assert terminal.terminal_digest == canonical_json_hash(terminal.canonical_body())
-    assert SelectedPreSubmitTerminalFacts.from_canonical_body(terminal.canonical_body()) == terminal
+    assert SelectedPreSubmitTerminalFacts.from_canonical_body(terminal.canonical_body(), source_contracts=selected_pre_submit_source_contracts()) == terminal
     changed_terminal = terminal.canonical_body() | {"queue_latency_ms": 26}
     with pytest.raises(ValueError, match="terminal facts"):
-        SelectedPreSubmitTerminalFacts.from_canonical_body(changed_terminal)
+        SelectedPreSubmitTerminalFacts.from_canonical_body(changed_terminal, source_contracts=selected_pre_submit_source_contracts())
 
 
 @pytest.mark.asyncio

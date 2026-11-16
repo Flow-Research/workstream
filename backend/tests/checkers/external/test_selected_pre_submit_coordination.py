@@ -2,6 +2,11 @@
 
 from __future__ import annotations
 
+from app.adapters.artifacts import selected_pre_submit_source_contracts
+from app.modules.checkers.api.source_contracts import source_contracts_context
+
+from app.modules.artifacts.selected_pre_submit_source_custody import SelectedPreSubmitSourceCustody
+
 import json
 
 from dataclasses import replace
@@ -69,7 +74,7 @@ def _reservation() -> SelectedPreSubmitReservationFacts:
         archive_byte_count=1024,
         semantic_manifest_sha256="sha256:" + "4" * 64,
         execution_budget_ms=120_000,
-    )
+     source_contracts=selected_pre_submit_source_contracts())
 
 
 def _queued_row(reservation: SelectedPreSubmitReservationFacts) -> SimpleNamespace:
@@ -109,7 +114,7 @@ async def test_selected_pre_current_replays_only_stable_actor_key_facts() -> Non
         scalar=AsyncMock(return_value=row),
     )
     tasks = SimpleNamespace(lock_selected_pre_submit_scope=AsyncMock())
-    coordinator = SelectedPreSubmitCoordinator(session, tasks=tasks)
+    coordinator = SelectedPreSubmitCoordinator(session, tasks=tasks, source_contracts=selected_pre_submit_source_contracts())
     fresh = replace(
         stored,
         attempt_id=new_record_id(),
@@ -147,7 +152,7 @@ async def test_selected_pre_expired_lease_read_keeps_task_first_custody() -> Non
         scalar=AsyncMock(side_effect=[row, now]),
     )
     tasks = SimpleNamespace(lock_selected_pre_submit_scope=AsyncMock())
-    coordinator = SelectedPreSubmitCoordinator(session, tasks=tasks)
+    coordinator = SelectedPreSubmitCoordinator(session, tasks=tasks, source_contracts=selected_pre_submit_source_contracts())
 
     lease = await coordinator.read_expired_lease(
         run_id=reservation.attempt_id,
@@ -349,7 +354,7 @@ def test_selected_pre_authority_digests_bind_lease_and_infrastructure_outcome() 
         lease=lease,
         execution=None,
         infrastructure_failure_code="deadline_exceeded",
-    )
+     source_contracts=selected_pre_submit_source_contracts())
 
     assert execution.facts_digest != changed.facts_digest
     assert (
@@ -358,14 +363,14 @@ def test_selected_pre_authority_digests_bind_lease_and_infrastructure_outcome() 
             lease=lease,
             execution=None,
             infrastructure_failure_code="material_unavailable",
-        ).facts_digest
+         source_contracts=selected_pre_submit_source_contracts()).facts_digest
     )
     with pytest.raises(ValueError, match="outcome"):
         SelectedPreSubmitFinalizeFacts(
             lease=lease,
             execution=None,
             infrastructure_failure_code=None,
-        )
+         source_contracts=selected_pre_submit_source_contracts())
 
 
 def test_selected_pre_request_binds_complete_later_admission_lineage() -> None:
@@ -404,7 +409,7 @@ def test_selected_pre_request_binds_complete_later_admission_lineage() -> None:
 
     assert reservation.canonical_body()["admission_lineage"] == lineage.canonical_body()
     assert (
-        SelectedPreSubmitReservationFacts.from_canonical_body(reservation.canonical_body())
+        SelectedPreSubmitReservationFacts.from_canonical_body(reservation.canonical_body(), source_contracts=selected_pre_submit_source_contracts())
         == reservation
     )
     assert (
@@ -528,12 +533,12 @@ def test_historical_pre_decoder_preserves_exact_request_and_terminal_bytes(name)
     assert terminal.canonical_body() == retained["terminal"]
     assert terminal.terminal_digest == retained["terminal_digest"]
     row = _retained_row(retained)
-    view = _view(row)
+    view = _view(row, source_contracts=selected_pre_submit_source_contracts())
     assert type(view.terminal) is HistoricalSelectedPreSubmitTerminal
     assert view.terminal.canonical_body() == retained["terminal"]
     row.terminal_digest = "sha256:" + "f" * 64
     with pytest.raises(SelectedPreSubmitUnavailable):
-        _view(row)
+        _view(row, source_contracts=selected_pre_submit_source_contracts())
 
 
 @pytest.mark.asyncio
@@ -546,7 +551,7 @@ async def test_historical_pre_values_cannot_become_live_reservation_or_lease():
     tasks = SimpleNamespace(lock_selected_pre_submit_scope=AsyncMock())
     sources = SimpleNamespace(lock_pre_source=AsyncMock())
     async with AsyncSession() as session, session.begin():
-        coordinator = SelectedPreSubmitCoordinator(session, tasks=tasks, sources=sources)
+        coordinator = SelectedPreSubmitCoordinator(session, tasks=tasks, sources=SelectedPreSubmitSourceCustody(sources), source_contracts=selected_pre_submit_source_contracts())
         with pytest.raises(TypeError, match="reservation facts are invalid"):
             await coordinator.reserve(request)
     tasks.lock_selected_pre_submit_scope.assert_not_awaited()
@@ -586,7 +591,7 @@ def test_historical_pre_read_rejects_foreign_row_selectors_and_facts(field, valu
     row = _retained_row(_retained_v1())
     setattr(row, field, value)
     with pytest.raises(SelectedPreSubmitUnavailable):
-        _view(row)
+        _view(row, source_contracts=selected_pre_submit_source_contracts())
 
 
 def test_historical_pre_decoder_rejects_an_unknown_outcome():
@@ -608,7 +613,7 @@ def test_historical_nonterminal_pre_remains_readable_without_inventing_an_outcom
     if status == "queued":
         row.started_at = row.lease_id = row.lease_expires_at = None
         row.lease_generation = 0
-    view = _view(row)
+    view = _view(row, source_contracts=selected_pre_submit_source_contracts())
     assert view.status == status and view.terminal is None and view.completed_at is None
 
 
@@ -672,20 +677,20 @@ def _source_reservation() -> SelectedPreSubmitReservationFacts:
             current_rules_sha256=lineage.rules_sha256, predecessor_rules_sha256=None,
             packet=packet,
         ),
-        runtime_profile=SelectedPreSubmitRuntimeProfile(
+        runtime_profile=SelectedPreSubmitRuntimeProfile.model_validate(dict(
             profile_id="test-only", platform_root_sha256=SHA, cpu_millis=2000,
             memory_bytes=2 * 1024**3, temporary_disk_bytes=4 * 1024**3,
             maximum_processes=64, maximum_output_bytes=1024 * 1024,
             maximum_log_bytes=1024 * 1024, aggregate_deadline_ms=120_000,
             archive_limits=SubmissionArchiveLimits(maximum_inspection_seconds=60),
-        ), admission_lineage=lineage,
-    )
+        ), context=source_contracts_context(selected_pre_submit_source_contracts())), admission_lineage=lineage,
+     source_contracts=selected_pre_submit_source_contracts())
 
 
 def test_source_first_reservation_round_trip_without_derived_inputs() -> None:
     request = _source_reservation()
     body = request.canonical_body()
-    assert SelectedPreSubmitReservationFacts.from_canonical_body(body) == request
+    assert SelectedPreSubmitReservationFacts.from_canonical_body(body, source_contracts=selected_pre_submit_source_contracts()) == request
     assert body["source_sha256"] == request.source.source_sha256()
     assert not {"prepared_generation_id", "default_input_sha256", "semantic_manifest_sha256"} & body.keys()
     assert "semantic_manifest_body" not in body["admission_lineage"]
@@ -703,7 +708,7 @@ def test_source_first_reservation_rejects_substituted_source(field: str) -> None
         "raw_byte_count": 1025, "sealed_upload_fence": 2,
     }[field]
     with pytest.raises(ValueError):
-        SelectedPreSubmitReservationFacts.from_canonical_body(body)
+        SelectedPreSubmitReservationFacts.from_canonical_body(body, source_contracts=selected_pre_submit_source_contracts())
 
 
 @pytest.mark.parametrize("field", [
@@ -714,19 +719,19 @@ def test_source_first_reservation_rejects_unobserved_or_mutable_facts(field: str
     body = _source_reservation().canonical_body()
     body[field] = SHA
     with pytest.raises(ValueError):
-        SelectedPreSubmitReservationFacts.from_canonical_body(body)
+        SelectedPreSubmitReservationFacts.from_canonical_body(body, source_contracts=selected_pre_submit_source_contracts())
 
 
 def test_source_first_reservation_binds_packet_and_hard_deadline() -> None:
     request = _source_reservation()
-    assert replace(request, pre_deadline_at=request.pre_deadline_at + timedelta(seconds=1)).request_digest != request.request_digest
+    assert replace(request, pre_deadline_at=request.pre_deadline_at + timedelta(seconds=1), source_contracts=selected_pre_submit_source_contracts()).request_digest != request.request_digest
     with pytest.raises(ValueError):
-        replace(request, pre_deadline_at=datetime.now())
+        replace(request, pre_deadline_at=datetime.now(), source_contracts=selected_pre_submit_source_contracts())
     from app.modules.checkers.api.pre_submit_material import SubmissionPacketView
     with pytest.raises(ValueError):
         replace(request, default_context=replace(
             request.default_context, packet=SubmissionPacketView("substituted", ""),
-        ))
+        ), source_contracts=selected_pre_submit_source_contracts())
 
 
 def _source_guard(request):
@@ -761,7 +766,7 @@ async def test_source_first_reserve_checks_live_custody_before_checker_rows(fiel
         in_nested_transaction=lambda: False, scalar=AsyncMock(), execute=AsyncMock(),
     )
     tasks = SimpleNamespace(lock_selected_pre_submit_scope=AsyncMock())
-    coordinator = SelectedPreSubmitCoordinator(session, tasks=tasks, sources=sources)
+    coordinator = SelectedPreSubmitCoordinator(session, tasks=tasks, sources=SelectedPreSubmitSourceCustody(sources), source_contracts=selected_pre_submit_source_contracts())
     with pytest.raises(SelectedPreSubmitUnavailable, match="source_changed"):
         await coordinator.reserve(request)
     tasks.lock_selected_pre_submit_scope.assert_awaited_once_with(request)
@@ -793,8 +798,8 @@ async def test_source_first_claim_caps_lease_at_existing_hard_deadline() -> None
         return SimpleNamespace(facts_digest=facts.facts_digest, evidence_id=new_record_id())
     coordinator = SelectedPreSubmitCoordinator(
         session, tasks=SimpleNamespace(lock_selected_pre_submit_scope=AsyncMock()),
-        sources=_source_guard(request),
-    )
+        sources=SelectedPreSubmitSourceCustody(_source_guard(request)),
+     source_contracts=selected_pre_submit_source_contracts())
     authority = SimpleNamespace(consume=AsyncMock(side_effect=consume))
     lease = await coordinator.claim(run_id=request.attempt_id, facts=request, authority=authority)
     assert lease.lease_expires_at == request.pre_deadline_at
@@ -813,7 +818,7 @@ def test_source_first_lease_cannot_extend_aggregate_deadline() -> None:
 def test_source_first_policy_requires_exactly_one_project_image() -> None:
     from tests.checkers.external.test_selected_pre_submit import _empty_policy
     with pytest.raises(ValueError, match="locked context"):
-        replace(_source_reservation(), policy=_empty_policy())
+        replace(_source_reservation(), policy=_empty_policy(), source_contracts=selected_pre_submit_source_contracts())
 
 
 def test_source_first_profile_rejects_archive_time_beyond_aggregate() -> None:
@@ -822,7 +827,7 @@ def test_source_first_profile_rejects_archive_time_beyond_aggregate() -> None:
     with pytest.raises(ValueError, match="locked context"):
         replace(request, runtime_profile=request.runtime_profile.model_copy(update={
             "archive_limits": SubmissionArchiveLimits(maximum_inspection_seconds=121),
-        }))
+        }), source_contracts=selected_pre_submit_source_contracts())
 
 
 def _source_receipt(lease):
@@ -830,7 +835,7 @@ def _source_receipt(lease):
     from app.modules.checkers.api.selected_pre_submit import SelectedPreSubmitInvocationReceipt
     from tests.checkers.external.test_pre_invocation import receipt_body
 
-    return SelectedPreSubmitInvocationReceipt.model_validate_json(json.dumps(receipt_body(lease)))
+    return SelectedPreSubmitInvocationReceipt.model_validate_json(json.dumps(receipt_body(lease)), context=source_contracts_context(selected_pre_submit_source_contracts()))
 
 
 def _source_completed_execution(reservation):
@@ -851,7 +856,7 @@ def _source_completed_execution(reservation):
     lease = SelectedPreSubmitLeaseFacts(reservation, new_record_id(), 1, reservation.pre_deadline_at)
     value, request = derive_selected_pre_submit_input(
         lease, manifest_body=manifest, manifest_sha256=manifest_sha256,
-    )
+     source_contracts=selected_pre_submit_source_contracts())
     selected = reservation.policy.entries[0]
     result = make_external_checker_execution_result(
         request_digest=request.request_digest, registry_entry_id=selected.registry.registry_entry_id,
@@ -875,7 +880,7 @@ def _source_completed_execution(reservation):
                  "runtime": "smolvm", "isolation_mode": "smol-microvm"}
             )),
         ),),
-    )
+     source_contracts=selected_pre_submit_source_contracts())
 
 
 @pytest.mark.parametrize("changed", [
@@ -905,22 +910,22 @@ def test_source_first_finalization_binds_actual_selected_member(changed):
         member = replace(member, isolation=replace(
             member.isolation, platform_manifest_digest="sha256:" + "f" * 64,
         ))
-    execution = replace(execution, external_members=(member,))
+    execution = replace(execution, external_members=(member,), source_contracts=selected_pre_submit_source_contracts())
     if changed == "missing":
-        execution = replace(execution, external_members=(), eligible=False)
+        execution = replace(execution, external_members=(), eligible=False, source_contracts=selected_pre_submit_source_contracts())
     now = datetime.now(UTC)
     lease = SelectedPreSubmitLeaseFacts(
         reservation=reservation, lease_id=execution.lease_id, lease_generation=execution.lease_generation,
         lease_expires_at=reservation.pre_deadline_at,
     )
     def finalize():
-        return SelectedPreSubmitFinalizeFacts(lease, execution, _source_receipt(lease), None)
+        return SelectedPreSubmitFinalizeFacts(lease, execution, _source_receipt(lease), None, source_contracts=selected_pre_submit_source_contracts())
     def terminal():
-        return SelectedPreSubmitTerminalFacts(lease, "completed", execution, _source_receipt(lease), None, now, now, now)
+        return SelectedPreSubmitTerminalFacts(lease, "completed", execution, _source_receipt(lease), None, now, now, now, source_contracts=selected_pre_submit_source_contracts())
     if changed is None:
         assert finalize().execution == execution
         value = terminal()
-        assert SelectedPreSubmitTerminalFacts.from_canonical_body(value.canonical_body()) == value
+        assert SelectedPreSubmitTerminalFacts.from_canonical_body(value.canonical_body(), source_contracts=selected_pre_submit_source_contracts()) == value
     else:
         for construct in (finalize, terminal):
             with pytest.raises(ValueError, match="execution selection"):
@@ -930,7 +935,7 @@ def test_source_first_finalization_binds_actual_selected_member(changed):
 def test_source_first_execution_cannot_claim_zero_required_project_checks():
     execution = _source_completed_execution(_source_reservation())
     with pytest.raises(ValueError, match="execution facts"):
-        replace(execution, required_external_count=0, external_members=(), eligible=True)
+        replace(execution, required_external_count=0, external_members=(), eligible=True, source_contracts=selected_pre_submit_source_contracts())
 
 
 def test_source_first_default_rejection_does_not_require_project_result():
@@ -939,6 +944,7 @@ def test_source_first_default_rejection_does_not_require_project_result():
     reservation = _source_reservation()
     execution = replace(
         _source_completed_execution(reservation),
+        source_contracts=selected_pre_submit_source_contracts(),
         workstream_default=evaluate_rejected_archive(
             "submission_archive_malformed", packet=reservation.default_context.packet,
         ), external_members=(), eligible=False,
@@ -947,7 +953,7 @@ def test_source_first_default_rejection_does_not_require_project_result():
     lease = SelectedPreSubmitLeaseFacts(
         reservation, execution.lease_id, execution.lease_generation, reservation.pre_deadline_at,
     )
-    assert SelectedPreSubmitFinalizeFacts(lease, execution, _source_receipt(lease), None).execution == execution
+    assert SelectedPreSubmitFinalizeFacts(lease, execution, _source_receipt(lease), None, source_contracts=selected_pre_submit_source_contracts()).execution == execution
 
 
 @pytest.mark.parametrize("boundary", ["finalization", "terminal"])
@@ -958,16 +964,16 @@ def test_source_first_result_digest_revalidated_before_terminal_write(boundary):
     execution = _source_completed_execution(reservation)
     member = execution.external_members[0]
     forged = member.result.model_copy(update={"result_digest": "sha256:" + "f" * 64})
-    execution = replace(execution, external_members=(replace(member, result=forged),))
+    execution = replace(execution, external_members=(replace(member, result=forged),), source_contracts=selected_pre_submit_source_contracts())
     lease = SelectedPreSubmitLeaseFacts(
         reservation, execution.lease_id, execution.lease_generation, reservation.pre_deadline_at,
     )
     now = datetime.now(UTC)
     with pytest.raises(ValueError, match="result digest mismatch"):
         if boundary == "finalization":
-            SelectedPreSubmitFinalizeFacts(lease, execution, _source_receipt(lease), None)
+            SelectedPreSubmitFinalizeFacts(lease, execution, _source_receipt(lease), None, source_contracts=selected_pre_submit_source_contracts())
         else:
-            SelectedPreSubmitTerminalFacts(lease, "completed", execution, _source_receipt(lease), None, now, now, now)
+            SelectedPreSubmitTerminalFacts(lease, "completed", execution, _source_receipt(lease), None, now, now, now, source_contracts=selected_pre_submit_source_contracts())
 
 
 @pytest.mark.parametrize("changed", [
@@ -985,11 +991,11 @@ def test_source_first_completed_evidence_rejects_substitution(changed):
         reservation, execution.lease_id, execution.lease_generation, reservation.pre_deadline_at,
     )
     if changed == "request":
-        execution = replace(execution, request_digest="sha256:" + "f" * 64)
+        execution = replace(execution, request_digest="sha256:" + "f" * 64, source_contracts=selected_pre_submit_source_contracts())
     elif changed == "lease_id":
-        execution = replace(execution, lease_id=new_record_id())
+        execution = replace(execution, lease_id=new_record_id(), source_contracts=selected_pre_submit_source_contracts())
     elif changed == "lease_generation":
-        execution = replace(execution, lease_generation=execution.lease_generation + 1)
+        execution = replace(execution, lease_generation=execution.lease_generation + 1, source_contracts=selected_pre_submit_source_contracts())
     elif changed.startswith("source_"):
         source = execution.observed_source
         field, value = {
@@ -1000,15 +1006,15 @@ def test_source_first_completed_evidence_rejects_substitution(changed):
                 "operation_id": new_record_id(),
             })),
         }[changed]
-        execution = replace(execution, observed_source=source.model_copy(update={field: value}))
+        execution = replace(execution, observed_source=source.model_copy(update={field: value}), source_contracts=selected_pre_submit_source_contracts())
     elif changed == "default_input":
-        execution = replace(execution, default_input_sha256="sha256:" + "f" * 64)
+        execution = replace(execution, default_input_sha256="sha256:" + "f" * 64, source_contracts=selected_pre_submit_source_contracts())
     elif changed == "manifest":
         body = deepcopy(execution.manifest_body)
         body["entries"][0]["normalized_path"] = "../escape"
-        execution = replace(execution, manifest_body=body, manifest_sha256=canonical_json_hash(body))
+        execution = replace(execution, manifest_body=body, manifest_sha256=canonical_json_hash(body), source_contracts=selected_pre_submit_source_contracts())
     elif changed == "missing_manifest":
-        execution = replace(execution, manifest_body=None, manifest_sha256=None, default_input_sha256=None)
+        execution = replace(execution, manifest_body=None, manifest_sha256=None, default_input_sha256=None, source_contracts=selected_pre_submit_source_contracts())
     elif changed == "project_request":
         member = execution.external_members[0]
         # Echo agreement plus a valid result digest is insufficient: the owner
@@ -1019,9 +1025,9 @@ def test_source_first_completed_evidence_rejects_substitution(changed):
         ))
         execution = replace(execution, external_members=(replace(
             member, request_digest=result.request_digest, result=result,
-        ),))
+        ),), source_contracts=selected_pre_submit_source_contracts())
     with pytest.raises(ValueError):
-        SelectedPreSubmitFinalizeFacts(lease, execution, _source_receipt(lease), None)
+        SelectedPreSubmitFinalizeFacts(lease, execution, _source_receipt(lease), None, source_contracts=selected_pre_submit_source_contracts())
 
 
 @pytest.mark.parametrize("limit", ["maximum_entries", "maximum_path_bytes", "maximum_entry_bytes"])
@@ -1034,12 +1040,12 @@ def test_source_first_derived_manifest_obeys_locked_limits(limit):
     profile = reservation.runtime_profile.model_copy(update={
         "archive_limits": SubmissionArchiveLimits(**{limit: 1}, maximum_inspection_seconds=60),
     })
-    reservation = replace(reservation, runtime_profile=profile)
+    reservation = replace(reservation, runtime_profile=profile, source_contracts=selected_pre_submit_source_contracts())
     lease = SelectedPreSubmitLeaseFacts(reservation, new_record_id(), 1, reservation.pre_deadline_at)
     with pytest.raises(ValueError):
         derive_selected_pre_submit_input(
             lease, manifest_body=execution.manifest_body, manifest_sha256=execution.manifest_sha256,
-        )
+         source_contracts=selected_pre_submit_source_contracts())
 
 
 @pytest.mark.parametrize("failure", ["high_confidence_secret_detected", "submission_archive_unchanged"])
@@ -1066,7 +1072,7 @@ def test_source_first_default_blocker_does_not_validate_unrun_project_schema(fai
     ))
     reservation = replace(reservation, policy=policy, admission_lineage=replace(
         reservation.admission_lineage, effective_plan_sha256=policy.policy_sha256,
-    ))
+    ), source_contracts=selected_pre_submit_source_contracts())
     if failure == "submission_archive_unchanged":
         from app.modules.checkers.api.default_checker import WorkstreamDefaultPredecessor
         predecessor = WorkstreamDefaultPredecessor(
@@ -1080,15 +1086,15 @@ def test_source_first_default_blocker_does_not_validate_unrun_project_schema(fai
                 reservation.admission_lineage, predecessor_submission_id=predecessor.submission_id,
                 predecessor_submission_version=1, checker_remediation_manifest_id=new_record_id(),
             ),
-        )
+         source_contracts=selected_pre_submit_source_contracts())
     lease = SelectedPreSubmitLeaseFacts(reservation, execution.lease_id, 1, reservation.pre_deadline_at)
     default_input = derive_selected_pre_submit_default_input(
         lease, manifest_body=execution.manifest_body, manifest_sha256=execution.manifest_sha256,
-    )
+     source_contracts=selected_pre_submit_source_contracts())
     with pytest.raises(ValueError):
         derive_selected_pre_submit_input(
             lease, manifest_body=execution.manifest_body, manifest_sha256=execution.manifest_sha256,
-        )
+         source_contracts=selected_pre_submit_source_contracts())
     default = execution.workstream_default.model_dump()
     checks = list(default["checks"])
     index = 2 if failure == "high_confidence_secret_detected" else 3
@@ -1098,5 +1104,44 @@ def test_source_first_default_blocker_does_not_validate_unrun_project_schema(fai
         execution, request_digest=reservation.request_digest, policy_sha256=policy.policy_sha256,
         workstream_default=WorkstreamDefaultCheckerResult.model_validate(default),
         default_input_sha256=workstream_default_input_sha256(default_input), external_members=(), eligible=False,
+     source_contracts=selected_pre_submit_source_contracts())
+    assert SelectedPreSubmitFinalizeFacts(lease, execution, _source_receipt(lease), None, source_contracts=selected_pre_submit_source_contracts()).execution == execution
+
+
+def test_source_validation_dependency_is_not_retained_in_request():
+    from dataclasses import fields
+
+    request = _source_reservation()
+    assert "source_contracts" not in {item.name for item in fields(request)}
+    assert "source_contracts" not in request.canonical_body()
+    with pytest.raises(TypeError, match="source_contracts"):
+        SelectedPreSubmitReservationFacts.from_canonical_body(request.canonical_body())
+
+
+def test_nested_receipt_requires_explicit_source_validation_context():
+    from app.modules.checkers.api.selected_pre_submit import SelectedPreSubmitInvocationReceipt
+
+    reservation = _source_reservation()
+    lease = SelectedPreSubmitLeaseFacts(
+        reservation, new_record_id(), 1, reservation.pre_deadline_at,
     )
-    assert SelectedPreSubmitFinalizeFacts(lease, execution, _source_receipt(lease), None).execution == execution
+    body = _source_receipt(lease).canonical_body()
+    with pytest.raises(ValueError, match="source contracts are required"):
+        SelectedPreSubmitInvocationReceipt.model_validate_json(json.dumps(body))
+    context = source_contracts_context(selected_pre_submit_source_contracts())
+    recovered = SelectedPreSubmitInvocationReceipt.model_validate_json(json.dumps(body), context=context)
+    assert recovered.canonical_body() == body
+    body["runtime"]["profile"]["archive_limits"]["maximum_entries"] = True
+    with pytest.raises(ValueError):
+        SelectedPreSubmitInvocationReceipt.model_validate_json(json.dumps(body), context=context)
+
+
+def test_source_profile_preserves_float_wire_representation():
+    request = _source_reservation()
+    profile = request.runtime_profile.model_dump(mode="json")
+    assert type(profile["archive_limits"]["maximum_inspection_seconds"]) is float
+    assert profile["archive_limits"]["maximum_inspection_seconds"] == 60.0
+    restored = SelectedPreSubmitReservationFacts.from_canonical_body(
+        request.canonical_body(), source_contracts=selected_pre_submit_source_contracts(),
+    )
+    assert restored.request_digest == request.request_digest

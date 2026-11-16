@@ -3648,3 +3648,210 @@ b083aa86e92a9b36ce306d27003a8d4202a6887d, Backend run43338819788) is NOT green:
 Repair bounded count/format/reflection regressions, then continue provider cleanup
 and the already-required public/client/downstream cutover. No full-suite readiness
 or merge request is implied by the focused cleanup proof.
+
+### Bounded CI regression repair
+
+Repair the observed preflight/runtime/catalogue failures before further cleanup
+composition. Allowed changes: explicit accepted-evidence field publication in
+ART foreground admission; CLI permission response validation and its HTTP/API
+fixtures; MCP catalogue fixtures; the independent external API drill permission
+oracle and tests; rustfmt on the two changed PRE Rust files; this record.
+Preserve the full accepted decision/event/receipt transaction and all input
+identity fields. Keep the closed permission count exact at95 and add only the
+new cleanup permission to the drill oracle. Do not relax response validation,
+module-boundary gates, tests or lanes, or restore the obsolete PRE flow.
+Risk is L0 for acceptance atomicity and L1 for client catalogue/format fixes.
+Verify boundary/structure checks, real PostgreSQL T4 acceptance and rollback,
+CLI HTTP and real API catalogue behavior, MCP catalogue behavior, drill oracle
+unit proof and cargo fmt. Review architecture/security and QA for acceptance,
+docs/CI for unchanged gate and proof scope. Human review focus is the explicit
+publication field set and unchanged authorization/OUTBOX atomicity. Native Smol
+qualification and remaining old PRE consumers are outside this repair's proof.
+
+Once reflection is removed, preflight reports two added private AUTH edges:
+ART's authorization adapter imports the cleanup and finalization resource fact
+models from AUTH's domain package. These are strict, immutable selector-only
+models that the caller must construct; relocate their definitions into AUTH's
+public API, update all internal and external consumers, and remove the superseded
+domain files. This exposes the actual typed fact contract rather than adding a
+private-module re-export or ledger exception. The same models, validation,
+audit digests and authority checks remain; no executable capability is granted
+by constructing values. Include the two moves and consumer imports in this
+scope's architecture/security review and replay existing exact-authority tests.
+
+Further gate inspection finds four private ART imports in the new finalization
+adapter submodule. Move that actual composition into the canonical ART adapter
+root, update OUTBOX and test callers, and remove the superseded submodule. This
+uses the repository's existing owner-composition boundary and adds no ledger
+entry. Include original/recovery finalizer composition tests in verification.
+MCP's permission schema snapshot also still fixes94 and its closed enum omits
+cleanup; regenerate that one transitive fragment from current backend OpenAPI,
+retain the snapshot digest check, and verify the installed contract behavior.
+
+The public API leak gate additionally identifies manifest validation importing
+private ART implementations. Move the actual canonical manifest value, builder
+and reported-manifest validator into `artifacts/api/submission_manifest.py`, and
+pure path/inventory rules into the existing archive API. Keep ZIP I/O and change
+policy private; update all affected consumers without compatibility re-exports.
+Extract the existing digest-format validator into `core/hashing.py` and update
+its consumers so public values do not depend on private source capabilities.
+This scope includes those files and their existing tests. Preserve closed shape,
+digest, normalization, collision, ancestry and resource-limit rejection behavior;
+verify existing archive/manifest/change-gate and selected PRE contract tests,
+plus the full boundary gate. Include this relocation in architecture/QA review.
+
+The concrete manifest relocation clears the public-private leak stage. The full
+boundary run now reaches `cyclic_public_dependency` (boundaries4 log). A direct
+edge inventory identifies CHECKERS -> ART in `checkers/api/selected_pre_submit.py`
+(source values, archive limits and manifest validation) and
+`checkers/selected_pre_submit_coordination.py` (source custody port), against the
+existing ART -> CHECKERS dependency. This requires a real consumer-port design
+repair; the relocation alone does not establish a passing boundary gate.
+Archive/manifest/change-gate regression run: 76 passed, 5 failed in 121.63s.
+All five failures are preparation-deadline errors before inspection in the
+scratch-backed archive tests; preserve the deadline and diagnose independently.
+Evidence: `/tmp/submission-ci-repair-manifest.log`. No passing-suite claim.
+
+The regenerated MCP permission snapshot and updated fixtures passed all 21
+selected permission-list cases (210 deselected, 215.33s), including the three
+previously failing schema/wire/revocation cases. Evidence:
+`/tmp/submission-ci-repair-mcp-permissions.log`. This proves source-package
+permission behavior only; installed-wheel API integration remains separate.
+
+The unchanged single scratch-preparation case also fails independently with
+`ArtifactPreparationDeadlineError` (1 failed, 28.67s;
+`/tmp/submission-ci-repair-archive-deadline-probe.log`). Thus parallel pytest
+contention alone is not an adequate explanation. Next diagnose preparation I/O
+and compare the same case before relocation, preserving its ten-second bound.
+
+Scratch diagnosis continued without changing production behavior or limits.
+Temporary timing instrumentation outside the repository reproduced successful
+preparation in 5.02s: 64 ledger writes, 61 reserve-byte calls; ledger writes took
+3.46s. The test buffer is two bytes and the sample ZIP is 122 bytes. The same
+five failing cases then passed unchanged (5 passed, 38 deselected, 36.61s;
+`/tmp/submission-ci-repair-archive-preparation-replay.log`). Together these show
+variable preparation I/O latency, not a demonstrated manifest-validation defect;
+retain the original timeout failures as evidence rather than claiming reliable
+full-suite passage. Cargo fmt --check passed for the Rust service.
+
+Further dirty-worktree verification after the public contract relocations:
+- Exact finalization/cleanup authorization module: 10 passed in 56.17s,
+  Alembic0080, isolated database cleanup true
+  (`/tmp/submission-ci-repair-authority.log/json`).
+- Selected PRE derived-manifest, completed-evidence and default-blocker cases:
+  17 passed, 69 deselected in 15.91s
+  (`/tmp/submission-ci-repair-derived-manifest.log`).
+- Test structure boundary validation and Ruff on all changed backend Python
+  files passed; git diff --check passed.
+These receipts validate their affected scope, not the unresolved dependency
+cycle, obsolete PRE callers or public end-to-end behavior.
+
+Architecture consultation confirms two explicit CHECKERS consumer boundaries:
+pure source-contract validation and session-bound live custody. Keep actual
+source and limits values ART-owned; do not move them into core/interfaces or
+add parallel models. Thread pure validation explicitly through constructors,
+canonical decoding and nested invocation receipts; missing decoder context must
+fail closed. This consultation is not frozen candidate approval.
+First implement the independent custody boundary: add CHECKERS' source guard
+protocol, move exact source/lease/context comparison into an ART-owned guard,
+compose it through ART's adapter root, and update coordinator callers and
+existing source-substitution tests. Keep TASK-before-ART-before-CHECKERS order,
+all compared fields, and current refusal category. Allowed files include those
+two owners, adapter roots and the existing coordination test module. Risk L0;
+verify live-custody substitution cases and historical refusal, then include real
+PostgreSQL acceptance/recovery coverage in final review. Pure decoding remains
+an explicit remaining edge, not hidden by this first step.
+
+The custody-port step passed the existing exact live-source substitution,
+lease-cap and historical-refusal cases: 12 passed, 74 deselected in 3.05s
+(`/tmp/submission-ci-repair-source-guard.log`). The tests now exercise ART's
+real comparison guard with controlled custody facts; every original comparison
+is preserved. CHECKERS' coordinator no longer imports ART. The selected-PRE API
+still imports ART for pure source/limits/manifest validation; the full dependency
+cycle therefore remains open. The next implementation step must explicitly
+thread pure validation through constructor/decoder and nested receipt paths;
+consumer inventory is `/tmp/submission-source-codec-consumers.txt`. Architecture
+consultation completed without edits and is not final candidate approval.
+
+Pure-contract repair scope: add a small CHECKERS API declaring read-only source
+and archive-limit views plus strict parsing/validation methods. ART implements
+those methods with its existing source, archive and manifest definitions; only
+ART's canonical adapter root constructs the implementation. The port carries
+no session, credentials or provider read capability. Add a canonical body method
+to the existing archive-limits value for exact JSON preservation. Then replace
+CHECKERS' concrete ART dependencies and thread the port through affected owner
+services, adapters, constructors and decoders. Existing substitution, resource
+limit and canonical-wire tests remain the proof; add only missing port-boundary
+failure cases. Never store the port in persisted facts, use a global codec,
+weaken strict source typing or permit context-free JSON decoding. Allowed files
+include the two owners' APIs/implementations, their adapter roots and traced
+callers/tests. Risk remains L0; frozen architecture/security and QA review is
+required after the complete call-path cutover, not for an unused interface alone.
+
+Pure validation port and ART implementation added, preserving concrete owner
+values and delegating canonical manifest validation to the existing implementation.
+The port tests passed 11 cases (137 deselected, 29.44s;
+`/tmp/submission-source-contract-port.log`): reject forged/non-owner source
+objects, missing/extra/coercive/overflow limits, omitted canonical source fields,
+wrong manifest digest, stricter entry limits and malformed manifest fields.
+Ruff and diff whitespace checks passed. This is boundary implementation evidence,
+not completed runtime wiring or a passing module DAG. Production decoding still
+uses the original concrete imports until the coordinated signature cutover.
+Call-path inventory identifies coordinator replay, retained-run reader, ART
+admission recovery, checker external-service response decoding, and nested
+receipt decoding/validate_lease as required consumers. Do not wire only the
+foreground constructor and leave historical or replay paths unvalidated.
+
+The pure port is now explicitly threaded through CHECKERS source/execution
+constructors (keyword-only InitVar, excluded from retained dataclass fields),
+canonical decoders, derivation and nested receipt validation. Runtime-profile
+JSON parsing requires an explicit owner context and preserves existing limits
+serialization. Coordinator, retained reader, processor and socket transport get
+the dependency through composition; ART callers use their owner implementation.
+Pydantic also traverses these dataclasses inside AUTH resource values, requiring
+explicit structural-view validation hooks; no arbitrary source decoding fallback
+was added. Direct and fixture callers were updated together.
+The first focused run after schema-hook repair passed87/failed1 because one
+`dataclasses.replace` test omitted the required InitVar. After fixing that caller
+and adding missing-context/non-retention tests, all90 selected cases passed
+(34 deselected, 18.42s; `/tmp/submission-source-codec-wiring3.log`). The earlier
+full module-boundary run passed (`/tmp/submission-ci-repair-boundaries5.log`),
+and a repeat after complete wiring is underway. PostgreSQL T4, structure and
+OpenAPI verification remain pending; no final frozen review or commit yet.
+
+Complete call-path inspection also includes the separate trusted guest entry
+point and portable guest/service drills under `external_checkers/`. Update their
+manifest imports and explicit pure-validator construction with the backend
+callers. The guest already composes the private ZIP inspector and default checker;
+it constructs ART's pure validator at that application boundary without pulling
+API/session adapter roots into execution. Include these paths in architecture
+review; a backend-only import scan does not prove the guest is wired.
+The first T4 replay stopped during collection on the missed guest manifest import;
+that import and the guest's decoder/derivation calls are repaired. No T4 pass is
+claimed for that run. A direct old-HEAD/new-profile wire comparison then exposed
+integer versus float inspection-second serialization. Preserve Pydantic's prior
+float output in the existing limits canonical projection; the corrected comparison
+passes for integer, fractional and default seconds
+(`/tmp/submission-profile-wire-compare.log`). Added a focused wire-representation
+regression. Current repeated full module-boundary and structure gates passed;
+OpenAPI generation succeeded (822091-byte document). T4 and portable worker
+verification are still running, and candidate review remains pending.
+
+Portable guest PRE proof passed19 cases (27 deselected, 18.68s;
+`/tmp/submission-source-codec-worker.log`). The combined source/receipt/port/wire
+regression selection passed105 cases (168 deselected, 25.32s;
+`/tmp/submission-source-codec-final-pure.log`). This includes the owner-context
+requirement, omission of the InitVar from retained request fields and the prior
+float serialization representation. The original failed T4 collection run did
+clean its isolated database; its metadata is not a pass receipt. The repaired
+T4 replay remains in progress under `/tmp/submission-source-codec-t4-replay.*`.
+
+The CI-repair implementation is being frozen as a review candidate after passing
+module-boundary, structure, Ruff, OpenAPI and documentation checks, 105 focused
+source/receipt cases and 19 portable PRE-worker cases. Latest fetched main is
+94334ccf4 with zero missing upstream commits. PostgreSQL T4 replay is still live;
+original/recovery finalizer composition tests and frozen architecture/security,
+QA/test-delta and docs/CI reviews remain required before pushing this repair.
+This candidate commit does not mark the full submission initiative complete or
+the single draft PR ready. The public API/client/downstream/cleanup/provider
+work listed in the implementation snapshot remains in scope.

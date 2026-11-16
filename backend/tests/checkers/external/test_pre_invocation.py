@@ -1,4 +1,7 @@
 """Receipt contract proof with synthetic, unqualified provider observations."""
+
+from app.adapters.artifacts import selected_pre_submit_source_contracts
+from app.modules.checkers.api.source_contracts import source_contracts_context
 import json
 from copy import deepcopy
 from dataclasses import replace
@@ -58,16 +61,16 @@ def lease():
 def test_received_failure_retains_receipt_in_authority_digest(lease, managed, disposition, outcome, reason):
     body = receipt_body(lease, outcome=outcome, reason=reason, managed=managed)
     body["cleanup"]["disposition"] = disposition
-    receipt = SelectedPreSubmitInvocationReceipt.model_validate_json(json.dumps(body))
+    receipt = SelectedPreSubmitInvocationReceipt.model_validate_json(json.dumps(body), context=source_contracts_context(selected_pre_submit_source_contracts()))
     result = SelectedPreSubmitInvocationResult(receipt, None)
-    result.validate_lease(lease)
-    assert SelectedPreSubmitInvocationResult.from_canonical_body(result.canonical_body()) == result
-    facts = SelectedPreSubmitFinalizeFacts(lease, None, receipt, reason)
-    assert facts.facts_digest != replace(facts, invocation_receipt=None).facts_digest
+    result.validate_lease(lease, source_contracts=selected_pre_submit_source_contracts())
+    assert SelectedPreSubmitInvocationResult.from_canonical_body(result.canonical_body(), source_contracts=selected_pre_submit_source_contracts()) == result
+    facts = SelectedPreSubmitFinalizeFacts(lease, None, receipt, reason, source_contracts=selected_pre_submit_source_contracts())
+    assert facts.facts_digest != replace(facts, invocation_receipt=None, source_contracts=selected_pre_submit_source_contracts()).facts_digest
     changed = deepcopy(body)
     changed["cleanup"]["disposition"] = "pending" if disposition == "destroyed" else "destroyed"
-    other = SelectedPreSubmitInvocationReceipt.model_validate_json(json.dumps(changed))
-    assert replace(facts, invocation_receipt=other).facts_digest != facts.facts_digest
+    other = SelectedPreSubmitInvocationReceipt.model_validate_json(json.dumps(changed), context=source_contracts_context(selected_pre_submit_source_contracts()))
+    assert replace(facts, invocation_receipt=other, source_contracts=selected_pre_submit_source_contracts()).facts_digest != facts.facts_digest
 
 
 @pytest.mark.parametrize("field", ["run_id", "source_operation_id", "request_digest", "source_sha256",
@@ -77,7 +80,7 @@ def test_invocation_cannot_move_between_requests_or_leases(lease, field):
     body["invocation"][field] = (2 if field == "lease_generation" else str(new_record_id())
                                  if field.endswith("_id") else "sha256:" + "f" * 64)
     with pytest.raises(ValueError):
-        SelectedPreSubmitInvocationReceipt.model_validate_json(json.dumps(body)).validate_lease(lease)
+        SelectedPreSubmitInvocationReceipt.model_validate_json(json.dumps(body), context=source_contracts_context(selected_pre_submit_source_contracts())).validate_lease(lease, source_contracts=selected_pre_submit_source_contracts())
 
 
 @pytest.mark.parametrize("change", ["negative", "boolean", "overflow", "sum", "extra", "wrong_cleanup", "outcome"])
@@ -94,7 +97,7 @@ def test_receipt_rejects_malformed_observations(lease, change):
     else:
         body["reason"] = "invalid_output"
     with pytest.raises(ValueError):
-        SelectedPreSubmitInvocationReceipt.model_validate_json(json.dumps(body))
+        SelectedPreSubmitInvocationReceipt.model_validate_json(json.dumps(body), context=source_contracts_context(selected_pre_submit_source_contracts()))
 
 
 @pytest.mark.parametrize("managed", [False, True])
@@ -112,14 +115,14 @@ def test_completed_worker_is_bound_to_provider_receipt(managed):
             provider="managed", platform_manifest_digest=member.isolation.platform_manifest_digest,
             config_image_id=member.isolation.config_image_id, deployment_sha256=body["runtime"]["deployment_sha256"],
         )
-        execution = replace(execution, external_members=(replace(member, isolation=isolation),))
-    receipt = SelectedPreSubmitInvocationReceipt.model_validate_json(json.dumps(body))
-    SelectedPreSubmitInvocationResult(receipt, execution).validate_lease(lease)
-    assert SelectedPreSubmitFinalizeFacts(lease, execution, receipt, None).execution == execution
+        execution = replace(execution, external_members=(replace(member, isolation=isolation),), source_contracts=selected_pre_submit_source_contracts())
+    receipt = SelectedPreSubmitInvocationReceipt.model_validate_json(json.dumps(body), context=source_contracts_context(selected_pre_submit_source_contracts()))
+    SelectedPreSubmitInvocationResult(receipt, execution).validate_lease(lease, source_contracts=selected_pre_submit_source_contracts())
+    assert SelectedPreSubmitFinalizeFacts(lease, execution, receipt, None, source_contracts=selected_pre_submit_source_contracts()).execution == execution
     body["invocation"]["config_image_id"] = "sha256:" + "f" * 64
-    forged = SelectedPreSubmitInvocationReceipt.model_validate_json(json.dumps(body))
+    forged = SelectedPreSubmitInvocationReceipt.model_validate_json(json.dumps(body), context=source_contracts_context(selected_pre_submit_source_contracts()))
     with pytest.raises(ValueError, match="image configuration"):
-        SelectedPreSubmitInvocationResult(forged, execution).validate_lease(lease)
+        SelectedPreSubmitInvocationResult(forged, execution).validate_lease(lease, source_contracts=selected_pre_submit_source_contracts())
     with pytest.raises(ValueError):
         SelectedPreSubmitInvocationResult(receipt, None)
 
@@ -148,12 +151,12 @@ def test_source_reads_preserve_schema_and_reject_rebound_columns(version, status
                       infrastructure_failure_code="capacity_exceeded" if failed else None,
                       queued_at=now, started_at=now, completed_at=now)
         if version == "v2":
-            terminal = HistoricalSourcePreSubmitTerminal(**values)
+            terminal = HistoricalSourcePreSubmitTerminal(**values, source_contracts=selected_pre_submit_source_contracts())
         else:
             body = receipt_body(lease, outcome="infrastructure_failure" if failed else "completed",
                                 reason="capacity_exceeded" if failed else None)
             terminal = SelectedPreSubmitTerminalFacts(**values,
-                invocation_receipt=SelectedPreSubmitInvocationReceipt.model_validate_json(json.dumps(body)))
+                invocation_receipt=SelectedPreSubmitInvocationReceipt.model_validate_json(json.dumps(body), context=source_contracts_context(selected_pre_submit_source_contracts())), source_contracts=selected_pre_submit_source_contracts())
     row = SimpleNamespace(
         **{key: str(getattr(request, key)) for key in (
             "actor_profile_id", "identity_link_id", "project_id", "task_id", "assignment_id", "idempotency_key")},
@@ -173,16 +176,16 @@ def test_source_reads_preserve_schema_and_reject_rebound_columns(version, status
         queued_at=now, started_at=now if status != "queued" else None,
         completed_at=now if terminal else None,
     )
-    assert _view(row).terminal == terminal
+    assert _view(row, source_contracts=selected_pre_submit_source_contracts()).terminal == terminal
     if terminal is None:
         original = row.lease_generation
         row.lease_generation = -1
         with pytest.raises(SelectedPreSubmitUnavailable):
-            _view(row)
+            _view(row, source_contracts=selected_pre_submit_source_contracts())
         row.lease_generation = original
     row.source_operation_id = str(new_record_id())
     with pytest.raises(SelectedPreSubmitUnavailable):
-        _view(row)
+        _view(row, source_contracts=selected_pre_submit_source_contracts())
 
 
 def test_python_decodes_shared_production_rust_wire_fixture():
@@ -198,14 +201,14 @@ def test_python_decodes_shared_production_rust_wire_fixture():
     wire = json.loads(Path(emitted).read_bytes()) if emitted else fixture["wire"]
     assert wire == fixture["wire"]
     assert "adapter_provider_key" not in wire
-    request = SelectedPreSubmitReservationFacts.from_canonical_body(fixture["reservation"])
+    request = SelectedPreSubmitReservationFacts.from_canonical_body(fixture["reservation"], source_contracts=selected_pre_submit_source_contracts())
     lease = SelectedPreSubmitLeaseFacts(
         request, UUID(wire["invocation"]["lease_id"]), wire["invocation"]["lease_generation"],
         datetime.fromisoformat(fixture["lease_expires_at"]),
     )
     # The real Unix-socket adapter attaches its trusted factory identity.
-    result = SelectedPreSubmitInvocationResult.from_canonical_body(wire | {"adapter_provider_key": "unix_socket"})
-    result.validate_lease(lease)
+    result = SelectedPreSubmitInvocationResult.from_canonical_body(wire | {"adapter_provider_key": "unix_socket"}, source_contracts=selected_pre_submit_source_contracts())
+    result.validate_lease(lease, source_contracts=selected_pre_submit_source_contracts())
     assert result.execution.eligible and result.receipt.cleanup.disposition == "destroyed"
 
 
@@ -222,7 +225,7 @@ async def test_managed_port_retains_receipt_and_enforces_selected_factory(lease,
         reason="cancelled" if case == "cancelled" else "capacity_exceeded")
     body["adapter_provider_key"] = "managed_test"
     body["cleanup"]["disposition"] = "pending"
-    result = SelectedPreSubmitInvocationResult.from_canonical_body(body | {"execution": None})
+    result = SelectedPreSubmitInvocationResult.from_canonical_body(body | {"execution": None}, source_contracts=selected_pre_submit_source_contracts())
     grant = object()
 
     class ManagedAdapter:
@@ -237,7 +240,7 @@ async def test_managed_port_retains_receipt_and_enforces_selected_factory(lease,
             assert actual_lease == lease and actual_grant is grant
             return result
 
-    processor = SelectedPreSubmitProcessor(lease=lease, execution=ManagedAdapter())
+    processor = SelectedPreSubmitProcessor(lease=lease, execution=ManagedAdapter(), source_contracts=selected_pre_submit_source_contracts())
     if case == "cancelled":
         with pytest.raises(asyncio.CancelledError):
             await processor.process(grant)

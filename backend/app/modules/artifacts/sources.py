@@ -7,6 +7,7 @@ from collections.abc import AsyncIterator, Callable
 from dataclasses import dataclass
 from typing import BinaryIO, Protocol, TypeVar, final
 from uuid import UUID
+from app.core.hashing import validate_sha256
 from app.core.identifiers import new_record_id
 
 from app.core.cancellation import await_cancellation_resistant
@@ -22,8 +23,6 @@ class PreparedArtifactInspector(Protocol[_InspectionResultCo]):
 
     def inspect(self, reader: BinaryIO) -> _InspectionResultCo:
         """Return bounded structural facts without retaining the reader."""
-
-
 
 
 class _PreparedArtifactOwner(Protocol):
@@ -78,20 +77,9 @@ class ArtifactCommitment:
 
     def __post_init__(self) -> None:
         """Reject noncanonical commitment facts."""
-        self.validate_sha256(self.sha256)
+        validate_sha256(self.sha256)
         self.validate_byte_count(self.byte_count)
         self.validate_media_type(self.media_type)
-
-    @staticmethod
-    def validate_sha256(sha256: str) -> None:
-        """Require one canonical lower-case SHA-256 commitment."""
-        if (
-            not isinstance(sha256, str)
-            or len(sha256) != 71
-            or not sha256.startswith("sha256:")
-            or any(character not in "0123456789abcdef" for character in sha256[7:])
-        ):
-            raise ValueError("artifact commitment digest is invalid")
 
     @staticmethod
     def validate_byte_count(byte_count: int) -> None:

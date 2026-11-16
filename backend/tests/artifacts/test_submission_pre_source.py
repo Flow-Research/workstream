@@ -1,5 +1,7 @@
 """Real PostgreSQL PRE source, SQL fence, and authorized execution custody."""
 
+from app.adapters.artifacts import selected_pre_submit_source_contracts
+
 import json
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
@@ -16,7 +18,7 @@ from app.modules.artifacts.intake.repository import IntakeCustodyConflict
 from app.modules.tasks.api.submission_context import TaskSubmissionContextUnavailable
 from tests.artifacts.test_submission_intake_custody import (
     SHA, capacity_limits as capacity_limits, intake as intake,
-    foreground_bytes, foreground_limits, foreground_upload,
+    foreground_limits, foreground_upload,
     record_eof, repository, reserve,
 )
 
@@ -350,7 +352,7 @@ async def _assert_pre_terminal_guards(intake, request):
     await _assert_receipt_migration_refuses_inflight(intake, request, "running")
     finalize = SelectedPreSubmitFinalizeFacts(
         lease=lease, execution=None, invocation_receipt=None, infrastructure_failure_code="capacity_exceeded",
-    )
+     source_contracts=selected_pre_submit_source_contracts())
     for changed in ("lease_id", "lease_expires_at", "started_at", "execute_evidence_id",
                     "schema_version", "reservation", "request_digest", "outcome", "terminal_digest", "extra"):
         async with intake.factory.begin() as session:
@@ -362,7 +364,7 @@ async def _assert_pre_terminal_guards(intake, request):
                     lease=lease, outcome="infrastructure_failed", execution=None, invocation_receipt=None,
                     infrastructure_failure_code="capacity_exceeded", queued_at=row.queued_at,
                     started_at=row.started_at, completed_at=now,
-                ).canonical_body()
+                 source_contracts=selected_pre_submit_source_contracts()).canonical_body()
                 values = dict(
                     id=request.attempt_id, lease_id=lease.lease_id,
                     lease_expires_at=lease.lease_expires_at, started_at=row.started_at,
@@ -450,7 +452,7 @@ def _source_runtime(payload, tmp_path, runtime_outcome):
             if runtime_outcome == "received_failure":
                 body = receipt_body(lease, outcome="infrastructure_failure", reason="capacity_exceeded")
                 body["cleanup"]["disposition"] = "pending"
-                return SelectedPreSubmitInvocationResult.from_canonical_body(body | {"execution": None})
+                return SelectedPreSubmitInvocationResult.from_canonical_body(body | {"execution": None}, source_contracts=selected_pre_submit_source_contracts())
             if runtime_outcome == "completed":
                 worker, output, reply, actual_lease = _pre_worker(
                     tmp_path, payload, lease=lease,
@@ -463,7 +465,7 @@ def _source_runtime(payload, tmp_path, runtime_outcome):
                 assert project_frame["operation"] == "project" and reply.calls == 1
                 assert completion["operation"] == "completed" and output.read() == b""
                 response = receipt_body(lease) | {"execution": completion["payload"]}
-                return SelectedPreSubmitInvocationResult.from_canonical_body(response)
+                return SelectedPreSubmitInvocationResult.from_canonical_body(response, source_contracts=selected_pre_submit_source_contracts())
             raise SelectedPreSubmitInfrastructureUnavailable("capacity_exceeded")
     return SourceRuntime(), runtime_errors
 
@@ -504,7 +506,7 @@ async def _assert_acceptance_terminal(factory, request, terminal):
         with pytest.raises(SelectedPreSubmitRequestConflict):
             await coordinator.lock_acceptance(**(args | {"run_id": new_record_id()}))
         with pytest.raises(SelectedPreSubmitRequestConflict):
-            await coordinator.lock_acceptance(**(args | {"facts": replace(request, attempt_id=new_record_id())}))
+            await coordinator.lock_acceptance(**(args | {"facts": replace(request, attempt_id=new_record_id(), source_contracts=selected_pre_submit_source_contracts())}))
         with pytest.raises(SelectedPreSubmitUnavailable):
             await coordinator.lock_acceptance(**(args | {"terminal_digest": "sha256:" + "f" * 64}))
 

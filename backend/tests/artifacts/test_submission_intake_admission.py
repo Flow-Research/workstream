@@ -178,7 +178,6 @@ async def test_t1_replays_eof_before_provider_completion_without_changing_custod
         assert (row.lease_id, row.lease_generation) == (str(owner.lease_id), owner.generation)
 
 
-
     async with f.factory.begin() as session:
         await repository(session).terminalize(owner.operation_id, owner.lease_id, owner.generation,
                                               state="failed", failure_code="upload_failed")
@@ -335,7 +334,6 @@ async def record_intake_eof(f, owner, payload):
                                 upload=SubmissionSourceUpload(intent=intent, provider_upload_id="recorded-handle"))
         await record_eof(session, owner.operation_id, owner.lease_id, owner.generation,
                          raw_sha256="sha256:" + hashlib.sha256(payload).hexdigest(), raw_byte_count=len(payload))
-
 
 
 @pytest.mark.parametrize("admission_intake", ["no_pre", "no_post"], indirect=True)
@@ -868,7 +866,7 @@ async def test_t5_finalizes_same_source_with_one_submission_and_post_dispatch(ad
 async def test_operator_recovers_same_accepted_finalization_once(recovery_intake, tmp_path):
     import asyncio
     from sqlalchemy import select, func
-    from app.adapters.artifacts.finalization import submission_finalization_recovery_handler
+    from app.adapters.artifacts import submission_finalization_recovery_handler
     from app.adapters.auth import outbox_dispatch_authorization
     from app.adapters.outbox import outbox_delivery
     from app.modules.artifacts.api.submission_recovery import FINALIZATION_RECOVERY_EVENT, SubmissionRecoveryUnavailable
@@ -1003,7 +1001,7 @@ async def test_recovery_sql_requires_exact_source_and_real_operator_cause(recove
 async def test_finalization_outbox_recovers_lost_ack_without_provider_replay(admission_intake, tmp_path, lost_at):
     from uuid import UUID
     from sqlalchemy import select, func, text
-    from app.adapters.artifacts.finalization import submission_finalization_handler
+    from app.adapters.artifacts import submission_finalization_handler
     from app.adapters.auth import outbox_dispatch_authorization
     from app.adapters.checkers import selected_pre_submit_coordinator
     from app.adapters.outbox import outbox_append, outbox_delivery, production_outbox_delivery
@@ -1094,7 +1092,7 @@ async def test_authorized_progress_reports_exact_exhaustion_without_reopening_in
     import json
     from uuid import UUID
     from sqlalchemy import select, func
-    from app.adapters.artifacts.finalization import submission_finalization_handler
+    from app.adapters.artifacts import submission_finalization_handler
     from app.adapters.auth import outbox_dispatch_authorization
     from app.adapters.checkers import selected_pre_submit_coordinator
     from app.adapters.outbox import outbox_append, outbox_delivery

@@ -195,7 +195,7 @@ async def test_admin_inspection_follows_real_authority_and_scope(
                     assert value == expected.json()
                 assert (
                     inspected(cli, origin, tokens["auditor"], "permissions")["total"]
-                    == 94
+                    == 95
                 )
                 assert (
                     inspected(cli, origin, tokens["auditor"], "role-definitions")[

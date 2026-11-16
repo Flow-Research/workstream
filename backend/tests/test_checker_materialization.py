@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from app.adapters.artifacts import selected_pre_submit_source_contracts
+
 from io import BytesIO
 from dataclasses import replace
 import os
@@ -26,7 +28,9 @@ from app.modules.artifacts.api.submission_archive import (
 from app.modules.artifacts.submission_archive import (
     SubmissionArchiveInspector,
 )
-from app.modules.artifacts.submission_manifest import build_submission_manifest
+from app.modules.artifacts.api.submission_manifest import (
+    build_submission_manifest,
+)
 
 
 def _zip(*, executable: bool = False) -> bytes:
@@ -467,7 +471,7 @@ async def test_pre_source_grant_is_consumed_by_production_processor_in_foregroun
         async def execute_pre(self, lease, grant):
             assert b"".join([chunk async for chunk in grant.open_source(lease=lease)]) == value.payload
             raise SelectedPreSubmitInfrastructureUnavailable("capacity_exceeded")
-    processor = SelectedPreSubmitProcessor(lease=value.lease, execution=Execution())
+    processor = SelectedPreSubmitProcessor(lease=value.lease, execution=Execution(), source_contracts=selected_pre_submit_source_contracts())
     async with value.issuer.issue(lease=value.lease, execution_authority=value.capability) as grant:
         with pytest.raises(SelectedPreSubmitInfrastructureUnavailable) as error:
             await processor.process(grant)
@@ -488,7 +492,7 @@ async def test_pre_source_processor_abort_unwinds_foreground_and_closes_provider
             assert await anext(reader) == value.payload
             started.set()
             await asyncio.Event().wait()
-    processor = SelectedPreSubmitProcessor(lease=value.lease, execution=Execution())
+    processor = SelectedPreSubmitProcessor(lease=value.lease, execution=Execution(), source_contracts=selected_pre_submit_source_contracts())
     async def foreground():
         async with value.issuer.issue(lease=value.lease, execution_authority=value.capability) as grant:
             await processor.process(grant)

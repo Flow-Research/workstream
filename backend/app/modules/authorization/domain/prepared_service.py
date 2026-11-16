@@ -58,8 +58,8 @@ from app.modules.authorization.domain.guide_compilation_projections import (
 from app.modules.authorization.domain.project_setup_finalization import (
     ProjectSetupFinalizationResourceContext,
 )
-from app.modules.authorization.domain.submission_finalization import SubmissionFinalizationResourceContext
-from app.modules.authorization.domain.submission_cleanup import SubmissionSourceCleanupResourceContext
+from app.modules.authorization.api.submission_finalization import SubmissionFinalizationResourceContext
+from app.modules.authorization.api.submission_cleanup import SubmissionSourceCleanupResourceContext
 from app.modules.authorization.runtime import (
     ArtifactPendingWorkResourceContext,
     ArtifactPutAttemptResourceContext,

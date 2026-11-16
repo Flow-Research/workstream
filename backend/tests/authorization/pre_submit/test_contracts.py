@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from app.adapters.artifacts import selected_pre_submit_source_contracts
+
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
@@ -59,7 +61,7 @@ def _reservation() -> SelectedPreSubmitReservationFacts:
         archive_byte_count=100,
         semantic_manifest_sha256="sha256:" + "4" * 64,
         execution_budget_ms=60_000,
-    )
+     source_contracts=selected_pre_submit_source_contracts())
 
 
 def _execute() -> SelectedPreSubmitExecuteFacts:
@@ -148,7 +150,7 @@ def test_selected_pre_finalize_and_prepare_parser_are_closed() -> None:
         lease=execute.lease,
         execution=None,
         infrastructure_failure_code="deadline_exceeded",
-    )
+     source_contracts=selected_pre_submit_source_contracts())
     resource = pre_submit_resource(FINALIZE, final)
     prepared = pre_submit_prepare_values(execute.lease.reservation)
 

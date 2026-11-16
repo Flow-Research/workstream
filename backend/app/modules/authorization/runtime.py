@@ -8,8 +8,8 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
 
 from app.modules.artifacts.api.submission_intake import PreSubmitSourceReadFacts
-from app.modules.authorization.domain.submission_finalization import SubmissionFinalizationResourceContext
-from app.modules.authorization.domain.submission_cleanup import SubmissionSourceCleanupResourceContext
+from app.modules.authorization.api.submission_finalization import SubmissionFinalizationResourceContext
+from app.modules.authorization.api.submission_cleanup import SubmissionSourceCleanupResourceContext
 from app.modules.authorization.domain.submission_recovery import SubmissionRecoveryResourceContext
 from app.modules.authorization.domain.guide_compilation import ProjectGuideCompilationExecuteResourceContext, ProjectGuideCompilationRequestResourceContext
 from app.modules.authorization.domain.resource_digest import authorization_resource_digest as authorization_resource_digest

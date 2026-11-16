@@ -115,7 +115,7 @@ operations.status.read operations.timer.run operations.reconcile.run operations.
 operations.projection.rebuild operations.submission_gate.repair
 operations.checker.retry artifact.binding.read artifact.replica.read artifact.receipt.read
 artifact.verification_job.read artifact.verification_job.retry artifact.recovery_attempt.read
-artifact.audit.read artifact.guide_source.ingest artifact.binding.create artifact.verification.execute
+artifact.audit.read artifact.guide_source.ingest artifact.binding.create artifact.submission_source.cleanup artifact.verification.execute
 artifact.pending_work.scan artifact.put_attempt.resolve artifact.guide_source.read
 artifact.checker_input.materialize artifact.checker_output.write artifact.review_packet.materialize
 project.model_profile.manage project.model_budget.manage project.model_call.recovery_child.authorize
@@ -147,7 +147,7 @@ contribution.read_project compensation.award.read audit.read audit.export"""),
 def catalogue_expectations():
     """Fresh expected JSON objects; callers cannot mutate the frozen oracle."""
     return {
-        "permissions": {"items": [{"permission_id": value} for value in EXPECTED_PERMISSIONS], "total": 94},
+        "permissions": {"items": [{"permission_id": value} for value in EXPECTED_PERMISSIONS], "total": 95},
         "admin-role-definitions": {"items": [
             {"role": role, "allowed_scopes": list(scopes), "permission_ids": permissions.split()}
             for role, scopes, permissions in EXPECTED_ROLE_CONTRACT], "total": 5},

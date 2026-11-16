@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 import math
+import unicodedata
 
 
 # Compressed intake ceiling; expanded content has its own inspection limit.
@@ -97,31 +98,47 @@ class SubmissionArchiveLimits:
         ):
             raise ValueError("submission archive deadline is invalid")
 
+    def canonical_body(self) -> dict[str, int | float]:
+        """Serialize all bounds with the existing invocation-wire field names."""
+        return {
+            "maximum_entries": self.maximum_entries,
+            "maximum_path_bytes": self.maximum_path_bytes,
+            "maximum_path_depth": self.maximum_path_depth,
+            "maximum_central_directory_bytes": self.maximum_central_directory_bytes,
+            "maximum_entry_bytes": self.maximum_entry_bytes,
+            "maximum_expanded_bytes": self.maximum_expanded_bytes,
+            "maximum_compression_ratio": self.maximum_compression_ratio,
+            "maximum_inspection_seconds": float(self.maximum_inspection_seconds),
+        }
 
-def validate_submission_manifest(
-    body: object, *, sha256: str, limits: SubmissionArchiveLimits,
-) -> SubmissionArchiveInspectionResult:
-    """Validate reported canonical metadata without claiming observation of bytes.
 
-    Reuse ART's manifest semantics and the invocation's stricter resource limits.
-    Source integrity still requires a trusted loader receipt.
-    """
-    from app.modules.artifacts.submission_manifest import SubmissionManifest
-    from app.modules.artifacts.submission_archive import normalize_submission_archive_path
+def normalize_submission_archive_path(
+    path: str, *, maximum_path_bytes: int, maximum_path_depth: int,
+) -> str:
+    """Apply the same path rules to inspected and recovered manifest entries."""
+    parts = path.split("/")
+    normalized = unicodedata.normalize("NFC", path)
+    if (
+        not path or "\\" in path or path.startswith("/")
+        or any(ord(character) < 32 or ord(character) == 127 for character in path)
+        or any(part in {"", ".", ".."} or part.endswith((" ", ".")) for part in parts)
+        or ":" in parts[0] or len(parts) > maximum_path_depth
+        or max(len(path.encode("utf-8")), len(normalized.encode("utf-8"))) > maximum_path_bytes
+    ):
+        raise SubmissionArchiveRejectedError(SubmissionArchiveFailureCode.UNSAFE_ENTRY)
+    return normalized
 
-    manifest = SubmissionManifest.from_dict(body, sha256=sha256)
-    if (manifest.entry_count > limits.maximum_entries
-            or manifest.total_expanded_bytes > limits.maximum_expanded_bytes):
-        raise ValueError("submission manifest exceeds execution limits")
-    for entry in manifest.entries:
-        if entry.byte_count > limits.maximum_entry_bytes:
-            raise ValueError("submission manifest exceeds execution limits")
-        normalize_submission_archive_path(
-            entry.normalized_path, maximum_path_bytes=limits.maximum_path_bytes,
-            maximum_path_depth=limits.maximum_path_depth,
-        )
-    return SubmissionArchiveInspectionResult(
-        entries=manifest.entries, entry_count=manifest.entry_count,
-        file_count=manifest.file_count, directory_count=manifest.directory_count,
-        total_expanded_bytes=manifest.total_expanded_bytes,
-    )
+
+def validate_submission_archive_inventory(entries: tuple[SubmissionArchiveEntry, ...]) -> None:
+    """Require one unambiguous path per entry and exact directory ancestry."""
+    kinds = {entry.normalized_path: entry.entry_type for entry in entries}
+    folded_paths: set[str] = set()
+    for entry in entries:
+        folded = unicodedata.normalize("NFC", entry.normalized_path).casefold()
+        if folded in folded_paths:
+            raise SubmissionArchiveRejectedError(SubmissionArchiveFailureCode.COLLISION)
+        folded_paths.add(folded)
+        parts = entry.normalized_path.split("/")
+        for depth in range(1, len(parts)):
+            if kinds.get("/".join(parts[:depth])) is not SubmissionArchiveEntryType.DIRECTORY:
+                raise SubmissionArchiveRejectedError(SubmissionArchiveFailureCode.COLLISION)

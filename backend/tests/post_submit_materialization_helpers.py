@@ -29,7 +29,9 @@ from app.modules.artifacts.api.submission_archive import (
 from app.modules.artifacts.submission_archive import (
     SubmissionArchiveInspector,
 )
-from app.modules.artifacts.submission_manifest import build_submission_manifest
+from app.modules.artifacts.api.submission_manifest import (
+    build_submission_manifest,
+)
 from app.modules.authorization.api import ActorIdentityFacts, ActorKind
 from app.modules.tasks.api import SubmissionCreationRequest
 from app.modules.tasks.api.submitted_bundle import SubmittedBundleRequest

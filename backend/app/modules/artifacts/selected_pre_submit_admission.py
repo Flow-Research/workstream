@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from app.modules.artifacts.selected_pre_submit_source_contracts import ArtifactPreSubmitSourceContracts
+
 from dataclasses import dataclass
 from uuid import UUID
 
@@ -206,6 +208,7 @@ def build_selected_pre_submit_reservation(
         pre_deadline_at=source.pre_deadline_at, policy=selected.policy,
         default_context=selected.default_context, runtime_profile=runtime_profile,
         admission_lineage=lineage,
+        source_contracts=ArtifactPreSubmitSourceContracts(),
     )
 
 

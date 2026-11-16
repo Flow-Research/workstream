@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from app.modules.artifacts.selected_pre_submit_source_contracts import ArtifactPreSubmitSourceContracts
+
 from collections.abc import Callable
 from contextlib import AbstractAsyncContextManager, AsyncExitStack
 import asyncio
@@ -60,9 +62,11 @@ from app.modules.artifacts.submission_authorization import (
     SubmissionBundlePreparationAuthorization,
 )
 from app.modules.artifacts.submission_custody import SubmissionBundlePreparedCustody
+from app.modules.artifacts.api.submission_manifest import (
+    build_submission_manifest,
+)
 from app.modules.artifacts.submission_manifest import (
     SubmissionCanonicalPredecessor,
-    build_submission_manifest,
 )
 from app.modules.artifacts.submission_materialization import (
     PreparedBundleMaterializationRequest,
@@ -335,7 +339,8 @@ class SubmissionBundleAdmissionPublisher:
             raise RuntimeError("submission verification TASK composition is unavailable")
         try:
             selected = SelectedPreSubmitReservationFacts.from_canonical_body(
-                row.selected_request_json
+                row.selected_request_json,
+                source_contracts=ArtifactPreSubmitSourceContracts(),
             )
         except (TypeError, ValueError) as exc:
             raise SubmissionBundleAdmissionPublicationError(
@@ -393,7 +398,8 @@ class SubmissionBundleAdmissionPublisher:
             raise SubmissionBundleAdmissionPublicationError("external PRE durable intent is unavailable")
         try:
             selected = SelectedPreSubmitReservationFacts.from_canonical_body(
-                intent.selected_request_json
+                intent.selected_request_json,
+                source_contracts=ArtifactPreSubmitSourceContracts(),
             )
         except (TypeError, ValueError) as exc:
             raise SubmissionBundleAdmissionPublicationError(

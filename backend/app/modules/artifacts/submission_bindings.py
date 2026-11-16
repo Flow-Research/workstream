@@ -18,7 +18,9 @@ from app.modules.artifacts.api import (
     SubmissionAdmissionMaterial,
 )
 from app.modules.artifacts.api.submission_admission import ConsumedSubmissionAdmissionRequest
-from app.modules.artifacts.submission_manifest import SubmissionManifest
+from app.modules.artifacts.api.submission_manifest import (
+    SubmissionManifest,
+)
 from app.modules.checkers.api.external_policy import validate_stored_external_post_policy
 from app.modules.artifacts.models import (
     ArtifactBinding,
