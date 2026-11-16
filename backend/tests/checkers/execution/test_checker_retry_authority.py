@@ -520,7 +520,7 @@ async def _assert_real_audit_failure_rolls_back(admin_access, h, retry_path):
     async with h.factory() as session:
         assert await session.scalar(select(func.count()).select_from(CheckerRun)) == 1
         assert await session.scalar(select(func.count()).select_from(CheckerRetryReceipt)) == 0
-        assert await session.scalar(select(func.count()).select_from(OutboxEvent)) == 1
+        assert await session.scalar(select(func.count()).select_from(OutboxEvent)) == 2
         assert tuple(await session.scalars(select(AuditEvent.id).where(
             AuditEvent.action_id == ActionId.OPERATIONS_CHECKER_RETRY.value
         ).order_by(AuditEvent.id))) == evidence_before
@@ -888,7 +888,7 @@ async def test_task_wait_holds_no_retry_authority_custody(
                 assert await _retry_facts(h) == (
                     1,
                     0,
-                    1,
+                    2,
                     0,
                     str(h.created.evaluation_attempt_id),
                 )
@@ -898,7 +898,7 @@ async def test_task_wait_holds_no_retry_authority_custody(
                 raise
         created = await asyncio.wait_for(call, 60)
         assert created.successor.generation == 2
-        assert (await _retry_facts(h))[:4] == (2, 1, 2, 1)
+        assert (await _retry_facts(h))[:4] == (2, 1, 3, 1)
 
 
 @pytest.mark.parametrize("first", ["retry", "claim"])
@@ -957,7 +957,7 @@ async def test_retry_and_claim_keep_task_before_authority(
         assert sum(isinstance(result, TaskAuthorityDenied) for result in results) == 1, [
             type(result).__name__ for result in results
         ]
-        assert (await _retry_facts(h))[:4] == (2, 1, 2, 1)
+        assert (await _retry_facts(h))[:4] == (2, 1, 3, 1)
         async with h.factory() as session:
             assert await session.scalar(
                 select(func.count())
@@ -1073,13 +1073,13 @@ async def test_retry_and_operator_revocation_commit_one_authorized_order(
             assert grant.status == "revoked" and grant.version == 2
         if first == "retry":
             assert all(not isinstance(result, BaseException) for result in results)
-            assert (await _retry_facts(h))[:4] == (2, 1, 2, 1)
+            assert (await _retry_facts(h))[:4] == (2, 1, 3, 1)
         else:
             assert sum(isinstance(result, CheckerExecutionUnavailable) for result in results) == 1
             assert (await _retry_facts(h)) == (
                 1,
                 0,
-                1,
+                2,
                 0,
                 str(h.created.evaluation_attempt_id),
             )

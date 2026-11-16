@@ -6546,3 +6546,20 @@ assertions. Ruff/record/structure pass. This closes the eight hosted953 model-ou
 authority failures locally, not live paid-provider or full-CI qualification.
 Retry77589 and material28715 remain separate active verification; only model fixture
 is included in this implementation commit alongside accumulated scoped records.
+
+Binding unit scope: tests/test_artifact_bindings.py. Hosted953 eight failures stop
+on fake admission lacking source_operation_id. Migrate ready-consumption fixture to
+explicit current accepted_operation_id and same source_operation_id (not silentNone
+historical fallback). Positive binding asserts SQL source-custody check invoked for
+exactadmission; negative absent/foreign acceptedoperation rejects before SQL/content
+or binding writes. Preserve existing packet/manifest/authority/replay assertions.
+Medium authority test risk, no production changes. Run whole unit module plus QA.
+Mock SQL participation tests do not qualify database source-custody implementation;
+real T5/public revision proofs remain separate evidence.
+
+Retry-authority terminal0:6passed3deselected371.41s with5existing serializer warnings.
+Database+MinIO cleanup complete; public audit-failure trigger cleanup now completes
+and schema fingerprint teardown passes. Exact lock/revocation/rollback/replay
+proofs retained; QA no findings. Ruff/record/whitespace pass, shared structure prior
+run passed. This commit includes only retry-authority implementation; material
+integrity and binding unit followups remain in progress separately.
