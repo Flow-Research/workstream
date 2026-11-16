@@ -17,6 +17,10 @@ from app.core.hashing import canonical_json_hash
 from app.modules.artifacts.api.submission_archive import MAXIMUM_SUBMISSION_ZIP_BYTES
 
 
+# Shared transport-to-owner bound; independent of the total compressed ZIP limit.
+MAXIMUM_INGRESS_CHUNK_BYTES = 1024 * 1024
+
+
 Sha256 = Annotated[str, Field(pattern=r"^sha256:[0-9a-f]{64}$")]
 
 

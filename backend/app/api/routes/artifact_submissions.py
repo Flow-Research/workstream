@@ -7,7 +7,7 @@ from fastapi.responses import JSONResponse
 
 from app.adapters.artifacts import get_submission_intake_command
 from app.api.deps.authorization import get_authorization_actor_identity
-from app.api.submission_intake import SubmissionIntakeHeaders, submission_intake_headers
+from app.api.submission_intake import SubmissionIntakeHeaders, submission_intake_headers, submission_intake_body
 from app.core.api_controls import error_response
 from app.modules.artifacts.api.submission_command import SubmissionAcceptedResponse, SubmissionIntakeCommand
 from app.modules.artifacts.api.submission_intake import SubmissionIntakeFailure
@@ -75,7 +75,7 @@ async def submit_source(
     """Acknowledge only committed acceptance, with no fabricated T5 identifiers."""
     try:
         receipt = await command.submit(
-            headers.metadata, request.stream(), actor_id=actor.actor_profile_id,
+            headers.metadata, submission_intake_body(request), actor_id=actor.actor_profile_id,
             identity_link_id=actor.identity_link_id, idempotency_key=headers.idempotency_key,
             declared_raw_bytes=headers.declared_raw_bytes,
         )

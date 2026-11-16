@@ -16,8 +16,11 @@ from tests.artifacts.test_submission_intake_admission import (
 )
 
 
-@pytest.mark.parametrize("outcome", ["completed", "rejected"])
-async def test_public_raw_zip_submission_uses_real_owners_and_stable_replay(admission_intake, tmp_path, monkeypatch, outcome):
+@pytest.mark.parametrize("outcome,framing", [
+    ("completed", "small"), ("rejected", "small"),
+    ("completed", "large-single"), ("completed", "large-split"),
+])
+async def test_public_raw_zip_submission_uses_real_owners_and_stable_replay(admission_intake, tmp_path, monkeypatch, outcome, framing):
     from sqlalchemy import text
     from app.adapters import artifacts as composition
     from app.adapters.checkers import SelectedPreSubmitCheckerExecutionAdapter
@@ -31,6 +34,16 @@ async def test_public_raw_zip_submission_uses_real_owners_and_stable_replay(admi
 
     f, key = admission_intake, new_record_id()
     payload = _archive("../escape") if outcome == "rejected" else _archive()
+    if framing.startswith("large"):
+        payload = _archive(content=b"finished work\n" * 90_000)
+        assert 1024 * 1024 < len(payload) < 2 * 1024 * 1024
+    def body(split):
+        if not split:
+            return payload
+        async def chunks():
+            for start in range(0, len(payload), 64 * 1024):
+                yield payload[start:start + 64 * 1024]
+        return chunks()
     runtime, errors = _source_runtime(payload, tmp_path, outcome)
     calls, original = [], runtime.execute_pre
     async def execute(lease, grant):
@@ -45,7 +58,7 @@ async def test_public_raw_zip_submission_uses_real_owners_and_stable_replay(admi
     app = client._transport.app
     storage = {name: value for name, value in _settings(tmp_path).model_dump().items() if name.startswith("artifact_")}
     settings = app.state.settings.model_copy(update=storage | {"submission_execution_profile": {
-        "capacity": {"maximum_total_bytes": 1_000_000},
+        "capacity": {"maximum_total_bytes": 4 * 1024 * 1024},
         "runtime": _source_reservation().runtime_profile.model_dump(mode="json"),
         "upload_total_seconds": 300.0, "upload_idle_seconds": 10.0,
         "foreground_lease_seconds": 60.0, "heartbeat_seconds": 10.0,
@@ -53,12 +66,13 @@ async def test_public_raw_zip_submission_uses_real_owners_and_stable_replay(admi
     }})
     monkeypatch.setattr(app.state, "settings", settings)
     headers = f.access.target.headers | {"Content-Type": "application/zip",
-        "X-Task-Assignment-Id": str(f.assignment), "Idempotency-Key": str(key)}
+        "X-Task-Assignment-Id": str(f.assignment), "Idempotency-Key": str(key),
+        "Content-Length": str(len(payload))}
     url = f"/api/v1/tasks/{f.task}/submissions"
-    first = await client.post(url, headers=headers, content=payload)
-    second = await client.post(url, headers=headers, content=payload)
+    first = await client.post(url, headers=headers, content=body(framing == "large-split"))
+    second = await client.post(url, headers=headers, content=body(framing != "large-split"))
     assert not errors, "\n".join(errors)
-    assert len(calls) == 1
+    assert len(calls) == 1, (first.status_code, first.text, second.status_code, second.text)
     if outcome == "completed":
         assert first.status_code == second.status_code == 202, (first.text, second.text)
         receipt = first.json()

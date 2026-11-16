@@ -1,6 +1,6 @@
 # Workstream MCP Adapter
 
-An independently installed adapter exposing 132 tools under the caller's authority:
+An independently installed adapter exposing 131 tools under the caller's authority:
 
 - `workstream_profile_get` calls `GET /api/v1/actors/me`.
 - `workstream_profile_update` calls the unkeyed `PATCH /api/v1/actors/me`.
@@ -251,7 +251,7 @@ retries. A mutation transport failure, upstream 5xx response, or unexpected
 success/redirect response is reported as non-retryable uncertain execution.
 Connections may be pooled, but
 caller credentials and results are not shared or cached. Response validation is
-pinned to the 132 selected public contracts in `contracts/`; upstream drift
+pinned to the 131 selected public contracts in `contracts/`; upstream drift
 must be reviewed, not silently accepted. There is no fallback service or
 backend-private import.
 

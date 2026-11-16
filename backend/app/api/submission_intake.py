@@ -1,4 +1,5 @@
 """Exact HTTP command metadata for the single raw-ZIP submission mutation."""
+from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import NoReturn
 from uuid import UUID
@@ -8,7 +9,7 @@ from starlette.requests import Request
 
 from app.core.api_controls import StructuredHTTPException
 from app.modules.artifacts.api.submission_archive import MAXIMUM_SUBMISSION_ZIP_BYTES
-from app.modules.artifacts.api.submission_intake import SubmissionIntakeMetadata
+from app.modules.artifacts.api.submission_intake import MAXIMUM_INGRESS_CHUNK_BYTES, SubmissionIntakeMetadata
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,3 +73,10 @@ def submission_intake_headers(request: Request, task_id: UUID) -> SubmissionInta
     except ValueError:
         _reject("submission_packet_invalid", 422, "Submission packet is invalid")
     return SubmissionIntakeHeaders(metadata, key, declared)
+
+
+async def submission_intake_body(request: Request) -> AsyncIterator[bytes]:
+    """Adapt arbitrary ASGI frames to bounded owner chunks without reading ahead."""
+    async for frame in request.stream():
+        for start in range(0, len(frame), MAXIMUM_INGRESS_CHUNK_BYTES):
+            yield frame[start:start + MAXIMUM_INGRESS_CHUNK_BYTES]

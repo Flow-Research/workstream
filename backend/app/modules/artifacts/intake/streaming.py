@@ -22,12 +22,12 @@ from app.interfaces.artifacts import (
     ArtifactStoreUnavailableError,
 )
 from app.modules.artifacts.api.submission_intake import (
+    MAXIMUM_INGRESS_CHUNK_BYTES,
     SubmissionSourceCompletion,
     SubmissionSourceUpload,
 )
 
 
-MAXIMUM_INGRESS_CHUNK_BYTES = 1024 * 1024
 
 
 class SubmissionUploadTimeout(ArtifactStoreUnavailableError):

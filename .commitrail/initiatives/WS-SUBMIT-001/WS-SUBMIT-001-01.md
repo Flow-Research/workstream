@@ -4560,3 +4560,79 @@ MCP feedback parity, obsolete fixture/shared producer migration, complete downst
 journeys, cleanup/runtime/provider/deployment qualification and full CI remain open.
 No PR readiness or merge request is made. Scoped internal reviews will assess this
 implemented delta with those omissions explicit, rather than certify goal completion.
+
+### Frozen public-cutover review and batched repairs
+
+Frozen666be589370c15fe6be15b3ed96bcf97974912bb stayed clean through shared
+verification and review snapshots. Combined pure/API/reconciliation suite221passed
+in127.34s (`/tmp/submission-cutover-frozen-pure.log`). Combined foreground/public
+HTTP/T5 suite14passed in376.40s with exact666 metadata,0080 and database cleanup
+complete (`/tmp/submission-cutover-frozen-db.log/json`). Commitrail record check
+passed. The existing retry-builder serialization warning remains disclosed.
+
+ARCH/SEC and QA identified the same Medium transport defect: request.stream()
+can yield a valid ZIP in a frame exceeding ART's1MiB internal chunk bound; the
+route forwarded that frame unchanged. Their independent split/one-frame probes
+confirmed identical legal bytes accepted when segmented and rejected whole. Add
+public initial/replay tests for both segmentations, expose the existing chunk
+bound through ART's public intake contract, and split only at the HTTP adapter.
+Keep internal size/EOF/deadline checks and bounded backpressure. This repair adds
+no whole-body spool or second ingress policy.
+
+DOCS/CI findingCI-CATALOGUE-001: actual MCP catalogue131 but six exact-count
+consumers still expected132. Allowed repair additionally includes the affected
+existing .github/workflows/mcp.yml, scripts/test_hosted_mcp_container.py and
+deploy/hosted/compose.mcp.yml assertions/summary, MCP drift test and README. Change
+only the intentional count removal; preserve exactness, tool-name/route assertions,
+health behavior, lane selection and deployment controls. This is catalogue repair,
+not deployment authorization. Reviewer independently preserved all692 prior
+ownership assignments/protected base with exactly693 total and full CI selection.
+
+QA's independent retained-digest test-of-test passed on666 and failed at the intended
+rejection assertion under its controlled guard-removal simulation
+(`/tmp/submission-progress-qa-digest-mutant.log`). No other concrete implementation
+finding was reported; the two shared repairs remain open until frozen replay.
+
+Both new real HTTP framing regressions reproduced the defect before repair:
+large-single initial failed413; large-split initial reached202 but same-key
+single-frame replay failed413 (`/tmp/submission-asgi-frame-before.log/json`,2failed,
+55.52s, database cleanup complete). The HTTP helper now yields bounded slices of
+each supplied frame without reading ahead; ART imports the same public1MiB bound
+and retains its guard. Four transport backpressure/boundary cases and the full
+API-controls module passed61 in95.25s (`/tmp/submission-asgi-controls-after.log`).
+Module-boundary validation and targeted Ruff/diff checks passed.
+
+First repaired four-case database run passed one case then the Python process
+segfaulted while garbage-collecting during FastAPI/Pydantic fixture schema creation
+(`/tmp/submission-asgi-frame-after.log/json`, exit245, cleanup complete). This is
+not an assertion failure or a root-cause fix for prior native instability. The
+unchanged four cases are being replayed; retain both outcomes.
+
+The exact131 catalogue repair passed its count assertion, then exposed one older
+snapshot drift: ServiceIdentity lacks workstream.artifact.source_cleanup added by
+this PR's sealed-cleanup owner. Independent comparison of all task-operation
+snapshots found exactly that one enum difference. Refresh only
+mcp_server/contracts/service_actor_create.json and its canonical digest/provenance;
+do not weaken comparison. Initial command27passed1failed,34.50s
+(`/tmp/submission-catalogue-count-repair.log`). Configured comparison rerun and a
+local hosted-compose smoke against the rebuilt MCP image are in progress. This
+smoke uses isolated fixture containers and is not deployment or AWS qualification.
+
+Unchanged repaired public HTTP replay passed all4 cases in123.46s
+(`/tmp/submission-asgi-frame-replay.log/json`),0080 and isolated database cleanup
+complete. Both large-ZIP initial/replay segmentations now return stable202 with
+one PRE; small acceptance and QC rejection remain covered. The earlier native
+SIGSEGV remains unexplained and is not erased by this pass.
+
+Configured MCP catalogue/task-operation OpenAPI checks passed28 in40.38s
+(`/tmp/submission-catalogue-count-contract-after.log`). Local hosted-compose smoke
+passed on image sha256:06bcaa810b65d2515db1ea44bcbefb8fe32d2402ffd4fc12385795bea16f423e,
+with131tools, restart, replacement and stale-namespace counterexample all passed
+(`/tmp/submission-mcp-hosted-smoke.log`, exit0). This exercised repaired health and
+smoke counts against the actual rebuilt package and removed fixture containers.
+It is local protocol/lifecycle proof, not deployment/provider qualification.
+
+Freeze the batched transport/catalogue repairs for affected reviewer replay.
+The unchanged666 owner/foreground14 and pure221 receipts remain bounded baseline
+evidence; the new transport cases require the repair's exact-head replay. The
+full goal and public progress wiring remain unfinished on PR708.

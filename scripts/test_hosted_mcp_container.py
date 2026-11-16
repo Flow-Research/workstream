@@ -140,7 +140,7 @@ def main() -> None:
 
         def prove_calls(generation: str) -> None:
             tools = rpc("tools/list", {})["tools"]
-            assert len(tools) == len({tool["name"] for tool in tools}) == 132
+            assert len(tools) == len({tool["name"] for tool in tools}) == 131
             params = {"name": "workstream_profile_get", "arguments": {}}
             for caller in ("alice", "bob"):
                 result = rpc("tools/call", params, "fixture-" + caller)
@@ -181,7 +181,7 @@ def main() -> None:
             assert current_api != original_api and current_mcp != original_mcp
             prove_calls("replacement")
             print(json.dumps({"proof": "hosted MCP fixture transport", "image_id": image_id,
-                              "tools": 132, "restart": "passed", "replacement": "passed",
+                              "tools": 131, "restart": "passed", "replacement": "passed",
                               "stale_namespace_counterexample": "passed"}))
         finally:
             compose("down", "--volumes", "--remove-orphans", "--timeout", "10", timeout=45)

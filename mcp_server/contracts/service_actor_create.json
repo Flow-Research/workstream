@@ -1,5 +1,5 @@
 {
-  "canonical_sha256": "3d848ecc58c83e5009511771fdbb2bae8880e8053aa243639ecbd36afc25d2bc",
+  "canonical_sha256": "1e0aca84e06cc1cda9d4e464fd375b59e4f57b8e0e7a2e2a86648995655d9899",
   "components": {
     "schemas": {
       "ApiError": {
@@ -163,6 +163,7 @@
           "workstream.artifact.verifier",
           "workstream.artifact.put_resolver",
           "workstream.artifact.scheduler",
+          "workstream.artifact.source_cleanup",
           "workstream.artifact.binding",
           "workstream.artifact.guide_reader",
           "workstream.artifact.materializer",
@@ -464,6 +465,6 @@
     "method": "POST",
     "openapi_version": "3.1.0",
     "path": "/api/v1/service-actors",
-    "repository_sha": "f0431385573eb53353c5ffc3c6cdb6a93d206b73"
+    "repository_sha": "666be589370c15fe6be15b3ed96bcf97974912bb"
   }
 }

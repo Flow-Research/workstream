@@ -1100,3 +1100,28 @@ def test_raw_submission_single_mixed_case_names_preserve_exact_values():
     upper = [(name.upper(), value) for name, value in lower]
     task = UUID(int=3)
     assert submission_intake_headers(_casefold_request(upper), task) == submission_intake_headers(_casefold_request(lower), task)
+
+
+@pytest.mark.parametrize("size", [1024 * 1024 - 1, 1024 * 1024, 1024 * 1024 + 1, 2 * 1024 * 1024 + 3])
+async def test_submission_http_body_preserves_bytes_and_backpressure(size):
+    from app.api.submission_intake import submission_intake_body
+    from app.modules.artifacts.api.submission_intake import MAXIMUM_INGRESS_CHUNK_BYTES
+
+    payload, received = b"z" * size, []
+    async def receive():
+        received.append(True)
+        if len(received) == 1:
+            return {"type": "http.request", "body": payload, "more_body": True}
+        assert len(received) == 2
+        return {"type": "http.request", "body": b"tail", "more_body": False}
+    stream = submission_intake_body(Request({"type": "http"}, receive))
+    chunks = []
+    while sum(map(len, chunks)) < len(payload):
+        chunk = await anext(stream)
+        assert 0 < len(chunk) <= MAXIMUM_INGRESS_CHUNK_BYTES
+        assert len(received) == 1  # Do not pull the next ASGI frame early.
+        chunks.append(chunk)
+    assert b"".join(chunks) == payload
+    assert await anext(stream) == b"tail" and len(received) == 2
+    with pytest.raises(StopAsyncIteration):
+        await anext(stream)
