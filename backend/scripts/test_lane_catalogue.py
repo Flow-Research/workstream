@@ -324,6 +324,7 @@ SHARED_FOUNDATION_MODULES = (
 ) + STATIC_FOUNDATION_MODULES
 
 PROJECT_MODULES = (
+    "tests/finance/test_fulfillment_evidence_transactions.py",
     "tests/finance/test_fulfillment_evidence_public_api.py",
     "tests/finance/test_fulfillment_roots.py",
     "tests/finance/test_fulfillment_evidence_native_bodies.py",

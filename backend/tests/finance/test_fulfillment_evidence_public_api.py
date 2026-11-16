@@ -1,11 +1,14 @@
 """Signed public evidence operations against PostgreSQL and canonical AUTH."""
 
 from datetime import UTC, datetime
+import json
 
 from sqlalchemy import text
 
 from app.api.deps.compensation_fulfillment import FulfillmentEvidenceRequest
 from app.core.identifiers import new_record_id
+from app.modules.compensation.fulfillment.evidence_service import FulfillmentEvidenceService
+from tests.authentication.support import issue_asymmetric_token
 
 
 def report_for(obligation):
@@ -102,3 +105,54 @@ async def test_signed_source_report_exception_and_response_loss_journey(fulfillm
         assert decision["actor_id"] == row["reporter_actor_id"]
     assert sum(d["action_id"] == "compensation.fulfillment.report" for d in decisions) == 1
     assert sum(d["action_id"] == "compensation.fulfillment.exception.report" for d in decisions) == 1
+
+
+async def test_human_rejected_before_actor_provisioning(fulfillment_api_source):
+    source = fulfillment_api_source
+    async with source.factory() as session:
+        before = (await session.execute(text("SELECT (SELECT count(*) FROM actor_profiles), "
+            "(SELECT count(*) FROM actor_identity_links)"))).one()
+    token = issue_asymmetric_token(source.access.signed.private_key,
+        claims={"sub": f"unregistered-human-{new_record_id()}", "jti": str(new_record_id())})
+    response = await source.client.get(
+        f"/api/v1/compensation/awards/{source.obligation['award_id']}/finance-evidence",
+        headers={"Authorization": f"Bearer {token}"})
+    assert response.status_code == 403, response.text
+    async with source.factory() as session:
+        after = (await session.execute(text("SELECT (SELECT count(*) FROM actor_profiles), "
+            "(SELECT count(*) FROM actor_identity_links)"))).one()
+    assert after == before
+    assert await evidence_rows(source) == ([], [], [])
+
+
+async def test_streamed_budget_and_identity_rejection_before_locator_or_auth(fulfillment_api_source, monkeypatch):
+    source = fulfillment_api_source
+    report = report_for(source.obligation)
+    prefix = f"/api/v1/compensation/awards/{source.obligation['award_id']}"
+
+    async def forbidden(*args, **kwargs):
+        raise AssertionError("invalid wire reached the source locator")
+
+    monkeypatch.setattr(FulfillmentEvidenceService, "_locate", forbidden)
+    headers = source.headers | {"Idempotency-Key": report["external_event_id"]}
+    for key_headers, body, award, expected in (
+        (headers, b"x" * 65_537, source.obligation["award_id"], 413),
+        (headers, b'{"award_id":"duplicate","award_id":"duplicate"}', source.obligation["award_id"], 422),
+        (source.headers, json.dumps(report).encode(), source.obligation["award_id"], 422),
+        (headers | {"Idempotency-Key": str(new_record_id())}, json.dumps(report).encode(), source.obligation["award_id"], 422),
+        (headers, json.dumps(report).encode(), str(new_record_id()), 422),
+    ):
+        response = await source.client.post(f"/api/v1/compensation/awards/{award}/fulfillment-reports",
+            content=body, headers=key_headers)
+        assert response.status_code == expected, response.text
+    duplicate = list(headers.items()) + [("Idempotency-Key", report["external_event_id"])]
+    response = await source.client.post(prefix + "/fulfillment-reports", json=report, headers=duplicate)
+    assert response.status_code == 422, response.text
+    for length_header in ({}, {"Content-Length": "1"}):
+        async def chunks():
+            yield b"x" * 32_768
+            yield b"x" * 32_769
+        response = await source.client.post(prefix + "/fulfillment-reports", content=chunks(),
+            headers=headers | length_header)
+        assert response.status_code == 413, response.text
+    assert await evidence_rows(source) == ([], [], [])

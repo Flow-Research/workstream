@@ -2335,3 +2335,20 @@ remaining approved native, rollback, isolation, concurrency and denial proofs
 before integrating or marking this public capability ready. Shared/project
 membership fingerprints preserve all old members with exactly one added module
 per family; the six static architecture modules and hard CI limits stay intact.
+
+The first native public journey reached its response-loss probe but assumed
+exceptions escaped the existing request-control middleware. That middleware
+instead emits500 for an unstarted failed response. Keep the real commit and
+independent row/evidence assertions; assert the commit callback completed before
+observing500 and exact replay. Frozen f16eac3 passes the complete four-route
+signed journey in58.52s with PostgreSQL/MinIO cleanup true. This qualifies this
+bounded callback path, not provider execution or the full guide/ZIP/worker path.
+The existing service matrix still passes18 planned-action cases after the
+three actions move to explicit active wrong-identity coverage. Shared and AUTH
+candidate inventories and structural validation pass; candidate ownership is
+not promoted. Add native precommit response-failure, authorized lookup-miss,
+unregistered-human and streamed-budget/identity refusal cases next. The
+response-failure case must first observe the real row and canonical allow inside
+the active transaction, then prove both absent from independent reads after
+serialization/detached/identity/digest failures. No production clocks, allows or
+transaction guards are replaced by those probes.
