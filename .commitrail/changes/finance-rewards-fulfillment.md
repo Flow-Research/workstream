@@ -2415,3 +2415,16 @@ through only the session dependency; Flow verification and actor resolution stay
 real. It must fail before preparation/restage and leave no effects. A registry
 503 fault checks availability remains distinct from concealed resource refusals.
 These selectors are not claimed executed until their isolated native run.
+
+The first actual-denial run fails at5f28d91: suspended reporting returns500
+before the issuing-kernel restage probe, with cleanup complete. Diagnose the
+existing supports_prepared_denial classifier: all four current fulfillment
+resource/action pairs returnfalse, so deny_unsupported cannot produce its
+canonical denial. A focused regression reproduces all four failures before the
+repair and passes15 authority-contract cases after it. Extend the affected
+scope explicitly to backend/app/modules/authorization/domain/action_groups.py
+and its existing authority-contract tests: admit only exact types from the
+existing FULFILLMENT_EVIDENCE_RESOURCES_BY_ACTION registry. Preserve every
+other classifier, resource, permission and allow path; this introduces no new
+authority, alternate denial implementation or compatibility behavior. Replay
+actual suspended/revoked persistence and real incompatible isolation next.

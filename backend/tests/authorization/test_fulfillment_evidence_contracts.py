@@ -93,6 +93,17 @@ def test_source_and_lookup_equal_target_ids_never_share_authority():
         assert authorization_resource_digest(original) != authorization_resource_digest(substituted)
 
 
+@pytest.mark.parametrize("action,facts", _resources())
+def test_fulfillment_prepare_denial_admits_only_matching_action_resource(action, facts):
+    from app.modules.authorization.domain.action_groups import supports_prepared_denial
+
+    resource = fulfillment_evidence_resource(facts)
+    assert supports_prepared_denial(action, resource)
+    for other in ActionId:
+        if other is not action:
+            assert not supports_prepared_denial(other, resource)
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize("action,facts", _resources()[:2])
 async def test_replay_checks_original_allow_without_creating_replacement_authority(action, facts):

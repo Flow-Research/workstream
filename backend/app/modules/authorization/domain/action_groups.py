@@ -9,6 +9,7 @@ from app.modules.authorization.domain import (
     checker_outputs,
     checker_registry,
     contribution_policies,
+    fulfillment_evidence,
 )
 from app.modules.authorization.domain.artifact_operator import ARTIFACT_OPERATOR_ACTIONS
 from app.modules.authorization.runtime import PROJECT_SUBMISSION_POLICY_TARGET_KIND_BY_ACTION
@@ -83,6 +84,8 @@ def supports_prepared_denial(action_id: ActionId, resource_context: object) -> b
         ProjectPolicyMutationPrepareDenialResourceContext, ProjectSubmissionArtifactPolicyMutationResourceContext,
     )
     return (
+        type(resource_context) in fulfillment_evidence.FULFILLMENT_EVIDENCE_RESOURCES_BY_ACTION.get(action_id, ())
+        or
         (
             action_id in checker_outputs.CHECKER_OUTPUT_ACTIONS
             and type(resource_context) is checker_outputs.CheckerOutputResourceContext
