@@ -2428,3 +2428,32 @@ existing FULFILLMENT_EVIDENCE_RESOURCES_BY_ACTION registry. Preserve every
 other classifier, resource, permission and allow path; this introduces no new
 authority, alternate denial implementation or compatibility behavior. Replay
 actual suspended/revoked persistence and real incompatible isolation next.
+
+### Native mixed-evidence contention qualification
+
+Continue the approved receipt qualification in an isolated checkout of pushed
+a4e4cc4. Its genuine-denial and app-isolation cases passed2 native tests in82.93s
+with cleanup; both focused reviewer groups pass that exact bounded repair.
+The full Finance objective and remaining native qualification stay open.
+
+The next concrete gap is concurrent report/exception ordering through public
+signed APIs. Allowed files are the new
+backend/tests/finance/test_fulfillment_evidence_concurrency.py, current Finance
+fixtures only if needed, existing lane catalogue and its independent literal
+membership/placement controls, and this record. No production guard, schema,
+authority, timeout, clock, provider or delivery activation change is authorized
+by this proof addition. Risk remainsL0; QA/test-delta/security/architecture/
+reuse/CI review applies, with human focus on genuine waits and immutable facts.
+
+First implement test_rc_late_failure_and_exception_serialize_ordinals in both
+arrival orders. Reuse the real signed source fixture, actual flush and locator
+operations and existing advisory-wait observer. Test barriers may pause after
+real flush but never replace an AUTH decision or database operation. Observe
+the contender waiting on the native REV advisory lock before release. Require
+exact1/2/3 cross-table order, fulfilled+attention projection, receiver time after
+the observed wait, identical replay with no new allow, and unchanged contribution,
+award and root facts. Existing public/rollback/denial proof remains retained.
+Register the new native module only in the established project family and
+preserve all old membership and placement fingerprints. Subsequent approved
+revocation/three-party/direct-SQL/isolation-guard/clock probes remain required;
+this first contention case alone does not qualify them.
