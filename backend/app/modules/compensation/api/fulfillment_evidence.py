@@ -70,7 +70,6 @@ class FulfillmentExceptionAuthorityFacts(FulfillmentSourceIdentity):
 
     exception_event_id: UUID7
     exception_digest: Digest
-    original_receipt_id: UUID7
     original_fulfillment_event_id: UUID7
     recording_lifecycle_generation: int = Field(ge=1, le=9_223_372_036_854_775_807)
 

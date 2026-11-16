@@ -52,17 +52,28 @@ def decode_obligation(body: bytes) -> dict:
     return value
 
 
-def decode_fulfillment_report(body: bytes, *, obligation: dict, received_at: datetime) -> dict:
-    """Validate a full-award report against exact caller-owned source evidence.
+def parse_fulfillment_report(body: bytes) -> dict:
+    """Validate closed request syntax before any source or authority lookup.
 
-    Pure validation cannot establish source authority, provider finality or a
-    stored receipt. The caller must obtain the obligation under its owner guards.
+    The full decoder still checks immutable source and receiver-time bounds;
+    passing this syntax boundary grants no permission to record evidence.
     """
     value = decode_financial_object(body)
     if next(Draft202012Validator(fulfillment_report_schema()).iter_errors(value), None):
         raise ValueError("invalid fulfillment report shape")
     if type(value["contract_version"]) is not int:
         raise ValueError("version must be an integer wire value")
+    require_canonical_uuid(value["external_event_id"], version=7)
+    return value
+
+
+def decode_fulfillment_report(body: bytes, *, obligation: dict, received_at: datetime) -> dict:
+    """Validate a full-award report against exact caller-owned source evidence.
+
+    Pure validation cannot establish source authority, provider finality or a
+    stored receipt. The caller must obtain the obligation under its owner guards.
+    """
+    value = parse_fulfillment_report(body)
     for key in (
         "source_instance_id",
         "fulfillment_root_id",
@@ -76,7 +87,6 @@ def decode_fulfillment_report(body: bytes, *, obligation: dict, received_at: dat
     ):
         if value[key] != obligation[key]:
             raise ValueError("fulfillment source mismatch")
-    require_canonical_uuid(value["external_event_id"], version=7)
     reported = canonical_utc_timestamp(value["reported_at"])
     awarded = canonical_utc_timestamp(obligation["awarded_at"])
     if received_at.tzinfo is None or received_at.utcoffset() is None:
@@ -98,6 +108,17 @@ def decode_fulfillment_report(body: bytes, *, obligation: dict, received_at: dat
     return value
 
 
+def parse_fulfillment_exception(body: bytes) -> dict:
+    """Validate one closed exception event without granting source authority."""
+    value = decode_financial_object(body)
+    if next(Draft202012Validator(fulfillment_exception_schema()).iter_errors(value), None):
+        raise ValueError("invalid fulfillment exception shape")
+    if type(value["contract_version"]) is not int:
+        raise ValueError("version must be an integer wire value")
+    require_canonical_uuid(value["exception_event_id"], version=7)
+    return value
+
+
 def decode_fulfillment_exception(
     body: bytes,
     *,
@@ -106,11 +127,7 @@ def decode_fulfillment_exception(
     received_at: datetime,
 ) -> dict:
     """Validate a linked post-success observation without authorizing repayment."""
-    value = decode_financial_object(body)
-    if next(Draft202012Validator(fulfillment_exception_schema()).iter_errors(value), None):
-        raise ValueError("invalid fulfillment exception shape")
-    if type(value["contract_version"]) is not int:
-        raise ValueError("version must be an integer wire value")
+    value = parse_fulfillment_exception(body)
     # Revalidate the exact retained successful event, not a caller's bare event ID.
     prior = decode_fulfillment_report(
         json.dumps(fulfilled_report).encode("utf-8"),
@@ -130,7 +147,6 @@ def decode_fulfillment_exception(
     ):
         if value[key] != obligation[key]:
             raise ValueError("exception source mismatch")
-    require_canonical_uuid(value["exception_event_id"], version=7)
     if value["original_fulfillment_event_id"] != prior["external_event_id"]:
         raise ValueError("exception references another fulfillment")
     observed = canonical_utc_timestamp(value["observed_at"])

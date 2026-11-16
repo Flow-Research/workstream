@@ -1733,3 +1733,21 @@ no generic OUTBOX completion is treated as a validated Finance acknowledgement.
 The value is rebuilt under caller-held authorized root custody, with no mutable
 award field or projection cache/table. Native0073/service/AUTH/routes and the
 planned integration/concurrency proof remain pending; this reader is not activated.
+
+The current COMP wire decoder now factors its existing closed-shape/event parsing
+so callbacks can reject malformed syntax before source lookup without inventing a
+receiver clock. Full source/quantity/time validation remains one canonical decoder
+and uses the actual database-generated time. Exception AUTH facts bind the original
+fulfilled event under original root/binding; that exact unique event identifies
+the successful receipt. Its actual receipt row ID remains a required native FK,
+resolved only after fresh AUTH and root custody. No fake row ID is derived from
+an event token and no nullable/placeholder authority path is added for an unknown
+parent; such requests can fail under fresh principal custody.
+
+The current decoder syntax refactor passed the existing154case fulfillment/
+obligation wire suite. AUTH now has four disjoint typed resource values for report,
+exception, source evidence and exact-report lookup. Pure probes distinguish source
+and lookup digests even with identical resource IDs and reject a different request
+actor or link. Module boundaries pass. These detached values do not authorize an
+operation: catalogue/PREP/replay wiring, the live request-context adapter, native
+0073 guard/registration and actual public HTTP operations remain in progress.
