@@ -1424,3 +1424,15 @@ the real canonical require operation (delegate unchanged), assert actor/project/
 collection identity and exact stored resource-context digest for all3 decisions;
 do not invent raw target metadata or change the audit publisher. Full grant/actor/
 permission assertions remain. The failed run completed owned cleanup.
+
+The source-digest/read/queue repair at exact47a1822 passed39 pure cases on
+preceding identical source and5 native cases in196.54 seconds with cleanup.
+The exact524c687 run passed its first3 policy-reader cases before the new audit
+assertion failed; exactf5e8055 then passed all5 remaining audit/retirement/
+activation/reset/empty-upgrade cases in309.88 seconds with cleanup. Evidence
+retains those distinct exact sources, not a relabeled whole-suite pass.
+The affected contribution_policy_list.py module/class docstrings also need their
+obsolete Finance-only wording replaced; this added allowed file is documentation
+only and changes no owner logic. Current historical reference specifications
+remain historical evidence. Full hosted and Finance runtime qualification remain
+unfinished; these bounded test/docs repairs change no capability-ledger claim.
