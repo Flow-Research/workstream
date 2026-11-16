@@ -99,16 +99,18 @@ matrix memberships plus the target-only `workstream.compensation.adapter`.
 AUTH-OUTBOX-01 registered the dispatcher; AUTH-OUTBOX-02 activates only its shared
 delivery mechanics with exact phase audit custody. ARCH-03C1 separately registers
 the assignment reconciler and its exact feature authority. The current registry
-has seventeen identities, sixteen action-bearing identities and twenty-five
-memberships. ARCH-03C2 completes atomic producer publication and the sole
+has twenty-one identities and forty-five registered service-action memberships.
+Three compensation-adapter memberships are PLANNED: source read, fulfillment
+report and fulfillment exception report. Their request-local AUTH wiring does
+not activate routes or authorize receipt insertion; native/API proof is pending. ARCH-03C2 completes atomic producer publication and the sole
 assignment-invalidation handler registration with enforced prefork delivery.
 CP01A registered four initially unavailable adapter-binding actions and CP01B
 registered five initially unavailable ContributionPolicy actions; neither
 changes fixed-service identity or matrix membership. CP01C corrects only the
 unavailable adapter-binding resource facts before CP02. It does not change
 catalogue custody, action identifiers, fixed-service identity, availability,
-or matrix membership. CP03A establishes that target-only identity and owner
-eligibility without a service-action matrix row; all four binding actions
+or matrix membership. CP03A established the binding-target identity and owner
+eligibility before its later planned fulfillment matrix registration; all four binding actions
 were activated by CP03B. CP05 activates exactly the five policy actions for
 human Finance Authority through explicit AUTH composition, retaining CP01B
 registration custody. CP05A exposes the public human Finance policy routes;

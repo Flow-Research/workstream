@@ -1814,3 +1814,21 @@ the exact contract with97 and adding the three explicit drill permission tokens.
 There is no dual-count acceptance, alias or old positive contract. No frontend,
 new CLI operation or feature permission activation is introduced. Preserve every
 existing negative response/count, duplicate-token and authorization test.
+
+
+At exact6f5250a the repaired AUTH/CI control selection passed241 cases in53.67s,
+and the built CLI administrative HTTP module passed23 cases in31.94s. Native
+catalogue reads passed8 cases before the real CLI/API case failed at startup:
+its generic API environment selected a shared scratch directory with an invalid
+marker/ledger layout. The exact run ended1failed/8passed146.88s with all owned
+PostgreSQL/MinIO cleanup complete. Preserve that failure; no overall native pass.
+The API fixture now selects its own tmp_path scratch root through the existing
+ArtifactScratchManager, without deleting or accepting the shared invalid root.
+CATALOGUE-CONSUMER-001 also requires restoring the internally consistent wrong-
+cardinality negative:98 items and total98, preserving the97-duplicate negative.
+An isolated Go overlay removes only the exact-total guard for discriminator proof.
+Update affected current AUTH/CON/operations/activation docs to describe exactly
+three PLANNED compensation memberships,21 identities and45 registered service
+memberships. Historical CP03A evidence remains historical. These catalogue-only
+changes expose no receipt operation and add no delivered roadmap capability;
+full native receipt/API qualification and Finance delivery remain unfinished.

@@ -830,8 +830,9 @@ AUTH alone owns:
 
 ACTORS owns and publicly exposes the closed ActorProfile `ServiceIdentity`
 vocabulary. AUTH consumes that vocabulary for controlled provisioning and owns
-which identities are action-bearing; a target-only identity does not acquire a
-service-action matrix row or execution authority.
+which identities have registered service-action memberships and which actions
+are executable. The compensation adapter has exactly three planned fulfillment
+memberships; binding-target eligibility grants no executable authority.
 
 CON owns canonical resource loading, product guards, hidden behavior, and
 feature tests. Neither subsystem imports the other's repositories or mutates
@@ -927,7 +928,7 @@ context, evaluator, or active-behavior parity drift.
 A closed target-only service identity is not an action-bearing fixed service.
 It may be provisioned as a typed product resource, but it has no static matrix
 row, AUTH-09E runtime admission, action, permission, or executable feature
-authority. `workstream.compensation.adapter` is the only current target-only
+authority. `workstream.compensation.adapter` is the current binding-target
 identity; it is eligible to be referenced by an adapter binding and cannot act
 as the Finance Authority caller.
 

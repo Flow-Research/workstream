@@ -452,7 +452,7 @@ def test_admin_rejects_malformed_and_mismatched_success(cli):
                 {
                     "items": PERMISSIONS["items"]
                     + [{"permission_id": "operations.task.start_override"}],
-                    "total": 95,
+                    "total": 98,
                 },
             ),
             ("permissions", PERMISSIONS | {"unknown": True}),

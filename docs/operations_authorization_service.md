@@ -733,15 +733,17 @@ actor, project, role, and cause event before a consumer changes product state.
 Revoking one role must leave the other project roles and all AdminRoleGrants
 unchanged.
 
-The closed registry now has seventeen fixed-service identities: sixteen
-action-bearing identities with twenty-five matrix memberships, plus the
-target-only `workstream.compensation.adapter` identity. The action-bearing
-set comprises seven ART identities, project setup, six exact REV identities,
-the active shared outbox dispatcher, and the task assignment reconciler. Missing
-provisioned rows deny without stopping the application.
-The target-only identity has no matrix membership, and the REV actions remain
-unavailable. Dispatcher authority grants no feature permission. Do not create a
-shared review service or a database service-grant table.
+The closed registry has twenty-one fixed-service identities and forty-five
+registered service-action memberships. The compensation adapter has exactly
+three PLANNED memberships: `compensation.fulfillment.source.read`,
+`compensation.fulfillment.report`, and `compensation.fulfillment.exception.report`.
+Its provisioned identity can be selected as a binding target, but those planned
+actions grant no executable source read or callback authority. Request-local
+prepared authorization binds the actual actor/link and original source; native
+receipt enforcement and public route activation remain unfinished. Missing
+provisioned rows deny without stopping the application. Dispatcher authority
+grants no feature permission. Do not create a shared review service or a
+database service-grant table.
 
 Historically, AUTH-12B extended the registry to an eighth identity,
 `workstream.project.setup`. Its execution memberships include:

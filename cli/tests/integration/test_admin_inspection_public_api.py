@@ -50,6 +50,7 @@ async def test_admin_inspection_follows_real_authority_and_scope(
     tmp_path: Path, cli, clean_postgres_database
 ) -> None:
     env = api_environment()
+    env["WORKSTREAM_ARTIFACT_SCRATCH_ROOT"] = str(tmp_path / "artifact-scratch")
     assert env["WORKSTREAM_DATABASE_URL"] == clean_postgres_database
     env["WORKSTREAM_E2E_FLOW_ISSUER"] = "https://identity.flowresearch.tech"
     env["WORKSTREAM_FLOW_AUTH_ISSUER"] = env["WORKSTREAM_E2E_FLOW_ISSUER"]
