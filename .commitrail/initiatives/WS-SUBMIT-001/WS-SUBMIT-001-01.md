@@ -6310,3 +6310,30 @@ fresh worker root resolves the positive-control fixture failure. Ruff, whitespac
 record and structure checks pass. Current27531 hosted CLI API failure is now
 concrete: three old _prepared_packet consumers and one registry409 fixture conflict;
 they remain required migration work. Same draft PR708; no full-suite readiness claim.
+
+CLI current producer scope: integration/test_manager_task_evidence_public_api.py,
+test_tui_public_api.py, test_checker_operations_public_api.py; shared signed HTTP
+setup in artifacts/test_submission_foreground_command.py and its malformed caller.
+Manager retains actual CLI submission using file/key, accepts202 then drives exact
+OUTBOX T5 before history checks. TUI setup uses current TASK fixture and real source
+submission where needed; claim-only case needs no admission. Shared HTTP setup
+takes explicit factory/client, provisions fixed principals idempotently without
+resetting lifecycle. Preserve all fresh-revocation, concealment, history and CLI
+wire assertions. Registry probes use distinct versions from two locked fixture
+images and assert exact total4 after two CLI registrations. No compatibility flags,
+authority bypass, skipped test or changed production API. Medium risk client/owner
+integration: run all four affected CLI cases with built binary, existing HTTP
+helper consumers, CLI Ruff/format, structural checks and focused QA review.
+Use the existing signed raw-ZIP journey's90s subprocess allowance only for task
+submit; keep20s for reads. This accommodates the foreground upload/PRE command
+instead of the removed short admission call; no product deadline changes.
+
+CLI current-producer replay passes4 in185.90s (existing marker/serializer warnings),
+including actual manager CLI ZIP submission, signed TUI read/claim and revocation,
+Operator registry/retry. Shared HTTP helper consumers pass5 in169.90s. Both isolated
+receipts confirm database and MinIO cleanup complete. QA finds no scoped defect;
+all prior manager/TUI assertions and registry replay/concealment/revocation guards
+remain. Full CLI Ruff/format99files, structural validator, record and whitespace
+checks pass. Fresh origin/main fetch has no commits absent from this branch.
+These focused proofs close the four observed27531 CLI API failures locally;
+hosted rerun and remaining full-spec/current producer migrations remain required.

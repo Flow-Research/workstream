@@ -16,13 +16,12 @@ from tests.artifacts.test_submission_intake_admission import (
 )
 
 
-async def configure_source_http(f, tmp_path, monkeypatch, payload, outcome):
+async def configure_source_http(factory, client, tmp_path, monkeypatch, payload, outcome):
     """Bind signed HTTP to real intake owners and the controlled guest transport."""
     from app.adapters import artifacts as composition
     from app.adapters.checkers import SelectedPreSubmitCheckerExecutionAdapter
     from app.modules.actors.api import ServiceIdentity
     from tests.artifacts.test_submission_pre_source import _source_runtime
-    from tests.authorization.test_pre_submit_attempt_authority import _seed_materializer
     from tests.checkers.execution.support import provision_post_submit_service
     from tests.checkers.external.test_selected_pre_submit_coordination import _source_reservation
     from tests.test_artifact_admission import _settings
@@ -34,9 +33,8 @@ async def configure_source_http(f, tmp_path, monkeypatch, payload, outcome):
     runtime.execute_pre = execute
     monkeypatch.setattr(composition, "selected_pre_submit_checker_execution",
                         lambda **kwargs: SelectedPreSubmitCheckerExecutionAdapter(external_execution=runtime))
-    await provision_post_submit_service(f.factory, ServiceIdentity.CHECKER_PRE_SUBMIT)
-    await _seed_materializer(f.factory)
-    client = f.access.signed.client
+    await provision_post_submit_service(factory, ServiceIdentity.CHECKER_PRE_SUBMIT)
+    await provision_post_submit_service(factory, ServiceIdentity.ARTIFACT_MATERIALIZER)
     app = client._transport.app
     storage = {name: value for name, value in _settings(tmp_path).model_dump().items() if name.startswith("artifact_")}
     settings = app.state.settings.model_copy(update=storage | {"submission_execution_profile": {
@@ -71,7 +69,7 @@ async def test_public_raw_zip_submission_uses_real_owners_and_stable_replay(admi
                 yield payload[start:start + 64 * 1024]
         return chunks()
     client, settings, errors, calls = await configure_source_http(
-        f, tmp_path, monkeypatch, payload, outcome,
+        f.factory, f.access.signed.client, tmp_path, monkeypatch, payload, outcome,
     )
     app = client._transport.app
     headers = f.access.target.headers | {"Content-Type": "application/zip",

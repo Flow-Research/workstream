@@ -145,7 +145,7 @@ async def test_public_malformed_zip_preserves_task_and_retains_cleanup_custody(
     f = admission_intake
     malformed = b"PK\x03\x04not-a-readable-zip"
     client, settings, errors, calls = await configure_source_http(
-        f, tmp_path, monkeypatch, malformed, "rejected",
+        f.factory, f.access.signed.client, tmp_path, monkeypatch, malformed, "rejected",
     )
     headers = f.access.target.headers | {
         "Content-Type": "application/zip", "X-Task-Assignment-Id": str(f.assignment),
