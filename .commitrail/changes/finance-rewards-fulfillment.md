@@ -2136,3 +2136,46 @@ SQL-validator inputs, not an insertion-clock override or actual command append.
 Module-boundary, test-structure and behavior-ownership checks pass on that exact
 source. Add the original-clock rule to the current canonical receipt contract.
 The final evidence/docs append changes no tested implementation source.
+
+
+## Public receipt operation implementation refinement
+
+Continue the same approved four-route L0 boundary after pushed811063c5b.
+The concrete remaining gap is real request authentication, owner transaction/
+response custody and bounded read contracts around the existing unactivated
+commands. Scope extends those COMP owners, existing AUTH/REV adapters and exact
+composition registration, new API dependencies/routes and router, exact3 action
+activations/custody fixtures, focused native/public tests and affected current
+contracts/docs. No Finance provider effects, worker activation, frontend, new
+controller/store, compatibility path or second PR.
+
+Use canonical signed service identity before any human first-access flow;
+stream at most64KiB, preserve raw closed JSON, and match canonical UUIDv7 event
+header/path/body. One fresh RC root takes REV→actual request AUTH→COMP custody.
+Serialize/validate the response before explicit commit. Existing issuing-kernel
+restage_denial preserves only actual pending denial evidence after rollback;
+incompatible isolation never prepares/restages AUTH. Original binding
+suspension and later phases do not erase factual reporting authority from an
+active original principal.
+
+Proposed closed read values reuse exact portable body schemas: event lookup
+contains existing acknowledgement plus normalized report and receiver/ordinal/
+generation metadata; source evidence contains explicit contract/source fields,
+the exact obligation, existing status, nullable fulfilled event, latest receipt,
+actual fulfilled receipt and latest exception. Parent/digest/source/status and
+original-clock consistency are checked. All nullable members remain present.
+Review this precise nested layout before adopting it in specification10.3; no
+previous public representation exists to preserve.
+
+Acceptance/proof: actual public service provisioning before policy fixture
+creation, signed token/JWKS authentication, genuine earned root, all4routes and
+new/replay/conflict/missing/late failure/exception/attention behavior. Preserve
+actual AUTH, root/award/contribution, immutable clocks/ordinals and zero replay
+effects. Add principal/link/source/quantity/time/native closure and mutation
+negative controls; RC contention, RR/SERIALIZABLE zero-effect refusal and
+rollback-contained native guard-removal counterexample; revocation-first,
+callback-first and three-party lock-order tests. Register exact lanes/ownership;
+keep validators strict. Required review remains security/architecture/reuse
+and QA/test-delta/CI/docs/product-ops. Human focus is identity, clock/source
+lineage, transaction/replay and public failure/recovery proof. Whole Finance
+execution and its complete external-HTTP/durable-worker journey remain required.
