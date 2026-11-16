@@ -2124,3 +2124,15 @@ assertions and add the exact reproduced step-back pure regression, independent
 new-clock awareness refusal and installed native body alignment proof. Actual
 canonical append/replay/isolation/contention and all public routes remain
 unqualified. Replay affected reviews after focused proof and shared checks.
+
+
+Exacte9e35c069 clock repair passed94 focused wire/command tests in3.51s. The
+exact new regression passes both independent owners and rejects an in-memory
+mutant that substitutes the new receiver time for the retained receipt time,
+with the reproduced report-time error. No mutant or alternate implementation
+is retained in the repository. Its installed native body regression passed1
+case in41.60s with complete PostgreSQL/MinIO cleanup; this uses explicit pure
+SQL-validator inputs, not an insertion-clock override or actual command append.
+Module-boundary, test-structure and behavior-ownership checks pass on that exact
+source. Add the original-clock rule to the current canonical receipt contract.
+The final evidence/docs append changes no tested implementation source.

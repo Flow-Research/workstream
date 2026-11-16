@@ -502,6 +502,9 @@ Both event IDs are canonical UUIDv7 values. The original row must be this
 award/binding's actual fulfilled receipt. Kind is only `provider_reversal` or
 `provider_status_conflict`; body and digest cover the exact closed request.
 Exact replay retains the original evidence; changed replay conflicts.
+Decode the retained success against its own stored receiver time. The new
+exception receiver time governs only the new observation bounds; a clock step
+back cannot invalidate an immutable successful receipt.
 
 An exception sets persistent attention while preserving historical fulfillment.
 It creates no payout, adjustment, contribution or award. There is no automatic
