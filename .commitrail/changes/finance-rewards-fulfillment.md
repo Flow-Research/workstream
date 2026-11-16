@@ -1669,3 +1669,19 @@ already-running native receipt-AUTH proof releases the owned database slot.
 QA/test-delta/CI/docs review should confirm the obsolete input is replaced and
 all distinct failure boundaries remain; human focus is the same real HTTP and
 installed-package proof, with no compatibility path or Finance-completion claim.
+
+### Installed MCP fixture proof and runtime uncertainty
+
+Exact324b59e current MCP policy unit selection passed40 cases in210.65s. The
+fresh wheel was installed in an independent private environment. Its full real-
+HTTP policy journey passed1 case in68.77s with diagnostic import/fault tracing,
+unchanged assertions/readiness limits and complete PostgreSQL/MinIO cleanup.
+The original local run failed readiness; a diagnostic replay showed API exit
+SIGSEGV(-11); the later ordinary replay failed readiness in301.21s. Preserve
+all these outcomes. The hosted source66732c4 failure was invalid_tool_input at
+the obsolete positive policy input; this repair replaces that input and does
+not relax the production schema or test outcome. Intermittent local native
+startup failures remain unexplained, and a matching CI Python patch could not
+be downloaded by the installed uv registry. No interpreter, loop, timeout,
+project dependency or application setting was changed to force success. Fresh
+hosted normal execution remains required before qualification; keep the PR draft.
