@@ -93,7 +93,7 @@ FULFILLMENT_EVIDENCE_TARGETS = frozenset({
     "backend/app/modules/authorization/fulfillment_evidence_authorization.py",
     "backend/app/modules/authorization/prepared_fulfillment_replay.py",
     "backend/app/modules/compensation/api/fulfillment_evidence.py",
-    "backend/app/modules/compensation/fulfillment/evidence_models.py",
+    "backend/app/modules/compensation/fulfillment/evidence_service.py",
     "backend/app/modules/compensation/fulfillment/projection.py",
 })
 PILOT_08_REVISION_TARGETS = frozenset({

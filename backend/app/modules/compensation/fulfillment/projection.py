@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.modules.compensation.api.fulfillment_evidence import (
     CompensationStatusProjection, FulfillmentEvidenceUnavailable,
 )
-from app.modules.compensation.fulfillment.evidence_models import (
+from app.modules.compensation.fulfillment.models import (
     CompensationFulfillmentException, CompensationFulfillmentReceipt,
 )
 from app.modules.compensation.fulfillment.models import CompensationFulfillmentRoot

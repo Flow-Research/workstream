@@ -1486,7 +1486,7 @@
     },
     {
       "group": "shared",
-      "target": "backend/app/modules/compensation/fulfillment/evidence_models.py"
+      "target": "backend/app/modules/compensation/fulfillment/evidence_service.py"
     },
     {
       "group": "shared",
@@ -2637,7 +2637,7 @@
       "target": "backend/scripts/validate_test_lane_evidence.py"
     }
   ],
-  "authority_digest": "e86e86b9337829d06e8ed14504c186522b9157e4f4be3f9a782025587430f885",
+  "authority_digest": "90b8aad355b7998a7f37e7a342b1b9bdfa0678e763593f6499420e531f77ff35",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }

@@ -1,0 +1,23 @@
+{
+  "behavior_id": "finance.fulfillment.compensation.fulfillment.evidence_service",
+  "callables": [
+    "app.modules.compensation.fulfillment.evidence_service.FulfillmentEvidenceService.__init__",
+    "app.modules.compensation.fulfillment.evidence_service.FulfillmentEvidenceService._custody",
+    "app.modules.compensation.fulfillment.evidence_service.FulfillmentEvidenceService._decode_report",
+    "app.modules.compensation.fulfillment.evidence_service.FulfillmentEvidenceService._existing",
+    "app.modules.compensation.fulfillment.evidence_service.FulfillmentEvidenceService._facts",
+    "app.modules.compensation.fulfillment.evidence_service.FulfillmentEvidenceService._lock_source",
+    "app.modules.compensation.fulfillment.evidence_service.FulfillmentEvidenceService._parse",
+    "app.modules.compensation.fulfillment.evidence_service.FulfillmentEvidenceService._require_transaction",
+    "app.modules.compensation.fulfillment.evidence_service.FulfillmentEvidenceService._row_source",
+    "app.modules.compensation.fulfillment.evidence_service.FulfillmentEvidenceService.exception",
+    "app.modules.compensation.fulfillment.evidence_service.FulfillmentEvidenceService.report",
+    "app.modules.compensation.fulfillment.evidence_service._exception_ack",
+    "app.modules.compensation.fulfillment.evidence_service._report_ack"
+  ],
+  "group": "shared",
+  "schema": "workstream.behavior-ownership.v1",
+  "status": "candidate",
+  "target": "backend/app/modules/compensation/fulfillment/evidence_service.py",
+  "unresolved_reason": "Report/exception commands remain unactivated and require actual native AUTH, replay, contention and public API proof."
+}

@@ -1969,3 +1969,21 @@ composite original success; they do not insert evidence, forge AUTH or override
 the insertion clock. Register the module in the existing project test family.
 These tests supplement existing portable owner tests and cannot qualify actual
 insert/source/principal/ordinal/rollback or command behavior on their own.
+
+
+Exact415acfadd passed both native actual0072 receipt migration cases in463.77s,
+with PostgreSQL and MinIO cleanup confirmed. This establishes empty/repeatable
+installation, active-lifecycle atomic refusal and pending earning/source/root/
+OUTBOX/AUTH/control/history physical and logical preservation. It does not
+qualify inserts, command authorization, ordinal/clock/concurrency or public APIs.
+
+Module-boundary validation found the new global model-discovery import of
+fulfillment.evidence_models, which falls outside the existing models-only
+exception. Consolidate those declarations into fulfillment/models.py and remove
+the separate file and all imports; do not add boundary debt, an exception or an
+alias. Keep all three genuine row types, constraints and native DDL unchanged.
+The existing root model remains partitioned; replace the removed declaration
+target with the new command target in exact additive registration and declare
+its ownership candidate until native/public command proof. Existing partition
+base and every unrelated assignment remain intact. This source-only owner
+consolidation requires fresh structural checks and native schema/body tests.
