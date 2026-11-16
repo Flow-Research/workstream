@@ -1034,3 +1034,100 @@ residues now identify anchored REV source and unavailable external Finance
 execution precisely. A final clean-source native run must additionally exercise
 the relocated fixture and source/closure/reviewer/migration boundaries before
 reviewers can qualify execution. The full financial specification remains unfinished.
+
+
+## Native root qualification and next receipt boundary
+
+Clean `cd2982b073fb871ebf73928454a93227957224de` passed 43 native
+PostgreSQL cases in 1230.94 seconds with owned database/MinIO cleanup complete.
+The proof covers zero-root activation/source substitution, independent native
+award/root/event closure and guard-removal controls, held custody, AUTH/storage,
+rollback, ordinal contention, four reviewer-storage/two export branches, the
+relocated ownership-denial fixture and all three actual migration cases. Both
+combined reviewer tracks pass this bounded native repair; the prior source,
+reviewer, independent-event and documentation findings are closed. This does not
+qualify public Medium acceptance, stopped-phase earning replay, full-suite,
+durable-worker/S3 delivery or the full Finance objective. A separate exact-clean
+four-case revised-terms run passed in 220.74 seconds with cleanup complete; the
+earlier intermittent not_evaluated result remains unexplained, not erased.
+
+Fresh main is 94334ccf4085c26c7bfaa054465fc05cfbdad1fc. The only open non-draft
+PR at preparation is dependency-update PR #711; it supplies no new financial owner.
+The next same-PR gap is original-bound-service source reads and immutable
+receipt/exception recording. No callback owner is currently exposed. Internal
+roots alone cannot provide callback-before-ack or late factual recovery.
+
+Allowed: existing COMP fulfillment/API/composition and narrow public REV fence;
+AUTH catalogue/domain/PREP/resource/action/service-matrix owners; API routes,
+router/dependencies; model registration and one forward migration after 0072;
+affected behavior/module ownership, test lanes, current specs/data model/roadmap
+and Finance README; focused API/PostgreSQL and affected existing tests. Prohibit
+new lifecycle/auth/job owners, provider/credit execution, worker activation,
+compatibility paths, private cross-owner reads, prospective reconciliation code,
+weakened assertions/checks, live payments, deployment or merge. All prior scope
+prohibitions remain in force.
+
+The plan review found and corrected a concrete specification conflict: callbacks
+holding adapter AUTH before REV can cycle with lifecycle transitions holding REV
+before AUTH control and revocation holding AUTH control before that adapter.
+Amend sections 8.5/10.1/12.6 explicitly. Extend existing REV held-fence machinery
+with a small public server-current hold, then take exact action-specific AUTH
+locks, then COMP binding/root/receipt locks. COMP validates the same held
+capability without reacquiring REV after AUTH. This is the concrete gap for the
+public extension; do not add a lock framework or a global fixed-service AUTH
+lock. New-root LIVE admission remains unchanged. Current custody is distinct
+from a root's immutable original generation and permits factual evidence in all
+phases, including a suspended original binding with its exact active reporter.
+
+Use the actual verified HTTP service actor/link and exact binding.adapter_actor_id,
+never an internally re-resolved fixed principal. Give finance-evidence and
+exact-report lookup disjoint typed resources under source.read. Verify path/body
+award and Idempotency-Key/event equality, canonical complete-body digests and
+existing decoder source facts. First insertion reads one database clock after
+waits for both bounds and received_at. Exact replay uses retained immutable
+AUTH/resource evidence with existing validate_replay under fresh principal/fence
+checks, returning original acknowledgement/time without another allow or row.
+Changed same-event requests conflict. Retain 300-second bounds and arbitrarily
+late legitimate evidence.
+
+Persist immutable report/exception body, digest, receiver time, exact source/
+root/award/project/binding and request-principal/AUTH references. Native guards
+independently close that lineage and authority, enforce event-per-binding and
+one fulfilled receipt per award, exact successful-report exception linkage and
+UPDATE/DELETE denial. Serialize writers on existing root custody. Derive status
+from immutable evidence; any cache is rebuildable without another lock owner.
+Fulfilled dominates ordinary late failure; exceptions retain fulfilled and set
+attention. Contributor JSON/CSV must expose no operational event/reference IDs.
+Actual 0072 upgrade must retain pending roots, initial events, source anchor and
+AUTH without manufacturing evidence; fresh and repeated-head install agree.
+
+Acceptance/proof files: finance/test_fulfillment_receipts.py for public HTTP,
+fresh principal, disjoint read resources, headers/path/body, replay, time/phase,
+rollback and native substitutions; test_fulfillment_projection.py for all seven
+section 14.1 outputs, failed/success ordering, exception attention and rebuild;
+test_fulfillment_receipt_migration.py for fresh/actual0072/repeat/pending roots.
+Use existing project_lifecycle_* lanes for receipt/projection PostgreSQL and
+schema_contracts for migration; preserve other actor/catalogue/export lanes.
+Extend their existing tests only for distinct behavior. Preserve lane catalogue,
+module/behavior ownership and exact OpenAPI action markers on all four routes.
+
+Independent-session barrier proof must show callback-first commits exactly one
+receipt then revocation, while revocation-first denies callback with zero
+receipt/exception/callback-AUTH writes. The three-party case must also complete
+within bounded waits without deadlock. A stale-principal mutation must fail its
+outcome assertion even when futures finish. Separately prove same-event concurrent
+replay, distinct-success conflict, failed/success projection, every phase and
+transition race, exact time boundaries, direct-SQL lineage/AUTH/digest denial and
+rollback-only guard-removal discrimination. Inspect existing proof before adding
+a distinct test; no coverage targets or failure skips.
+
+Risk: L0. Both combined plan-review tracks pass after the above corrections;
+implementation still requires shared checks and clean-target focused security,
+architecture, product, reuse/senior and QA/test-delta/CI/docs replay. Human focus:
+one canonical lock order, fresh request principal, immutable source/evidence,
+zero-write replay and native concurrency closure. Reconcile affected current
+capability claims in docs/spec_contribution_compensation.md,
+docs/spec_review_lifecycle.md, docs/architecture_data_model.md,
+docs/roadmap_status.md and backend/app/modules/finance/README.md during
+implementation. This planning-only update changes no delivered capability and
+requires no no-op roadmap edit. Full Finance remains unfinished in draft PR #709.
