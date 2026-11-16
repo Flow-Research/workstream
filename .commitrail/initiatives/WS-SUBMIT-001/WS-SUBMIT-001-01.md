@@ -6466,3 +6466,38 @@ ID and version guards, and acceptance test detects receipt-guard removal. In-mem
 probes leave source unchanged (/tmp/submission-coordination-qa-repair.log). No
 remaining scoped QA/ARCH findings;137pass final suite evidence inspected. Same
 single draft PR708, with remaining full-spec/provider/CI work still open.
+
+Model-call preservation scope: tests/checkers_model_calls/test_composed_execution.py.
+Hosted953 run43960175985 actual stack shows output storage execute_committed_put
+fails fixed ART service context. Source-based material fixture no longer incidentally
+provisions old put pipeline; model-generated outputs still legitimately require
+ARTIFACT_PUT_RESOLVER and ARTIFACT_VERIFIER per checker_output_storage composition.
+Provision those exact identities alongside ARTIFACT_CHECKER_OUTPUT locally, using
+idempotent helper that never resets lifecycle. No shared broad grants, product
+AUTH changes or removed assertions. Medium downstream authority risk: full eight
+composed cases incl MinIO/provider uncertainty/concurrency/recovery, lint/structure
+and focused QA review. Human focus is explicit required fixture authority without
+weakening model budget/charge/replay or output binding evidence.
+
+Hosted953 evidence refreshed:15 downloaded backend-lane artifacts,152 failure
+entries in /tmp/submission-hosted-failures-953.txt. This is an older head and includes
+now-fixed public/coordination cases; do not call it current-head remaining count.
+QA model-fixture probe confirms added identities exactly match production output
+composition, all existing assertions unchanged, and suspended existing principals
+are preserved by helper without reset/recreation. No scoped findings. Full8case
+run /tmp/submission-model-composed-v1.log is active (session42607); do not claim
+runtime success or commit completion before its terminal receipt. Ruff/record pass.
+
+Independent bounded fixture repair while model integration runs: allowed file
+backend/tests/test_checker_materialization.py. Hosted953 source-read tests stop
+before exercising guards because dataclass replace omits explicit source_contracts
+InitVar. Supply existing production contract dependency at the fixture copy;
+no source-validator bypass or test assertion change. Low implementation risk,
+authority test relevance: run full pre_source selection, Ruff and scoped QA.
+Existing commit-before-read/lifetime/expiry/cancellation guards must all execute.
+
+Source grant final selection12pass12deselected12.36s; existing assertions and all
+other AST nodes unchanged. QA confirms canonical contract dependency validates
+source only and conveys no storage authority; no scoped findings. Ruff/whitespace
+pass, shared structure validation passed. Model8case integration remains separately
+active42607; its fixture change is not included in this source-grant commit.

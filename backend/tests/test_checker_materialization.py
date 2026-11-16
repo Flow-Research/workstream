@@ -277,7 +277,7 @@ def _source_read_fixture(*, failure=None):
     events = []
     payload = b"authorized original bytes"
     reservation = _source_reservation()
-    reservation = replace(reservation, source=reservation.source.model_copy(update={
+    reservation = replace(reservation, source_contracts=selected_pre_submit_source_contracts(), source=reservation.source.model_copy(update={
         "raw_sha256": "sha256:" + hashlib.sha256(payload).hexdigest(), "raw_byte_count": len(payload),
     }))
     lease = SelectedPreSubmitLeaseFacts(reservation, new_record_id(), 1, reservation.pre_deadline_at)
