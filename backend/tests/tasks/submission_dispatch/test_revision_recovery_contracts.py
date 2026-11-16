@@ -44,10 +44,12 @@ def test_recovery_authority_binds_only_exact_service_source():
     assert fixed_service_resource_matches(
         ActionId.TASK_REVISION_RECOVER, resource, resource.scope_project_id,
         None, None, None,
+        actor_profile_id=resource.actor_profile_id, identity_link_id=resource.identity_link_id,
     ) is True
     assert fixed_service_resource_matches(
         ActionId.TASK_REVISION_RECOVER, resource,
         new_record_id(), None, None, None,
+        actor_profile_id=resource.actor_profile_id, identity_link_id=resource.identity_link_id,
     ) is False
     for change in (
         {"reason": "ordinary PM repair"},

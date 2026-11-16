@@ -749,6 +749,8 @@ class AuthorizationService:
                 authority.artifact_resource_type,
                 authority.artifact_resource_id,
                 expected_resource,
+                actor_profile_id=context.actor_profile_id,
+                identity_link_id=context.identity_link_id,
             ):
                 denial = AuthorizationDenialCode.RESOURCE_GUARD_DENIED
             if denial is None:

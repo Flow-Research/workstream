@@ -1,11 +1,13 @@
 """Disjoint AUTH resources for original-bound fulfillment evidence."""
 
+import json
 from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, UUID7, model_validator
 
 from app.core.hashing import canonical_json_hash
+from app.modules.authorization.catalogue import ActionId
 from app.modules.compensation.api.fulfillment_evidence import (
     FulfillmentEvidenceAuthorityFacts, FulfillmentExceptionAuthorityFacts,
     FulfillmentReportAuthorityFacts, FulfillmentReportLookupAuthorityFacts,
@@ -111,4 +113,39 @@ def fulfillment_evidence_principal_matches(
         resource.facts.reporter_actor_id == actor_profile_id
         and resource.facts.binding_actor_id == actor_profile_id
         and resource.facts.reporter_identity_link_id == identity_link_id
+    )
+
+
+FULFILLMENT_EVIDENCE_RESOURCES_BY_ACTION = {
+    ActionId.COMPENSATION_FULFILLMENT_REPORT: (FulfillmentReportResourceContext,),
+    ActionId.COMPENSATION_FULFILLMENT_EXCEPTION_REPORT: (FulfillmentExceptionResourceContext,),
+    ActionId.COMPENSATION_FULFILLMENT_SOURCE_READ: (
+        FulfillmentSourceReadResourceContext, FulfillmentReportLookupResourceContext,
+    ),
+}
+FULFILLMENT_EVIDENCE_ACTIONS = frozenset(FULFILLMENT_EVIDENCE_RESOURCES_BY_ACTION)
+
+
+def parse_fulfillment_evidence_binding(action, request, invalid_error):
+    """Parse exact closed resource JSON only for the three fulfillment actions."""
+    expected = FULFILLMENT_EVIDENCE_RESOURCES_BY_ACTION.get(action)
+    if expected is None:
+        return None
+    try:
+        value = dict(request)
+        resource_type = value.get("resource_type")
+        for resource in expected:
+            if resource.model_fields["resource_type"].default == resource_type:
+                return resource.model_validate_json(json.dumps(value))
+    except (TypeError, ValueError):
+        pass
+    raise invalid_error("invalid fulfillment evidence authority") from None
+
+
+def fulfillment_evidence_action_matches(action, resource, project_id, actor_id, link_id):
+    """Require exact action family, project and actual request principal."""
+    return (
+        type(resource) in FULFILLMENT_EVIDENCE_RESOURCES_BY_ACTION.get(action, ())
+        and resource.scope_project_id == project_id
+        and fulfillment_evidence_principal_matches(resource, actor_id, link_id)
     )

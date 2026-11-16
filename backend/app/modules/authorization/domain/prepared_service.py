@@ -6,6 +6,10 @@ from uuid import UUID
 
 from app.core.hashing import canonical_json_hash
 from app.modules.authorization.catalogue import ActionId
+from app.modules.authorization.domain.fulfillment_evidence import (
+    FULFILLMENT_EVIDENCE_ACTIONS, fulfillment_evidence_action_matches,
+    parse_fulfillment_evidence_binding,
+)
 from app.modules.authorization.domain.model_usage import (
     CHECKER_MODEL_CALL_ACTIONS,
     SETUP_MODEL_USAGE_ACTIONS,
@@ -166,7 +170,8 @@ def fixed_service_scope_project(action_id, scope, artifact_resource):
         or outbox
         or (
             action_id
-            in PRE_SUBMIT_ACTIONS
+            in FULFILLMENT_EVIDENCE_ACTIONS
+            | PRE_SUBMIT_ACTIONS
             | POST_SUBMIT_ACTIONS
             | CHECKER_MODEL_CALL_ACTIONS
             | CHECKER_OUTPUT_ACTIONS
@@ -191,9 +196,14 @@ def fixed_service_scope_project(action_id, scope, artifact_resource):
 
 
 def fixed_service_resource_matches(
-    action_id, resource, project_id, artifact_type, artifact_id, expected
+    action_id, resource, project_id, artifact_type, artifact_id, expected,
+    *, actor_profile_id, identity_link_id,
 ):
     """Check the final resource against the exact prepared service scope."""
+    if action_id in FULFILLMENT_EVIDENCE_ACTIONS:
+        return fulfillment_evidence_action_matches(
+            action_id, resource, project_id, actor_profile_id, identity_link_id,
+        )
     if action_id is ROUTE:
         return (
             type(resource) is PostSubmitRoutingResourceContext
@@ -268,6 +278,9 @@ def prepared_fixed_service_bindings(action, request, invalid_error):
             "routing_request": parse_post_submit_routing_prepare(action, request, invalid_error)
         }
     return {
+        "fulfillment_evidence_context": parse_fulfillment_evidence_binding(
+            action, request, invalid_error,
+        ),
         "pre_submit_prepare_context": parse_pre_submit_prepare(action, request, invalid_error),
         "post_submit_prepare_context": parse_post_submit_prepare(action, request, invalid_error),
         "assignment_invalidation_context": parse_assignment_invalidation_binding(

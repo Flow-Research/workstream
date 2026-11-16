@@ -35,6 +35,8 @@ _ENTITY_TYPES = frozenset(
 )
 _RESOURCE_TYPES = frozenset(
     """task_post_submit_routing_manifest joint_lifecycle_control checker_run selected_pre_submit_run outbox_event outbox_delivery actor_profile actor_identity_link admin_role_grant project qualification_snapshot project_role_grant task
+    compensation_fulfillment_report compensation_fulfillment_exception
+    compensation_fulfillment_evidence compensation_fulfillment_report_lookup
     submission submission_creation submission_binding review contribution compensation_award compensation_delivery compensation_adapter_binding contribution_policy operations
     audit_event project_create_operation project_submission_artifact_policy_mutation
     project_guide_activation pre_submit_checker_input project_guide_compilation_request

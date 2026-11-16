@@ -1774,3 +1774,18 @@ the stale literal94 response and obsolete no-service-actions assertion; both wer
 replaced in the current contract, with no dual total or old proof-name alias.
 The callback action definitions remain PLANNED pending complete same-boundary
 storage/PREP/HTTP proof. This result qualifies catalogue declaration only.
+
+The receipt runtime now wires the four closed resource types into canonical
+AUTH digests, privacy-bounded audit selectors/vocabulary and PREP binding and
+consumption. Fixed-service matching receives the actual request actor/link
+explicitly at every current caller; fulfillment additionally requires exact
+binding actor, project and action family. Callback preparation commits the full
+resource and exact event idempotency key. A dedicated replay validator checks
+the original immutable allow/digest without emitting a replacement allow.
+The request-local adapter uses the verified request context directly and the
+same session/repository/kernel/PREP owner; it never resolves a global principal.
+All three actions remain PLANNED and no receipt route/table is activated.
+The focused pure AUTH/recovery/routing/catalogue selection passed117 cases in
+13.45s; Ruff/diff checks and the module-boundary validator pass. These checks
+cover exact action/resource/principal and retained-allow substitution boundaries;
+native authorization, transactional replay and live callback proof remain pending.

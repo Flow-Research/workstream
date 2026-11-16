@@ -3,6 +3,11 @@
 from __future__ import annotations
 from app.modules.authorization.catalogue import GUIDE_PROPOSAL_ACTION_IDS, POST_POLICY_ACTION_IDS
 from app.modules.authorization.domain.lifecycle import parse_lifecycle_prepare, lifecycle_matches
+from app.modules.authorization.domain.fulfillment_evidence import (
+    FULFILLMENT_EVIDENCE_ACTIONS, FulfillmentEvidenceResourceContext,
+    fulfillment_evidence_action_matches,
+)
+from app.modules.authorization.prepared_fulfillment_replay import validate_fulfillment_replay
 from app.modules.authorization.prepared_routing_replay import validate_routing_replay
 from app.modules.authorization.prepared_lifecycle_replay import validate_lifecycle_replay
 from app.modules.authorization.fixed_service_revalidation import fixed_service_context_revalidator
@@ -212,6 +217,7 @@ class _PreparedAuthorizationBinding:
     assignment_invalidation_context: AssignmentInvalidationResourceContext | None = None
     revision_expiry_context: RevisionExpiryResourceContext | None = None
     revision_recovery_context: RevisionRecoveryResourceContext | None = None
+    fulfillment_evidence_context: FulfillmentEvidenceResourceContext | None = None
     outbox_dispatch_digest: str | None = None
     post_submit_prepare_context: dict | None = None
     pre_submit_prepare_context: dict | None = None
@@ -632,6 +638,14 @@ class PreparedAuthorizationService:
             or issuance.binding.revision_recovery_context != final_resource_context
         ):
             raise PreparedAuthorizationHandleInvalid("invalid revision recovery authority")
+        if expected_action_id in FULFILLMENT_EVIDENCE_ACTIONS and (
+            issuance.binding.fulfillment_evidence_context != final_resource_context
+            or not fulfillment_evidence_action_matches(
+                expected_action_id, final_resource_context, issuance.authority.scope_project_id,
+                issuance.authority.context.actor_profile_id, issuance.authority.context.identity_link_id,
+            )
+        ):
+            raise PreparedAuthorizationHandleInvalid("invalid prepared fulfillment authority")
         if not lifecycle_matches(issuance.binding.lifecycle_command, final_resource_context):
             raise PreparedAuthorizationHandleInvalid("invalid lifecycle authority")
         if expected_action_id is ROUTE:
@@ -779,7 +793,9 @@ class PreparedAuthorizationService:
         self._issued[handle] = _CONSUMED
         try:
             replay = (
-                validate_routing_replay
+                validate_fulfillment_replay
+                if expected_action_id in FULFILLMENT_EVIDENCE_ACTIONS
+                else validate_routing_replay
                 if expected_action_id is ActionId.TASK_POST_SUBMIT_ROUTE
                 else validate_checker_retry_replay
                 if expected_action_id is ActionId.OPERATIONS_CHECKER_RETRY
@@ -918,6 +934,23 @@ class PreparedAuthorizationService:
                 == self._context.correlation_id == request.route_operation_id
             ):
                 raise PreparedAuthorizationHandleInvalid("invalid prepared routing request")
+        if action_id in FULFILLMENT_EVIDENCE_ACTIONS:
+            resource = service_bindings["fulfillment_evidence_context"]
+            if not (
+                scope.kind is PreparedAuthorityScopeKind.PROJECT
+                and caller_input.idempotency_key == (
+                    resource.facts.external_event_id
+                    if action_id is ActionId.COMPENSATION_FULFILLMENT_REPORT
+                    else resource.facts.exception_event_id
+                    if action_id is ActionId.COMPENSATION_FULFILLMENT_EXCEPTION_REPORT
+                    else self._context.request_id
+                )
+                and fulfillment_evidence_action_matches(
+                    action_id, resource, scope.project_id,
+                    self._context.actor_profile_id, self._context.identity_link_id,
+                )
+            ):
+                raise PreparedAuthorizationHandleInvalid("invalid fulfillment evidence request")
         operation_id = project_id = operation_generation = None
         setup_bindings = parse_setup_bindings(action_id, caller_input, scope, self._context)
         if action_id is ActionId.PROJECT_CREATE:
@@ -983,6 +1016,13 @@ class PreparedAuthorizationService:
         action_id: ActionId,
         resource: AuthorizationResourceContext,
     ) -> PreparedAuthorityScope:
+        if (
+            action_id in FULFILLMENT_EVIDENCE_ACTIONS
+            and isinstance(resource, FulfillmentEvidenceResourceContext)
+        ):
+            return PreparedAuthorityScope(
+                kind=PreparedAuthorityScopeKind.PROJECT, project_id=resource.scope_project_id,
+            )
         artifact_resource = _EXACT_ARTIFACT_RESOURCE_BY_ACTION.get(action_id)
         if artifact_resource is not None and isinstance(resource, artifact_resource[1]):
             return PreparedAuthorityScope(kind=PreparedAuthorityScopeKind.ARTIFACT_INTERNAL, artifact_resource_type=artifact_resource[0], artifact_resource_id=resource.resource_id)
