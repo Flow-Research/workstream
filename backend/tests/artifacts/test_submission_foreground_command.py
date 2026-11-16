@@ -16,12 +16,8 @@ from tests.artifacts.test_submission_intake_admission import (
 )
 
 
-@pytest.mark.parametrize("outcome,framing", [
-    ("completed", "small"), ("rejected", "small"),
-    ("completed", "large-single"), ("completed", "large-split"),
-])
-async def test_public_raw_zip_submission_uses_real_owners_and_stable_replay(admission_intake, tmp_path, monkeypatch, outcome, framing):
-    from sqlalchemy import text
+async def configure_source_http(f, tmp_path, monkeypatch, payload, outcome):
+    """Bind signed HTTP to real intake owners and the controlled guest transport."""
     from app.adapters import artifacts as composition
     from app.adapters.checkers import SelectedPreSubmitCheckerExecutionAdapter
     from app.modules.actors.api import ServiceIdentity
@@ -30,20 +26,6 @@ async def test_public_raw_zip_submission_uses_real_owners_and_stable_replay(admi
     from tests.checkers.execution.support import provision_post_submit_service
     from tests.checkers.external.test_selected_pre_submit_coordination import _source_reservation
     from tests.test_artifact_admission import _settings
-    from tests.test_trusted_intake import _archive
-
-    f, key = admission_intake, new_record_id()
-    payload = _archive("../escape") if outcome == "rejected" else _archive()
-    if framing.startswith("large"):
-        payload = _archive(content=b"finished work\n" * 90_000)
-        assert 1024 * 1024 < len(payload) < 2 * 1024 * 1024
-    def body(split):
-        if not split:
-            return payload
-        async def chunks():
-            for start in range(0, len(payload), 64 * 1024):
-                yield payload[start:start + 64 * 1024]
-        return chunks()
     runtime, errors = _source_runtime(payload, tmp_path, outcome)
     calls, original = [], runtime.execute_pre
     async def execute(lease, grant):
@@ -65,6 +47,33 @@ async def test_public_raw_zip_submission_uses_real_owners_and_stable_replay(admi
         "replay_total_seconds": 30.0, "part_bytes": 5 * 1024**2,
     }})
     monkeypatch.setattr(app.state, "settings", settings)
+    return client, settings, errors, calls
+
+
+@pytest.mark.parametrize("outcome,framing", [
+    ("completed", "small"), ("rejected", "small"),
+    ("completed", "large-single"), ("completed", "large-split"),
+])
+async def test_public_raw_zip_submission_uses_real_owners_and_stable_replay(admission_intake, tmp_path, monkeypatch, outcome, framing):
+    from sqlalchemy import text
+    from tests.test_trusted_intake import _archive
+
+    f, key = admission_intake, new_record_id()
+    payload = _archive("../escape") if outcome == "rejected" else _archive()
+    if framing.startswith("large"):
+        payload = _archive(content=b"finished work\n" * 90_000)
+        assert 1024 * 1024 < len(payload) < 2 * 1024 * 1024
+    def body(split):
+        if not split:
+            return payload
+        async def chunks():
+            for start in range(0, len(payload), 64 * 1024):
+                yield payload[start:start + 64 * 1024]
+        return chunks()
+    client, settings, errors, calls = await configure_source_http(
+        f, tmp_path, monkeypatch, payload, outcome,
+    )
+    app = client._transport.app
     headers = f.access.target.headers | {"Content-Type": "application/zip",
         "X-Task-Assignment-Id": str(f.assignment), "Idempotency-Key": str(key),
         "Content-Length": str(len(payload))}

@@ -25,12 +25,20 @@ from app.modules.checkers.models import CheckerRun, SelectedPreSubmitRun
 from app.modules.checkers.api.pre_submit_material import SubmissionPacketView
 from app.modules.outbox.models import OutboxEvent
 from app.modules.tasks.models import Submission
-from app.modules.tasks.models import TaskAssignment, WorkstreamTask
+from app.modules.tasks.models import WorkstreamTask
 from app.modules.tasks.api import SubmissionCreationRequest
 from app.modules.tasks.schemas import AdmissionBackedSubmissionCreate
 from app.modules.api_controls.service import AUTHORIZATION_READ_SCOPE, RateControlService
 from app.modules.actors.models import ActorProfile
 from tests.tasks.test_submission_lineage import _prepared_packet
+from tests.artifacts.test_submission_intake_admission import (
+    admission_intake as admission_intake,
+    admin_access as admin_access,
+    signed_access as signed_access,
+    rsa_signing_material as rsa_signing_material,
+    auth_database_env as auth_database_env,
+    clear_settings_cache as clear_settings_cache,
+)
 from tests.test_artifact_admission import _context, _seed_human_actor
 from tests.submission_preparation_auth_helpers import install_submitter_grant
 from tests.tasks.post_submit_routing.backfill_support import assert_upgrade_refuses_stale_findings
@@ -123,104 +131,65 @@ def _payload(request, admission_id):
     }
 
 
-async def test_public_malformed_zip_returns_bounded_422_without_effects(
-    isolated_database_env, tmp_path, monkeypatch,
+async def test_public_malformed_zip_preserves_task_and_retains_cleanup_custody(
+    admission_intake, tmp_path, monkeypatch,
 ):
-    """Reject unreadable contributor bytes before PRE, provider, or lifecycle effects."""
-    async with _prepared_packet(isolated_database_env, tmp_path, verify=False) as h:
-        route = f"/api/v1/tasks/{h.task_id}/submission-bundle-preparations"
-        headers = {
-            "Content-Type": "application/zip",
-            "X-Task-Assignment-Id": str(h.assignment_id),
-            "Idempotency-Key": str(new_record_id()),
-            "X-Submission-Summary": h.preparation_request.summary,
-            "X-Contributor-Attestation": h.preparation_request.contributor_attestation,
-        }
-        counted_models = (
-            Submission,
-            SubmissionBundleAdmission,
-            SelectedPreSubmitRun,
-            CheckerRun,
-            ArtifactPutAttempt,
-            OutboxEvent,
-        )
+    """Malformed sealed input rejects before acceptance and remains cleanup-owned."""
+    from sqlalchemy import text
+    from app.adapters import artifacts as composition
+    from app.adapters.checkers import SelectedPreSubmitCheckerExecutionAdapter
+    from tests.artifacts.test_submission_foreground_command import configure_source_http
+    from tests.artifacts.test_submission_pre_source import _source_runtime
+    from tests.test_trusted_intake import _archive
 
-        async with _client(
-            h,
-            monkeypatch,
-            isolated_database_env,
-            raise_app_exceptions=False,
-        ) as client:
-            async with h.factory() as session:
-                before_count_values = []
-                for model in counted_models:
-                    before_count_values.append(
-                        await session.scalar(select(func.count()).select_from(model))
-                    )
-                before_counts = tuple(before_count_values)
-                task = await session.get(WorkstreamTask, str(h.task_id))
-                assignment = await session.get(TaskAssignment, str(h.assignment_id))
-                before_state = (task.status, assignment.status)
+    f = admission_intake
+    malformed = b"PK\x03\x04not-a-readable-zip"
+    client, settings, errors, calls = await configure_source_http(
+        f, tmp_path, monkeypatch, malformed, "rejected",
+    )
+    headers = f.access.target.headers | {
+        "Content-Type": "application/zip", "X-Task-Assignment-Id": str(f.assignment),
+        "Idempotency-Key": str(new_record_id()),
+    }
+    route = f"/api/v1/tasks/{f.task}/submissions"
+    response = await client.post(route, headers=headers, content=malformed)
+    assert response.status_code == 422, response.text
+    assert response.json()["error"]["code"] == "pre_submission_checker_failed"
+    assert response.json()["error"]["details"]["eligible_to_submit"] is False
+    results = response.json()["error"]["details"]["results"]
+    assert any(item["source"] == "workstream_default"
+               and item.get("failure_code") == "submission_archive_malformed" for item in results)
+    assert not any(item["source"] == "project_external_checker" for item in results)
+    assert len(calls) == 1 and not errors, errors
+    assert all(value not in response.text for value in (
+        "/tmp/", "s3://", "not-a-readable-zip", "BadZipFile",
+    ))
+    async with f.factory() as session:
+        assert await session.scalar(text("SELECT status FROM workstream_tasks WHERE id=:id"),
+                                    {"id": f.task}) == "in_progress"
+        assert await session.scalar(text("SELECT status FROM task_assignments WHERE id=:id"),
+                                    {"id": f.assignment}) == "active"
+        assert await session.scalar(select(func.count()).select_from(Submission)) == 0
+        assert await session.scalar(select(func.count()).select_from(SubmissionBundleAdmission)) == 0
+        assert await session.scalar(select(func.count()).select_from(OutboxEvent)) == 0
+        assert await session.scalar(select(func.count()).select_from(CheckerRun)) == 0
+        assert await session.scalar(text("SELECT state FROM submission_intake_operations WHERE task_id=:id"),
+                                    {"id": f.task}) == "rejected"
+        assert await session.scalar(text("SELECT accounted_bytes FROM submission_source_charges")) == len(malformed)
+    assert not tuple(settings.artifact_scratch_root.glob("files/*"))
+    assert not tuple(settings.artifact_scratch_root.glob("workspaces/*"))
 
-            from app.adapters.artifacts.local import LocalStorageAdapter
-            from app.modules.artifacts.selected_pre_submit_execution import (
-                SelectedPreSubmitExecutionService,
-            )
-
-            async def unexpected_effect(*_args, **_kwargs):
-                raise AssertionError("archive rejection reached checker or provider effects")
-
-            with monkeypatch.context() as patch:
-                patch.setattr(LocalStorageAdapter, "put", unexpected_effect)
-                patch.setattr(
-                    SelectedPreSubmitExecutionService, "execute", unexpected_effect,
-                )
-                response = await client.post(
-                    route,
-                    headers=headers,
-                    content=b"PK\x03\x04not-a-readable-zip",
-                )
-
-            async with h.factory() as session:
-                after_count_values = []
-                for model in counted_models:
-                    after_count_values.append(
-                        await session.scalar(select(func.count()).select_from(model))
-                    )
-                after_counts = tuple(after_count_values)
-                task = await session.get(WorkstreamTask, str(h.task_id))
-                assignment = await session.get(TaskAssignment, str(h.assignment_id))
-                after_state = (task.status, assignment.status)
-
-            assert after_counts == before_counts
-            assert after_state == before_state == ("in_progress", "active")
-            assert not tuple((h.settings.artifact_scratch_root / "files").iterdir())
-            assert not tuple((h.settings.artifact_scratch_root / "workspaces").iterdir())
-            assert response.status_code == 422, response.text
-            payload = response.json()
-            assert payload["detail"] == "submission_archive_malformed"
-            assert payload["error"] == {
-                "code": "invalid_request",
-                "message": "Invalid request",
-                "details": {},
-                "correlation_id": response.headers["X-Correlation-ID"],
-                "retryable": False,
-            }
-            rendered = response.text
-            assert all(
-                value not in rendered
-                for value in ("/tmp/", "s3://", "not-a-readable-zip", "BadZipFile")
-            )
-
-            valid = await client.post(
-                route,
-                headers=headers | {"Idempotency-Key": str(new_record_id())},
-                content=h.archive_bytes,
-            )
-            assert valid.status_code == 202, valid.text
-            assert valid.json()["submission_bundle_preparation_status"] == (
-                "stored_pending_verification"
-            )
+    valid_bytes = _archive()
+    retry_root = tmp_path / "corrected-worker"
+    retry_root.mkdir()
+    runtime, valid_errors = _source_runtime(valid_bytes, retry_root, "completed")
+    monkeypatch.setattr(composition, "selected_pre_submit_checker_execution",
+                        lambda **kwargs: SelectedPreSubmitCheckerExecutionAdapter(external_execution=runtime))
+    valid = await client.post(route, headers=headers | {"Idempotency-Key": str(new_record_id())},
+                              content=valid_bytes)
+    assert not valid_errors, "\n".join(valid_errors)
+    assert valid.status_code == 202, valid.text
+    assert valid.json()["status"] == "accepted" and valid.json()["replayed"] is False
 
 
 def test_optional_public_text_keeps_packet_utf8_byte_limit():

@@ -6279,3 +6279,34 @@ outcome-insensitive finalization digests (/tmp/submission-coordination-qa-mutati
 Unrelated verifier/history test ASTs remain unchanged. Ruff, whitespace and record
 checks pass; parent5/principal3/fullretry and structure validation remain pending
 at this checkpoint. Do not infer full readiness from these focused proofs.
+
+Public malformed-ZIP migration scope: artifacts/test_submission_foreground_command.py
+and tasks/test_public_submission_intake.py. Extract the existing signed raw-ZIP
+HTTP setup for reuse; preserve its four framing/replay tests. Replace obsolete
+prepare-route malformed test with current submissions route: sealed upload precedes
+real guest default inspection, bounded QC rejection preserves task/assignment and
+creates no Submission/POST/finalization event, failed source remains cleanup-owned,
+and corrected bytes with a new key accept. Keep response privacy assertions.
+Do not restore removed preparation endpoints, suppress provider I/O, fabricate
+PRE results or bypass task authority. Medium public-contract risk; run migrated
+case plus existing four framing cases and QA review of changed outcome oracle.
+
+Public first replay4pass1fail131.98s: rejection checks pass, corrected-key control
+hits500. QA identifies reused simulated-worker pre-tree directory; corrected
+invocation must use a fresh child root, without clearing retained source/charge.
+Restore exact malformed default failure/no project result and zero admission
+assertions per QA-MALFORMED-001/002. Check simulated-runtime errors before the
+positive HTTP assertion to retain diagnostic cause; no response/production change.
+Earlier pending receipts now terminal: parent locks5pass145.79s, structure pass;
+full retry26pass813.55s with cleanup complete. Principal three-phase replay2pass
+and one10s scratch deadline in restored materializer positive control; unchanged
+limit single-case replay passes1 in29.81s, cleanup complete. Do not claim the
+transient deadline root cause resolved or all-provider qualification.
+
+Final malformed rejection/corrected-key proof passes1 in34.08s with owned database
+and MinIO cleanup complete (/tmp/submission-public-malformed-v3). The unchanged
+four framing/replay cases passed in v1. QA closes all three findings by inspection;
+fresh worker root resolves the positive-control fixture failure. Ruff, whitespace,
+record and structure checks pass. Current27531 hosted CLI API failure is now
+concrete: three old _prepared_packet consumers and one registry409 fixture conflict;
+they remain required migration work. Same draft PR708; no full-suite readiness claim.
