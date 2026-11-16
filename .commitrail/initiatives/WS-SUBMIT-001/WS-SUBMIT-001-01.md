@@ -6758,3 +6758,36 @@ checks pass; ARCH/SEC scoped PASS. QA-SQL-BIND001/002/003 evidence now complete.
 This closes the A33 admission-transition portion, not physical-provider/history
 qualification or full operational cutover. TASK old command, ART old publisher
 and preparation retirement remain next; keep full A01-A35/C01-C07 goal active.
+
+Dispatch proof migration scope: update tests/tasks/submission_dispatch/test_composition.py
+from the obsolete hidden creation command to accepted T5 and retained dispatch reads.
+Preserve exact dispatch/POST custody, reject mismatched receipt identifiers without
+participant writes, and force the deferred SQL missing-dispatch failure through
+real OUTBOX finalization. Rollback must preserve accepted T4/source custody while
+removing all T5 writes. Internal retained reads are not fresh human authorization
+proof; public intake replay and lost-ack outbox tests retain those distinct proofs.
+No production behavior or compatibility helper is added. This removes one test
+consumer blocking old TASK command deletion, not the complete deletion itself.
+QA/test-delta review and focused isolated PostgreSQL tests required.
+
+Dispatch migration v1: 3 failures in97.07s, cleanup complete. Two new assertions
+used nonexistent OutboxEvent.id; correct to native UUID event_id. The injected
+missing dispatch correctly reaches SQL23514 at the current accepted-operation
+closure guard (0074), before the older dispatch-required guard. Assert that exact
+current error and preserve the no-dispatch injection and staged-write checks.
+Also assert accepted receipt, sealed nonzero source charge, and active TASK pointer
+survive T5 rollback. Structural and record validators passed; rerun after repairs.
+
+Dispatch migration v2 terminal0: 3passed63.85s, database and MinIO cleanup complete
+(/tmp/submission-dispatch-current-v2.json and .log). Frozen test blob
+232a026b0ef5934398d4aa68333adf0ead354f99. Current composed accepted owner returns
+exact retained dispatch; each mismatched receipt key fails without POST creation;
+real deferred missing-dispatch failure rolls back T5 while retaining T4 acceptance,
+sealed charged source, active TASK pointer and exact finalization event. Tests ran
+on these modified bytes with precommit HEAD e52a215c3, not a clean commit execution.
+Existing T1 changed-metadata/revocation/post-body reauthorization and real OUTBOX
+lost-ack tests retain distinct public/worker replay obligations. Scoped QA found no
+actionable issue: selector coverage and current T4/T5 rollback semantics agree
+with their owners. QA inspected shared execution evidence; no independent PG
+rerun or mutation is claimed. Old TASK command removal and full end-to-end
+qualification remain open.
