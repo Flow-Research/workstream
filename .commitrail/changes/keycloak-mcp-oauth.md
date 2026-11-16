@@ -77,6 +77,14 @@ the saved subject. Its script dependencies are frozen independently of the
 backend environment. Logout revokes the refresh credential and removes the local
 file; it does not claim to end browser SSO or invalidate already issued JWTs.
 
+Garden's existing SDK refreshes the provider's returned scope set explicitly.
+The MCP audience-binding scope must therefore remain visible in that set. A
+hosted probe reproduced valid initial MCP access followed by loss of both MCP
+audiences on explicit-scope refresh when this scope was hidden. The provider
+regression uses the actual two-scope login and returned-scope/resource refresh,
+then verifies the renewed credential and API exchange through the real adapters.
+No Garden-specific refresh workaround or authorization exception is introduced.
+
 ## Acceptance criteria
 
 - [x] Exact pinned provider configuration passes real browser, claim, profile,

@@ -311,7 +311,7 @@ Create separate audience-binding scopes so a public client cannot ask for both r
 | `workstream-identity` | Both public clients and exchange client, default; same contract for the registered Garden client | Administrator-controlled human marker plus bounded issuer profile observations; hidden from the `scope` string. |
 | `workstream:access` | Optional on proof/login clients and registered Garden client; default on exchange client | Literal permission string; login helpers and Garden must request it explicitly. |
 | `workstream-api-audience` | Optional on `workstream-cli-login`; hidden default on `workstream-mcp` | Add the exact API resource client ID to `aud`; Include in token scope OFF. |
-| `workstream-mcp-audience` | Optional on `workstream-mcp-proof` and the exact registered Garden client only | Add `workstream-mcp` and the canonical MCP resource URL to `aud`; Include in token scope OFF. |
+| `workstream-mcp-audience` | Optional on `workstream-mcp-proof` and the exact registered Garden client only | Add `workstream-mcp` and the canonical MCP resource URL to `aud`; Include in token scope ON so clients renewing the returned scope set retain the resource binding. |
 
 The API audience binding is a hidden default scope on the exchange client.
 The real provider proof found that its downscope executor filters a dedicated

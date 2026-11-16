@@ -540,7 +540,8 @@ class IdentityProviderTests(unittest.TestCase):
         replacement = secrets.token_urlsafe(24)
         direct = self.probe.login("workstream-cli-login", "workstream-api-audience", email,
                                   password, new_password=replacement)
-        mcp = self.probe.login("workstream-mcp-proof", "workstream-mcp-audience", email, replacement)
+        mcp = self.probe.login("workstream-mcp-proof", "workstream-mcp-audience", email, replacement,
+                              scopes="workstream:access workstream-mcp-audience")
         clients = self.probe.request("/admin/realms/flow/clients", token=self.operator)
         client = next(c for c in clients if c["clientId"] == "workstream-mcp")
         secret = self.probe.request(f"/admin/realms/flow/clients/{client['id']}/client-secret",
@@ -576,6 +577,7 @@ class IdentityProviderTests(unittest.TestCase):
         refreshed = self.probe.request("/realms/flow/protocol/openid-connect/token", {
             "grant_type": "refresh_token", "client_id": "workstream-mcp-proof",
             "refresh_token": mcp["refresh_token"],
+            "scope": mcp["scope"], "resource": realm_config.MCP_RESOURCE,
         }, form=True)
         self.assertNotEqual(refreshed["refresh_token"], mcp["refresh_token"])
         self.assertEqual(asyncio.run(boundaries(refreshed["access_token"])), subject)

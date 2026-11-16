@@ -39,7 +39,7 @@ def audience_mapper(name: str, *, client: str | None = None, resource: str | Non
 
 
 def client_scope(name: str, mappers: list[dict], *, visible: bool = False) -> dict:
-    """Separate visible permission scopes from hidden identity/audience mappers."""
+    """Choose which scopes clients retain when renewing resource credentials."""
     return {
         "name": name, "protocol": "openid-connect",
         "attributes": {
@@ -155,7 +155,7 @@ def realm() -> dict:
             client_scope("workstream-mcp-audience", [
                 audience_mapper("mcp-client", client=EXCHANGE_CLIENT),
                 audience_mapper("mcp-resource", resource=MCP_RESOURCE),
-            ]),
+            ], visible=True),
         ],
         "clients": [
             browser_client("workstream-cli-login", "http://127.0.0.1:17843/callback", "workstream-api-audience"),

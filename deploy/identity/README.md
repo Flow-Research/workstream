@@ -112,6 +112,10 @@ stay disabled.
 The direct client requests `workstream:access workstream-api-audience`; its
 callback is exactly `http://127.0.0.1:17843/callback`. An inspected Garden client
 requests `workstream:access workstream-mcp-audience` with its exact HTTPS callback.
+The MCP audience scope is included in the returned scope set. Garden's existing
+OAuth client renews that set explicitly; hiding the audience scope would remove
+the MCP audiences on refresh. The API audience and identity mapper scopes remain
+hidden. This does not grant additional Workstream permissions.
 Render the inspected Garden registration separately:
 
 ```sh
