@@ -1723,3 +1723,13 @@ Keep delivery handler/provider execution inactive until their own required owner
 work is implemented. No public/payment/deployment or whole-Finance completion
 claim is made by these initial records. Internal focused reviewers and full
 verification remain required before this boundary is ready in the same PR.
+
+The COMP status reader now derives its seven fields with bounded owner queries
+ordered by the native evidence ordinal. Successful receipt evidence dominates
+ordinary late failures; a correctly linked exception retains fulfilled and sets
+attention. Missing parent success is unavailable rather than fabricated pending.
+Only actual recorded callback evidence establishes acknowledgement at this stage;
+no generic OUTBOX completion is treated as a validated Finance acknowledgement.
+The value is rebuilt under caller-held authorized root custody, with no mutable
+award field or projection cache/table. Native0073/service/AUTH/routes and the
+planned integration/concurrency proof remain pending; this reader is not activated.
