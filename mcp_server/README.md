@@ -204,6 +204,11 @@ review-mode inheritance, immutable lineage, stale/malformed preconditions,
 authorization and replay. Selector recovery, approval and activation remain
 outside these two guide-policy tools.
 
+Guide proposal approval requires exactly one registered PRE image and exactly
+one registered POST image, with explicit configuration for each. Missing, empty
+or multiple selections are rejected before the adapter sends an HTTP request.
+Workstream validates the selected immutable identities and approval authority.
+
 Workspace reads accept only their documented UUID selectors, filters, bounded
 page size and opaque cursor. Contribution export is JSON-only in MCP; the
 adapter sets `format=json` and does not expose CSV bytes as structured tool

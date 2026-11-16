@@ -89,7 +89,7 @@ func decodeGuideApprovalInput(raw json.RawMessage) (guideApprovalInput, error) {
 
 func validGuideImageAttachments(raw json.RawMessage) bool {
 	var members []json.RawMessage
-	if jsonv2.Unmarshal(raw, &members) != nil || members == nil || len(members) > 200 {
+	if jsonv2.Unmarshal(raw, &members) != nil || members == nil || len(members) != 1 {
 		return false
 	}
 	previous := ""

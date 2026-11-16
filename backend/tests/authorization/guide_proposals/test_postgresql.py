@@ -115,7 +115,7 @@ async def evidence_state(factory):
 
 @pytest.mark.parametrize("action", ["approve", "correct"])
 async def test_real_proposal_transaction_replay_and_revocation(clean_postgres_database, action):
-    async with proposal_case(clean_postgres_database) as (_, factory, command, actor, grant):
+    async with proposal_case(clean_postgres_database) as (values, factory, command, actor, grant):
         review = await package(factory, command, actor)
         before_events, before_finalizations = await evidence_state(factory)
         assert len(before_events) == 1
@@ -123,7 +123,7 @@ async def test_real_proposal_transaction_replay_and_revocation(clean_postgres_da
         assert before_events[0]["resource_id"] == str(command.compilation_id)
         payload = (
             GuideProposalApproval(
-                pre_submit_attachments=(), post_submit_attachments=(),
+                pre_submit_attachments=values["pre_submit_attachments"], post_submit_attachments=values["post_submit_attachments"],
                 target=review.target,
                 idempotency_key=uuid4(),
                 acknowledged_warning_hashes=review.warning_hashes,
@@ -166,7 +166,7 @@ async def test_real_proposal_transaction_replay_and_revocation(clean_postgres_da
 async def test_real_authority_denial_has_no_product_or_allowed_writes(
     clean_postgres_database, action, authority
 ):
-    async with proposal_case(clean_postgres_database) as (_, factory, command, actor, grant):
+    async with proposal_case(clean_postgres_database) as (values, factory, command, actor, grant):
         review = await package(factory, command, actor)
         before = await evidence_state(factory)
         if authority == "revoked":
@@ -197,7 +197,7 @@ async def test_real_authority_denial_has_no_product_or_allowed_writes(
                     factory,
                     actor,
                     GuideProposalApproval(
-                pre_submit_attachments=(), post_submit_attachments=(),
+                pre_submit_attachments=values["pre_submit_attachments"], post_submit_attachments=values["post_submit_attachments"],
                         target=review.target,
                         idempotency_key=uuid4(),
                         acknowledged_warning_hashes=review.warning_hashes,

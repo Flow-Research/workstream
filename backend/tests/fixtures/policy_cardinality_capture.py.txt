@@ -1,0 +1,33 @@
+@pytest.mark.parametrize("admission_intake", ["no_pre", "no_post"], indirect=True)
+async def test_capture_historical_cardinality(admission_intake, request):
+    import asyncpg
+    import json
+    from dataclasses import asdict
+    from pathlib import Path
+
+    f = admission_intake
+    await test_t1_requires_one_selected_checker_in_each_phase(f)
+    url = f.factory.kw["bind"].url.render_as_string(hide_password=False).replace("+asyncpg", "")
+    connection = await asyncpg.connect(url)
+    try:
+        tables = {}
+        for table in await connection.fetch("SELECT tablename FROM pg_tables WHERE schemaname='public' ORDER BY tablename"):
+            name = table["tablename"]
+            quoted = '"' + name.replace('"', '""') + '"'
+            rows = await connection.fetch(f"SELECT to_jsonb(r)::text AS value FROM public.{quoted} r ORDER BY to_jsonb(r)::text")
+            if rows:
+                tables[name] = [json.loads(row["value"]) for row in rows]
+        snapshot = {
+            "revision": "0081_operation_read_authority",
+            "source_commit": "fac8ea5110dfe3ac1d8fa90a5f0ff132c3811034",
+            "tables": tables,
+            "seed": {
+                "actor": f.actor.model_dump(mode="json"),
+                "task": str(f.task), "assignment": str(f.assignment), "project": str(f.project),
+                "namespace": asdict(f.namespace),
+            },
+        }
+        label = request.node.callspec.params["admission_intake"]
+        Path(f"/tmp/submission-history-{label}.json").write_text(json.dumps(snapshot, sort_keys=True, separators=(",", ":")))
+    finally:
+        await connection.close()

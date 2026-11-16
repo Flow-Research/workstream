@@ -24,6 +24,7 @@ from tests.authentication.fixtures import (
     rsa_signing_material as rsa_signing_material,
 )
 from tests.artifacts.intake_recovery_support import recovery_intake as recovery_intake
+from tests.historical_policy_fixtures import historical_policy_intake as historical_policy_intake
 from tests.authorization.admin_access.fixtures import (
     signed_access as signed_access,
     admin_access as admin_access,
@@ -53,10 +54,6 @@ async def test_stalled_accepted_source_is_protected_from_cleanup(recovery_intake
 @pytest.fixture
 async def admission_intake(tmp_path, isolated_database_env, admin_access, request):
     from sqlalchemy import text
-    from app.adapters.outbox import outbox_append, finalized_unknown_deliveries
-    from app.adapters.projects import project_locked_policy_context_port
-    from app.modules.artifacts.intake.foreground_admission import ForegroundIntakeAdmission
-    from app.modules.authorization.submission_intake import SubmissionIntakeAuthorization
     from tests.authorization.task_authority.test_postgresql import context, grant, project_manager
 
     engine = create_async_engine(isolated_database_env)
@@ -83,8 +80,8 @@ async def admission_intake(tmp_path, isolated_database_env, admin_access, reques
         from tests.checkers.external.support import pre_registry_spec, post_registry_spec
         plan, _ = await approved_selected_policy_fixture(
             factory, namespace, guide_version="v1",
-            pre_submit_registry_spec=None if getattr(request, "param", None) == "no_pre" else pre_registry_spec(),
-            post_submit_registry_spec=None if getattr(request, "param", None) == "no_post" else post_registry_spec(),
+            pre_submit_registry_spec=pre_registry_spec(),
+            post_submit_registry_spec=post_registry_spec(),
         )
         project = plan.lineage.project_id
         manager = await project_manager(admin_access, project)
@@ -99,20 +96,29 @@ async def admission_intake(tmp_path, isolated_database_env, admin_access, reques
             await connection.execute(text(
                 "UPDATE task_assignments SET accepted_at=clock_timestamp() WHERE id=:id"
             ), {"id": assignment})
-        admission = ForegroundIntakeAdmission(
-            factory, tasks=lambda session: IntakeTaskCustody(session, task_submission_context_port(session)),
-            task_contexts=task_submission_context_port, projects=project_locked_policy_context_port,
-            authorization=lambda session: SubmissionIntakeAuthorization(session, actor), namespace=namespace,
-            events=outbox_append, deliveries=finalized_unknown_deliveries,
-            capacity_limits=SubmissionSourceCapacityLimits(maximum_total_bytes=1_000_000), maximum_raw_bytes=1024,
-            upload_duration=timedelta(seconds=300), lease_duration=timedelta(seconds=60),
-        )
+        admission = intake_admission(factory, actor, namespace)
         yield SimpleNamespace(factory=factory, actor=actor, task=task, assignment=assignment,
                               admission=admission, project=project, namespace=namespace,
                               access=admin_access, manager=manager, grant_id=grant_id,
                               source_store_factory=source_store_factory)
     finally:
         await engine.dispose()
+
+
+def intake_admission(factory, actor, namespace):
+    """Compose the same T1 owner for current and faithfully restored contexts."""
+    from app.adapters.outbox import outbox_append, finalized_unknown_deliveries
+    from app.adapters.projects import project_locked_policy_context_port
+    from app.modules.artifacts.intake.foreground_admission import ForegroundIntakeAdmission
+    from app.modules.authorization.submission_intake import SubmissionIntakeAuthorization
+    return ForegroundIntakeAdmission(
+        factory, tasks=lambda session: IntakeTaskCustody(session, task_submission_context_port(session)),
+        task_contexts=task_submission_context_port, projects=project_locked_policy_context_port,
+        authorization=lambda session: SubmissionIntakeAuthorization(session, actor), namespace=namespace,
+        events=outbox_append, deliveries=finalized_unknown_deliveries,
+        capacity_limits=SubmissionSourceCapacityLimits(maximum_total_bytes=1_000_000), maximum_raw_bytes=1024,
+        upload_duration=timedelta(seconds=300), lease_duration=timedelta(seconds=60),
+    )
 
 
 async def admit_new(fixture, *, key=None, metadata=None):
@@ -341,11 +347,13 @@ async def record_intake_eof(f, owner, payload):
                          raw_sha256="sha256:" + hashlib.sha256(payload).hexdigest(), raw_byte_count=len(payload))
 
 
-@pytest.mark.parametrize("admission_intake", ["no_pre", "no_post"], indirect=True)
-async def test_t1_requires_one_selected_checker_in_each_phase(admission_intake):
+@pytest.mark.postgres_schema_contract
+@pytest.mark.parametrize("historical_policy_intake", ["no_pre", "no_post"], indirect=True)
+async def test_t1_requires_one_selected_checker_in_each_phase(historical_policy_intake):
     from sqlalchemy import func, select
     from app.modules.tasks.models import WorkstreamTask, AuditEvent
-    f = admission_intake
+    f = historical_policy_intake
+    f.admission = intake_admission(f.factory, f.actor, f.namespace)
     with pytest.raises(IntakeCustodyConflict, match="intake_requires_one_pre_and_post_checker"):
         await admit_new(f)
     async with f.factory() as session:

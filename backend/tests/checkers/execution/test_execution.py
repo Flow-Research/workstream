@@ -49,17 +49,23 @@ async def test_verified_material_execution_and_replay(
     async with material_fixture(tmp_path, isolated_database_env, provider=provider) as h:
         reservation = await reserve(h)
         receipts = []
+        material_errors = []
         materialize = h.service.materialize
 
         async def observe_receipt(*args, **kwargs):
-            value = await materialize(*args, **kwargs)
+            try:
+                value = await materialize(*args, **kwargs)
+            except Exception:
+                import traceback
+                material_errors.append(traceback.format_exc())
+                raise
             receipts.append(value.input_materialization_evidence_id)
             return value
 
         monkeypatch.setattr(h.service, "materialize", observe_receipt)
         executor = live_executor(h)
         result = await executor.evaluate_post_submission(h.request)
-        assert result.outcome == "completed"
+        assert result.outcome == "completed", "\n".join(material_errors) or result
         assert (
             result.attempt_id == reservation.attempt_id
             and result.result_id == reservation.result_id
@@ -107,7 +113,7 @@ async def test_verified_material_execution_and_replay(
             assert tuple(row.checker_name for row in rows) == tuple(
                 m.requirement_id for m in result.execution.external_members
             )
-            assert len(rows) == len(h.request.policy.entries) == 0
+            assert len(rows) == len(h.request.policy.entries) == 1
             event = await session.scalar(
                 select(OutboxEvent).where(OutboxEvent.event_type == COMPLETION_EVENT)
             )

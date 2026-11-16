@@ -32,6 +32,7 @@ from sqlalchemy.schema import CreateIndex
 
 from projects.guide_fixtures import complete_guide_payload
 from tests.projects.policy_read_faults import corrupt_locked_policy_reads
+from tests.checkers.external.support import post_registry_spec
 from auth_concurrency_support import wait_for_named_database_lock
 from tests.submission_fixtures import seed_retained_submission, route_retained_checker_remediation
 
@@ -618,8 +619,9 @@ async def create_policy_bundle_for_guide(
     guide_id: str,
     artifact_proposal=None,
     *,
-    post_submit_registry_spec=None,
+    post_submit_registry_spec=post_registry_spec(),
     document_access_factory=None,
+    revision_deadline_hours=48,
 ) -> dict:
     for kind, body in (
         (
@@ -640,7 +642,7 @@ async def create_policy_bundle_for_guide(
             "revision",
             {
                 "max_revision_rounds": 7,
-                "revision_deadline_hours": 48,
+                "revision_deadline_hours": revision_deadline_hours,
                 "allowed_resubmission_states": ["needs_revision"],
                 "reviewer_reassignment_rule": "same reviewer preferred",
             },
@@ -721,7 +723,8 @@ def complete_submission_payload(package_hash: str = "sha256:package-v1") -> dict
 
 
 async def create_active_project(
-    client: AsyncClient, *, slug: str = "task-queue-project", post_submit_registry_spec=None,
+    client: AsyncClient, *, slug: str = "task-queue-project", post_submit_registry_spec=post_registry_spec(),
+    revision_deadline_hours=48,
 ) -> dict:
     project_response = await client.post(
         "/api/v1/projects",
@@ -744,6 +747,7 @@ async def create_active_project(
     guide = guide_response.json()
     await create_policy_bundle_for_guide(
         client, project["id"], guide["id"], post_submit_registry_spec=post_submit_registry_spec,
+        revision_deadline_hours=revision_deadline_hours,
     )
 
     await seed_active_guide_for_downstream_test(
@@ -2464,9 +2468,11 @@ async def test_retained_submission_versions_are_readable_without_exposing_packet
     v2_payload = complete_submission_payload("sha256:package-v2")
     v2_payload["artifact_hash_manifest"][0]["hash"] = "sha256:answer-v2"
 
-    v2_id = await seed_retained_submission(
-        started_task["id"], v2_payload, predecessor_id=v1_id,
-    )
+    from tests.tasks.submission_dispatch.accepted_revision_probes import probe_revision_insert
+    with probe_revision_insert():
+        v2_id = await seed_retained_submission(
+            started_task["id"], v2_payload, predecessor_id=v1_id,
+        )
     v2 = await task_client.get(
         f"/api/v1/submissions/{v2_id}", headers=auth_headers(),
     )
@@ -2488,6 +2494,29 @@ async def test_retained_submission_versions_are_readable_without_exposing_packet
     assert dispatch is not None
     assert str(dispatch.checker_remediation_manifest_id) == remediation_id
 
+    # Finalized revisions retain exact accepted custody, independent of the
+    # contributor's later eligibility. Probe the SQL owner with forged records.
+    async with db_session.get_session_factory()() as session:
+        assert await session.scalar(text("""
+            SELECT public.accepted_revision_submission_valid(s, true)
+            FROM public.submissions s WHERE s.id=:id
+        """), {"id": v2_id}) is True
+        for field, value in (
+            ("task_assignment_id", str(new_record_id())),
+            ("contributor_id", str(new_record_id())),
+            ("supersedes_submission_id", str(new_record_id())),
+            ("version", 99),
+            ("locked_review_policy_hash", "sha256:" + "0" * 64),
+        ):
+            with pytest.raises(IntegrityError, match="accepted revision submission custody mismatch"):
+                async with session.begin_nested():
+                    await session.execute(text("""
+                        SELECT public.accepted_revision_submission_valid(
+                            jsonb_populate_record(NULL::public.submissions,
+                                to_jsonb(s) || CAST(:replacement AS jsonb)), true)
+                        FROM public.submissions s WHERE s.id=:id
+                    """), {"id": v2_id, "replacement": json.dumps({field: value})})
+
     listed = await task_client.get(
         f"/api/v1/tasks/{started_task['id']}/submissions",
         headers=auth_headers(),
@@ -2504,6 +2533,33 @@ async def test_retained_submission_versions_are_readable_without_exposing_packet
         headers=auth_headers(),
     )
     assert denied.status_code == 404
+
+
+async def test_revision_acceptance_rejects_checker_fence_changed_before_commit(task_client, monkeypatch):
+    from app.modules.artifacts.intake.repository import IntakeCustodyConflict
+    from tests.tasks.submission_dispatch.accepted_revision_probes import stale_fence_before_acceptance_commit
+
+    project = await create_active_project(task_client, post_submit_registry_spec=post_registry_spec())
+    task = await create_started_task(task_client, project["id"], monkeypatch)
+    first = await seed_retained_submission(task["id"], complete_submission_payload())
+    await route_retained_checker_remediation(first)
+    set_dev_actor(monkeypatch, roles="worker", subject="worker-one")
+    with stale_fence_before_acceptance_commit():
+        with pytest.raises(IntakeCustodyConflict) as error:
+            await seed_retained_submission(task["id"], complete_submission_payload(), predecessor_id=first)
+    assert "revision acceptance is no longer eligible" in str(error.value.__cause__)
+    async with db_session.get_session_factory()() as session:
+        assert await session.scalar(text("SELECT count(*) FROM submissions WHERE task_id=:id"), {"id": task["id"]}) == 1
+        assert await session.scalar(text("SELECT count(*) FROM submission_bundle_admissions WHERE task_id=:id"), {"id": task["id"]}) == 1
+        row = (await session.execute(text("""
+            SELECT state, acceptance_receipt, finalization_event_id FROM submission_intake_operations
+            WHERE task_id=:id AND command_metadata->>'predecessor_submission_id' IS NOT NULL
+        """), {"id": task["id"]})).one()
+        assert row.state == "failed" and row.acceptance_receipt is None and row.finalization_event_id is None
+        assert await session.scalar(text("""
+            SELECT count(*) FROM outbox_events
+            WHERE event_type='SubmissionFinalizationRequested' AND payload->>'task_id'=:id
+        """), {"id": task["id"]}) == 1
 
 
 async def test_retained_submission_history_preserves_locked_guide_after_activation(

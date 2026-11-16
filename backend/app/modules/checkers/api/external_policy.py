@@ -214,8 +214,8 @@ class ExternalCheckerImageAttachment(_PolicyValue):
 class ExternalCheckerPolicyCompileRequest(_PolicyValue):
     """Phase-separated project images, independent of setup suggestions."""
 
-    pre_submit_attachments: tuple[ExternalCheckerImageAttachment, ...] = Field(max_length=200)
-    post_submit_attachments: tuple[ExternalCheckerImageAttachment, ...] = Field(max_length=200)
+    pre_submit_attachments: tuple[ExternalCheckerImageAttachment, ...] = Field(min_length=1, max_length=1)
+    post_submit_attachments: tuple[ExternalCheckerImageAttachment, ...] = Field(min_length=1, max_length=1)
 
     @model_validator(mode="after")
     def validate_order(self) -> Self:

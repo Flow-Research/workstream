@@ -52,7 +52,7 @@ async def test_post_correction_public_socket_replay_and_authority(
 
     # Canonical retained prerequisite, not live inference or broker-delivery proof.
     async with source_case(clean_postgres_database) as (
-        _,
+        values,
         factory,
         command,
         actor,
@@ -250,8 +250,14 @@ async def test_post_correction_public_socket_replay_and_authority(
                     headers=headers | {"Idempotency-Key": str(uuid4())},
                     json={
                         "target": source["target"],
-                        "pre_submit_attachments": [],
-                        "post_submit_attachments": [],
+                        "pre_submit_attachments": [
+                            item.model_dump(mode="json")
+                            for item in values["pre_submit_attachments"]
+                        ],
+                        "post_submit_attachments": [
+                            item.model_dump(mode="json")
+                            for item in values["post_submit_attachments"]
+                        ],
                         "acknowledged_warning_hashes": source["warning_hashes"],
                     },
                 )

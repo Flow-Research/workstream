@@ -33,7 +33,7 @@ async def completed_evidence(
     async with material_fixture(
         tmp_path,
         database_url,
-        post_submit_registry_spec=post_registry_spec() if failed or findings else None,
+        post_submit_registry_spec=post_registry_spec(),
         **options,
     ) as h:
         await reserve(h)

@@ -5306,3 +5306,649 @@ it. All98 CLI test files pass lint and format checks; full structural validation
 again passes exit0 (/tmp/submission-format-structure.log). Both latest CLI jobs
 stop at this same formatting gate before integration execution. No new journey
 execution evidence is claimed. Latest fetched main is already contained in HEAD.
+
+### Shared retained-history producer cutover: caller audit
+
+CI8989 task_lifecycle_a artifact14244099338 supplies the failing test log at
+/tmp/submission-8989-task-a-tests.log. It exposes two superseded producer paths:
+retained_material_fixtures._runtime_factory passes removed materialization to
+SelectedPreSubmitExecutionService; tasks.submission_lineage_support prepares old
+material facts for the current guide-source authority. Neither warrants restoring
+old constructors or weakening AUTH. Current retained_admission has two callers:
+submission_fixtures.seed_retained_submission and dispatch/test_concurrency's
+second-ready-admission race. The latter assumes two independent ready admissions
+before TASK creation; current T1 task exclusion and T4/T5 handoff require a new
+race trigger, preserving single committed Submission/dispatch/checker/event proof.
+MemoryStore also serves checksum-bound migration rows and POST storage proofs;
+its retained-object read/write semantics must survive. Migration snapshots remain
+immutable and are not a substitute for a current submission producer.
+
+Next bounded implementation scope: retained_material_fixtures.py,
+submission_fixtures.py, checkers/execution/storage_fixture.py and directly affected
+submission_dispatch fixture/race consumers, plus a focused current-source fixture
+helper if required for cohesion. Replace preparation/verification/hidden-current
+creation with real source T1/upload/PRE/T4 and production OUTBOX T5. Keep portable
+external PRE as explicit controlled runtime evidence for the one selected image.
+New producers must explicitly approve exactly one PRE and one POST before task
+release; empty-policy historical reads remain valid, not new execution inputs. Preserve private retained packet fields only at the existing
+fixture injection boundary around the canonical T5 writer. Retain exact source
+bytes for subsequent POST and separate historical archive reads. Prohibited:
+compatibility constructors, fabricated eligible PRE, SQL bypass of custody,
+disabled triggers, weakened race assertions, changing snapshot data, or calling
+this provider/native/broker qualification. Acceptance is the affected retained
+history/read/storage suite plus concrete initial/revision and duplicate-finalizer
+proof, followed by the original failing lane. Risks: lineage/authorization,
+fixture proof fidelity and test structure. ARCH/SEC and QA must review the caller
+mapping and frozen implementation; CI review applies if assertion maps/lane
+selection need reconciliation. Human focus is preserved original proof and exact
+T4/T5 source lineage. Shared post_submit_materialization_helpers and other old
+lineage callers remain tracked follow-on consumers, not silently accepted green.
+
+ARCH/SEC plan review confirms the existing ready-admission race cannot be carried
+forward literally: T1 already owns exclusion, and duplicate T5 must prove exactly
+one durable continuation. It also confirms private packet injection belongs only
+around production T5's existing build_submission boundary. Source provider fixture
+must bind operation/fence/generation and bytes while preserving historical reads.
+
+Concrete prerequisite found during caller audit: ExternalCheckerPolicyCompileRequest
+and GuideProposalApprovalInput still allow0..200 images per phase, whereas spec
+D08/A34 and T1 require exactly1 each. Do not manufacture a selected image when
+migrating retained policies. Tighten NEW approval/compiler input and CLI/MCP input
+contracts together, leaving LockedExternal* retained decoders unchanged (spec20.2).
+This requirement precedes creating valid current retained-history producers.
+Allowed prerequisite paths: checkers/api/external_policy.py (compile input only),
+projects/api/guide_proposals.py (approval input), cli/internal/api/guide_approval.go,
+MCP generated approval contract and affected schema generation/tests, focused
+policy/approval/client tests, and current selection docs. Prohibited: rewriting
+locked policy bodies, changing historical decoder cardinality, silently picking a
+first image or supplying defaults, relaxing admission, or removing retained replay
+proof. Verification must cover missing/zero/two selections in either phase, exact
+one-per-phase success with real registry resolution, rejection before registry or
+HTTP side effects, schema parity, and historical empty/multiple-policy decoding.
+ARCH/SEC and QA review apply; client contract/docs review applies on frozen target.
+Broader caller migration remains required after this boundary is enforced.
+
+Cardinality worktree regression: four zero/two-per-phase cases fail before input
+bounds change; exact-one registry resolution passes. Tightened compiler and public
+approval request fields to1..1, without changing retained decoders. Updated phase
+configuration/model/forge tests to supply an explicit valid counterpart selection,
+so their original failure boundaries remain reachable. Old duplicate/unsorted
+multi-selection input proof now checks categorical cardinality refusal. Retained
+multi-PRE aggregate runtime-budget guard is tested at stored decoding; historical
+zero/two phase bodies retain exact JSON/hash. Full policy module passes35 in4.21s
+(/tmp/submission-cardinality-policy-v2.log). Two saved-POST compiler tests now use
+explicit one-per-phase inputs; their exact projection/hash assertions remain.
+
+CLI input validator and MCP snapshot enforce the same cardinality. Their boundary
+fixtures now explicitly select both images; zero/two selections must fail without
+HTTP. Initial CLI replay launched before its new binary existed and failed fixture
+setup; this is no product evidence. Replay begins only after binary existence is
+observed. Client tests, backend schema parity, remaining approval fixture migration,
+full shared checks and frozen review are still outstanding. These edits are not yet
+committed/pushed; latest PR head remainsfac8ea511.
+
+Current client evidence: Go API/command packages pass; rebuilt CLI approval HTTP
+module passes6 in55.39s (/tmp/submission-cardinality-cli-v2.log), including the
+new zero/two no-request cases. MCP lifecycle and configured full backend OpenAPI
+snapshot checks remain live at this checkpoint; no result is inferred from partial
+progress output. The latest full policy run remains35pass; saved-POST fixture
+updates made afterward still need their focused execution.
+
+Extend affected fixture scope to projects/guide_activation/source_fixtures.py,
+projects/unified_policy_fixtures.py, selected_policy_fixtures.py and proposal
+pg_support/test_postgresql/test_public_api. Ordinary fixture defaults deliberately
+select the existing controlled PRE/POST specs before approval. Explicit None
+continues to mean no registration for tests proving later image registration;
+it cannot be approved by the new contract. proposal_case must register its exact
+selected images through the existing real Operator owner, returning those values
+for typed/public approvals. Tests must forward those exact values rather than
+manufacture new identity/configuration. Preserve all authority/rollback/replay
+assertions. Intentional historical multi-policy and T1-incompatible-policy tests
+require retained fixture treatment, not silently changing their expected facts.
+
+QA plan review independently confirms model-scope and PRE-budget tests detect
+specific simulated defects. Add matching-hash retained duplicate/order negatives
+for both phases because new-input cardinality now rejects earlier. Pure public
+input/saved-POST projection tests pass10 in4.33s; configured MCP snapshot/backend
+OpenAPI comparison passes78 in237.76s. MCP lifecycle remains running.
+
+Caller trace extends the same fixture migration to guide_activation/pg_support,
+post_submit_materialization_helpers, tasks/test_submission_lineage and the
+projects policy_bundle/submission_policy fixtures; they explicitly forward their
+own absent defaults. Authorization guide_proposals approval tests also consume the
+same proposal_case choices. Preserve explicit absence for historical/late-register
+scenarios. Focused database run initially refused the admin URL's plain postgres
+scheme before provisioning; corrected to required postgresql+asyncpg for owned
+loopback test database. No production database or guard changed.
+
+Expanded pure replay passes85 in22.91s (/tmp/submission-cardinality-pure-v3.log):
+policy cardinality/historical identity/order/budget, trial and evaluation-context
+selection, approval replacement/attachment inputs and saved POST projection.
+Evaluation-context no-write negative now additionally proves both actual registry
+reads occurred, preventing an early cardinality denial from falsely satisfying it.
+Proposal-case normal setup registers exact real images; explicit None remains an
+unregistered setup opt-out for the later-publication test, which now rejects empty
+approval and registers both images before its existing replay/conflict assertions.
+The selected5 PostgreSQL/public approval cases are running against isolated0081;
+MCP lifecycle process is live and progressing, neither yet counted as passed.
+
+Still required in this cardinality change: complete shared policy_bundle and
+submission_policy fixture migration, successor and remaining CLI/API/auth approval
+callers, historical incompatible T1/multi-POST proof preservation, actual database
+results, structural inventory/affected gates/docs and frozen ARCH/SEC/QA/client
+review. No push or readiness claim at this checkpoint.
+
+Focused5 real PostgreSQL/public approval cases pass in124.70s at0081;
+/tmp/submission-cardinality-approval-db-v2.log/json records exit0 and complete
+isolated database/role cleanup. Worktree evidence is based onfac8ea511; subsequent
+fixture edits are not covered by that result. Shared policy-bundle approval now
+registers explicit controlled fixture selections through the real Operator owner;
+explicit empty inputs remain rejected. Extend directly affected scope to activation
+successor/late-registration and locked_policy_custody tests. Successor selects real
+registered images; locked-context refusal reuses exact original stored approval
+choices; late-registration explicitly opts out of fixture registration until its
+own publication step. Original lifecycle/hash/replay/denial assertions remain.
+Broader affected approval/activation database replay is now running as v3.
+
+Additional SQL boundary audit:0066's guide_approval_attachments_valid accepts
+coherent zero/multiple selection arrays and protects retained evidence; tightening
+it globally would invalidate historical approvals, including non-null request_json
+rows from0066 through0081. ARCH/SEC confirms the correct extension is a new0082
+migration replacing only require_current_guide_proposal_approval, already attached
+BEFORE INSERT. Preserve its current request/schema checks; require safe JSON array
+types and exact length1 in both request phases and locked plan phases. Do not alter
+the deferred validator or old rows. Scope includes the new migration and focused
+SQL insertion/preservation tests. Verify coherent zero/two new inserts fail at the
+specific new guard, current1/1 owner approval succeeds, and retained null/non-null
+old-cardinality rows remain readable under unchanged custody. Wait for running v3
+schema proof to terminate before editing migration head.
+
+Historical T1 review rejects a project-only fake as equivalent old-row proof: TASK's
+frozen PRE hash would not match the zero-PRE projection. Preserve a genuinely
+coherent retained TASK/PROJECT fixture for no_pre/no_post; fault-injection tests
+may supplement but cannot replace that claim. The historical multi-POST visibility
+proof likewise remains pending retained-custody migration.
+
+MCP lifecycle replay finishes60pass in1244.70s; the prior process was slow but live,
+not stalled or restarted. Structural validator exits0 with no ledger adjustment
+(/tmp/submission-cardinality-structure-v1.log). Full backend Ruff, all98 CLI test
+format checks, Markdown links and whitespace pass at this worktree checkpoint.
+Broad database v3 remains live; do not infer its result from heartbeat output.
+New schema guard and coherent historical fixtures are still incomplete, so no
+frozen implementation review, commit or push is claimed for cardinality yet.
+
+Historical fixture capture plan: use detachedfac8ea511 (before cardinality edits)
+in an isolated0081 database to run the existing real no_pre/no_post approved TASK
+fixtures. Capture exact nonempty public table rows plus actor/task/assignment and
+namespace selectors, with fixed source commit and checksum. These are synthetic
+test data only. Restore via the existing owned-database snapshot loader before
+upgrading to0082; validate retained TASK/PROJECT context and original T1 zero-write
+refusal after upgrade. This preserves the former integration assertion instead
+of forging a mismatched port response. Allowed additions are a checksum-bound
+historical policy fixture archive, concise loader/provenance and affected tests;
+no executable old approval path in production, no locked row rewriting, no data
+from user/provider environments. Capture scripts run only in detached temporary
+worktree and isolated runner; main branch production changes remain separate.
+
+Historical capture v2 passes2 in148.32s with0081 and full database/role cleanup.
+Only the capture test was appended in the detachedfac8ea511 checkout; all original
+source bytes match the commit. Archive policy_cardinality_history.json.gz binds
+52nonempty tables/308rows per scenario, including actual non-null approval requests
+with0/1 and1/0 phases. SHA256:
+0b7cb10abc1c23864fac6c3be2b898caf297760192cc423e2f6f2c1e1862911c.
+The checked-in capture text/provenance makes source and expected proof explicit.
+Original T1 zero-operation/task-link/audit assertions now consume restored exact
+TASK/PROJECT data through the same extracted intake_admission composition. Live
+fixture setup always approves valid1/1; no fake historical context is introduced.
+The existing snapshot loader checks ownership, exact rows/FKs and reinstated guards.
+Restoration baseline and direct SQL negative are running before the0082draft is
+installed; SQL negative is expected to fail until its new guard exists. Do not
+count baseline as passing until terminal evidence is inspected. All new helper
+lint/link/whitespace checks pass. Broader approval v3 remains live at0081.
+
+Approval database v3 finished84pass in1174.75s at0081 with complete owned
+database/role cleanup. Historical baseline finished2pass; SQL insertion regression
+failed at the old uniqueness guard instead of the required cardinality guard,
+confirming the new boundary was absent. Installed0082 only after both runs ended;
+separate owned runs now verify upgraded historical refusal and current insertion.
+Extend fixture scope to test_tasks and tasks/post_submit_routing/support: ordinary
+new approvals must register a POST image by default instead of forwarding None.
+Explicit None remains explicit; no production compatibility path is added.
+
+0082 SQL replay initially stops at fixture schema fingerprint before test bodies.
+The migration replaces only the existing BEFORE INSERT function; reset fingerprints
+include function definitions. Extend allowed scope to tests/conftest.py pinned
+EXPECTED_PUBLIC_SCHEMA_SHA256, updating0081 646811e5… to observed0082 35cf33c4…;
+retain exact equality guard. Failed setup run cleaned its database/role completely.
+Approval authority input replay passes19 in3.83s.
+
+Historical upgraded0082 T1 cases pass2 in151.79s (37 unrelated tests deselected);
+original zero-operation/task-pointer/audit assertions remain intact. Backend Ruff
+passes for app/tests/new migration. MCP README now states the same exact1/1
+approval input requirement as its checked contract and CLI instructions.
+
+0082 SQL replay v2 passes2 in35.42s: real current approval/replay succeeds and
+rehashed zero/two phase inserts fail at the named cardinality guard, leaving the
+original approval unchanged. Reset/task replay passes6 in37.26s, including exact
+schema preservation, schema-drift rejection and draft task creation with current
+approval defaults. Structural validator v2 exits0 without ledger edits; Markdown
+links pass15 changed files. Expanded SQL replay v3 independently varies request,
+locked plan and both, with zero/two entries and null/object array-type violations.
+This final expansion is running, not yet claimed passed. No cardinality commit
+or full-goal completion is claimed; historical multi-POST and downstream current
+producer migration remain required.
+
+Expanded SQL replay v3 finishes2pass in25.07s at0082, complete database/role
+cleanup. It checks24 invalid request/plan combinations plus current approval and
+replay, and exact unchanged original approval row. Fresh origin/main fetch remains
+94334ccf4085c26c7bfaa054465fc05cfbdad1fc; current branch is0commits behind.
+All processes started for this migration checkpoint are terminal. Full goal remains
+active, with no readiness or full-suite success claim.
+
+Historical multi-POST preservation: capture the unchanged per-binding revision
+journey at pinned main94334ccf4085c26c7bfaa054465fc05cfbdad1fc (schema0068),
+where its original prepared-admission producer is still authoritative. A temporary
+detached checkout adds only an observer test: snapshot accepted successor custody
+and synthetic MinIO objects immediately before POST, then allow the original
+test to complete all grant/visibility/replay/immutability assertions. Capture all
+three role combinations. Only successful original journeys qualify as fixtures.
+Allowed scope: captured synthetic archive/provenance/loader and existing revision
+materialization test, with no production compatibility path or locked-row edits.
+Current-head replay must drain retained accepted POST and preserve every distinct
+visibility assertion. Native/AWS qualification remains separate.
+
+QA provisional multi-POST plan review confirms endpoint-bound namespace cannot
+be rewritten for CI. Use captured bytes only for current owner/grant isolation;
+retain separate current real-MinIO single-image revision coverage as a required
+proof. Capture observer preserves original test bytes and writes only after all
+original assertions pass. First available archive is predecessor_submission_archive:
+71tables/388rows,2objects, SHA256 cf6d55f9ed34334b86697961af192233a94097368ca777fc20e33527f0746fc2.
+Both objects match exact retained replica/content hashes and sizes. Other role
+cases are still running under owned runner handle38676, metadata/log
+/tmp/submission-multipost-capture-v1.{json,log}; no whole-run success claim.
+Portable restoration fixture drafted at /tmp/submission-multipost-fixture.py,
+not installed: checksum/provenance/role validation, bounded read-only exact-ref
+store, coordinator reread after upgrade, real current materialization. QA requires
+original grant/context/SQL/replay/foreign-request/cleanup assertions unchanged.
+
+Capture v1 is terminal:2pass/1fail in391.68s, all database/role/MinIO cleanup
+complete. Archive-only and findings+archive original journeys passed; findings-only
+was cancelled at ArtifactScratchManager.reserve_bytes/run_blocking_cancellation_resistant.
+No timeout/guard changes made. Replay only that unchanged failed role in isolated
+/tmp/submission-multipost-capture-findings-v2.log/json to distinguish a repeated
+behavior from the first run cancellation. Do not count findings-only as captured.
+
+Installed an explicitly incomplete two-variant multi_post_history archive to
+exercise current upgrade while the missing-role recapture runs; not committed or
+published. Current restore v1 selects only captured roles1/roles2. Replaced original
+test setup with historical_revision_material; AST comparison confirms every
+statement from successor materialization through visibility/SQL/cleanup/replay/
+foreign-assignment assertions is identical. Actual original producer/helper source
+is preserved by pinned capture provenance, not retained as an executable current
+approval path. Full3-case replay and capture provenance remain pending.
+
+Findings-only unchanged recapture v2 passes1 in202.15s, complete owned DB/role/
+MinIO cleanup. All3original role journeys now have successful captures; first-run
+cancellation remains recorded, with no timing/budget changes. Each snapshot has
+71nonempty tables/388rows and2objects. Do not replace the partial archive while
+restore v1 handle92448 is still live; its imported checksum must stay consistent.
+After that run terminates, consolidate all3snapshots and replay the missing role.
+
+Historical multi-POST current replay completes: roles1/roles2 pass2 in184.14s;
+roles0 passes1 in55.85s. Both runs finish at0082 and clean owned database/role.
+All original successor assertions retain identical AST; the fixture additionally
+rereads the exact request through current coordinator after upgrade. Final3-role
+archive SHA256 acde3375a3e96603868480fff9ffbb4492fe62ef3a89f9348e2ac9caddaae552,
+146399bytes; existing two snapshots are byte-semantically unchanged after adding
+the third. Ruff app/tests/new migration passes; structural validator v3 exits0
+without ledger changes; Markdown links pass16 changed files. All processes started
+for this checkpoint are terminal; QA plan review completed, implementation review
+is still pending. Current real-MinIO single-image revision and shared producer
+cutover remain required; no cardinality commit, full CI or full-goal claim.
+
+Current producer cutover prerequisite: retained_material_fixtures still constructs
+SelectedPreSubmitExecutionService(materialization=), and submission_fixtures then
+uses the retired hidden prepared-admission creation operation. Replace this shared
+producer with raw ZIP T1/upload/source PRE/T4 and production outbox T5. Preserve
+fixture-private packet fields only around build_submission during T5; do not fake
+source/PRE/acceptance rows or skip AUTH. Allowed files: retained_material_fixtures,
+submission_fixtures, checkers/execution/storage_fixture and directly affected
+tasks/submission_dispatch/test_concurrency (its competing ready-admission premise
+is replaced by competing T1/finalizer proof). Keep actual old object bytes for
+historical migration consumers, and share complete source state by factory and
+namespace. Tests use existing current-task, revision/history/acceptance consumers;
+architecture/security/QA review remains required. No production compatibility path.
+
+Retained source replay v1 reaches real T1 and rejects the old symbolic provider
+profile "test" created by committed_guide_fixtures. Extend allowed fixture scope
+to that default namespace constructor: use canonical local-v2 descriptor/hash
+through ArtifactStoreNamespaceIdentity/artifact_store_namespace_material from
+the start of new guide setup. This remains an explicitly scripted byte provider,
+not a filesystem/deployment proof. Existing retained rows and real provider
+namespace overrides are unchanged. No production qualification guard is relaxed.
+
+Retained source v2: initial owner/SQL lineage test passes; revision-history test
+reaches accepted T4 then leaves T5 unfinalized (1pass/1fail,94.85s). Added an
+observing wrapper around the unchanged production finalization handler so the
+next exact-case replay exposes the underlying exception that OUTBOX classifies
+as uncertain; no retry/guard bypass. /tmp/submission-retained-revision-v3.log/json
+is running. Current concurrency replacement passes2 in60.09s: pause exact source
+observation during a real OUTBOX T5 claim, refuse duplicate delivery or a new-key
+T1, then assert one operation/Submission/dispatch/checker and one event per phase.
+All completed runs cleaned owned database/role. ARCH/SEC in-progress review finds
+no blocking fixture composition issue; scoped proof excludes provider/VM and
+private-packet/source equality. Remaining role-race/rollback/material producers
+still need current acceptance-path migration; no compatibility alias retained.
+
+Verified production revision defect: retained revision replay v3 fails125.19s
+at T5 admission INSERT with SQL CheckViolation "revision admission context
+unavailable" from0043 guard_revision_admission_context. The trigger still reads
+a prepared durable intent and requires needs_revision/current deadline, despite
+source T4 having accepted custody and moved TASK to evaluation_pending.0074
+updated the verified-lineage guard but omitted this revision guard. Scope extends
+to new0083 migration and pinned test schema fingerprint, plus focused accepted
+revision SQL substitution tests. Proposed change delegates source rows to existing
+require_source_submission_admission (complete acceptance/PRE/actor/task/assignment/
+revision-id/hash/predecessor/remediation validation); preserve old trigger body
+exactly for non-source rows. A11 requires accepted work to survive delayed workers
+without renewed contributor/deadline eligibility. No old row rewriting or guard
+disabling. ARCH/SEC plan review requested before installing migration.
+
+Revision continuation plan correction after ARCH/SEC inspection: 0043 also guards
+Submission insertion and deferred revision deadline. 0083 must adapt all three
+source paths, binding the exact accepted operation, source admission, immutable
+revision preparation/lineage and continuation authority. Preserve non-source
+branches. At T4 add preparation target/current TASK lineage and current routing
+fence checks to require_submission_acceptance_current; these are eligibility
+checks and must not recur after acceptance. Risk: high authorization/atomicity.
+Acceptance: actual failing revision journey succeeds; invalid source/revision
+bindings fail; acceptance refuses stale target/fence; delayed accepted work does
+not recheck contributor deadline. Allowed files remain 0083, schema fingerprint,
+focused existing intake/revision tests and this record. No retained row rewriting,
+new public API, provider qualification claims or compatibility producers. Human
+review focus is exact T4/T5 authority boundary; ARCH/SEC and QA review required.
+
+0083 candidate installed: T4 adds exact revision project/target lineage/current
+routing fence checks. All three old revision guards delegate accepted source
+custody to the existing admission validator and a new exact Submission bridge;
+the BEFORE bridge uses TASK active operation and the deferred bridge uses finalized
+Submission identity plus consumed admission and commit authority. Non-source
+branches remain unchanged. ARCH/SEC code-scope provisional PASS; no full proof
+claim. Schema upgrades successfully; first run stops at expected fingerprint
+mismatch 4f2fa4c887c1fe29c555b4af534227535c7b28b2ddccc53013c1e62eba8625a5,
+now pinned. v2 /tmp/submission-revision-0083-v2.log/json runs actual revision
+history with five finalized-record substitution probes plus reset tests. Ruff
+and structural validator pass (structure log /tmp/submission-revision-0083-structure.log).
+QA identifies outstanding direct preinsert and T4 stale target/fence cases and
+expired-after-T4 replay. Existing expiry fixtures disable immutable triggers or
+rewrite pre-preparation history; they are not no-bypass current-source evidence.
+Use retained_intake/finalize_retained_intake split for new current boundary tests.
+No commit/push or full-goal completion claim at this checkpoint.
+
+0083 v2 terminal result: 32passed in236.32s; migration head0083; owned database
+and role cleanup complete. This includes the previously failing real source
+revision T4→OUTBOX T5/history journey, five finalized-record forged lineage
+refusals, and database reset suite. Current blocker is repaired for this concrete
+journey; acceptance/preinsert/deadline proof gaps above remain open. All local
+processes started for this checkpoint are terminal. No full CI/provider claim.
+
+0083 next proof increment: extend allowed test scope with
+backend/tests/tasks/submission_dispatch/accepted_revision_probes.py and the existing
+retained revision history case. Observe real T5 immediately before repository
+Submission insertion; require a valid committed=false control and reject forged
+revision lineage and source admission/preparation/predecessor/remediation records
+inside savepoints, then invoke the unchanged repository insertion. No provider,
+authority, SQL trigger, clock, or durable owner mutation bypass. Keep these
+preinsert probes distinct from committed=true history probes. QA review will
+assess actual boundary coverage; expiry and T4 stale-current evidence stay open.
+
+T4 stale-fence proof design: stage real acceptance with unchanged owner, reserve
+a legitimate generation2 predecessor checker evaluation inside the same root
+transaction, then let deferred SQL validate commit. Expect named revision
+acceptance refusal and complete rollback of receipt/event/Submission/admission.
+This tests the new database fence check after Python context preflight; no raw
+fence update, trigger disabling, or mocked eligibility. Add one existing task
+client test and a scoped observing helper in accepted_revision_probes.py.
+
+Expiry proof scope: add explicit long-running
+backend/tests/artifacts/revision_deadline_drill.py (run by direct pytest path;
+not ordinary test_ collection) and expose revision_deadline_hours on existing
+create_active_project/create_policy_bundle_for_guide fixtures, default unchanged48.
+Drill approves actual one-hour policy, creates genuine revision T4, observes
+PostgreSQL time until its original deadline, then runs production OUTBOX T5.
+No clock override, immutable-row edits or trigger bypass. This is scripted-store
+owner/SQL timing proof, not provider/native qualification. Run with isolated
+runner timeout4500; retain exact terminal result before claiming A11 evidence.
+
+0083 v3 preinsert probes exposed test savepoint lifetime: SQLAlchemy ROLLBACK TO
+left a PostgreSQL subtransaction active; later checker root pg_export_snapshot
+correctly refused. No production relaxation. Probe helper now explicitly issues
+SAVEPOINT, ROLLBACK TO, RELEASE for each rejected composite. v3 failed61.84s,
+owned DB/role cleanup complete. v4 terminal: 2passed163.23s, cleanup complete;
+real preinsert false-branch controls/source substitutions + original finalized
+history probes + exact T4 stale-fence commit refusal all pass. One existing
+storage_request generation2 Pydantic serializer warning remains visible.
+
+Deadline drill v1 intentionally interrupted after QA found wrong POST event-name
+oracle; cleanup complete. Corrected to canonical REQUEST_EVENT. v2 intentionally
+interrupted before waiting an hour to batch final QA request: invoke production
+finalizer twice within the same still-live OUTBOX invocation after deadline and
+require identical full creation results. Cleanup complete. v3 now runs exact
+final drill at /tmp/submission-revision-deadline-drill-v3.log/json, timeout4500;
+do not restart merely for silence or elapsed observation. No expiry pass claim
+until terminal evidence. QA code review confirms meaningful preinsert and
+same-transaction T4 fence coverage; stale-target case remains open. No reviewer
+is running, no full-goal claim, and only original PR708 remains authorized.
+
+Shared material producer cutover scope: post_submit_materialization_helpers.py,
+retained_material_fixtures.py, tasks/submission_dispatch/test_concurrency.py and
+test_rollback.py, plus directly affected source-read assertions. Replace retired
+_verified_admission/hidden create with actual raw ZIP source intake and OUTBOX T5
+using real existing local/MinIO provider. Preserve exact archive mode bytes and
+POST request reads. Custom producer hooks move to foreground submission so role
+races test T4 authority; rollback cases move to accepted T5 and retain acceptance
+receipt/event while refusing partial finalization. Do not add compatibility
+aliases or a second producer. Retain creation_request projection only for existing
+current downstream consumers, explicitly trace remaining old revision callers.
+Risk high owner/AUTH/atomicity; focused real PG/local+MinIO execution, race/rollback
+checks and required ARCH/SEC/QA review before commit. No provider qualification
+claim from controlled portable project runtime. One-hour deadline v3 remains live.
+
+Material source cutover implemented: exact archive bytes now traverse _foreground
+and production OUTBOX T5; current dispatch result read from persisted owner row.
+Removed prepared admission/hidden creation from this shared producer. Role race
+hooks now pause T4 prepare_acceptance and prove already accepted work survives
+later contributor revocation. T5 rollback tests preserve evaluation_pending,
+acceptance receipt and finalization event, while requiring no source admission,
+Submission, binding, CheckerRun or POST event after a failed participant. Current
+selected POST fixture asserts one entry. CountedStore implements exact open_source;
+real MinIO fixture enables bucket versioning. Remaining downstream old revision
+helpers and composition/replay callers are traced, not treated as passed.
+
+Material v1 terminal2fail81.32s: portable PRE lacked its directory and role race
+never reached T4. Added mkdir with per-task unique source-runtime directory.
+Material v2 terminated at collection because test imported ArtifactAuthorityDeniedError
+from wrong module; corrected to artifacts.schemas. Both owned DB/role cleanups
+complete. Structural validator v1 exited0, no debt ledger change. v3 now runs
+local+MinIO execution/replay, T4 revocation race and seven T5 rollback cases,
+/tmp/submission-material-source-v3.log/json. Deadline drill v3 remains active;
+confirmed real accepted revision in workstream_test_906ae3a89dbc and original
+PostgreSQL deadline2026-11-16T19:25:25.361833Z. No deadline result yet.
+
+Shared producer ARCH/SEC code review complete: no further concrete bypass found;
+portable-runtime versus real-provider proof scope retained. v3 remains live with
+runner-owned MinIO bucket workstream-ci-isolated-4b500b25f9c9 and database
+workstream_test_4b500b25f9c9. Seven rollback cases collect successfully. Latest
+Ruff/diff checks pass. Fresh origin/main fetch remains94334ccf4; HEAD167ahead/0behind.
+No merge/rebase needed at this checkpoint. No results inferred from live run.
+
+Material v3 terminal: 8passed/2failed289.58s; owned DB/role/MinIO cleanup complete.
+Passed local source POST/replay, T4 role revocation race, five staged participant
+rollbacks and unmanaged-savepoint refusal. MinIO POST returned infrastructure_failed;
+add materialization exception diagnostics before rerunning that exact case. Revoked
+binding denies via PreparedAuthorizationUnsupported at fixed-service resolution,
+not ArtifactAuthorityDeniedError; corrected exact assertion, no runtime change.
+v4 /tmp/submission-material-source-v4.log/json runs only the two failed cases.
+
+Next traced shared consumer within cutover: tasks/post_submit_routing/support.py
+_create_submission still prepares/verifies and calls hidden create for sibling and
+revision successors. Extend allowed scope to that producer. Extract the already
+implemented current archive->source->T5 composition as create_source_submission
+in post_submit_materialization_helpers.py and reuse it from both initial and
+routing producers. Keep exact metadata revision acknowledgment from locked TASK,
+whole real underlying store and persisted dispatch.result; no compatibility
+producer. Use unique runtime directory per invocation so revision of the same
+TASK cannot collide. Verify existing sibling, successor/routing and previous
+version denial cases; current live-MinIO revision qualification still separate.
+
+Material v4 terminal1passed/1failed80.50s, owned DB/role/MinIO cleanup complete.
+Revoked binding test now passes exact fixed-service denial. MinIO diagnostic shows
+ArtifactPreparationDeadlineError, followed by async-generator aclose-already-running
+teardown errors. Fixture inherited 2-byte provider buffers from adapter vectors;
+normal material execution will use bounded64KiB, matching existing source POST
+fixture, without increasing any deadline. The cleanup symptom exposes a production
+gap: PostSubmissionMaterializationService passes open_source directly to prepare
+without closing that closable generator if preparation fails while suspended at a
+yield. Extend bounded scope to post_submit_materialization.py and existing
+materialization tests. Register exact-source generator closure in AsyncExitStack
+with cancellation-resistant await; retained non-source iterator contract unchanged.
+Regression must open real local/MinIO source, fail scratch write after first chunk,
+and prove provider generator closed before failure returns, no consumer entry,
+no active scratch. ARCH/SEC/QA review required before commit; no workaround by
+relaxing timeouts or silently discarding the observed cleanup defect.
+
+Routing source v1 terminal3passed103.52s: sibling mixed-lineage denial, old-version
+routing refusal after real successor, and superseded-checker reserve/replay denial.
+All use current archive source/T4/T5 composition; owned DB/role cleanup complete.
+New cleanup regression added to test_post_submit_materialization.py: wrap real
+provider open_source; fail scratch write after first chunk; require generator
+finally completed before error return and zero scratch/consumer entry. Running
+local baseline against unchanged production owner at
+/tmp/submission-source-close-before-v1.log/json before installing closure fix.
+
+Source close baseline fails exactly: first553-byte chunk written, closed count0,
+30.64s, cleanup complete. Source close after-v1 passes4 in90.82s: real local/MinIO
+first-write failure cleanup plus both normal execution/replay journeys; owned
+DB/role/bucket cleanup complete. Production source generators now register on the
+existing AsyncExitStack before scratch preparation. Final callback creates one
+close task, shields/drains it despite repeated cancellation, preserves caller
+cancellation only after successful closure, and maps ordinary or self-cancelled
+close failures to ArtifactScratchIntegrityError (not a normal terminal material
+failure). This follows ARCH/SEC review; generic preserving-cancellation helper
+would suppress close errors during cancellation, so the callback explicitly lets
+cleanup uncertainty win.
+
+Keep the new cohesive regressions in backend/tests/artifacts/test_post_source_cleanup.py
+instead of enlarging the existing materialization suite. Added real local/MinIO
+repeated-cancellation draining and pure ordinary/self-cancelled close-failure
+controls. after-v2 /tmp/submission-source-close-after-v2.log/json now verifies all
+six cleanup cases plus local/MinIO normal execution against final callback. Ruff
+and diff checks pass; no final result yet. Deadline v3 remains the same live run.
+
+Final source-close structural check exits0, no debt-ledger edits. QA scoped code
+review finds no additional defect; independently verified compound cancellation
+then late-close-error probe exits0 and preserves original cause/integrity failure
+(/tmp/submission-post-source-close-qa-compound.log). Final eight-case v2 still live
+handle43563; deadline v3 same handle59321. No reviewers remain running. No final
+execution/goal/signoff claim before terminal receipts; no commit/push yet.
+
+Final cleanup v2 terminal7passed/1setup error150.91s, owned DB/role/MinIO cleanup
+complete. Asyncpg raised UnicodeDecodeError while decoding canonical schema
+inventory before the local first-write case executed; no owner assertion failed.
+Keep this environment failure open, do not mask/skip it. Exact unchanged local
+case replay runs /tmp/submission-source-close-after-v3-local.log/json. The seven
+completed cases include MinIO ordinary cleanup, both repeated-cancellation paths,
+both unconfirmed-close errors and both normal provider execution/replays.
+
+Continue existing test_post_submit_materialization.py consumer cutover: use
+actual selected POST processor with controlled registered-image adapter and exact
+execution lease instead of synthesizing empty-policy results. Adapt existing
+provider fault/lock hooks to open_source (closable generator), and protect source
+reads as well as object reads in binding-consumption proof. Preserve foreign-result
+refusal by rehashing a completed actual result with mismatched generation. Existing
+manifest-corruption behavior will be checked, not weakened speculatively. Scope
+is directly affected tests, no new runtime compatibility path or policy relaxation.
+
+Unchanged local source-close replay v3 passes1 in27.04s; owned DB/role cleanup
+complete. All eight targeted final-callback cases now have passing evidence
+across v2+local replay, but prior asyncpg schema-decoding setup error is retained
+as unresolved environment evidence, not claimed repaired. Existing whole POST
+materialization owner suite now uses actual selected processor/lease and source
+read hooks; running /tmp/submission-materialization-owner-v1.log/json and scoped
+structure validation. No current-owner suite pass claim yet. Source cleanup
+production/code review is complete; broader acceptance and native qualification
+requirements remain active.
+
+Next bounded proof cutover: test_evaluation_revision.py must create its consumed
+revision using create_source_submission, actual raw ZIP PRE/T4 and OUTBOX T5.
+Allowed files are that test and this record; preserve every revision-read,
+rebase, substitution, replay and no-mutation assertion. No production changes,
+historical-data rewriting, guard relaxation or compatibility helper. Risk is
+test fidelity; verification is the entire four-case owner file on isolated
+PostgreSQL plus Ruff and structural validation. QA/test-delta review should
+compare the old assertions and current producer custody. Human focus is whether
+the revision selector is exercised against the same actual source-backed
+submission the public intake now creates.
+
+Structural diagnosis: frozen Python diagnostic run exits0, system Python exits139
+in garbage collection during ast.parse in coverage_policy.py. This is unresolved
+interpreter/environment evidence, not proof of a validator defect or its repair.
+Both materialization-owner and real deadline integration runs remain live.
+
+QA-EVAL-001 found an affected shared producer in test_revision_exhaustion.py:
+_submit_initial_after_reclaim still invokes the removed preparation endpoint.
+Expand allowed test scope to this helper and its direct callers. Preserve HTTP
+claim and submission boundaries, inject the real foreground owner with controlled
+runtime through the configured command, then run production finalization. Keep
+all caller assertions. Verify reclaimed-contributor isolation and existing
+exhaustion/reclaim callers; do not claim an unrun caller passes.
+
+Environment evidence at 2026-11-16 19:07 UTC: owned PostgreSQL log records backend
+PID2068 killed by signal9 while updating project_setup_runs.documents_ready_at;
+server terminated other connections and recovered. Before death host process
+235582 used35.4 percent of16GB RAM. This is not a diagnosed application or
+hardware root cause. Preserve affected run receipts. Evaluation v1 had loaded
+the superseded reclaim helper; deliberately SIGINT that test process only after
+repair, terminal exit2 with1passed404.65s and runner cleanup_complete=true.
+New six-case current candidate run is /tmp/submission-evaluation-revision-source-v2.log/json,
+including full evaluation-revision file and both zero-cap reclaim modes, failfast.
+Ruff/diff checks pass. Structural /tmp/submission-evaluation-revision-structure-v1.log
+is pending. Main materialization and deadline runs were not restarted.
+
+Materialization owner v1 terminal3failed/14passed948.09s, cleanup_complete=true.
+Quota case failed during setup at the exact PostgreSQL UPDATE killed19:07UTC;
+consumer-deadline case hit outer10s while revalidating audit custody, not during
+consumer waiting. Replay those two unchanged before any timeout/production change.
+Stored-manifest corruption now fails earlier in require_source_submission_admission
+with23514 before provider I/O; the old expected late manifest error is obsolete
+for this source-backed fixture. Bound test repair to test_post_submit_materialization.py
+and new cohesive artifacts/test_post_source_manifest.py: retain corrupt-database
+rejection with exact SQLSTATE/provenance and zero provider/consumer calls; separately
+inject changed executable semantics from the controlled inspector over exact source
+bytes and require independent manifest mismatch before consumer/export. Preserve
+cleanup assertions. No production guard changes. QA/test-delta review must verify
+both distinct boundaries and a discriminating mismatch-check removal probe.
+
+QA/test-delta confirms reclaim helper preserves HTTP/authenticated identity and
+returns stored dispatch fields required by all traced callers. Its extracted
+helper control and actor/metadata substitution probes pass
+(/tmp/submission-reclaim-qa-auth-probe-bounded.log); these are not database proof.
+QA independently ran exact new semantic-manifest test against exact materialize
+method with controlled DB selection and real scratch/inspection: baseline passes,
+removing only the semantic digest comparison fails at forbidden export
+(/tmp/submission-source-manifest-qa-probe.log). Both boundary assertions remain.
+Removed obsolete pre_submit_evidence_sets mutation from stored-corruption test
+(source admissions do not link that table); replay final exact case after v2.
+Frozen current test candidate; Ruff/diff pass. Revision structural run exits0;
+new manifest structural run /tmp/submission-post-manifest-structure-v1.log pending.
+Fresh origin/main fetch has167ahead/0behind; sole draft PR708 still points fac8ea511.
+No native/provider/full-goal completion or new commit claimed.
+
+
+Checkpoint verification: materialization owner focused replay passes4 in345.70s;
+revision/reclaim passes6 in710.46s; real one-hour revision deadline drill passes1
+in3680.50s. All three isolated runner receipts confirm cleanup complete. Source
+cleanup, historical replay and policy-cardinality evidence remain as recorded
+above. Python lint, Markdown links and structural validation pass. Native/provider
+qualification, broader full-suite proof and full-spec acceptance remain unfinished.
+This checkpoint does not mark PR708 ready or the active goal complete.

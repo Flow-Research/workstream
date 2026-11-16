@@ -143,7 +143,7 @@ async def test_unified_approval_postgresql_commits_exact_chain_and_provenance(
     async with proposal_case(clean_postgres_database) as (values, factory, command, actor, grant):
         before = await stored_state(factory, command)
         package = await read_package(factory, command, actor, grant)
-        payload = GuideProposalApproval(pre_submit_attachments=(), post_submit_attachments=(), target=package.target, idempotency_key=uuid4())
+        payload = GuideProposalApproval(pre_submit_attachments=values["pre_submit_attachments"], post_submit_attachments=values["post_submit_attachments"], target=package.target, idempotency_key=uuid4())
         receipt = await approve(factory, command, actor, grant, payload)
         replay = await approve(factory, command, actor, grant, payload)
         assert replay == receipt
@@ -165,8 +165,9 @@ async def test_unified_approval_postgresql_commits_exact_chain_and_provenance(
         assert (await stored_state(factory, command))[:2] == before[:2]
 
 
+
 async def test_correction_postgresql_replay_creates_one_successor(clean_postgres_database):
-    async with proposal_case(clean_postgres_database) as (_, factory, command, actor, grant):
+    async with proposal_case(clean_postgres_database) as (values, factory, command, actor, grant):
         before = await stored_state(factory, command)
         package = await read_package(factory, command, actor, grant)
         payload = GuideProposalCorrection(
@@ -206,11 +207,12 @@ async def test_correction_postgresql_replay_creates_one_successor(clean_postgres
                 command,
                 actor,
                 grant,
-                GuideProposalApproval(pre_submit_attachments=(), post_submit_attachments=(),
+                GuideProposalApproval(pre_submit_attachments=values["pre_submit_attachments"], post_submit_attachments=values["post_submit_attachments"],
                     target=package.target,
                     idempotency_key=uuid4(),
                 ),
             )
+
 
 
 async def test_correction_uses_canonical_human_request_and_binds_feedback(clean_postgres_database):
@@ -341,7 +343,7 @@ async def test_correction_rejects_authority_for_a_substituted_locator_operation(
 
 
 async def test_approval_rejects_every_substituted_target_identity(clean_postgres_database):
-    async with proposal_case(clean_postgres_database) as (_, factory, command, actor, grant):
+    async with proposal_case(clean_postgres_database) as (values, factory, command, actor, grant):
         package = await read_package(factory, command, actor, grant)
         with pytest.raises(ValidationError) as invalid_result_version:
             type(package.target).model_validate({
@@ -383,7 +385,7 @@ async def test_approval_rejects_every_substituted_target_identity(clean_postgres
                     command,
                     actor,
                     grant,
-                    GuideProposalApproval(pre_submit_attachments=(), post_submit_attachments=(),
+                    GuideProposalApproval(pre_submit_attachments=values["pre_submit_attachments"], post_submit_attachments=values["post_submit_attachments"],
                         target=package.target.model_copy(update=patch),
                         idempotency_key=uuid4(),
                     ),
@@ -398,7 +400,7 @@ async def test_approval_rejects_every_substituted_target_identity(clean_postgres
             command,
             actor,
             grant,
-            GuideProposalApproval(pre_submit_attachments=(), post_submit_attachments=(),
+            GuideProposalApproval(pre_submit_attachments=values["pre_submit_attachments"], post_submit_attachments=values["post_submit_attachments"],
                 target=package.target,
                 idempotency_key=uuid4(),
             ),
@@ -406,11 +408,12 @@ async def test_approval_rejects_every_substituted_target_identity(clean_postgres
         assert receipt.artifact_policy_id == package.target.artifact_policy_id
 
 
+
 async def test_warning_acknowledgment_is_exact_and_required(clean_postgres_database):
     async with proposal_case(
         clean_postgres_database, classification="draft_ready_with_warnings"
     ) as (
-        _,
+        values,
         factory,
         command,
         actor,
@@ -425,7 +428,7 @@ async def test_warning_acknowledgment_is_exact_and_required(clean_postgres_datab
                     command,
                     actor,
                     grant,
-                    GuideProposalApproval(pre_submit_attachments=(), post_submit_attachments=(),
+                    GuideProposalApproval(pre_submit_attachments=values["pre_submit_attachments"], post_submit_attachments=values["post_submit_attachments"],
                         target=package.target,
                         idempotency_key=uuid4(),
                         acknowledged_warning_hashes=warnings,
@@ -436,7 +439,7 @@ async def test_warning_acknowledgment_is_exact_and_required(clean_postgres_datab
             command,
             actor,
             grant,
-            GuideProposalApproval(pre_submit_attachments=(), post_submit_attachments=(),
+            GuideProposalApproval(pre_submit_attachments=values["pre_submit_attachments"], post_submit_attachments=values["post_submit_attachments"],
                 target=package.target,
                 idempotency_key=uuid4(),
                 acknowledged_warning_hashes=package.warning_hashes,
@@ -445,9 +448,10 @@ async def test_warning_acknowledgment_is_exact_and_required(clean_postgres_datab
         assert receipt.artifact_policy_id == package.target.artifact_policy_id
 
 
+
 async def test_blocked_result_allows_correction_but_never_approval(clean_postgres_database):
     async with proposal_case(clean_postgres_database, classification="guide_blocked") as (
-        _,
+        values,
         factory,
         command,
         actor,
@@ -461,7 +465,7 @@ async def test_blocked_result_allows_correction_but_never_approval(clean_postgre
                 command,
                 actor,
                 grant,
-                GuideProposalApproval(pre_submit_attachments=(), post_submit_attachments=(),
+                GuideProposalApproval(pre_submit_attachments=values["pre_submit_attachments"], post_submit_attachments=values["post_submit_attachments"],
                     target=package.target,
                     idempotency_key=uuid4(),
                 ),
@@ -480,11 +484,12 @@ async def test_blocked_result_allows_correction_but_never_approval(clean_postgre
         assert receipt.successor_setup_generation == command.setup_generation + 1
 
 
+
 async def test_capability_close_failure_rolls_back_every_decision_effect(clean_postgres_database):
     from sqlalchemy import func
     from app.modules.tasks.models import AuditEvent
 
-    async with proposal_case(clean_postgres_database) as (_, factory, command, actor, grant):
+    async with proposal_case(clean_postgres_database) as (values, factory, command, actor, grant):
         package = await read_package(factory, command, actor, grant)
         before = await stored_state(factory, command)
         for action in ("approve", "correct"):
@@ -507,7 +512,7 @@ async def test_capability_close_failure_rolls_back_every_decision_effect(clean_p
                     )
                     if action == "approve":
                         await service.approve(
-                            GuideProposalApproval(pre_submit_attachments=(), post_submit_attachments=(),
+                            GuideProposalApproval(pre_submit_attachments=values["pre_submit_attachments"], post_submit_attachments=values["post_submit_attachments"],
                                 target=package.target,
                                 idempotency_key=uuid4(),
                             ),
@@ -547,7 +552,7 @@ async def test_capability_close_failure_rolls_back_every_decision_effect(clean_p
             command,
             actor,
             grant,
-            GuideProposalApproval(pre_submit_attachments=(), post_submit_attachments=(),
+            GuideProposalApproval(pre_submit_attachments=values["pre_submit_attachments"], post_submit_attachments=values["post_submit_attachments"],
                 target=package.target,
                 idempotency_key=uuid4(),
             ),
@@ -555,18 +560,19 @@ async def test_capability_close_failure_rolls_back_every_decision_effect(clean_p
         assert receipt.artifact_policy_id == package.target.artifact_policy_id
 
 
+
 async def test_database_preserves_approved_content_lifecycle_and_operation(clean_postgres_database):
     from sqlalchemy import text
     from sqlalchemy.exc import DBAPIError
 
-    async with proposal_case(clean_postgres_database) as (_, factory, command, actor, grant):
+    async with proposal_case(clean_postgres_database) as (values, factory, command, actor, grant):
         package = await read_package(factory, command, actor, grant)
         receipt = await approve(
             factory,
             command,
             actor,
             grant,
-            GuideProposalApproval(pre_submit_attachments=(), post_submit_attachments=(),
+            GuideProposalApproval(pre_submit_attachments=values["pre_submit_attachments"], post_submit_attachments=values["post_submit_attachments"],
                 target=package.target,
                 idempotency_key=uuid4(),
             ),
@@ -625,6 +631,7 @@ async def test_database_preserves_approved_content_lifecycle_and_operation(clean
         assert after.artifact_policy_status == "approved"
 
 
+
 @pytest.mark.parametrize("omitted", [None, "reservation", "operation"])
 async def test_unified_approval_postgresql_requires_reservation_and_operation(
     clean_postgres_database,
@@ -638,7 +645,7 @@ async def test_unified_approval_postgresql_requires_reservation_and_operation(
         SubmissionPolicyMutationReplayRepository,
     )
 
-    async with proposal_case(clean_postgres_database) as (_, factory, command, actor, grant):
+    async with proposal_case(clean_postgres_database) as (values, factory, command, actor, grant):
         package = await read_package(factory, command, actor, grant)
         if omitted == "reservation":
 
@@ -685,7 +692,7 @@ async def test_unified_approval_postgresql_requires_reservation_and_operation(
                     ),
                     external_checker_registry_reader(session),
                 ).approve(
-                    GuideProposalApproval(pre_submit_attachments=(), post_submit_attachments=(),
+                    GuideProposalApproval(pre_submit_attachments=values["pre_submit_attachments"], post_submit_attachments=values["post_submit_attachments"],
                         target=package.target,
                         idempotency_key=uuid4(),
                     ),
@@ -706,6 +713,7 @@ async def test_unified_approval_postgresql_requires_reservation_and_operation(
             assert policy.lifecycle_status == ("draft" if omitted else "approved")
 
 
+
 async def test_corrected_generation_replaces_exact_approved_chain_and_preserves_history(
     clean_postgres_database,
 ):
@@ -718,7 +726,7 @@ async def test_corrected_generation_replaces_exact_approved_chain_and_preserves_
 
     async with proposal_case(clean_postgres_database) as (values, factory, command, actor, grant):
         first_package = await read_package(factory, command, actor, grant)
-        first_payload = GuideProposalApproval(pre_submit_attachments=(), post_submit_attachments=(), target=first_package.target, idempotency_key=uuid4())
+        first_payload = GuideProposalApproval(pre_submit_attachments=values["pre_submit_attachments"], post_submit_attachments=values["post_submit_attachments"], target=first_package.target, idempotency_key=uuid4())
         first = await approve(
             factory,
             command,
@@ -748,7 +756,7 @@ async def test_corrected_generation_replaces_exact_approved_chain_and_preserves_
                 next_command,
                 actor,
                 grant,
-                GuideProposalApproval(pre_submit_attachments=(), post_submit_attachments=(),
+                GuideProposalApproval(pre_submit_attachments=values["pre_submit_attachments"], post_submit_attachments=values["post_submit_attachments"],
                     target=next_package.target,
                     idempotency_key=uuid4(),
                 ),
@@ -758,7 +766,7 @@ async def test_corrected_generation_replaces_exact_approved_chain_and_preserves_
             next_command,
             actor,
             grant,
-            GuideProposalApproval(pre_submit_attachments=(), post_submit_attachments=(),
+            GuideProposalApproval(pre_submit_attachments=values["pre_submit_attachments"], post_submit_attachments=values["post_submit_attachments"],
                 target=next_package.target,
                 idempotency_key=uuid4(),
                 expected_previous_approval_operation_id=first.operation_id,
@@ -801,14 +809,15 @@ async def test_corrected_generation_replaces_exact_approved_chain_and_preserves_
         assert retained.artifact_policy_status == "superseded"
 
 
+
 async def test_concurrent_approvals_have_one_winner_and_one_exact_replay(clean_postgres_database):
     import asyncio
     from sqlalchemy import func
 
-    async with proposal_case(clean_postgres_database) as (_, factory, command, actor, grant):
+    async with proposal_case(clean_postgres_database) as (values, factory, command, actor, grant):
         package = await read_package(factory, command, actor, grant)
         payloads = [
-            GuideProposalApproval(pre_submit_attachments=(), post_submit_attachments=(), target=package.target, idempotency_key=uuid4()) for _ in range(2)
+            GuideProposalApproval(pre_submit_attachments=values["pre_submit_attachments"], post_submit_attachments=values["post_submit_attachments"], target=package.target, idempotency_key=uuid4()) for _ in range(2)
         ]
         outcomes = await asyncio.gather(
             *(approve(factory, command, actor, grant, payload) for payload in payloads),
@@ -832,11 +841,12 @@ async def test_concurrent_approvals_have_one_winner_and_one_exact_replay(clean_p
             )
 
 
+
 async def test_approval_requires_current_manager_authority_even_on_replay(clean_postgres_database):
 
-    async with proposal_case(clean_postgres_database) as (_, factory, command, actor, grant):
+    async with proposal_case(clean_postgres_database) as (values, factory, command, actor, grant):
         package = await read_package(factory, command, actor, grant)
-        payload = GuideProposalApproval(pre_submit_attachments=(), post_submit_attachments=(), target=package.target, idempotency_key=uuid4())
+        payload = GuideProposalApproval(pre_submit_attachments=values["pre_submit_attachments"], post_submit_attachments=values["post_submit_attachments"], target=package.target, idempotency_key=uuid4())
         receipt = await approve(factory, command, actor, grant, payload)
         # A different (nonexistent) grant cannot confer manager authority even
         # when all persisted result and replay identities are otherwise valid.
@@ -860,11 +870,12 @@ async def test_approval_requires_current_manager_authority_even_on_replay(clean_
         assert await approve(factory, command, actor, grant, payload) == receipt
 
 
+
 async def test_projected_draft_content_cannot_be_changed_before_approval(clean_postgres_database):
     from sqlalchemy import text
     from sqlalchemy.exc import DBAPIError
 
-    async with proposal_case(clean_postgres_database) as (_, factory, command, actor, grant):
+    async with proposal_case(clean_postgres_database) as (values, factory, command, actor, grant):
         package = await read_package(factory, command, actor, grant)
         with pytest.raises(DBAPIError, match="unified proposal content is immutable"):
             async with factory() as session, session.begin():
@@ -882,12 +893,13 @@ async def test_projected_draft_content_cannot_be_changed_before_approval(clean_p
                 command,
                 actor,
                 grant,
-                GuideProposalApproval(pre_submit_attachments=(), post_submit_attachments=(),
+                GuideProposalApproval(pre_submit_attachments=values["pre_submit_attachments"], post_submit_attachments=values["post_submit_attachments"],
                     target=package.target,
                     idempotency_key=uuid4(),
                 ),
             )
         ).artifact_policy_id == package.target.artifact_policy_id
+
 
 
 @pytest.mark.parametrize("guide_version", ["v0.1", "example-proof"])
@@ -900,7 +912,7 @@ async def test_approval_preserves_opaque_guide_version(clean_postgres_database, 
         grant,
     ):
         package = await read_package(factory, command, actor, grant)
-        payload = GuideProposalApproval(pre_submit_attachments=(), post_submit_attachments=(), target=package.target, idempotency_key=uuid4())
+        payload = GuideProposalApproval(pre_submit_attachments=values["pre_submit_attachments"], post_submit_attachments=values["post_submit_attachments"], target=package.target, idempotency_key=uuid4())
         receipt = await approve(factory, command, actor, grant, payload)
         assert await approve(factory, command, actor, grant, payload) == receipt
         async with factory() as session:
@@ -910,6 +922,7 @@ async def test_approval_preserves_opaque_guide_version(clean_postgres_database, 
             )
             assert operation.target_json["guide_version"] == guide_version
         await finalize(factory, values, command)
+
 
 
 @pytest.mark.parametrize(
@@ -931,9 +944,9 @@ async def test_stored_authority_variants_deny_review_replay_and_correction(
     from .pg_support import seed_review_actor, revoke_review_grant
     from project_create_fixtures import seed_historical_project
 
-    async with proposal_case(clean_postgres_database) as (_, factory, command, actor, grant):
+    async with proposal_case(clean_postgres_database) as (values, factory, command, actor, grant):
         package = await read_package(factory, command, actor, grant)
-        payload = GuideProposalApproval(pre_submit_attachments=(), post_submit_attachments=(), target=package.target, idempotency_key=uuid4())
+        payload = GuideProposalApproval(pre_submit_attachments=values["pre_submit_attachments"], post_submit_attachments=values["post_submit_attachments"], target=package.target, idempotency_key=uuid4())
         receipt = await approve(factory, command, actor, grant, payload)
         assert await approve(factory, command, actor, grant, payload) == receipt
         denied_grant = grant
@@ -1007,6 +1020,7 @@ async def test_stored_authority_variants_deny_review_replay_and_correction(
                     text("SELECT count(*) FROM project_guide_proposal_corrections")
                 )
             ).scalar_one() == 0
+
 
 
 async def test_another_current_manager_can_admit_correction_after_creator_revocation(
@@ -1086,7 +1100,7 @@ async def test_database_approval_requires_guide_to_remain_draft(
 
     from .pg_support import seed_selected_review_revision_inputs
 
-    async with proposal_case(clean_postgres_database) as (_, factory, command, actor, grant):
+    async with proposal_case(clean_postgres_database) as (values, factory, command, actor, grant):
         await seed_selected_review_revision_inputs(factory, command, actor)
         package = await read_package(factory, command, actor, grant)
         before = await stored_state(factory, command)
@@ -1115,7 +1129,7 @@ async def test_database_approval_requires_guide_to_remain_draft(
                     ProposalAuthority(session, actor, command.project_id, grant),
                     external_checker_registry_reader(session),
                 ).approve(
-                    GuideProposalApproval(pre_submit_attachments=(), post_submit_attachments=(), target=package.target, idempotency_key=uuid4()),
+                    GuideProposalApproval(pre_submit_attachments=values["pre_submit_attachments"], post_submit_attachments=values["post_submit_attachments"], target=package.target, idempotency_key=uuid4()),
                     actor=actor,
                     request_id=uuid4(),
                 )

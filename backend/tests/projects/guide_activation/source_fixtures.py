@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from uuid import UUID, uuid4
 
 from sqlalchemy import select
+
+from tests.checkers.external.support import pre_registry_spec, post_registry_spec
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.modules.actors.models import ActorIdentityLink, ActorProfile
@@ -206,8 +208,8 @@ async def source_case(
     namespace=None,
     guide_version="v1",
     artifact_proposal=None,
-    pre_submit_registry_spec=None,
-    post_submit_registry_spec=None,
+    pre_submit_registry_spec=pre_registry_spec(),
+    post_submit_registry_spec=post_registry_spec(),
     post_submit_configuration_setup: PostSubmitConfigurationSetup | None = None,
     post_submit_configurations_setup: PostSubmitConfigurationsSetup | None = None,
     post_submit_specification=None,

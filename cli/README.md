@@ -946,15 +946,16 @@ workstream project guide proposal PROJECT_ID GUIDE_ID COMPILATION_ID -o json > p
 jq '{target: .target, pre_submit_attachments: [], post_submit_attachments: [], acknowledged_warning_hashes: []}' proposal.json > approval.json
 # Read the findings. Edit approval.json to acknowledge only the exact displayed
 # warning_hashes you deliberately accept; the backend requires the complete order.
-# Add each selected registered image to the appropriate attachments array.
+# Add exactly one selected registered PRE image and one POST image.
 # Each attachment needs requirement_id, registry_entry_id,
-# registry_entry_digest and configuration. Empty arrays select no images.
+# registry_entry_digest and configuration. Empty or multiple selections are rejected.
 workstream project guide approve-pre PROJECT_ID GUIDE_ID COMPILATION_ID --input approval.json --idempotency-key APPROVAL_UUID -o json
 ```
 
 `--input` is a regular UTF-8 JSON file of at most 1 MiB containing the public
 `GuideProposalApprovalInput`, not the entire display package. It requires
-`target`, `pre_submit_attachments` and `post_submit_attachments`. Each attachment
+`target`, `pre_submit_attachments` and `post_submit_attachments`. Each phase must
+contain exactly one image attachment. Each attachment
 uses a human-authored requirement ID, the exact registry entry ID and digest,
 and a configuration object. Omitted `acknowledged_warning_hashes` means an empty list, never
 automatic acknowledgment. When replacing an earlier approval, supply both

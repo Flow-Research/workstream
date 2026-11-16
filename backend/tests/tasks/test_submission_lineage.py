@@ -1,6 +1,7 @@
 """Real ZIP, ART custody and hidden TASK creation with exact contribution lineage."""
 
 import asyncio
+from tests.checkers.external.support import pre_registry_spec
 from dataclasses import replace
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
@@ -58,7 +59,7 @@ from tests.tasks.submission_lineage_support import (
 
 @asynccontextmanager
 async def _prepared_packet(
-    isolated_database_env, tmp_path, *, verify=True, pre_submit_registry_spec=None,
+    isolated_database_env, tmp_path, *, verify=True, pre_submit_registry_spec=pre_registry_spec(),
 ):
     engine = create_async_engine(isolated_database_env)
     factory = async_sessionmaker(engine, expire_on_commit=False)

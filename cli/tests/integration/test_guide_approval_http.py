@@ -21,7 +21,14 @@ def approval():
                 "configuration": {"required": True, "labels": ["research", 2]},
             }
         ],
-        "post_submit_attachments": [],
+        "post_submit_attachments": [
+            {
+                "requirement_id": "project.quality",
+                "registry_entry_id": OTHER,
+                "registry_entry_digest": HASH,
+                "configuration": {},
+            }
+        ],
         "acknowledged_warning_hashes": [HASH],
     }
 
@@ -166,6 +173,8 @@ def test_approval_invalid_input_never_dispatches(cli, tmp_path):
             variants.append(approval() | {"acknowledged_warning_hashes": value})
         for phase in ("pre_submit_attachments", "post_submit_attachments"):
             for attachments in (
+                [],
+                [approval()[phase][0] | {"requirement_id": key} for key in ("a", "b")],
                 None,
                 {},
                 [None],

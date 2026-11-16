@@ -31,28 +31,32 @@ def _target():
     )
 
 
-def test_omitted_attachments_are_invalid_but_explicit_empty_is_valid():
-    target = _target()
-    with pytest.raises(ValidationError):
-        GuideProposalApprovalInput(target=target)
+@pytest.mark.parametrize("phase", ["pre_submit_attachments", "post_submit_attachments"])
+@pytest.mark.parametrize("count", [None, 0, 2])
+def test_approval_requires_exactly_one_explicit_image_per_phase(phase, count):
+    pre = _attachment(_entry("project.pre", "pre_submit"), "intake")
+    post = _attachment(_entry("project.post", "post_submit"), "quality")
+    body = {"target": _target(), "pre_submit_attachments": (pre,),
+            "post_submit_attachments": (post,)}
+    if count is None:
+        del body[phase]
+    else:
+        member = body[phase][0]
+        body[phase] = tuple(member.model_copy(update={"requirement_id": f"member_{i}"})
+                            for i in range(count))
+    with pytest.raises(ValidationError) as error:
+        GuideProposalApprovalInput(**body)
+    assert error.value.errors()[0]["loc"] == (phase,)
+
+
+def test_approval_preserves_exact_single_phase_selections():
+    pre = _attachment(_entry("project.pre", "pre_submit"), "intake")
+    post = _attachment(_entry("project.post", "post_submit"), "quality")
     approved = GuideProposalApprovalInput(
-        target=target, pre_submit_attachments=(), post_submit_attachments=(),
+        target=_target(), pre_submit_attachments=(pre,), post_submit_attachments=(post,),
     )
-    assert approved.pre_submit_attachments == ()
-    assert approved.post_submit_attachments == ()
-
-
-def test_duplicate_human_execution_key_is_invalid_even_for_distinct_images():
-    first = _entry("project.first", "pre_submit")
-    second = _entry("project.second", "pre_submit")
-    with pytest.raises(ValidationError, match="unique canonical"):
-        GuideProposalApprovalInput(
-            target=_target(),
-            pre_submit_attachments=(
-                _attachment(first, "same_key"), _attachment(second, "same_key"),
-            ),
-            post_submit_attachments=(),
-        )
+    assert approved.pre_submit_attachments == (pre,)
+    assert approved.post_submit_attachments == (post,)
 
 
 def test_current_target_rejects_old_catalogue_identity():

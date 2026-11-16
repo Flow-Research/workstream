@@ -48,7 +48,7 @@ async def intake(tmp_path, isolated_database_env, capacity_limits, request):
         from tests.checkers.external.support import pre_registry_spec
         plan, _ = await approved_selected_policy_fixture(
             factory, _namespace(_settings(tmp_path)), guide_version="v1",
-            pre_submit_registry_spec=pre_registry_spec() if getattr(request, "param", False) else None,
+            pre_submit_registry_spec=pre_registry_spec(),
         )
         actor = _context()
         async with factory.begin() as session:

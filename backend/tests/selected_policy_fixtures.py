@@ -5,6 +5,8 @@ from types import SimpleNamespace
 
 from sqlalchemy import select
 
+from tests.checkers.external.support import pre_registry_spec, post_registry_spec
+
 
 async def approved_selected_policy_fixture(
     factory,
@@ -14,8 +16,8 @@ async def approved_selected_policy_fixture(
     contribution_awards=(),
     human_review_required=True,
     max_revision_rounds=2,
-    pre_submit_registry_spec=None,
-    post_submit_registry_spec=None,
+    pre_submit_registry_spec=pre_registry_spec(),
+    post_submit_registry_spec=post_registry_spec(),
     post_submit_configuration_setup=None,
     post_submit_configurations_setup=None,
     post_submit_specification=None,

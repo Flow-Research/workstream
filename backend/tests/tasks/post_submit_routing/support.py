@@ -8,26 +8,23 @@ from sqlalchemy import select, text
 
 from app.adapters.checkers import evaluation_coordinator
 from app.adapters.tasks import task_submission_context_port
-from app.api.deps.authorization import compose_hidden_submission_creation_command
 from app.core.identifiers import new_record_id
 from app.modules.actors.models import ActorIdentityLink
-from app.modules.artifacts.api import SubmissionBundlePreparationRequest
-from app.modules.authorization.api import ActorIdentityFacts, ActorKind
+from app.modules.artifacts.api.submission_intake import SubmissionIntakeMetadata
 from app.modules.checkers.models import CheckerRun
 from app.modules.projects.models import (
     ReviewPolicy,
 )
-from app.modules.tasks.api import SubmissionCreationRequest, TaskSubmissionContextRequest
+from app.modules.tasks.api import TaskSubmissionContextRequest
 from app.modules.tasks.api.post_submit_routing import TaskPostSubmitManifestFacts
 from app.modules.tasks.api.transition_audit import TaskPolicyLineage
 from app.modules.tasks.models import Submission, SubmissionDispatch, TaskAssignment, WorkstreamTask
 from tests.checkers.execution.support import live_executor, reserve
+from tests.checkers.external.support import post_registry_spec
 from tests.checkers.post_submit.support import change_request
-from tests.post_submit_materialization_helpers import material_fixture
+from tests.post_submit_materialization_helpers import material_fixture, create_source_submission
 from tests.tasks.lineage_fixtures import seed_started_task_for_artifact_test
-from tests.tasks.submission_lineage_support import _verified_admission
 from tests.test_artifact_admission import _context
-from tests.archive_fixtures import byte_source as _bytes
 
 
 SOURCE_COLUMNS = (
@@ -216,7 +213,7 @@ async def completed_source(
     contribution_awards=(),
     human_review_required=True,
     max_revision_rounds=2,
-    post_submit_registry_spec=None,
+    post_submit_registry_spec=post_registry_spec(),
 ):
     """Yield one real authorized allow-review run and its valid source scalars."""
     async with material_fixture(
@@ -253,51 +250,16 @@ async def _create_submission(h, context, task_id, assignment_id, predecessor_id=
             )
         )
         revision = current.revision_context
-    preparation = SubmissionBundlePreparationRequest(
-        actor=ActorIdentityFacts(
-            context.actor_profile_id,
-            context.identity_link_id,
-            ActorKind.HUMAN,
-        ),
-        request_id=context.request_id,
-        correlation_id=context.correlation_id,
-        task_id=task_id,
-        assignment_id=assignment_id,
-        predecessor_submission_id=predecessor_id,
-        revision_preparation_id=str(revision.preparation_id) if revision else None,
+    metadata = SubmissionIntakeMetadata(
+        task_id=task_id, assignment_id=assignment_id, predecessor_submission_id=predecessor_id,
+        revision_preparation_id=revision.preparation_id if revision else None,
         revision_preparation_sha256=revision.preparation_sha256 if revision else None,
-        idempotency_key=new_record_id(),
         summary=h.creation_request.summary,
         contributor_attestation=h.creation_request.contributor_attestation,
-        media_type="application/zip",
-        byte_source=_bytes(h.data),
     )
-    admission_id = await _verified_admission(
-        h.factory,
-        h.store,
-        h.namespace,
-        h.settings,
-        context,
-        preparation,
+    return await create_source_submission(
+        h.factory, context, h.store.wrapped, h.namespace, h.settings, metadata, h.data,
     )
-    async with h.factory() as session:
-        created = await compose_hidden_submission_creation_command(
-            session,
-            context,
-            request_id=new_record_id(),
-            correlation_id=new_record_id(),
-        ).create(
-            SubmissionCreationRequest(
-                task_id=task_id,
-                assignment_id=assignment_id,
-                contributor_id=context.actor_profile_id,
-                predecessor_submission_id=predecessor_id,
-                admission_id=admission_id,
-                summary=preparation.summary,
-                contributor_attestation=preparation.contributor_attestation,
-            )
-        )
-    return created
 
 
 async def completed_sibling_source(h):
