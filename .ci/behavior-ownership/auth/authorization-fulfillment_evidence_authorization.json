@@ -1,0 +1,15 @@
+{
+  "behavior_id": "finance.fulfillment.authorization.fulfillment_evidence_authorization",
+  "callables": [
+    "app.modules.authorization.fulfillment_evidence_authorization.FulfillmentEvidenceAuthorizationAdapter.__init__",
+    "app.modules.authorization.fulfillment_evidence_authorization.FulfillmentEvidenceAuthorizationAdapter.prepare",
+    "app.modules.authorization.fulfillment_evidence_authorization._PreparedEvidence.__init__",
+    "app.modules.authorization.fulfillment_evidence_authorization._PreparedEvidence.consume_new",
+    "app.modules.authorization.fulfillment_evidence_authorization._PreparedEvidence.validate_replay"
+  ],
+  "group": "auth",
+  "schema": "workstream.behavior-ownership.v1",
+  "status": "candidate",
+  "target": "backend/app/modules/authorization/fulfillment_evidence_authorization.py",
+  "unresolved_reason": "Unactivated receipt foundation: native transactional authority, storage/projection and public API operation proof remain required before reviewed ownership adoption."
+}

@@ -2809,3 +2809,25 @@ def test_fulfillment_root_partition_additions_are_exact():
             "backend/app/modules/compensation/fulfillment/other.py"])), trusted)
     with pytest.raises(ownership.BehaviorOwnershipError, match="untrusted_partition_change"):
         ownership._validate_additive_partition_transition(_partition(sorted(targets)), trusted)
+
+
+def test_fulfillment_evidence_partition_additions_are_exact():
+    """Receipt registration admits only the six real targets and retains every owner."""
+    targets = {
+        "backend/app/modules/authorization/domain/fulfillment_evidence.py",
+        "backend/app/modules/authorization/fulfillment_evidence_authorization.py",
+        "backend/app/modules/authorization/prepared_fulfillment_replay.py",
+        "backend/app/modules/compensation/api/fulfillment_evidence.py",
+        "backend/app/modules/compensation/fulfillment/evidence_models.py",
+        "backend/app/modules/compensation/fulfillment/projection.py",
+    }
+    assert ownership.FULFILLMENT_EVIDENCE_TARGETS == targets
+    retained = "backend/app/modules/tasks/revision/exhaustion.py"
+    trusted = _partition([retained])
+    ownership._validate_additive_partition_transition(_partition(sorted([retained, *targets])), trusted)
+    with pytest.raises(ownership.BehaviorOwnershipError, match="untrusted_partition_change"):
+        ownership._validate_additive_partition_transition(
+            _partition(sorted([retained, *targets, "backend/app/modules/authorization/unrelated.py"])), trusted,
+        )
+    with pytest.raises(ownership.BehaviorOwnershipError, match="untrusted_partition_change"):
+        ownership._validate_additive_partition_transition(_partition(sorted(targets)), trusted)

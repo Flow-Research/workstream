@@ -88,6 +88,14 @@ FULFILLMENT_ROOT_TARGETS = frozenset({
     "backend/app/modules/compensation/fulfillment/models.py",
     "backend/app/modules/compensation/fulfillment/service.py",
 })
+FULFILLMENT_EVIDENCE_TARGETS = frozenset({
+    "backend/app/modules/authorization/domain/fulfillment_evidence.py",
+    "backend/app/modules/authorization/fulfillment_evidence_authorization.py",
+    "backend/app/modules/authorization/prepared_fulfillment_replay.py",
+    "backend/app/modules/compensation/api/fulfillment_evidence.py",
+    "backend/app/modules/compensation/fulfillment/evidence_models.py",
+    "backend/app/modules/compensation/fulfillment/projection.py",
+})
 PILOT_08_REVISION_TARGETS = frozenset({
     "backend/app/modules/tasks/api/assignment_outcome.py",
     "backend/app/modules/tasks/post_submit_routing/terminal_replay.py",
@@ -1136,6 +1144,7 @@ def _validate_additive_partition_transition(
     approved_additions = (
         AUTH_BOUNDARY_FOUNDATION_TARGETS | TASK_CHECKER_CLEANUP_TARGETS
         | PILOT_08_REVISION_TARGETS | FINANCE_REWARD_TARGETS | FULFILLMENT_ROOT_TARGETS
+        | FULFILLMENT_EVIDENCE_TARGETS
         | PILOT_READ_1_TARGETS
         | AWS_ARTIFACT_ACTIVATION_TARGETS
         | AUTH_ART_OPERATOR_TARGETS

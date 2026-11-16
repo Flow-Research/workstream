@@ -914,6 +914,10 @@
     },
     {
       "group": "auth",
+      "target": "backend/app/modules/authorization/domain/fulfillment_evidence.py"
+    },
+    {
+      "group": "auth",
       "target": "backend/app/modules/authorization/domain/guide_activation.py"
     },
     {
@@ -1050,6 +1054,10 @@
     },
     {
       "group": "auth",
+      "target": "backend/app/modules/authorization/fulfillment_evidence_authorization.py"
+    },
+    {
+      "group": "auth",
       "target": "backend/app/modules/authorization/guide_activation_authorization.py"
     },
     {
@@ -1147,6 +1155,10 @@
     {
       "group": "auth",
       "target": "backend/app/modules/authorization/prepared_checker_retry_replay.py"
+    },
+    {
+      "group": "auth",
+      "target": "backend/app/modules/authorization/prepared_fulfillment_replay.py"
     },
     {
       "group": "auth",
@@ -1450,6 +1462,10 @@
     },
     {
       "group": "shared",
+      "target": "backend/app/modules/compensation/api/fulfillment_evidence.py"
+    },
+    {
+      "group": "shared",
       "target": "backend/app/modules/compensation/api/instruments.py"
     },
     {
@@ -1470,7 +1486,15 @@
     },
     {
       "group": "shared",
+      "target": "backend/app/modules/compensation/fulfillment/evidence_models.py"
+    },
+    {
+      "group": "shared",
       "target": "backend/app/modules/compensation/fulfillment/models.py"
+    },
+    {
+      "group": "lifecycle",
+      "target": "backend/app/modules/compensation/fulfillment/projection.py"
     },
     {
       "group": "shared",
@@ -2613,7 +2637,7 @@
       "target": "backend/scripts/validate_test_lane_evidence.py"
     }
   ],
-  "authority_digest": "a3fe04a7a274894783d5aabcf9aff3a19a1839e093a58f28d860b89ace4f5c22",
+  "authority_digest": "e86e86b9337829d06e8ed14504c186522b9157e4f4be3f9a782025587430f885",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }

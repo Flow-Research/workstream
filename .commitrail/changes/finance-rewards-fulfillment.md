@@ -1864,3 +1864,18 @@ Update the affected existing invalidation binding consumer to the new exact
 caller-input/scope/context signature; there is no fallback signature. DOC-AUTH-
 WIRING-001 corrects the remaining current data-model no-matrix claim and current
 AUTH terminology; historically qualified CP03A evidence is retained.
+
+CI-AUTH-WIRING-003 was the newly reached exact partition-target gate, not a
+runtime defect. Register only the six new receipt targets through the existing
+explicit additive mechanism, preserving the protected base, every prior target/
+group and the authority digest rule. Add an independent exact-set test rejecting
+an adjacent target and removal of a retained owner. Pure domain/replay ownership
+names the actual tested nodes; adapter/API/projection records remain candidates
+because native operation proof is pending. The ORM declaration target has no AST
+callable and executable metadata effects: retain it explicitly unresolved rather
+than fabricating a reviewed callable or structural-only exemption. No eligibility,
+validation, completeness or authority rule is weakened.
+Exacte99886e native routing/PREP module passed9 cases in326.00s with complete
+PostgreSQL/MinIO cleanup. Its259 pure/CI/docs controls passed in60.94s; module and
+structure validators pass. Behavior partition/ownership repair is metadata-only;
+reconcile it on the next clean target with original execution provenance intact.

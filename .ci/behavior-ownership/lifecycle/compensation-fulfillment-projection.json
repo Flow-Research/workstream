@@ -1,0 +1,12 @@
+{
+  "behavior_id": "finance.fulfillment.compensation.fulfillment.projection",
+  "callables": [
+    "app.modules.compensation.fulfillment.projection.CompensationStatusReader.__init__",
+    "app.modules.compensation.fulfillment.projection.CompensationStatusReader.read"
+  ],
+  "group": "lifecycle",
+  "schema": "workstream.behavior-ownership.v1",
+  "status": "candidate",
+  "target": "backend/app/modules/compensation/fulfillment/projection.py",
+  "unresolved_reason": "Unactivated receipt foundation: native transactional authority, storage/projection and public API operation proof remain required before reviewed ownership adoption."
+}

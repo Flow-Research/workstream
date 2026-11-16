@@ -1,0 +1,32 @@
+{
+  "behavior_id": "finance.fulfillment.authorization.domain.fulfillment_evidence",
+  "boundaries": [],
+  "callables": [
+    "app.modules.authorization.domain.fulfillment_evidence.FulfillmentExceptionResourceContext.exact_target",
+    "app.modules.authorization.domain.fulfillment_evidence.FulfillmentReportLookupResourceContext.exact_target",
+    "app.modules.authorization.domain.fulfillment_evidence.FulfillmentReportResourceContext.exact_target",
+    "app.modules.authorization.domain.fulfillment_evidence.FulfillmentSourceReadResourceContext.exact_target",
+    "app.modules.authorization.domain.fulfillment_evidence._exact_target",
+    "app.modules.authorization.domain.fulfillment_evidence.fulfillment_evidence_action_matches",
+    "app.modules.authorization.domain.fulfillment_evidence.fulfillment_evidence_principal_matches",
+    "app.modules.authorization.domain.fulfillment_evidence.fulfillment_evidence_resource",
+    "app.modules.authorization.domain.fulfillment_evidence.fulfillment_evidence_resource_digest",
+    "app.modules.authorization.domain.fulfillment_evidence.parse_fulfillment_evidence_binding"
+  ],
+  "group": "auth",
+  "outcomes": [
+    "return",
+    "mapped_error"
+  ],
+  "reviewed_by": [
+    "Finance receipt AUTH focused internal review at e99886e99"
+  ],
+  "schema": "workstream.behavior-ownership.v1",
+  "status": "reviewed",
+  "target": "backend/app/modules/authorization/domain/fulfillment_evidence.py",
+  "tests": [
+    "backend/tests/authorization/test_fulfillment_evidence_contracts.py::test_fulfillment_authority_requires_exact_action_source_and_principal",
+    "backend/tests/authorization/test_fulfillment_evidence_contracts.py::test_source_and_lookup_equal_target_ids_never_share_authority",
+    "backend/tests/authorization/test_fulfillment_evidence_contracts.py::test_prepared_fulfillment_request_rejects_principal_operation_and_scope_changes"
+  ]
+}
