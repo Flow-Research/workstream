@@ -5026,3 +5026,27 @@ required ARCH/SEC, QA/test-delta and DOCS/CI review, with exact committed-head
 regression to cover all three T5 cases after the fixture correction. CLI/MCP
 progress commands, other governed outcomes, historical/new-revision concealment,
 old runtime removal and full acceptance/qualification remain open.
+
+### Frozen public-reader review closure
+
+Code checkpoint0e45c371eb24f8909e7e88aaa05d8af6d6a54af7 has exact-head proof:
+- /tmp/submission-progress-frozen-0e45.log/json:11passed231.52s (threeT5,
+  sevenlive-authority selections, oneTASK visibility/context),0081,cleanuptrue.
+- /tmp/submission-public-frozen-0e45.log/json:2passed61.32s (small accepted and
+  QC-rejected public ZIP/progress flows),0081,cleanuptrue.
+- /tmp/submission-progress-architecture-full.log:92passed245.83s.
+Ruff, diff, module-boundary and Commitrail checks passed. Remote fetch confirms
+no missing origin/main commits. PR708 remains the only draft PR.
+
+ARCH/SEC code review, QA/test-delta and DOCS/CI reviews closed with no required
+repairs on clean0e45. QA independently proved the mounted error test detects a
+503-to409 mutation and that PRE feedback rejects metadata/actor/key/task/assignment/
+source substitutions (/tmp/submission-progress-read-qa-error-mutant.log and
+/tmp/submission-progress-read-qa-feedback-probe.log). DOCS/CI inventory mutants
+reject absent GET/security, wrong manager action and an extra public route
+(/tmp/submission-progress-read-docs-ci-adversarial.json). These are scoped review
+verdicts; earlier native failures and remaining full-goal requirements persist.
+This evidence-only follow-up does not change the reviewed production/test code.
+Next work: client progress commands and pending task/work-context projection,
+real historical/reassignment/new-revision and remaining governed outcome proof,
+obsolete runtime/consumer cleanup, full CI and A01-A35/C01-C07 qualification.
