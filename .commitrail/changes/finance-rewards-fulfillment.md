@@ -2086,3 +2086,25 @@ NullPool connection, disposed within its async loop, rather than leaking a
 global pooled connection into synchronous fixture teardown. Prior failure and
 loop-close diagnostics remain evidence, not an overall pass. All owned cleanup
 completed; the two migration cases were not reached because -x stopped here.
+
+
+Exact5eecb3aff passed all3 native vocabulary/migration cases in305.48s. The
+vocabulary probe checks four supported action/resource combinations through
+all four actual native predicates and rejects unknown token, mismatched pair
+and extra-facts substitutions without inserting audit/product rows. Both real
+0072 upgrades retain empty/repeatable and pending earning/source/root/OUTBOX/
+AUTH/control/history physical and logical evidence, including active-phase
+refusal. PostgreSQL/MinIO cleanup is confirmed. Eight schema/model/fixture/REV
+source files match integrated3adc5d0 byte-for-byte; this is an explicit source
+bridge, not a combined-root native execution claim. Actual canonical AUTH plus
+receipt append, clock/ordinal/isolation/contention/replay and public API proof
+remain pending.
+
+Exact3adc5d0 shared checks passed module boundaries against actual main, test
+structure, behavior ownership,274 focused pure/failure-boundary tests in10.62s,
+Markdown links, stale wording, Commitrail and reviewer-contract validation.
+The full-PR whitespace check additionally found original Markdown hard-break
+spaces and excess final blank lines in the specification/current clock fixture.
+Preserve those line breaks as separate Markdown paragraphs and remove only
+excess EOF whitespace; no specification value, test assertion or runtime logic
+changes. Keep the complete Finance objective Planned and PR draft.

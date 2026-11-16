@@ -48,4 +48,3 @@ async def source_window_clock(session, window_seconds):
         assert await session.scalar(text(
             "SELECT count(*) FROM pg_trigger WHERE NOT tgisinternal AND tgenabled='D'"
         )) == 0
-

@@ -628,8 +628,10 @@ Use mounted secret files for issuer clients, Paystack credentials and encryption
 
 ### 9.1 Durable obligation admission
 
-**Route:** PUT /api/v1/finance/workstream/obligations/{award_id}  
-**Caller:** Exact provisioned `workstream.compensation.fulfillment_executor` with `workstream:service`; prepared AUTH action `finance.obligation.admit`.  
+**Route:** PUT /api/v1/finance/workstream/obligations/{award_id}
+
+**Caller:** Exact provisioned `workstream.compensation.fulfillment_executor` with `workstream:service`; prepared AUTH action `finance.obligation.admit`.
+
 **Idempotency-Key:** Exact award_id.
 
 The body is a closed object with every field below present. Nullable fields must be explicit null.
@@ -689,7 +691,8 @@ The unique database key is (source_instance_id, award_id), not an HTTP request I
 
 ### 9.2 Status and recovery
 
-**Route:** GET /api/v1/finance/workstream/obligations/{award_id}  
+**Route:** GET /api/v1/finance/workstream/obligations/{award_id}
+
 **Caller:** Same exact compensation-executor identity and source with `workstream:service`; prepared AUTH action `finance.obligation.read`.
 
 Response fields are contract_version, source_instance_id, award_id, obligation_id, obligation_digest, processing_status, block_reason, latest_report, latest_report_digest, fulfillment_exception, fulfillment_exception_digest and updated_at. Every field is present.
@@ -757,8 +760,10 @@ Validate acknowledgements against source, award, obligation digest and closed sc
 
 ### 10.1 Fulfillment reports
 
-**Route:** POST /api/v1/compensation/awards/{award_id}/fulfillment-reports  
-**Caller:** Exact provisioned COMPENSATION_ADAPTER service principal.  
+**Route:** POST /api/v1/compensation/awards/{award_id}/fulfillment-reports
+
+**Caller:** Exact provisioned COMPENSATION_ADAPTER service principal.
+
 **Action:** compensation.fulfillment.report.
 
 All body fields are required:
@@ -813,14 +818,16 @@ Callback-before-delivery-ack is valid: the Workstream award/root already exists 
 
 ### 10.2 Exact event lookup
 
-**Route:** GET /api/v1/compensation/awards/{award_id}/fulfillment-reports/{external_event_id}  
+**Route:** GET /api/v1/compensation/awards/{award_id}/fulfillment-reports/{external_event_id}
+
 **Action:** compensation.fulfillment.source.read.
 
 Only the original bound service may read this operational receipt identity. Return the exact receipt acknowledgement plus normalized report fields; 404 means that exact event is not recorded. This supports callback-response-loss recovery. Do not expose these provider/event identifiers on contributor/product reads.
 
 ### 10.3 Independent source evidence
 
-**Route:** GET /api/v1/compensation/awards/{award_id}/finance-evidence  
+**Route:** GET /api/v1/compensation/awards/{award_id}/finance-evidence
+
 **Action:** compensation.fulfillment.source.read.
 
 Require an existing admitted root and the exact original service binding. Return:
@@ -839,7 +846,8 @@ This service route is a bounded operational read. It grants no task/award creati
 
 ### 10.4 Post-fulfillment exceptions
 
-**Route:** POST /api/v1/compensation/awards/{award_id}/fulfillment-exceptions  
+**Route:** POST /api/v1/compensation/awards/{award_id}/fulfillment-exceptions
+
 **Action:** compensation.fulfillment.exception.report.
 
 Closed body:
@@ -1399,7 +1407,8 @@ The same stored event may be retried after token/signature rotation. Current aut
 
 ### 15.1 Finance quote
 
-**Route:** GET /api/v1/finance/workstream/equivalents  
+**Route:** GET /api/v1/finance/workstream/equivalents
+
 **Caller:** Exact compensation executor with `workstream:service` and prepared AUTH action `finance.equivalent.read`.
 
 Required query fields: source_instance_id, project_id, adapter_binding_id, unit_code and points_quantity. The binding must be a project_points binding. points_quantity is a positive canonical whole-number string.
@@ -2070,5 +2079,3 @@ Preserve historical drill reports and business evidence. Correct stale current s
 Read this document and the current repository owners before implementation. Treat the field shapes, ownership rules, state transitions, selected defaults and acceptance cases as one contract. Implement through the existing Workstream operations and the dedicated Finance module and the shared platform owners specified here. Do not silently relax authority, substitute latest-policy economics, duplicate awards, alter historical evidence or reinterpret a timeout as permission to pay again.
 
 Real project configuration and live credentials are supplied through the defined setup path. If an external prerequisite or retained-data guard blocks a live step, complete and verify the code with explicit test fixtures, identify the exact blocked deployment input, and do not fabricate completion.
-
-
