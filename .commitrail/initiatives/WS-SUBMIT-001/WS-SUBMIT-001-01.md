@@ -5208,3 +5208,11 @@ changed-packet409, both progress selectors, zero-before/one-after Submission,
 retained raw digest/size, history/findings/own-work, same/foreign project404 and
 suspension/revocation404. Production OUTBOX handler performs T5; actual broker,
 POST execution and native/provider qualification are not claimed by this drill.
+
+ARCH/SEC and QA/test-delta close the fae1d4dce drill with no required repairs;
+QA independently confirms the zero/one manager guard and unchanged socket helper.
+Both preserve the worktree evidence provenance and broader goal limits.
+CI4346 preflight now passes structure but finds one unused dataclasses.asdict
+import in backend/tests/test_authorization.py, left by removed-route migration.
+Extend the repair scope to removing only that unused import; no test behavior or
+production code changes. Verify the full backend Ruff gate before the same-PR push.

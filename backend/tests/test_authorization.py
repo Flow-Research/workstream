@@ -38,7 +38,7 @@ import base64
 import copy
 from collections import UserDict
 from collections.abc import Iterator, Mapping
-from dataclasses import asdict, replace
+from dataclasses import replace
 from datetime import UTC, datetime
 import inspect
 import hashlib
