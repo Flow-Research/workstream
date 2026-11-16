@@ -12,7 +12,6 @@ from contextlib import contextmanager, nullcontext
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from io import BytesIO
-import json
 from pathlib import Path
 from types import SimpleNamespace
 from typing import cast
@@ -173,7 +172,10 @@ def _selected_admission_reservation():
 
 def test_revision_acknowledgement_changes_selected_request_and_retains_old_bytes() -> None:
     """A new acknowledgement is frozen; old selected requests keep their digest."""
-    _, _, retained = _selected_admission_reservation()
+    from tests.checkers.external.test_selected_pre_submit_coordination import _source_reservation
+    from app.modules.checkers.api.default_checker import WorkstreamDefaultPredecessor
+
+    retained = _source_reservation()
     old_body = retained.canonical_body()
     assert SelectedPreSubmitReservationFacts.from_canonical_body(old_body, source_contracts=selected_pre_submit_source_contracts()).canonical_body() == old_body
     assert "revision_preparation_id" not in old_body["admission_lineage"]
@@ -189,7 +191,14 @@ def test_revision_acknowledgement_changes_selected_request_and_retains_old_bytes
         revision_preparation_id=preparation_id,
         revision_preparation_sha256=_hex_sha("b"),
     )
-    selected = replace(retained, admission_lineage=acknowledged)
+    predecessor = WorkstreamDefaultPredecessor(predecessor_id, 1, retained.source.raw_sha256, SHA)
+    selected = replace(retained, admission_lineage=acknowledged,
+        default_context=replace(retained.default_context, predecessor=predecessor,
+            current_predecessor=predecessor, predecessor_exists=True,
+            predecessor_rules_sha256=retained.default_context.current_rules_sha256),
+        source_contracts=selected_pre_submit_source_contracts())
+    assert retained.canonical_body() == old_body
+    assert selected.request_digest != retained.request_digest
     body = selected.canonical_body()
     assert body["admission_lineage"]["revision_preparation_id"] == str(preparation_id)
     assert body["admission_lineage"]["revision_preparation_sha256"] == _hex_sha("b")
@@ -972,107 +981,95 @@ async def test_selected_pre_default_secret_blocker_precedes_external_image(
 
 
 @pytest.mark.asyncio
-async def test_selected_admission_binds_unchanged_work_to_current_task_rules(
-    tmp_path,
-) -> None:
-    request, _inspector, manager, _preparation = await _request(tmp_path)
+async def test_selected_admission_binds_unchanged_work_to_current_task_rules() -> None:
+    """Bind prior content/rules before inspection, then derive unchanged input in PRE."""
+    from app.modules.artifacts.api.submission_intake import SubmissionIntakeMetadata
+    from app.modules.checkers.api.selected_pre_submit import derive_selected_pre_submit_default_input
+    from tests.checkers.external.test_selected_pre_submit_coordination import (
+        _source_reservation, _source_guard, _source_completed_execution,
+    )
+
+    original = _source_reservation()
+    derived = _source_completed_execution(original)
     policies = _policies()
-    project_id = request.selected_reservation.project_id
-    actor_profile_id = new_record_id()
-    identity_link_id = new_record_id()
-    assignment_id = new_record_id()
-    guide_id = new_record_id()
-    source_snapshot_id = new_record_id()
-    effective_policy_id = new_record_id()
-    pre_submit_policy_id = new_record_id()
+    lineage = original.admission_lineage
     predecessor = SubmissionCanonicalPredecessor(
-        submission_id=new_record_id(),
-        submission_version=1,
-        archive_sha256=request.prepared_artifact.commitment.sha256,
-        semantic_manifest_sha256=request.manifest.sha256,
+        submission_id=new_record_id(), submission_version=1,
+        archive_sha256=original.source.raw_sha256,
+        semantic_manifest_sha256=derived.manifest_sha256,
+    )
+    references = SimpleNamespace(
+        project_id=original.project_id, guide_version=lineage.guide_version,
+        source_snapshot_id=lineage.source_snapshot_id, source_snapshot_hash=lineage.source_snapshot_sha256,
+        effective_policy_id=lineage.effective_policy_id, effective_policy_hash=lineage.effective_policy_sha256,
+        pre_submit_policy_id=lineage.pre_submit_policy_id, pre_submit_policy_bundle_hash=lineage.pre_submit_policy_sha256,
     )
     task = SimpleNamespace(
-        contributor_id=actor_profile_id,
-        task_id=request.task_id,
-        assignment_id=assignment_id,
-        checker_remediation_manifest_id=new_record_id(),
+        contributor_id=original.actor_profile_id, task_id=original.task_id,
+        assignment_id=original.assignment_id, checker_remediation_manifest_id=new_record_id(),
         revision_context=SimpleNamespace(preparation_id=new_record_id(), preparation_sha256=SHA),
-        predecessor=SimpleNamespace(
-            submission_id=predecessor.submission_id,
-            version=predecessor.submission_version,
-        ),
-        locked_project_context=SimpleNamespace(project_id=project_id),
-        locked_policy=SimpleNamespace(
-            model_dump=lambda **_kwargs: {
-                "locked_guide_version": "v1",
-                "locked_pre_submit_checker_bundle_hash": SHA,
-            }
-        ),
+        predecessor=SimpleNamespace(submission_id=predecessor.submission_id, version=1),
+        locked_project_context=references,
+        locked_policy=SimpleNamespace(model_dump=lambda **kwargs: {
+            "locked_guide_version": lineage.guide_version, "locked_pre_submit_checker_bundle_hash": SHA,
+        }),
     )
-    project = SimpleNamespace(
-        project_id=project_id,
-        guide_id=guide_id,
-        guide_version="v1",
-        source_snapshot_id=source_snapshot_id,
-        source_snapshot_hash=SHA,
-        effective_policy_id=effective_policy_id,
-        effective_policy_hash=SHA,
-        pre_submit_policy_id=pre_submit_policy_id,
-        pre_submit_policy_bundle_hash=SHA,
-        external_checker_policies=SimpleNamespace(
-            value=json.dumps(
-                policies.model_dump(mode="json"),
-                sort_keys=True,
-                separators=(",", ":"),
-            )
-        ),
+    project = SimpleNamespace(**vars(references), guide_id=lineage.guide_id,
+        external_checker_policies=SimpleNamespace(value=policies.model_dump_json()))
+    packet = original.default_context.packet
+    metadata = SubmissionIntakeMetadata(
+        task_id=task.task_id, assignment_id=task.assignment_id,
+        predecessor_submission_id=predecessor.submission_id,
+        summary=packet.summary, contributor_attestation=packet.contributor_attestation,
+        revision_preparation_id=task.revision_context.preparation_id,
+        revision_preparation_sha256=task.revision_context.preparation_sha256,
     )
-    try:
-        bound = bind_selected_pre_submit_admission(
-            task=task,
-            project=project,
-            commitment=request.prepared_artifact.commitment,
-            manifest=request.manifest,
-            predecessor=predecessor,
-            predecessor_rules_sha256="sha256:" + "d" * 64,
-            predecessor_exists=True,
-            packet=request.packet,
-        )
-        assert bound.change_gate.outcome.value == "unchanged"
-        assert bound.default_input.predecessor is not None
-        assert bound.default_input.predecessor_rules_sha256 == "sha256:" + "d" * 64
-        assert bound.default_input.current_rules_sha256 == bound.rules_sha256
-        assert bound.policy.policy_sha256 == policies.pre_submit.policy_sha256
-        reservation = build_selected_pre_submit_reservation(
-            actor_profile_id=actor_profile_id,
-            identity_link_id=identity_link_id,
-            task=task,
-            project=project,
-            prepared_generation_id=request.prepared_artifact.generation_id,
-            attempt_id=new_record_id(),
-            idempotency_key=new_record_id(),
-            attempt_request_digest=SHA,
-            commitment=request.prepared_artifact.commitment,
-            manifest=request.manifest,
-            packet=request.packet,
-            selected=bound,
-            storage_scheme="s3",
-            execution_budget_ms=120_000,
-        )
-        assert reservation.admission_lineage is not None
-        assert reservation.admission_lineage.semantic_manifest_body == (request.manifest.as_dict())
-        assert reservation.admission_lineage.packet_sha256 == request.packet.sha256
-        assert reservation.admission_lineage.revision_preparation_id == task.revision_context.preparation_id
-        assert reservation.admission_lineage.revision_preparation_sha256 == task.revision_context.preparation_sha256
-        assert reservation.admission_lineage.checker_remediation_manifest_id == (
-            task.checker_remediation_manifest_id
-        )
-        assert reservation.admission_lineage.predecessor_submission_id == (
-            predecessor.submission_id
-        )
-    finally:
-        await request.prepared_artifact.close()
-        manager.close()
+    source = _source_guard(original).lock_pre_source.return_value.model_copy(update={
+        "metadata_sha256": metadata.metadata_sha256(),
+    })
+    bound = bind_selected_pre_submit_admission(
+        task=task, project=project, predecessor=predecessor,
+        predecessor_rules_sha256="sha256:" + "d" * 64, predecessor_exists=True, packet=packet,
+    )
+    assert bound.default_context.predecessor.submission_id == predecessor.submission_id
+    assert bound.default_context.predecessor_rules_sha256 == "sha256:" + "d" * 64
+    assert bound.default_context.current_rules_sha256 == bound.rules_sha256
+    assert bound.policy.policy_sha256 == policies.pre_submit.policy_sha256
+    reservation = build_selected_pre_submit_reservation(
+        source=source, metadata=metadata, task=task, project=project,
+        attempt_id=new_record_id(), idempotency_key=new_record_id(), selected=bound,
+        runtime_profile=original.runtime_profile,
+    )
+    assert "semantic_manifest_body" not in reservation.admission_lineage.canonical_body()
+    assert reservation.admission_lineage.packet_sha256 == packet.sha256
+    assert reservation.admission_lineage.revision_preparation_id == task.revision_context.preparation_id
+    assert reservation.admission_lineage.revision_preparation_sha256 == task.revision_context.preparation_sha256
+    assert reservation.admission_lineage.checker_remediation_manifest_id == task.checker_remediation_manifest_id
+    assert reservation.admission_lineage.predecessor_submission_id == predecessor.submission_id
+    lease = SelectedPreSubmitLeaseFacts(reservation, new_record_id(), 1, reservation.pre_deadline_at)
+    default_input = derive_selected_pre_submit_default_input(
+        lease, manifest_body=derived.manifest_body, manifest_sha256=derived.manifest_sha256,
+        source_contracts=selected_pre_submit_source_contracts(),
+    )
+    from app.modules.artifacts.sources import ArtifactCommitment
+    from app.modules.artifacts.api.submission_manifest import SubmissionManifest
+    from app.modules.artifacts.submission_manifest import bind_submission_change
+
+    comparison = bind_submission_change(
+        commitment=ArtifactCommitment(default_input.archive_sha256, default_input.archive_byte_count,
+                                      default_input.archive_media_type),
+        manifest=SubmissionManifest.from_dict(derived.manifest_body, sha256=default_input.semantic_manifest_sha256),
+        predecessor=predecessor, predecessor_exists=default_input.predecessor_exists,
+        current_predecessor=predecessor,
+    )
+    assert comparison.outcome.value == "unchanged"
+    assert default_input.current_rules_sha256 == bound.rules_sha256
+    assert default_input.predecessor_rules_sha256 == "sha256:" + "d" * 64
+    from app.modules.checkers.default_checker import _change_failure
+
+    assert _change_failure(default_input) is None
+    assert _change_failure(replace(default_input,
+        predecessor_rules_sha256=default_input.current_rules_sha256)) == "submission_archive_unchanged"
 
 
 @pytest.mark.asyncio

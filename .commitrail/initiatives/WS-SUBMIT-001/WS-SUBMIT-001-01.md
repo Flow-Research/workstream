@@ -6584,3 +6584,27 @@ Final binding structural validator terminal0. Scoped tests/review/record checks
 complete; commit current accepted-operation fixture and guards without claiming
 live database source validation or full-spec readiness. No local test run remains
 active from model/retry/material/binding batch.
+
+Current PRE builder scope: tests/checkers/external/test_selected_pre_submit.py,
+only revision acknowledgement request digest and current policy/predecessor binding
+tests. Replace retired prepared archive fixture with sealed source reservation,
+metadata and explicit contract dependency; preserve ack completeness/digest, exact
+predecessor/rules/packet and revision lineage assertions. Derived manifest supplied
+only after reservation through guest-default derivation, never admission metadata.
+Retained publisher tests/helpers remain untouched pending checksum-bound historical
+fixture migration. Medium lineage proof risk: targeted tests, Ruff/structure and QA.
+No production path/schema changes, fake authority grant or compatibility alias.
+
+Builder v1 targeted2pass1fail: current default input has no change_gate property.
+Repair uses actual bind_submission_change over typed derived commitment/manifest;
+assert intrinsic unchanged outcome. Supplemental pure current default gate confirms
+changedrules allow and samerules refuse identicalarchive; no secret/byteproof claim.
+Final targeted3pass11deselected0.75s; v2comparison-only also3pass1.69s. Ruff/structure/
+record/whitespace pass. Historical publisher/old processor consumers remain explicitly
+unmigrated; this is not a whole-module/full-spec completion claim. QA closure pending.
+
+QA-BUILDER001 closed: exact tests detect ignored acknowledgement fields, removed
+changedrules exception and unconditional unchanged acceptance; other test/helper
+ASTs unchanged (/tmp/submission-current-builders-qa-probe.log). No scoped findings.
+Fresh origin/main fetch has0missing main commits (190ahead beforethiscommit).
+Same draftPR708; no broad CI or retained publisher completion claim.
