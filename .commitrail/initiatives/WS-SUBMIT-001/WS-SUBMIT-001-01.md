@@ -6698,3 +6698,63 @@ Frozen binding public v2 terminal0:1passed75.71s, database/MinIO cleanup complet
 durable T5, retained history and accepted replay remain valid with the final guard
 and dead-branch cleanup. No code changes after this run; final reviewer closure
 requested on these results. Same single draft PR708; full goal remains active.
+
+Database consumption cutover scope: new0084 migration, focused migration test and
+checksum-bound ready/consumed predecessor fixtures with observation-only capture
+recipe, current schema fingerprint and exact test-lane registration if needed.
+The ART application guard alone does not prevent an old ready admission from a
+direct database ready-to-consumed transition. Add a guarded SQL refusal for rows
+without source_operation_id; preserve consumed historical rows and ready-to-stale
+owner transitions. No automatic submissions, row deletion, receipt rewrites or
+generic producer changes. High lifecycle/schema risk, ARCH/QA required. Proof:
+capture real old ready and consumed states through pinned owners, upgrade both
+without changing retained evidence, reject old consumption with exact guard error,
+allow staling, and retain current public source T5. Verify schema fingerprint
+delta and CI registration without weakening either gate. TASK old API removal is
+being traced independently; this database change is not full cutover completion.
+
+QA-SQL-BIND002: real split0083->0084 upgrade refused by stale env.py supported
+revision list (still0081), before exercising newguard. Expand scope to env.py:
+admit exact0081/0082/0083 predecessors and0084head, preserving unknown stamps.
+Migration proof will traverse0082->0083->0084 and repeathead upgrade; rerun existing
+unknown-stamp refusal. Do not infer schema fingerprint from preflight refusal.
+QA-SQL-BIND001: raw ready update alone may lack later Submission/FK receipts.
+It proves exactnewguard/order only; stronger pinned-old-writer control is running
+at0083(success) and0084(exactrefusal/all-table rollback) in isolatedoldcode process.
+
+Fresh0084 schema measurement (separate isolated read-only diagnostic, not the
+failedupgrade) yields e028a3b353a8112bddd77309722cd0dd69e6fe0c871dfa00c50f6da88651a90b.
+Update tests/conftest.py exactexpected fingerprint; retain its full assertion.
+The migration suite must still prove only the intended public function changed
+and no captured rows changed. V2 adds explicit0082->0083->0084 and current-head
+no-op upgrade plus existing unknown0030 stamp refusal. These runs are pending.
+
+Pinned old-writer control terminal0:2passed233.74s with complete cleanup
+(/tmp/submission-source-binding-old-writer-v1.json). Production owner code is
+e2b926288; only current0066..0084 migration files were copied into its isolated
+checkout. The observed test recipe is retained as pre_cutover_writer_proof.py.txt,
+not installed as a current compatibility writer. Each case creates genuine0065
+ready custody, upgrades schema, then calls the unchanged old composed command:
+0083 commits one Submission and consumed admission;0084 raises the exact new
+source-custody guard error and preserves every public table row. This supplies
+the otherwise-valid transaction control missing from the raw UPDATE assertion.
+Current migration-v2 and public0084T5 tests remain live; no readiness claim yet.
+
+Migration v2 terminal0:3passed321.59s with complete cleanup. Captured ready/consumed
+graphs survive unchanged; only guard_submission_bundle_admission_lineage changes.
+Split0082/0083/0084 and repeatedhead upgrades succeed; unknown0030 stamp remains
+rejected without mutation, closing QA-SQL-BIND002. Current public0084 T5/replay
+passed59.25s and full cleanup; canonical schema assertion remains enabled.
+QA-SQL-BIND001 closed by the genuine old-writer control, not the raw SQL probe.
+QA-SQL-BIND003 adds actual writer serialization to ready case: hold ROW EXCLUSIVE,
+observe waiting ACCESS EXCLUSIVE, then release and require completed upgrade.
+Final ready-case run and independent omitted-lock mutation remain pending.
+
+Final0084 ready lock case passed248.03s with complete cleanup. The independent
+copy with only0084 LOCK removed fails exactly "source binding cutover did not
+wait for the old writer" (238.93s), also with complete cleanup. No current files
+were changed by the probe. Structural validator, Ruff, record and whitespace
+checks pass; ARCH/SEC scoped PASS. QA-SQL-BIND001/002/003 evidence now complete.
+This closes the A33 admission-transition portion, not physical-provider/history
+qualification or full operational cutover. TASK old command, ART old publisher
+and preparation retirement remain next; keep full A01-A35/C01-C07 goal active.
