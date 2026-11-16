@@ -1603,3 +1603,13 @@ Risk L1 proof integrity; required native proof covers affected migrations,
 named current projection/repair cases. Both assigned reviewer groups inspect
 clean implementation/evidence. No capability-ledger delta: synthetic migration
 proof only; full backend/Finance/public HTTP/provider qualification remains open.
+
+The structural checker identified that the approved immutable snapshot extension
+made the current replacement test126lines against its existing120line limit.
+Its before/after SQL was duplicated. Use one cohesive exact-source projection
+helper for both reads, preserving byte-identical SQL, all six immutable values,
+non-null source assertion and exact before/after equality. No limit/ledger/check
+change or assertion removal. The helper removes actual repeated query text; it
+adds no generic fixture framework. Run both current replacement branches on the
+clean correction and replay the structural checker. The original8fad nineteen-case
+native run remains isolated and keeps its own source attribution.
