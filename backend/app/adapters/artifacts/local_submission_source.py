@@ -25,8 +25,8 @@ from app.modules.artifacts.api.submission_intake import (
 )
 
 _METADATA_LIMIT = 256 * 1024
-_TEMP = re.compile(r"^\.(?:upload|seal|aborted)\.[0-9a-f]{32}\.tmp$")
-_FILES = frozenset({"upload.json", "seal.json", "aborted.json", "bundle.zip"})
+_TEMP = re.compile(r"^\.(?:upload|seal|aborted|deleted)\.[0-9a-f]{32}\.tmp$")
+_FILES = frozenset({"upload.json", "seal.json", "aborted.json", "deleted.json", "bundle.zip"})
 
 
 class LocalSubmissionSource:
@@ -324,11 +324,59 @@ class LocalSubmissionSource:
         try:
             with self.locked(upload.intent.location) as directory:
                 self.upload(directory, upload)
+                if self.exists(directory, "deleted.json"):
+                    completion, sealed = self.seal(directory)
+                    if (completion.upload != upload
+                            or json.loads(self.read(directory, "deleted.json")) != sealed.model_dump(mode="json")):
+                        raise ArtifactIntegrityError("submission source deletion identity mismatch")
+                    return not self.exists(directory, "bundle.zip")
                 return (self.exists(directory, "aborted.json")
                         and not self.exists(directory, "bundle.zip"))
         except FileNotFoundError:
             # A missing metadata file is not proof the staging bytes are gone.
             return False
+
+    def delete_sealed(self, source: SealedSubmissionSource, upload: SubmissionSourceUpload) -> None:
+        """Private cleanup primitive; caller must hold committed cleanup authority.
+
+        Preserve all provenance and a durable tombstone before removing bytes.
+        The operation lock settles local writers; the open descriptor pins the
+        generation until unlink completes. Missing bytes without our tombstone
+        are an integrity failure, not evidence of successful cleanup.
+        """
+        source = SealedSubmissionSource.model_validate(source)
+        upload = SubmissionSourceUpload.model_validate(upload)
+        with self.locked(source.location) as directory:
+            completion, sealed = self.seal(directory)
+            self.upload(directory, completion.upload)
+            if sealed != source or completion.upload != upload:
+                raise ArtifactIntegrityError("submission source seal mismatch")
+            tombstone = source.model_dump(mode="json")
+            deleted = self.exists(directory, "deleted.json")
+            if deleted and json.loads(self.read(directory, "deleted.json")) != tombstone:
+                raise ArtifactIntegrityError("submission source deletion identity mismatch")
+            try:
+                descriptor = os.open("bundle.zip", os.O_RDONLY | os.O_NOFOLLOW, dir_fd=directory)
+            except FileNotFoundError:
+                if not deleted:
+                    raise ArtifactIntegrityError("submission source disappeared before cleanup") from None
+                os.fsync(directory)
+                return
+            try:
+                info = self.store._assert_private_regular(descriptor)
+                if (self.source(completion, info) != source
+                        or info.st_size != source.raw_byte_count
+                        or stat.S_IMODE(info.st_mode) != 0o400):
+                    raise ArtifactIntegrityError("submission source generation or size mismatch")
+                if not deleted:
+                    self.publish(directory, "deleted.json", tombstone)
+                current = os.stat("bundle.zip", dir_fd=directory, follow_symlinks=False)
+                if (current.st_dev, current.st_ino) != (info.st_dev, info.st_ino):
+                    raise ArtifactIntegrityError("submission source generation changed during cleanup")
+                os.unlink("bundle.zip", dir_fd=directory)
+                os.fsync(directory)
+            finally:
+                os.close(descriptor)
 
     def seal(self, directory: int) -> tuple[SubmissionSourceCompletion, SealedSubmissionSource]:
         value = json.loads(self.read(directory, "seal.json"))
@@ -344,7 +392,7 @@ class LocalSubmissionSource:
         with self.locked(source.location) as directory:
             completion, sealed = self.seal(directory)
             self.upload(directory, completion.upload)
-            if self.exists(directory, "aborted.json"):
+            if self.exists(directory, "aborted.json") or self.exists(directory, "deleted.json"):
                 raise ArtifactIntegrityError("submission source was aborted")
             descriptor = os.open("bundle.zip", os.O_RDONLY | os.O_NOFOLLOW, dir_fd=directory)
             try:

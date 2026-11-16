@@ -1002,3 +1002,52 @@ def worker_submission_finalization_recovery_handler(*, sessions, delivery_option
         sessions=sessions, settings=get_settings(), store=_WorkerSourceObservation(),
         lease_duration=timedelta(seconds=delivery_options.lease_seconds),
     )
+
+
+def submission_source_cleanup_execution(*, sessions, provider, lease_duration):
+    """Compose deletion with the fixed cleanup service and TASK custody owner."""
+    from app.adapters.tasks import intake_task_custody_port
+    from app.core.identifiers import new_record_id
+    from app.modules.artifacts.authorization import PreparedSubmissionSourceCleanupAuthorization
+    from app.modules.artifacts.intake.cleanup_execution import SubmissionSourceCleanupExecution
+
+    return SubmissionSourceCleanupExecution(
+        sessions, tasks=intake_task_custody_port, provider=provider, lease_duration=lease_duration,
+        authorization=lambda session: PreparedSubmissionSourceCleanupAuthorization(
+            session, request_id=new_record_id(), correlation_id=new_record_id()),
+    )
+
+
+def create_submission_source_cleanup_provider(*, settings, namespace_claim, upload_principal):
+    """Build a cleanup-only capability from its worker's dedicated configuration.
+
+    upload_principal identifies the upload credential/role, never its secret.
+    Credentials use the existing redacted Settings loader in the cleanup worker;
+    no deletion credentials are added to the foreground ArtifactStore instance.
+    """
+    from app.adapters.artifacts.source_cleanup import LocalSubmissionSourceCleanup, S3SubmissionSourceCleanup
+    from app.modules.artifacts.api.submission_cleanup import (
+        SUBMISSION_SOURCE_CLEANUP_CAPABILITY, SubmissionSourceCleanupProvider,
+    )
+
+    if settings.artifact_store_backend == "s3_compatible":
+        if settings.artifact_s3_provider_profile == "aws_s3":
+            raise ArtifactProviderLiveProofRequiredError("source cleanup requires native AWS role qualification")
+        if (type(upload_principal) is not str or not upload_principal
+                or settings.artifact_s3_access_key_id is None
+                or settings.artifact_s3_access_key_id.get_secret_value() == upload_principal):
+            raise ArtifactConfigurationError("source cleanup requires a separate provider principal")
+    factory = ExternalServiceAdapterFactory[SubmissionSourceCleanupProvider](SUBMISSION_SOURCE_CLEANUP_CAPABILITY)
+
+    def construct(adapter):
+        bootstrap = create_artifact_store_bootstrap(settings, activation_guard=None)
+        try:
+            store = bootstrap.initialize_after_namespace_claim(namespace_claim)
+            return adapter(store)
+        except BaseException:
+            bootstrap.close()
+            raise
+
+    factory.register("local", lambda: construct(LocalSubmissionSourceCleanup))
+    factory.register("s3_compatible", lambda: construct(S3SubmissionSourceCleanup))
+    return factory.create(settings.artifact_store_backend)

@@ -32,7 +32,11 @@ Internal audited finalization recovery now reuses the existing Operator gate-rep
 action, preserves the original delivery and runs the same T5 under a live child lease.
 Private sealed-source cleanup claims, retention barriers and atomic charge-release
 custody are now implemented and database-tested. Cleanup claims and confirmations now require exact audited service decisions.
-Provider deletion, scheduling and uncertain/unsealed reconciliation remain uncomposed.
+Internal Local/S3 exact-generation deletion now composes committed audited claims
+with separately observed settlement and charge release. Local database/provider
+and MinIO protocol/principal tests cover that private path; native AWS cleanup is
+not qualified. Worker startup/scheduling and uncertain/unsealed reconciliation
+remain uncomposed.
 Remaining work includes durable-worker deployment, complete cleanup, public API/CLI/MCP
 cutover, real revision/review/ContributionRecord journeys, policy cardinality and
 the A01–A35/C01–C07 completion audit. No public end-to-end readiness is claimed.
@@ -3907,3 +3911,186 @@ This closes only the bounded CI-repair implementation. Full hosted CI, existing
 obsolete PRE consumers, provider cleanup/qualification, public API/client cutover,
 revision/contribution journeys and the specification acceptance audit remain.
 Keep the single PR draft; no merge or complete-initiative claim is authorized.
+
+## Exact-generation provider cleanup implementation scope
+
+The remaining concrete gap is physical removal after the existing audited,
+committed cleanup claim. Implement exact Local and S3 generation removal and
+compose it with claim/confirmation outside database transactions. Preserve the
+separate cleanup capability/credentials requirement; never expose a general
+administrative delete-by-key path or treat provider acknowledgement as settlement.
+
+Allowed files: existing ART source adapters and their composition root, typed
+artifact provider/cleanup contracts, ART cleanup owner/coordinator, required
+configuration and provider qualification owners, existing source/cleanup tests
+and their lane registration if needed, and this record. Begin with the private
+Local primitive and its regression proof; it grants no authority and is not a
+public deletion endpoint. The coordinator must validate a committed audited claim
+before invoking any deletion capability.
+
+Prohibited: retained/accepted generation deletion, upload-role deletion authority,
+charge release on timeout/abort acknowledgement, broad bucket deletion, provider
+qualification claims without live proof, gate weakening and unrelated cleanup.
+Acceptance: exact source generation only; durable tombstone before unlink; replay
+and crash recovery preserve ownership; changed inode/source refuses deletion;
+provider I/O outside database locks; current audited claim and confirmation;
+separate credentials; uncertain object/part/writer outcomes retain charges.
+Risk: L0. Verify Local failure/replay/substitution cases, real MinIO VersionId
+isolation, PostgreSQL claim/confirmation and accepted-retention races, applicable
+boundary/lint/docs gates, then architecture/security, QA/test-delta and docs/CI
+review of the frozen candidate. Human review focus is deletion authority,
+retention barriers, late writes and conservative accounting. Full public cutover,
+worker deployment and complete acceptance audit remain part of the same PR.
+
+Local primitive worktree evidence (base f0d40a199): full existing Local storage
+suite plus five cleanup cases passed, 64 tests in 19.93s
+(`/tmp/submission-local-cleanup.log`). Cases exercise normal/repeated cleanup,
+interruption before and after unlink, retained provenance/reinitialization,
+late begin/part refusal and missing/replaced-generation rejection. Initial new
+test execution failed three cases due to a missing exception import; fixed the
+import before the full run. Ruff for both changed Python files and diff whitespace
+checks passed. This is private primitive proof only: no composed authority,
+provider settlement, S3 deletion or end-to-end cleanup claim is made. Candidate
+review remains pending until the bounded cleanup integration is assembled.
+
+Cleanup coordinator worktree progress: the owner now recovers the immutable upload
+under a live exact audited claim; root composition commits before invoking the
+separate provider capability and confirms only an exact-source observation with
+all three settlement facts. A confirmed replay performs no provider call.
+Local cleanup validates the upload before deletion and observes the retained
+source tombstone for part settlement. No deletion method was added to the upload
+ArtifactStore interface.
+
+Verification: four isolated PostgreSQL coordinator cases passed in46.74s
+(`/tmp/submission-cleanup-execution-replay.log/json`, Alembic0080, database cleanup
+complete). A separate connection obtains TASK/operation locks during provider I/O
+and reads the committed claim. Unsettled writes, substituted source and provider
+exception retain the charge; exact settled replay invokes the provider once.
+The initial four-case run failed on an incorrect test SQL table name (`tasks`);
+corrected to the inspected `workstream_tasks`. The test charge oracle was also
+corrected to the existing state/accounted_bytes columns before replay. Local full
+suite passed65 tests in37.26s (`/tmp/submission-local-cleanup-full.log`); six focused
+cleanup cases passed in4.60s. Ruff passed for all current Python changes. These
+are dirty-worktree results, not frozen-candidate review. S3 scoped deletion,
+separate credentials, scheduler and unsealed/uncertain reconciliation remain open.
+
+Combined PostgreSQL/Local proof passed: one test in34.26s
+(`/tmp/submission-cleanup-local-db.log/json`,0080, database cleanup complete).
+The test writes actual Local bytes through durable initiation/EOF/seal custody,
+terminalizes, ages only fixture history (preserving the actual provider upload
+deadline), invokes audited cleanup, observes removal and retained tombstone,
+verifies zero accounted bytes and replays the confirmed operation. This proves
+the internal Local cleanup composition, not public submission or S3 deployment.
+Current module-boundary gate also passed
+(`/tmp/submission-cleanup-boundaries-current.log`).
+
+S3 deletion primitive progress: private cleanup capability checks the exact sealed
+upload handle, refuses unresolved multipart handles, deletes only the supplied
+VersionId and separately observes absence. HEAD's generic404 requires a successful
+bucket observation; missing bucket/denied access is not confirmed absence. After
+deletion, any remaining version/delete marker keeps writes unsettled and therefore
+retains the charge. The source capability AWS qualification guard remains intact.
+The constructor currently requires a cleanup store by contract; production
+construction and proof of separate credentials are still unimplemented. Tests use
+administrative MinIO credentials and do not qualify role isolation or AWS.
+
+Real MinIO protocol proof: five version-isolation/lost-delete-acknowledgement/
+unresolved-upload cases passed in21.45s
+(`/tmp/submission-s3-cleanup-versions.log`). Includes no-newer-version settlement,
+newer-version preservation with conservative charge outcome, and replay after a
+successful deletion whose response timed out. Four denied/missing-bucket HEAD
+counterprobes passed in8.41s (`/tmp/submission-s3-cleanup-absence.log`). The initial
+three protocol cases passed before review identified the remaining-version
+settlement gap; current five cases supersede that narrower claim. Ruff and diff
+whitespace checks passed. These results belong to the uncommitted worktree;
+frozen-candidate reviews remain pending for the complete cleanup integration.
+
+Cleanup provider construction now follows the typed ExternalServiceAdapterFactory
+contract with explicit Local/S3 registration. It constructs its own store from
+the cleanup worker's redacted Settings and requires the existing exact namespace
+claim. MinIO construction rejects the upload access-key identity; native AWS
+construction fails closed pending source-cleanup role qualification. The upload
+process receives no new deletion method or cleanup credential setting. Separate
+worker startup/scheduling still needs composition.
+
+Restricted MinIO principal investigation: the first live STS-session test passed
+upload and negative-role checks but failed version deletion with only
+DeleteObjectVersion. The server's DeleteObject handler checks DeleteObject as
+well (upstream source: https://github.com/minio/minio/blob/master/cmd/auth-handler.go).
+A discriminating replay added a VersionId condition, but this build rejected that
+condition as invalid during STS issuance. The current test therefore uses a
+prefix-scoped MinIO DeleteObject grant, retains upload-deletion and cleanup-upload
+denials, and checks out-of-prefix deletion denial. This is principal/prefix proof,
+not IAM-level version-only deletion proof. Exact-version calls remain enforced by
+the adapter and verified by the existing call-capture tests; retained-source
+protection remains the audited ART gate as required by specification17.5. Do not
+transfer this MinIO policy assumption to AWS qualification. Both failed evidence
+logs are retained at `/tmp/submission-s3-cleanup-principals.log` and
+`/tmp/submission-s3-cleanup-principals-replay.log`.
+
+Restricted-principal proof now passes (1 test,14.86s;
+`/tmp/submission-s3-cleanup-principals-final.log`). Distinct short-lived MinIO STS
+sessions have separate upload versus cleanup policies. Real upload succeeds;
+upload-principal version deletion, cleanup-principal upload and out-of-prefix
+cleanup deletion are denied. The exact-version cleanup succeeds. Factory reuse of
+the upload principal and a mismatched namespace claim are rejected. A test oracle
+initially expected ArtifactConfigurationError for the latter, but the shared
+factory intentionally wraps constructor failures in ExternalServiceConfigurationError;
+the corrected oracle preserves that existing error contract.
+
+The combined prior S3 run reported9 passed/1 failed and then exited139
+(`/tmp/submission-s3-cleanup-all.log`). The process-level crash remains unexplained;
+the focused replay with PYTHONFAULTHANDLER=1 exited0. Do not represent that replay
+as a root-cause fix for process stability. Current lint, whitespace and module
+boundary checks pass (`/tmp/submission-cleanup-factory-boundaries.log`). The full
+PostgreSQL cleanup suite is still under verification; no frozen-candidate or full
+initiative completion claim is made.
+
+Current-head hosted CI correction scope: f0d40a199's image-proof job exposes a
+missed manifest-owner import in experiments/pilot04_external_checker_runtime/run_probe.py.
+Auth preflight reports behavior_ownership_error:partition_target_mismatch; local
+inventory identifies22 missing tracked targets and no stale targets. Allow the
+probe's canonical import correction, additive partition registration for delivered
+owners/new cleanup files and existing behavior-ownership verification. Do not
+change protected ownership, drop assertions or relax gates. External runtime also
+has five obsolete prepared-PRE fixture failures (main.rs:3350); retain as pending
+source-first caller cutover, never restore the obsolete implementation to pass.
+Artifacts: `/tmp/submission-f0-ci-image.log`, `-preflight.log`, `-runtime.log` and
+`-shared-a.log`. Full hosted CI remains failing; sampled database constraint log
+messages alone are not classified as defects because many are expected negative
+assertions. Lane-bundle pytest reports still need inspection.
+The additive ownership repair also updates the explicit SUBMISSION_INTAKE_TARGETS
+set in backend/scripts/behavior_ownership.py and its existing exact-set test in
+backend/tests/test_behavior_ownership.py. Register24 concrete paths (22 previously
+missing plus the new cleanup capability/coordinator). Preserve existing assignments,
+protected base, digest validation and rejection of removed or unrelated targets.
+
+Hosted-CI corrective verification: the canonical import repair passed all17
+scripts.test_public_hosted_attachment tests in40.388s
+(`/tmp/submission-probe-import-repair.log`). Additive ownership registration passed
+all170 test_behavior_ownership tests in7.89s
+(`/tmp/submission-cleanup-ownership-tests.log`), validated690 targets against
+origin/main and passed Ruff. Existing assignments and protected base are unchanged;
+only the24 named missing additions and canonical digest were added. This closes
+the reproduced import/partition defects locally, not the other hosted CI failures.
+
+Full cleanup suite result:28 tests passed,1 teardown error in439.87s
+(`/tmp/submission-cleanup-full-db.log/json`,0080, runner database cleanup complete).
+The error followed test_confirmation_rejects_wrong_decision_even_with_atomic_release[source]
+in clean_postgres_database -> _verify_test_database_schema -> canonical schema
+inventory: asyncpg text decoding raised UnicodeDecodeError (byte0x90 at position145).
+The test assertions passed; this is not a passing full-suite result. The original
+isolated database was removed, so do not claim its wire bytes were recovered.
+An exact-case replay with PYTHONFAULTHANDLER=1 and PYTHONMALLOC=debug is the next
+native-runtime diagnostic; no fixture/gate/assertion was weakened. Process139
+observations remain independently unresolved. Full behavior_ownership validate
+also passed after additive partition correction.
+
+The exact teardown case replay passed in17.60s with both native diagnostics enabled
+(`/tmp/submission-cleanup-teardown-diagnostic.log/json`,0080, database cleanup
+complete). The earlier UnicodeDecodeError is unreproduced, not root-caused or
+fixed. Review must preserve that limitation rather than combine these runs into a
+fabricated clean full-suite receipt. All28 original test assertions passed in the
+full run; its independent teardown gate did not. Sealed cleanup is ready for
+bounded code review; the complete initiative, full hosted CI, unsealed cleanup,
+scheduling and public cutover remain unfinished.

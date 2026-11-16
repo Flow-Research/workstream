@@ -105,6 +105,7 @@ def minio_settings(
     private_prefix: str,
     access_key: str = MINIO_ACCESS_KEY,
     secret_key: str = MINIO_SECRET_KEY,
+    session_token: str | None = None,
     buffer_bytes: int = 2,
 ) -> Settings:
     """Return one complete local-only MinIO configuration."""
@@ -122,6 +123,7 @@ def minio_settings(
         artifact_s3_credential_mode="local_static",
         artifact_s3_access_key_id=access_key,
         artifact_s3_secret_access_key=secret_key,
+        artifact_s3_session_token=session_token,
         artifact_stream_buffer_bytes=buffer_bytes,
         artifact_s3_operation_total_timeout_seconds=20,
         artifact_s3_write_timeout_seconds=20,
@@ -1179,3 +1181,204 @@ async def test_submission_source_lost_begin_ack_discovers_and_aborts_only_owned_
     assert await store.discover_source_uploads(intent) == ()
     assert await store.discover_source_uploads(other.intent) == (other,)
     await store.request_source_abort(other)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("lost_ack", [False, True])
+@pytest.mark.parametrize("newer_version", [False, True])
+async def test_source_cleanup_deletes_exact_version_and_recovers_lost_ack(source_store, monkeypatch, lost_ack, newer_version):
+    from app.adapters.artifacts.source_cleanup import S3SubmissionSourceCleanup
+
+    # Admin protocol fixture only: this test does not qualify production role isolation.
+    store = source_store
+    completion = await source_completion(store, b"original")
+    source = await store.complete_source_upload(completion)
+    cleanup_store = initialize_minio_store(private_prefix=store._private_prefix, buffer_bytes=65536)
+    cleanup = S3SubmissionSourceCleanup(cleanup_store)
+    try:
+        if newer_version:
+            async with store._client() as client:
+                newer = await client.put_object(Bucket=MINIO_BUCKET, Key=store._source_key(source.location), Body=b"newer")
+        original_client = cleanup_store._client
+        deletes = []
+
+        class Client:
+            def __init__(self, inner):
+                self.inner = inner
+
+            async def head_object(self, **kwargs):
+                assert kwargs["VersionId"] == source.provider_generation
+                return await self.inner.head_object(**kwargs)
+
+            async def head_bucket(self, **kwargs):
+                return await self.inner.head_bucket(**kwargs)
+
+            async def list_parts(self, **kwargs):
+                assert kwargs["UploadId"] == completion.upload.provider_upload_id
+                return await self.inner.list_parts(**kwargs)
+
+            async def list_multipart_uploads(self, **kwargs):
+                return await self.inner.list_multipart_uploads(**kwargs)
+
+            async def list_object_versions(self, **kwargs):
+                return await self.inner.list_object_versions(**kwargs)
+
+            async def delete_object(self, **kwargs):
+                deletes.append(kwargs)
+                result = await self.inner.delete_object(**kwargs)
+                if lost_ack and len(deletes) == 1:
+                    raise TimeoutError("lost deletion acknowledgement")
+                return result
+
+        @asynccontextmanager
+        async def client():
+            async with original_client() as inner:
+                yield Client(inner)
+
+        monkeypatch.setattr(cleanup_store, "_client", client)
+        if lost_ack:
+            with pytest.raises(ArtifactStoreUnavailableError):
+                await cleanup.remove(source, completion.upload)
+        result = await cleanup.remove(source, completion.upload)
+        assert result.source == source
+        assert result.object_absent is result.parts_absent is True
+        assert result.writes_settled is (not newer_version)
+        assert (await cleanup.remove(source, completion.upload)) == result
+        assert deletes == [dict(Bucket=MINIO_BUCKET, Key=store._source_key(source.location),
+                                VersionId=source.provider_generation)]
+        if newer_version:
+            async with store._client() as client:
+                retained = await client.get_object(Bucket=MINIO_BUCKET, Key=store._source_key(source.location),
+                                                   VersionId=newer["VersionId"])
+                async with retained["Body"] as body:
+                    assert await body.read() == b"newer"
+    finally:
+        cleanup_store.close()
+
+
+@pytest.mark.asyncio
+async def test_source_cleanup_keeps_source_when_another_upload_is_unresolved(source_store):
+    from app.adapters.artifacts.source_cleanup import S3SubmissionSourceCleanup
+
+    store = source_store
+    completion = await source_completion(store, b"original")
+    source = await store.complete_source_upload(completion)
+    extra = await store.begin_source_upload(completion.upload.intent)
+    cleanup_store = initialize_minio_store(private_prefix=store._private_prefix)
+    try:
+        result = await S3SubmissionSourceCleanup(cleanup_store).remove(source, completion.upload)
+        assert result.object_absent is result.writes_settled is False
+        assert await store.observe_sealed_source(source) is not None
+    finally:
+        await store.request_source_abort(extra)
+        cleanup_store.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("code,status,bucket_error", [
+    ("NoSuchBucket", 404, None),
+    ("AccessDenied", 403, None),
+    ("404", 404, "NoSuchBucket"),
+    ("404", 404, "AccessDenied"),
+])
+async def test_source_cleanup_never_calls_bucket_or_permission_failure_absence(source_store, monkeypatch, code, status, bucket_error):
+    from app.adapters.artifacts.source_cleanup import S3SubmissionSourceCleanup
+    from app.interfaces.artifacts import ArtifactStoreError
+    from app.modules.artifacts.api.submission_intake import SealedSubmissionSource
+
+    source = SealedSubmissionSource(location=source_intent(source_store).location,
+        provider_generation="exact-version", raw_sha256="sha256:" + "a" * 64,
+        raw_byte_count=10, sealed_upload_fence=1)
+
+    class Observation:
+        async def head_object(self, **kwargs):
+            assert kwargs["VersionId"] == source.provider_generation
+            raise _client_error(code, status)
+
+        async def head_bucket(self, **kwargs):
+            assert bucket_error is not None
+            raise _client_error(bucket_error, 403 if bucket_error == "AccessDenied" else 404)
+
+    @asynccontextmanager
+    async def client():
+        yield Observation()
+
+    monkeypatch.setattr(source_store, "_client", client)
+    with pytest.raises(ArtifactStoreError):
+        await S3SubmissionSourceCleanup(source_store)._absent(source)
+
+
+@pytest.mark.asyncio
+async def test_source_cleanup_uses_separate_restricted_principal(source_store):
+    from dataclasses import replace
+    import json
+    from app.adapters.artifacts import create_submission_source_cleanup_provider
+    from app.interfaces.external_services import ExternalServiceConfigurationError
+
+    prefix = source_store._private_prefix
+    bucket_resource = f"arn:aws:s3:::{MINIO_BUCKET}"
+    object_resource = f"{bucket_resource}/{prefix}/*"
+    session = AioSession()
+    session.set_credentials(MINIO_ACCESS_KEY, MINIO_SECRET_KEY)
+
+    async def credentials(name, object_actions, bucket_actions):
+        policy = {"Version": "2012-10-17", "Statement": [
+            {"Effect": "Allow", "Action": object_actions, "Resource": [object_resource]},
+            {"Effect": "Allow", "Action": bucket_actions, "Resource": [bucket_resource]},
+        ]}
+        async with session.create_client("sts", endpoint_url=MINIO_ENDPOINT, region_name=MINIO_REGION) as client:
+            result = await client.assume_role(
+                RoleArn="arn:aws:iam::123456789012:role/submission-cleanup-test",
+                RoleSessionName=name, DurationSeconds=900, Policy=json.dumps(policy))
+            return result["Credentials"]
+
+    uploader = await credentials("source-uploader", ["s3:PutObject", "s3:GetObjectVersion"], ["s3:GetBucketVersioning"])
+    cleaner = await credentials("source-cleaner", [
+        # This MinIO build requires DeleteObject even with VersionId and rejects
+        # a VersionId policy condition. Exact-version enforcement remains in
+        # the cleanup capability; this proves principal/prefix separation only.
+        "s3:GetObjectVersion", "s3:DeleteObject", "s3:DeleteObjectVersion", "s3:ListMultipartUploadParts",
+    ], ["s3:ListBucket", "s3:ListBucketVersions", "s3:ListBucketMultipartUploads"])
+
+    def settings(value):
+        return minio_settings(private_prefix=prefix, access_key=value["AccessKeyId"],
+                              secret_key=value["SecretAccessKey"], session_token=value["SessionToken"],
+                              buffer_bytes=65536)
+
+    upload_settings, cleanup_settings = settings(uploader), settings(cleaner)
+    bootstrap = create_artifact_store_bootstrap(upload_settings, activation_guard=None)
+    _, fingerprint = artifact_store_namespace_material(
+        backend="s3_compatible", adapter_identity=bootstrap.identity,
+        namespace_identity=bootstrap.namespace_identity)
+    claim = ArtifactStoreNamespaceClaim(bootstrap.identity, bootstrap.namespace_identity, fingerprint)
+    upload_store = bootstrap.initialize_after_namespace_claim(claim)
+    cleanup = create_submission_source_cleanup_provider(
+        settings=cleanup_settings, namespace_claim=claim, upload_principal=uploader["AccessKeyId"])
+    try:
+        completion = await source_completion(upload_store, b"restricted-source")
+        source = await upload_store.complete_source_upload(completion)
+        with pytest.raises(ArtifactConfigurationError, match="separate provider principal"):
+            create_submission_source_cleanup_provider(
+                settings=upload_settings, namespace_claim=claim, upload_principal=uploader["AccessKeyId"])
+        with pytest.raises(ExternalServiceConfigurationError):
+            create_submission_source_cleanup_provider(
+                settings=cleanup_settings, namespace_claim=replace(claim, namespace_fingerprint="sha256:" + "0" * 64),
+                upload_principal=uploader["AccessKeyId"])
+        async with upload_store._client() as client:
+            with pytest.raises(ClientError) as denied:
+                await client.delete_object(Bucket=MINIO_BUCKET, Key=upload_store._source_key(source.location),
+                                           VersionId=source.provider_generation)
+            assert denied.value.response["Error"]["Code"] == "AccessDenied"
+        async with cleanup._store._client() as client:
+            with pytest.raises(ClientError) as denied:
+                await client.put_object(Bucket=MINIO_BUCKET, Key=upload_store._source_key(source.location), Body=b"forbidden")
+            assert denied.value.response["Error"]["Code"] == "AccessDenied"
+            with pytest.raises(ClientError) as denied:
+                await client.delete_object(Bucket=MINIO_BUCKET, Key=f"unrelated/{uuid4().hex}",
+                                           VersionId=source.provider_generation)
+            assert denied.value.response["Error"]["Code"] == "AccessDenied"
+        result = await cleanup.remove(source, completion.upload)
+        assert result.object_absent is result.parts_absent is result.writes_settled is True
+    finally:
+        cleanup.close()
+        upload_store.close()

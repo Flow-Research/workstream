@@ -30,6 +30,10 @@
     },
     {
       "group": "artifacts",
+      "target": "backend/app/adapters/artifacts/source_cleanup.py"
+    },
+    {
+      "group": "artifacts",
       "target": "backend/app/adapters/artifacts/trusted_intake.py"
     },
     {
@@ -558,11 +562,27 @@
     },
     {
       "group": "artifacts",
+      "target": "backend/app/modules/artifacts/api/submission_cleanup.py"
+    },
+    {
+      "group": "artifacts",
+      "target": "backend/app/modules/artifacts/api/submission_finalization.py"
+    },
+    {
+      "group": "artifacts",
       "target": "backend/app/modules/artifacts/api/submission_intake.py"
     },
     {
       "group": "artifacts",
+      "target": "backend/app/modules/artifacts/api/submission_manifest.py"
+    },
+    {
+      "group": "artifacts",
       "target": "backend/app/modules/artifacts/api/submission_preparation.py"
+    },
+    {
+      "group": "artifacts",
+      "target": "backend/app/modules/artifacts/api/submission_recovery.py"
     },
     {
       "group": "artifacts",
@@ -602,7 +622,27 @@
     },
     {
       "group": "artifacts",
+      "target": "backend/app/modules/artifacts/intake/acceptance.py"
+    },
+    {
+      "group": "artifacts",
       "target": "backend/app/modules/artifacts/intake/capacity.py"
+    },
+    {
+      "group": "artifacts",
+      "target": "backend/app/modules/artifacts/intake/cleanup.py"
+    },
+    {
+      "group": "artifacts",
+      "target": "backend/app/modules/artifacts/intake/cleanup_execution.py"
+    },
+    {
+      "group": "artifacts",
+      "target": "backend/app/modules/artifacts/intake/finalization.py"
+    },
+    {
+      "group": "artifacts",
+      "target": "backend/app/modules/artifacts/intake/finalization_delivery.py"
     },
     {
       "group": "artifacts",
@@ -619,6 +659,22 @@
     {
       "group": "artifacts",
       "target": "backend/app/modules/artifacts/intake/models.py"
+    },
+    {
+      "group": "artifacts",
+      "target": "backend/app/modules/artifacts/intake/progress.py"
+    },
+    {
+      "group": "artifacts",
+      "target": "backend/app/modules/artifacts/intake/recovery.py"
+    },
+    {
+      "group": "artifacts",
+      "target": "backend/app/modules/artifacts/intake/recovery_delivery.py"
+    },
+    {
+      "group": "artifacts",
+      "target": "backend/app/modules/artifacts/intake/registration.py"
     },
     {
       "group": "artifacts",
@@ -679,6 +735,14 @@
     {
       "group": "artifacts",
       "target": "backend/app/modules/artifacts/selected_pre_submit_execution.py"
+    },
+    {
+      "group": "artifacts",
+      "target": "backend/app/modules/artifacts/selected_pre_submit_source_contracts.py"
+    },
+    {
+      "group": "artifacts",
+      "target": "backend/app/modules/artifacts/selected_pre_submit_source_custody.py"
     },
     {
       "group": "artifacts",
@@ -839,6 +903,14 @@
     {
       "group": "auth",
       "target": "backend/app/modules/authorization/api/project_setup_finalization.py"
+    },
+    {
+      "group": "auth",
+      "target": "backend/app/modules/authorization/api/submission_cleanup.py"
+    },
+    {
+      "group": "auth",
+      "target": "backend/app/modules/authorization/api/submission_finalization.py"
     },
     {
       "group": "auth",
@@ -1078,6 +1150,10 @@
     },
     {
       "group": "auth",
+      "target": "backend/app/modules/authorization/domain/submission_recovery.py"
+    },
+    {
+      "group": "auth",
       "target": "backend/app/modules/authorization/domain/task_authority.py"
     },
     {
@@ -1294,6 +1370,10 @@
     },
     {
       "group": "auth",
+      "target": "backend/app/modules/authorization/submission_recovery.py"
+    },
+    {
+      "group": "auth",
       "target": "backend/app/modules/authorization/task_authorization.py"
     },
     {
@@ -1374,6 +1454,10 @@
     },
     {
       "group": "artifacts",
+      "target": "backend/app/modules/checkers/api/post_material_custody.py"
+    },
+    {
+      "group": "artifacts",
       "target": "backend/app/modules/checkers/api/pre_submit_material.py"
     },
     {
@@ -1387,6 +1471,10 @@
     {
       "group": "artifacts",
       "target": "backend/app/modules/checkers/api/selected_pre_submit.py"
+    },
+    {
+      "group": "artifacts",
+      "target": "backend/app/modules/checkers/api/source_contracts.py"
     },
     {
       "group": "artifacts",
@@ -1475,6 +1563,10 @@
     {
       "group": "artifacts",
       "target": "backend/app/modules/checkers/selected_pre_submit_reads.py"
+    },
+    {
+      "group": "artifacts",
+      "target": "backend/app/modules/checkers/selected_pre_submit_records.py"
     },
     {
       "group": "artifacts",
@@ -2142,6 +2234,10 @@
     },
     {
       "group": "lifecycle",
+      "target": "backend/app/modules/tasks/accepted_submission.py"
+    },
+    {
+      "group": "lifecycle",
       "target": "backend/app/modules/tasks/api/accepted_effects.py"
     },
     {
@@ -2665,7 +2761,7 @@
       "target": "backend/scripts/validate_test_lane_evidence.py"
     }
   ],
-  "authority_digest": "b6cc06f83827bf37427589437c71a084255f91a27b66bcc4109eebe8ba0160b2",
+  "authority_digest": "f904ce88d1dce00fdba24e8504521f25d6f01dca0ec46b90d5065f1f605c2236",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }

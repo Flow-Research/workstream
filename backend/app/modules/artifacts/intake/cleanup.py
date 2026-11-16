@@ -10,10 +10,10 @@ from uuid import UUID
 
 from sqlalchemy import func, select, text
 
-from app.modules.artifacts.api.submission_intake import SealedSubmissionSource
+from app.modules.artifacts.api.submission_intake import SealedSubmissionSource, SubmissionSourceUpload
 from app.modules.artifacts.api.submission_cleanup import SubmissionSourceCleanupAuthorityFacts
 from app.modules.artifacts.intake.capacity import SubmissionSourceCapacity
-from app.modules.artifacts.intake.models import SubmissionSourceCleanupClaim
+from app.modules.artifacts.intake.models import SubmissionSourceCleanupClaim, SubmissionSourceUploadReceipt
 from app.modules.artifacts.intake.repository import IntakeCustodyConflict, SubmissionIntakeRepository
 
 # Match the existing bounded durable finalization delivery lease, not a default.
@@ -137,3 +137,20 @@ class SealedSourceCleanup:
         row.confirmed_at = now
         await self._session.flush()
         await SubmissionSourceCapacity(self._session).release_confirmed(operation)
+
+    async def upload_for_claim(self, claim: SealedSourceCleanupClaim) -> SubmissionSourceUpload:
+        """Recover the exact upload under the same live audited deletion claim."""
+        operation, row = await self._locked(claim.source.location.operation_id)
+        now = await self._session.scalar(select(func.clock_timestamp()))
+        if (row is None or row.claim_id != str(claim.claim_id) or row.generation != claim.generation
+                or row.source != claim.source.model_dump(mode="json")
+                or row.confirmed_at is not None or row.lease_expires_at <= now):
+            raise IntakeCustodyConflict("source_cleanup_stale")
+        await self._require_claim_authority(operation.id)
+        receipt = await self._session.get(SubmissionSourceUploadReceipt, operation.id)
+        if receipt is None or receipt.provider_upload_id is None or receipt.completion_parts is None:
+            raise IntakeCustodyConflict("source_cleanup_unresolved")
+        return SubmissionSourceUpload(
+            intent=await self._intake._upload_intent(operation, receipt),
+            provider_upload_id=receipt.provider_upload_id,
+        )

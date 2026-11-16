@@ -69,7 +69,7 @@ async def terminal_source(intake):
     return operation
 
 
-async def age_fixture(intake, operation):
+async def age_fixture(intake, operation, *, preserve_upload_deadline=False):
     """Seed historical timestamps in an isolated test DB; all cleanup guards stay enabled."""
     database = intake.engine.url.database
     assert database.startswith("workstream_test_")
@@ -83,7 +83,7 @@ async def age_fixture(intake, operation):
             f"{column}={column}-interval '3 hours'" for column in (
                 "created_at", "upload_deadline_at", "lease_expires_at", "pre_deadline_at",
                 "eof_at", "sealed_at", "terminal_at",
-            )
+            ) if not (preserve_upload_deadline and column == "upload_deadline_at")
         ) + " WHERE id=:id"), {"id": operation})
         await connection.execute(text("SET CONSTRAINTS ALL IMMEDIATE"))
         await connection.execute(text("ALTER TABLE submission_intake_operations ENABLE TRIGGER submission_intake_mutation"))
@@ -460,3 +460,99 @@ async def test_confirmation_rejects_wrong_decision_even_with_atomic_release(inta
             "FROM submission_source_cleanup_claims WHERE operation_id=:id"), {"id": operation}) is True
         assert await session.scalar(text("SELECT accounted_bytes FROM submission_source_charges WHERE operation_id=:id"),
                                     {"id": operation}) == 100
+
+
+@pytest.mark.parametrize("outcome", ["settled", "uncertain", "wrong_source", "exception"])
+async def test_cleanup_execution_commits_before_provider_and_retains_uncertainty(intake, outcome):
+    from app.adapters.artifacts import submission_source_cleanup_execution
+    from app.modules.artifacts.api.submission_cleanup import SubmissionSourceRemoval
+
+    operation = await terminal_source(intake)
+    await age_fixture(intake, operation)
+    claim_id = new_record_id()
+    calls = []
+
+    class Provider:
+        async def remove(self, source, upload):
+            calls.append(source)
+            assert upload.intent.location == source.location
+            # Separate connection sees the committed claim and can lock TASK
+            # and operation immediately: provider I/O holds no custody locks.
+            async with intake.factory.begin() as session:
+                await session.execute(text("SELECT id FROM workstream_tasks WHERE id=:id FOR UPDATE NOWAIT"),
+                                      {"id": intake.task})
+                await session.execute(text("SELECT id FROM submission_intake_operations WHERE id=:id FOR UPDATE NOWAIT"),
+                                      {"id": operation})
+                persisted = (await session.execute(text(
+                    "SELECT claim_id FROM submission_source_cleanup_claims WHERE operation_id=:id"
+                ), {"id": operation})).scalar_one()
+                assert str(persisted) == str(claim_id)
+            if outcome == "exception":
+                raise OSError("uncertain deletion")
+            return SubmissionSourceRemoval(
+                source.model_copy(update={"provider_generation": "foreign"}) if outcome == "wrong_source" else source,
+                True, outcome != "uncertain", True,
+            )
+
+    execution = submission_source_cleanup_execution(
+        sessions=intake.factory, provider=Provider(), lease_duration=timedelta(minutes=5))
+    if outcome == "settled":
+        await execution.run(operation, claim_id)
+        await execution.run(operation, claim_id)
+        assert len(calls) == 1
+    else:
+        with pytest.raises((IntakeCustodyConflict, OSError)):
+            await execution.run(operation, claim_id)
+    async with intake.factory() as session:
+        confirmed = (await session.execute(text(
+            "SELECT confirmed_at IS NOT NULL FROM submission_source_cleanup_claims WHERE operation_id=:id"
+        ), {"id": operation})).scalar_one()
+        assert confirmed is (outcome == "settled")
+        released = (await session.execute(text(
+            "SELECT state='released' AND accounted_bytes=0 FROM submission_source_charges WHERE operation_id=:id"
+        ), {"id": operation})).scalar_one()
+        assert released is (outcome == "settled")
+
+
+async def test_cleanup_execution_removes_real_local_source_and_releases_charge(intake):
+    from datetime import UTC, datetime
+    from app.adapters.artifacts import submission_source_cleanup_execution
+    from app.adapters.artifacts.source_cleanup import LocalSubmissionSourceCleanup
+    from tests.test_local_artifact_store import initialize_local_store, local_source_completion
+
+    store = initialize_local_store(root=intake.durable_root)
+    try:
+        async with intake.factory.begin() as session:
+            row = await reserve(intake, session, with_upload=False)
+            operation, lease = UUID(row.id), UUID(row.lease_id)
+            intent = await repository(session).prepare_upload(
+                operation, lease, 1, part_bytes=5 * 1024 * 1024, idle_timeout_seconds=20.0)
+        upload = await store.begin_source_upload(intent)
+        async with intake.factory.begin() as session:
+            await repository(session).record_upload(operation, lease, 1, upload=upload)
+        completion = await local_source_completion(store, upload, b"real-terminal-source")
+        async with intake.factory.begin() as session:
+            await repository(session).record_eof(operation, lease, 1, completion=completion)
+        source = await store.complete_source_upload(completion)
+        async with intake.factory.begin() as session:
+            deadline = datetime.now(UTC) + timedelta(minutes=2)
+            await repository(session).seal(operation, lease, 1, provider_generation=source.provider_generation,
+                                          pre_deadline_at=deadline, lease_expires_at=deadline)
+        async with intake.factory.begin() as session:
+            await repository(session).terminalize(operation, lease, 1, state="rejected", failure_code="pre_failed")
+        await age_fixture(intake, operation, preserve_upload_deadline=True)
+        execution = submission_source_cleanup_execution(
+            sessions=intake.factory, provider=LocalSubmissionSourceCleanup(store),
+            lease_duration=timedelta(minutes=5))
+        claim_id = new_record_id()
+        await execution.run(operation, claim_id)
+        await execution.run(operation, claim_id)
+        assert await store.observe_sealed_source(source) is None
+        assert await store.source_upload_parts_absent(upload) is True
+        assert (intake.durable_root / "objects" / source.location.object_ref).with_name("deleted.json").exists()
+        async with intake.factory() as session:
+            assert await session.scalar(text(
+                "SELECT accounted_bytes FROM submission_source_charges WHERE operation_id=:id"
+            ), {"id": operation}) == 0
+    finally:
+        store.close()

@@ -20,6 +20,7 @@ from app.interfaces.artifacts import (
     ArtifactInputMismatchError,
     ArtifactIntegrityError,
     ArtifactOperationConflictError,
+    ArtifactPreconditionFailedError,
     ArtifactStoreUnavailableError,
     ArtifactStoreNamespaceClaim,
     artifact_provider_object_ref,
@@ -1150,4 +1151,97 @@ async def test_local_submission_parent_sync_failure_closes_new_directory(tmp_pat
                 os.close(descriptor)
             except OSError:
                 pass
+        store.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("interruption", [None, "before_unlink", "after_unlink"])
+async def test_local_sealed_cleanup_retains_tombstone_and_recovers(tmp_path, monkeypatch, interruption):
+    from app.adapters.artifacts.local_submission_source import LocalSubmissionSource
+
+    root = tmp_path / "store"
+    store = initialize_local_store(root=root)
+    try:
+        upload = await store.begin_source_upload(local_source_intent(store))
+        completion = await local_source_completion(store, upload, b"owned-source")
+        source = await store.complete_source_upload(completion)
+        primitive = LocalSubmissionSource(store)
+        path = root / "objects" / source.location.object_ref
+        original_unlink = os.unlink
+
+        def interrupted_unlink(name, **kwargs):
+            if name != "bundle.zip":
+                return original_unlink(name, **kwargs)
+            if interruption == "after_unlink":
+                original_unlink(name, **kwargs)
+            raise OSError("injected cleanup crash")
+
+        if interruption:
+            with monkeypatch.context() as patch:
+                patch.setattr(os, "unlink", interrupted_unlink)
+                with pytest.raises(OSError, match="injected cleanup crash"):
+                    primitive.delete_sealed(source, upload)
+            assert path.with_name("deleted.json").exists()
+        primitive.delete_sealed(source, upload)
+        primitive.delete_sealed(source, upload)
+        assert not path.exists()
+        assert path.with_name("deleted.json").exists()
+        assert path.with_name("seal.json").exists()
+        assert path.with_name("upload.json").exists()
+        with pytest.raises(ArtifactPreconditionFailedError):
+            await store.begin_source_upload(upload.intent)
+        with pytest.raises(ArtifactPreconditionFailedError):
+            await store.upload_source_part(upload, 1, b"late")
+        assert await store.observe_sealed_source(source) is None
+        assert await store.source_upload_parts_absent(upload) is True
+    finally:
+        store.close()
+    reopened = initialize_local_store(root=root)
+    reopened.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("replacement", [False, True])
+async def test_local_sealed_cleanup_refuses_missing_or_replaced_generation(tmp_path, replacement):
+    from app.adapters.artifacts.local_submission_source import LocalSubmissionSource
+
+    root = tmp_path / "store"
+    store = initialize_local_store(root=root)
+    try:
+        upload = await store.begin_source_upload(local_source_intent(store))
+        source = await store.complete_source_upload(await local_source_completion(store, upload, b"original"))
+        path = root / "objects" / source.location.object_ref
+        if replacement:
+            other = path.with_name("replacement")
+            other.write_bytes(b"original")
+            other.chmod(0o400)
+            other.replace(path)
+        else:
+            path.unlink()
+        with pytest.raises(ArtifactIntegrityError):
+            LocalSubmissionSource(store).delete_sealed(source, upload)
+        assert not path.with_name("deleted.json").exists()
+        if replacement:
+            assert path.read_bytes() == b"original"
+    finally:
+        store.close()
+
+
+@pytest.mark.asyncio
+async def test_local_cleanup_capability_rejects_foreign_upload_before_deletion(tmp_path):
+    from app.adapters.artifacts.source_cleanup import LocalSubmissionSourceCleanup
+
+    store = initialize_local_store(root=tmp_path / "store")
+    try:
+        upload = await store.begin_source_upload(local_source_intent(store))
+        source = await store.complete_source_upload(await local_source_completion(store, upload, b"original"))
+        cleanup = LocalSubmissionSourceCleanup(store)
+        with pytest.raises(ArtifactIntegrityError):
+            await cleanup.remove(source, upload.model_copy(update={"provider_upload_id": "foreign"}))
+        assert await store.observe_sealed_source(source) is not None
+        for _ in range(2):
+            result = await cleanup.remove(source, upload)
+            assert result.source == source
+            assert result.object_absent is result.writes_settled is result.parts_absent is True
+    finally:
         store.close()
