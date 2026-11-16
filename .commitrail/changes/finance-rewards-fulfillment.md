@@ -809,3 +809,40 @@ probes then passed, including actual private-reexport denial and frozen selected
 terms. A mistaken initial MCP `-k` selector selected no tests and is not counted
 as evidence; the complete two actual task modules were run afterward. Native
 stopped-phase generation and affected contribution checks remain running.
+
+
+### Native substitution proof required by implementation review
+
+The dirty repair run completed all 29 affected lifecycle/contribution cases
+(741.46 seconds) with PostgreSQL/MinIO cleanup complete; exact clean b962 control
+run passed all 303 cases (177.09 seconds). These are distinct custody boundaries.
+Both implementation reviewer sessions then failed with a usage-limit error, so
+neither supplied a final verdict. The security/architecture reviewer identified
+a valid missing proof before termination: independent direct-SQL root INSERT
+substitutions were not exercised by readiness, ORM custody, closure or UPDATE/
+DELETE tests. Treat the implementation review as incomplete, not passed.
+
+Repair is limited to the current root test module and this record, using the
+existing two-source real paid fixture and actual earning transaction. Commit a
+first genuine root as the singleton source anchor; stage the second genuine
+award under actual AUTH/REV custody with only its root participant omitted.
+Construct the current Python envelope, append its event through real OUTBOX, and
+INSERT the root through SQL. Independently substitute source (with recomputed
+wire digests), ordinal, generation, project, binding, authority, manifest,
+acceptance and envelope/digests. Require named native failures at INSERT and
+complete rollback of all staged earning rows. Retain an unmodified successful
+control and a rolled-back named-trigger removal probe that discriminates the
+source-UUID rejection. No production constraints or validators are relaxed.
+
+
+Development native substitution proof passed (161.09 seconds), including genuine
+foreign-project references, internally rehashed source/body changes, named SQL
+rejections, rollback snapshots, a valid committed control and the trigger-removal
+discriminator. Owned database/MinIO cleanup completed. The first invocation
+failed before tests because the owned services were stopped after the host
+restart; restarting only those existing containers restored the actual dependency.
+The final test extracts only raw INSERT and real event-append setup into focused
+helpers, adds an independent source-digest-column substitution and forces deferred
+closure after the trigger-removal control before rolling it back. Final-source
+execution and reviewer replay are still required; the prior development pass is
+not attributed to that final source.
