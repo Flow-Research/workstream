@@ -36,14 +36,14 @@ async def _complete_draft(
     *, reverse_rule_insertion: bool = False
 ) -> tuple[ContributionPolicyPublishRequest, UUID, str]:
     project, creator, _, binding, _ = await _seed_project()
-    policy, version = await _draft_policy(project, creator)
+    policy, version = await _draft_policy(project, creator, financial_header=("money", "USD", binding))
     rules = (
-        (("completed_review", "unpaid", None), ("accepted_submission", "compensated", binding))
+        (("completed_review", "unpaid", False), ("accepted_submission", "compensated", True))
         if reverse_rule_insertion
-        else (("accepted_submission", "compensated", binding), ("completed_review", "unpaid", None))
+        else (("accepted_submission", "compensated", True), ("completed_review", "unpaid", False))
     )
-    for contribution_type, mode, binding_id in rules:
-        await _add_rule(version, project, contribution_type, mode, binding_id=binding_id)
+    for contribution_type, mode, with_awards in rules:
+        await _add_rule(version, project, contribution_type, mode, with_awards=with_awards)
     return (
         ContributionPolicyPublishRequest(
             operation_id=new_record_id(),

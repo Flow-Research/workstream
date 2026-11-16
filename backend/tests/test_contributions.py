@@ -176,9 +176,11 @@ async def _draft_policy(
     creator_id: str,
     *,
     policy_id: UUID | None = None,
+    financial_header: tuple[str, str, UUID] | None = None,
 ) -> tuple[UUID, UUID]:
     policy_id = policy_id or new_record_id()
     version_id = new_record_id()
+    instrument, unit, binding = financial_header if financial_header is not None else (None, None, None)
     async with db_session.get_session_factory()() as session:
         session.add(
             ContributionPolicy(
@@ -197,6 +199,9 @@ async def _draft_policy(
                 project_id=project_id,
                 version_number=1,
                 status="draft",
+                instrument_type=instrument,
+                unit_code=unit,
+                adapter_binding_id=binding,
                 created_by=creator_id,
             )
         )
@@ -210,35 +215,44 @@ async def _add_rule(
     contribution_type: str,
     compensation_mode: str,
     *,
-    binding_id: UUID | None = None,
+    with_awards: bool = False,
 ) -> UUID:
+    """Seed a rule; optional current awards copy only its declared common header."""
     rule_id = new_record_id()
     async with db_session.get_session_factory()() as session:
-        session.add(
-            ContributionRule(
-                id=rule_id,
-                contribution_policy_version_id=version_id,
-                project_id=project_id,
-                contribution_type=contribution_type,
-                compensation_mode=compensation_mode,
-            )
-        )
-        if binding_id is not None:
-            session.add(
-                ContributionAwardDefinition(
-                    id=new_record_id(),
-                    contribution_rule_id=rule_id,
-                    contribution_policy_version_id=version_id,
-                    project_id=project_id,
-                    contribution_type=contribution_type,
-                    instrument_type="money",
-                    unit_code="USD",
-                    quantity="25.500000000000000000",
-                    adapter_binding_id=binding_id,
-                )
-            )
+        session.add(ContributionRule(
+            id=rule_id, contribution_policy_version_id=version_id,
+            project_id=project_id, contribution_type=contribution_type,
+            compensation_mode=compensation_mode,
+        ))
+        if with_awards:
+            version = await session.get(ContributionPolicyVersion, version_id)
+            assert version.project_id == project_id
+            assert all(value is not None for value in (
+                version.instrument_type, version.unit_code, version.adapter_binding_id,
+            ))
+            sizes = ("small", "medium", "large") if contribution_type == "accepted_submission" else (None,)
+            base = Decimal("25.5") if version.instrument_type == "money" else Decimal("25")
+            for index, size in enumerate(sizes, start=1):
+                session.add(ContributionAwardDefinition(
+                    id=new_record_id(), contribution_rule_id=rule_id,
+                    contribution_policy_version_id=version_id, project_id=project_id,
+                    contribution_type=contribution_type, task_size=size,
+                    instrument_type=version.instrument_type, unit_code=version.unit_code,
+                    quantity=base * index, adapter_binding_id=version.adapter_binding_id,
+                ))
         await session.commit()
     return rule_id
+
+
+async def _graph_snapshot(version_id: UUID) -> dict[str, tuple[str, ...]]:
+    async with db_session.get_session_factory()() as session:
+        return {table: tuple((await session.execute(text(
+            f"SELECT to_jsonb(r)::text FROM public.{table} r "
+            "WHERE contribution_policy_version_id=:id ORDER BY id"
+        ), {"id": version_id})).scalars()) for table in (
+            "contribution_rules", "contribution_award_definitions",
+        )}
 
 
 async def _publish_version(
@@ -301,7 +315,7 @@ async def _complete_published_policy(
     creator_id: str,
     binding_id: UUID,
 ) -> tuple[UUID, UUID, UUID]:
-    policy_id, version_id = await _draft_policy(project_id, creator_id)
+    policy_id, version_id = await _draft_policy(project_id, creator_id, financial_header=("money", "USD", binding_id))
     unpaid_rule_id = await _add_rule(
         version_id, project_id, "accepted_submission", "unpaid"
     )
@@ -310,7 +324,7 @@ async def _complete_published_policy(
         project_id,
         "completed_review",
         "compensated",
-        binding_id=binding_id,
+        with_awards=True,
     )
     await _publish_version(version_id, creator_id)
     return policy_id, version_id, unpaid_rule_id
@@ -335,6 +349,9 @@ def test_contribution_models_register_closed_canonical_tables() -> None:
         "project_id",
         "version_number",
         "status",
+        "instrument_type",
+        "unit_code",
+        "adapter_binding_id",
         "created_by",
         "created_at",
         "published_by",
@@ -491,13 +508,13 @@ async def test_incomplete_or_unpaid_definition_graph_cannot_publish(
     contribution_database_env: str,
 ) -> None:
     project_id, creator_id, _, money_binding_id, _ = await _seed_project()
-    _, version_id = await _draft_policy(project_id, creator_id)
+    _, version_id = await _draft_policy(project_id, creator_id, financial_header=("money", "USD", money_binding_id))
     await _add_rule(
         version_id,
         project_id,
         "accepted_submission",
         "unpaid",
-        binding_id=money_binding_id,
+        with_awards=True,
     )
     with pytest.raises(ContributionPolicyConflict, match="contribution_policy_conflict"):
         await _publish_version(version_id, creator_id)
@@ -515,34 +532,34 @@ async def test_each_incomplete_policy_graph_shape_is_rejected(
         with pytest.raises(ContributionPolicyConflict, match="contribution_policy_conflict"):
             await _publish_version(version_id, creator_id)
 
-    _, unpaid_version_id = await _draft_policy(project_id, creator_id)
+    _, unpaid_version_id = await _draft_policy(project_id, creator_id, financial_header=("money", "USD", money_binding_id))
     await _add_rule(
         unpaid_version_id,
         project_id,
         "accepted_submission",
         "unpaid",
-        binding_id=money_binding_id,
+        with_awards=True,
     )
-    await _add_rule(unpaid_version_id, project_id, "completed_review", "unpaid")
+    await _add_rule(unpaid_version_id, project_id, "completed_review", "compensated", with_awards=True)
     with pytest.raises(ContributionPolicyConflict, match="contribution_policy_conflict"):
         await _publish_version(unpaid_version_id, creator_id)
 
-    _, empty_version_id = await _draft_policy(project_id, creator_id)
+    _, empty_version_id = await _draft_policy(project_id, creator_id, financial_header=("money", "USD", money_binding_id))
     await _add_rule(empty_version_id, project_id, "accepted_submission", "compensated")
     await _add_rule(empty_version_id, project_id, "completed_review", "unpaid")
     with pytest.raises(ContributionPolicyConflict, match="contribution_policy_conflict"):
         await _publish_version(empty_version_id, creator_id)
 
-    _, duplicate_version_id = await _draft_policy(project_id, creator_id)
+    _, duplicate_version_id = await _draft_policy(project_id, creator_id, financial_header=("money", "USD", money_binding_id))
     rule_id = await _add_rule(
         duplicate_version_id,
         project_id,
         "accepted_submission",
         "compensated",
-        binding_id=money_binding_id,
+        with_awards=True,
     )
     async with db_session.get_session_factory()() as session:
-        with pytest.raises(IntegrityError):
+        with pytest.raises(IntegrityError, match="uq_award_definition_size"):
             session.add(
                 ContributionAwardDefinition(
                     id=new_record_id(),
@@ -550,6 +567,7 @@ async def test_each_incomplete_policy_graph_shape_is_rejected(
                     contribution_policy_version_id=duplicate_version_id,
                     project_id=project_id,
                     contribution_type="accepted_submission",
+                    task_size="small",
                     instrument_type="money",
                     unit_code="USD",
                     quantity=Decimal("1"),
@@ -560,63 +578,45 @@ async def test_each_incomplete_policy_graph_shape_is_rejected(
 
 
 @pytest.mark.asyncio
-async def test_definition_binding_must_match_project_and_instrument(
-    contribution_database_env: str,
-) -> None:
-    project_id, creator_id, _, _, points_binding_id = await _seed_project()
-    _, version_id = await _draft_policy(project_id, creator_id)
-    with pytest.raises(IntegrityError):
-        await _add_rule(
-            version_id,
-            project_id,
-            "accepted_submission",
-            "compensated",
-            binding_id=points_binding_id,
-        )
+async def test_definition_binding_must_match_project_and_instrument(contribution_database_env: str) -> None:
+    project, creator, _, money, points = await _seed_project()
+    _, version = await _draft_policy(project, creator, financial_header=("money", "USD", money))
+    rule = await _add_rule(version, project, "accepted_submission", "compensated")
+    async with db_session.get_session_factory()() as session:
+        with pytest.raises(IntegrityError, match="fk_contribution_award_definition_binding") as caught:
+            session.add(ContributionAwardDefinition(
+                id=new_record_id(), contribution_rule_id=rule,
+                contribution_policy_version_id=version, project_id=project,
+                contribution_type="accepted_submission", task_size="small",
+                instrument_type="money", unit_code="USD", quantity=Decimal("1"),
+                adapter_binding_id=points,
+            ))
+            await session.flush()
+        assert caught.value.orig.sqlstate == "23503"
 
 
 @pytest.mark.asyncio
-async def test_database_rejects_unconfigured_units_and_fractional_points(
-    contribution_database_env: str,
-) -> None:
-    project_id, creator_id, _, money_binding_id, points_binding_id = await _seed_project()
-    _, version_id = await _draft_policy(project_id, creator_id)
-    rule_id = await _add_rule(
-        version_id,
-        project_id,
-        "accepted_submission",
-        "compensated",
-        binding_id=money_binding_id,
-    )
-    invalid_definitions = (
-        ContributionAwardDefinition(
-            id=new_record_id(),
-            contribution_rule_id=rule_id,
-            contribution_policy_version_id=version_id,
-            project_id=project_id,
-            contribution_type="accepted_submission",
-            instrument_type="money",
-            unit_code="EUR",
-            quantity=Decimal("1"),
-            adapter_binding_id=money_binding_id,
-        ),
-        ContributionAwardDefinition(
-            id=new_record_id(),
-            contribution_rule_id=rule_id,
-            contribution_policy_version_id=version_id,
-            project_id=project_id,
-            contribution_type="accepted_submission",
-            instrument_type="project_points",
-            unit_code="merit.points",
-            quantity=Decimal("1.5"),
-            adapter_binding_id=points_binding_id,
-        ),
-    )
-    for definition in invalid_definitions:
+async def test_database_rejects_unconfigured_units_and_fractional_points(contribution_database_env: str) -> None:
+    project, creator, _, money, points = await _seed_project()
+    for instrument, unit, quantity, binding, constraint, state in (
+        ("money", "EUR", Decimal("1"), money, "fk_contribution_award_definition_unit", "23503"),
+        ("project_points", "merit.points", Decimal("1.5"), points,
+         "ck_contribution_award_definitions_project_points_whole", "23514"),
+    ):
+        declared_unit = "USD" if instrument == "money" else "merit.points"
+        _, version = await _draft_policy(project, creator, financial_header=(instrument, declared_unit, binding))
+        rule = await _add_rule(version, project, "accepted_submission", "compensated")
         async with db_session.get_session_factory()() as session:
-            with pytest.raises(IntegrityError):
-                session.add(definition)
+            with pytest.raises(IntegrityError, match=constraint) as caught:
+                session.add(ContributionAwardDefinition(
+                    id=new_record_id(), contribution_rule_id=rule,
+                    contribution_policy_version_id=version, project_id=project,
+                    contribution_type="accepted_submission", task_size="small",
+                    instrument_type=instrument, unit_code=unit, quantity=quantity,
+                    adapter_binding_id=binding,
+                ))
                 await session.flush()
+            assert caught.value.orig.sqlstate == state
 
 
 @pytest.mark.asyncio
@@ -625,7 +625,7 @@ async def test_database_rejects_unknown_iso_code_and_overprecision(
 ) -> None:
     project_id, creator_id, _, money_binding_id, _ = await _seed_project()
     async with db_session.get_session_factory()() as session:
-        with pytest.raises(IntegrityError):
+        with pytest.raises(IntegrityError, match="fk_project_compensation_unit_iso_currency"):
             session.add(
                 ProjectCompensationUnit(
                     project_id=project_id,
@@ -639,7 +639,7 @@ async def test_database_rejects_unknown_iso_code_and_overprecision(
             await session.flush()
 
     async with db_session.get_session_factory()() as session:
-        with pytest.raises(IntegrityError):
+        with pytest.raises(IntegrityError, match="ck_project_compensation_units_unit_identity"):
             session.add(
                 ProjectCompensationUnit(
                     project_id=project_id,
@@ -652,10 +652,10 @@ async def test_database_rejects_unknown_iso_code_and_overprecision(
             )
             await session.flush()
 
-    _, version_id = await _draft_policy(project_id, creator_id)
+    _, version_id = await _draft_policy(project_id, creator_id, financial_header=("money", "USD", money_binding_id))
     rule_id = await _add_rule(version_id, project_id, "accepted_submission", "compensated")
     async with db_session.get_session_factory()() as session:
-        with pytest.raises(IntegrityError):
+        with pytest.raises(IntegrityError, match="ck_contribution_award_definitions_quantity_exact_bounds"):
             session.add(
                 ContributionAwardDefinition(
                     id=new_record_id(),
@@ -663,6 +663,7 @@ async def test_database_rejects_unknown_iso_code_and_overprecision(
                     contribution_policy_version_id=version_id,
                     project_id=project_id,
                     contribution_type="accepted_submission",
+                    task_size="small",
                     instrument_type="money",
                     unit_code="USD",
                     quantity=Decimal("1.0000000000000000001"),
@@ -687,10 +688,10 @@ async def test_database_rejects_each_invalid_quantity_edge(
     quantity: Decimal,
 ) -> None:
     project_id, creator_id, _, money_binding_id, _ = await _seed_project()
-    _, version_id = await _draft_policy(project_id, creator_id)
+    _, version_id = await _draft_policy(project_id, creator_id, financial_header=("money", "USD", money_binding_id))
     rule_id = await _add_rule(version_id, project_id, "accepted_submission", "compensated")
     async with db_session.get_session_factory()() as session:
-        with pytest.raises(IntegrityError):
+        with pytest.raises(IntegrityError, match="ck_contribution_award_definitions_quantity_exact_bounds"):
             session.add(
                 ContributionAwardDefinition(
                     id=new_record_id(),
@@ -698,6 +699,7 @@ async def test_database_rejects_each_invalid_quantity_edge(
                     contribution_policy_version_id=version_id,
                     project_id=project_id,
                     contribution_type="accepted_submission",
+                    task_size="small",
                     instrument_type="money",
                     unit_code="USD",
                     quantity=quantity,
@@ -712,7 +714,7 @@ async def test_database_accepts_exact_maximum_quantity_edge(
     contribution_database_env: str,
 ) -> None:
     project_id, creator_id, _, money_binding_id, _ = await _seed_project()
-    _, version_id = await _draft_policy(project_id, creator_id)
+    _, version_id = await _draft_policy(project_id, creator_id, financial_header=("money", "USD", money_binding_id))
     rule_id = await _add_rule(version_id, project_id, "accepted_submission", "compensated")
     maximum = Decimal("99999999999999999999.999999999999999999")
     async with db_session.get_session_factory()() as session:
@@ -722,6 +724,7 @@ async def test_database_accepts_exact_maximum_quantity_edge(
             contribution_policy_version_id=version_id,
             project_id=project_id,
             contribution_type="accepted_submission",
+            task_size="small",
             instrument_type="money",
             unit_code="USD",
             quantity=maximum,
@@ -813,54 +816,23 @@ async def test_policy_and_unit_tables_reject_truncate(
 
 
 @pytest.mark.asyncio
-async def test_published_definition_cannot_be_reparented_to_draft_version(
-    contribution_database_env: str,
-) -> None:
-    project_id, creator_id, _, money_binding_id, points_binding_id = await _seed_project()
-    _, published_version_id = await _draft_policy(project_id, creator_id)
-    compensated_rule_id = await _add_rule(
-        published_version_id,
-        project_id,
-        "accepted_submission",
-        "compensated",
-        binding_id=money_binding_id,
-    )
+async def test_published_definition_cannot_be_reparented_to_draft_version(contribution_database_env: str) -> None:
+    project, creator, _, money, _ = await _seed_project()
+    _, published = await _draft_policy(project, creator, financial_header=("money", "USD", money))
+    await _add_rule(published, project, "accepted_submission", "compensated", with_awards=True)
+    await _add_rule(published, project, "completed_review", "unpaid")
+    await _publish_version(published, creator)
+    _, draft = await _draft_policy(project, creator, financial_header=("money", "USD", money))
+    draft_rule = await _add_rule(draft, project, "accepted_submission", "compensated")
+    before = (await _graph_snapshot(published), await _graph_snapshot(draft))
     async with db_session.get_session_factory()() as session:
-        session.add(
-            ContributionAwardDefinition(
-                id=new_record_id(),
-                contribution_rule_id=compensated_rule_id,
-                contribution_policy_version_id=published_version_id,
-                project_id=project_id,
-                contribution_type="accepted_submission",
-                instrument_type="project_points",
-                unit_code="merit.points",
-                quantity=Decimal("10"),
-                adapter_binding_id=points_binding_id,
-            )
-        )
-        await session.commit()
-    await _add_rule(published_version_id, project_id, "completed_review", "unpaid")
-    await _publish_version(published_version_id, creator_id)
-
-    _, draft_version_id = await _draft_policy(project_id, creator_id)
-    draft_rule_id = await _add_rule(
-        draft_version_id, project_id, "accepted_submission", "compensated"
-    )
-    async with db_session.get_session_factory()() as session:
-        with pytest.raises(DBAPIError):
-            await session.execute(
-                update(ContributionAwardDefinition)
-                .where(
-                    ContributionAwardDefinition.contribution_policy_version_id
-                    == published_version_id,
-                    ContributionAwardDefinition.instrument_type == "project_points",
-                )
-                .values(
-                    contribution_rule_id=draft_rule_id,
-                    contribution_policy_version_id=draft_version_id,
-                )
-            )
+        with pytest.raises(DBAPIError, match="published contribution policy rules and definitions are immutable") as caught:
+            await session.execute(update(ContributionAwardDefinition).where(
+                ContributionAwardDefinition.contribution_policy_version_id == published,
+                ContributionAwardDefinition.task_size == "small",
+            ).values(contribution_rule_id=draft_rule, contribution_policy_version_id=draft))
+        assert caught.value.orig.sqlstate == "55000"
+    assert (await _graph_snapshot(published), await _graph_snapshot(draft)) == before
 
 
 @pytest.mark.asyncio
@@ -868,13 +840,13 @@ async def test_active_policy_race_has_one_winner(contribution_database_env: str)
     project_id, creator_id, _, money_binding_id, _ = await _seed_project()
     versions: list[UUID] = []
     for _ in range(2):
-        _, version_id = await _draft_policy(project_id, creator_id)
+        _, version_id = await _draft_policy(project_id, creator_id, financial_header=("money", "USD", money_binding_id))
         await _add_rule(
             version_id,
             project_id,
             "accepted_submission",
             "compensated",
-            binding_id=money_binding_id,
+            with_awards=True,
         )
         await _add_rule(version_id, project_id, "completed_review", "unpaid")
         versions.append(version_id)
@@ -883,7 +855,7 @@ async def test_active_policy_race_has_one_winner(contribution_database_env: str)
         try:
             await _publish_version(version_id, creator_id)
             return "active"
-        except (DBAPIError, IntegrityError):
+        except (ContributionPolicyConflict, DBAPIError):
             return "conflict"
 
     assert sorted(
@@ -938,21 +910,22 @@ async def test_publishability_race_cannot_use_uncommitted_rule(
 
 
 @pytest.mark.asyncio
-async def test_publish_lock_rejects_concurrent_draft_child_mutation(
-    contribution_database_env: str,
-) -> None:
-    project_id, creator_id, _, money_binding_id, points_binding_id = await _seed_project()
-    _, version_id = await _draft_policy(project_id, creator_id)
-    compensated_rule_id = await _add_rule(
-        version_id,
-        project_id,
-        "accepted_submission",
-        "compensated",
-        binding_id=money_binding_id,
-    )
-    await _add_rule(version_id, project_id, "completed_review", "unpaid")
-    publish_locked = asyncio.Event()
-    child_attempted = asyncio.Event()
+async def test_publish_lock_rejects_concurrent_draft_child_mutation(contribution_database_env: str) -> None:
+    project, creator, _, money, _ = await _seed_project()
+    _, version = await _draft_policy(project, creator, financial_header=("money", "USD", money))
+    rule = await _add_rule(version, project, "accepted_submission", "compensated", with_awards=True)
+    await _add_rule(version, project, "completed_review", "unpaid")
+    before = await _graph_snapshot(version)
+    mutation = update(ContributionAwardDefinition).where(
+        ContributionAwardDefinition.contribution_rule_id == rule,
+        ContributionAwardDefinition.task_size == "small",
+    ).values(quantity=Decimal("26.5"))
+    async with db_session.get_session_factory()() as session:
+        changed = await session.execute(mutation)
+        assert changed.rowcount == 1
+        await session.rollback()
+    assert await _graph_snapshot(version) == before
+    publish_locked, child_attempted = asyncio.Event(), asyncio.Event()
 
     async def publish() -> str:
         class PausingAuthorization(AllowAuthorization):
@@ -962,26 +935,18 @@ async def test_publish_lock_rejects_concurrent_draft_child_mutation(
                 return await super().consume_contribution_policy_mutation(prepared, facts)
 
         async with db_session.get_session_factory()() as session, session.begin():
-            actor_id = UUID(creator_id)
-            authorization = PausingAuthorization(actor_id)
+            authorization = PausingAuthorization(UUID(creator))
             service = ContributionPolicyService(
-                session,
-                read_authorization=authorization,
-                mutation_authorization=authorization,
+                session, read_authorization=authorization, mutation_authorization=authorization,
                 projects=project_contribution_policy_eligibility_port(session),
                 bindings=policy_adapter_binding_port(session),
             )
-            version = await session.get(ContributionPolicyVersion, version_id)
-            assert version is not None
-            await service.publish(
-                ContributionPolicyPublishRequest(
-                    operation_id=new_record_id(),
-                    actor_profile_id=actor_id,
-                    project_id=UUID(project_id),
-                    contribution_policy_id=version.contribution_policy_id,
-                    contribution_policy_version_id=version.id,
-                )
-            )
+            row = await session.get(ContributionPolicyVersion, version)
+            await service.publish(ContributionPolicyPublishRequest(
+                operation_id=new_record_id(), actor_profile_id=UUID(creator),
+                project_id=UUID(project), contribution_policy_id=row.contribution_policy_id,
+                contribution_policy_version_id=version,
+            ))
             return "published"
 
     async def mutate_child() -> str:
@@ -989,27 +954,14 @@ async def test_publish_lock_rejects_concurrent_draft_child_mutation(
         async with db_session.get_session_factory()() as session:
             try:
                 await session.execute(text("set local lock_timeout='500ms'"))
-                session.add(
-                    ContributionAwardDefinition(
-                        id=new_record_id(),
-                        contribution_rule_id=compensated_rule_id,
-                        contribution_policy_version_id=version_id,
-                        project_id=project_id,
-                        contribution_type="accepted_submission",
-                        instrument_type="project_points",
-                        unit_code="merit.points",
-                        quantity=Decimal("5"),
-                        adapter_binding_id=points_binding_id,
-                    )
-                )
-                await session.flush()
-                return "mutated"
-            except DBAPIError:
+                await session.execute(mutation)
+                raise AssertionError("publication did not retain its child fence")
+            except DBAPIError as caught:
+                assert caught.orig.sqlstate == "55P03"
                 return "rejected"
             finally:
+                await session.rollback()
                 child_attempted.set()
 
-    assert sorted(await asyncio.gather(publish(), mutate_child())) == [
-        "published",
-        "rejected",
-    ]
+    assert sorted(await asyncio.gather(publish(), mutate_child())) == ["published", "rejected"]
+    assert await _graph_snapshot(version) == before

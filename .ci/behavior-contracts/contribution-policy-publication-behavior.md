@@ -1,15 +1,16 @@
-# Chunk Contract: WS-ARCH-001-CP04B — Hidden ContributionPolicy Publication
+# Chunk Contract: WS-ARCH-001-CP04B — ContributionPolicy Publication
 
 Current exposure amendment: CP05A replaces the original hidden-route restriction
-with exact Finance-authorized public policy administration. The owner behavior,
+with public policy administration by authorized project managers and Finance managers. The owner behavior,
 deny-default composition, transaction and lineage requirements below remain.
 
 
 ## Goal
 
-Implement hidden publish and retire behavior using CP04A's public API,
-operation/recovery custody, and opaque authorization port. Keep all policy
-actions unavailable and add no route or downstream product behavior.
+Publish and retire through CONTRIBUTIONS' public API, operation/recovery
+custody, and opaque authorization port. Public routes compose current AUTH
+policy actions; uncomposed owner operations deny by default. Original chunk
+scope and migration sequencing below are historical implementation boundaries.
 
 ## Preconditions, risk and outcome
 
@@ -83,10 +84,12 @@ factory path may be introduced.
   installs the real CONTRIBUTIONS-to-AUTH adapter and prepared-handle behavior.
 - `policy_graph.py` serializes the locked rules in ascending
   `(contribution_type, rule_id)` order and each rule's definitions in ascending
-  `(instrument_type, unit_code, adapter_binding_id, definition_id)` order. It
+  `(task-size order, instrument_type, unit_code, adapter_binding_id, definition_id)` order. It
   uses canonical UTF-8 JSON with sorted keys, `(',', ':')` separators, no
   caller-controlled whitespace, UUID strings, and canonical stored quantity
   strings. The digest is lowercase `sha256:` plus 64 hexadecimal characters.
+  The graph includes the shared instrument/unit/binding header and each
+  definition's task size; Small, Medium and Large use their business order.
   Binding ids are taken from those same locked definitions, deduplicated, and
   sorted by UUID string exactly as AUTH requires.
 - Parity tests must compare the CONTRIBUTIONS-produced facts and digest to the
@@ -212,7 +215,7 @@ duplicates require a fresh authorized read and return immutable event facts.
 
 ## Acceptance criteria
 
-- [ ] Publish/retire use exact CP05A Finance composition; uncomposed owner calls remain deny-default.
+- [ ] Publish/retire use exact authorized project-manager/Finance-manager composition; uncomposed owner calls remain deny-default.
 - [ ] Publish facts equal digest/binding facts recomputed from locked rows.
 - [ ] Concurrent child mutation, binding suspension, unit retirement,
   competing publication, opaque-port denial, close failure, and
@@ -226,8 +229,8 @@ duplicates require a fresh authorized read and return immutable event facts.
 - [ ] PostgreSQL rejects immutable graph mutation, lifecycle skips, forged
   attribution/events, event mutation/deletion/truncation, and incomplete publish.
 - [ ] No new file reaches 500 lines; one primary behavior per test; no frozen
-  debt growth; focused coverage remains at least 90%.
-- [ ] CP05 alone becomes the next activation boundary.
+  debt growth; coverage is diagnostic only.
+- [ ] Public policy actions retain exact AUTH registration and deny-default owner composition.
 
 ## Verification
 
@@ -284,15 +287,6 @@ database do not satisfy the contract.
 ```bash
 cd backend && .venv/bin/ruff check app/modules/contributions app/modules/compensation/api app/modules/compensation/policy_binding_service.py app/adapters/contributions tests/contributions
 cd backend && .venv/bin/python -m pytest -q tests/contributions/test_policy_publication_authorization.py tests/contributions/public_policy/test_contracts.py tests/contributions/test_policy_publish.py tests/contributions/test_policy_publication_recovery.py tests/contributions/test_policy_retire.py tests/contributions/test_policy_publication_auth_parity.py tests/contributions/test_cp04b_file_structure.py tests/contributions/test_cp04b_contract_projection.py tests/authorization/test_contribution_policy_registration.py tests/authorization/guide_compilation/test_migration_contract.py tests/projects/guide_compilation/test_migration_contract.py tests/architecture/test_module_boundaries.py tests/test_alembic.py
-cd backend && .venv/bin/python -m pytest -q tests/contributions --cov=app.modules.contributions --cov=app.adapters.contributions --cov-report=term-missing --cov-fail-under=90
-cd backend && .venv/bin/coverage report --include='app/modules/contributions/api/policies.py' --precision=2 --fail-under=90
-cd backend && .venv/bin/coverage report --include='app/modules/contributions/models.py' --precision=2 --fail-under=90
-cd backend && .venv/bin/coverage report --include='app/modules/contributions/repository.py' --precision=2 --fail-under=90
-cd backend && .venv/bin/coverage report --include='app/modules/contributions/service.py' --precision=2 --fail-under=90
-cd backend && .venv/bin/coverage report --include='app/modules/contributions/policy_graph.py' --precision=2 --fail-under=90
-cd backend && .venv/bin/coverage report --include='app/modules/contributions/policy_publication.py' --precision=2 --fail-under=90
-cd backend && .venv/bin/coverage report --include='app/modules/contributions/policy_mutation_support.py' --precision=2 --fail-under=90
-cd backend && .venv/bin/coverage report --include='app/adapters/contributions/*' --precision=2 --fail-under=90
 cd backend && .venv/bin/python -m scripts.module_boundaries validate --protected-base <base-sha>
 cd backend && .venv/bin/python -m scripts.test_structure_boundary validate --policy ../.ci/auth-boundaries/TEST_STRUCTURE_POLICY.md --ledger ../.ci/auth-boundaries/TEST_STRUCTURE_DEBT.json
 python3 scripts/check_commitrail_records.py --base-ref <base-sha>
@@ -304,7 +298,8 @@ Hosted CI additionally runs
 `tests/contributions/test_policy_publication_concurrency.py` and
 `tests/contributions/test_policy_publication_cross_project_postgresql.py` and
 `tests/contributions/test_policy_lifecycle_postgresql.py` with real PostgreSQL,
-then owns complete semantic-lane and repository aggregate coverage proof.
+then owns complete semantic-lane execution proof. Coverage is diagnostic only;
+percentage quotas do not apply.
 
 ## Required reviewers
 

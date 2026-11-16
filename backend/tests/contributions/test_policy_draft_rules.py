@@ -1,4 +1,4 @@
-"""Complete v2 graph validation, including forged internal owner inputs."""
+"""Current policy graph validation, including forged internal owner inputs."""
 
 from dataclasses import replace
 
@@ -27,7 +27,9 @@ def validate(rules, **header):
 
 
 @pytest.mark.parametrize(
-    "rules", [(complete_rules()[1],), (complete_rules()[0],), (complete_rules()[0],) * 2]
+    "rules",
+    [(complete_rules()[1],), (complete_rules()[0],),
+     (complete_rules()[0],) * 2, (complete_rules()[1],) * 2],
 )
 def test_update_requires_exactly_one_rule_of_each_type(rules):
     with pytest.raises(ContributionPolicyConflict):

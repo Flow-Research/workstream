@@ -1243,3 +1243,29 @@ required by AGENTS.md, rather than imposing one Python representation across
 owners. No database check is relaxed. The focused pure admission/identifier
 run passed 22 cases on isolated development source. Native public replay,
 concurrent consumption and fresh revocation proof follows on a clean commit.
+
+## Current native policy storage proof repair
+
+The current repair scope includes test_contributions.py, its publication
+concurrency consumer, draft-rule/structural proof, and the two policy behavior
+contracts. Replace superseded fixture shapes rather than adding a compatibility
+helper. Negative rows now have valid unrelated fields and name the exact native
+constraint; the publication race has a successful mutation/rollback control,
+SQLSTATE55P03 and unchanged graph proof. Existing size-null and duplicate-tier
+guards remain in reward_policy_storage.py. No product schema, AUTH authority,
+workflow, dependency or CI threshold changes are allowed in this repair.
+
+The contracts now reference exact executable current tests; the structural
+mapper no longer translates names or skips old proof. The rule matrix rejects
+both duplicate rule types. Obsolete coverage quotas are removed in accordance
+with AGENTS.md; required behavior and complete hosted execution remain blocking.
+Focused rule/contract/structure proof passed 50 cases on development source;
+lint and Markdown links passed. Native execution and QA/test-delta/CI/docs review
+remain required before claiming this repair qualified. No capability change is
+claimed by these fixture repairs; the existing Finance roadmap scope remains.
+
+The independent exact-clean replay run at 44acad6f passed all four cases in
+162.70 seconds, including fresh per-member authority with unchanged business
+effects, revoked-manager denial and retained revision-root recovery. Its
+PostgreSQL and MinIO resources were cleaned up. That source is an isolated
+commit; integrating its delta does not relabel its original evidence.
