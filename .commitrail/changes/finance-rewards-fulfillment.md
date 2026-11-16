@@ -1624,3 +1624,12 @@ including its ordered immutable member/finding rows. Require actual run identity
 and nonempty member/finding evidence before replacement; compare the entire
 source projection afterwards. No assertion is dropped. The failed run completed
 owned cleanup; its4passing cases remain exact8fad evidence, not a19case pass.
+
+Internal59ac review found G5-IMPL-001 / QA-G5-001 / TEST-G5-001: the0047→0048
+retained-row comparison omitted the exact source AUTH allow and lifecycle audit
+rows. Add both expected audit rows through their immutable preparation references,
+assert exactly2 and compare complete body/tableoid/xmin with deterministic ordering
+across0048. Keep all seven existing owner comparisons and original pre-upgrade
+semantic validation. No data, runtime, native guard, scope or requirement changes.
+Rerun the captured-window native case and affected review tracks on clean source;
+prior fifteen-case proof keeps its original59ac attribution and unchanged sources.

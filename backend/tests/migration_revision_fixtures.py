@@ -190,6 +190,9 @@ async def retained_revision_rows(session, manifest_id):
         "submissions": "id=(SELECT submission_id FROM public.task_post_submit_routing_manifests WHERE id=:id)",
         "task_revision_preparations": "routing_manifest_id=:id",
         "task_post_submit_routing_manifests": "id=:id",
+        "audit_events": "id IN (SELECT authorization_decision_id FROM public.task_revision_preparations "
+        "WHERE routing_manifest_id=:id UNION SELECT audit_event_id FROM public.task_revision_preparations "
+        "WHERE routing_manifest_id=:id)",
         "outbox_events": "idempotency_key='task.revision.expire:'||CAST(CAST(:id AS uuid) AS text)",
     }
     result = {}
@@ -197,10 +200,10 @@ async def retained_revision_rows(session, manifest_id):
         excluded = ("remaining_microseconds", "clock_observed_at") if table == "task_revision_preparations" else ()
         values = await session.execute(text(
             f"SELECT (to_jsonb(row)-CAST(:excluded AS text[]))::text,tableoid::bigint,"
-            f"xmin::text FROM public.{table} row WHERE {where}"
+            f"xmin::text FROM public.{table} row WHERE {where} ORDER BY 1"
         ), {"id": manifest_id, "excluded": list(excluded)})
         result[table] = [tuple(row) for row in values]
-        assert len(result[table]) == 1, table
+        assert len(result[table]) == (2 if table == "audit_events" else 1), table
     return result
 
 
