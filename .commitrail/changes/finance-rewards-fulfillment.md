@@ -2400,3 +2400,18 @@ Retain all real allow/evidence rollback and replay assertions. Remove the
 obsolete route-specific403 declaration; the shared API error vocabulary remains
 owned by its existing global handler. Freeze and rerun affected native proof
 before asking both focused reviewers to replay the same finding set.
+
+### Actual denial and incompatible-isolation proof continuation
+
+Prepare the remaining approved transaction selectors in a separate owned
+checkout of the frozen HTTP repair candidate. Reuse signed service provisioning,
+public actor/link lifecycle mutations and the owner-earned root. The denial
+probe must observe the genuine captured decision after rollback, reject a
+foreign kernel and copied decision, permit one exact restage, reject a second,
+and independently verify suspended/revoked canonical denial evidence before
+reactivation permits the original request. No fabricated allow or AUTH decision
+is used. The pre-authority probe selects real RR/SERIALIZABLE database sessions
+through only the session dependency; Flow verification and actor resolution stay
+real. It must fail before preparation/restage and leave no effects. A registry
+503 fault checks availability remains distinct from concealed resource refusals.
+These selectors are not claimed executed until their isolated native run.
