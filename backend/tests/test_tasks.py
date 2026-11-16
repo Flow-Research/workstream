@@ -221,9 +221,13 @@ async def test_task_repository_locks_initial_and_revision_submission_context() -
         setattr(task, field, str(value) if field.endswith("_id") and field != "locked_contribution_policy_version_id" else value)
     task.locked_post_submit_checker_policy_body = post_policy.model_dump(mode="json")
     task.acceptance_criteria = base_context.acceptance_criteria
+    task.task_size = base_context.task_size
+    task.locked_submission_award_definition_id = base_context.contribution_award_definition_id
     assignment = MagicMock(
         project_id=str(references.project_id),
         submitter_contribution_policy_version_id=references.locked_contribution_policy_version_id,
+        submitter_task_size=base_context.task_size,
+        submitter_award_definition_id=base_context.contribution_award_definition_id,
         task_id=str(task_id),
         contributor_id=str(contributor_id),
         status="active",
@@ -2755,6 +2759,8 @@ async def test_database_enforces_unique_submission_version(
             submission_id=str(new_record_id()), task=task, contributor_id=persisted.contributor_id,
             task_assignment_id=persisted.task_assignment_id,
             contribution_policy_version_id=persisted.contribution_policy_version_id,
+            task_size=persisted.task_size,
+            contribution_award_definition_id=persisted.contribution_award_definition_id,
             version=persisted.version, summary="duplicate",
             worker_attestation=persisted.worker_attestation,
             package_uri=persisted.package_uri, package_hash=persisted.package_hash,

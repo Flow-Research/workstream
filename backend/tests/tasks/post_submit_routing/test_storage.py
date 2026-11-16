@@ -40,7 +40,11 @@ async def test_source_matches_real_completed_run(tmp_path, isolated_database_env
         assert before <= stored.created_at <= after
         for column, value in h.source.items():
             if column != "id":
-                expected = as_uuid(value) if column.endswith("_id") else value
+                expected = value
+                if column.endswith("_id") and not (
+                    column == "contribution_award_definition_id" and value is None
+                ):
+                    expected = as_uuid(value)
                 assert getattr(facts, column) == expected, column
         assert facts.predecessor_submission_id is facts.predecessor_submission_version is None
         assert facts.admission_id == h.created.admission_id
@@ -75,9 +79,10 @@ async def _reject_changed_manifest(h, monkeypatch, changes, message):
     with monkeypatch.context() as patch:
         patch.setattr(outcome, "_manifest", changed)
         async with h.factory() as session:
-            with pytest.raises(DBAPIError, match=message):
+            with pytest.raises(DBAPIError, match=message) as failure:
                 async with session.begin():
                     await apply_outcome(session, h, None)
+            assert failure.value.orig.sqlstate == "23514"
     async with h.factory() as session:
         assert await outcome_snapshot(session) == before
 
@@ -144,7 +149,9 @@ async def test_source_rejects_foreign_stored_lineage(tmp_path, isolated_database
                     h,
                     monkeypatch,
                     {field: value},
-                    "routing (task is not current|assignment is not current|submission is not current|evaluation is not current|source .*mismatch)",
+                    "routing reward selection differs"
+                    if field in {"submission_id", "contribution_policy_version_id"}
+                    else "routing (task is not current|assignment is not current|submission is not current|evaluation is not current|source .*mismatch)",
                 )
             async with h.factory() as session, session.begin():
                 await apply_outcome(session, h, None)

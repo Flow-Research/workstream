@@ -1447,3 +1447,23 @@ DOC-CURRENT-CONSUMERS-001 also corrects the owner docstrings to canonical
 Project Manager / Finance Authority wording. No public DTO, owner logic, guard,
 workflow or privacy requirement is changed. Replay affected reviewers after
 proof on the new clean source; current full-suite and Finance gaps remain.
+
+
+## Remaining typed task-lineage consumers
+
+Continue reviewed group2 in tests/test_tasks.py, tasks/test_contribution_lineage.py
+and tasks/post_submit_routing/test_storage.py only, plus this record. Explicit
+builder/mock facts copy the actual selected size/definition from the existing
+context, assignment or Submission. Nullable selected UUID stays None; required
+UUID assertions stay strict. Direct assignment INSERT controls include both
+selection coordinates. Negative tuples prove the current selection guard and
+then the original policy stamp guard independently, dropping only the named
+selection trigger inside a rolled-back savepoint; verify exact trigger definition,
+enabled state, SQLSTATE and unchanged assignment rows. Foreign routing selection
+mutants assert the current named guard and unchanged outcome snapshot. No runtime,
+schema, authorization, workflow, dependency or historical-data changes. Risk L1
+proof integrity. Run focused owner-context unit proof and real PostgreSQL affected
+lineage/storage modules; preserve distinct FK, immutable stamp, duplicate version
+and failure rollback proof. Both assigned review groups inspect the clean candidate.
+No capability-ledger impact: this replaces affected test consumers of the existing
+current contract. Full Finance runtime and full-suite qualification remain open.
