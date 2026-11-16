@@ -1482,3 +1482,12 @@ unnecessary trigger-drop helper entirely; no native guard must be changed to
 prove this boundary. The failed replay completed owned cleanup. The preceding
 proposal to discriminate an earlier reward guard is superseded by this observed
 ordering; neither failed run counts as a successful complete module proof.
+
+Internal22ac review found TEST-TASK-LINEAGE-001: a foreign-project submission
+also changes reward selection, so its new guard no longer discriminates exact
+submission currentness. Keep that selection rejection and use the existing real
+completed_sibling_source helper for a same-project/policy/size/definition submission.
+Assert selection equality first, then exact routing-submission currentness rejection,
+23514 and unchanged outcome snapshot; the existing valid original commit remains.
+No new fixture graph/helper or runtime change. Run the affected storage case and
+replay both assigned review tracks against the clean repair source.

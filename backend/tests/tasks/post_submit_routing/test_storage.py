@@ -17,6 +17,7 @@ from .support import (
     SOURCE_COLUMNS,
     activate_successor_guide,
     as_uuid,
+    completed_sibling_source,
     joined_source_facts,
     other_hash,
     source_rows,
@@ -120,6 +121,15 @@ async def test_source_rejects_foreign_stored_lineage(tmp_path, isolated_database
     async with authorized_routing_source(
         tmp_path / "one", isolated_database_env, human_review_required=True
     ) as h:
+        sibling = await completed_sibling_source(h)
+        for field in ("project_id", "contribution_policy_version_id", "task_size",
+                      "contribution_award_definition_id"):
+            assert sibling.source[field] == h.source[field], field
+        assert sibling.source["submission_id"] != h.source["submission_id"]
+        await _reject_changed_manifest(
+            h, monkeypatch, {"submission_id": str(sibling.source["submission_id"])},
+            "routing submission is not current",
+        )
         async with authorized_routing_source(
             tmp_path / "two",
             isolated_database_env,
