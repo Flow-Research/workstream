@@ -1467,3 +1467,9 @@ lineage/storage modules; preserve distinct FK, immutable stamp, duplicate versio
 and failure rollback proof. Both assigned review groups inspect the clean candidate.
 No capability-ledger impact: this replaces affected test consumers of the existing
 current contract. Full Finance runtime and full-suite qualification remain open.
+
+The first exact17a8b7f native run passed its first case, then exposed asyncpg's
+native PostgreSQL char representation in trigger metadata: tgenabled is bytes.
+Read that metadata explicitly as text, preserving the exact enabled-state and
+full-definition comparison. The failed run completed owned database/MinIO cleanup;
+its result is not a full lineage proof pass.

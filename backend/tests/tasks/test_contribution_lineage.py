@@ -51,7 +51,7 @@ async def test_no_payment_screen_claim_and_start_copy_exact_guide_policy(task_cl
 async def _reject_assignment_selection_and_stamp(session, statement, params):
     """Prove both current selection and the independent policy stamp guard."""
     trigger_query = text(
-        "SELECT pg_get_triggerdef(oid), tgenabled FROM pg_trigger "
+        "SELECT pg_get_triggerdef(oid), tgenabled::text AS tgenabled FROM pg_trigger "
         "WHERE tgrelid='public.task_assignments'::regclass "
         "AND tgname='assignment_reward_selection'"
     )
