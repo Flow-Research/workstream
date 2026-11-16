@@ -6411,3 +6411,29 @@ substitution (/tmp/submission-deadline-qa-probe.log). Ruff, structural boundarie
 record and whitespace checks pass. Removed now-unused _prepared_packet import;
 remaining remediation consumer still uses old preparation and requires migration.
 Real timer/provider qualification remains open; no full-spec readiness claim.
+
+Public remediation migration scope: tasks/test_public_submission_intake.py only.
+Use existing real source-backed predecessor and routed failed POST; submit revised
+raw ZIP over HTTP with exact predecessor and revision preparation acknowledgement,
+reject wrong predecessor before PRE, accept/replay immutable receipt, then real
+OUTBOX T5 produces version2 bound to consumed admission and predecessor. Assert
+exact two Submission/PRE/POST runs across initial+revision, one successor and history.
+No production changes or fabricated predecessor/default manifest. Retain shared
+_client/_payload because revision-expiry and CLI consumers still import them.
+Medium lifecycle risk: isolated target, whole public module, lint/structure and QA
+review; human review focus is preserved lineage plus current asynchronous receipt.
+
+Remediation QA001 repaired: CountedStore lacks observe_sealed_source, so T5 uses
+its initialized underlying provider. QA002 repaired: consumed admission now binds
+independently to receipt.operation_id and observed PRE run, not merely successor's
+own admission selector. Independent mutation probes reject either substitution.
+Full module first run7pass1fail284.17s; remediation failed T1 because predecessor
+fixture locks16MiB namespace capacity while HTTP helper supplies4MiB. Preserve
+production mismatch guard; explicitly use predecessor's16MiB test profile for
+this revision only. QA verifies rest of profile unchanged and no shared change.
+Diagnostic v3 loaded repaired code and passes1 in181.35s; explicit final v4 passes1
+in152.66s. Both database/MinIO cleanup complete. Together with unchanged seven
+cases from full run, every public module case has passing evidence. Ruff, structure,
+record and whitespace pass. Shared _payload remains for revision_expiry consumer;
+no removed preparation call remains in this module's tests. This is local proof,
+not full CI/native/provider or full-spec completion.
