@@ -6,6 +6,7 @@
     "app.modules.compensation.fulfillment.evidence_service.FulfillmentEvidenceService._decode_report",
     "app.modules.compensation.fulfillment.evidence_service.FulfillmentEvidenceService._existing",
     "app.modules.compensation.fulfillment.evidence_service.FulfillmentEvidenceService._facts",
+    "app.modules.compensation.fulfillment.evidence_service.FulfillmentEvidenceService._flush_evidence",
     "app.modules.compensation.fulfillment.evidence_service.FulfillmentEvidenceService._lock_source",
     "app.modules.compensation.fulfillment.evidence_service.FulfillmentEvidenceService._parse",
     "app.modules.compensation.fulfillment.evidence_service.FulfillmentEvidenceService._require_transaction",

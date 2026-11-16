@@ -4,10 +4,12 @@ from contextlib import asynccontextmanager
 from uuid import UUID
 
 from sqlalchemy import select, text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.hashing import canonical_json_hash
 from app.core.identifiers import new_record_id
+from app.db.errors import integrity_constraint_name
 from app.modules.compensation.api.fulfillment_contracts import (
     decode_fulfillment_exception, decode_fulfillment_report,
     parse_fulfillment_exception, parse_fulfillment_report,
@@ -64,7 +66,7 @@ class FulfillmentEvidenceService:
                 report_body=value, report_digest=digest,
             )
             self._session.add(row)
-            await self._session.flush()
+            await self._flush_evidence()
             # The native guard assigns this single clock after all lock waits.
             # Reuse RETURNING's actual value for the independent pure decoder.
             self._decode_report(body, root.obligation_body, row.received_at)
@@ -98,13 +100,23 @@ class FulfillmentEvidenceService:
                 kind=value["kind"], exception_body=value, exception_digest=digest,
             )
             self._session.add(row)
-            await self._session.flush()
+            await self._flush_evidence()
             try:
                 decode_fulfillment_exception(body, obligation=root.obligation_body,
                     fulfilled_report=original.report_body, received_at=row.received_at)
             except ValueError as exc:
                 raise FulfillmentEvidenceInvalid("invalid_fulfillment_exception") from exc
             return _exception_ack(row, replay=False)
+
+    async def _flush_evidence(self):
+        try:
+            await self._session.flush()
+        except IntegrityError as exc:
+            if integrity_constraint_name(exc) in {
+                "fulfillment_report_body", "fulfillment_exception_body",
+            }:
+                raise FulfillmentEvidenceInvalid("invalid_fulfillment_evidence") from exc
+            raise
 
     @staticmethod
     def _parse(award_id, event_id, body, *, exception):

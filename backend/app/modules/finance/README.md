@@ -8,7 +8,10 @@ Finance routes or execute transfers or point credits.
 
 Workstream retains acceptance, contribution records, awards and fulfillment
 receipts. Finance will own payees, arrangements, conversion, plans and execution.
-Both financial handoff directions use authenticated HTTP after local commit.
+COMP has internal receipt/exception storage, request-bound authority scaffolding
+and unactivated report commands; callback/source routes and complete native
+operation proof remain pending. Both financial handoff directions use
+authenticated HTTP after local commit.
 Sharing host infrastructure grants no cross-owner write authority.
 
 ## Contract proof

@@ -444,78 +444,96 @@ REV capability, and native INSERT checks the anchored UUID. No per-request
 deployment identity is generated.
 
 The event contains selectors and digests only and stays unregistered for delivery
-in this step. Finance HTTP admission, receipts/exceptions, execution, callbacks,
-status/quote reads and cutoff/drain qualification remain unfinished. See the
+in this step. Finance HTTP admission, public receipt/exception callbacks and source/status
+reads, execution and cutoff/drain qualification remain unfinished. See the
 [implementation record](../.commitrail/changes/finance-rewards-fulfillment.md).
 
 ### CompensationFulfillmentReceipt
 
-Canonical fields:
+Current internal storage and unactivated commands implement the receipt shape;
+public callback/source routes and complete native authority/concurrency proof
+remain unfinished. This foundation grants no payment or delivery authority.
+
+Canonical stored fields:
 
 ```text
 id
-compensation_award_id
+fulfillment_root_id
+award_id
 project_id
+source_instance_id
 adapter_binding_id
 external_event_id
+evidence_ordinal
+recording_lifecycle_generation
 reported_status: fulfilled | failed
-external_reference
-fulfilled_quantity
-fulfilled_at
-failure_code
-reported_at
+report_body
+report_digest
+reporter_actor_id
+reporter_identity_link_id
+authorization_decision_id
+authorization_resource_digest
 received_at
-correlation_id
 ```
 
-Receipts are immutable and idempotent by their exact provider/binding event
-identity. `external_event_id` is an opaque 1-128 character ASCII token matching
-`[A-Za-z0-9._:-]+`, unique per adapter binding. `external_reference` is either
-null or a non-secret opaque token with the same length and character bounds; it
-is required for `fulfilled` and null for `failed`. Neither value is returned by
-contributor/product reads or emitted in integration events.
+`external_event_id` is a canonical Finance-generated UUIDv7, unique per original
+adapter binding. Exact authorized replay retains the original row, allow,
+recording generation, receiver time and ordinal. Changed replay conflicts.
+`report_body` retains the complete closed normalized report; `report_digest`
+hashes that body. Fulfilled quantity must equal the original canonical award
+quantity and unit. `external_reference` is a required non-secret opaque token
+of 1–128 ASCII characters from `[A-Za-z0-9._:-]` for fulfilled reports. Failed
+reports require null quantity, fulfillment time and reference, plus one closed
+code: `ADAPTER_REJECTED`, `DESTINATION_UNAVAILABLE`, `PROVIDER_UNAVAILABLE`,
+`PROVIDER_TIMEOUT` or `UNKNOWN_PROVIDER_FAILURE`.
 
-A fulfilled receipt requires the exact award `NUMERIC(38, 18)` quantity, the
-exact binding unit, and a bounded fulfillment time. A failed receipt requires
-one closed Workstream code:
-`ADAPTER_REJECTED`, `DESTINATION_UNAVAILABLE`, `PROVIDER_UNAVAILABLE`,
-`PROVIDER_TIMEOUT`, or `UNKNOWN_PROVIDER_FAILURE`; unknown provider values map
-to the last code before persistence. Failed receipts have null quantity,
-fulfillment time, and external reference. One award has at most one fulfilled
-receipt. A conflicting replay fails closed.
+The native append guard assigns one receiver clock after custody waits and uses
+it for the 300-second timestamp bounds. Exact retained events have no maximum
+delivery age. At most one fulfilled receipt exists per award. Later failed
+reports retain evidence and cannot lower that historical success.
 
-Raw provider secrets, authentication tokens, unbounded callback bodies,
-free-form messages/codes, headers, signatures, endpoints, credentials, URLs,
-markup, provider metadata, PII, balances, ledgers, and settlement data MUST NOT
-be persisted, logged, emitted, exported,
-or returned. This prohibition does not include the bounded non-secret opaque
-`external_event_id` and `external_reference` identifiers defined above; those
-may be stored only in their canonical receipt/status fields and remain excluded
-from product reads and integration events. Only closed canonical facts, those
-bounded identifiers, and platform-generated digests derived exclusively from
-approved stored receipt fields may cross into receipt, audit, outbox, or
-diagnostic records. Digests derived from provider bodies, tokens, signatures,
-URLs, PII, balances, ledgers, settlement data, or any other forbidden input are
-themselves forbidden and MUST be rejected before persistence.
+### CompensationFulfillmentException
+
+The immutable exception shares the receipt's original source, reporter/AUTH,
+recording-generation, receiver-time and evidence-ordinal fields. Its own fields
+are `id`, `exception_event_id`, `original_receipt_id`,
+`original_fulfillment_event_id`, `kind`, `exception_body` and `exception_digest`.
+Both event IDs are canonical UUIDv7 values. The original row must be this
+award/binding's actual fulfilled receipt. Kind is only `provider_reversal` or
+`provider_status_conflict`; body and digest cover the exact closed request.
+Exact replay retains the original evidence; changed replay conflicts.
+
+An exception sets persistent attention while preserving historical fulfillment.
+It creates no payout, adjustment, contribution or award. There is no automatic
+clear or repayment operation. Native tables reject update, delete and truncate.
+
+Raw provider secrets, tokens, free-form messages, payloads, headers, signatures,
+URLs, account details and metadata must never cross this boundary. Only closed
+facts, exact event UUIDs, the bounded non-secret reference and their canonical
+digests may persist. Product reads and integration events exclude operational
+provider/event identifiers. Digests of forbidden provider input are forbidden.
 
 ### CompensationStatusProjection
 
-Canonical fields:
+The owner rebuilds this read from immutable evidence; no mutable status row or
+cache owns fulfillment truth:
 
 ```text
-compensation_award_id
 delivery_status: pending_delivery | acknowledged_by_adapter
 fulfillment_status: pending | failed | fulfilled
+fulfillment_attention_required
 latest_receipt_id
-external_reference
+latest_exception_id
 last_failure_code
-delivery_timestamps
-fulfillment_timestamps
 updated_at
 ```
 
-This projection is mutable and rebuildable from immutable awards, delivery
-history, and receipts. It is not eligibility or settlement truth.
+Latest evidence follows the positive cross-table ordinal assigned under the
+existing root mutex, never UUID time, caller time or wall-clock ordering.
+Fulfilled dominates a later failure; a linked exception retains attention.
+A recorded callback establishes adapter observation. Generic OUTBOX completion
+alone does not establish Finance acknowledgement. Actual authenticated delivery
+acknowledgement remains a separate unfinished operation.
 
 ## FinalAcceptance Boundary
 

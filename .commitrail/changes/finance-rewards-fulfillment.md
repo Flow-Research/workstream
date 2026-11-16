@@ -2059,3 +2059,17 @@ separate78f89684c ActionId snapshot repair is also retained. Earlier G5 migratio
 repairs and installed MCP unpaid-policy input repair remain present. Hosted
 backend/full-suite execution on preceding pushedbebc90463 completed SUCCESS;
 it does not qualify these later receipt changes.
+
+
+Root command follow-up maps only native closed-report/exception body refusals
+to the public invalid-input error; source/AUTH/digest/infrastructure errors keep
+their distinct failure. This still requires actual flush/API proof. Add focused
+public-command tests showing substituted path/event identity or absent root
+transaction cannot reach any locator or authority. Use no database/usable fake
+port and preserve wire validation tests; register these in the static lane.
+Update current receipt/exception/projection documentation to actual row/body
+shapes and UUIDv7 event IDs, removing obsolete opaque event-token and mutable
+projection descriptions. Reconcile only affected roadmap summary, scoreboard,
+dependency edge and proof gate: internal scaffolding exists; callback/source
+routes, actual native authority/concurrency and Finance execution remain pending.
+No local sheet exports exist. No delivered callback or payment claim is added.

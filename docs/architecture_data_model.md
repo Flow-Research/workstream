@@ -2371,50 +2371,39 @@ control and transition observation; later phases cannot replace or clear it.
 Native guards enforce that identity even before the first root, sequential allocation,
 immutable evidence and deferred award/root/event closure. Suspended bindings do
 not change earned facts. The new selector/digest event stays unregistered; root
-custody does not implement Finance admission, receipts, payment or cutoff/drain.
+custody does not activate Finance admission, public callbacks, payment or cutoff/drain.
 
 ## CompensationFulfillmentReceipt
 
-Fields:
+Internal immutable receipt storage binds `id`, `fulfillment_root_id`, `award_id`,
+`project_id`, `source_instance_id` and original `adapter_binding_id` to a canonical
+UUIDv7 `external_event_id`. It stores the complete closed `report_body`, its
+`report_digest`, `reported_status`, actual reporter actor/link, exact AUTH
+allow/resource digest, recording lifecycle generation, database receiver time
+and positive root-serialized evidence ordinal. Binding/event identity is unique;
+at most one fulfilled receipt exists per award. Full quantity and timestamp
+bounds are checked independently in native storage and the portable decoder.
+Public operations and complete transactional qualification remain pending.
 
-- `id`
-- `compensation_award_id`
-- `project_id`
-- `adapter_binding_id`
-- `external_event_id`
-- `reported_status`: `fulfilled | failed`
-- `external_reference`
-- `fulfilled_quantity`
-- `fulfilled_at`
-- `failure_code`
-- `reported_at`
-- `received_at`
-- `correlation_id`
+## CompensationFulfillmentException
 
-Receipts are immutable. `external_event_id` is a binding-scoped unique 1-128
-character opaque ASCII token from `[A-Za-z0-9._:-]`. Fulfilled receipts require
-the exact award `NUMERIC(38, 18)` quantity, a non-secret external reference with
-the same bounds, and a timestamp. Failed receipts require a closed Workstream
-failure code and null quantity, time, and external reference. Free-form provider
-messages/codes, payloads, headers, signatures, credentials, URLs, and metadata
-are never persisted, logged, emitted, exported, or returned. One award has at
-most one fulfilled receipt.
+Immutable exception storage binds the same original source and authority fields
+to UUIDv7 `exception_event_id`, actual `original_receipt_id` and
+`original_fulfillment_event_id`, closed `kind`, `exception_body` and
+`exception_digest`. It requires this award's actual success and shares the
+receipt's root-serialized ordinal sequence. It records attention without
+removing success or authorizing repayment. Both row types reject mutation.
+See the [canonical evidence fields](spec_contribution_compensation.md#compensationfulfillmentreceipt).
 
 ## CompensationStatusProjection
 
-Fields:
-
-- `compensation_award_id`
-- `delivery_status`: `pending_delivery | acknowledged_by_adapter`
-- `fulfillment_status`: `pending | failed | fulfilled`
-- `latest_receipt_id`
-- `external_reference`
-- `last_failure_code`
-- delivery, fulfillment, and update timestamps
-
-This projection is mutable and rebuildable. ContributionRecord,
-CompensationAward, outbox delivery history, and fulfillment receipts remain the
-authoritative records.
+A rebuilt owner read returns `delivery_status`, `fulfillment_status`,
+`fulfillment_attention_required`, `latest_receipt_id`, `latest_exception_id`,
+`last_failure_code` and `updated_at`. It uses evidence ordinals for latest
+selection, keeps fulfilled above late failure and retains exception attention.
+There is no mutable projection row or status cache. Callback evidence can prove
+adapter observation; generic OUTBOX completion cannot. Earned contribution and
+award facts remain immutable. Public status/delivery operations remain pending.
 
 ## ReputationEvent
 
