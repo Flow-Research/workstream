@@ -1508,3 +1508,19 @@ verify complete management receipt module against isolated PostgreSQL, then both
 assigned review groups on clean source. Human focus: valid current shapes reach
 the intended constraints; no requirement is silently removed. No capability
 ledger delta; full Finance and hosted qualification remain unfinished.
+
+Hosted bb743cf source ran merge1ba1c4445b548fbe3abe5e79c17eddaddbdf7c7c.
+Both CLI contract lanes stopped at the existing Ruff formatting check: the
+integration conftest needed one blank line after its imports. Apply that exact
+formatter output in cli/tests/integration/conftest.py; AST before/after is equal,
+no fixture/runtime/dependency or CI changes. Run the actual CLI Ruff/check-format
+commands; prior socket/native proof is not relabeled or replaced by formatting.
+
+Exact22ac task-lineage proof passed14cases/399.38s with cleanup. Review finding
+TEST-TASK-LINEAGE-001 required independent same-selection submission-currentness
+proof; exact3122807 then passed that repaired native case in148.33s with cleanup.
+Exact isolatedb51a66c passed the complete6case management receipt module in243.92s
+with cleanup and both bounded review tracks pass. Integrated test sources are
+byte-identical to their original proof sources. Reconcile the combined repair
+and formatting delta on one clean target before pushing. Full hosted/Finance
+qualification remains unfinished; the genuine-data adoption is separate work.
