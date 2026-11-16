@@ -94,7 +94,8 @@ def test_source_and_lookup_equal_target_ids_never_share_authority():
 
 
 @pytest.mark.asyncio
-async def test_replay_checks_original_allow_without_creating_replacement_authority():
+@pytest.mark.parametrize("action,facts", _resources()[:2])
+async def test_replay_checks_original_allow_without_creating_replacement_authority(action, facts):
     """Retained evidence must match the authority selectors and exact source digest."""
     from types import SimpleNamespace
     from unittest.mock import AsyncMock, Mock
@@ -107,7 +108,6 @@ async def test_replay_checks_original_allow_without_creating_replacement_authori
         ServiceAuthorizationContext,
     )
 
-    action, facts = _resources()[0]
     resource = fulfillment_evidence_resource(facts)
     context = ServiceAuthorizationContext(
         actor_kind=ActorKind.SERVICE, actor_status=ActorStatus.ACTIVE,
@@ -133,7 +133,9 @@ async def test_replay_checks_original_allow_without_creating_replacement_authori
     issuance = SimpleNamespace(authority=SimpleNamespace(
         context=context, action_id=action, scope_project_id=facts.project_id,
     ))
-    await validate_fulfillment_replay(owner, issuance, action, object(), resource, decision_id)
+    caller_input = object()
+    await validate_fulfillment_replay(owner, issuance, action, caller_input, resource, decision_id)
+    owner._validate_consumption.assert_called_once_with(issuance, action, caller_input, resource)
     read.assert_awaited_once_with(decision_id)
     for field, changed in (
         ("actor_id", str(new_record_id())), ("action_id", ActionId.COMPENSATION_FULFILLMENT_SOURCE_READ.value),
@@ -143,7 +145,13 @@ async def test_replay_checks_original_allow_without_creating_replacement_authori
     ):
         read.return_value = SimpleNamespace(**(expected | {field: changed}))
         with pytest.raises(PreparedAuthorizationHandleInvalid, match="invalid retained fulfillment receipt"):
-            await validate_fulfillment_replay(owner, issuance, action, object(), resource, decision_id)
+            await validate_fulfillment_replay(owner, issuance, action, caller_input, resource, decision_id)
     read.return_value = None
     with pytest.raises(PreparedAuthorizationHandleInvalid, match="invalid retained fulfillment receipt"):
-        await validate_fulfillment_replay(owner, issuance, action, object(), resource, decision_id)
+        await validate_fulfillment_replay(owner, issuance, action, caller_input, resource, decision_id)
+
+    read.reset_mock()
+    owner._validate_consumption.side_effect = PreparedAuthorizationHandleInvalid("invalid root custody")
+    with pytest.raises(PreparedAuthorizationHandleInvalid, match="invalid root custody"):
+        await validate_fulfillment_replay(owner, issuance, action, caller_input, resource, decision_id)
+    read.assert_not_awaited()

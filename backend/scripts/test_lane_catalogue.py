@@ -251,6 +251,7 @@ SHARED_FOUNDATION_MODULES = (
     "tests/test_auth_concurrency_observer.py",
     "tests/test_authorization.py",
     "tests/authorization/test_catalogue.py",
+    "tests/authorization/test_fulfillment_evidence_contracts.py",
     "tests/authorization/test_authorization_custody_documentation.py",
     "tests/authorization/test_acceptance_source_contracts.py",
     "tests/authorization/test_outbox_dispatch_contract.py",

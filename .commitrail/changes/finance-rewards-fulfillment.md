@@ -1789,3 +1789,14 @@ The focused pure AUTH/recovery/routing/catalogue selection passed117 cases in
 13.45s; Ruff/diff checks and the module-boundary validator pass. These checks
 cover exact action/resource/principal and retained-allow substitution boundaries;
 native authorization, transactional replay and live callback proof remain pending.
+
+
+Receipt AUTH review at74603d185 passes security/architecture/reuse and source QA,
+while CI-AUTH-WIRING-001 requires registering the new module in the existing
+shared AUTH test lane and TEST-AUTH-WIRING-001 requires covering both callback
+replay families and the exact PREP validation boundary. The repair adds only
+that existing-lane entry, parameterizes report/exception replay, checks the exact
+caller input and tests guard failure prevents even an audit lookup. It preserves
+all retained-allow substitution negatives. No production authority or activation
+changes are included in this repair. Replay and deterministic checks follow on
+the clean candidate; native/API qualification remains pending.
