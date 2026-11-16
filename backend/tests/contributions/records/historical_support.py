@@ -85,3 +85,30 @@ async def historical_contribution_source(
             contribution_policy_version_id=row["contribution_policy_version_id"],
         )
         yield h
+
+
+async def award_values_at_0018(session, record):
+    """Prepare the exact archived award set for the 0018→0019 migration only."""
+    assert await session.scalar(text(
+        "SELECT version_num FROM public.alembic_version"
+    )) == "0018_task_routing_request"
+    definitions = (await session.execute(text("""
+        SELECT d.id, d.adapter_binding_id, d.instrument_type, d.unit_code, d.quantity
+        FROM public.contribution_award_definitions d
+        JOIN public.contribution_rules r ON r.id=d.contribution_rule_id
+          AND r.contribution_policy_version_id=d.contribution_policy_version_id
+          AND r.project_id=d.project_id AND r.contribution_type=d.contribution_type
+        WHERE d.project_id=:project AND d.contribution_policy_version_id=:policy
+          AND d.contribution_type=:type AND r.compensation_mode='compensated'
+        ORDER BY d.instrument_type, d.id
+    """), {"project": record.project_id, "policy": record.contribution_policy_version_id,
+           "type": record.contribution_type})).mappings().all()
+    assert len(definitions) == 2
+    return [dict(
+        id=new_record_id(), project_id=record.project_id, contribution_record_id=record.id,
+        contributor_id=record.contributor_id,
+        contribution_policy_version_id=record.contribution_policy_version_id,
+        award_definition_id=d["id"], adapter_binding_id=d["adapter_binding_id"],
+        instrument_type=d["instrument_type"], unit_code=d["unit_code"], quantity=d["quantity"],
+        correlation_id=new_record_id(),
+    ) for d in definitions]

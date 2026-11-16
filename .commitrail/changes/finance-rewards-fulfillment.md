@@ -1279,3 +1279,19 @@ existing concurrent replay proof independently requires the same per-member
 allow behavior. No allow audit is hidden or treated as a business write. The
 failed run completed owned cleanup; its teardown also logged a cross-loop pool
 close exception, which is distinct from the reproduced snapshot failure.
+
+## Retained predecessor fixture isolation
+
+Repair the0018 completeness migration tests in records/historical_support.py
+and test_migration.py only, with this record. The archived predecessor has two
+compensated definitions and no Submission selection column. A revision-bound
+raw query reads exactly those stored project/policy/type definitions; both tests
+assert the complete two-award source before deliberately inserting one or both.
+The current runtime selector and its fixture remain strict and unchanged.
+No migration/schema/authority/CI changes, runtime fallback or retained-data
+deletion is allowed. QA plan review traced the archived values and explicit
+INSERT columns and passed. Risk L1 retained-data proof. Required verification:
+real PostgreSQL complete and incomplete upgrades, byte-preserving snapshots,
+rollback/revision/function guards, lint and QA/test-delta/CI review. Human focus:
+exact predecessor fixture custody rather than current readers on absent columns.
+No capability-ledger change is claimed by this test-only repair.
