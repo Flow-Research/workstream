@@ -6570,3 +6570,17 @@ cases and all5 nonrecordable cases preserve finalize authority, no checker acces
 recoverability, scratch cleanup and exact unchanged T4+POST event set. QA no scoped
 findings; final structural validator terminal0, Ruff/record/whitespace pass. This
 commit includes material tests only; bindingunit strengthening remains separate.
+
+Binding first run18pass1fail: manually rebuilt wrongversion replay omitted accepted
+operation, so it stopped at operation guard; use replace(original,submission_version=2)
+to isolate intended version denial (QA-BINDING001). QA-BINDING002 strengthens new
+negative fixture with full valid downstream readsequence, so removing operationguard
+causes DIDNOTRAISE rather than exhaustedmock. Exact probes now detect missingSQL
+participation and foreign/missingoperation invalidacceptance; all existing assertions
+retained including historical read. Final19pass1.52s, no remaining QA findings;
+Ruff/whitespace pass. Final structure session22457 stillactive at this checkpoint.
+
+Final binding structural validator terminal0. Scoped tests/review/record checks
+complete; commit current accepted-operation fixture and guards without claiming
+live database source validation or full-spec readiness. No local test run remains
+active from model/retry/material/binding batch.
