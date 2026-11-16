@@ -9,14 +9,12 @@ from uuid import UUID
 from sqlalchemy import insert, select, text
 
 from app.adapters.tasks import submitted_bundle_port, task_submission_context_port
-from app.api.deps.authorization import compose_hidden_submission_creation_command
 from app.core.identifiers import new_record_id
 from app.modules.actors.models import ActorIdentityLink
-from app.modules.artifacts.api import SubmissionBundlePreparationRequest
+from app.modules.artifacts.api.submission_intake import SubmissionIntakeMetadata
 from app.modules.artifacts.api.submission_manifest import (
     build_submission_manifest,
 )
-from app.modules.authorization.api import ActorIdentityFacts, ActorKind
 from app.modules.checkers.models import CheckerRun
 from app.modules.reviews.decision.models import (
     FindingResolution,
@@ -26,16 +24,14 @@ from app.modules.reviews.decision.models import (
 )
 from app.modules.reviews.decision.schemas import ReviewFindingInput, ReviewSourceInput
 from app.modules.reviews.packet.repository import ReviewPacketRepository
-from app.modules.tasks.api import SubmissionCreationRequest
 from app.modules.tasks.api.submission_context import TaskSubmissionContextRequest
 from app.modules.tasks.api.submitted_bundle import SubmittedBundleRequest
 from app.modules.tasks.models import Submission
 from tests.checkers.execution.support import live_executor, reserve
 from tests.reviews.packet.support import packet_source, prepare_packet
+from tests.post_submit_materialization_helpers import create_source_submission
 from tests.tasks.post_submit_routing.support import next_request, source_values
-from tests.tasks.submission_lineage_support import _verified_admission
 from tests.test_artifact_admission import _context
-from tests.archive_fixtures import byte_source as _bytes
 
 
 @asynccontextmanager
@@ -282,40 +278,18 @@ async def _admit_successor(h):
             f"revision-{h.request.submission_version + 1}.txt", "The requested result is corrected."
         )
     revised_data = revised_bytes.getvalue()
-    preparation = SubmissionBundlePreparationRequest(
-        actor=ActorIdentityFacts(
-            context.actor_profile_id, context.identity_link_id, ActorKind.HUMAN
-        ),
-        request_id=context.request_id,
-        correlation_id=context.correlation_id,
+    metadata = SubmissionIntakeMetadata(
         task_id=h.request.task_id,
         assignment_id=h.request.assignment_id,
         predecessor_submission_id=h.request.submission_id,
-        idempotency_key=new_record_id(),
         summary=h.creation_request.summary,
         contributor_attestation=h.creation_request.contributor_attestation,
-        media_type="application/zip",
-        byte_source=_bytes(revised_data),
-        revision_preparation_id=str(revision.preparation_id),
+        revision_preparation_id=revision.preparation_id,
         revision_preparation_sha256=revision.preparation_sha256,
     )
-    admission_id = await _verified_admission(
-        h.factory, h.store, h.namespace, h.settings, context, preparation
+    created = await create_source_submission(
+        h.factory, context, h.store.wrapped, h.namespace, h.settings, metadata, revised_data,
     )
-    async with h.factory() as session:
-        created = await compose_hidden_submission_creation_command(
-            session, context, request_id=new_record_id(), correlation_id=new_record_id()
-        ).create(
-            SubmissionCreationRequest(
-                task_id=h.request.task_id,
-                assignment_id=h.request.assignment_id,
-                contributor_id=context.actor_profile_id,
-                predecessor_submission_id=h.request.submission_id,
-                admission_id=admission_id,
-                summary=preparation.summary,
-                contributor_attestation=preparation.contributor_attestation,
-            )
-        )
     async with h.factory() as session:
         facts = await submitted_bundle_port(session).read(
             SubmittedBundleRequest(h.request.project_id, h.request.task_id, created.submission_id)

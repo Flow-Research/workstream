@@ -6203,3 +6203,40 @@ Hosted86a artifacts contain146 failing cases across completed lanes, including
 42 obsolete preparation-fact callers and multiple retired PRE constructors.
 Artifacts: /tmp/submission-ci-43947584976; failure index:
 /tmp/submission-hosted-failures-86a.txt. Full CI remains incomplete and failing.
+
+Review-history successor producer migration scope: reviews/decision/support.py.
+Replace obsolete prepare/verify/hidden-create setup in _admit_successor with
+existing create_source_submission, using the same actor, locked revision context,
+exact predecessor, summary and corrected ZIP. Preserve all storage review,
+finding carry-forward and predecessor assertions; no compatibility alias, direct
+Submission insert or authority bypass. Medium risk shared lifecycle fixture;
+verify its three consuming storage tests on isolated PostgreSQL, Ruff and test
+structure checks. QA review must confirm the current producer does not weaken
+the history guards. Existing review fixtures remain storage proofs, not public
+human-decision authority claims.
+
+Adjacent retry-fixture scope: checkers/execution/test_checker_retry.py.
+Its missing-object injection still patches open, while current selected POST
+reads open_source. Move the exact controlled provider failure to open_source and
+accept its keyword arguments. Preserve material_unavailable, Operator receipt,
+rollback and retry assertions. Verify local/MinIO recovery first, then affected
+retry/authority consumers; QA review of this shared injection is required. No
+production changes or weakening of expected infrastructure failure classification.
+
+Local/MinIO retry pair now reaches actual Operator successor creation; both fail
+on obsolete total-event count2 versus3 (T4 finalization plus two POST requests).
+Update this file's exact total counts for the one retained finalization event,
+explicitly assert that finalization event in the shared source fixture, and move
+the independent concurrency fixture's identical old open hook to open_source.
+Preserve all rollback/replay and exact retry receipt checks; no event filtering
+that could hide duplicates. Replay provider pair and full affected retry file.
+
+Successor verification: all3 existing predecessor-chain, finding carry-forward
+and first-review-after-correction cases pass273.83s; owned database and MinIO
+cleanup complete (/tmp/submission-review-successor-v1). Existing serializer
+warnings remain. QA finds no code defect: same actor/revision custody, unchanged
+history/finding assertions; all11 retry event totals increase exactly1 for retained
+T4 and the new source assertion requires exactly1 finalization event. Ruff,
+whitespace, Commitrail and initial structure validation pass. Full retry replay
+(/tmp/submission-current-retry-v2) and prior AUTH replay remain live; this checkpoint
+does not claim their success or whole-spec readiness.
