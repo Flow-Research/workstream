@@ -2195,3 +2195,20 @@ not computed from production catalogue during tests. Schema ownership still
 includes every existing module. No CI workflow, skip, gate or production schema
 changes. Run the complete lane-catalogue controls and focused Alembic graph
 regression, with a same-cardinality cross-family mutation discriminator.
+
+
+All three shared lanes on811 also exposed the same pure matrix-consumer gap:
+six parameter cases in two existing tests. Their generic input builder supplied
+an empty request for the now-declared fulfillment resources, and their fixed
+"wrong" identity was COMPENSATION_ADAPTER even for its own new actions. Extend
+the one controlled service-matrix fixture with exact typed source/report/
+exception resources and representative UUIDv7 record facts, and select a known
+different identity for every owner. Rename that single fixture to service
+matrix inputs without retaining its old alias; all current callers transition.
+Use a shared forbidden-actor-lock fixture for both negative tests, retaining
+unsupported denial-code, zero-lock, no-issued-handle and zero-event assertions.
+This removes irrelevant positive actor-row mock data from a before-lock test
+and shrinks the oversized test owner; no production authorization or guard
+ordering changes. These are pure tests, not native authority proof. Once the
+three actions activate, retain their wrong-identity proof in the named active
+registration tests rather than keeping obsolete PLANNED assertions.

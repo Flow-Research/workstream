@@ -24,7 +24,8 @@ from tests.authorization.postgresql_support import restore_actor_lifecycle_trigg
 
 from tests.authorization.runtime_support import (
     _runtime_context,
-    _planned_service_matrix_inputs,
+    _service_matrix_inputs,
+    _ForbiddenMatrixActorLock,
     _DecisionEvidence,
     _runtime_service,
     _PreparedTestSession,
@@ -5436,33 +5437,12 @@ async def test_project_setup_service_matrix_issues_no_handle_for_planned_actions
         service_identity=service_identity or ServiceIdentity.ARTIFACT_VERIFIER,
     )
 
-    class LockedFacts:
-        calls = 0
-
-        async def lock_request_actor(self, identity_link_id, actor_profile_id):
-            self.calls += 1
-            return (
-                SimpleNamespace(
-                    id=str(identity_link_id),
-                    actor_profile_id=str(actor_profile_id),
-                    status="active",
-                ),
-                SimpleNamespace(
-                    id=str(actor_profile_id),
-                    actor_kind=context.actor_kind.value,
-                    status="active",
-                    service_identity=(
-                        service_identity.value if service_identity is not None else None
-                    ),
-                ),
-            )
-
-    context, caller_input, scope = _planned_service_matrix_inputs(
+    context, caller_input, scope = _service_matrix_inputs(
         context, action_id, _submission_policy_derive_prepare_inputs
     )
     session = _PreparedTestSession()
     authorization, evidence = _runtime_service(context, session=session)
-    facts = LockedFacts()
+    facts = _ForbiddenMatrixActorLock()
     authorization._admin = facts  # type: ignore[assignment]
     prepared = PreparedAuthorizationService(
         session,  # type: ignore[arg-type]
@@ -5496,19 +5476,20 @@ async def test_project_setup_service_matrix_wrong_identity_denies_before_availab
     action_id: ActionId,
     owning_identity: ServiceIdentity,
 ):
-    wrong_identity = ServiceIdentity.COMPENSATION_ADAPTER
+    wrong_identity = (ServiceIdentity.OUTBOX_DISPATCHER if owning_identity is ServiceIdentity.COMPENSATION_ADAPTER
+                      else ServiceIdentity.COMPENSATION_ADAPTER)
     assert wrong_identity is not owning_identity
     assert action_id not in SERVICE_ACTIONS_BY_IDENTITY.get(wrong_identity, frozenset())
     context = _runtime_context(
         actor_kind=ActorKind.SERVICE,
         service_identity=wrong_identity,
     )
-    context, caller_input, scope = _planned_service_matrix_inputs(
+    context, caller_input, scope = _service_matrix_inputs(
         context, action_id, _submission_policy_derive_prepare_inputs
     )
     session = _PreparedTestSession()
     authorization, evidence = _runtime_service(context, session=session)
-    facts = _PreparedAdminFacts(context)
+    facts = _ForbiddenMatrixActorLock()
     authorization._admin = facts  # type: ignore[assignment]
     prepared = PreparedAuthorizationService(
         session,  # type: ignore[arg-type]
