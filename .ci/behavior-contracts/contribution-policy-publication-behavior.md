@@ -238,7 +238,7 @@ duplicates require a fresh authorized read and return immutable event facts.
 
 | Criterion | Required future proof | Execution custody |
 |---|---|---|
-| Publish/retire use CP05A public Finance composition; uncomposed owner calls remain deny-default | `tests/contributions/test_policy_publication_authorization.py::{test_publish_denies_without_composed_authority,test_retire_denies_without_composed_authority}` and `tests/contributions/public_policy/test_contracts.py::test_public_policy_contract` | focused local command and hosted CI |
+| Publish/retire use authorized project-manager/Finance-manager composition; uncomposed owner calls remain deny-default | `tests/contributions/test_policy_publication_authorization.py::{test_publish_denies_without_composed_authority,test_retire_denies_without_composed_authority}` and `tests/contributions/public_policy/test_contracts.py::test_public_policy_contract` | focused local command and hosted CI |
 | Publish consumes exact server-recomputed graph digest and binding ids, and the public request cannot carry caller graph facts | `tests/contributions/test_policy_publish.py::{test_publish_uses_locked_server_owned_graph,test_publish_request_cannot_carry_caller_graph_facts}` | focused local command and hosted CI |
 | PREP denial occurs before lifecycle mutation | `tests/contributions/test_policy_publication_authorization.py::test_publish_prepare_denial_has_no_product_effect` | focused local command and hosted CI |
 | PREP consume exception occurs before lifecycle mutation | `tests/contributions/test_policy_publication_authorization.py::test_publish_consume_exception_has_no_product_effect` | focused local command and hosted CI |

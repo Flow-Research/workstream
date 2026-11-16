@@ -1295,3 +1295,17 @@ real PostgreSQL complete and incomplete upgrades, byte-preserving snapshots,
 rollback/revision/function guards, lint and QA/test-delta/CI review. Human focus:
 exact predecessor fixture custody rather than current readers on absent columns.
 No capability-ledger change is claimed by this test-only repair.
+
+Bounded review at clean983e5a8 passed QA, test-delta, CI integrity, security,
+architecture and reuse. Documentation found DOC-POLICY-CONTRACT-001: one
+acceptance row still said Finance-only composition. Correct that row to both
+authorized project-manager and Finance-manager composition; no runtime change.
+The exact983 native policy run passed50 cases in247.49 seconds with complete
+cleanup. Original44 replay proof remains attributed to44; reviewers verified
+affected source identity rather than relabeling the artifact. Full hosted
+execution and Finance HTTP/payment qualification remain unfinished.
+
+Exact isolatede26ab6e completeness proof passed both predecessor upgrade cases
+in329.66 seconds. Complete two-award rows are preserved, incomplete rows cause
+refusal without partial conversion, and owned PostgreSQL/MinIO cleanup completed.
+This is migration evidence only, not current dual-instrument runtime behavior.
