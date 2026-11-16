@@ -1832,3 +1832,16 @@ three PLANNED compensation memberships,21 identities and45 registered service
 memberships. Historical CP03A evidence remains historical. These catalogue-only
 changes expose no receipt operation and add no delivered roadmap capability;
 full native receipt/API qualification and Finance delivery remain unfinished.
+
+
+Exact1f09cb31d CLI/API replay passed1 case in48.94s using the private fixture
+scratch root, with complete PostgreSQL/MinIO cleanup. Original6f5250a eight
+native catalogue read cases retain their original execution provenance; they
+were not rerun or relabeled. The full real built-binary CLI HTTP module passed23
+cases in23.08s at1f09. Removing only Go's exact-total guard through an isolated
+overlay makes the malformed-success case fail specifically on accepted98/98
+output in7.53s; production code and repository files were not mutated for that
+probe. CATALOGUE-CONSUMER-001 has discriminating proof pending reviewer replay.
+A final current-doc scan also removes the remaining no-matrix/current-target-only
+claims while retaining explicitly historical CP03A registration evidence. The
+three memberships stay PLANNED; no receipt API, payment or full Finance claim.

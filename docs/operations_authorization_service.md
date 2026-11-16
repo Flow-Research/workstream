@@ -853,12 +853,13 @@ IDs, subject kind, lifecycle state, and timestamps. Neither response includes
 issuer, subject, contact email, reason, lifecycle actor, token/claim, grant,
 assignment, or service-action-matrix data.
 
-Controlled provisioning may create the target-only
-`workstream.compensation.adapter` profile and service identity link. Operators
-must not add a service-action matrix row for it: it is a binding target, not an
-action-bearing service principal. CP03A left all adapter-binding actions
-unavailable; CP03B is the separate completed Finance Authority activation
-boundary.
+Controlled provisioning may create the `workstream.compensation.adapter`
+profile and service identity link for a binding target. Its exact three
+fulfillment matrix memberships remain PLANNED and do not grant executable
+callback or source-read authority. Operators must not add ad hoc memberships.
+CP03A originally established target eligibility; CP03B separately activated the
+human Finance Authority binding actions. Binding management does not activate
+service fulfillment actions.
 
 The kernel locks and revalidates the human caller profile, exact link, and
 matched system grant before target lookup and holds those locks through

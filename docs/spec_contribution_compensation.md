@@ -925,12 +925,12 @@ release readiness, but MUST NOT prevent application startup or Access
 Administrator provisioning. Startup MAY fail on closed catalogue, matrix,
 context, evaluator, or active-behavior parity drift.
 
-A closed target-only service identity is not an action-bearing fixed service.
-It may be provisioned as a typed product resource, but it has no static matrix
-row, AUTH-09E runtime admission, action, permission, or executable feature
-authority. `workstream.compensation.adapter` is the current binding-target
-identity; it is eligible to be referenced by an adapter binding and cannot act
-as the Finance Authority caller.
+`workstream.compensation.adapter` is eligible to be referenced by an adapter
+binding and has exactly three planned fulfillment action memberships. Planned
+membership and binding eligibility grant no executable feature authority and
+do not make this service a human Finance Authority caller. Runtime activation
+requires the exact prepared authority, native evidence guards and public API
+proof; the catalogue wiring alone does not establish those operations.
 
 Merged AUTH-09B provides the human-administrator-controlled
 `POST /api/v1/service-actors` provisioning route and activates only
