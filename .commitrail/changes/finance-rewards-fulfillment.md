@@ -2457,3 +2457,17 @@ Register the new native module only in the established project family and
 preserve all old membership and placement fingerprints. Subsequent approved
 revocation/three-party/direct-SQL/isolation-guard/clock probes remain required;
 this first contention case alone does not qualify them.
+
+The frozen81e1593 mixed-callback case passes both arrival orders in134.75s,
+observing different real backend PIDs and the actual advisory wait, with all
+owned cleanup complete. Next implement the already-approved revocation-first,
+callback-first and three-party selectors in the same native test module. Pause
+only after the real callback flush or real link-target lock; use the existing
+named database-lock observer. In the three-party case revocation holds AUTH,
+the callback holds REV while waiting for that principal, and the actual Operator
+lifecycle controller waits behind the callback. Require completion without a
+cycle, one callback fence acquisition, no stale success after revocation,
+immutable earning facts and canonical denial evidence. Then restore the link
+through its public operation and prove fresh reporting under the new draining
+generation retains the original admission lineage. No fake authority or new
+lifecycle implementation is introduced.
