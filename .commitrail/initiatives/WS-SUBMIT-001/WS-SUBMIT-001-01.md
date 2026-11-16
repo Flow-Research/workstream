@@ -6106,3 +6106,78 @@ covers all collected modules with exact ownership and unchanged rejection gates.
 Full CLI Ruff check and format check pass99files; AST comparison confirms the
 pending HTTP formatting changes no behavior. Scoped combined CI review and hosted
 rerun remain required. No full-suite or provider qualification claim.
+
+A12 target-change proof scope: test_tasks.py and accepted_revision_probes.py.
+ARCH/SEC review establishes legitimate PM repair cannot commit a changed target
+while active intake protects its locked snapshot (0069 deferred custody guard);
+after T4, evaluation_pending also makes repair ineligible. Test completed real
+revision PRE before opening T4, activate a genuine successor guide, call authorized
+PM repair, require named custody rejection and rollback of TASK/preparation/audit/
+outbox effects, then complete original T4/T5 under unchanged lineage. No trigger
+bypass, fabricated acceptance, clock mutation or independent SQL target-check
+claim. Keep existing stale-fence proof separate. QA/ARCH review and focused real
+PostgreSQL execution required. This closes legitimate target-change interleaving
+proof, not all A12 scenarios or provider/native qualification.
+
+Current request-delivery local/MinIO baseline fails2 in96.58s, cleanup complete
+including owned MinIO bucket. Real selected POST is unconfigured in the shared
+old empty-policy fixture, yielding infrastructure_failed. Bounded fixture repair:
+evaluation_delivery/support.py and test_delivery.py. Bind existing controlled
+selected execution only while composing the test handler (captured constructor
+port), preserve production registry/authority/materialization, and assert exact
+one selected result/request. No product fallback, provider qualification claim or
+runtime bypass. QA proof: full delivery file including lostack, revocation and
+eligibility, real local/MinIO storage, then affected delivery consumers as needed.
+
+Affected delivery-consumer trace finds old open(reference) hooks in custody and
+worker materialization tests; current POST reads open_source(exact source).
+Extend scope to those two tests: move pauses/missing-object injection to the
+current port with kwargs forwarded, retain cancellation/unknown/cleanup guards.
+Do not add a production alias. ARCH/SEC A12 code review requests explicit changed
+v2-versus-locked-guide assertion; added. Final execution must include it.
+
+Hosted86a preflight now reaches existing docstr gate and fails78.8% against80.
+Scope documentation-only repair to new submission code: checker API source_contracts;
+local_submission_source/source_cleanup adapters; ART intake acceptance/finalization/
+finalization_delivery; ART API submission_recovery/submission_command/submission_cleanup/
+submission_finalization; AUTH API submission_intake; TASK API pending_submission.
+Document source identity, bounds, custody, cleanup and authority contracts after
+reading implementations. Do not alter logic, annotations, interfaces, coverage
+configuration or unrelated old files. Verify normalized AST equality excluding
+docstrings, Ruff and unchanged docstr gate; docs review for accuracy required.
+
+Final A12 target/fence replay passes2 in121.84s (existing serializer warning),
+cleanup complete. Local/MinIO delivery passes5 in141.14s, database and bucket
+cleanup complete. Two cancellation custody tests pass; three worker cases first
+error because the runner omitted MinIO endpoint (no product failure), then fail
+on obsolete Consumer(files) signature and one-event count. Pass the actual
+material execution to Consumer and assert the two real T4/T5 request events;
+retain all source cancellation and missing-object assertions. Replay entire
+worker materialization file. Documentation review corrects removal wording:
+provider deletes bytes, not custody; all MCP selected fragments remain unchanged.
+Hosted CLI API collection exposes ambiguous historical fixture import from
+conftest resolving CLI conftest. Extend scope to historical_submission_fixtures.py:
+use existing tests.conftest qualified owner import, preserve database ownership
+assertion unchanged. Verify collection of all four affected public modules.
+
+Shared Consumer trace also finds obsolete one-argument consumers in authorization
+post_submit test_principals/test_atomicity/test_live_authority/test_receipt_custody
+and test_post_submit_selection. Extend scope to supply each existing real execution
+lease, constructing consumers only for materialize phases. Preserve denial,
+rollback and positive-control assertions; no optional/compatibility constructor.
+QA also requires paused source wrappers to close their inner iterator in finally;
+add explicit aclose forwarding in custody/worker tests, preserving cancellation.
+
+Checkpoint evidence: final A12 pair2pass121.84s; local/MinIO delivery5pass141.14s;
+signed CLI raw-ZIP progress/replay/history/suspension1pass129.46s. All receipts
+confirm owned database cleanup and delivery MinIO bucket cleanup. Structural
+validator v2 exits0. CLI four-module collection5nodes succeeds (existing custom
+marker warnings). Source cleanup wording corrected per DOC-CLEANUP-001; QA-HOOK-001
+addressed with deterministic inner iterator closure. All12 documented production
+files retain identical executable AST excluding docstrings. Existing docstr gate
+passes6957/8692=80.0%; all selected MCP fragments match actual generated OpenAPI,
+so no snapshot regeneration is needed. Ruff and whitespace checks pass.
+Full worker-materialization run and affected authorization/material consumer run
+are still active; the final close-forwarding hooks require their focused replay.
+Do not treat this checkpoint as full CI/provider/spec readiness. Hosted preflight
+and CLI collection fixes still require rerun on the final pushed head.

@@ -13,6 +13,7 @@ from app.modules.outbox.api import HandlerOutcome, InvocationFencePort, OutboxEv
 
 
 def require_finalization_event(row, envelope):
+    """Require every envelope and payload identity to match accepted finalization."""
     expected = finalization_event(row)
     if (
         str(envelope.claim.event_id) != row.finalization_event_id
@@ -36,9 +37,11 @@ class FinalizationInvocation:
 
     @property
     def lease_expires_at(self):
+        """Expose the delivery deadline that bounds the continuation lease."""
         return self.envelope.claim.claim_expires_at
 
     async def fence(self, session, row):
+        """Require the exact committed invocation to remain live in this transaction."""
         require_finalization_event(row, self.envelope)
         envelope = self.envelope
         observed = await self.fence_factory(session).fence_invocation(envelope)
@@ -50,9 +53,11 @@ class SubmissionFinalizationHandler:
     """Acknowledge only after T5 or its exact committed replay succeeds."""
 
     def __init__(self, *, observer, finalizer):
+        """Bind the durable invocation observer and finalizer factory."""
         self._observer, self._finalizer = observer, finalizer
 
     async def __call__(self, envelope):
+        """Reject unqualified invocations and acknowledge only successful finalization."""
         try:
             envelope = OutboxEventEnvelope.model_validate(envelope.model_dump())
         except (AttributeError, TypeError, ValueError):

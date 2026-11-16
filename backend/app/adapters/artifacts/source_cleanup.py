@@ -8,17 +8,21 @@ class LocalSubmissionSourceCleanup:
     """Separate composition-owned capability over the pinned Local namespace."""
 
     def __init__(self, store):
+        """Bind cleanup to the local namespace and its source primitives."""
         self._store = store
         self._source = LocalSubmissionSource(store)
 
     @property
     def identity(self):
+        """Advertise the separate source-cleanup capability and adapter name."""
         return ExternalServiceAdapterIdentity(SUBMISSION_SOURCE_CLEANUP_CAPABILITY, "local")
 
     def close(self):
+        """Release the cleanup store resources."""
         self._store.close()
 
     async def remove(self, source, upload):
+        """Delete exact sealed bytes and observe object and part absence."""
         await self._store._source_io(self._source.delete_sealed, source, upload)
         # The shared operation lock drains Local writers. Retained seal/upload
         # metadata prevent subsequent begin/part/complete from reopening the key.
@@ -35,16 +39,20 @@ class S3SubmissionSourceCleanup:
     """
 
     def __init__(self, cleanup_store):
+        """Bind the separately credentialed cleanup store supplied by composition."""
         self._store = cleanup_store
 
     @property
     def identity(self):
+        """Advertise the separate source-cleanup capability and adapter name."""
         return ExternalServiceAdapterIdentity(SUBMISSION_SOURCE_CLEANUP_CAPABILITY, "s3_compatible")
 
     def close(self):
+        """Release the cleanup store resources."""
         self._store.close()
 
     async def _absent(self, source):
+        """Prove exact-version absence without treating bucket loss or denial as cleanup."""
         from botocore.exceptions import ClientError
         from app.interfaces.artifacts import ArtifactProviderOperationEvidence
 
@@ -71,6 +79,7 @@ class S3SubmissionSourceCleanup:
         return False
 
     async def remove(self, source, upload):
+        """Delete only the sealed version and retain unresolved handle or version obligations."""
         from app.interfaces.artifacts import ArtifactOperationConflictError, ArtifactProviderOperationEvidence
         from app.modules.artifacts.api.submission_intake import SealedSubmissionSource, SubmissionSourceUpload
 

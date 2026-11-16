@@ -11,11 +11,13 @@ FINALIZATION_RECOVERY_SOURCES = (("SubmissionFinalizationRequested", 1),)
 
 
 class RecoveryValue(BaseModel):
+    """Strict immutable recovery data with unknown fields rejected."""
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True,
                               revalidate_instances="always", hide_input_in_errors=True)
 
 
 class SubmissionRecoveryCommand(RecoveryValue):
+    """An operator request scoped to one accepted operation and reason."""
     operation_id: UUID
     project_id: UUID
     actor_profile_id: UUID
@@ -25,12 +27,14 @@ class SubmissionRecoveryCommand(RecoveryValue):
     @field_validator("reason")
     @classmethod
     def bounded_reason(cls, value):
+        """Reject surrounding whitespace and control characters in recovery reasons."""
         if value != value.strip() or any(ord(c) < 32 or ord(c) == 127 for c in value):
             raise ValueError("invalid finalization recovery reason")
         return value
 
 
 class SubmissionRecoverySource(RecoveryValue):
+    """The exact original event, claim generation and accepted receipt to recover."""
     operation_id: UUID
     project_id: UUID
     task_id: UUID
@@ -41,18 +45,21 @@ class SubmissionRecoverySource(RecoveryValue):
 
 
 class SubmissionRecoveryAuthority(RecoveryValue):
+    """Recorded authorization provenance bound to the recovery resource."""
     decision_id: UUID
     identity_link_id: UUID
     resource_digest: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
 
 
 class SubmissionRecoveryPayload(RecoveryValue):
+    """Bind the operator command, accepted source and authorization evidence."""
     command: SubmissionRecoveryCommand
     source: SubmissionRecoverySource
     authority: SubmissionRecoveryAuthority
 
     @model_validator(mode="after")
     def exact_source(self):
+        """Reject commands whose operation or project differs from the source."""
         if (self.command.operation_id != self.source.operation_id
                 or self.command.project_id != self.source.project_id):
             raise ValueError("finalization recovery source differs")
@@ -60,6 +67,7 @@ class SubmissionRecoveryPayload(RecoveryValue):
 
 
 class SubmissionRecoveryResult(RecoveryValue):
+    """Expose the durable recovery event identity and delivery state."""
     operation_id: UUID
     recovery_event_id: UUID
     state: Literal["pending", "active", "acknowledged", "unknown", "held"]
@@ -70,6 +78,11 @@ class SubmissionRecoveryUnavailable(RuntimeError):
 
 
 class SubmissionRecoveryAuthorizationPort(Protocol):
+    """Authorize recovery and revalidate its stored originating decision."""
     async def authorize(self, command: SubmissionRecoveryCommand,
-                        source: SubmissionRecoverySource) -> SubmissionRecoveryAuthority: ...
-    async def validate_cause(self, payload: SubmissionRecoveryPayload) -> None: ...
+                        source: SubmissionRecoverySource) -> SubmissionRecoveryAuthority:
+        """Authorize this command against the exact accepted recovery source."""
+        ...
+    async def validate_cause(self, payload: SubmissionRecoveryPayload) -> None:
+        """Revalidate the authority that originated the stored recovery payload."""
+        ...

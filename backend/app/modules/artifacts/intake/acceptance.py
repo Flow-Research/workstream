@@ -10,6 +10,7 @@ from app.modules.outbox.api import OutboxAppendInput
 
 
 def acceptance_context(terminal: SelectedPreSubmitTerminalFacts) -> dict:
+    """Freeze PRE, source and revision lineage into the accepted context."""
     request = terminal.lease.reservation
     lineage = request.admission_lineage
     return {
@@ -28,6 +29,7 @@ def acceptance_context(terminal: SelectedPreSubmitTerminalFacts) -> dict:
 
 
 def acceptance_receipt(terminal: SelectedPreSubmitTerminalFacts, accepted_at: datetime) -> dict:
+    """Build the stable T4 response before a formal Submission exists."""
     request = terminal.lease.reservation
     return {
         "operation_id": str(request.source.location.operation_id), "task_id": str(request.task_id),
@@ -62,6 +64,7 @@ def authority_facts(row) -> IntakeAcceptanceAuthorityFacts:
 
 
 def finalization_event(row) -> OutboxAppendInput:
+    """Construct the identifier-only event bound to this acceptance decision."""
     return OutboxAppendInput(
         event_type="SubmissionFinalizationRequested", event_version=1,
         aggregate_type="submission_operation", aggregate_id=UUID(row.id), project_id=UUID(row.project_id),

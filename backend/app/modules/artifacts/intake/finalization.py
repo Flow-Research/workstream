@@ -20,12 +20,14 @@ from app.modules.tasks.api import SubmissionCreationRequest, SubmissionCreationR
 
 @dataclass(frozen=True, slots=True)
 class AcceptedContinuation:
+    """The exact sealed source and lease generation claimed for T5."""
     source: SealedSubmissionSource
     lease_id: UUID
     generation: int
 
 
 def continuation_facts(row, lease_id, generation):
+    """Reconstruct claim authority facts from immutable acceptance custody."""
     return SubmissionFinalizationAuthorityFacts(
         operation_id=UUID(row.id), project_id=UUID(row.project_id), task_id=UUID(row.task_id),
         assignment_id=UUID(row.assignment_id), contributor_id=UUID(row.actor_profile_id),
@@ -42,6 +44,7 @@ class AcceptedSubmissionFinalization:
     def __init__(self, sessions, *, tasks, authorization, submissions, checkers, store, lease_duration, delivery=None):
         # Match the durable outbox's one-hour structural lease ceiling. This is
         # not a deployment default; composition must still supply its profile.
+        """Bind continuation owners and require an explicit bounded lease duration."""
         if not isinstance(lease_duration, timedelta) or not timedelta(0) < lease_duration <= timedelta(hours=1):
             raise ValueError("finalization lease duration must be explicit, positive and at most one hour")
         self._sessions, self._tasks, self._authorization = sessions, tasks, authorization
@@ -51,6 +54,7 @@ class AcceptedSubmissionFinalization:
 
     @asynccontextmanager
     async def _root(self):
+        """Own the transaction and authority lifetime while preserving uncertain commits."""
         session = self._sessions()
         authority = self._authorization(session)
         try:
@@ -69,6 +73,7 @@ class AcceptedSubmissionFinalization:
             await await_completion_preserving_cancellation(session.close())
 
     async def run(self, operation_id: UUID) -> SubmissionCreationResult:
+        """Claim accepted work, observe its sealed source, and finalize or replay T5."""
         lease_id = new_record_id()
         try:
             claim = await self._claim(operation_id, lease_id)
@@ -87,6 +92,7 @@ class AcceptedSubmissionFinalization:
                 return await self._finalized(session, row)
 
     async def _lock(self, session, authority, operation_id):
+        """Lock operation custody, authorize the service, and recheck delivery fencing."""
         row = await SubmissionIntakeRepository(session, self._tasks(session))._lock(operation_id)
         await authority.authorize()
         if self._delivery is not None:
@@ -94,6 +100,7 @@ class AcceptedSubmissionFinalization:
         return row
 
     async def _claim(self, operation_id, lease_id):
+        """Replay finalized work or acquire one authorized continuation generation."""
         async with self._root() as (session, authority):
             row = await self._lock(session, authority, operation_id)
             if row.state == "finalized":
@@ -120,6 +127,7 @@ class AcceptedSubmissionFinalization:
             return AcceptedContinuation(SubmissionIntakeRepository._sealed_source(row), lease_id, generation)
 
     async def _recover_claim(self, operation_id, lease_id):
+        """Resolve an uncertain claim acknowledgement using its original lease ID."""
         async with self._root() as (session, authority):
             row = await self._lock(session, authority, operation_id)
             if row.state == "finalized":
@@ -137,6 +145,7 @@ class AcceptedSubmissionFinalization:
             return AcceptedContinuation(SubmissionIntakeRepository._sealed_source(row), lease_id, row.continuation_generation)
 
     async def _finalize(self, operation_id: UUID, claim: AcceptedContinuation, observation: SealedSourceObservation):
+        """Revalidate live custody and atomically register the source and Submission."""
         async with self._root() as (session, authority):
             tasks = self._tasks(session)
             row = await self._lock(session, authority, operation_id)
@@ -174,6 +183,7 @@ class AcceptedSubmissionFinalization:
             return result
 
     async def _finalized(self, session, row):
+        """Validate committed acceptance and source custody before reading exact results."""
         if row.state != "finalized":
             raise IntakeCommitUnknown("finalization result unavailable")
         await session.execute(text("SELECT public.require_submission_acceptance(o) "

@@ -24,6 +24,7 @@ class SubmissionFinalizationProgress:
 
 @dataclass(frozen=True, slots=True)
 class SubmissionFinalizationAuthorityFacts:
+    """Bind claim or commit authority to accepted source custody and continuation fencing."""
     operation_id: UUID
     project_id: UUID
     task_id: UUID

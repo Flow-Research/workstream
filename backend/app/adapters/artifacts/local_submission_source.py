@@ -33,9 +33,11 @@ class LocalSubmissionSource:
     """Private synchronous primitives, called off-loop with cancellation drained."""
 
     def __init__(self, store: Any) -> None:
+        """Bind filesystem primitives to the initialized local store owner."""
         self.store = store
 
     def location(self, value: SubmissionSourceLocation) -> SubmissionSourceLocation:
+        """Validate the location against the pinned local provider namespace."""
         self.store._require_initialized()
         value = SubmissionSourceLocation.model_validate(value)
         if (value.provider_profile != "local-v2"
@@ -45,6 +47,7 @@ class LocalSubmissionSource:
 
     @staticmethod
     def deadline(intent: SubmissionSourceUploadIntent) -> float:
+        """Return remaining upload time or reject an expired deadline."""
         remaining = (intent.upload_deadline_at - datetime.now(UTC)).total_seconds()
         if remaining <= 0:
             raise ArtifactStoreUnavailableError("submission upload deadline expired")
@@ -52,6 +55,7 @@ class LocalSubmissionSource:
 
     @contextmanager
     def locked(self, location: SubmissionSourceLocation, intent: SubmissionSourceUploadIntent | None = None, *, create: bool = False) -> Iterator[int]:
+        """Hold the operation lock and yield its safely opened source directory."""
         location = self.location(location)
         key = hashlib.sha256(location.object_ref.encode()).hexdigest()
         lock_fd = os.open(key + ".lock", os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW,
@@ -82,6 +86,7 @@ class LocalSubmissionSource:
             os.close(lock_fd)
 
     def read(self, directory: int, name: str) -> bytes:
+        """Read bounded private metadata without following symbolic links."""
         descriptor = os.open(name, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=directory)
         try:
             info = self.store._assert_private_regular(descriptor)
@@ -99,6 +104,7 @@ class LocalSubmissionSource:
     def publish(self, directory: int, name: str, value: dict[str, Any]) -> None:
         # Every caller holds the same operation lock. Only metadata is renamed;
         # the raw ZIP remains at its original key and inode from begin onward.
+        """Persist new metadata atomically while the caller holds the operation lock."""
         try:
             os.stat(name, dir_fd=directory, follow_symlinks=False)
         except FileNotFoundError:
@@ -120,6 +126,7 @@ class LocalSubmissionSource:
         os.fsync(directory)
 
     def upload(self, directory: int, supplied: SubmissionSourceUpload) -> SubmissionSourceUpload:
+        """Require the supplied upload identity to match stored metadata."""
         stored = SubmissionSourceUpload.model_validate_json(self.read(directory, "upload.json"))
         if stored != supplied:
             raise ArtifactOperationConflictError("submission upload identity mismatch")
@@ -127,6 +134,7 @@ class LocalSubmissionSource:
 
     @staticmethod
     def exists(directory: int, name: str) -> bool:
+        """Check directory-relative presence without following symbolic links."""
         try:
             os.stat(name, dir_fd=directory, follow_symlinks=False)
             return True
@@ -134,6 +142,7 @@ class LocalSubmissionSource:
             return False
 
     def begin(self, intent: SubmissionSourceUploadIntent) -> SubmissionSourceUpload:
+        """Create one upload receipt and its original private ZIP inode."""
         intent = SubmissionSourceUploadIntent.model_validate(intent)
         with self.locked(intent.location, intent, create=True) as directory:
             if self.exists(directory, "upload.json") or self.exists(directory, "aborted.json"):
@@ -151,6 +160,7 @@ class LocalSubmissionSource:
             return upload
 
     def part(self, upload: SubmissionSourceUpload, number: int, data: bytes) -> SubmissionSourcePart:
+        """Append the next bounded part under the upload lock and deadline."""
         upload = SubmissionSourceUpload.model_validate(upload)
         if type(number) is not int or not 1 <= number <= 100 or type(data) is not bytes or not data:
             raise ArtifactInputMismatchError("submission source part is invalid")
@@ -178,6 +188,7 @@ class LocalSubmissionSource:
                                         provider_etag=hashlib.sha256(data).hexdigest())
 
     def verify(self, descriptor: int, completion: SubmissionSourceCompletion) -> os.stat_result:
+        """Stream-check part receipts, total length and raw digest on the opened inode."""
         info = self.store._assert_private_regular(descriptor)
         if info.st_size != completion.raw_byte_count:
             raise ArtifactIntegrityError("submission source size mismatch")
@@ -202,6 +213,7 @@ class LocalSubmissionSource:
 
     @staticmethod
     def source(completion: SubmissionSourceCompletion, info: os.stat_result) -> SealedSubmissionSource:
+        """Bind the completion facts to the upload token and physical inode."""
         return SealedSubmissionSource(
             location=completion.upload.intent.location,
             provider_generation=f"{completion.upload.provider_upload_id}:{info.st_dev}:{info.st_ino}",
@@ -210,6 +222,7 @@ class LocalSubmissionSource:
         )
 
     def complete(self, completion: SubmissionSourceCompletion) -> SealedSubmissionSource:
+        """Verify the ZIP, persist its seal and make the same inode read-only."""
         completion = SubmissionSourceCompletion.model_validate(completion)
         upload = completion.upload
         with self.locked(upload.intent.location, upload.intent) as directory:
@@ -258,6 +271,7 @@ class LocalSubmissionSource:
             return None
 
     def observe(self, completion: SubmissionSourceCompletion) -> SealedSubmissionSource | None:
+        """Resolve uncertain completion only from matching sealed metadata and bytes."""
         completion = SubmissionSourceCompletion.model_validate(completion)
         try:
             with self.locked(completion.upload.intent.location) as directory:
@@ -281,6 +295,7 @@ class LocalSubmissionSource:
             return None
 
     def discover(self, intent: SubmissionSourceUploadIntent) -> tuple[SubmissionSourceUpload, ...]:
+        """Find handles for this exact intent without adopting foreign upload state."""
         intent = SubmissionSourceUploadIntent.model_validate(intent)
         try:
             with self.locked(intent.location) as directory:
@@ -305,6 +320,7 @@ class LocalSubmissionSource:
             return ()
 
     def abort(self, upload: SubmissionSourceUpload) -> None:
+        """Fence unfinished writes while preserving a successfully sealed source."""
         upload = SubmissionSourceUpload.model_validate(upload)
         try:
             with self.locked(upload.intent.location) as directory:
@@ -379,6 +395,7 @@ class LocalSubmissionSource:
                 os.close(descriptor)
 
     def seal(self, directory: int) -> tuple[SubmissionSourceCompletion, SealedSubmissionSource]:
+        """Decode the exact completion and source pair from bounded seal metadata."""
         value = json.loads(self.read(directory, "seal.json"))
         if not isinstance(value, dict) or set(value) != {"completion", "source"}:
             raise ArtifactIntegrityError("submission source seal is invalid")
@@ -388,6 +405,7 @@ class LocalSubmissionSource:
         )
 
     def chunk(self, source: SealedSubmissionSource, position: int, maximum_chunk_bytes: int) -> bytes:
+        """Read bounded bytes after rechecking the sealed generation and inode state."""
         source = SealedSubmissionSource.model_validate(source)
         with self.locked(source.location) as directory:
             completion, sealed = self.seal(directory)

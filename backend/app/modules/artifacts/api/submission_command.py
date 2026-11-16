@@ -27,6 +27,7 @@ class SubmissionExecutionProfile(BaseModel):
 
     @model_validator(mode="after")
     def bounded_envelopes(self) -> Self:
+        """Require consistent, finite and representable upload and lease envelopes."""
         if not self.heartbeat_seconds < self.foreground_lease_seconds <= self.upload_total_seconds:
             raise ValueError("submission foreground lease envelope is invalid")
         if self.foreground_lease_seconds * 1000 > self.runtime.aggregate_deadline_ms:
@@ -59,6 +60,7 @@ class SubmissionAcceptedResponse(BaseModel):
 
 
 class SubmissionIntakeCommand(Protocol):
+    """Single raw-ZIP mutation whose success is durable T4 acceptance."""
     async def submit(
         self, metadata: SubmissionIntakeMetadata, chunks: AsyncIterator[bytes], *,
         actor_id: UUID, identity_link_id: UUID, idempotency_key: UUID,
@@ -77,6 +79,7 @@ class SubmissionOperationSelector(BaseModel):
 
     @model_validator(mode="after")
     def exactly_one(self) -> Self:
+        """Reject missing selectors and ambiguous operation/key combinations."""
         if (self.operation_id is None) == (self.idempotency_key is None):
             raise ValueError("exactly one submission operation selector is required")
         return self
@@ -115,6 +118,7 @@ class SubmissionOperationResponse(BaseModel):
 
 
 class SubmissionOperationReader(Protocol):
+    """Read stored progress for an authenticated operation selector."""
     async def read(self, task_id: UUID, selector: SubmissionOperationSelector) -> SubmissionOperationResponse:
         """Read one authorized operation without changing submission state."""
         ...

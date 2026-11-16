@@ -11,6 +11,7 @@ SUBMISSION_SOURCE_CLEANUP_CAPABILITY = "submission_source_cleanup"
 
 @dataclass(frozen=True, slots=True)
 class SubmissionSourceCleanupAuthorityFacts:
+    """Bind cleanup claim or confirmation to an exact operation and source digest."""
     operation_id: UUID
     project_id: UUID
     task_id: UUID
@@ -33,6 +34,10 @@ class SubmissionSourceRemoval:
 class SubmissionSourceCleanupProvider(ExternalServiceAdapter, Protocol):
     """Separate deletion capability supplied only to the audited coordinator."""
 
-    async def remove(self, source: SealedSubmissionSource, upload: SubmissionSourceUpload) -> SubmissionSourceRemoval: ...
+    async def remove(self, source: SealedSubmissionSource, upload: SubmissionSourceUpload) -> SubmissionSourceRemoval:
+        """Remove exact sealed-source bytes and return independent settlement observations."""
+        ...
 
-    def close(self) -> None: ...
+    def close(self) -> None:
+        """Release the separately composed cleanup capability resources."""
+        ...
