@@ -6791,3 +6791,26 @@ actionable issue: selector coverage and current T4/T5 rollback semantics agree
 with their owners. QA inspected shared execution evidence; no independent PG
 rerun or mutation is claimed. Old TASK command removal and full end-to-end
 qualification remain open.
+
+Dispatch authority proof migration scope: test_storage.py still intercepts the
+obsolete PreparedSubmissionCreationAuthorization, while its fixture now accepts
+through source T4. Move the unrelated-allow substitution to current
+SubmissionIntakeAuthorization.consume_acceptance. Preserve a genuine unrelated
+persisted authority event, real preparation/consume, exact SQL rejection, and
+assert no accepted handoff or Submission/POST is persisted. Foreground failure
+must retain sealed source obligations for cleanup. Run all three storage tests
+including independent SQL member substitution and immutability controls. This
+removes another old AUTH test consumer; it does not claim old path retirement.
+Required QA/security review limited to the changed attack and its owner mapping.
+
+Storage authority migration v1 terminal0:3passed115.98s at schema0084 with database
+and MinIO cleanup complete (/tmp/submission-dispatch-authority-v1.json and .log).
+Exact frozen test blob57dd8707b80ba6587848acf28d2b2a17e5708549; execution used modified
+bytes over473c32677, not a clean postcommit execution. Unchanged independent SQL
+substitution/immutability controls pass. Current T4 wrong-action allow reaches the
+exact accepted-authority SQL refusal; genuine consume audit rolls back, unrelated
+allow persists, no accepted/T5 writes survive, and sealed cleanup charge remains.
+QA/security inspection found no actionable issue and confirmed unchanged control
+ASTs. Verdict is limited to wrong-action/provenance substitution; no exhaustive
+authority or provider qualification and no independent rerun/mutation is claimed.
+Ruff, structural validator, Commitrail and whitespace checks passed.
