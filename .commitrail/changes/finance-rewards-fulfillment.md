@@ -2220,3 +2220,55 @@ exception keys are their persisted external event IDs. Correct only that
 fixture key according to the existing guarded owner; retain all production
 checks. Replay the full selected matrix/resource controls rather than weakening
 request/principal parsing or changing the asserted denial order.
+
+
+The current CI-consumer repair passes60 lane/graph controls in7.40s and35
+selected service-matrix/resource controls in8.86s. A same-cardinality cross-family
+swap is rejected by the retained independent digest, and omission of0072 is
+rejected by the retained full-chain assertion. No mutation remains in source.
+Production guards, migration DDL and actual public capabilities are unchanged.
+
+## Public-operation named proof and response ownership
+
+PLAN-PUBLIC-OPS-001/002 are concrete plan omissions, not a new authority boundary.
+Refine the same authorized operation scope with exact future selectors/lanes
+and the explicit serialization/validation/commit owner below. Security's
+5538676 plan feasibility remains historical evidence; no future tests are
+claimed executed.
+ (closing PLAN-PUBLIC-OPS-001/002)
+
+These are future required selectors, not executed evidence. Pure/read-schema modules join STATIC_FOUNDATION_MODULES; AUTH registration/owner proofs join SHARED_FOUNDATION_MODULES. Their exact eligible lanes are shared_foundations_a, shared_foundations_b and shared_foundations_c under the existing deterministic per-node partition. The four native API/transaction/concurrency/direct-SQL modules join PROJECT_MODULES; their exact eligible lanes are project_lifecycle_a, project_lifecycle_b, project_lifecycle_c, project_lifecycle_d, project_lifecycle_e, project_lifecycle_f and project_lifecycle_g through PARTITION_LANES_BY_MODULE. Do not add overrides or new lanes without measured need. Collected manifest validation must bind each selector to exactly one of its declared lanes. Update independent literal family counts/digests by exact added names while recovering all old membership/placement digests; do not derive expected fingerprints from production at test runtime. Existing migration proof stays schema_contracts.
+
+| Future selector (under backend/) | Custody / forbidden side effect |
+| --- | --- |
+| tests/finance/test_fulfillment_evidence_read_contracts.py::test_closed_source_and_recorded_evidence_shapes | pure: all explicit nullable fields, reused exact schemas, canonical UTC metadata; reject extra provider data |
+| tests/finance/test_fulfillment_evidence_read_contracts.py::test_source_rejects_crossed_digest_parent_and_status | pure: source/digest/parent/attention/success consistency and original receipt clocks |
+| tests/finance/test_fulfillment_evidence_public_api.py::test_signed_source_report_exception_and_response_loss_journey | composition+transaction: public service provisioning/JWKS/ASGI + actual PG; all four routes,201/200/404/409, exact IDs/allow/clock/ordinal and lost-response recovery |
+| tests/finance/test_fulfillment_evidence_public_api.py::test_human_rejected_before_actor_provisioning | composition+transaction: signed unregistered human subject cannot create profile/link or reach COMP |
+| tests/finance/test_fulfillment_evidence_public_api.py::test_streamed_budget_and_identity_rejection_before_locator_or_auth | composition+transaction:65537bytes, chunked oversized body with false/absent Content-Length, duplicate JSON and missing/duplicate/changed header/path/body; no COMP locator, AUTH preparation/restage or evidence |
+| tests/finance/test_fulfillment_evidence_transactions.py::test_response_failure_rolls_back_flushed_evidence_and_allow | transaction: real report and exception flush first; serialization, detached validation and valid-looking wrong identity/digest failures before commit leave zero receipt/exception/allow |
+| tests/finance/test_fulfillment_evidence_transactions.py::test_lookup_miss_commits_only_source_read_allow | transaction: authorized exact-event404 commits exactly one disjoint lookup/source.read allow, no report/exception |
+| tests/finance/test_fulfillment_evidence_transactions.py::test_pre_authority_failures_do_not_prepare_or_restage | transaction: resolver refusal/unavailability, explicit RR/SERIALIZABLE root and pre-commit infrastructure failure leave zero allow/deny/restage/product evidence |
+| tests/finance/test_fulfillment_evidence_transactions.py::test_genuine_denial_restages_only_issuing_pending_decision | transaction: actual inactive/revoked profile/link denial, rollback then exact original pending decision once; wrong owner/copied decision/unavailable audit cannot mint evidence |
+| tests/finance/test_fulfillment_evidence_concurrency.py::test_rc_late_failure_and_exception_serialize_ordinals | concurrency: independent real connections/tasks, observed actual blocking, consecutive distinct cross-table ordinals with success/attention retained |
+| tests/finance/test_fulfillment_evidence_concurrency.py::test_revocation_and_callback_lock_order | concurrency: both orders, no stale success under revocation-first, callback-first atomic immutable evidence |
+| tests/finance/test_fulfillment_evidence_concurrency.py::test_three_party_revocation_callback_lifecycle_has_no_cycle | concurrency: real three-party waits prove REV→AUTH→COMP and absence of AUTH→REV reacquisition |
+| tests/finance/test_fulfillment_evidence_native.py::test_native_source_authority_body_parent_and_immutability_refusals | direct_sql+transaction: actual canonical prepared allow then bypass app writer; exact named native source/body/parent/immutability guards |
+| tests/finance/test_fulfillment_evidence_native.py::test_native_allow_receipt_deferred_closure | direct_sql+transaction: genuine allow cannot commit alone or with another row/body/principal |
+| tests/finance/test_fulfillment_evidence_native.py::test_native_non_rc_refuses_without_effects | direct_sql+transaction: RR/SERIALIZABLE guard before clock/ordinal; rollback all attempted AUTH/evidence, no denial restage |
+| tests/finance/test_fulfillment_evidence_native.py::test_rr_native_guard_removal_exposes_cross_table_collision | direct_sql+concurrency: rollback-contained removal only of native RC guard exposes pinned-RR duplicate with a peer committed opposite-table ordinal; app RC guard remains intact, no invalid data/DDL commits |
+| tests/finance/test_fulfillment_evidence_native.py::test_native_clock_is_assigned_after_wait_and_bounds_use_it | direct_sql+concurrency: actual insertion clock/RETURNING after waits, caller timestamps cannot replace it; exact bound checks can use that actual stored value without a clock override |
+| tests/authorization/test_fulfillment_evidence_registration.py::test_only_three_service_actions_and_four_routes_activate | negative_structure+contract_inspection: exact action/permission/owner/principal/caller inventory; no delivery-handler activation |
+| tests/authorization/test_fulfillment_evidence_registration.py::test_openapi_closed_requests_responses_and_errors | composition+contract_inspection: actual application OpenAPI has four exact route/methods, action tags, canonical header/path/request/response/error schemas, truthful bounded bodies |
+| tests/authorization/test_fulfillment_evidence_registration.py::test_active_fulfillment_actions_reject_every_other_service_identity | service: preserve the three wrong-identity assertions after they leave planned-action parametrization |
+| tests/authorization/test_fulfillment_evidence_contracts.py::test_fulfillment_denial_restage_requires_issuing_kernel | service: exact pending-object provenance/single-use alongside real transaction denial proof |
+
+Explicit obsolete PLANNED expectation transitions: test_catalogue.py::test_closed_permission_and_action_catalogue_is_exact_and_non_executable changes only active165→168 and planned28→25; ::test_fixed_service_action_matrix_and_activation_are_exact_and_immutable resolves exactly three COMP actions instead of asserting unavailable; ::test_active_fixed_service_actions_are_exact adds only those three. The two test_authorization.py planned-matrix parametrizations retain every remaining planned action; new active-registration wrong-identity tests retain the removed three denial behaviors. No skips, broad assertions or weakened discovery. All other unavailable action assertions remain where still required by actual unimplemented owners.
+
+### Concrete response and denial ownership
+
+app/api/deps/compensation_fulfillment.py::FulfillmentEvidenceRequest.finish is the narrow explicit response/commit owner for these four routes. The route opens one root transaction and obtains the actual owner result; finish validates the concrete route response model and known request/source identity/digest, serializes via that model's model_dump_json (equivalent to typed dump_json), validates the detached bytes via the concrete model's model_validate_json(strict=True), constructs the final application/json Response, then awaits session.commit before returning that Response. FastAPI's later serializer and yield-dependency cleanup do not own commit. The dependency finally rolls back any still-open failed root. No generic transaction framework is introduced.
+
+The transactions.py response-failure test must establish a real receipt/exception and its actual allow were flushed inside the transaction before inducing serialization or detached-validation/postcondition failure, then inspect independent PG state after the API error. A move of commit ahead of serialization/validation must fail this test. The lookup-miss test uses finish with the existing ApiErrorResponse and404 after source-read consumption, so it deliberately commits the one read allow rather than raising into generic rollback. Commit-before-effect failures leave no product/AUTH effect; response loss after an actual commit may leave exactly one complete receipt+allow pair and is recovered by exact GET/POST replay. Do not make the impossible promise that transport loss proves rollback, nor retain an allow without its evidence.
+
+PREP precision from security review: inactive/revoked service preparation raises PreparedAuthorizationUnsupported. The adapter must call the existing deny_unsupported(action,input,exact_resource,error) to obtain genuine AuthorizationDenied and capture that ISSUING kernel; only its exact pending decision may be restaged after rollback. Unsupported alone, a copied/foreign decision, resolver failure, unavailable evidence, invalid wire and incompatible isolation cannot trigger restaging. Existing canonical restage_denial enforces request/correlation/object identity and single use. No alternate denial store or fabricated allow is added.
