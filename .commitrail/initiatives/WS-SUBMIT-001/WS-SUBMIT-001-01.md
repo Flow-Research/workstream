@@ -6080,3 +6080,29 @@ Catalogue validation exits0 with existing unresolved population listed, not
 claimed reviewed. Exact diff adds only the pending TASK API lifecycle assignment
 and its digest; protected base and retained assignments remain unchanged. Ruff
 and whitespace checks pass. Hosted rerun and scoped CI review remain pending.
+
+Further hosted diagnostics before pushing the repair: every sampled backend lane
+stops at missing_lane_modules for the four new cleanup/manifest/pending tests;
+CLI API and HTTP jobs stop at Ruff format for test_task_pending_http.py. Extend
+bounded CI repair scope to test_lane_catalogue.py and that CLI formatting only.
+Assign both artifact tests alongside existing POST materialization and both TASK
+progress tests alongside work-context; preserve completeness/error propagation,
+SDK selection, infrastructure requirements and timeouts. No excluded/skipped test
+or workflow weakening. Run lane validator tests and full CLI lint/format gates;
+CI integrity review required on clean combined candidate.
+Separately, current economic facts proof passes all three unpaid/one-award/two-award
+cases in136.19s, cleanup complete (/tmp/submission-current-economic-facts-v1).
+It verifies exact FinalAcceptance, ContributionRecord and award facts/replay with
+no fabricated human Review; this remains controlled execution owner proof.
+
+Lane validator first run:201pass/3fail20.11s. Failures are independent exact
+membership assertions for the intended four additions, not runtime failures.
+Extend scope to test_ci_lane_catalogue.py: add the two POST modules to expected
+delivery membership, update project256→258/task94→96 canonical family hashes,
+and project ownership hash. Preserve exact comparisons and negative controls.
+
+Final lane catalogue/evidence/runner tests pass204; repository discovery now
+covers all collected modules with exact ownership and unchanged rejection gates.
+Full CLI Ruff check and format check pass99files; AST comparison confirms the
+pending HTTP formatting changes no behavior. Scoped combined CI review and hosted
+rerun remain required. No full-suite or provider qualification claim.

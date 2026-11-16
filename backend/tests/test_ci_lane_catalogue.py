@@ -129,6 +129,8 @@ def test_checker_delivery_and_routing_preparation_partition_every_node_once() ->
         "tests/checkers/execution/test_delivery_reconciliation_custody.py",
         "tests/checkers/execution/test_delivery_reconciliation_public.py",
         "tests/test_post_submit_materialization.py",
+        "tests/artifacts/test_post_source_cleanup.py",
+        "tests/artifacts/test_post_source_manifest.py",
         "tests/test_post_submit_selection.py",
         "tests/test_checker_output_custody.py",
         "tests/test_checker_output_storage.py",
@@ -322,12 +324,12 @@ def test_semantic_family_membership_has_an_independent_fingerprint() -> None:
             "e9280bafac00f22e4bd54acd1c6dcd3699411a927269f5132f3cc39ca31224a1",
         ),
         "project": (
-            256,
-            "65376b7218792edcf026d5f851fb85d909a59ad7df363f6904e04e501ba5118d",
+            258,
+            "d1c3c2852afa36476206c00129dcd8b63a10b187b0ad8634e6f894a20cd4deed",
         ),
         "task": (
-            94,
-            "49ae5e1b0b26ee4b71fd117e0502802a1e1439850628f1ed0d65130c38c0c4d9",
+            96,
+            "dfd8a2c63b43d85422eaf9f98fe30ef9a044a492a7e8270261de9c2b491a0eb3",
         ),
     }
     actual = {
@@ -395,9 +397,9 @@ def test_project_lane_ownership_has_an_independent_fingerprint() -> None:
         )
         + "\n"
     )
-    assert len(catalogue.PROJECT_PARTITIONED_MODULES) == 256
+    assert len(catalogue.PROJECT_PARTITIONED_MODULES) == 258
     assert hashlib.sha256(canonical.encode()).hexdigest() == (
-        "ed9527add277491e0b20f495767bdf844cecdffa518ce8854109e3b3bcfbe56b"
+        "f2581105d16fe388d824b0e50b017aa10f97ba7cbf5df27a8121d5591d2be96d"
     )
 
 
