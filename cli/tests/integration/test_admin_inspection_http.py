@@ -59,8 +59,8 @@ GRANT = {
     "revoked_at": None,
 }
 PERMISSIONS = {
-    "items": [{"permission_id": f"test.permission_{i}"} for i in range(94)],
-    "total": 94,
+    "items": [{"permission_id": f"test.permission_{i}"} for i in range(97)],
+    "total": 97,
 }
 DEFINITIONS = {
     "items": [
@@ -456,7 +456,7 @@ def test_admin_rejects_malformed_and_mismatched_success(cli):
                 },
             ),
             ("permissions", PERMISSIONS | {"unknown": True}),
-            ("permissions", PERMISSIONS | {"items": [PERMISSIONS["items"][0]] * 94}),
+            ("permissions", PERMISSIONS | {"items": [PERMISSIONS["items"][0]] * 97}),
             ("role-definitions", DEFINITIONS | {"items": DEFINITIONS["items"][:-1]}),
             (
                 "role-definitions",

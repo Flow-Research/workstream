@@ -1800,3 +1800,17 @@ caller input and tests guard failure prevents even an audit lookup. It preserves
 all retained-allow substitution negatives. No production authority or activation
 changes are included in this repair. Replay and deterministic checks follow on
 the clean candidate; native/API qualification remains pending.
+
+
+The deterministic catalogue run correctly rejected the missing independent
+semantic-family fingerprint update:240 passed,1 failed. Verified removing only
+the new AUTH module reproduces the exact previous274-member hash; the current
+literal is275 members with its recomputed hash. No other family, assignment,
+threshold, skip or gate changes. Tracing the permission catalogue's consumers
+also found stale94-entry expectations in two real AUTH read cases, the independent
+external-HTTP drill oracle, the CLI exact response validator and its two affected
+integration modules. Extend this affected scope only to those files, replacing
+the exact contract with97 and adding the three explicit drill permission tokens.
+There is no dual-count acceptance, alias or old positive contract. No frontend,
+new CLI operation or feature permission activation is introduced. Preserve every
+existing negative response/count, duplicate-token and authorization test.
