@@ -1222,3 +1222,24 @@ module-boundary and policy-contract run passed 63 cases on development source;
 this is supporting proof, not an exact-clean final runtime qualification.
 The actual CLI socket proof at clean aaa9599ff passed all three cases in 373.84
 seconds with owned database cleanup; its native lane deliberately has no S3 claim.
+
+## Current replay, admission and UUID proof
+
+Update affected tests to specification 5.2.8: a screen or batch receipt returns
+its original result after a later task advance under fresh authority. Keep the
+late second-write rollback, changed-body 409, unchanged business snapshot and
+revoked-manager replay denial; do not change runtime authorization or replay.
+Unpaid work context now explicitly includes its immutable size. Frozen revision
+root recovery must not depend on mutable PROJECT facts; keep no-write/source
+custody and exact recovered-event assertions rather than an obsolete call count.
+
+ART admission fakes copy all three current typed selection facts from their
+real request: task size, contribution policy version and optional selected
+award UUID. This restores final-authority and stale-lineage tests to their
+intended boundaries. Metadata proof retains the exact native UUIDv7 bit condition
+while ignoring expression whitespace. FK proof compares actual PostgreSQL UUID
+types, preserving owner-local string versus Python UUID representations as
+required by AGENTS.md, rather than imposing one Python representation across
+owners. No database check is relaxed. The focused pure admission/identifier
+run passed 22 cases on isolated development source. Native public replay,
+concurrent consumption and fresh revocation proof follows on a clean commit.

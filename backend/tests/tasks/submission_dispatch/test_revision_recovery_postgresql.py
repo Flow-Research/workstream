@@ -85,7 +85,10 @@ async def test_unavailable_locked_policy_preserves_existing_root_event_recovery(
                 monkeypatch.setattr(recovery._projects, "lock_locked_policy_context", unavailable)
                 assert await recovery.recover(source_id) is (existing_root and attempt == 0)
             assert await _recovery_source_custody(h, source_id) == before
-        assert len(unavailable_calls) == (2 if existing_root else 4)
+        if existing_root:
+            assert unavailable_calls == []  # Frozen root recovery never needs mutable guide facts.
+        else:
+            assert unavailable_calls  # A new context still fails closed against its current owner.
         async with h.factory() as session:
             events = (await session.scalars(select(OutboxEvent).where(
                 OutboxEvent.idempotency_key == f"task.revision.expire:{source_id}",

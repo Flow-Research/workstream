@@ -280,6 +280,7 @@ async def test_work_context_public_projections(task_client, monkeypatch):
                 "contribution_policy_version_id": str(
                     stored["locked_contribution_policy_version_id"]
                 ),
+                "task_size": stored["task_size"],
                 "accepted_submission": "unpaid",
                 "completed_review": "unpaid",
             }

@@ -275,7 +275,7 @@ async def test_manager_command_rolls_back_all_staged_success(task_client, monkey
     assert retry.status_code == (201 if operation == "create" else 200), retry.text
 
 
-async def test_successor_guide_preserves_screen_replay_but_task_advance_conflicts(task_client):
+async def test_screen_replay_retains_original_result_after_guide_and_task_advance(task_client):
     from tests.test_tasks import (
         complete_guide_payload,
         create_policy_bundle_for_guide,
@@ -308,9 +308,9 @@ async def test_successor_guide_preserves_screen_replay_but_task_advance_conflict
     )
     assert released.status_code == 200, released.text
     assert released.json()["locked_guide_version"] == first.json()["locked_guide_version"] == "v1"
-    stale = await task_client.post(path, headers=headers)
-    assert stale.status_code == 409, stale.text
-    assert stale.json()["error"]["code"] == "task_replay_state_changed"
+    retained = await task_client.post(path, headers=headers)
+    assert retained.status_code == 200, retained.text
+    assert retained.json() == first.json()
     async with db_session.get_session_factory()() as session:
         events = list(
             await session.scalars(

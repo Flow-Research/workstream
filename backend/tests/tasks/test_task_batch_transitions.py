@@ -315,7 +315,7 @@ async def test_missing_active_guide_refuses_whole_batch_without_success_effects(
     assert await _success_facts(project) == before
 
 
-async def test_late_staging_failure_and_partial_advance_replay_roll_back_whole_batch(import_source_client, monkeypatch):
+async def test_late_staging_failure_rolls_back_and_replay_retains_original_batch(import_source_client, monkeypatch):
     """A real second canonical write followed by failure leaves no partial success."""
     client = import_source_client
     project, batch = await _import(client)
@@ -351,7 +351,8 @@ async def test_late_staging_failure_and_partial_advance_replay_roll_back_whole_b
     assert advanced.status_code == 200, advanced.text
     before = await _success_facts(project)
     replay = await client.post(_path(project, batch, "screen"), headers=key, json=payload)
-    assert replay.status_code == 409 and replay.json()["error"]["code"] == "task_replay_state_changed", replay.text
+    assert replay.status_code == 200, replay.text
+    assert replay.json() == successful.json()
     assert await _success_facts(project) == before
 
 
