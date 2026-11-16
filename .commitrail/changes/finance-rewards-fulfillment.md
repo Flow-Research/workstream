@@ -1269,3 +1269,13 @@ The independent exact-clean replay run at 44acad6f passed all four cases in
 effects, revoked-manager denial and retained revision-root recovery. Its
 PostgreSQL and MinIO resources were cleaned up. That source is an isolated
 commit; integrating its delta does not relabel its original evidence.
+
+The first clean 1d221 replay run passed three cases, then the batch snapshot
+correctly exposed two fresh AUTH allow events while all five business snapshots
+were unchanged. The replay contract requires fresh authority. Its assertion now
+keeps exact task/selection/root/member/receipt/lifecycle equality and separately
+requires one new exact-actor/project/action/grant allow per member. The already
+existing concurrent replay proof independently requires the same per-member
+allow behavior. No allow audit is hidden or treated as a business write. The
+failed run completed owned cleanup; its teardown also logged a cross-loop pool
+close exception, which is distinct from the reproduced snapshot failure.

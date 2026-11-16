@@ -61,6 +61,7 @@ async def _success_facts(project):
         tasks = list((await session.execute(select(
             WorkstreamTask.id, WorkstreamTask.status, WorkstreamTask.locked_guide_version,
             WorkstreamTask.locked_contribution_policy_version_id,
+            WorkstreamTask.task_size, WorkstreamTask.locked_submission_award_definition_id,
         ).where(WorkstreamTask.project_id == project).order_by(WorkstreamTask.id))).all())
         roots = set(await session.scalars(select(TaskBatchTransitionReceipt.id).where(TaskBatchTransitionReceipt.project_id == project)))
         members = set(await session.scalars(select(TaskBatchTransitionMember.id).where(TaskBatchTransitionMember.project_id == project)))
@@ -353,7 +354,18 @@ async def test_late_staging_failure_rolls_back_and_replay_retains_original_batch
     replay = await client.post(_path(project, batch, "screen"), headers=key, json=payload)
     assert replay.status_code == 200, replay.text
     assert replay.json() == successful.json()
-    assert await _success_facts(project) == before
+    after = await _success_facts(project)
+    assert after[:5] == before[:5]  # No task, root, member, receipt or lifecycle write.
+    fresh = after[-1] - before[-1]
+    assert before[-1] <= after[-1] and len(fresh) == len(batch["tasks"])
+    async with db_session.get_session_factory()() as session:
+        root = await session.get(TaskBatchTransitionReceipt, next(iter(before[1])))
+        decisions = (await session.scalars(select(AuditEvent).where(AuditEvent.id.in_(fresh)))).all()
+        assert len(decisions) == len(fresh)
+        assert all((row.actor_id, row.action_id, row.resource_type, row.resource_id, row.project_id)
+                   == (root.actor_profile_id, "project.task.screen", "project", project, project)
+                   and row.matched_grant_id is not None and row.after_facts["allowed"] is True
+                   for row in decisions)
 
 
 async def test_revoked_manager_cannot_replay_a_successful_bulk_write(import_source_client):
