@@ -1925,3 +1925,13 @@ fingerprint is still the previous0072 literal pending native capture and pinning
 this intermediate source is deliberately unqualified, with no passing migration
 or callback claim. Capture the new schema under owned isolation, pin its exact
 fingerprint, and complete the declared native/body/ordinal/API proof next.
+
+
+Exactabad903 native capture applied actual0072→0073 DDL and reached the planned
+strict schema-fingerprint check. It failed there in280.35s with the old0072
+literal, recording new0073 fingerprint
+`4a152064e3e2a789f518c4a6191aab874dd7c1849adf6ad869e360c79b8d4b4b`.
+All owned PostgreSQL/MinIO cleanup completed. Pin exactly that observed new
+object inventory; retain every schema/table/custody check. The initial capture
+is not a passing migration test. Run both actual empty/idempotent and pending-
+root/authority retention/refusal cases next on the clean pinned candidate.
