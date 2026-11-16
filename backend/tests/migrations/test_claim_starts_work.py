@@ -104,10 +104,10 @@ async def _claim(session, task_id, actor_id, *, started=False):
         INSERT INTO public.task_assignments
           (id,task_id,project_id,contributor_id,assigned_by,assigned_at,accepted_at,
            submitter_contribution_policy_version_id,status)
-        SELECT :id,t.id,t.project_id,:actor,:actor,clock_timestamp(),clock_timestamp(),
+        SELECT :id,t.id,t.project_id,:actor,:assigned_by,clock_timestamp(),clock_timestamp(),
                t.locked_contribution_policy_version_id,'active'
         FROM public.workstream_tasks t WHERE t.id=:task
-    """), {"id": assignment_id, "actor": actor_id, "task": task_id})
+    """), {"id": assignment_id, "actor": actor_id, "assigned_by": actor_id, "task": task_id})
     await session.execute(text("UPDATE public.workstream_tasks SET status='claimed',assigned_to=:actor WHERE id=:task"),
                           {"actor": actor_id, "task": task_id})
     await _audit(session, task_id, assignment_id, actor_id)

@@ -1343,3 +1343,9 @@ no partial conversion, exact revisions and native guard/downgrade checks.
 Current reward-cutover refusal remains separately required. Native PostgreSQL,
 lint, QA/test-delta/security/architecture reviews remain required. No capability
 change is claimed by this test-only repair.
+
+The first exactfd2a389 claim probe reached native setup but exposed an ambiguous
+parameter reused for UUID contributor_id and varchar assigned_by. Keep the
+predecessor column types and bind those representations separately; no schema
+or guard change. That failed run completed owned cleanup. Rerun the same
+selectors, preserving the original failure artifact and exact source custody.
