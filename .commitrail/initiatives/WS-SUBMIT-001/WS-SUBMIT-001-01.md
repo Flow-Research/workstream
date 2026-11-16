@@ -6501,3 +6501,48 @@ other AST nodes unchanged. QA confirms canonical contract dependency validates
 source only and conveys no storage authority; no scoped findings. Ruff/whitespace
 pass, shared structure validation passed. Model8case integration remains separately
 active42607; its fixture change is not included in this source-grant commit.
+
+Retry-authority counter scope: tests/checkers/execution/test_checker_retry_authority.py.
+Hosted953 six failures show exact outbox totals missing the source T4 finalization
+event. Shared _failed_source already asserts exactly1 SubmissionFinalizationRequested.
+Increase only affected absolute event totals by1, retain all counts (no filtering),
+NOWAIT/observed blocking, revocation, audit rollback and replay/no-effects checks.
+Public audit-failure assertion currently interrupts before test-owned trigger cleanup;
+correct expected total permits existing cleanup and resolves downstream schema
+fingerprint symptom if no separate defect exists. Medium authority-test relevance;
+run six affected cases and QA review, lint/structure. No production changes.
+
+Retry-authority QA confirms entire module AST changes only six integer expectations
+by+1; every caller uses exact-one-finalization fixture. Baseline2 is T4+initialPOST;
+retry3 adds successorPOST. Authority/lock/revocation/receipt/fence/audit/cleanup
+assertions unchanged (/tmp/submission-retry-authority-qa-probe.log). No findings;
+run77589 /tmp/submission-retry-authority-v1.log still active, so runtime and schema
+cleanup consequence remain unproven. Separate modelrun42607 also remains active.
+
+Execution integrity scope: tests/checkers/execution/test_execution.py only. Current
+material fixture retains operation source ZIP, so old SHA-object damage test fails
+before exercising integrity. Recover source operation from exact created admission,
+assert stored original bytes, then unlink/corrupt exact local source bundle. Retain
+no-checker-before-verification, finalize revocation, cleanup and immutable replay
+assertions. Both damaged/nonrecordable tests must compare all exact baseline outbox
+IDs (T4+initialPOST) and require that pair's exact types; no filtering/loose totals.
+Medium source/authority proof risk: seven affected DB cases, lint/structure/QA.
+No production storage, authorization, timers or retained historical fixtures change.
+
+Execution integrity QA no findings: exact local source layout and admission-bound
+operation confirmed; all non-outbox assertions and unrelated test ASTs unchanged.
+Corrected independent exact-postexecution snapshot probe detects added, removed,
+and type-swapped events (/tmp/submission-execution-integrity-qa-events-v2.log).
+Sevencase28715 /tmp/submission-material-failures-v1.log active; model42607 and
+retry77589 also active. No runtime completion claim. Ruff/record/whitespace pass;
+shared structure check terminal0 before this two-test edit, final validation needed.
+
+Model composed run terminal0:8passed635.57s,6 existing serializer warnings;
+/tmp/submission-model-composed-v1.json confirms database/MinIO cleanup complete.
+Coverage includes local+MinIO, paid-effect retry, concurrentcallbacksinglecharge,
+operator no-effect/settledfailure recovery and offline OpenRouter completed/ambiguous
+transport. QA no findings; exact required principal provision preserved all existing
+assertions. Ruff/record/structure pass. This closes the eight hosted953 model-output
+authority failures locally, not live paid-provider or full-CI qualification.
+Retry77589 and material28715 remain separate active verification; only model fixture
+is included in this implementation commit alongside accumulated scoped records.
