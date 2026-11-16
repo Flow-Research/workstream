@@ -4315,3 +4315,21 @@ at this entry; the original blocked finding is not yet declared closed.
 The public route, explicit deployment composition/readiness, coordinated clients,
 remaining cleanup/deployment/provider qualification, full CI and complete goal
 remain unfinished. No merge readiness is requested.
+
+### Foreground composition review closure
+
+All required bounded reviews closed on clean58cfcc8c6748fb587b8b455bcc1636cf9b5cae48,
+with implementation parentb2d7dd325ff41643dd0f898f53f80596b0da480f unchanged:
+architecture/security PASS, QA/test_delta PASS AFTER FIXES, documentation/CI
+integrity PASS. The shared mixed-case finding is closed. Architecture independently
+rejected same-value and conflicting mixed-case duplicates. QA independently ran
+all12 exact regression bodies on58cfcc8c6; all passed
+(/tmp/submission-header-casefold-qa-frozen-replay.log). No other material finding
+remains in this private-command/parser delta. The exactb2 PostgreSQL9 and pure156
+receipts remain applicable to unchanged command/runtime owners; parser55 proof
+and independent frozen regression replay cover the repair. Record/link/diff checks
+also passed after repair. This evidence closure changes no implementation.
+
+The full goal remains active: public HTTP/configuration/progress/client cutover,
+remaining cleanup/worker/provider qualification, downstream journeys and full CI
+are still required in PR708 before readiness. No merge request or new PR is made.
