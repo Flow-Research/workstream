@@ -5126,3 +5126,27 @@ prior shared-family fingerprint exactly. Behavior-ownership validation passes.
 Freeze client progress plus proof extraction for ARCH/SEC, QA/test-delta and
 DOCS/CI review. All receipts above are worktree receipts on parent686; no full CI
 or historical/terminal branch qualification is implied.
+
+### Client review repairs
+
+Frozen ddf proof passed3DB153.91s (0081/cleanuptrue),66configuredMCP238.40s,
+17CLIHTTP37.68s and GoAPI/command packages. QA/test-delta passes, with independent
+binding mutant detection and exact42assertion/four-raises preservation. ARCH/SEC
+found no runtime defect, but the newly tracked test has an extra empty EOF line;
+precommit diff --check had not inspected untracked files. DOCS/CI requires132-tool
+counts in .github/workflows/mcp.yml, scripts/test_hosted_mcp_container.py and
+deploy/hosted/compose.mcp.yml, plus CLI's stale prepare/admission walkthrough and
+MCP's Seventeen family summary. Extend repair scope to these three exact hosted
+consumers; retain uniqueness and fixed-name checks and explicitly require the new
+progress tool where names are already inspected. Remove only the EOF blank line,
+reconcile the current submission walkthrough/unknown-outcome/revision advice,
+and remove duplicate appended progress prose. No client/runtime behavior change.
+Verify committed diff whitespace, document scans and actual assertion probes;
+replay affected reviews against the repair commit before pushing samePR708.
+
+Repair verification: actual application tools/list returns132 tools and passes the
+exact workflow Python assertion, hosted smoke count/name assertions and Compose
+healthcheck Python with substituted HTTP responses. Workflow counterprobes reject
+missing, extra, duplicate and missing-progress-tool catalogues. Artifact:
+/tmp/submission-catalogue-repair-probe.log. This proves catalogue assertions, not
+hosted deployment. Commitrail validation and worktree whitespace checks pass.

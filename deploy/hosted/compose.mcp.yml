@@ -28,7 +28,7 @@ services:
       WORKSTREAM_MCP_MAX_IN_FLIGHT: "1"
       WORKSTREAM_MCP_ALLOWED_HOSTS: 127.0.0.1:8080,localhost:8080
     healthcheck:
-      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health', timeout=2); r=urllib.request.Request('http://127.0.0.1:8080/mcp', data=b'{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\",\"params\":{}}', headers={'Content-Type':'application/json','Accept':'application/json, text/event-stream'}); import json; assert len(json.load(urllib.request.urlopen(r,timeout=3))['result']['tools']) == 131"]
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health', timeout=2); r=urllib.request.Request('http://127.0.0.1:8080/mcp', data=b'{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\",\"params\":{}}', headers={'Content-Type':'application/json','Accept':'application/json, text/event-stream'}); import json; assert len(json.load(urllib.request.urlopen(r,timeout=3))['result']['tools']) == 132"]
       interval: 10s
       timeout: 6s
       retries: 3

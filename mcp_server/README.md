@@ -68,7 +68,7 @@ An independently installed adapter exposing 132 tools under the caller's authori
   projections plus deliberate operator retry, reconciliation and registration.
 - Nine operator-artifact tools cover readiness, bindings, replicas, receipts,
   verification/recovery, admission usage and audit events.
-- Sixteen task-execution tools cover bounded submission ZIPs, contributor and
+- Seventeen task-execution tools cover bounded submission ZIPs, contributor and
   manager task context, screen/release/claim, guide-document reads and
   submission acceptance and immutable history.
 - Twenty-three project, task-management, import, audit, service-actor and model

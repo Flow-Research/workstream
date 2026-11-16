@@ -247,4 +247,3 @@ async def test_t5_finalizes_same_source_with_one_submission_and_post_dispatch(ad
 
     finally:
         store.close()
-
