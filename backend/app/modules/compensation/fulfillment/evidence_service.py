@@ -15,6 +15,7 @@ from app.modules.compensation.api.fulfillment_contracts import (
 from app.modules.compensation.api.fulfillment_evidence import (
     FulfillmentEvidenceAuthorizationPort, FulfillmentEvidenceDenied,
     FulfillmentEvidenceInvalid, FulfillmentEvidenceUnavailable,
+    FulfillmentEvidenceCurrentCustodyPort,
     FulfillmentExceptionAcknowledgement, FulfillmentExceptionAuthorityFacts,
     FulfillmentExceptionConflict, FulfillmentReportAcknowledgement,
     FulfillmentReportAuthorityFacts, FulfillmentReportConflict,
@@ -24,7 +25,6 @@ from app.modules.compensation.fulfillment.models import (
 )
 from app.modules.compensation.fulfillment.models import CompensationFulfillmentRoot
 from app.modules.compensation.models import ProjectCompensationAdapterBinding
-from app.modules.reviews.api.lifecycle import JointLifecycleCurrentCustodyPort
 
 
 class FulfillmentEvidenceService:
@@ -33,7 +33,7 @@ class FulfillmentEvidenceService:
     def __init__(self, session: AsyncSession, *, source_instance_id: UUID,
                  actor_profile_id: UUID, identity_link_id: UUID,
                  authorization: FulfillmentEvidenceAuthorizationPort,
-                 lifecycle: JointLifecycleCurrentCustodyPort):
+                 lifecycle: FulfillmentEvidenceCurrentCustodyPort):
         self._session, self._source = session, source_instance_id
         self._actor, self._link = actor_profile_id, identity_link_id
         self._authorization, self._lifecycle = authorization, lifecycle
@@ -136,7 +136,7 @@ class FulfillmentEvidenceService:
         async with self._lifecycle.hold_current() as (current, held):
             if root.source_instance_id != self._source:
                 raise FulfillmentEvidenceUnavailable("fulfillment_source_unavailable")
-            await held.require_fulfillment_source(current.generation, self._source)
+            await held.require_source(current.generation, self._source)
             existing = await self._existing(root, value, exception=exception)
             generation = existing.recording_lifecycle_generation if existing is not None else current.generation
             facts = self._facts(root, binding_actor, value, digest, generation, exception=exception)
@@ -167,7 +167,7 @@ class FulfillmentEvidenceService:
                 ), {"id": root.id}) is not True):
             raise FulfillmentEvidenceUnavailable("fulfillment_source_unavailable")
         # This held view validates custody without taking REV again after AUTH.
-        await held.require_fulfillment_source(generation, self._source)
+        await held.require_source(generation, self._source)
 
     def _facts(self, root, binding_actor, value, digest, generation, *, exception):
         common = dict(source_instance_id=root.source_instance_id, fulfillment_root_id=root.id,

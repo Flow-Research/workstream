@@ -2,6 +2,7 @@
   "behavior_id": "finance.fulfillment.compensation.api.fulfillment_evidence",
   "callables": [
     "app.modules.compensation.api.fulfillment_evidence.FulfillmentEvidenceAuthorizationPort.prepare",
+    "app.modules.compensation.api.fulfillment_evidence.FulfillmentEvidenceCurrentCustodyPort.hold_current",
     "app.modules.compensation.api.fulfillment_evidence.PreparedFulfillmentEvidence.consume_new",
     "app.modules.compensation.api.fulfillment_evidence.PreparedFulfillmentEvidence.validate_replay"
   ],

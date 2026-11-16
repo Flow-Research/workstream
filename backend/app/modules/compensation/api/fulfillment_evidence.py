@@ -10,6 +10,10 @@ from uuid import UUID
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, UUID7
 
+from app.modules.compensation.api.fulfillment import (
+    CompensationFulfillmentFence, CompensationFulfillmentLifecycleFacts,
+)
+
 Digest = Annotated[str, Field(pattern=r"^sha256:[0-9a-f]{64}$")]
 FulfillmentFailureCode = Literal[
     "ADAPTER_REJECTED", "DESTINATION_UNAVAILABLE", "PROVIDER_UNAVAILABLE",
@@ -91,6 +95,16 @@ FulfillmentEvidenceAuthorityFacts = (
     FulfillmentReportAuthorityFacts | FulfillmentExceptionAuthorityFacts
     | FulfillmentSourceReadAuthorityFacts | FulfillmentReportLookupAuthorityFacts
 )
+
+
+class FulfillmentEvidenceCurrentCustodyPort(Protocol):
+    """COMP consumer view; composition retains the existing REV custody owner."""
+
+    def hold_current(self) -> AbstractAsyncContextManager[
+        tuple[CompensationFulfillmentLifecycleFacts, CompensationFulfillmentFence]
+    ]:
+        """Yield actual generation and the same held fence before request AUTH."""
+        ...
 
 
 class FulfillmentEvidenceAuthority(_EvidenceValue):

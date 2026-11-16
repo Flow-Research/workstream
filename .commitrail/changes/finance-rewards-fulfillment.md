@@ -2011,3 +2011,26 @@ This isolates RECEIPT-STORAGE-001 without minting a synthetic allow, inserting
 an audit row, disabling a trigger or claiming real AUTH receipt admission.
 Register it in the existing project lane. Actual authorized receipt insertion
 and closure remain required separately.
+
+
+Structural follow-up found that the new command's direct REV public protocol
+import creates a COMP→REV→COMP dependency cycle. Keep REV as the sole custody
+owner and define the narrow current-custody consumer protocol in COMP's existing
+public evidence API. The existing composition adapter projects the same REV held
+fence through COMP's existing fence view and maps custody errors, without
+reacquiring REV or adding a controller/lock/state. Commands depend only on COMP
+contracts. This closes a concrete import cycle; it is not a new custody owner.
+Batch this repair with model consolidation, exact native AUDIT vocabulary and
+whitespace repair before fresh structural/native checks and review replay.
+
+
+Exactb5859b108 passed all24 installed native report/exception body cases in
+316.31s, with PostgreSQL and MinIO cleanup complete. This independently proves
+the tested SQL closed shape/source/quantity/time boundaries, including inclusive
+300-second bounds. It is not an insert/custody/clock/ordinal/actual AUTH test.
+New audit constraint vocabulary is a later change and needs its own native
+qualification plus strict new schema capture; do not relabel the older24 cases
+as a combined latest-target run. Initial structural attempts exposed the
+metadata import and then COMP/REV cycle, both repaired in source rather than
+relaxing policy. Use actual current main for the module-boundary protected base;
+the historical behavior-partition base is specific to its own validator.

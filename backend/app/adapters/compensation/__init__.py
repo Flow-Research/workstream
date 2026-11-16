@@ -1,5 +1,7 @@
 """COMPENSATION-owned composition adapters."""
 
+from contextlib import asynccontextmanager
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.compensation.api import PolicyAdapterBindingPort
@@ -71,3 +73,20 @@ def project_award_totals_port(session):
     from app.modules.compensation.awards.read_repository import ContributionAwardReadRepository
 
     return ContributionAwardReadRepository(session)
+
+
+class FulfillmentEvidenceCurrentCustodyAdapter:
+    """Project the existing current REV hold into COMP's consumer port."""
+
+    def __init__(self, lifecycle):
+        self._lifecycle = lifecycle
+
+    @asynccontextmanager
+    async def hold_current(self):
+        from app.modules.compensation.api.fulfillment_evidence import FulfillmentEvidenceUnavailable
+
+        try:
+            async with self._lifecycle.hold_current() as (facts, held):
+                yield facts, FulfillmentLifecycleFenceAdapter(held)
+        except (JointLifecycleUnavailable, CompensationAwardConflict) as exc:
+            raise FulfillmentEvidenceUnavailable("fulfillment_source_unavailable") from exc
