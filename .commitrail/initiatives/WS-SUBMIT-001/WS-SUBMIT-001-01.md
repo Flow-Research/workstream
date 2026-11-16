@@ -5952,3 +5952,83 @@ cleanup, historical replay and policy-cardinality evidence remain as recorded
 above. Python lint, Markdown links and structural validation pass. Native/provider
 qualification, broader full-suite proof and full-spec acceptance remain unfinished.
 This checkpoint does not mark PR708 ready or the active goal complete.
+
+Bounded implementation: spec5.5 pending operation in TASK detail/work-context.
+ARCH/SEC design review recommends TASK-owned typed port, ART bridge on exact
+request session/context, reuse existing authorized operation reader and stage
+derivation. Allowed files: TASK pending-operation API, detail DTOs, authorized
+commands, TASK/ART composition, request dependency, focused task/operation tests,
+affected wire contracts/docs and this record. No schema migration, provider
+bootstrap, second root transaction, alternate stage logic or relaxed authority.
+Expose operation ID/stage only to assigned contributors with operation-read
+authority and authorized managers. Other visible TASK reads retain null. Only
+genuine AUTH-denied reads may suppress the projection with staged denial retained;
+missing/corrupt pointer or unavailable composition must fail closed. Embed field
+in detail so work-context shares it. Preserve predecessor as historical evidence.
+Risk: authorization and cross-owner transaction visibility. Required ARCH/SEC
+implementation review plus QA proof: own/manager/non-owner/revoked authority,
+active stages, revision pending, T5 clear, corrupt pointers, no provider I/O and
+OpenAPI/JSON nullability; existing detail/work-context regression checks. Human
+focus: no pending-operation identity leakage through broader task visibility.
+
+Terminal evidence: materialization owner v2 passes4 in345.70s, cleanup complete;
+revision/reclaim v2 passes6 in710.46s, cleanup complete. Real one-hour deadline
+v3 passes1 in3680.50s, cleanup complete: original deadline remained unchanged,
+accepted revision finalized after it and exact replay produced one Submission
+and POST dispatch. Manifest structural check exits0. Environment root cause
+from prior killed PostgreSQL/native Python failures remains unresolved.
+
+Pending-progress implementation scoped ARCH/SEC code review finds no defect;
+execution proof remains separate. Initial v1 fails after successful owner/manager
+pending reads because test incorrectly expected non-owner assigned-task visibility.
+Actual current TASK authority conceals it with404. Preserve existing visibility,
+repair that expectation without broadening product access. V1 cleanup complete.
+V2 tests initial/revision, receiving/PRE, revocation, missing/cross-task selector,
+missing reader, OpenAPI and final stored-manifest corruption; pending.
+Extend affected client scope to the four CLI task/detail-context decoders and
+their HTTP tests, plus four transitive MCP contract snapshots. Go API package
+tests pass; build /tmp/workstream-pending-progress-cli succeeds. Native CLI and
+MCP OpenAPI drift checks running. Operator manual documents the nullable field;
+roadmap reconciliation remains required before full PR readiness.
+
+Boundary validation found new ART adapter importing private AUTH runtime to
+classify denied operation reads. Do not expand the frozen import ledger. Extend
+allowed AUTH API/service scope with a typed IntakeOperationReadDenied subtype,
+raised only around AUTH's operation-read kernel denial; ART consumes that public
+type and never inspects private AuthorizationDenied. Existing base-error callers
+retain identical denial behavior. Replay ARCH/SEC and module-boundary validation.
+
+Module inventory also exposed one new private ART repository edge from the new
+adapter file. Move PendingSubmissionReader beside the existing configured reader
+in adapters/artifacts/__init__.py; remove the new file and update imports. Exact
+private-edge sets now match: module-boundaries v3 exits0, no ledger changes.
+ARCH/SEC narrow replay passes code scope, including typed denial staging behavior.
+CLI HTTP v1 had18pass/1failure: prior fixture lacked the new nullable field in
+complete text projection. Update shared detail fixture and add visible pending
+identity/stage to contributor/manager text detail. Rebuilt CLI v2 passes19 in108.40s.
+MCP live OpenAPI/transitive-snapshot checks pass78 in45.16s.
+
+Pending PG v2 completes5pass/3fail403.57s, cleanup complete. Failures are test
+oracles: initial Submission history is concealed until a Submission exists;
+revoked sole Submitter loses task detail/work-context before ART read. Preserve
+these404 boundaries, assert initial stored Submission count0, and check TASK
+denial audits. QA additionally identified seeded manager fallback and weak
+cross-task negative: remove fixture manager grants through real API before own
+authority tests; add two real tasks/operations with valid controls then swap
+selectors. Add actual stalled-OUTBOX fixture and manager post-T5 null checks.
+PG v3 running. Reviewer-retained owner detail is a distinct legitimate200/null
+case: issue Reviewer, revoke Submitter, require committed ART denial audit while
+work-context remains404. Its dedicated run is
+/tmp/submission-task-reviewer-progress-v1.log/json. Full existing work-context
+regression and final structural checks now running. No full-readiness claim.
+
+Pending-progress checkpoint verification: PostgreSQL v3 passes 8 in 451.05s;
+Reviewer-retained visibility passes 1 in 76.46s; complete existing work-context
+regression passes 24 in 370.81s. All three isolated runner receipts confirm
+cleanup_complete=true. CLI HTTP passes 19; MCP contract checks pass 78; Go API,
+module boundaries, test structure, changed Python Ruff, and Markdown links pass.
+Receipts record the pre-commit HEAD because these tests ran against the working
+changes; they are not clean-commit CI attestations. ARCH/SEC and QA code reviews
+found no remaining scoped defect; final clean-candidate review is still required.
+Downstream completion tests remain running, and full specification qualification,
+roadmap reconciliation, provider qualification and complete CI remain unfinished.

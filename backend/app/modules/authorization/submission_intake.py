@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.hashing import canonical_json_hash
 from app.modules.authorization.api.submission_intake import (
-    IntakeAuthorityDenied, IntakeOperationReadFacts, IntakeReservationAuthorityFacts, IntakeReservationPreflightFacts,
+    IntakeAuthorityDenied, IntakeOperationReadDenied, IntakeOperationReadFacts, IntakeReservationAuthorityFacts, IntakeReservationPreflightFacts,
     IntakeAcceptanceAuthorityFacts, IntakeOperationReadAccess,
 )
 from app.modules.authorization.catalogue import ActionId, PermissionId
@@ -200,7 +200,7 @@ class SubmissionIntakeAuthorization:
         try:
             return (await self._kernel.require(action, resource)).decision_id
         except AuthorizationDenied as exc:
-            raise IntakeAuthorityDenied("submission intake is unavailable") from exc
+            raise IntakeOperationReadDenied("submission intake is unavailable") from exc
 
     async def authorize_operation_read(self, facts: IntakeOperationReadFacts) -> IntakeOperationReadAccess:
         """Select public read authority from live grants, not a client role flag."""

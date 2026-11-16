@@ -263,6 +263,7 @@ def task_commands(
     audit: TaskTransitionAuditPort,
     actor_profile_id: UUID,
     settings: Settings,
+    pending_submissions=None,
 ) -> AuthorizedTaskCommands:
     """Compose TASK commands without exposing private product imports to delivery."""
     from app.adapters.artifacts import task_guide_documents_port
@@ -278,6 +279,7 @@ def task_commands(
         guide_documents=task_guide_documents_port(session, settings),
         compensation_terms=locked_compensation_terms_port(session),
         outbox=outbox_append(session),
+        pending_submissions=pending_submissions,
     )
 
 

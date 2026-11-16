@@ -64,6 +64,10 @@ class IntakeAuthorityDenied(RuntimeError):
     """Concealed intake authorization failure."""
 
 
+class IntakeOperationReadDenied(IntakeAuthorityDenied):
+    """A current operation-read AUTH decision denied and staged its audit evidence."""
+
+
 class IntakeAuthorizationPort(Protocol):
     """The caller owns root transactions, product locks and original provenance."""
     async def lock_actor(self, actor_id: UUID, identity_link_id: UUID) -> None: ...

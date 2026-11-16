@@ -1205,6 +1205,57 @@ def get_submission_intake_command(
         settings=request.app.state.settings, sessions=get_session_factory(), context=context)
 
 
+def submission_operation_read_service(session, authority):
+    """Compose operation progress inside its caller's existing transaction."""
+    return SubmissionOperationReadService(
+        session, tasks=intake_task_custody_port(session), authority=authority,
+        history=submission_history_repository(session), evaluations=evaluation_coordinator(session),
+        prechecks=selected_pre_submit_coordinator(session), projects=project_locked_policy_context_port(session),
+        events=outbox_append(session), deliveries=finalized_unknown_deliveries(session),
+    )
+
+
+class PendingSubmissionReader:
+    """TASK progress through the existing ART read in the caller transaction."""
+
+    def __init__(self, session, context):
+        self._session, self._context = session, context
+
+    async def read(self, task_id, operation_id):
+        from app.modules.artifacts.api.submission_command import SubmissionOperationSelector
+        from app.modules.authorization.api.submission_intake import IntakeOperationReadDenied
+        from app.modules.tasks.api.pending_submission import PendingSubmissionOperation, PendingSubmissionOperationUnavailable
+        from app.modules.checkers.api.execution import CheckerExecutionUnavailable
+        from app.modules.checkers.api.selected_pre_submit import SelectedPreSubmitUnavailable
+        from app.modules.projects.api.locked_policy import ProjectLockedPolicyContextUnavailable
+        from app.modules.tasks.api import TaskSubmissionContextUnavailable
+        from app.modules.tasks.api.submission_history import SubmissionOperationAssociationUnavailable
+
+        if not self._session.in_transaction():
+            raise PendingSubmissionOperationUnavailable("pending submission requires the caller transaction")
+        authority = submission_intake_authority(self._session, self._context)
+        try:
+            response = await submission_operation_read_service(self._session, authority).read(
+                task_id, SubmissionOperationSelector(operation_id=operation_id),
+                actor_id=self._context.actor_profile_id,
+            )
+            if (response.task_id != task_id or response.operation_id != operation_id
+                    or response.operation_state not in {"receiving", "pre_checking", "finalization_pending"}):
+                raise PendingSubmissionOperationUnavailable("pending submission association is inconsistent")
+            return PendingSubmissionOperation(response.operation_id, response.processing_stage)
+        except IntakeOperationReadDenied:
+            # AUTH has staged this denial in the same still-owned transaction.
+            return None
+        except IntakeAuthorityDenied as exc:
+            raise PendingSubmissionOperationUnavailable("pending submission association is unavailable") from exc
+        except (IntakeCustodyConflict, TaskSubmissionContextUnavailable, SubmissionOperationAssociationUnavailable,
+                CheckerExecutionUnavailable, SelectedPreSubmitUnavailable, ProjectLockedPolicyContextUnavailable,
+                SQLAlchemyError, ValidationError, ValueError) as exc:
+            raise PendingSubmissionOperationUnavailable("pending submission progress is unavailable") from exc
+        finally:
+            authority.close()
+
+
 class ConfiguredSubmissionOperationReader:
     """Read stored progress without provider credentials or an execution profile."""
 
@@ -1220,12 +1271,7 @@ class ConfiguredSubmissionOperationReader:
             authority = submission_intake_authority(session, self._context)
             try:
                 async with session.begin():
-                    service = SubmissionOperationReadService(
-                        session, tasks=intake_task_custody_port(session), authority=authority,
-                        history=submission_history_repository(session), evaluations=evaluation_coordinator(session),
-                        prechecks=selected_pre_submit_coordinator(session), projects=project_locked_policy_context_port(session),
-                        events=outbox_append(session), deliveries=finalized_unknown_deliveries(session),
-                    )
+                    service = submission_operation_read_service(session, authority)
                     return await service.read(task_id, selector, actor_id=self._context.actor_profile_id)
             except IntakeAuthorityDenied as exc:
                 if await authority.restage_denial(exc):

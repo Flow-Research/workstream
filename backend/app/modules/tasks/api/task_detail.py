@@ -8,6 +8,7 @@ from uuid import UUID
 from app.modules.tasks.api.ready_queue import TaskCompensationTerms, _aware
 from app.modules.tasks.api.assignment_outcome import TaskAssignmentOutcome
 from app.modules.tasks.api.revision import ContributorRevisionContext
+from app.modules.tasks.api.pending_submission import PendingSubmissionOperation
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,9 +76,12 @@ class ContributorTaskDetail(_TaskDetailFields):
 
     compensation: TaskCompensationTerms
     last_assignment_outcome: TaskAssignmentOutcome | None = None
+    pending_submission_operation: PendingSubmissionOperation | None = None
 
     def __post_init__(self) -> None:
         _TaskDetailFields.__post_init__(self)
+        if self.pending_submission_operation is not None and not isinstance(self.pending_submission_operation, PendingSubmissionOperation):
+            raise ValueError("pending submission operation is invalid")
         if (not isinstance(self.compensation, TaskCompensationTerms)
                 or (self.last_assignment_outcome is not None
                     and not isinstance(self.last_assignment_outcome, TaskAssignmentOutcome))):
@@ -97,9 +101,12 @@ class ManagementTaskDetail(_TaskDetailFields):
     assigned_to: str | None
     last_assignment_outcome: TaskAssignmentOutcome | None = None
     revision_context: ContributorRevisionContext | None = None
+    pending_submission_operation: PendingSubmissionOperation | None = None
 
     def __post_init__(self) -> None:
         _TaskDetailFields.__post_init__(self)
+        if self.pending_submission_operation is not None and not isinstance(self.pending_submission_operation, PendingSubmissionOperation):
+            raise ValueError("pending submission operation is invalid")
         if (
             not isinstance(self.source_type, str) or not isinstance(self.created_by, str)
             or any(value is not None and not isinstance(value, str) for value in (
