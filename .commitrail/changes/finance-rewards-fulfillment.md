@@ -1324,3 +1324,22 @@ Verify exact inventory, lint, minimal native falsification/PTY proof, and an
 actual backend API case; then QA/test-delta/CI/reuse review. Human focus: no
 backend dependency enters isolated socket/terminal tests. No capability-ledger
 change is claimed by this test-scoping repair.
+## Exact retained-claim migration proof
+
+Repair tests/migrations/test_claim_starts_work.py and this record only. Remove
+current HTTP, private task-command/AUTH owners and response/ORM readers from
+the0064 fixture. Restore the validated archive using existing setup custody,
+remove its setup projections, then prepare explicit predecessor SQL rows under
+enabled guards. Prove direct ready insertion fails; insert draft/null-stamp
+clones and use native screening/ready transitions. Use a distinct archived human
+for wrong-assignee refusal. Do not fabricate current AUTH decisions.
+
+Both internal plan tracks pass the amended exact sequence. PLAN-MIGFIX-001 is
+closed by the guarded sequence and its named-guard negative. Risk L1 retained
+data proof; allowed changes exclude production, migrations, archive bytes, shared
+restore helpers, CI and runtime compatibility. Upgrade to exact0065, whose
+conversion is under test, retaining all eight refusal cases, byte/xmin snapshots,
+no partial conversion, exact revisions and native guard/downgrade checks.
+Current reward-cutover refusal remains separately required. Native PostgreSQL,
+lint, QA/test-delta/security/architecture reviews remain required. No capability
+change is claimed by this test-only repair.

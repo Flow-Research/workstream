@@ -1,10 +1,10 @@
-"""Forward conversion of real predecessor claims without rewriting evidence."""
+"""Exact predecessor claim conversion without current runtime compatibility."""
 
 import asyncio
-from datetime import UTC, datetime
+import json
 from pathlib import Path
 import runpy
-from uuid import UUID
+from types import SimpleNamespace
 
 from alembic import command
 from alembic.migration import MigrationContext
@@ -13,35 +13,17 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
-from app.adapters.artifacts import task_guide_documents_port
-from app.adapters.audit import task_transition_audit
-from app.adapters.tasks import task_service
-from app.core.config import get_settings
 from app.core.identifiers import new_record_id
 from app.db import session as db_session
-from app.modules.authorization.task_authorization import PreparedTaskAuthorization
-from app.modules.tasks.api.authorization import TaskAuthorityOperation
-from app.modules.tasks.authorized_commands import AuthorizedTaskCommands
-from app.modules.tasks.models import AuditEvent, TaskAssignment, TaskCommandReceipt, WorkstreamTask
-from app.modules.tasks.schemas import AssignmentResponse
-from tests.authorization.task_authority.test_concurrency import actor_context
 from tests.conftest import _drop_test_database_schema
 from tests.migration_fixtures import _config
 from tests.migration_revision_fixtures import (
     _restore_historical_revision_rows, assert_historical_revision_guards,
-    add_retained_owner_read_projection, drop_retained_owner_read_projection,
     add_historical_revision_read_projection, enter_predecessor_owner_shape,
     leave_predecessor_owner_shape,
 )
-from tests.project_create_fixtures import grant_fixture_admin_role
 from tests.test_alembic import _execute
-from tests.test_tasks import (
-    task_client as current_task_client,
-    task_database_env as task_database_env,
-    actor_id,
-    admit_and_grant_project_submitter,
-    create_ready_task,
-)
+from tests.test_tasks import task_database_env as task_database_env
 
 pytestmark = pytest.mark.postgres_schema_contract
 _PATH = Path(__file__).parents[2] / "alembic/versions/0065_claim_starts_work.py"
@@ -53,8 +35,8 @@ def _upgrade(connection):
 
 
 @pytest.fixture
-async def predecessor_client(task_database_env, migration_lock):
-    """Restore exact predecessor evidence before adding temporary current-reader projections."""
+async def predecessor_rows(task_database_env, migration_lock):
+    """Restore archived data; expose no current reader or application writer."""
     await db_session.dispose_engine()
     with migration_lock():
         await _drop_test_database_schema(task_database_env)
@@ -72,83 +54,105 @@ async def predecessor_client(task_database_env, migration_lock):
         await leave_predecessor_owner_shape(_execute, task_database_env)
         await db_session.dispose_engine()
         await asyncio.to_thread(command.upgrade, _config(), "0064_checker_trial_evidence")
-        # Current TASK owners read retained guide custody through current ORM
-        # columns. These null-only projections are removed before the upgrade.
-        async with db_session.get_engine().begin() as connection:
-            await add_retained_owner_read_projection(connection)
-    async for client in current_task_client.__wrapped__(task_database_env):
-        project_id = seed["request"]["project_id"]
-        await assert_historical_revision_guards(
-            db_session.get_session_factory(), "0064_checker_trial_evidence",
-        )
-        manager_id = await actor_id("project-manager-subject")
-        async with db_session.get_session_factory()() as session, session.begin():
-            await grant_fixture_admin_role(
-                session, manager_id, project_id=project_id,
-            )
-        yield client, project_id
+    await assert_historical_revision_guards(
+        db_session.get_session_factory(), "0064_checker_trial_evidence",
+    )
+    yield seed
+
+
+async def _audit(session, task, assignment, actor, *, started=False):
+    event, before, after = (("TaskStarted", "claimed", "in_progress") if started
+                            else ("TaskClaimed", "ready", "claimed"))
+    await session.execute(text("""
+        INSERT INTO public.audit_events
+          (id,event_domain,entity_type,entity_id,event_type,from_status,to_status,actor_id,
+           external_subject,external_issuer,actor_roles,claim_snapshot,auth_source,
+           is_dev_auth,reason,event_payload)
+        VALUES (:id,'legacy_lifecycle','task',:task,:event,:before,:after,:actor,
+          'workstream:lifecycle-participant','workstream:internal','[]'::json,
+          '{}'::json,'local_lifecycle',false,'retained predecessor evidence',CAST(:payload AS json))
+    """), dict(id=new_record_id(), task=task, event=event, before=before, after=after,
+               actor=actor, payload=json.dumps({"references": {"task_id": str(task),
+               "assignment_id": str(assignment)}})))
+
+
+async def _receipt(session, task, assignment, actor, *, started=False):
+    response = await session.scalar(text("""
+        SELECT jsonb_build_object('task',to_jsonb(t),'assignment',to_jsonb(a))
+        FROM public.workstream_tasks t JOIN public.task_assignments a ON a.task_id=t.id
+        WHERE t.id=:task AND a.id=:assignment
+    """), {"task": task, "assignment": assignment})
+    assert response["task"]["assigned_to"] == str(actor)
+    digest = await session.scalar(text(
+        "SELECT public.revision_task_context_digest(t) FROM public.workstream_tasks t WHERE id=:id"
+    ), {"id": task})
+    await session.execute(text("""
+        INSERT INTO public.task_command_receipts
+          (id,actor_profile_id,action_id,idempotency_key,request_digest,task_id,status,
+           assignment_id,contributor_id,locked_context_hash,response,committed_at)
+        VALUES (:id,:actor,:action,:key,:digest,:task,'committed',:assignment,:actor,
+                :digest,CAST(:response AS jsonb),clock_timestamp())
+    """), dict(id=new_record_id(), actor=actor, action="task.start" if started else "task.claim",
+               key=new_record_id(), digest=digest, task=task, assignment=assignment,
+               response=json.dumps(response)))
 
 
 async def _claim(session, task_id, actor_id, *, started=False):
-    """Write the predecessor owner's assignment, transition and committed receipt.
-
-    Current public claim intentionally cannot create the predecessor state. These
-    are its original stored facts, with every live predecessor guard enabled.
-    """
-    context = await actor_context(actor_id)
-    owner = AuthorizedTaskCommands(
-        session, authorization=PreparedTaskAuthorization(session, context),
-        audit=task_transition_audit(session), actor_profile_id=context.actor_profile_id,
-        contexts=task_service(session, settings=get_settings()),
-        guide_documents=task_guide_documents_port(session, get_settings()),
-    )
-    receipt, _, _ = await owner._replay.reserve(
-        UUID(actor_id), TaskAuthorityOperation.CLAIM, new_record_id(), UUID(task_id), "historical claim",
-    )
-    task, _, decision = await owner._locked_task(
-        UUID(task_id), TaskAuthorityOperation.CLAIM, "historical claim",
-        idempotency_key=receipt.idempotency_key, receipt=receipt,
-    )
-    facts = owner._facts(task, None, TaskAuthorityOperation.CLAIM, "historical claim", receipt.idempotency_key)
-    captured_task = owner._contexts.task_response_for_authority(task, can_manage=False).model_dump(mode="json")
-    captured_task["status"], captured_task["assigned_to"] = "claimed", actor_id
-    now = datetime.now(UTC)
-    assignment = TaskAssignment(
-        id=str(new_record_id()), task_id=task.id, project_id=task.project_id,
-        contributor_id=actor_id, assigned_by=actor_id, assigned_at=now, accepted_at=now,
-        submitter_contribution_policy_version_id=task.locked_contribution_policy_version_id,
-        status="active",
-    )
-    session.add(assignment)
-    await session.flush()
-    task.assigned_to, task.status = actor_id, "claimed"
-    await session.flush()
-    refs = {"project_id": task.project_id, "task_id": task.id,
-            "assignment_id": assignment.id, "authorization_decision_id": str(decision.decision_id)}
-    session.add(AuditEvent(
-        id=str(new_record_id()), entity_type="task", entity_id=task.id,
-        event_type="TaskClaimed", from_status="ready", to_status="claimed", actor_id=actor_id,
-        external_subject="workstream:lifecycle-participant", external_issuer="workstream:internal",
-        actor_roles=[], claim_snapshot={}, auth_source="local_lifecycle", is_dev_auth=False,
-        reason="historical claim", event_payload={"references": refs},
-    ))
-    receipt.status, receipt.assignment_id, receipt.contributor_id = "committed", assignment.id, actor_id
-    receipt.locked_context_hash, receipt.committed_at = facts.locked_context_hash, now
-    receipt.response = {"task": captured_task, "assignment": AssignmentResponse.model_validate(assignment).model_dump(mode="json")}
-    await session.flush()
+    """Prepare stored predecessor facts under its guards, without claiming AUTH proof."""
+    assignment_id = str(new_record_id())
+    await session.execute(text("""
+        INSERT INTO public.task_assignments
+          (id,task_id,project_id,contributor_id,assigned_by,assigned_at,accepted_at,
+           submitter_contribution_policy_version_id,status)
+        SELECT :id,t.id,t.project_id,:actor,:actor,clock_timestamp(),clock_timestamp(),
+               t.locked_contribution_policy_version_id,'active'
+        FROM public.workstream_tasks t WHERE t.id=:task
+    """), {"id": assignment_id, "actor": actor_id, "task": task_id})
+    await session.execute(text("UPDATE public.workstream_tasks SET status='claimed',assigned_to=:actor WHERE id=:task"),
+                          {"actor": actor_id, "task": task_id})
+    await _audit(session, task_id, assignment_id, actor_id)
+    await _receipt(session, task_id, assignment_id, actor_id)
     if started:
-        task.status = "in_progress"
-        await session.flush()
-        assignment.started_at = now
-        await session.flush()
-    return task, assignment
+        await session.execute(text("UPDATE public.workstream_tasks SET status='in_progress' WHERE id=:id"), {"id": task_id})
+        await session.execute(text("UPDATE public.task_assignments SET started_at=assigned_at WHERE id=:id"), {"id": assignment_id})
+    return SimpleNamespace(id=task_id), SimpleNamespace(id=assignment_id)
 
 
-async def _setup(predecessor, monkeypatch):
-    client, project_id = predecessor
-    tasks = [await create_ready_task(client, project_id) for _ in range(3)]
-    grant = await admit_and_grant_project_submitter(client, monkeypatch, project_id, "historical-claimant")
-    return tasks, grant["actor_profile_id"]
+async def _setup(seed):
+    actor = seed["actor_context"]["actor_profile_id"]
+    source = seed["request"]["task_id"]
+    tasks = []
+    async with db_session.get_session_factory()() as session, session.begin():
+        assert await session.scalar(text("SELECT actor_kind FROM public.actor_profiles WHERE id=:id"), {"id": actor}) == "human"
+        clone = text("""
+            INSERT INTO public.workstream_tasks
+            SELECT (jsonb_populate_record(NULL::public.workstream_tasks,
+                    to_jsonb(t)||CAST(:changes AS jsonb))).*
+            FROM public.workstream_tasks t WHERE t.id=:source RETURNING id
+        """)
+        with pytest.raises(IntegrityError, match="task contribution stamp requires initial screening"):
+            async with session.begin_nested():
+                await session.execute(clone, {"source": source, "changes": json.dumps({
+                    "id": str(new_record_id()), "status": "ready", "assigned_to": None,
+                    "external_task_id": None, "import_batch_id": None,
+                })})
+        for _ in range(3):
+            task_id = str(new_record_id())
+            stored = await session.scalar(clone, {"source": source, "changes": json.dumps({
+                "id": task_id, "status": "draft", "assigned_to": None,
+                "locked_contribution_policy_version_id": None,
+                "source_ref": task_id, "external_task_id": None, "import_batch_id": None,
+            })})
+            assert str(stored) == task_id
+            await session.execute(text("""
+                UPDATE public.workstream_tasks SET status='screening',
+                  locked_contribution_policy_version_id=(SELECT locked_contribution_policy_version_id
+                    FROM public.workstream_tasks WHERE id=:source) WHERE id=:task
+            """), {"source": source, "task": task_id})
+            await session.execute(text("UPDATE public.workstream_tasks SET status='ready' WHERE id=:id"), {"id": task_id})
+            tasks.append({"id": task_id})
+        await session.execute(text("SET CONSTRAINTS ALL IMMEDIATE"))
+    return tasks, actor
 
 
 async def _snapshot(session):
@@ -160,28 +164,15 @@ async def _snapshot(session):
     }
 
 
-async def test_upgrade_starts_only_retained_claim_and_preserves_evidence(predecessor_client, monkeypatch):
+async def test_upgrade_starts_only_retained_claim_and_preserves_evidence(predecessor_rows):
     """Upgrade a retained claim while preserving unrelated assignments, receipts and audit rows."""
-    tasks, actor = await _setup(predecessor_client, monkeypatch)
+    tasks, actor = await _setup(predecessor_rows)
     async with db_session.get_session_factory()() as session:
         task, prior = await _claim(session, tasks[0]["id"], actor, started=True)
-        prior.status, prior.released_at = "released", datetime.now(UTC)
-        task.status, task.assigned_to = "ready", None
-        await session.flush()
-        # Prior released work has legitimate start history on the same task.
-        session.add(AuditEvent(
-            id=str(new_record_id()), entity_type="task", entity_id=task.id,
-            event_type="TaskStarted", from_status="claimed", to_status="in_progress", actor_id=actor,
-            external_subject="workstream:lifecycle-participant", external_issuer="workstream:internal",
-            actor_roles=[], claim_snapshot={}, auth_source="local_lifecycle", is_dev_auth=False,
-            reason="historical start", event_payload={"references": {"assignment_id": prior.id}},
-        ))
-        session.add(TaskCommandReceipt(
-            id=new_record_id(), actor_profile_id=actor, action_id="task.start", idempotency_key=new_record_id(),
-            request_digest="sha256:" + "a" * 64, task_id=task.id, status="committed",
-            assignment_id=prior.id, contributor_id=actor, locked_context_hash="sha256:" + "a" * 64,
-            response={"status": "in_progress"}, committed_at=datetime.now(UTC),
-        ))
+        await _audit(session, task.id, prior.id, actor, started=True)
+        await _receipt(session, task.id, prior.id, actor, started=True)
+        await session.execute(text("UPDATE task_assignments SET status='released',released_at=clock_timestamp() WHERE id=:id"), {"id": prior.id})
+        await session.execute(text("UPDATE workstream_tasks SET status='ready',assigned_to=NULL WHERE id=:id"), {"id": task.id})
         _, assignment = await _claim(session, task.id, actor)
         await _claim(session, tasks[1]["id"], actor, started=True)
         await session.flush()
@@ -193,10 +184,8 @@ async def test_upgrade_starts_only_retained_claim_and_preserves_evidence(predece
         before = await _snapshot(session)
         assignment_id = assignment.id
         await session.commit()
-    async with db_session.get_engine().begin() as connection:
-        await drop_retained_owner_read_projection(connection)
     await db_session.dispose_engine()
-    await asyncio.to_thread(command.upgrade, _config(), "head")
+    await asyncio.to_thread(command.upgrade, _config(), "0065_claim_starts_work")
     async with db_session.get_session_factory()() as session:
         after = await _snapshot(session)
         for table in ("audit_events", "task_command_receipts"):
@@ -211,9 +200,10 @@ async def test_upgrade_starts_only_retained_claim_and_preserves_evidence(predece
                 else:
                     assert {k: v for k, v in new[0].items() if k not in fields} == {
                         k: v for k, v in old[0].items() if k not in fields}
-        assignment = await session.get(TaskAssignment, assignment_id)
-        assert assignment.started_at == assignment.assigned_at
-        assert (await session.get(WorkstreamTask, tasks[0]["id"])).status == "in_progress"
+        assert await session.scalar(text("SELECT version_num FROM alembic_version")) == "0065_claim_starts_work"
+        stamps = (await session.execute(text("SELECT started_at,assigned_at FROM task_assignments WHERE id=:id"), {"id": assignment_id})).one()
+        assert stamps.started_at == stamps.assigned_at
+        assert await session.scalar(text("SELECT status FROM workstream_tasks WHERE id=:id"), {"id": tasks[0]["id"]}) == "in_progress"
         with pytest.raises(IntegrityError, match="assignment start requires the started task"):
             async with session.begin_nested():
                 await session.execute(text("UPDATE task_assignments SET started_at=started_at+interval '1 second' WHERE id=:id"), {"id": assignment_id})
@@ -222,13 +212,15 @@ async def test_upgrade_starts_only_retained_claim_and_preserves_evidence(predece
                 await session.execute(text("UPDATE workstream_tasks SET status='claimed' WHERE id=:id"), {"id": tasks[0]["id"]})
 
 
-async def test_invalid_current_claim_refuses_entire_upgrade(predecessor_client, monkeypatch):
-    tasks, actor = await _setup(predecessor_client, monkeypatch)
+async def test_invalid_current_claim_refuses_entire_upgrade(predecessor_rows):
+    tasks, actor = await _setup(predecessor_rows)
     async with db_session.get_session_factory()() as session:
         # A valid claim first proves failure cannot partially convert other rows.
         await _claim(session, tasks[0]["id"], actor)
         task, assignment = await _claim(session, tasks[1]["id"], actor)
-        task_id, assignment_id, other_actor = task.id, assignment.id, task.created_by
+        task_id, assignment_id = task.id, assignment.id
+        other_actor = await session.scalar(text("SELECT id FROM actor_profiles WHERE actor_kind='human' AND id<>:actor ORDER BY id LIMIT 1"), {"actor": actor})
+        assert other_actor is not None and str(other_actor) != actor
         await session.flush()
         for case in ("missing_assignment", "unaccepted", "missing_assignee", "wrong_assignee", "released", "started", "start_event", "start_receipt"):
             mutation = await session.begin_nested()
@@ -246,20 +238,9 @@ async def test_invalid_current_claim_refuses_entire_upgrade(predecessor_client, 
                     await session.execute(text("UPDATE task_assignments SET started_at=assigned_at WHERE id=:id"), {"id": assignment_id})
                     await session.execute(text("UPDATE workstream_tasks SET status='claimed' WHERE id=:id"), {"id": task_id})
                 elif case == "start_event":
-                    session.add(AuditEvent(
-                        id=str(new_record_id()), entity_type="task", entity_id=task_id,
-                        event_type="TaskStarted", from_status="claimed", to_status="in_progress", actor_id=actor,
-                        external_subject="workstream:lifecycle-participant", external_issuer="workstream:internal",
-                        actor_roles=[], claim_snapshot={}, auth_source="local_lifecycle", is_dev_auth=False,
-                        reason="contradictory start", event_payload={"references": {"assignment_id": assignment_id}},
-                    ))
+                    await _audit(session, task_id, assignment_id, actor, started=True)
                 elif case == "start_receipt":
-                    session.add(TaskCommandReceipt(
-                        id=new_record_id(), actor_profile_id=actor, action_id="task.start", idempotency_key=new_record_id(),
-                        request_digest="sha256:" + "a" * 64, task_id=task_id, status="committed",
-                        assignment_id=assignment_id, contributor_id=actor, locked_context_hash="sha256:" + "a" * 64,
-                        response={"status": "in_progress"}, committed_at=datetime.now(UTC),
-                    ))
+                    await _receipt(session, task_id, assignment_id, actor, started=True)
                 await session.flush()
                 await session.execute(text("SET CONSTRAINTS ALL IMMEDIATE"))
                 before = await _snapshot(session)
