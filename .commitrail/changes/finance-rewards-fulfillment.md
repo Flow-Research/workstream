@@ -2034,3 +2034,12 @@ as a combined latest-target run. Initial structural attempts exposed the
 metadata import and then COMP/REV cycle, both repaired in source rather than
 relaxing policy. Use actual current main for the module-boundary protected base;
 the historical behavior-partition base is specific to its own validator.
+
+The MCP catalogue/read/full-fragment selection completed308 passed and1 failed
+in1788.93s: the sole failure was the actual backend drift comparison finding the
+remaining ActionId enum in authorization_context_get. Scan every existing MCP
+operation against the actual captured OpenAPI, not just PermissionId references.
+Exactly that one additional fragment differs, only by the three ActionId members;
+its operation/other schemas are unchanged. Refresh its canonical hash/capture
+metadata and rerun the exact tamper-evidence and actual drift checks. Preserve
+the308 passing execution provenance rather than rerunning unchanged read cases.
