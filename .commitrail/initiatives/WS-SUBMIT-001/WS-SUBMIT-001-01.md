@@ -6181,3 +6181,25 @@ Full worker-materialization run and affected authorization/material consumer run
 are still active; the final close-forwarding hooks require their focused replay.
 Do not treat this checkpoint as full CI/provider/spec readiness. Hosted preflight
 and CLI collection fixes still require rerun on the final pushed head.
+
+Hosted transport replay repair scope: tests/checkers/external/test_runtime.py.
+The single PRE transport matrix fails before exercising transport because
+dataclasses.replace requires the reservation's explicit source_contracts InitVar.
+Supply the existing ART composition dependency while replacing source facts;
+preserve every tampering, deadline, transport and runtime assertion. No production
+contract default or compatibility path. Low-risk fixture repair; verify the full
+existing transport matrix and Ruff. Broader hosted failures in retired PRE and
+replacement producers remain separate required migration work.
+
+Transport replay first reaches11passing cases and exposes the slow-decode hook's
+old signature. Forward the real source_contracts keyword through that hook;
+preserve its300ms delay and deadline_exceeded assertion. Final transport matrix
+passes12 in3.38s; Ruff and Commitrail checks pass. Final worker/custody hook replay
+passes4 in111.54s on99d, with database and MinIO cleanup complete. This replays the
+previous consumer timeout without extending its20s bound; it does not establish
+the original timeout's root cause. Documentation review passes; QA code review
+closes inner-stream cleanup finding, while full AUTH execution remains pending.
+Hosted86a artifacts contain146 failing cases across completed lanes, including
+42 obsolete preparation-fact callers and multiple retired PRE constructors.
+Artifacts: /tmp/submission-ci-43947584976; failure index:
+/tmp/submission-hosted-failures-86a.txt. Full CI remains incomplete and failing.

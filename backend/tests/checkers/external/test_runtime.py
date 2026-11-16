@@ -1164,7 +1164,7 @@ async def test_single_pre_transport_streams_source_and_validates_combined_result
 
     payload = b"controlled transport bytes" * 4000
     reservation = _source_reservation()
-    reservation = replace(reservation, source=reservation.source.model_copy(update={
+    reservation = replace(reservation, source_contracts=selected_pre_submit_source_contracts(), source=reservation.source.model_copy(update={
         "raw_sha256": "sha256:" + hashlib.sha256(payload).hexdigest(),
         "raw_byte_count": len(payload),
     }))
@@ -1231,10 +1231,10 @@ async def test_single_pre_transport_streams_source_and_validates_combined_result
         import time
         from app.modules.checkers.api.selected_pre_submit import SelectedPreSubmitExecutionFacts
         decode = SelectedPreSubmitExecutionFacts.from_canonical_body
-        def delayed_decode(cls, value):
+        def delayed_decode(cls, value, *, source_contracts):
             decode_called.append(True)
             time.sleep(0.3)
-            return decode(value)
+            return decode(value, source_contracts=source_contracts)
         monkeypatch.setattr(SelectedPreSubmitExecutionFacts, "from_canonical_body", classmethod(delayed_decode))
     expected_lease = lease
     grant = Grant()
