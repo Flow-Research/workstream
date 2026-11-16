@@ -4094,3 +4094,48 @@ fabricated clean full-suite receipt. All28 original test assertions passed in th
 full run; its independent teardown gate did not. Sealed cleanup is ready for
 bounded code review; the complete initiative, full hosted CI, unsealed cleanup,
 scheduling and public cutover remain unfinished.
+
+## Frozen sealed-cleanup proof and review closure
+
+Implementation target:4de63467b272b8915427f447daff13f949241969, base and merge base
+f0d40a1998b38df5cbdbb48eb69e7e36b05e80ee. All14 paths were frozen clean throughout
+these executions and review snapshots. origin/main was fetched again; this branch
+has zero missing main commits. No merge readiness is claimed.
+
+All three frozen commands used backend/.venv Python3.12.13 with
+PYTHONFAULTHANDLER=1 and PYTHONMALLOC=debug. PostgreSQL used the restricted isolated
+runner against the owned local test server; S3 used the owned local MinIO endpoint.
+
+- Full PostgreSQL cleanup suite:28 passed in340.97s, exit0. Command from backend:
+  `.venv/bin/python scripts/run_isolated_tests.py --metadata-json /tmp/submission-cleanup-frozen-db.json -- .venv/bin/python -m pytest tests/artifacts/test_submission_source_cleanup.py -q --tb=short`.
+  `/tmp/submission-cleanup-frozen-db.log/json/head` records exact4de, Alembic0080
+  and completed database cleanup, including teardown.
+- Full Local store suite:65 passed in42.81s, exit0. Command:
+  `.venv/bin/python -m pytest tests/test_local_artifact_store.py -q --tb=short`.
+  Artifact: `/tmp/submission-cleanup-frozen-local.log`.
+- S3 cleanup suite:10 passed,47 deselected in42.84s, exit0. Command:
+  `.venv/bin/python -m pytest tests/test_s3_artifact_store.py -k source_cleanup -q --tb=short`.
+  Artifact: `/tmp/submission-cleanup-frozen-s3.log`.
+- `/tmp/submission-cleanup-frozen-provenance.json` records the clean implementation
+  head, Python interpreter, diagnostic settings and MinIO image digest
+  sha256:1033251d858d3f89f14d9e095e8dd0c8ada3360124ab33cca994655e579fdbf6.
+
+Required bounded reviews closed on that unchanged target:
+
+- Architecture/security:PASS, including authority before provider I/O, exact
+  generation/tombstone custody and atomic audited confirmation.
+- QA/test_delta:PASS WITH LOW RISKS, no findings or repairs. Exact frozen receipts
+  close previously provisional runtime rows. The in-memory omitted-tombstone
+  mutant fails the intended before-unlink assertion; repository stays unchanged.
+- Documentation/CI integrity:PASS. Independent partition comparison preserves all666
+  prior assignments/protected base and adds only24 exact paths. Recomputed-digest
+  mutants that remove/reassign prior targets, add unrelated targets or alter the
+  protected base are rejected. Actual CI selection remains full suite/all lanes.
+
+The earlier exit139 and UTF-8 schema-inventory teardown error remain unexplained.
+This clean frozen replay does not erase those failures or claim a root-cause fix.
+MinIO principal/prefix separation and adapter VersionId enforcement do not qualify
+AWS or IAM-level version-only deletion. Worker startup/scheduling, unsealed and
+uncertain reconciliation, public API/CLI/MCP cutover, downstream journeys, remaining
+hosted-CI failures, deployment values and complete A01–A35 proof remain required in
+this same PR before readiness. The full thread goal stays active and incomplete.
