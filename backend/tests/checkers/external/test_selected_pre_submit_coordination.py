@@ -27,7 +27,6 @@ from app.modules.artifacts.models import (
     SubmissionBundleAdmission,
     SubmissionBundleDurableIntent,
 )
-from app.modules.checkers.api.default_checker import WORKSTREAM_DEFAULT_BEHAVIOR_SHA256
 from app.modules.checkers.api.selected_pre_submit import (
     SelectedPreSubmitExecuteFacts,
     SelectedPreSubmitAdmissionLineage,
@@ -41,7 +40,6 @@ from app.adapters.tasks import selected_pre_submit_task_guard
 from app.modules.tasks.submission_context import TaskSubmissionContextService
 from app.modules.checkers.models import SelectedPreSubmitRun
 from app.modules.checkers.selected_pre_submit_coordination import (
-    SelectedPreSubmitAdmissionCapability,
     SelectedPreSubmitExecutionCapability,
     SelectedPreSubmitCoordinator,
 )
@@ -54,27 +52,6 @@ _POST_POLICY_WITHOUT_DIGEST = {
 }
 _POST_POLICY_SHA256 = canonical_json_hash(_POST_POLICY_WITHOUT_DIGEST)
 _POST_POLICY = _POST_POLICY_WITHOUT_DIGEST | {"policy_sha256": _POST_POLICY_SHA256}
-
-
-def _reservation() -> SelectedPreSubmitReservationFacts:
-    return SelectedPreSubmitReservationFacts(
-        actor_profile_id=new_record_id(),
-        identity_link_id=new_record_id(),
-        project_id=new_record_id(),
-        task_id=new_record_id(),
-        assignment_id=new_record_id(),
-        attempt_id=new_record_id(),
-        idempotency_key=new_record_id(),
-        attempt_request_digest=SHA,
-        prepared_generation_id=new_record_id(),
-        policy_sha256="sha256:" + "1" * 64,
-        default_behavior_sha256=WORKSTREAM_DEFAULT_BEHAVIOR_SHA256,
-        default_input_sha256="sha256:" + "2" * 64,
-        archive_sha256="sha256:" + "3" * 64,
-        archive_byte_count=1024,
-        semantic_manifest_sha256="sha256:" + "4" * 64,
-        execution_budget_ms=120_000,
-     source_contracts=selected_pre_submit_source_contracts())
 
 
 def _queued_row(reservation: SelectedPreSubmitReservationFacts) -> SimpleNamespace:
@@ -187,37 +164,21 @@ async def test_selected_pre_expired_lease_read_keeps_task_first_custody() -> Non
 
 
 @pytest.mark.asyncio
-async def test_selected_pre_task_guard_rechecks_exact_locked_lineage(monkeypatch) -> None:
-    lineage = SelectedPreSubmitAdmissionLineage(
-        predecessor_submission_id=new_record_id(),
-        predecessor_submission_version=2,
-        checker_remediation_manifest_id=new_record_id(),
-        guide_id=new_record_id(),
-        guide_version="guide-v2",
-        source_snapshot_id=new_record_id(),
-        source_snapshot_sha256="sha256:" + "5" * 64,
-        locked_guide_sha256="sha256:" + "6" * 64,
-        effective_policy_id=new_record_id(),
-        effective_policy_sha256="sha256:" + "7" * 64,
-        pre_submit_policy_id=new_record_id(),
-        pre_submit_policy_sha256="sha256:" + "8" * 64,
-        effective_plan_sha256="sha256:" + "9" * 64,
-        rules_sha256="sha256:" + "d" * 64,
-        external_checker_policies_sha256=SHA,
-        post_submit_policy_sha256=_POST_POLICY_SHA256,
-        post_submit_policy_body=_POST_POLICY,
-        locked_policy_context_hash="sha256:" + "a" * 64,
-        semantic_manifest_id=new_record_id(),
-        semantic_manifest_body={"schema_version": "test"},
-        packet_sha256="sha256:" + "b" * 64,
-        storage_scheme="s3",
-    )
-    reservation = replace(
-        _reservation(),
-        policy_sha256=lineage.effective_plan_sha256,
-        semantic_manifest_sha256=canonical_json_hash(lineage.semantic_manifest_body),
-        admission_lineage=lineage,
-    )
+@pytest.mark.parametrize("revision", [False, True])
+async def test_selected_pre_task_guard_rechecks_exact_locked_lineage(monkeypatch, revision) -> None:
+    reservation = _source_reservation()
+    if revision:
+        from app.modules.checkers.api.default_checker import WorkstreamDefaultPredecessor
+        predecessor = WorkstreamDefaultPredecessor(new_record_id(), 2, SHA, SHA)
+        reservation = replace(reservation,
+            default_context=replace(reservation.default_context,
+                predecessor=predecessor, current_predecessor=predecessor,
+                predecessor_exists=True, predecessor_rules_sha256=reservation.default_context.current_rules_sha256),
+            admission_lineage=replace(reservation.admission_lineage,
+                predecessor_submission_id=predecessor.submission_id, predecessor_submission_version=2,
+                checker_remediation_manifest_id=new_record_id()),
+            source_contracts=selected_pre_submit_source_contracts())
+    lineage = reservation.admission_lineage
     locked = SimpleNamespace(
         project_id=reservation.project_id,
         guide_version=lineage.guide_version,
@@ -233,10 +194,8 @@ async def test_selected_pre_task_guard_rechecks_exact_locked_lineage(monkeypatch
         assignment_id=reservation.assignment_id,
         contributor_id=reservation.actor_profile_id,
         checker_remediation_manifest_id=(lineage.checker_remediation_manifest_id),
-        predecessor=SimpleNamespace(
-            submission_id=lineage.predecessor_submission_id,
-            version=lineage.predecessor_submission_version,
-        ),
+        predecessor=(SimpleNamespace(submission_id=lineage.predecessor_submission_id,
+                                     version=lineage.predecessor_submission_version) if revision else None),
         locked_project_context=locked,
     )
 
@@ -247,6 +206,18 @@ async def test_selected_pre_task_guard_rechecks_exact_locked_lineage(monkeypatch
     monkeypatch.setattr(TaskSubmissionContextService, "lock_submission_context", lock)
     guard = selected_pre_submit_task_guard(SimpleNamespace())
     await guard.lock_selected_pre_submit_scope(reservation)
+
+    exact_predecessor = context.predecessor
+    context.predecessor = SimpleNamespace(submission_id=new_record_id(),
+                                         version=lineage.predecessor_submission_version if revision else 1)
+    with pytest.raises(RuntimeError, match="selected PRE TASK custody changed"):
+        await guard.lock_selected_pre_submit_scope(reservation)
+    context.predecessor = exact_predecessor
+    if revision:
+        context.predecessor.version += 1
+        with pytest.raises(RuntimeError, match="selected PRE TASK custody changed"):
+            await guard.lock_selected_pre_submit_scope(reservation)
+        context.predecessor.version = lineage.predecessor_submission_version
 
     context.checker_remediation_manifest_id = new_record_id()
     with pytest.raises(RuntimeError, match="selected PRE TASK custody changed"):
@@ -288,35 +259,58 @@ def test_selected_pre_model_compiles_complete_owner_and_authority_custody() -> N
         assert value in admission_sql
 
 
-def test_selected_pre_admission_capability_is_exact_and_single_use() -> None:
-    reservation = _reservation()
-    owner = SimpleNamespace(_capability=None)
-    run_id = new_record_id()
-    terminal = SimpleNamespace(
-        lease=SimpleNamespace(reservation=reservation),
-        terminal_digest="sha256:" + "5" * 64,
-    )
-    capability = SelectedPreSubmitAdmissionCapability._issued(
-        owner=owner,
-        run_id=run_id,
-        terminal=terminal,
-    )
-    owner._capability = capability
-    values = {
-        "run_id": run_id,
-        "terminal_digest": terminal.terminal_digest,
-        "attempt_id": reservation.attempt_id,
-        "prepared_generation_id": reservation.prepared_generation_id,
-        "archive_sha256": reservation.archive_sha256,
-        "semantic_manifest_sha256": reservation.semantic_manifest_sha256,
-    }
-    with pytest.raises(
-        SelectedPreSubmitUnavailable, match="selected_pre_submit_admission_unavailable"
-    ):
-        capability.consume(**(values | {"semantic_manifest_sha256": "sha256:" + "6" * 64}))
-    assert capability.consume(**values) == run_id
-    with pytest.raises(SelectedPreSubmitUnavailable):
-        capability.consume(**values)
+@pytest.mark.parametrize("changed", [
+    None, "run", "stored_run", "reservation", "status", "terminal", "digest",
+    "execution", "eligible", "receipt", "execute_evidence", "finalize_evidence",
+])
+async def test_selected_pre_acceptance_requires_exact_current_evidence(changed, monkeypatch):
+    """T4 locks exact authorized eligible evidence; it issues no prepared capability."""
+    request = _source_reservation()
+    terminal = SimpleNamespace(terminal_digest=SHA, execution=SimpleNamespace(eligible=True),
+                               invocation_receipt=object())
+    current = SimpleNamespace(run_id=request.attempt_id, reservation=request,
+                              status="completed", terminal=terminal)
+    row = SimpleNamespace(execute_evidence_id=new_record_id(), finalize_evidence_id=new_record_id())
+    session = SimpleNamespace(get=AsyncMock(return_value=row))
+    coordinator = SelectedPreSubmitCoordinator(session, tasks=SimpleNamespace(),
+        sources=SimpleNamespace(), source_contracts=selected_pre_submit_source_contracts())
+    read = AsyncMock(return_value=current)
+    monkeypatch.setattr(coordinator, "read_current", read)
+    run_id, digest = request.attempt_id, SHA
+    if changed == "run":
+        run_id = new_record_id()
+    elif changed == "stored_run":
+        current.run_id = new_record_id()
+    elif changed == "reservation":
+        current.reservation = replace(request, actor_profile_id=new_record_id(),
+                                      source_contracts=selected_pre_submit_source_contracts())
+    elif changed == "status":
+        current.status = "infrastructure_failed"
+    elif changed == "terminal":
+        current.terminal = None
+    elif changed == "digest":
+        digest = "sha256:" + "e" * 64
+    elif changed == "execution":
+        terminal.execution = None
+    elif changed == "eligible":
+        terminal.execution.eligible = False
+    elif changed == "receipt":
+        terminal.invocation_receipt = None
+    elif changed == "execute_evidence":
+        row.execute_evidence_id = None
+    elif changed == "finalize_evidence":
+        row.finalize_evidence_id = None
+    if changed:
+        error = SelectedPreSubmitRequestConflict if changed == "run" else SelectedPreSubmitUnavailable
+        with pytest.raises(error):
+            await coordinator.lock_acceptance(run_id=run_id, facts=request, terminal_digest=digest)
+    else:
+        assert await coordinator.lock_acceptance(run_id=run_id, facts=request, terminal_digest=digest) is terminal
+        session.get.assert_awaited_once_with(SelectedPreSubmitRun, str(run_id))
+    if changed == "run":
+        read.assert_not_awaited()
+    else:
+        read.assert_awaited_once_with(request)
 
 
 def test_selected_pre_execution_capability_is_exact_and_single_use() -> None:
@@ -397,53 +391,28 @@ def test_selected_pre_authority_digests_bind_lease_and_infrastructure_outcome() 
 
 
 def test_selected_pre_request_binds_complete_later_admission_lineage() -> None:
-    manifest = {"schema_version": "submission_manifest.v1", "entries": []}
-    digest = canonical_json_hash(manifest)
-    lineage = SelectedPreSubmitAdmissionLineage(
-        predecessor_submission_id=None,
-        predecessor_submission_version=None,
-        checker_remediation_manifest_id=None,
-        guide_id=new_record_id(),
-        guide_version="locked-v1",
-        source_snapshot_id=new_record_id(),
-        source_snapshot_sha256=SHA,
-        locked_guide_sha256=SHA,
-        effective_policy_id=new_record_id(),
-        effective_policy_sha256=SHA,
-        pre_submit_policy_id=new_record_id(),
-        pre_submit_policy_sha256=SHA,
-        effective_plan_sha256="sha256:" + "1" * 64,
-        rules_sha256="sha256:" + "2" * 64,
-        external_checker_policies_sha256=SHA,
-        post_submit_policy_sha256=_POST_POLICY_SHA256,
-        post_submit_policy_body=_POST_POLICY,
-        locked_policy_context_hash=SHA,
-        semantic_manifest_id=new_record_id(),
-        semantic_manifest_body=manifest,
-        packet_sha256=SHA,
-        storage_scheme="s3",
-    )
-    reservation = replace(
-        _reservation(),
-        policy_sha256=lineage.effective_plan_sha256,
-        semantic_manifest_sha256=digest,
-        admission_lineage=lineage,
-    )
+    from app.modules.checkers.api.pre_submit_material import SubmissionPacketView
 
+    reservation = _source_reservation()
+    lineage = reservation.admission_lineage
     assert reservation.canonical_body()["admission_lineage"] == lineage.canonical_body()
-    assert (
-        SelectedPreSubmitReservationFacts.from_canonical_body(reservation.canonical_body(), source_contracts=selected_pre_submit_source_contracts())
-        == reservation
-    )
-    assert (
-        reservation.request_digest
-        != replace(
-            reservation,
-            admission_lineage=replace(lineage, packet_sha256="sha256:" + "9" * 64),
-        ).request_digest
-    )
-    with pytest.raises(ValueError, match="reservation"):
-        replace(reservation, semantic_manifest_sha256=SHA)
+    assert SelectedPreSubmitReservationFacts.from_canonical_body(
+        reservation.canonical_body(), source_contracts=selected_pre_submit_source_contracts(),
+    ) == reservation
+    packet = SubmissionPacketView("different summary", "")
+    changed = replace(reservation,
+        default_context=replace(reservation.default_context, packet=packet),
+        admission_lineage=replace(lineage, packet_sha256=packet.sha256),
+        source_contracts=selected_pre_submit_source_contracts())
+    assert changed.request_digest != reservation.request_digest
+    with pytest.raises(ValueError):
+        replace(reservation, admission_lineage=changed.admission_lineage,
+                source_contracts=selected_pre_submit_source_contracts())
+    body = reservation.canonical_body()
+    body["admission_lineage"]["semantic_manifest_body"] = {"entries": []}
+    with pytest.raises(ValueError):
+        SelectedPreSubmitReservationFacts.from_canonical_body(
+            body, source_contracts=selected_pre_submit_source_contracts())
 
 
 def test_submission_artifact_request_selects_exactly_one_pre_lineage() -> None:

@@ -47,88 +47,6 @@ class SelectedPreSubmitTaskGuard(Protocol):
 _CAPABILITY_SEAL = object()
 
 
-class SelectedPreSubmitAdmissionCapability:
-    """One-use completed-pass authority minted inside the finalization root."""
-
-    __slots__ = (
-        "_consumed",
-        "_owner",
-        "_seal",
-        "_lock",
-        "run_id",
-        "terminal_digest",
-        "attempt_id",
-        "prepared_generation_id",
-        "archive_sha256",
-        "semantic_manifest_sha256",
-    )
-
-    def __init__(self, *_: object, **__: object) -> None:
-        raise TypeError("selected PRE admission capabilities are coordinator-issued")
-
-    @classmethod
-    def _issued(
-        cls,
-        *,
-        owner: SelectedPreSubmitCoordinator,
-        run_id: UUID,
-        terminal: SelectedPreSubmitTerminalFacts,
-    ) -> SelectedPreSubmitAdmissionCapability:
-        reservation = terminal.lease.reservation
-        value = object.__new__(cls)
-        value._owner = owner
-        value._seal = _CAPABILITY_SEAL
-        value._lock = threading.Lock()
-        value._consumed = False
-        value.run_id = run_id
-        value.terminal_digest = terminal.terminal_digest
-        value.attempt_id = reservation.attempt_id
-        value.prepared_generation_id = reservation.prepared_generation_id
-        value.archive_sha256 = reservation.archive_sha256
-        value.semantic_manifest_sha256 = reservation.semantic_manifest_sha256
-        return value
-
-    def consume(
-        self,
-        *,
-        run_id: UUID,
-        terminal_digest: str,
-        attempt_id: UUID,
-        prepared_generation_id: UUID,
-        archive_sha256: str,
-        semantic_manifest_sha256: str,
-    ) -> UUID:
-        """Consume only for the exact finalized run and still-live prepared bytes."""
-        with self._lock:
-            if (
-                self._seal is not _CAPABILITY_SEAL
-                or self._consumed
-                or self._owner._capability is not self
-                or (
-                    run_id,
-                    terminal_digest,
-                    attempt_id,
-                    prepared_generation_id,
-                    archive_sha256,
-                    semantic_manifest_sha256,
-                )
-                != (
-                    self.run_id,
-                    self.terminal_digest,
-                    self.attempt_id,
-                    self.prepared_generation_id,
-                    self.archive_sha256,
-                    self.semantic_manifest_sha256,
-                )
-            ):
-                raise SelectedPreSubmitUnavailable(
-                    "selected_pre_submit_admission_unavailable"
-                )
-            self._consumed = True
-            self._owner._capability = None
-            return self.run_id
-
-
 class SelectedPreSubmitExecutionCapability:
     """One-use authority for the committed lease's process-local ART callback."""
 
@@ -204,7 +122,6 @@ class SelectedPreSubmitCoordinator:
         self._tasks = tasks
         self._source_contracts = source_contracts
         self._sources = sources
-        self._capability: SelectedPreSubmitAdmissionCapability | None = None
         self._execution_capability: SelectedPreSubmitExecutionCapability | None = None
 
     async def read_current(
@@ -573,7 +490,6 @@ class SelectedPreSubmitCoordinator:
 
 
 __all__ = (
-    "SelectedPreSubmitAdmissionCapability",
     "SelectedPreSubmitCompletion",
     "SelectedPreSubmitCoordinator",
     "SelectedPreSubmitExecutionCapability",

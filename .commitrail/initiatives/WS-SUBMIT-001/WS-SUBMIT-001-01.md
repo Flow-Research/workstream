@@ -6437,3 +6437,32 @@ cases from full run, every public module case has passing evidence. Ruff, struct
 record and whitespace pass. Shared _payload remains for revision_expiry consumer;
 no removed preparation call remains in this module's tests. This is local proof,
 not full CI/native/provider or full-spec completion.
+
+PRE coordination cleanup scope: modules/checkers/selected_pre_submit_coordination.py
+and tests/checkers/external/test_selected_pre_submit_coordination.py. Repo-wide
+consumer trace finds no caller/issuer of SelectedPreSubmitAdmissionCapability
+outside its obsolete unit test; current finalize always returns capability=None.
+Remove dead class/member/export, retaining execution capability and all historical
+readers/data. Replace obsolete capability test with exact current acceptance lock
+refusal/positive controls; migrate TASK guard and packet/lineage tests to source
+reservation without caller-derived manifests. Remove unused old reservation helper.
+Medium authority risk: full coordination/receipt tests, Ruff/structure and QA+ARCH
+review. No compatibility alias, relaxed authority, schema or retained-data changes.
+Human focus: dead issuance removal must not weaken exact T4 evidence consumption.
+
+Coordination initial full run136pass15.09s. QA-COORD001 identified coupled predecessor
+ID/version negative could survive removal of either guard. Added typed current
+revision positive control and separate ID-only/version-only substitutions alongside
+initial case. Final full coordination+receipt run137pass9.98s; no retiredconstructor
+failures remain in this module. Ruff, structure and whitespace pass. ARCH confirms
+no live issuer or historical reader depends on deleted class; current T4 checks
+persisted evidence independently. New mocked acceptance matrix proves immediate
+conditions only; real database/source acceptance proofs remain separate. Old ART
+admission-authority protocol/consumer cleanup remains traced residual work, not
+removed blindly in this scope. QA mutation closure pending at this checkpoint.
+
+QA-COORD001 closed: exact revision test detects independent removal of predecessor
+ID and version guards, and acceptance test detects receipt-guard removal. In-memory
+probes leave source unchanged (/tmp/submission-coordination-qa-repair.log). No
+remaining scoped QA/ARCH findings;137pass final suite evidence inspected. Same
+single draft PR708, with remaining full-spec/provider/CI work still open.
