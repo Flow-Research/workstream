@@ -2294,6 +2294,10 @@
     },
     {
       "group": "lifecycle",
+      "target": "backend/app/modules/tasks/api/pending_submission.py"
+    },
+    {
+      "group": "lifecycle",
       "target": "backend/app/modules/tasks/api/post_submit_routing.py"
     },
     {
@@ -2773,7 +2777,7 @@
       "target": "backend/scripts/validate_test_lane_evidence.py"
     }
   ],
-  "authority_digest": "d416a689c5079db878d9baa8a5008a63ef892cf8745cba615d4eab8066cf74db",
+  "authority_digest": "69033945f9e74f3e3391cde0ac8e8f7c80a29ec88242a46d32f0482c651a92bf",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }

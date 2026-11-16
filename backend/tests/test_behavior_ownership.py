@@ -2803,6 +2803,7 @@ def test_submission_intake_partition_addition_is_exact_and_retains_existing_targ
         "backend/app/adapters/artifacts/local_submission_source.py",
         "backend/app/modules/artifacts/intake/repository.py",
         "backend/app/modules/tasks/api/intake_custody.py",
+        "backend/app/modules/tasks/api/pending_submission.py",
         "backend/app/modules/tasks/intake_custody.py",
     }
     assert ownership.SUBMISSION_INTAKE_TARGETS == additions

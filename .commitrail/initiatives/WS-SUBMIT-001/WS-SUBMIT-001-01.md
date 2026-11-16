@@ -6063,3 +6063,20 @@ Final manager minimal-response replay passes 1 in 5.20s. The expanded CLI run's
 other 24 cases remain passing, including all four omitted-key/explicit-null
 regressions. Changed Python Ruff and diff whitespace checks pass. Final clean
 review replay remains required; no full-spec readiness claim.
+
+Head62c138605 hosted preflight fails behavior_ownership partition_target_mismatch
+(job133573919169); prior module/AUTH/structure checks and 92 architecture tests
+pass. Exact inventory diff shows only missing
+backend/app/modules/tasks/api/pending_submission.py, no stale targets. Bounded
+repair scope: behavior_ownership.py existing SUBMISSION_INTAKE_TARGETS exact set,
+partition.v1.json, existing exact-addition test, and this record. Preserve original
+protected base, all retained assignments, group rules and unrelated-path rejection.
+No new wildcard, bypass, reviewed behavior claim, or catalogue population. CI
+integrity/QA review required; verify partition/catalogue plus validator tests.
+
+Partition repair verification: complete behavior-ownership validator suite passes
+170 in 8.77s (one unknown asyncio config warning with plugin autoload disabled).
+Catalogue validation exits0 with existing unresolved population listed, not
+claimed reviewed. Exact diff adds only the pending TASK API lifecycle assignment
+and its digest; protected base and retained assignments remain unchanged. Ruff
+and whitespace checks pass. Hosted rerun and scoped CI review remain pending.
