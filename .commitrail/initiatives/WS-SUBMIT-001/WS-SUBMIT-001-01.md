@@ -5150,3 +5150,61 @@ healthcheck Python with substituted HTTP responses. Workflow counterprobes rejec
 missing, extra, duplicate and missing-progress-tool catalogues. Artifact:
 /tmp/submission-catalogue-repair-probe.log. This proves catalogue assertions, not
 hosted deployment. Commitrail validation and worktree whitespace checks pass.
+
+### Real CLI raw-ZIP journey migration
+
+The pushed client repair is closed by affected ARCH/SEC and DOCS/CI reviewers at
+4346f80e9. Current main is contained. The real CLI submission drill still calls
+removed preparation routes and fails inside old materialization authorization
+before exercising the CLI. Replace that drill with the signed admission fixture,
+real socket/raw-ZIP command, portable source-bound PRE and actual T5 finalizer.
+Allowed: cli/tests/integration/test_submission_public_api.py and its narrowly
+scoped support, additive ownership registration if needed, and this record.
+Preserve exact replay, changed-packet refusal, immutable bytes/one Submission and
+POST dispatch, history/detail/findings/own-work reads, same-project/foreign-project
+concealment, suspension and grant-revocation checks. Replace obsolete preparation
+reads with operation-ID/key progress and unknown-operation refusal. Do not restore
+legacy constructors, mutate production authorization, narrow CI or claim native
+runtime/distributed scheduling. Approved-policy/task fixture setup is not public
+setup proof. Risk is integration/proof fidelity. Verify built CLI against signed
+HTTP/PostgreSQL and real Local storage; review QA/test-delta and ARCH/SEC with
+explicit before/after behavior mapping. Human review focus is retained authority
+and exact source custody. Shared legacy materialization fixtures remain a separate
+consumer migration, not fixed by this drill.
+
+Worktree drill evidence: initial collection needed explicit pytest-asyncio wrappers
+for imported backend fixtures, matching adjacent CLI proofs. The historical GET
+preparation routes remain intentional; only the obsolete POST is asserted absent.
+The v3/v4 runs now reach accepted raw-ZIP replay, pending progress, production
+OUTBOX finalization, finalized history/own-work reads, one-PRE custody, foreign
+concealment and suspended-actor denials. They fail when the reactivated actor's
+submitter grant is revoked: progress still succeeds while submit/history/findings
+fail. v4 reports stored actor active/grant revoked. Retain this regression;
+no authority relaxation or production change has been made. Investigate the exact
+read audit/selected grant before repairing. Logs: /tmp/submission-cli-source-journey-v3.log
+and /tmp/submission-cli-source-journey-v4.log. Structural validation, Ruff,
+Commitrail and whitespace pass; these are not a passing journey result.
+
+Diagnosis supersedes the suspected authorization defect: v5 audit shows the
+revoked submitter decision denied, followed by a valid management decision.
+seed_started_task_for_artifact_test grants the task actor a project manager role
+for screen/release and retains it. This is not a submitter-only fixture. Revoke
+that setup-only management grant through signed admin API before the CLI journey,
+assert no active management grants remain, then keep the original contributor
+revocation refusal. No production AUTH repair is justified. v6 is the explicit
+counterprobe asserting that the unadjusted fixture is submitter-only.
+
+The v6 counterprobe fails before upload with exactly one active project_manager
+grant on the task actor. The repaired drill revokes that grant via the signed
+admin API, retains its row/audit history, and asserts zero active management grants
+before and after the journey. Temporary verbose audit diagnostics are removed.
+The v7 run is the first execution of that repaired contributor-only setup.
+
+Repaired contributor-only journey passes1 in71.96s, exit0, migrations0081 and
+isolated database/role cleanup complete (/tmp/submission-cli-source-journey-v7.log/json).
+This is worktree evidence based on4346f80e9; only this record changes after that
+execution. The full assertion path includes accepted replay before/after T5,
+changed-packet409, both progress selectors, zero-before/one-after Submission,
+retained raw digest/size, history/findings/own-work, same/foreign project404 and
+suspension/revocation404. Production OUTBOX handler performs T5; actual broker,
+POST execution and native/provider qualification are not claimed by this drill.
