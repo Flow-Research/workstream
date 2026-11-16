@@ -1415,3 +1415,12 @@ role/audit/activation and schema cases plus pure graph, lint/structure/links and
 assigned reviews. No capability-ledger delta. Group5 historical running-window
 proof lacks a captured preparation and remains unimplemented pending a genuine
 source-commit capture plan; do not fabricate it or permit old runtime lineage.
+
+The exact524c687 policy/schema probe passed3 cases then exposed an incorrect
+new assertion: canonical AUTH deliberately clears granted project scope on a
+denied read. Keep exact project assertions for the two allows and assert no
+granted project for the denial. Observe the actual typed resource passed through
+the real canonical require operation (delegate unchanged), assert actor/project/
+collection identity and exact stored resource-context digest for all3 decisions;
+do not invent raw target metadata or change the audit publisher. Full grant/actor/
+permission assertions remain. The failed run completed owned cleanup.

@@ -8,6 +8,8 @@ from app.core.identifiers import new_record_id
 from app.db import session as db_session
 from app.modules.tasks.models import AuditEvent
 from app.modules.authorization.models import AdminRoleGrant
+from app.modules.authorization.kernel import AuthorizationService
+from app.modules.authorization.runtime import authorization_resource_digest
 from tests.test_tasks import actor_id, auth_headers, create_active_project, set_dev_actor
 from .support import (
     AUDITOR, EXACT_MANAGER, FINANCE, MANAGER, OPERATOR, OWNER, as_admin, as_manager, get_ok, project_path,
@@ -100,6 +102,15 @@ async def test_finance_of_another_project_is_concealed(task_client, monkeypatch)
 
 
 async def test_each_read_commits_one_exact_decision(task_client, monkeypatch):
+    resources = {}
+    original = AuthorizationService.require
+
+    async def observe(service, action_id, resource_context):
+        if str(action_id) == ACTION:
+            resources[str(resource_context.actor_profile_id)] = resource_context
+        return await original(service, action_id, resource_context)
+
+    monkeypatch.setattr(AuthorizationService, "require", observe)
     project = (await create_active_project(task_client))["id"]
     finance_id = await as_admin(task_client, monkeypatch, FINANCE, "finance_authority", project=project)
     await get_ok(task_client, _path(project))
@@ -127,8 +138,14 @@ async def test_each_read_commits_one_exact_decision(task_client, monkeypatch):
     assert [UUID(str(row.actor_id)) for row in rows] == [
         UUID(str(finance_id)), UUID(str(manager_id)), UUID(str(outsider_id)),
     ]
-    assert all(UUID(str(row.project_id)) == UUID(project) for row in rows)
-    assert all(row.resource_type == "contribution_policy_collection" and str(row.resource_id) == project for row in rows)
+    assert all(UUID(str(row.project_id)) == UUID(project) for row in rows[:2])
+    assert rows[2].project_id is None
+    assert len(resources) == 3
+    for row in rows:
+        resource = resources[str(row.actor_id)]
+        assert resource.resource_type == "contribution_policy_collection"
+        assert resource.resource_id == resource.scope_project_id == UUID(project)
+        assert row.after_facts["resource_context_digest"] == authorization_resource_digest(resource)
     assert all(row.matched_grant_id is not None for row in rows[:2])
     for row, role, scope in zip(rows[:2], ("finance_authority", "project_manager"), ("project", "system"), strict=True):
         grant = grants[str(row.matched_grant_id)]
