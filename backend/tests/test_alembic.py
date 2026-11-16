@@ -1374,101 +1374,111 @@ async def test_roles_anywhere_upgrade_preserves_old_proof_and_refuses_downgrade(
 
 
 async def test_revision_upgrade_retains_policy_source_and_running_window(
-    tmp_path,
     isolated_database_env,
     migration_lock,
-    monkeypatch,
 ):
-    """A genuine guarded 0047 window survives and remains usable on the new head."""
-    from sqlalchemy import select, text
-    from app.adapters.tasks import task_post_submit_outcome
-    from app.modules.tasks.revision.models import TaskRevisionPreparation
-    from app.modules.tasks.revision.service import project_current_revision
+    """Preserve genuine 0047 evidence, then refuse the incompatible reward cutover."""
+    import ast
+    from copy import deepcopy
+    from sqlalchemy import text
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+    from sqlalchemy.pool import NullPool
+    from tests.finance.test_selected_reward_migration import _snapshot
+    from tests.historical_submission_fixtures import _restore_validated_snapshot_rows
     from tests.migration_revision_fixtures import (
-        assert_historical_revision_guards,
-        enter_predecessor_owner_shape,
-        historical_revision_source,
-        insert_0047_preparation,
-        leave_predecessor_owner_shape,
-        retained_revision_rows,
-    )
-    from tests.tasks.post_submit_routing.outcome_support import invoked_completion
-    from tests.tasks.post_submit_routing.support import revision_archive
-    from tests.tasks.submission_dispatch.test_replacement_creation import (
-        _create,
-        _creation_request,
-        _ready_replacement,
+        captured_revision_window, restore_revision_window,
+        retained_revision_rows, validate_revision_window,
     )
 
     with migration_lock():
         await _execute(isolated_database_env, "drop schema public cascade; create schema public")
         await asyncio.to_thread(command.upgrade, _alembic_config(), "0047_revision_recovery")
-        shape = pytest.MonkeyPatch()
-        await enter_predecessor_owner_shape(_execute, isolated_database_env, shape)
-        async with historical_revision_source(
-            tmp_path,
-            isolated_database_env,
-            monkeypatch,
-            "0047_revision_source_default",
-        ) as h:
-            await assert_historical_revision_guards(h.factory, "0047_revision_recovery")
-            h.envelope = await invoked_completion(h)
-            await assert_historical_revision_guards(h.factory, "0047_revision_recovery")
-            with monkeypatch.context() as patch:
-                patch.setattr(
-                    "app.modules.tasks.post_submit_routing.outcome.prepare_revision",
-                    insert_0047_preparation,
+        capture = captured_revision_window()
+        seed = capture["snapshot"]["seed"]
+        # A syntactically valid digest substitution passes physical row/FK restore.
+        # Semantic validation must reject it independently of provenance checks.
+        mutant = deepcopy(capture["snapshot"])
+        preparation = mutant["tables"]["task_revision_preparations"][0]
+        preparation["preparation_sha256"] = "sha256:" + (
+            "0" if preparation["preparation_sha256"][-1] != "0" else "1"
+        ) * 64
+        await _restore_validated_snapshot_rows(
+            isolated_database_env, mutant, expected_revision="0047_revision_recovery",
+        )
+        connection = await asyncpg.connect(isolated_database_env.replace("+asyncpg", ""))
+        try:
+            with pytest.raises(AssertionError, match="preparation digest mismatch"):
+                await validate_revision_window(
+                    connection, seed, capture_time=datetime.fromisoformat(capture["capture_time"]),
                 )
-                async with h.factory() as session, session.begin():
-                    outcome = await task_post_submit_outcome(session, h.factory).apply(
-                        h.envelope,
-                        current_generation=None,
-                    )
-            async with h.factory() as session:
-                assert (
-                    await session.scalar(
-                        text(
-                            "SELECT count(*) FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid "
-                            "JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' "
-                            "AND NOT t.tgisinternal AND t.tgenabled='D'"
-                        )
-                    )
-                    == 0
+        finally:
+            await connection.close()
+        await restore_revision_window(isolated_database_env, capture)
+        engine = create_async_engine(isolated_database_env, poolclass=NullPool)
+        factory = async_sessionmaker(engine)
+        try:
+            async with factory() as session:
+                before = await retained_revision_rows(session, seed["routing_manifest_id"])
+                assert "remaining_microseconds" not in before["task_revision_preparations"][0][0]
+            for successor in ("0048_revision_exhaustion", "0068_issuer_profile_email"):
+                await asyncio.to_thread(command.upgrade, _alembic_config(), successor)
+                async with factory() as session:
+                    assert await retained_revision_rows(session, seed["routing_manifest_id"]) == before
+                    clocks = (await session.execute(text(
+                        "SELECT remaining_microseconds,clock_observed_at,deadline_at "
+                        "FROM public.task_revision_preparations WHERE id=:id"
+                    ), {"id": seed["preparation_id"]})).one()
+                    assert clocks.remaining_microseconds is clocks.clock_observed_at is None
+                    assert clocks.deadline_at.isoformat() == capture["snapshot"]["tables"][
+                        "task_revision_preparations"][0]["deadline_at"]
+            async with factory() as session:
+                backfill = (await session.execute(text("""
+                    SELECT s.attempt_status,s.status_reason,s.decided_at,s.updated_at,
+                      a.started_at,a.updated_at AS assignment_updated_at
+                    FROM public.submissions s JOIN public.task_assignments a
+                      ON a.id=s.task_assignment_id WHERE s.id=:id
+                """), {"id": seed["submission_id"]})).one()
+                rows = capture["snapshot"]["tables"]
+                source = rows["submissions"][0]
+                manifest = rows["task_post_submit_routing_manifests"][0]
+                assignment = rows["task_assignments"][0]
+                instant = datetime.fromisoformat
+                assert backfill.attempt_status == "needs_revision"
+                assert backfill.status_reason is None
+                assert backfill.decided_at == instant(manifest["created_at"])
+                assert backfill.updated_at == max(instant(source["submitted_at"]), backfill.decided_at)
+                starts = [instant(event["created_at"]) for event in rows["audit_events"]
+                          if event["entity_type"] == "task" and event["entity_id"] == seed["task_id"]
+                          and event["event_type"] in {"TaskStarted", "TaskStartOverridden"}
+                          and instant(event["created_at"]) >= instant(assignment["assigned_at"])]
+                expected_start = min(starts) if starts else None
+                assert backfill.started_at == expected_start
+                assert backfill.assignment_updated_at == max(
+                    instant(assignment["assigned_at"]), expected_start or instant(assignment["assigned_at"]),
                 )
-                before = await retained_revision_rows(session, outcome.routing_manifest_id)
-                source = before["task_revision_preparations"][0][0]
-                assert "remaining_microseconds" not in source
-            shape.undo()
-            await leave_predecessor_owner_shape(_execute, isolated_database_env)
-            await asyncio.to_thread(command.upgrade, _alembic_config(), HEAD_REVISION)
-            async with h.factory() as session:
-                assert await retained_revision_rows(session, outcome.routing_manifest_id) == before
-                preparation = await session.scalar(select(TaskRevisionPreparation))
-                assert preparation.clock_observed_at is None
-                assert (
-                    preparation.remaining_microseconds is None
-                    and preparation.deadline_at is not None
-                )
-                view = await project_current_revision(session, preparation)
-                assert view.disposition == "ready" and view.outcome == "kept"
-                assert view.preparation_sha256 == json.loads(source)["preparation_sha256"]
-                assert view.deadline_at == preparation.deadline_at
-                h.revision_preparation_id = preparation.id
-                h.revision_preparation_sha256 = preparation.preparation_sha256
-            prepared, admission_id = await _ready_replacement(h, revision_archive(h.data))
-            creation = _creation_request(h, prepared, admission_id)
-            successor = await _create(h, creation)
-            assert successor.submission_version == 2
-            assert successor.submission_id != h.created.submission_id
-            async with h.factory() as session:
-                retained = await retained_revision_rows(session, outcome.routing_manifest_id)
-                for owner in (
-                    "revision_policies",
-                    "submissions",
-                    "task_revision_preparations",
-                    "outbox_events",
-                ):
-                    assert retained[owner] == before[owner], owner
+            # Compare all retained rows and the full schema/guards at the actual
+            # cutover predecessor, after legitimate earlier backfills have run.
+            cutover_before = await _snapshot(isolated_database_env)
+            with pytest.raises(RuntimeError, match="reward transition requires explicit data resolution:") as failure:
+                await asyncio.to_thread(command.upgrade, _alembic_config(), HEAD_REVISION)
+            actual = ast.literal_eval(str(failure.value).split(": ", 1)[1])
+            expected = {
+                "published_policy_evidence": {
+                    "sample_ids": sorted(row["id"] for row in capture["snapshot"]["tables"][
+                        "contribution_policy_versions"] if row["status"] != "draft"), "truncated": False,
+                },
+                "command_evidence": {
+                    "sample_ids": sorted(row["id"] for row in capture["snapshot"]["tables"][
+                        "task_command_receipts"]), "truncated": False,
+                },
+                "screened_work": {"sample_ids": [seed["task_id"]], "truncated": False},
+            }
+            assert actual == expected
+            assert await _snapshot(isolated_database_env) == cutover_before
+            async with factory() as session:
+                assert await session.scalar(text("SELECT version_num FROM alembic_version")) == "0068_issuer_profile_email"
+        finally:
+            await engine.dispose()
 
 
 def test_current_head_installs_selected_only_checker_custody(

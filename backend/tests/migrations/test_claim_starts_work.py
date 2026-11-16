@@ -18,11 +18,8 @@ from app.db import session as db_session
 from tests.conftest import _drop_test_database_schema
 from tests.migration_fixtures import _config
 from tests.migration_revision_fixtures import (
-    _restore_historical_revision_rows, assert_historical_revision_guards,
-    add_historical_revision_read_projection, enter_predecessor_owner_shape,
-    leave_predecessor_owner_shape,
+    assert_historical_revision_guards, captured_revision_window, restore_revision_window,
 )
-from tests.test_alembic import _execute
 from tests.test_tasks import task_database_env as task_database_env
 
 pytestmark = pytest.mark.postgres_schema_contract
@@ -41,17 +38,7 @@ async def predecessor_rows(task_database_env, migration_lock):
     with migration_lock():
         await _drop_test_database_schema(task_database_env)
         await asyncio.to_thread(command.upgrade, _config(), "0047_revision_recovery")
-        shape = pytest.MonkeyPatch()
-        await enter_predecessor_owner_shape(_execute, task_database_env, shape)
-        try:
-            seed = await _restore_historical_revision_rows(
-                task_database_env, "0047_revision_source_default",
-            )
-            async with db_session.get_engine().begin() as connection:
-                await add_historical_revision_read_projection(connection)
-        finally:
-            shape.undo()
-        await leave_predecessor_owner_shape(_execute, task_database_env)
+        seed = await restore_revision_window(task_database_env, captured_revision_window())
         await db_session.dispose_engine()
         await asyncio.to_thread(command.upgrade, _config(), "0064_checker_trial_evidence")
     await assert_historical_revision_guards(
@@ -119,8 +106,8 @@ async def _claim(session, task_id, actor_id, *, started=False):
 
 
 async def _setup(seed):
-    actor = seed["actor_context"]["actor_profile_id"]
-    source = seed["request"]["task_id"]
+    actor = seed["contributor_id"]
+    source = seed["task_id"]
     tasks = []
     async with db_session.get_session_factory()() as session, session.begin():
         assert await session.scalar(text("SELECT actor_kind FROM public.actor_profiles WHERE id=:id"), {"id": actor}) == "human"

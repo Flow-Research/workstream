@@ -1524,3 +1524,34 @@ with cleanup and both bounded review tracks pass. Integrated test sources are
 byte-identical to their original proof sources. Reconcile the combined repair
 and formatting delta on one clean target before pushing. Full hosted/Finance
 qualification remains unfinished; the genuine-data adoption is separate work.
+
+## Genuine retained revision-window migration proof
+
+Both adoption plan tracks pass the bounded replacement. Allowed: the captured
+historical_revision_window_0047.json.gz data asset, migration_revision_fixtures.py,
+test_alembic.py running-window case, migrations/test_claim_starts_work.py fixture,
+test_submission_predecessor_custody.py immutable snapshot extension, and this record.
+Remove the entire obsolete projection/bootstrap/reconstructed-writer helper surface;
+its only consumers move to checksum-bound exact0047 data and direct captured seed
+fields. No old runtime executes in current tests. Existing archive bytes remain
+unchanged. Risk L1 retained-data proof. Verify exact117-table/schema/column/raw-row
+inventory, closed restore and semantic source/AUTH/packet/expiry validation, a
+valid-SHA digest mutant independently of provenance framing,0047→0048→0068 retained
+facts/declared backfills, then exact0069 atomic refusal with unchanged complete
+rows/guards/revision and exact category/sample IDs. Rerun all3claim migration cases,
+both existing current replacement branches (extended original policy/preparation/
+expiry immutability), and named current projection/repair proofs. Both assigned
+review groups inspect clean source and captured bytes. No runtime/schema/CI/
+requirements changes or current-head consumption of old lineage. Human focus:
+authentic committed retained facts without placeholder schemas or writer fallback.
+No capability-ledger change: this is synthetic migration proof, not public runtime,
+checker/container, provider-object or payment qualification.
+
+The captured asset is48987 gzip bytes /344548 raw bytes, SHA256
+65de7efe3e8e8ad4b14f289b51d2e4e3c7e10cee326cb7487f746c5d5a4e4768,
+from original clean1a4cd1e27a401308960d4d8e9fabe40282a9a79f with its frozen
+uv.lock (SHA25650b4f83d8edf7d57ca97c5f2f65029fd41203f7a8fe1b129d4c4e55a5ccd30ce),
+Python3.12.3/PostgreSQL16.14. Original owner capture passed43.97s with cleanup;
+its earlier validator-only missing Submission.project_id assumption was corrected
+before that pass. All source rows/IDs/timestamps/digests remain original. This
+capture is not adoption proof until the current restore/migration tests pass.
