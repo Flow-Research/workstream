@@ -1845,3 +1845,22 @@ probe. CATALOGUE-CONSUMER-001 has discriminating proof pending reviewer replay.
 A final current-doc scan also removes the remaining no-matrix/current-target-only
 claims while retaining explicitly historical CP03A registration evidence. The
 three memberships stay PLANNED; no receipt API, payment or full Finance claim.
+
+### Receipt AUTH owner extraction and current-document repair
+
+CI-AUTH-WIRING-002 exposed new/grown structure at331c75e. Move service resource-
+scope normalization, exact prepared request validation and service denial checks
+into the existing domain/prepared_service owner, removing the old inline copies.
+The same lifecycle-before-resource denial order and explicit actual principal
+remain. The existing operational audit selector also handles the four fulfillment
+resources; no parallel target-selection branch remains. prepared.py is1197 lines
+(below1200), kernel.py shrinks from the frozen1261 to1253 and its prelocked
+function no longer exceeds100. Inventory comparison confirms no added or grown
+debt; refresh only the shrinking kernel file hash/span and remove its eliminated
+function entry. Policy, thresholds and every other ledger entry remain unchanged.
+The focused existing AUTH/routing/recovery/catalogue selection passed130 cases
+in14.42s before adding direct four-resource prepared-binding substitution proof.
+Update the affected existing invalidation binding consumer to the new exact
+caller-input/scope/context signature; there is no fallback signature. DOC-AUTH-
+WIRING-001 corrects the remaining current data-model no-matrix claim and current
+AUTH terminology; historically qualified CP03A evidence is retained.

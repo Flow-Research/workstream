@@ -91,9 +91,10 @@ profile records `effective=false -> effective=true` for that profile projection
 without asserting that its identity link, grants, or fixed-service admission
 make the whole actor effective.
 
-The closed service identity `workstream.compensation.adapter` identifies only
-an eligible adapter-binding target. It has no service-action matrix row and no
-action authority. ACTORS locks the exact active service profile and its active
+The closed service identity `workstream.compensation.adapter` identifies an
+eligible adapter-binding target and has exactly three PLANNED fulfillment
+memberships: source read, report and exception report. These memberships grant
+no executable action authority. ACTORS locks the exact active service profile and its active
 service identity link before returning immutable eligibility facts; generic
 service kind and every other fixed-service identity are insufficient.
 

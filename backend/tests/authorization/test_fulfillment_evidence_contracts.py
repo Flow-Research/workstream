@@ -155,3 +155,37 @@ async def test_replay_checks_original_allow_without_creating_replacement_authori
     with pytest.raises(PreparedAuthorizationHandleInvalid, match="invalid root custody"):
         await validate_fulfillment_replay(owner, issuance, action, caller_input, resource, decision_id)
     read.assert_not_awaited()
+
+
+@pytest.mark.parametrize("action,facts", _resources())
+def test_prepared_fulfillment_request_rejects_principal_operation_and_scope_changes(action, facts):
+    """Pure binding validation rejects substitutions before issuing any capability."""
+    from types import SimpleNamespace
+
+    from app.modules.authorization.domain.prepared_service import prepared_fixed_service_bindings
+    from app.modules.authorization.runtime import (
+        PreparedAuthorizationInput, PreparedAuthorityScope, PreparedAuthorityScopeKind,
+    )
+
+    context = SimpleNamespace(
+        request_id=new_record_id(), actor_profile_id=facts.reporter_actor_id,
+        identity_link_id=facts.reporter_identity_link_id,
+    )
+    operation = (
+        facts.external_event_id if action is ActionId.COMPENSATION_FULFILLMENT_REPORT
+        else facts.exception_event_id if action is ActionId.COMPENSATION_FULFILLMENT_EXCEPTION_REPORT
+        else context.request_id
+    )
+    resource = fulfillment_evidence_resource(facts)
+    caller = PreparedAuthorizationInput(idempotency_key=operation, request_value=resource.model_dump(mode="json"))
+    scope = PreparedAuthorityScope(kind=PreparedAuthorityScopeKind.PROJECT, project_id=facts.project_id)
+    actual = prepared_fixed_service_bindings(action, caller, scope, context, ValueError)
+    assert actual["fulfillment_evidence_context"] == resource
+    for changed_caller, changed_scope, changed_context in (
+        (caller.model_copy(update={"idempotency_key": new_record_id()}), scope, context),
+        (caller, scope.model_copy(update={"project_id": new_record_id()}), context),
+        (caller, scope, SimpleNamespace(**(vars(context) | {"actor_profile_id": new_record_id()}))),
+        (caller, scope, SimpleNamespace(**(vars(context) | {"identity_link_id": new_record_id()}))),
+    ):
+        with pytest.raises(ValueError, match="invalid fulfillment evidence request"):
+            prepared_fixed_service_bindings(action, changed_caller, changed_scope, changed_context, ValueError)

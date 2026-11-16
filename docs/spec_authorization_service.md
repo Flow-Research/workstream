@@ -80,7 +80,7 @@ Required concepts:
 A profile status is a guard, not a grant. Active humans receive only self
 profile capability until an administrative or exact-project grant exists.
 For a service, the profile is the stable local identity. Its immutable
-`service_identity` selects its closed typed service-action matrix row.
+`service_identity` selects its closed typed service-action matrix memberships.
 Availability separately controls executable actions: the compensation adapter's
 three planned memberships grant no runtime authority. Binding-target eligibility
 is not an authority grant. The identity kind is never inferred from display data,

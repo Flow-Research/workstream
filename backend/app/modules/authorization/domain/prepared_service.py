@@ -5,11 +5,12 @@ from __future__ import annotations
 from uuid import UUID
 
 from app.core.hashing import canonical_json_hash
-from app.modules.authorization.catalogue import ActionId
+from app.modules.authorization.catalogue import ActionId, ActionAvailability, SERVICE_ACTIONS_BY_IDENTITY
 from app.modules.authorization.domain.fulfillment_evidence import (
-    FULFILLMENT_EVIDENCE_ACTIONS, fulfillment_evidence_action_matches,
+    FULFILLMENT_EVIDENCE_ACTIONS, FulfillmentEvidenceResourceContext, fulfillment_evidence_action_matches,
     parse_fulfillment_evidence_binding,
 )
+from app.modules.authorization.domain.prepared_checker_runtime import checker_runtime_project_id
 from app.modules.authorization.domain.model_usage import (
     CHECKER_MODEL_CALL_ACTIONS,
     SETUP_MODEL_USAGE_ACTIONS,
@@ -63,7 +64,7 @@ from app.modules.authorization.domain.project_setup_finalization import (
     ProjectSetupFinalizationResourceContext,
 )
 from app.modules.authorization.runtime import (
-    AuthorizationResourceContext,
+    AuthorizationDenialCode, AuthorizationResourceContext,
     PreparedAuthorityScope,
     PreparedAuthorityScopeKind,
     ProjectGuideSufficiencyMutationResourceContext,
@@ -271,13 +272,19 @@ def prepared_request_digest(value):
     )
 
 
-def prepared_fixed_service_bindings(action, request, invalid_error):
+def prepared_fixed_service_bindings(action, caller_input, scope, context, invalid_error):
     """Keep exact dispatcher and assignment effect commitments with service guards."""
+    request = caller_input.request_value
     if action is ROUTE:
-        return {
-            "routing_request": parse_post_submit_routing_prepare(action, request, invalid_error)
-        }
-    return {
+        routing = parse_post_submit_routing_prepare(action, request, invalid_error)
+        if not (
+            scope.kind is PreparedAuthorityScopeKind.PROJECT and scope.project_id == routing.project_id
+            and caller_input.idempotency_key == context.request_id == context.correlation_id
+            == routing.route_operation_id
+        ):
+            raise invalid_error("invalid prepared routing request")
+        return {"routing_request": routing}
+    bindings = {
         "fulfillment_evidence_context": parse_fulfillment_evidence_binding(
             action, request, invalid_error,
         ),
@@ -292,3 +299,63 @@ def prepared_fixed_service_bindings(action, request, invalid_error):
         ),
         "outbox_dispatch_digest": prepared_outbox_digest(action, request, invalid_error),
     }
+    require_fulfillment_evidence_request(
+        action, caller_input, scope, context, bindings["fulfillment_evidence_context"], invalid_error,
+    )
+    return bindings
+
+
+def prepared_service_resource_scope(action_id, resource, artifact_resource):
+    """Normalize the existing exact service resources before human/admin scopes."""
+    if (
+        action_id in FULFILLMENT_EVIDENCE_ACTIONS
+        and isinstance(resource, FulfillmentEvidenceResourceContext)
+    ):
+        return PreparedAuthorityScope(
+            kind=PreparedAuthorityScopeKind.PROJECT, project_id=resource.scope_project_id,
+        )
+    if artifact_resource is not None and isinstance(resource, artifact_resource[1]):
+        return PreparedAuthorityScope(kind=PreparedAuthorityScopeKind.ARTIFACT_INTERNAL, artifact_resource_type=artifact_resource[0], artifact_resource_id=resource.resource_id)
+    if isinstance(resource, (ProjectGuideProjectionResourceContext, PostPolicyResourceContext, OutboxDispatchResourceContext, AssignmentInvalidationResourceContext, RevisionExpiryResourceContext, RevisionRecoveryResourceContext, PreSubmitResourceContext, PostSubmitResourceContext, PostSubmitRoutingResourceContext)):
+        return PreparedAuthorityScope(
+            kind=PreparedAuthorityScopeKind.PROJECT,
+            project_id=resource.scope_project_id,
+        )
+    if checker_runtime_project := checker_runtime_project_id(action_id, resource):
+        return PreparedAuthorityScope(kind=PreparedAuthorityScopeKind.PROJECT, project_id=checker_runtime_project)
+    return None
+
+
+def require_fulfillment_evidence_request(action, caller_input, scope, context, resource, invalid_error):
+    """Bind the callback event or exact read request to its actual principal."""
+    if action not in FULFILLMENT_EVIDENCE_ACTIONS:
+        return
+    operation_id = (
+        resource.facts.external_event_id
+        if action is ActionId.COMPENSATION_FULFILLMENT_REPORT
+        else resource.facts.exception_event_id
+        if action is ActionId.COMPENSATION_FULFILLMENT_EXCEPTION_REPORT
+        else context.request_id
+    )
+    if not (
+        scope.kind is PreparedAuthorityScopeKind.PROJECT
+        and caller_input.idempotency_key == operation_id
+        and fulfillment_evidence_action_matches(
+            action, resource, scope.project_id, context.actor_profile_id, context.identity_link_id,
+        )
+    ):
+        raise invalid_error("invalid fulfillment evidence request")
+
+
+def fixed_service_prepared_denial(action, resource, project_id, artifact_type, artifact_id, expected, context):
+    """Apply fixed-service availability, matrix and exact-resource guards once."""
+    if action.availability is not ActionAvailability.ACTIVE:
+        return AuthorizationDenialCode.ACTION_UNAVAILABLE
+    if action.action_id not in SERVICE_ACTIONS_BY_IDENTITY.get(context.service_identity, ()):
+        return AuthorizationDenialCode.PERMISSION_NOT_GRANTED
+    if not fixed_service_resource_matches(
+        action.action_id, resource, project_id, artifact_type, artifact_id, expected,
+        actor_profile_id=context.actor_profile_id, identity_link_id=context.identity_link_id,
+    ):
+        return AuthorizationDenialCode.RESOURCE_GUARD_DENIED
+    return None

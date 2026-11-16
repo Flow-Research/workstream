@@ -45,7 +45,7 @@ from app.modules.authorization.domain.audit_targets import project_authority_aud
 from app.modules.authorization.domain.lifecycle import ReviewLifecycleActivationContract
 from app.modules.authorization.domain.prepared_service import (
     fixed_service_scope_project,
-    fixed_service_resource_matches,
+    fixed_service_prepared_denial,
 )
 from app.modules.authorization.policy import ACTIVE_GUIDE_ADMIN_ROLES
 from app.modules.authorization.domain.read_dispatch import READ_ACTIONS, read_denial
@@ -737,22 +737,12 @@ class AuthorizationService:
             denial = AuthorizationDenialCode.PERMISSION_NOT_GRANTED
         elif isinstance(context, ServiceAuthorizationContext):
             denial = self._lifecycle_denial(context)
-            expected_resource = _ARTIFACT_INTERNAL_RESOURCES.get(action_id)
-            if denial is None and action.availability is not ActionAvailability.ACTIVE:
-                denial = AuthorizationDenialCode.ACTION_UNAVAILABLE
-            if denial is None and action_id not in SERVICE_ACTIONS_BY_IDENTITY.get(context.service_identity, ()):
-                denial = AuthorizationDenialCode.PERMISSION_NOT_GRANTED
-            if denial is None and not fixed_service_resource_matches(
-                action_id,
-                resource_context,
-                authority.scope_project_id,
-                authority.artifact_resource_type,
-                authority.artifact_resource_id,
-                expected_resource,
-                actor_profile_id=context.actor_profile_id,
-                identity_link_id=context.identity_link_id,
-            ):
-                denial = AuthorizationDenialCode.RESOURCE_GUARD_DENIED
+            if denial is None:
+                denial = fixed_service_prepared_denial(
+                    action, resource_context, authority.scope_project_id,
+                    authority.artifact_resource_type, authority.artifact_resource_id,
+                    _ARTIFACT_INTERNAL_RESOURCES.get(action_id), context,
+                )
             if denial is None:
                 matched_kind = MatchedAuthorityKind.FIXED_SERVICE
         elif action_id is ActionId.ACTOR_PROFILE_UPDATE_SELF:
