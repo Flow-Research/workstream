@@ -824,6 +824,12 @@ Callback-before-delivery-ack is valid: the Workstream award/root already exists 
 
 Only the original bound service may read this operational receipt identity. Return the exact receipt acknowledgement plus normalized report fields; 404 means that exact event is not recorded. This supports callback-response-loss recovery. Do not expose these provider/event identifiers on contributor/product reads.
 
+The closed read object contains `acknowledgement` (the section-10.1 fields with
+`replay=true`), `report_body` (the exact normalized report), `received_at`,
+`evidence_ordinal`, and `recording_lifecycle_generation`. Receiver time is
+canonical UTC with exactly six fractional digits; ordinal and generation are
+positive signed-64-bit integers. This detached read grants no write authority.
+
 ### 10.3 Independent source evidence
 
 **Route:** GET /api/v1/compensation/awards/{award_id}/finance-evidence
@@ -838,6 +844,28 @@ Require an existing admitted root and the exact original service binding. Return
 - Exact selected task_size for submitter work; null for fixed reviewer work.
 - fulfillment_root_id and obligation_digest.
 - The current normalized fulfillment status, attention flag, fulfilled external_event_id if recorded, and exact receipt evidence.
+
+The one closed response representation has every member present:
+
+| Member | Value |
+| --- | --- |
+| contract_version | Integer1 |
+| source_instance_id | Exact configured UUIDv7 source |
+| obligation | The complete immutable section-9.1 envelope, including every source-award/lineage field and both digests |
+| status | The existing seven-field CompensationStatusProjection |
+| fulfilled_external_event_id | Actual fulfilled report event UUIDv7, or null |
+| latest_receipt | Section-10.2 read object, or null |
+| fulfilled_receipt | Section-10.2 read object for the actual successful receipt, or null |
+| latest_exception | Recorded exception evidence, or null |
+
+Recorded exception evidence contains `acknowledgement` (section10.4, replay=true),
+`original_receipt_id`, `exception_body`, `received_at`, `evidence_ordinal`, and
+`recording_lifecycle_generation`. Parent, source, identities and body digests
+must agree. Every nullable member is explicit null. Latest evidence follows the
+root-serialized cross-table ordinal; each retained report uses its own receiver
+clock and an exception uses that original clock plus its own new receiver time.
+A later failed receipt cannot replace the actual success or clear attention.
+No bank/provider payload or Finance administrative field is returned.
 
 
 Finance uses this authenticated HTTP evidence during its authorization operation, with no open DB transaction, and compares it with its admitted envelope. The final local authorization transaction also acquires the compensation-owned `FulfillmentSourceCurrentnessPort` described in §8.5; this typed read/locking port closes races and never replaces the HTTP evidence, admission or callback. The service performs this verification; it is not a second human approval or another Workstream acceptance. It never uses a mutable task amount, email, PR description or caller-supplied bank record as acceptance evidence.

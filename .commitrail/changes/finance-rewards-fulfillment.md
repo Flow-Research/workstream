@@ -2290,3 +2290,22 @@ module belongs directly in SHARED_FOUNDATION_MODULES, not the exact six-file
 STATIC_FOUNDATION_MODULES architecture inventory. Keep the same shared A/B/C
 partition, independent fingerprints and manifest proof; no lane/source changes
 are made by this plan correction. No future operation proof is claimed.
+
+
+Begin the approved public-operation boundary in an isolated checkout of121c2ec.
+Add closed operational read DTOs by extending COMP's existing public evidence
+API, reusing the exact portable obligation/report/exception schemas and wire
+parsers. They retain explicit nulls, canonical UTC6 metadata, immutable original
+receiver clocks, exact acknowledgement/body identities/digests and source/
+parent/status/ordinal consistency. There is no mutable projection cache or
+new authority capability. Record the single nested wire layout in specification
+10.2/10.3; these contracts alone do not expose routes or activate actions.
+
+The first pure read-contract probe passed19 cases and caught a missing second-
+success consistency check in the new DTO. Add that check and callback-observed
+delivery consistency without changing the test assertion. The corrected working
+selection passes120 read/wire/authority-resource cases in5.31s. This is working
+source evidence, not a native/API or final-target pass. Register the exact new
+pure module directly in shared ownership, preserve the exact six static
+architecture modules and reconcile its one added-name independent fingerprint.
+The API ownership record stays candidate pending actual operation proof.

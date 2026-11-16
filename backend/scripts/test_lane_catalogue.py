@@ -50,6 +50,7 @@ SHARED_FOUNDATION_MODULES = (
     "tests/finance/test_fulfillment_obligation.py",
     "tests/finance/test_fulfillment_contracts.py",
     "tests/finance/test_fulfillment_evidence_commands.py",
+    "tests/finance/test_fulfillment_evidence_read_contracts.py",
     "tests/finance/test_obligation_contracts.py",
     "tests/finance/test_policy_contract.py",
     "tests/finance/test_reward_policy_storage.py",
