@@ -4281,3 +4281,37 @@ members plus the new module before updating the276-member fingerprint. All59 CI
 lane catalogue tests passed in6.59s. Ownership validation/exact-addition proof,
 module boundaries, Ruff, Commitrail records, markdown links and diff checks passed.
 These are scoped worktree receipts, not full CI or public end-to-end readiness.
+
+### Frozen command proof and mixed-case header review repair
+
+Frozen implementation b2d7dd325ff41643dd0f898f53f80596b0da480f remained clean
+through the required review snapshots and final root suites. PostgreSQL command
+module:9passed186.81s, exit0, exacthead/Alembic0080/database cleanup complete
+(/tmp/submission-foreground-frozen-db.log/json). Combined intake contracts and
+API-controls:156passed71.30s, exit0 (/tmp/submission-foreground-frozen-pure.log).
+Both used backend/.venv Python with PYTHONFAULTHANDLER=1 and PYTHONMALLOC=debug.
+The earlier supplemental timeout case passed1 in39.07s with cleanup complete.
+Origin/main was fetched again and this branch has zero missing main commits.
+
+Documentation/CI integrity review passed the250d8af70..b2d7dd325 delta, including
+independent partition/lane preservation, AST relocation and adversarial mutations
+(/tmp/submission-foreground-docs-ci-adversarial.json). Architecture/security and
+QA/test_delta identified one shared Medium finding: Starlette getlist did not
+count differently cased raw ASGI header names. They found no second material
+command/retained-read defect; local duplication of retained decode validation
+was assessed as optional simplification, not a bypass. QA's lowercase-guard
+mutant failed the expected assertion; controlled retained-terminal substitutions
+were rejected. Those controlled probes are not PostgreSQL custody proof.
+
+Repair counts and selects from one raw-name-lowercased Headers collection,
+preserving exact value bytes. Twelve new regression cases first failed against
+b2d7dd325 (/tmp/submission-header-casefold-before.log): eleven valid-control
+mixed-case duplicates were accepted and a single uppercase-name packet was
+incorrectly rejected. Full API-controls after repair:55passed23.73s, exit0
+(/tmp/submission-header-casefold-after.log); Ruff/diff checks passed. This parser
+repair changes no command/runtime/DB owner. Affected review replay remains pending
+at this entry; the original blocked finding is not yet declared closed.
+
+The public route, explicit deployment composition/readiness, coordinated clients,
+remaining cleanup/deployment/provider qualification, full CI and complete goal
+remain unfinished. No merge readiness is requested.

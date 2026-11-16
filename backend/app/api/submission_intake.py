@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from typing import NoReturn
 from uuid import UUID
 
+from starlette.datastructures import Headers
 from starlette.requests import Request
 
 from app.core.api_controls import StructuredHTTPException
@@ -32,7 +33,10 @@ def _reject(code: str, status_code: int, message: str) -> NoReturn:
 
 def submission_intake_headers(request: Request, task_id: UUID) -> SubmissionIntakeHeaders:
     """Parse once without reading, trimming or otherwise rewriting packet bytes."""
-    headers = request.headers
+    # Count and select from the same case-insensitive raw collection. ASGI
+    # servers normally lowercase names, but an intermediary must not be able
+    # to hide a second selector from the ambiguity check by preserving case.
+    headers = Headers(raw=[(name.lower(), value) for name, value in request.scope["headers"]])
     for name in _PACKET_HEADERS:
         if len(headers.getlist(name)) > 1:
             _reject("submission_packet_invalid", 422, "Submission headers are ambiguous")

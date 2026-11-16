@@ -1003,3 +1003,59 @@ def test_raw_submission_invalid_headers_refuse_before_body(extra, omit, status, 
     with pytest.raises(StructuredHTTPException) as caught:
         submission_intake_headers(_raw_submission_request(extra, omit=omit), UUID(int=3))
     assert (caught.value.status_code, caught.value.error_code) == (status, code)
+
+
+def _casefold_packet_headers():
+    return [
+        (b'content-type', b'application/zip'),
+        (b'idempotency-key', b'019a0000-0000-7000-8000-000000000001'),
+        (b'x-task-assignment-id', b'019a0000-0000-7000-8000-000000000002'),
+        (b'x-submission-summary', b'Exact  text'),
+        (b'x-contributor-attestation', b'My work'),
+        (b'x-predecessor-submission-id', b'019a0000-0000-7000-8000-000000000003'),
+        (b'x-revision-preparation-id', b'019a0000-0000-7000-8000-000000000004'),
+        (b'x-revision-preparation-sha256', b'sha256:' + b'a' * 64),
+        (b'content-encoding', b'identity'),
+        (b'content-length', b'1'),
+    ]
+
+
+def _casefold_request(headers):
+    async def forbidden_read():
+        raise AssertionError('Header parsing consumed the body')
+    return Request({'type': 'http', 'headers': headers}, receive=forbidden_read)
+
+
+@pytest.mark.parametrize('header', [
+    b'content-type', b'idempotency-key', b'x-task-assignment-id',
+    b'x-submission-summary', b'x-contributor-attestation',
+    b'x-predecessor-submission-id', b'x-revision-preparation-id',
+    b'x-revision-preparation-sha256', b'content-encoding', b'content-length',
+    b'transfer-encoding',
+])
+def test_raw_submission_mixed_case_duplicates_reject_valid_packet(header):
+    from app.api.submission_intake import submission_intake_headers
+    from app.core.api_controls import StructuredHTTPException
+
+    headers = _casefold_packet_headers()
+    if header == b'transfer-encoding':
+        headers = [pair for pair in headers if pair[0] != b'content-length']
+        headers.append((header, b'chunked'))
+    task = UUID(int=3)
+    # Valid control prevents an unrelated packet/framing error from satisfying
+    # the duplicate refusal assertion.
+    assert submission_intake_headers(_casefold_request(headers), task).metadata.summary == 'Exact  text'
+    value = next(value for name, value in headers if name == header)
+    with pytest.raises(StructuredHTTPException) as caught:
+        submission_intake_headers(_casefold_request(headers + [(header.upper(), value)]), task)
+    assert caught.value.status_code == 422
+    assert caught.value.error_code == 'submission_packet_invalid'
+
+
+def test_raw_submission_single_mixed_case_names_preserve_exact_values():
+    from app.api.submission_intake import submission_intake_headers
+
+    lower = _casefold_packet_headers()
+    upper = [(name.upper(), value) for name, value in lower]
+    task = UUID(int=3)
+    assert submission_intake_headers(_casefold_request(upper), task) == submission_intake_headers(_casefold_request(lower), task)
