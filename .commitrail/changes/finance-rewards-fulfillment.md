@@ -1613,3 +1613,14 @@ change or assertion removal. The helper removes actual repeated query text; it
 adds no generic fixture framework. Run both current replacement branches on the
 clean correction and replay the structural checker. The original8fad nineteen-case
 native run remains isolated and keeps its own source attribution.
+
+The exact8fad native run passed the genuine0047 retention/refusal case and all3
+0062-based claim cases, then the new non-vacuous current-source assertion failed.
+Diagnosis: the old test queried CheckerResult.id with the completion's aggregate
+run result_id. Members have independently generated record IDs, so that original
+comparison had compared null to null. Keep the non-null assertion and read the
+exact completed CheckerRun by result_id, source Submission and routing manifest,
+including its ordered immutable member/finding rows. Require actual run identity
+and nonempty member/finding evidence before replacement; compare the entire
+source projection afterwards. No assertion is dropped. The failed run completed
+owned cleanup; its4passing cases remain exact8fad evidence, not a19case pass.
