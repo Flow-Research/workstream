@@ -8,6 +8,7 @@ from sqlalchemy import text
 from app.api.deps.compensation_fulfillment import FulfillmentEvidenceRequest
 from app.core.identifiers import new_record_id
 from app.modules.compensation.fulfillment.evidence_service import FulfillmentEvidenceService
+from app.modules.actors.api import ServiceIdentity
 from tests.authentication.support import issue_asymmetric_token
 
 
@@ -96,6 +97,16 @@ async def test_signed_source_report_exception_and_response_loss_journey(fulfillm
     changed = await source.client.post(prefix + "/fulfillment-reports", headers=headers,
         json=report | {"external_reference": f"fin_{new_record_id().hex}"})
     assert changed.status_code == 409, changed.text
+    assert changed.json()["error"]["code"] == "FULFILLMENT_REPORT_CONFLICT"
+    second = report_for(source.obligation)
+    second_success = await source.client.post(prefix + "/fulfillment-reports", json=second,
+        headers=source.headers | {"Idempotency-Key": second["external_event_id"]})
+    assert second_success.status_code == 409, second_success.text
+    assert second_success.json()["error"]["code"] == "FULFILLMENT_REPORT_CONFLICT"
+    changed_exception = await source.client.post(prefix + "/fulfillment-exceptions",
+        headers=exception_headers, json=exception | {"kind": "provider_status_conflict"})
+    assert changed_exception.status_code == 409, changed_exception.text
+    assert changed_exception.json()["error"]["code"] == "FULFILLMENT_EXCEPTION_CONFLICT"
     receipts, exceptions, decisions = await evidence_rows(source)
     assert [r["evidence_ordinal"] for r in receipts + exceptions] == [1, 2]
     for row in receipts + exceptions:
@@ -117,11 +128,52 @@ async def test_human_rejected_before_actor_provisioning(fulfillment_api_source):
     response = await source.client.get(
         f"/api/v1/compensation/awards/{source.obligation['award_id']}/finance-evidence",
         headers={"Authorization": f"Bearer {token}"})
-    assert response.status_code == 403, response.text
+    assert response.status_code == 404, response.text
     async with source.factory() as session:
         after = (await session.execute(text("SELECT (SELECT count(*) FROM actor_profiles), "
             "(SELECT count(*) FROM actor_identity_links)"))).one()
     assert after == before
+    assert await evidence_rows(source) == ([], [], [])
+
+
+async def test_service_and_missing_resource_refusals_are_concealed(fulfillment_api_source):
+    source = fulfillment_api_source
+    prefix = f"/api/v1/compensation/awards/{source.obligation['award_id']}"
+    report = report_for(source.obligation)
+    async with source.factory() as session:
+        before = (await session.execute(text("SELECT (SELECT count(*) FROM actor_profiles), "
+            "(SELECT count(*) FROM actor_identity_links)"))).one()
+    subject = f"unprovisioned-service-{new_record_id()}"
+    token = issue_asymmetric_token(source.access.signed.private_key, subject_kind="service",
+        scope="workstream:service", claims={"sub": subject, "jti": str(new_record_id())})
+    for method, suffix in (("GET", "/finance-evidence"), ("POST", "/fulfillment-reports")):
+        response = await source.client.request(method, prefix + suffix, json=report,
+            headers={"Authorization": f"Bearer {token}", "Idempotency-Key": report["external_event_id"]})
+        assert response.status_code == 404, response.text
+        assert response.json()["error"]["code"] == "fulfillment_evidence_not_found"
+    async with source.factory() as session:
+        assert (await session.execute(text("SELECT (SELECT count(*) FROM actor_profiles), "
+            "(SELECT count(*) FROM actor_identity_links)"))).one() == before
+    provisioned = await source.client.post("/api/v1/service-actors",
+        headers=source.access.admin.headers | {"Idempotency-Key": str(new_record_id())},
+        json={"service_identity": ServiceIdentity.REVIEW_PROJECTION.value, "subject": subject,
+              "reason": "Prove fulfillment rejects another provisioned service"})
+    assert provisioned.status_code == 201, provisioned.text
+    wrong_headers = {"Authorization": f"Bearer {token}"}
+    for headers, award in ((wrong_headers, source.obligation["award_id"]),
+                           (source.headers, str(new_record_id()))):
+        body = report | {"award_id": award}
+        base = f"/api/v1/compensation/awards/{award}"
+        denied = await source.client.post(base + "/fulfillment-reports", json=body,
+            headers=headers | {"Idempotency-Key": body["external_event_id"]})
+        assert denied.status_code == 404, denied.text
+        for suffix in ("/finance-evidence", "/fulfillment-reports/" + report["external_event_id"]):
+            denied = await source.client.get(base + suffix, headers=headers)
+            assert denied.status_code == 404, denied.text
+    for authorization in ({}, {"Authorization": "Bearer invalid-credentials"}):
+        rejected = await source.client.post(prefix + "/fulfillment-reports", json=report,
+            headers=authorization | {"Idempotency-Key": report["external_event_id"]})
+        assert rejected.status_code == 401, rejected.text
     assert await evidence_rows(source) == ([], [], [])
 
 
@@ -155,4 +207,26 @@ async def test_streamed_budget_and_identity_rejection_before_locator_or_auth(ful
         response = await source.client.post(prefix + "/fulfillment-reports", content=chunks(),
             headers=headers | length_header)
         assert response.status_code == 413, response.text
+    award = source.obligation["award_id"]
+    event = report["external_event_id"]
+    exception_body = {key: report[key] for key in (
+        "source_instance_id", "fulfillment_root_id", "award_id", "project_id",
+        "adapter_binding_id", "correlation_id", "contract_version", "route_key",
+    )} | {"exception_event_id": str(new_record_id()), "original_fulfillment_event_id": event,
+        "kind": "provider_reversal", "observed_at": report["reported_at"],
+        "reported_at": report["reported_at"]}
+    for alternate_award in (award.upper(), award.replace("-", ""), "{" + award + "}"):
+        for suffix, method in (("/finance-evidence", "GET"), ("/fulfillment-reports", "POST"),
+                               ("/fulfillment-exceptions", "POST")):
+            payload = exception_body if suffix == "/fulfillment-exceptions" else report
+            key = exception_body["exception_event_id"] if suffix == "/fulfillment-exceptions" else event
+            response = await source.client.request(method,
+                f"/api/v1/compensation/awards/{alternate_award}" + suffix,
+                headers=source.headers | {"Idempotency-Key": key},
+                json=payload if method == "POST" else None)
+            assert response.status_code == 422, response.text
+    for alternate_event in (event.upper(), event.replace("-", ""), "{" + event + "}"):
+        response = await source.client.get(prefix + "/fulfillment-reports/" + alternate_event,
+                                           headers=source.headers)
+        assert response.status_code == 422, response.text
     assert await evidence_rows(source) == ([], [], [])

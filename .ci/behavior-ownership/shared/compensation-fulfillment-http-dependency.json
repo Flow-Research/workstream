@@ -2,6 +2,7 @@
   "behavior_id": "finance.fulfillment.compensation-fulfillment-http-dependency",
   "callables": [
     "app.api.deps.compensation_fulfillment.FulfillmentEvidenceRequest.finish",
+    "app.api.deps.compensation_fulfillment.canonical_fulfillment_uuid",
     "app.api.deps.compensation_fulfillment.fulfillment_body",
     "app.api.deps.compensation_fulfillment.fulfillment_http_error",
     "app.api.deps.compensation_fulfillment.get_fulfillment_request",

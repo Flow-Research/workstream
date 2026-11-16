@@ -2376,3 +2376,27 @@ The full Finance objective stays active; this checkpoint is not ready for merge.
 Hosted run43964693605 independently passes all17 backend lanes, CLI API/HTTP,
 MCP real-API proof and full-suite at pushed121c2ec; it does not qualify these
 later local operation commits.
+
+### Public API contract review repair
+
+At clean4aa313c the focused reviewers identify exactly three concrete defects:
+RECEIPT-PUBLIC-001/QA-PUBLIC-OPS-001 resource-denial concealment,
+RECEIPT-PUBLIC-002/QA-PUBLIC-OPS-002 conflict family codes, and
+RECEIPT-PUBLIC-003/QA-PUBLIC-OPS-003 raw UUID path spelling. Architecture and
+reuse otherwise retain coherent ownership with the documented native proof
+limits; QA/test-delta/product-ops block on these defects, and bounded CI/docs
+tracks pass. No reviewer grants whole-plan readiness.
+
+Repair all unauthorized/missing resource paths to404, including human rejection
+before provisioning and genuine resolver403/404, while preserving authentication
+401 and availability503. Only actual captured AUTH denials can restage. Emit the
+exact FULFILLMENT_REPORT_CONFLICT and FULFILLMENT_EXCEPTION_CONFLICT codes,
+without compatibility codes. Reuse core.financial_wire.require_canonical_uuid
+for raw path and header UUIDv7 validation before UUID coercion can normalize an
+alternate spelling. Add signed unprovisioned/wrong-service and unknown-award
+controls, exact changed-report/second-success/changed-exception envelopes, and
+uppercase/hyphenless/braced path negatives that must fail before locator/AUTH.
+Retain all real allow/evidence rollback and replay assertions. Remove the
+obsolete route-specific403 declaration; the shared API error vocabulary remains
+owned by its existing global handler. Freeze and rerun affected native proof
+before asking both focused reviewers to replay the same finding set.

@@ -18,6 +18,7 @@ from app.api.deps.authorization import _authorization_context, resolve_authoriza
 from app.api.deps.rate_controls import get_rate_control_service
 from app.core.api_controls import ApiErrorResponse, StructuredHTTPException, request_ids
 from app.core.hashing import canonical_json_hash
+from app.core.financial_wire import require_canonical_uuid
 from app.db.session import get_db_session
 from app.modules.compensation.api.fulfillment_evidence import (
     FulfillmentEvidenceDenied, FulfillmentEvidenceInvalid, FulfillmentEvidenceUnavailable,
@@ -29,21 +30,23 @@ from app.schemas.auth import AuthVerificationResult
 
 
 def fulfillment_http_error(status: int) -> StructuredHTTPException:
-    code = {403: "fulfillment_evidence_denied", 404: "fulfillment_evidence_not_found",
-            409: "fulfillment_evidence_conflict", 413: "fulfillment_body_too_large",
+    code = {404: "fulfillment_evidence_not_found", 413: "fulfillment_body_too_large",
             422: "invalid_fulfillment_evidence", 503: "fulfillment_evidence_unavailable"}[status]
     return StructuredHTTPException(status_code=status, detail=code, error_code=code,
         error_message=code.replace("_", " "), retryable=status == 503)
+
+
+def canonical_fulfillment_uuid(value: str) -> str:
+    """Use the financial wire owner before HTTP UUID coercion can normalize aliases."""
+    require_canonical_uuid(value, version=7)
+    return value
 
 
 def require_fulfillment_key(request: Request) -> UUID:
     values = request.headers.getlist("Idempotency-Key")
     try:
         value = values[0] if len(values) == 1 else ""
-        event = UUID(value)
-        if event.version != 7 or str(event) != value:
-            raise ValueError("event must be a canonical UUIDv7")
-        return event
+        return UUID(canonical_fulfillment_uuid(value))
     except ValueError as exc:
         raise fulfillment_http_error(422) from exc
 
@@ -108,8 +111,13 @@ async def get_fulfillment_request(
 ) -> AsyncIterator[FulfillmentEvidenceRequest]:
     """Reject humans before provisioning and keep actual service principal custody."""
     if result.token.subject_kind != "service":
-        raise fulfillment_http_error(403)
-    resolved = await resolve_authorization_actor(request, result, session, rate_control)
+        raise fulfillment_http_error(404)
+    try:
+        resolved = await resolve_authorization_actor(request, result, session, rate_control)
+    except StructuredHTTPException as exc:
+        if exc.status_code in {403, 404}:
+            raise fulfillment_http_error(404) from exc
+        raise
     request_id, correlation_id = (UUID(value) for value in request_ids(request))
     context = _authorization_context(resolved, request_id, correlation_id)
     await session.rollback()
@@ -129,9 +137,12 @@ async def get_fulfillment_request(
         except (FulfillmentEvidenceUnavailable, SQLAlchemyError) as evidence_error:
             await session.rollback()
             raise fulfillment_http_error(503) from evidence_error
-        raise fulfillment_http_error(404 if request.method == "GET" else 403) from exc
+        raise fulfillment_http_error(404) from exc
     except (FulfillmentReportConflict, FulfillmentExceptionConflict) as exc:
-        raise fulfillment_http_error(409) from exc
+        code = ("FULFILLMENT_REPORT_CONFLICT" if isinstance(exc, FulfillmentReportConflict)
+                else "FULFILLMENT_EXCEPTION_CONFLICT")
+        raise StructuredHTTPException(status_code=409, detail=code, error_code=code,
+            error_message="Fulfillment evidence conflicts with the recorded event") from exc
     except FulfillmentEvidenceInvalid as exc:
         raise fulfillment_http_error(422) from exc
     except (FulfillmentEvidenceUnavailable, SQLAlchemyError,

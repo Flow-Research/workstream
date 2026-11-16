@@ -59,7 +59,7 @@ def test_openapi_closed_requests_responses_and_errors(fulfillment_openapi):
         keys = [p for p in operation["parameters"] if p["in"] == "header" and p["name"] == "Idempotency-Key"]
         assert len(keys) == 1 and keys[0]["required"] is True
         assert "65536" in operation["requestBody"]["description"]
-        assert {"200", "201", "401", "403", "404", "409", "413", "422", "503"} <= set(operation["responses"])
+        assert {"200", "201", "401", "404", "409", "413", "422", "503"} <= set(operation["responses"])
     for name in ("FulfillmentSourceEvidence", "FulfillmentRecordedReport", "FulfillmentRecordedException",
                  "FulfillmentReportAcknowledgement", "FulfillmentExceptionAcknowledgement"):
         schema = schemas[name]

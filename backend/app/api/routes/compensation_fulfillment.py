@@ -4,11 +4,12 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request
-from pydantic import UUID7
+from pydantic import BeforeValidator, UUID7
 
 from app.api.deps.compensation_fulfillment import (
     FulfillmentEvidenceRequest, fulfillment_body, fulfillment_http_error,
     get_fulfillment_request, require_fulfillment_key,
+    canonical_fulfillment_uuid,
 )
 from app.core.api_controls import ApiErrorResponse, error_payload
 from app.modules.compensation.api.fulfillment_contracts import (
@@ -23,9 +24,10 @@ from app.modules.finance.api.contract_schema import (
 )
 
 router = APIRouter(prefix="/compensation/awards/{award_id}", tags=["compensation-fulfillment"],
-    responses={code: {"model": ApiErrorResponse} for code in (401, 403, 404, 409, 413, 422, 503)})
+    responses={code: {"model": ApiErrorResponse} for code in (401, 404, 409, 413, 422, 503)})
 Owner = Annotated[FulfillmentEvidenceRequest, Depends(get_fulfillment_request)]
 EventKey = Annotated[UUID, Depends(require_fulfillment_key)]
+FulfillmentPathId = Annotated[UUID7, BeforeValidator(canonical_fulfillment_uuid)]
 _KEY_PARAMETER = {"name": "Idempotency-Key", "in": "header", "required": True,
                   "schema": {"type": "string", "format": "uuid", "description": "Canonical UUIDv7 event ID"}}
 
@@ -37,7 +39,7 @@ _KEY_PARAMETER = {"name": "Idempotency-Key", "in": "header", "required": True,
         "parameters": [_KEY_PARAMETER], "requestBody": {"required": True,
             "description": "Closed JSON report; actual streamed body must be at most 65536 bytes.",
             "content": {"application/json": {"schema": fulfillment_report_schema()}}}})
-async def report(award_id: UUID7, key: EventKey, request: Request, owner: Owner):
+async def report(award_id: FulfillmentPathId, key: EventKey, request: Request, owner: Owner):
     body = await fulfillment_body(request)
     try:
         value = parse_fulfillment_report(body)
@@ -50,7 +52,7 @@ async def report(award_id: UUID7, key: EventKey, request: Request, owner: Owner)
 
 @router.get("/fulfillment-reports/{external_event_id}", response_model=FulfillmentRecordedReport,
     openapi_extra={"x-workstream-action-id": "compensation.fulfillment.source.read"})
-async def lookup(award_id: UUID7, external_event_id: UUID7, request: Request, owner: Owner):
+async def lookup(award_id: FulfillmentPathId, external_event_id: FulfillmentPathId, request: Request, owner: Owner):
     result = await owner.service.lookup(award_id, external_event_id)
     if result is None:
         return await owner.finish(ApiErrorResponse.model_validate(error_payload(request,
@@ -62,7 +64,7 @@ async def lookup(award_id: UUID7, external_event_id: UUID7, request: Request, ow
 
 @router.get("/finance-evidence", response_model=FulfillmentSourceEvidence,
     openapi_extra={"x-workstream-action-id": "compensation.fulfillment.source.read"})
-async def source_evidence(award_id: UUID7, owner: Owner):
+async def source_evidence(award_id: FulfillmentPathId, owner: Owner):
     result = await owner.service.source_evidence(award_id)
     return await owner.finish(result, FulfillmentSourceEvidence, award_id=award_id)
 
@@ -74,7 +76,7 @@ async def source_evidence(award_id: UUID7, owner: Owner):
         "parameters": [_KEY_PARAMETER], "requestBody": {"required": True,
             "description": "Closed JSON exception; actual streamed body must be at most 65536 bytes.",
             "content": {"application/json": {"schema": fulfillment_exception_schema()}}}})
-async def exception(award_id: UUID7, key: EventKey, request: Request, owner: Owner):
+async def exception(award_id: FulfillmentPathId, key: EventKey, request: Request, owner: Owner):
     body = await fulfillment_body(request)
     try:
         value = parse_fulfillment_exception(body)
