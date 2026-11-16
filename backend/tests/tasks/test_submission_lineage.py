@@ -58,8 +58,8 @@ from tests.tasks.submission_lineage_support import (
 
 
 @asynccontextmanager
-async def _prepared_packet(
-    isolated_database_env, tmp_path, *, verify=True, pre_submit_registry_spec=pre_registry_spec(),
+async def _submission_task(
+    isolated_database_env, tmp_path, *, pre_submit_registry_spec=pre_registry_spec(),
 ):
     engine = create_async_engine(isolated_database_env)
     factory = async_sessionmaker(engine, expire_on_commit=False)
@@ -89,6 +89,27 @@ async def _prepared_packet(
             await seed_started_task_for_artifact_test(connection, params)
             await install_submitter_grant(connection, params)
         archive_bytes = _archive(evidence_path=policy["evidence_path"])
+        yield SimpleNamespace(
+            factory=factory, context=context, task_id=task_id, assignment_id=assignment_id,
+            project_id=plan.lineage.project_id, settings=settings, store=store,
+            namespace=namespace, archive_bytes=archive_bytes, policy=policy,
+        )
+    finally:
+        bootstrap.close()
+        await engine.dispose()
+
+
+@asynccontextmanager
+async def _prepared_packet(
+    isolated_database_env, tmp_path, *, verify=True, pre_submit_registry_spec=pre_registry_spec(),
+):
+    async with _submission_task(
+        isolated_database_env, tmp_path, pre_submit_registry_spec=pre_submit_registry_spec,
+    ) as task:
+        factory, context = task.factory, task.context
+        task_id, assignment_id = task.task_id, task.assignment_id
+        store, namespace, settings = task.store, task.namespace, task.settings
+        archive_bytes, policy = task.archive_bytes, task.policy
         request = SubmissionBundlePreparationRequest(
             actor=ActorIdentityFacts(
                 context.actor_profile_id, context.identity_link_id, ActorKind.HUMAN
@@ -127,15 +148,12 @@ async def _prepared_packet(
             creation = None
         yield SimpleNamespace(
             factory=factory, context=context, task_id=task_id, assignment_id=assignment_id,
-            project_id=plan.lineage.project_id,
+            project_id=task.project_id,
             admission_id=admission_id, creation=creation,
             preparation_request=request, archive_bytes=archive_bytes, settings=settings,
             store=store, namespace=namespace,
             put_attempt_id=put_attempt_id,
         )
-    finally:
-        bootstrap.close()
-        await engine.dispose()
 
 
 @pytest.mark.parametrize("changed_owner", ("project", "task", "assignment", "contributor"))
@@ -144,7 +162,7 @@ async def test_retained_submission_parent_lock_rejects_identity_substitution(
     tmp_path,
     changed_owner,
 ):
-    async with _prepared_packet(isolated_database_env, tmp_path, verify=False) as h:
+    async with _submission_task(isolated_database_env, tmp_path) as h:
         exact = TaskRetainedSubmissionParentsRequest(
             project_id=h.project_id,
             task_id=h.task_id,
@@ -165,14 +183,8 @@ async def test_retained_submission_parent_lock_rejects_identity_substitution(
                     replace(exact, **{field: new_record_id()})
                 )
 
-        admission_id = await _verify_put_attempt(
-            h.factory,
-            h.store,
-            h.namespace,
-            h.settings,
-            h.put_attempt_id,
-        )
-        assert admission_id is not None
+        async with h.factory.begin() as session:
+            await task_submission_context_port(session).lock_retained_submission_parents(exact)
 
 
 @pytest.mark.parametrize("lifecycle_owner", ("profile", "identity_link"))
@@ -267,7 +279,7 @@ async def test_retained_submission_parent_port_holds_task_and_assignment_locks(
     isolated_database_env,
     tmp_path,
 ):
-    async with _prepared_packet(isolated_database_env, tmp_path, verify=False) as h:
+    async with _submission_task(isolated_database_env, tmp_path) as h:
         exact = TaskRetainedSubmissionParentsRequest(
             project_id=h.project_id,
             task_id=h.task_id,

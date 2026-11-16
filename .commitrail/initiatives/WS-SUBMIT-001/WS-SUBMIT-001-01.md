@@ -6240,3 +6240,42 @@ T4 and the new source assertion requires exactly1 finalization event. Ruff,
 whitespace, Commitrail and initial structure validation pass. Full retry replay
 (/tmp/submission-current-retry-v2) and prior AUTH replay remain live; this checkpoint
 does not claim their success or whole-spec readiness.
+
+PRE coordination fixture migration scope: test_selected_pre_submit_coordination.py
+read-current replay, expired-lease read, execution capability and authority digest
+proofs, plus their shared queued-row fixture. Use the existing _source_reservation
+and real SelectedPreSubmitSourceCustody adapter; retain exact task/source locking,
+changed-source replay rejection, lease identity and one-use/digest assertions.
+Populate current source row fields without invented manifest/default inputs.
+No production compatibility, retired admission capability repair or new alias.
+Medium authority-test risk: run the four affected proofs and entire module to
+separate remaining retired-contract failures; focused QA review required.
+
+ARCH/SEC separates retained historical jobs from obsolete new preparation flow:
+do not revive PRE facts via guide-source AUTH fallback. Bounded parent-lock scope:
+test_submission_lineage.py, extract existing current task/assignment setup from
+_prepared_packet, use it directly for owner-substitution and NOWAIT parent locks.
+Replace verifier positive control in substitution test with exact canonical
+parent-lock success. Preserve all four substituted owners, both held locks and
+both released-lock assertions. Leave historical migration replay unchanged and
+explicitly defer obsolete verifier/new-creation tests to subsequent conversion.
+No extra product writer, authority bypass or duplicated lifecycle implementation.
+Run the five parent cases on real PostgreSQL; QA review required.
+
+Full affected AUTH/material replay terminates39pass1fail1342.16s. The sole
+principals.finalize failure counts real setup materialization from final_facts as
+denied-operation I/O. Extend scope to test_principals.py: snapshot source opens
+after valid setup and require unchanged opens across denied operation, retaining
+database snapshot, scratch/consumer and restored-authority positive control.
+Do not clear observations or skip phases. Replay all three phase cases; QA check
+must distinguish setup I/O from unauthorized I/O. No product authority change.
+
+Coordination final targeted replay passes4 in1.58s. Initial full module85pass4fail
+included three untouched retired-contract cases and the missing explicit invocation
+receipt now repaired; those three old cases remain required work. QA finds no
+scoped defect in TASK fixture split, current source coordination or principal I/O
+baseline. Independent exact-test probes detect reusable capabilities and
+outcome-insensitive finalization digests (/tmp/submission-coordination-qa-mutation.log).
+Unrelated verifier/history test ASTs remain unchanged. Ruff, whitespace and record
+checks pass; parent5/principal3/fullretry and structure validation remain pending
+at this checkpoint. Do not infer full readiness from these focused proofs.

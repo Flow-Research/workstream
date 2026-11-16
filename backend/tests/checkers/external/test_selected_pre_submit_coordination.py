@@ -86,26 +86,31 @@ def _queued_row(reservation: SelectedPreSubmitReservationFacts) -> SimpleNamespa
         task_id=str(reservation.task_id),
         assignment_id=str(reservation.assignment_id),
         idempotency_key=str(reservation.idempotency_key),
-        prepared_generation_id=str(reservation.prepared_generation_id),
+        prepared_generation_id=None,
+        source_operation_id=str(reservation.source.location.operation_id),
         request_json=reservation.canonical_body(),
         request_digest=reservation.request_digest,
         policy_sha256=reservation.policy_sha256,
         default_behavior_sha256=reservation.default_behavior_sha256,
-        default_input_sha256=reservation.default_input_sha256,
+        default_input_sha256=None,
         archive_sha256=reservation.archive_sha256,
         archive_byte_count=reservation.archive_byte_count,
-        semantic_manifest_sha256=reservation.semantic_manifest_sha256,
+        semantic_manifest_sha256=None,
         execution_budget_ms=reservation.execution_budget_ms,
         status="queued",
         terminal_json=None,
         terminal_digest=None,
         eligible=None,
+        queued_at=datetime.now(UTC) - timedelta(seconds=3),
+        started_at=None, completed_at=None,
+        lease_id=None, lease_generation=0, lease_expires_at=None,
+        execute_evidence_id=None, finalize_evidence_id=None,
     )
 
 
 @pytest.mark.asyncio
 async def test_selected_pre_current_replays_only_stable_actor_key_facts() -> None:
-    stored = _reservation()
+    stored = _source_reservation()
     row = _queued_row(stored)
     transaction = SimpleNamespace(is_active=True)
     session = SimpleNamespace(
@@ -114,11 +119,15 @@ async def test_selected_pre_current_replays_only_stable_actor_key_facts() -> Non
         scalar=AsyncMock(return_value=row),
     )
     tasks = SimpleNamespace(lock_selected_pre_submit_scope=AsyncMock())
-    coordinator = SelectedPreSubmitCoordinator(session, tasks=tasks, source_contracts=selected_pre_submit_source_contracts())
+    sources = _source_guard(stored)
+    coordinator = SelectedPreSubmitCoordinator(
+        session, tasks=tasks, sources=SelectedPreSubmitSourceCustody(sources),
+        source_contracts=selected_pre_submit_source_contracts(),
+    )
     fresh = replace(
         stored,
         attempt_id=new_record_id(),
-        prepared_generation_id=new_record_id(),
+        source_contracts=selected_pre_submit_source_contracts(),
     )
 
     current = await coordinator.read_current(fresh)
@@ -129,21 +138,28 @@ async def test_selected_pre_current_replays_only_stable_actor_key_facts() -> Non
     assert current.status == "queued"
     tasks.lock_selected_pre_submit_scope.assert_awaited_once_with(fresh)
 
+    changed = replace(
+        fresh, source=fresh.source.model_copy(update={"raw_sha256": "sha256:" + "f" * 64}),
+        source_contracts=selected_pre_submit_source_contracts(),
+    )
+    sources.lock_pre_source.return_value = _source_guard(changed).lock_pre_source.return_value
     with pytest.raises(
         SelectedPreSubmitRequestConflict,
         match="selected_pre_submit_request_conflict",
     ):
-        await coordinator.read_current(replace(fresh, archive_sha256="sha256:" + "f" * 64))
+        await coordinator.read_current(changed)
 
 
 @pytest.mark.asyncio
 async def test_selected_pre_expired_lease_read_keeps_task_first_custody() -> None:
-    reservation = _reservation()
+    reservation = _source_reservation()
     row = _queued_row(reservation)
     row.status = "running"
     row.lease_id = str(new_record_id())
     row.lease_generation = 3
     row.lease_expires_at = datetime.now(UTC) - timedelta(seconds=1)
+    row.started_at = row.queued_at
+    row.execute_evidence_id = str(new_record_id())
     now = datetime.now(UTC)
     transaction = SimpleNamespace(is_active=True)
     session = SimpleNamespace(
@@ -152,7 +168,11 @@ async def test_selected_pre_expired_lease_read_keeps_task_first_custody() -> Non
         scalar=AsyncMock(side_effect=[row, now]),
     )
     tasks = SimpleNamespace(lock_selected_pre_submit_scope=AsyncMock())
-    coordinator = SelectedPreSubmitCoordinator(session, tasks=tasks, source_contracts=selected_pre_submit_source_contracts())
+    sources = _source_guard(reservation)
+    coordinator = SelectedPreSubmitCoordinator(
+        session, tasks=tasks, sources=SelectedPreSubmitSourceCustody(sources),
+        source_contracts=selected_pre_submit_source_contracts(),
+    )
 
     lease = await coordinator.read_expired_lease(
         run_id=reservation.attempt_id,
@@ -302,7 +322,7 @@ def test_selected_pre_admission_capability_is_exact_and_single_use() -> None:
 def test_selected_pre_execution_capability_is_exact_and_single_use() -> None:
     from datetime import UTC, datetime
 
-    reservation = _reservation()
+    reservation = _source_reservation()
     lease = SelectedPreSubmitLeaseFacts(
         reservation=reservation,
         lease_id=new_record_id(),
@@ -334,7 +354,7 @@ def test_selected_pre_execution_capability_is_exact_and_single_use() -> None:
 def test_selected_pre_authority_digests_bind_lease_and_infrastructure_outcome() -> None:
     from datetime import UTC, datetime, timedelta
 
-    reservation = _reservation()
+    reservation = _source_reservation()
     lease = SelectedPreSubmitLeaseFacts(
         reservation=reservation,
         lease_id=new_record_id(),
@@ -353,6 +373,7 @@ def test_selected_pre_authority_digests_bind_lease_and_infrastructure_outcome() 
     terminal = SelectedPreSubmitFinalizeFacts(
         lease=lease,
         execution=None,
+        invocation_receipt=None,
         infrastructure_failure_code="deadline_exceeded",
      source_contracts=selected_pre_submit_source_contracts())
 
@@ -362,6 +383,7 @@ def test_selected_pre_authority_digests_bind_lease_and_infrastructure_outcome() 
         != SelectedPreSubmitFinalizeFacts(
             lease=lease,
             execution=None,
+        invocation_receipt=None,
             infrastructure_failure_code="material_unavailable",
          source_contracts=selected_pre_submit_source_contracts()).facts_digest
     )
@@ -369,6 +391,7 @@ def test_selected_pre_authority_digests_bind_lease_and_infrastructure_outcome() 
         SelectedPreSubmitFinalizeFacts(
             lease=lease,
             execution=None,
+        invocation_receipt=None,
             infrastructure_failure_code=None,
          source_contracts=selected_pre_submit_source_contracts())
 
