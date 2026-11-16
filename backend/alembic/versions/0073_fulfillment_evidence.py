@@ -25,6 +25,7 @@ def upgrade():
         raise RuntimeError("fulfillment evidence installation requires the lifecycle disabled")
     op.execute("LOCK TABLE public.compensation_fulfillment_roots, "
                "public.project_compensation_adapter_bindings,public.audit_events IN ACCESS EXCLUSIVE MODE")
+    _audit_vocabulary()
     _schema()
     _resource()
     _body_validation()
@@ -32,41 +33,87 @@ def upgrade():
     _closure()
 
 
+
+def _audit_vocabulary():
+    """Extend only the three exact action pairs and four closed resource types."""
+    actions = (
+        "compensation.fulfillment.report",
+        "compensation.fulfillment.exception.report",
+        "compensation.fulfillment.source.read",
+    )
+    resources = (
+        "compensation_fulfillment_report", "compensation_fulfillment_exception",
+        "compensation_fulfillment_evidence", "compensation_fulfillment_report_lookup",
+    )
+    pair_anchor = (
+        "(((action_id)::text = 'contribution.read_self'::text) AND "
+        "((permission_id)::text = 'contribution.read_self'::text))"
+    )
+    replacements = {
+        "ck_audit_events_authorization_action_evidence": (
+            pair_anchor,
+            "".join(f" OR (((action_id)::text = '{action}'::text) AND "
+                    f"((permission_id)::text = '{action}'::text))" for action in actions),
+            2, actions,
+        ),
+        "ck_audit_events_authority_registries": (
+            "('outbox.dispatch'::character varying)::text",
+            "".join(f", ('{action}'::character varying)::text" for action in actions),
+            1, actions,
+        ),
+        "ck_audit_events_authority_privacy_bounds": (
+            "('outbox_event'::character varying)::text",
+            "".join(f", ('{resource}'::character varying)::text" for resource in resources),
+            1, resources,
+        ),
+    }
+    for name, (anchor, addition, count, tokens) in replacements.items():
+        definition = op.get_bind().execute(sa.text(
+            "SELECT pg_catalog.pg_get_constraintdef(oid) FROM pg_catalog.pg_constraint "
+            "WHERE conrelid='public.audit_events'::regclass AND conname=:name"
+        ), {"name": name}).scalar_one()
+        if definition.count(anchor) != count or any(token in definition for token in tokens):
+            raise RuntimeError("fulfillment audit constraint shape changed: " + name)
+        op.execute(f"ALTER TABLE public.audit_events DROP CONSTRAINT {name}")
+        op.execute(f"ALTER TABLE public.audit_events ADD CONSTRAINT {name} "
+                   + definition.replace(anchor, anchor + addition))
+
+
 def _schema():
     op.execute(r"""
 CREATE TABLE public.compensation_fulfillment_receipts (
-	id UUID NOT NULL, 
-	fulfillment_root_id UUID NOT NULL, 
-	award_id UUID NOT NULL, 
-	project_id UUID NOT NULL, 
-	source_instance_id UUID NOT NULL, 
-	adapter_binding_id UUID NOT NULL, 
-	external_event_id UUID NOT NULL, 
-	evidence_ordinal BIGINT NOT NULL, 
-	recording_lifecycle_generation BIGINT NOT NULL, 
-	reported_status VARCHAR(16) NOT NULL, 
-	report_body JSONB NOT NULL, 
-	report_digest VARCHAR(71) NOT NULL, 
-	reporter_actor_id UUID NOT NULL, 
-	reporter_identity_link_id UUID NOT NULL, 
-	authorization_decision_id UUID NOT NULL, 
-	authorization_resource_digest VARCHAR(71) NOT NULL, 
-	received_at TIMESTAMP WITH TIME ZONE NOT NULL, 
-	CONSTRAINT pk_compensation_fulfillment_receipts PRIMARY KEY (id), 
-	CONSTRAINT ck_compensation_fulfillment_receipts_id_uuid7 CHECK ((get_byte(uuid_send(id),6)>>4)=7 and (get_byte(uuid_send(id),8)&192)=128), 
-	CONSTRAINT ck_compensation_fulfillment_receipts_event_uuid7 CHECK ((get_byte(uuid_send(external_event_id),6)>>4)=7 and (get_byte(uuid_send(external_event_id),8)&192)=128), 
-	CONSTRAINT ck_compensation_fulfillment_receipts_positive_custody CHECK (evidence_ordinal>0 and recording_lifecycle_generation>0), 
-	CONSTRAINT ck_compensation_fulfillment_receipts_digests CHECK (report_digest ~ '^sha256:[0-9a-f]{64}$' and authorization_resource_digest ~ '^sha256:[0-9a-f]{64}$'), 
-	CONSTRAINT ck_compensation_fulfillment_receipts_reported_status CHECK (reported_status in ('failed','fulfilled')), 
-	CONSTRAINT ck_compensation_fulfillment_receipts_report_object CHECK (jsonb_typeof(report_body)='object'), 
-	CONSTRAINT uq_fulfillment_receipt_binding_event UNIQUE (adapter_binding_id, external_event_id), 
-	CONSTRAINT uq_fulfillment_receipt_root_ordinal UNIQUE (fulfillment_root_id, evidence_ordinal), 
-	CONSTRAINT fk_compensation_fulfillment_receipts_fulfillment_root_i_cd6e FOREIGN KEY(fulfillment_root_id) REFERENCES compensation_fulfillment_roots (id), 
-	CONSTRAINT fk_compensation_fulfillment_receipts_award_id_compensat_6b88 FOREIGN KEY(award_id) REFERENCES compensation_awards (id), 
-	CONSTRAINT fk_compensation_fulfillment_receipts_project_id_projects FOREIGN KEY(project_id) REFERENCES projects (id), 
-	CONSTRAINT fk_compensation_fulfillment_receipts_adapter_binding_id_b094 FOREIGN KEY(adapter_binding_id) REFERENCES project_compensation_adapter_bindings (id), 
-	CONSTRAINT fk_compensation_fulfillment_receipts_reporter_actor_id__9be6 FOREIGN KEY(reporter_actor_id) REFERENCES actor_profiles (id), 
-	CONSTRAINT fk_compensation_fulfillment_receipts_reporter_identity__6ca2 FOREIGN KEY(reporter_identity_link_id) REFERENCES actor_identity_links (id), 
+	id UUID NOT NULL,
+	fulfillment_root_id UUID NOT NULL,
+	award_id UUID NOT NULL,
+	project_id UUID NOT NULL,
+	source_instance_id UUID NOT NULL,
+	adapter_binding_id UUID NOT NULL,
+	external_event_id UUID NOT NULL,
+	evidence_ordinal BIGINT NOT NULL,
+	recording_lifecycle_generation BIGINT NOT NULL,
+	reported_status VARCHAR(16) NOT NULL,
+	report_body JSONB NOT NULL,
+	report_digest VARCHAR(71) NOT NULL,
+	reporter_actor_id UUID NOT NULL,
+	reporter_identity_link_id UUID NOT NULL,
+	authorization_decision_id UUID NOT NULL,
+	authorization_resource_digest VARCHAR(71) NOT NULL,
+	received_at TIMESTAMP WITH TIME ZONE NOT NULL,
+	CONSTRAINT pk_compensation_fulfillment_receipts PRIMARY KEY (id),
+	CONSTRAINT ck_compensation_fulfillment_receipts_id_uuid7 CHECK ((get_byte(uuid_send(id),6)>>4)=7 and (get_byte(uuid_send(id),8)&192)=128),
+	CONSTRAINT ck_compensation_fulfillment_receipts_event_uuid7 CHECK ((get_byte(uuid_send(external_event_id),6)>>4)=7 and (get_byte(uuid_send(external_event_id),8)&192)=128),
+	CONSTRAINT ck_compensation_fulfillment_receipts_positive_custody CHECK (evidence_ordinal>0 and recording_lifecycle_generation>0),
+	CONSTRAINT ck_compensation_fulfillment_receipts_digests CHECK (report_digest ~ '^sha256:[0-9a-f]{64}$' and authorization_resource_digest ~ '^sha256:[0-9a-f]{64}$'),
+	CONSTRAINT ck_compensation_fulfillment_receipts_reported_status CHECK (reported_status in ('failed','fulfilled')),
+	CONSTRAINT ck_compensation_fulfillment_receipts_report_object CHECK (jsonb_typeof(report_body)='object'),
+	CONSTRAINT uq_fulfillment_receipt_binding_event UNIQUE (adapter_binding_id, external_event_id),
+	CONSTRAINT uq_fulfillment_receipt_root_ordinal UNIQUE (fulfillment_root_id, evidence_ordinal),
+	CONSTRAINT fk_compensation_fulfillment_receipts_fulfillment_root_i_cd6e FOREIGN KEY(fulfillment_root_id) REFERENCES compensation_fulfillment_roots (id),
+	CONSTRAINT fk_compensation_fulfillment_receipts_award_id_compensat_6b88 FOREIGN KEY(award_id) REFERENCES compensation_awards (id),
+	CONSTRAINT fk_compensation_fulfillment_receipts_project_id_projects FOREIGN KEY(project_id) REFERENCES projects (id),
+	CONSTRAINT fk_compensation_fulfillment_receipts_adapter_binding_id_b094 FOREIGN KEY(adapter_binding_id) REFERENCES project_compensation_adapter_bindings (id),
+	CONSTRAINT fk_compensation_fulfillment_receipts_reporter_actor_id__9be6 FOREIGN KEY(reporter_actor_id) REFERENCES actor_profiles (id),
+	CONSTRAINT fk_compensation_fulfillment_receipts_reporter_identity__6ca2 FOREIGN KEY(reporter_identity_link_id) REFERENCES actor_identity_links (id),
 	CONSTRAINT fk_compensation_fulfillment_receipts_authorization_deci_10e8 FOREIGN KEY(authorization_decision_id) REFERENCES audit_events (id)
 );
     """)
@@ -75,41 +122,41 @@ CREATE UNIQUE INDEX uq_fulfillment_receipt_fulfilled_award ON public.compensatio
     """)
     op.execute(r"""
 CREATE TABLE public.compensation_fulfillment_exceptions (
-	id UUID NOT NULL, 
-	fulfillment_root_id UUID NOT NULL, 
-	award_id UUID NOT NULL, 
-	project_id UUID NOT NULL, 
-	source_instance_id UUID NOT NULL, 
-	adapter_binding_id UUID NOT NULL, 
-	exception_event_id UUID NOT NULL, 
-	original_receipt_id UUID NOT NULL, 
-	original_fulfillment_event_id UUID NOT NULL, 
-	evidence_ordinal BIGINT NOT NULL, 
-	recording_lifecycle_generation BIGINT NOT NULL, 
-	kind VARCHAR(32) NOT NULL, 
-	exception_body JSONB NOT NULL, 
-	exception_digest VARCHAR(71) NOT NULL, 
-	reporter_actor_id UUID NOT NULL, 
-	reporter_identity_link_id UUID NOT NULL, 
-	authorization_decision_id UUID NOT NULL, 
-	authorization_resource_digest VARCHAR(71) NOT NULL, 
-	received_at TIMESTAMP WITH TIME ZONE NOT NULL, 
-	CONSTRAINT pk_compensation_fulfillment_exceptions PRIMARY KEY (id), 
-	CONSTRAINT ck_compensation_fulfillment_exceptions_id_uuid7 CHECK ((get_byte(uuid_send(id),6)>>4)=7 and (get_byte(uuid_send(id),8)&192)=128), 
-	CONSTRAINT ck_compensation_fulfillment_exceptions_event_uuid7 CHECK ((get_byte(uuid_send(exception_event_id),6)>>4)=7 and (get_byte(uuid_send(exception_event_id),8)&192)=128), 
-	CONSTRAINT ck_compensation_fulfillment_exceptions_positive_custody CHECK (evidence_ordinal>0 and recording_lifecycle_generation>0), 
-	CONSTRAINT ck_compensation_fulfillment_exceptions_digests CHECK (exception_digest ~ '^sha256:[0-9a-f]{64}$' and authorization_resource_digest ~ '^sha256:[0-9a-f]{64}$'), 
-	CONSTRAINT ck_compensation_fulfillment_exceptions_kind CHECK (kind in ('provider_reversal','provider_status_conflict')), 
-	CONSTRAINT ck_compensation_fulfillment_exceptions_exception_object CHECK (jsonb_typeof(exception_body)='object'), 
-	CONSTRAINT uq_fulfillment_exception_binding_event UNIQUE (adapter_binding_id, exception_event_id), 
-	CONSTRAINT uq_fulfillment_exception_root_ordinal UNIQUE (fulfillment_root_id, evidence_ordinal), 
-	CONSTRAINT fk_compensation_fulfillment_exceptions_fulfillment_root_afa9 FOREIGN KEY(fulfillment_root_id) REFERENCES compensation_fulfillment_roots (id), 
-	CONSTRAINT fk_compensation_fulfillment_exceptions_award_id_compens_532f FOREIGN KEY(award_id) REFERENCES compensation_awards (id), 
-	CONSTRAINT fk_compensation_fulfillment_exceptions_project_id_projects FOREIGN KEY(project_id) REFERENCES projects (id), 
-	CONSTRAINT fk_compensation_fulfillment_exceptions_adapter_binding__3173 FOREIGN KEY(adapter_binding_id) REFERENCES project_compensation_adapter_bindings (id), 
-	CONSTRAINT fk_compensation_fulfillment_exceptions_original_receipt_0d2a FOREIGN KEY(original_receipt_id) REFERENCES compensation_fulfillment_receipts (id), 
-	CONSTRAINT fk_compensation_fulfillment_exceptions_reporter_actor_i_a26e FOREIGN KEY(reporter_actor_id) REFERENCES actor_profiles (id), 
-	CONSTRAINT fk_compensation_fulfillment_exceptions_reporter_identit_77e6 FOREIGN KEY(reporter_identity_link_id) REFERENCES actor_identity_links (id), 
+	id UUID NOT NULL,
+	fulfillment_root_id UUID NOT NULL,
+	award_id UUID NOT NULL,
+	project_id UUID NOT NULL,
+	source_instance_id UUID NOT NULL,
+	adapter_binding_id UUID NOT NULL,
+	exception_event_id UUID NOT NULL,
+	original_receipt_id UUID NOT NULL,
+	original_fulfillment_event_id UUID NOT NULL,
+	evidence_ordinal BIGINT NOT NULL,
+	recording_lifecycle_generation BIGINT NOT NULL,
+	kind VARCHAR(32) NOT NULL,
+	exception_body JSONB NOT NULL,
+	exception_digest VARCHAR(71) NOT NULL,
+	reporter_actor_id UUID NOT NULL,
+	reporter_identity_link_id UUID NOT NULL,
+	authorization_decision_id UUID NOT NULL,
+	authorization_resource_digest VARCHAR(71) NOT NULL,
+	received_at TIMESTAMP WITH TIME ZONE NOT NULL,
+	CONSTRAINT pk_compensation_fulfillment_exceptions PRIMARY KEY (id),
+	CONSTRAINT ck_compensation_fulfillment_exceptions_id_uuid7 CHECK ((get_byte(uuid_send(id),6)>>4)=7 and (get_byte(uuid_send(id),8)&192)=128),
+	CONSTRAINT ck_compensation_fulfillment_exceptions_event_uuid7 CHECK ((get_byte(uuid_send(exception_event_id),6)>>4)=7 and (get_byte(uuid_send(exception_event_id),8)&192)=128),
+	CONSTRAINT ck_compensation_fulfillment_exceptions_positive_custody CHECK (evidence_ordinal>0 and recording_lifecycle_generation>0),
+	CONSTRAINT ck_compensation_fulfillment_exceptions_digests CHECK (exception_digest ~ '^sha256:[0-9a-f]{64}$' and authorization_resource_digest ~ '^sha256:[0-9a-f]{64}$'),
+	CONSTRAINT ck_compensation_fulfillment_exceptions_kind CHECK (kind in ('provider_reversal','provider_status_conflict')),
+	CONSTRAINT ck_compensation_fulfillment_exceptions_exception_object CHECK (jsonb_typeof(exception_body)='object'),
+	CONSTRAINT uq_fulfillment_exception_binding_event UNIQUE (adapter_binding_id, exception_event_id),
+	CONSTRAINT uq_fulfillment_exception_root_ordinal UNIQUE (fulfillment_root_id, evidence_ordinal),
+	CONSTRAINT fk_compensation_fulfillment_exceptions_fulfillment_root_afa9 FOREIGN KEY(fulfillment_root_id) REFERENCES compensation_fulfillment_roots (id),
+	CONSTRAINT fk_compensation_fulfillment_exceptions_award_id_compens_532f FOREIGN KEY(award_id) REFERENCES compensation_awards (id),
+	CONSTRAINT fk_compensation_fulfillment_exceptions_project_id_projects FOREIGN KEY(project_id) REFERENCES projects (id),
+	CONSTRAINT fk_compensation_fulfillment_exceptions_adapter_binding__3173 FOREIGN KEY(adapter_binding_id) REFERENCES project_compensation_adapter_bindings (id),
+	CONSTRAINT fk_compensation_fulfillment_exceptions_original_receipt_0d2a FOREIGN KEY(original_receipt_id) REFERENCES compensation_fulfillment_receipts (id),
+	CONSTRAINT fk_compensation_fulfillment_exceptions_reporter_actor_i_a26e FOREIGN KEY(reporter_actor_id) REFERENCES actor_profiles (id),
+	CONSTRAINT fk_compensation_fulfillment_exceptions_reporter_identit_77e6 FOREIGN KEY(reporter_identity_link_id) REFERENCES actor_identity_links (id),
 	CONSTRAINT fk_compensation_fulfillment_exceptions_authorization_de_446d FOREIGN KEY(authorization_decision_id) REFERENCES audit_events (id)
 );
     """)
