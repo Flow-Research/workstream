@@ -1,4 +1,4 @@
-"""Compose policy version lists for authorized project and Finance managers."""
+"""Compose policy version lists for authorized Project Managers and Finance Authorities."""
 
 from typing import Annotated
 from uuid import UUID
@@ -13,7 +13,7 @@ from app.modules.contributions.api.policies import ContributionPolicyVersionList
 
 
 class ContributionPolicyListRead:
-    """List every stored policy version, oldest first, under its authorized manager grant."""
+    """List every stored policy version, oldest first, under its authorized project management read grant."""
 
     def __init__(self, runner: ProjectManagementReadRunner, policies: ContributionPolicyVersionListPort):
         """Compose the read runner with the CON policy owner."""

@@ -74,7 +74,10 @@ async def test_public_queue_pages_preserve_owner_selection(task_client, monkeypa
         assert page["project_id"] == project["id"]
         assert len(page["items"]) == 1
         item = page["items"][0]
-        expected_fields = (COLUMNS[kind] - {"id", "locked_contribution_policy_version_id"}) | {"task_id"}
+        expected_fields = (COLUMNS[kind] - {
+            "id", "locked_contribution_policy_version_id", "task_size",
+            "locked_submission_award_definition_id",
+        }) | {"task_id"}
         if kind == "ready":
             expected_fields.add("compensation")
         assert set(item) == expected_fields

@@ -1436,3 +1436,14 @@ obsolete Finance-only wording replaced; this added allowed file is documentation
 only and changes no owner logic. Current historical reference specifications
 remain historical evidence. Full hosted and Finance runtime qualification remain
 unfinished; these bounded test/docs repairs change no capability-ledger claim.
+
+Internal c92c70a9 review found CONTRACT-CONSUMER-001 /
+TEST-CURRENT-CONSUMERS-001: the shared SQL column set also fed public-field
+expectations. Keep both internal selection columns in the exact SQL expectation,
+exclude them from public top-level response fields, and retain nested exact
+compensation proof plus the extra-description-column discriminator. Run the
+complete existing public queue module to catch dependent assertions.
+DOC-CURRENT-CONSUMERS-001 also corrects the owner docstrings to canonical
+Project Manager / Finance Authority wording. No public DTO, owner logic, guard,
+workflow or privacy requirement is changed. Replay affected reviewers after
+proof on the new clean source; current full-suite and Finance gaps remain.
