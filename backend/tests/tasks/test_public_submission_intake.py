@@ -27,7 +27,6 @@ from app.modules.outbox.models import OutboxEvent
 from app.modules.tasks.models import Submission
 from app.modules.api_controls.service import AUTHORIZATION_READ_SCOPE, RateControlService
 from app.modules.actors.models import ActorProfile
-from tests.tasks.test_submission_lineage import _prepared_packet
 from tests.artifacts.test_submission_intake_admission import (
     admission_intake as admission_intake,
     admin_access as admin_access,
@@ -490,61 +489,53 @@ async def test_public_checker_remediation_uses_exact_predecessor(
 
 
 async def test_confirmed_intake_deadline_persists_terminal_failure_and_replays(
-    isolated_database_env, tmp_path, monkeypatch,
+    admission_intake, tmp_path, monkeypatch,
 ):
-    """A drained PRE timeout commits failure once without admission or Submission."""
+    """A simulated provider deadline retains exact failure/cleanup custody on replay."""
+    from sqlalchemy import text
     from app.modules.artifacts.models import SubmissionBundleDurableIntent
-    from app.modules.checkers.selected_pre_submit_execution import SelectedPreSubmitProcessor
+    from tests.artifacts.test_submission_foreground_command import configure_source_http
+    from tests.test_trusted_intake import _archive
 
-    async with _prepared_packet(isolated_database_env, tmp_path, verify=False) as h:
-        calls = 0
-
-        async def deadline_after_intake(self, material, default):
-            nonlocal calls
-            calls += 1
-            assert default.eligible
-            assert material.entries
-            # ART has exported, evaluated default and awaited intake.close()
-            # before invoking this project processor. Exercise its TimeoutError
-            # conversion without changing the production deadline or finalizer.
-            raise TimeoutError("project operation deadline")
-
-        monkeypatch.setattr(SelectedPreSubmitProcessor, "process", deadline_after_intake)
-        key = new_record_id()
-        headers = {
-            "Content-Type": "application/zip",
-            "X-Task-Assignment-Id": str(h.assignment_id),
-            "Idempotency-Key": str(key),
-            "X-Submission-Summary": h.preparation_request.summary,
-            "X-Contributor-Attestation": h.preparation_request.contributor_attestation,
-        }
-        route = f"/api/v1/tasks/{h.task_id}/submission-bundle-preparations"
-        async with _client(h, monkeypatch, isolated_database_env) as client:
-            first = await client.post(route, headers=headers, content=h.archive_bytes)
-            assert first.status_code == 503, first.text
-            assert first.json()["detail"] == "deadline_exceeded"
-            async with h.factory() as session:
-                run = (await session.scalars(select(SelectedPreSubmitRun).where(
-                    SelectedPreSubmitRun.idempotency_key == str(key)
-                ))).one()
-                assert run.status == "infrastructure_failed"
-                assert run.terminal_json["outcome"] == "infrastructure_failed"
-                assert run.terminal_json["infrastructure_failure_code"] == "deadline_exceeded"
-                assert run.terminal_json["execution"] is None and run.eligible is None
-                assert run.execute_evidence_id and run.finalize_evidence_id
-                retained = (run.id, run.terminal_digest, run.finalize_evidence_id)
-                for model in (SubmissionBundleDurableIntent, SubmissionBundleAdmission):
-                    assert await session.scalar(select(func.count()).select_from(model).where(
-                        model.selected_pre_submit_run_id == run.id
-                    )) == 0
-                assert await session.scalar(select(func.count()).select_from(Submission).where(
-                    Submission.task_id == str(h.task_id)
-                )) == 0
-            replay = await client.post(route, headers=headers, content=h.archive_bytes)
-            assert replay.status_code == 503 and replay.json()["detail"] == "deadline_exceeded"
-        assert calls == 1
-        async with h.factory() as session:
-            run = (await session.scalars(select(SelectedPreSubmitRun).where(
-                SelectedPreSubmitRun.idempotency_key == str(key)
-            ))).one()
-            assert (run.id, run.terminal_digest, run.finalize_evidence_id) == retained
+    f, payload = admission_intake, _archive()
+    client, _, errors, calls = await configure_source_http(
+        f.factory, f.access.signed.client, tmp_path, monkeypatch, payload, "deadline_exceeded",
+    )
+    route = f"/api/v1/tasks/{f.task}/submissions"
+    headers = f.access.target.headers | {
+        "Content-Type": "application/zip", "X-Task-Assignment-Id": str(f.assignment),
+        "Idempotency-Key": str(new_record_id()),
+        "X-Submission-Summary": "Completed work", "X-Contributor-Attestation": "I completed this work",
+    }
+    first = await client.post(route, headers=headers, content=payload)
+    assert first.status_code == 503, first.text
+    assert first.json()["error"]["code"] == "submission_infrastructure_unavailable"
+    async with f.factory() as session:
+        run = (await session.scalars(select(SelectedPreSubmitRun))).one()
+        assert run.status == "infrastructure_failed"
+        assert run.terminal_json["outcome"] == "infrastructure_failed"
+        assert run.terminal_json["infrastructure_failure_code"] == "deadline_exceeded"
+        assert run.terminal_json["execution"] is None and run.eligible is None
+        invocation = run.terminal_json["invocation_receipt"]
+        assert invocation["outcome"] == invocation["reason"] == "deadline_exceeded"
+        assert invocation["cleanup"]["disposition"] == "pending"
+        assert run.execute_evidence_id and run.finalize_evidence_id
+        retained = (run.id, run.terminal_digest, run.finalize_evidence_id, run.terminal_json)
+        for model in (SubmissionBundleDurableIntent, SubmissionBundleAdmission, Submission, CheckerRun, OutboxEvent):
+            assert await session.scalar(select(func.count()).select_from(model)) == 0
+        row = (await session.execute(text(
+            "SELECT state, failure_code FROM submission_intake_operations WHERE task_id=:id"
+        ), {"id": f.task})).one()
+        assert tuple(row) == ("failed", "submission_infrastructure_unavailable")
+        assert await session.scalar(text("SELECT accounted_bytes FROM submission_source_charges")) == len(payload)
+        assert await session.scalar(text("SELECT status FROM workstream_tasks WHERE id=:id"), {"id": f.task}) == "in_progress"
+        assert await session.scalar(text("SELECT status FROM task_assignments WHERE id=:id"), {"id": f.assignment}) == "active"
+    replay = await client.post(route, headers=headers, content=payload)
+    assert replay.status_code == 503, replay.text
+    assert replay.json()["error"]["code"] == "submission_infrastructure_unavailable"
+    assert len(calls) == 1 and not errors, errors
+    async with f.factory() as session:
+        run = (await session.scalars(select(SelectedPreSubmitRun))).one()
+        assert (run.id, run.terminal_digest, run.finalize_evidence_id, run.terminal_json) == retained
+        assert await session.scalar(text("SELECT count(*) FROM submission_intake_operations")) == 1
+        assert await session.scalar(text("SELECT accounted_bytes FROM submission_source_charges")) == len(payload)

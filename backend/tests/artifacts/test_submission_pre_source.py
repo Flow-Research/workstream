@@ -462,8 +462,10 @@ def _source_runtime(payload, tmp_path, runtime_outcome, *, project_findings=()):
         async def run(self, lease, grant):
             async with aclosing(grant.open_source(lease=lease)) as reader:
                 assert b"".join([chunk async for chunk in reader]) == payload
-            if runtime_outcome == "received_failure":
-                body = receipt_body(lease, outcome="infrastructure_failure", reason="capacity_exceeded")
+            if runtime_outcome in {"received_failure", "deadline_exceeded"}:
+                deadline = runtime_outcome == "deadline_exceeded"
+                body = receipt_body(lease, outcome="deadline_exceeded" if deadline else "infrastructure_failure",
+                                    reason="deadline_exceeded" if deadline else "capacity_exceeded")
                 body["cleanup"]["disposition"] = "pending"
                 return SelectedPreSubmitInvocationResult.from_canonical_body(body | {"execution": None}, source_contracts=selected_pre_submit_source_contracts())
             if runtime_outcome in {"completed", "rejected"}:

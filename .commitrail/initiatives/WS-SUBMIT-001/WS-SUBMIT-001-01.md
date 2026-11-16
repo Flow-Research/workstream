@@ -6390,3 +6390,24 @@ unchanged, independent assertion probes detect second PRE and lost replay feedba
 Ruff, structural boundary, record and whitespace checks pass. This closes current
 initial replay proof only; remediation/deadline and other remaining spec work stay
 open. Hosted953 backend lanes now running; no final full-CI qualification claim.
+
+Public deadline migration scope: tasks/test_public_submission_intake.py and shared
+artifacts/test_submission_pre_source.py runtime fixture. Replace retired processor
+TimeoutError/prepare route with current signed ZIP and a simulated provider deadline
+receipt after exact source read/drain. This proves current receipt persistence,
+public infrastructure classification, stable replay, retained source cleanup charge,
+unchanged task/assignment and no admission/Submission/POST. It does not qualify
+real elapsed runtime enforcement; that remains separate A25 provider evidence.
+Keep existing capacity-failure fixture behavior unchanged. Medium lifecycle/contract
+risk: isolated target and existing receipt-source consumer, Ruff/structure, focused
+QA review. No production timers, compatibility interfaces or fabricated defaults.
+
+Deadline v1 selected an invalid parameterized node and ran no tests. Collected
+actual IDs and corrected selection; v2 public deadline + existing received-capacity
+source consumer pass2 in45.17s, database/MinIO cleanup complete. QA reports no
+scoped code findings; actual shared-branch probe proves exact source drain/close
+and typed pending receipt, and named public assertion detects capacity-for-deadline
+substitution (/tmp/submission-deadline-qa-probe.log). Ruff, structural boundaries,
+record and whitespace checks pass. Removed now-unused _prepared_packet import;
+remaining remediation consumer still uses old preparation and requires migration.
+Real timer/provider qualification remains open; no full-spec readiness claim.
