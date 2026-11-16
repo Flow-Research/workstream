@@ -1685,3 +1685,41 @@ startup failures remain unexplained, and a matching CI Python patch could not
 be downloaded by the installed uv registry. No interpreter, loop, timeout,
 project dependency or application setting was changed to force success. Fresh
 hosted normal execution remains required before qualification; keep the PR draft.
+
+
+## Receipt and source runtime implementation
+
+Resume the previously approved L0 boundary against cleanf919 and unchanged main
+94334ccf. The root/award/REV owners are present; none of the four receipt/source
+routes or immutable receipt/exception rows exists. Implement the declared current
+COMP fulfillment/API/models/native0073/composition, AUTH catalogue/domain/PREP/
+replay/service matrix, API router/dependencies, owner registration/lane metadata,
+focused receipt/projection/migration proof and affected current specs/roadmap/docs.
+Initial files are compensation/api/fulfillment_evidence.py and fulfillment/
+evidence_models.py; they expose detached values and opaque AUTH protocols only.
+Private evidence models register with the forward migration and actual service
+composition; partial code is not activated or claimed as a delivered capability.
+
+Both refinement plan tracks pass. Commands and native receipt/exception INSERT
+require actual READ COMMITTED before evidence authority/writes; RR/SERIALIZABLE
+fail closed without fallback or AUTH denial restaging. Continue existing order:
+REV held-current fence→request-resolved action-specific AUTH actor/link→COMP
+binding/root. Native insertion assigns one clock after waits and uses that exact
+received_at for bounds and RETURNING-based pure decoder verification. It also
+assigns a positive cross-receipt/exception ordinal under the same root mutex so
+latest evidence follows serialized append order, never caller time/UUID time.
+No counter table, extra lock owner, workflow or runtime knob. Replay retains its
+original recording generation/ordinal/clock/allow while fresh principal and current
+REV custody are verified; it never appends another allow or evidence row.
+
+Required proof includes mixed-table RC contention, pinned RR/SERIALIZABLE zero-
+effect rejection and rollback-contained discriminator, exact single receiver clock
+and skew boundaries, original binding/source/actor/current-principal isolation,
+all lifecycle phases and transition/revocation races, zero-write exact replay,
+changed-event conflicts, one successful receipt, linked exceptions/attention,
+independent native guard/rollback/migration tests and all four real public routes.
+Source read and report lookup use disjoint typed resources under source.read.
+Keep delivery handler/provider execution inactive until their own required owner
+work is implemented. No public/payment/deployment or whole-Finance completion
+claim is made by these initial records. Internal focused reviewers and full
+verification remain required before this boundary is ready in the same PR.
