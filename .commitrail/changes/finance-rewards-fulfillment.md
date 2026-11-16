@@ -1555,3 +1555,12 @@ Python3.12.3/PostgreSQL16.14. Original owner capture passed43.97s with cleanup;
 its earlier validator-only missing Submission.project_id assumption was corrected
 before that pass. All source rows/IDs/timestamps/digests remain original. This
 capture is not adoption proof until the current restore/migration tests pass.
+
+Exactfc8dde7 adoption run validated the physical digest mutant and rejected its
+semantic digest, then failed when the valid capture was restored over populated
+mutant rows: native ON DELETE RESTRICT cannot be deferred. Each independent
+backup-restore scenario must start from its exact empty0047 schema. Reset only
+the owned synthetic test schema between mutant and valid scenarios; retain all
+restore/FK/trigger validation unchanged. No shared restore helper or native guard
+is weakened. The failed run completed database/MinIO cleanup and is not an adoption
+pass. Rerun the full mapped11case proof on the clean correction.

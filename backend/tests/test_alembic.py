@@ -1413,6 +1413,10 @@ async def test_revision_upgrade_retains_policy_source_and_running_window(
                 )
         finally:
             await connection.close()
+        # Each backup restore starts from its exact empty predecessor. RESTRICT
+        # foreign keys intentionally prevent replacing populated parent rows.
+        await _execute(isolated_database_env, "drop schema public cascade; create schema public")
+        await asyncio.to_thread(command.upgrade, _alembic_config(), "0047_revision_recovery")
         await restore_revision_window(isolated_database_env, capture)
         engine = create_async_engine(isolated_database_env, poolclass=NullPool)
         factory = async_sessionmaker(engine)
