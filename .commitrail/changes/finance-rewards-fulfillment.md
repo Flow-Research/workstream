@@ -1164,3 +1164,18 @@ delta and CI integrity, plus security/architecture/reuse for any production
 owner refactor. Human focus: obsolete requirements removed explicitly while
 required authorization, isolation, immutable evidence, concurrency and replay
 proof remains. The capability ledger is unchanged by fixture/catalogue repair.
+
+The first fixture repair passed 19 exact-clean PostgreSQL cases at 2773dd096,
+including real authority quantity/foreign-binding guards, stale identity-map
+refresh, unprivileged denial audit, exact prepared router principal, successor
+source and shared reset. Pure routing contracts passed 101 cases before commit;
+behavior-catalogue collection now resolves the actual eleven-module test.
+
+CLI proof must match its actual hosted lane configuration. The native guide
+lane has no MinIO endpoint; injecting one selects S3 startup against its scripted
+committed-document fixture namespace and correctly fails the namespace guard.
+Changing only the disabled baseline did not remove that automatic selection.
+The aligned native-lane run reaches the public policy journey and exposed a
+fixture assertion assuming every mutation actor was Finance. The added manager
+retirement now supplies its exact manager ID to the same event-identity assertion;
+no caller identity check is removed. These CLI results do not claim S3 custody.

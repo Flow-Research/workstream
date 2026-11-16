@@ -301,6 +301,7 @@ async def test_guide_activation_public_socket_replay_and_fresh_authority(
                     finance.actor_profile_id,
                     finance_grant,
                     caller,
+                    actor.actor_profile_id,
                     token(outsider),
                     token(foreign_finance),
                     admin,

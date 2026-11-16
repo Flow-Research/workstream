@@ -9,7 +9,9 @@ from collections.abc import Callable
 
 import pytest
 
-from tests.conftest import configured_source_instance_id as configured_source_instance_id
+from tests.conftest import (
+    configured_source_instance_id as configured_source_instance_id,
+)
 
 
 @pytest.fixture
