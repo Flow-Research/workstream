@@ -6044,7 +6044,8 @@ No production owner, policy bypass, new fake acceptance, or provider qualificati
 claim. Risk: test validity; QA review and both production-registry cases required.
 
 Frozen pending review found CLI omission accepted as null although the field is
-required by the wire schema. Repair scope: contributor_tasks.go, task_context.go,
+required by the intended CLI projection contract. The generated OpenAPI DTO
+schema permits omission because the backend field defaults to None. Repair scope: contributor_tasks.go, task_context.go,
 tasks.go shared management detail decoder, and test_task_pending_http.py. Require
 key presence while retaining explicit null; prove omission rejection and null
 success in all four readers. No backend authority or schema change. Replay Go
