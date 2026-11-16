@@ -89,6 +89,11 @@ regression uses the actual two-scope login and returned-scope/resource refresh,
 then verifies the renewed credential and API exchange through the real adapters.
 No Garden-specific refresh workaround or authorization exception is introduced.
 
+Token scope inclusion and consent-screen presentation are independent. Keep the
+MCP audience scope in the returned token scope set for renewal, but display only
+the user-facing access permission on the consent screen. Verify the rendered
+scope configuration and the live consent page; retain the existing refresh proof.
+
 ## Acceptance criteria
 
 - [x] Exact pinned provider configuration passes real browser, claim, profile,

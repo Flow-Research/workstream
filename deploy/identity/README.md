@@ -113,8 +113,10 @@ The direct client requests `workstream:access workstream-api-audience`; its
 callback is exactly `http://127.0.0.1:17843/callback`. An inspected Garden client
 requests `workstream:access workstream-mcp-audience` with its exact HTTPS callback.
 The MCP audience scope is included in the returned scope set. Garden's existing
-OAuth client renews that set explicitly; hiding the audience scope would remove
-the MCP audiences on refresh. The API audience and identity mapper scopes remain
+OAuth client renews that set explicitly; omitting the audience scope from that set
+would remove the MCP audiences on refresh. This token setting is independent of consent-page
+display: show only the user-facing access permission, keeping the internal MCP
+audience scope hidden on that page. The API audience and identity mapper scopes remain
 hidden. This does not grant additional Workstream permissions.
 The current integration drill uses Garden dev. Render its registration separately:
 

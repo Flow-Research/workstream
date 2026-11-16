@@ -38,13 +38,16 @@ def audience_mapper(name: str, *, client: str | None = None, resource: str | Non
     return claim_mapper(name, "oidc-audience-mapper", config)
 
 
-def client_scope(name: str, mappers: list[dict], *, visible: bool = False) -> dict:
-    """Choose which scopes clients retain when renewing resource credentials."""
+def client_scope(
+    name: str, mappers: list[dict], *, include_in_token_scope: bool = False,
+    display_on_consent_screen: bool = False,
+) -> dict:
+    """Keep credential-renewal scope inclusion separate from consent presentation."""
     return {
         "name": name, "protocol": "openid-connect",
         "attributes": {
-            "include.in.token.scope": str(visible).lower(),
-            "display.on.consent.screen": str(visible).lower(),
+            "include.in.token.scope": str(include_in_token_scope).lower(),
+            "display.on.consent.screen": str(display_on_consent_screen).lower(),
             "consent.screen.text": "Access Workstream under your assigned permissions",
         },
         "protocolMappers": mappers,
@@ -150,12 +153,13 @@ def realm() -> dict:
                     "jsonType.label": "long", "id.token.claim": "true",
                 }),
             ]),
-            identity, client_scope(ACCESS_SCOPE, [], visible=True),
+            identity, client_scope(ACCESS_SCOPE, [], include_in_token_scope=True,
+                                   display_on_consent_screen=True),
             client_scope("workstream-api-audience", [audience_mapper("api", client=API_AUDIENCE)]),
             client_scope("workstream-mcp-audience", [
                 audience_mapper("mcp-client", client=EXCHANGE_CLIENT),
                 audience_mapper("mcp-resource", resource=MCP_RESOURCE),
-            ], visible=True),
+            ], include_in_token_scope=True),
         ],
         "clients": [
             browser_client("workstream-cli-login", "http://127.0.0.1:17843/callback", "workstream-api-audience"),

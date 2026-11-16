@@ -92,6 +92,21 @@ class KeycloakConfigurationTests(unittest.TestCase):
         self.assertTrue(realm["revokeRefreshToken"])
         self.assertEqual(realm["refreshTokenMaxReuse"], 0)
 
+    def test_consent_shows_access_once_without_losing_mcp_refresh_scope(self):
+        scopes = {scope["name"]: scope for scope in config.realm()["clientScopes"]}
+        client = config.garden_client("garden-dev", "https://garden.example/api/oauth/callback")
+        requested = [scopes[name] for name in client["optionalClientScopes"]]
+        self.assertEqual(
+            [scope["name"] for scope in requested
+             if scope["attributes"]["display.on.consent.screen"] == "true"],
+            ["workstream:access"],
+        )
+        self.assertEqual(
+            [scope["name"] for scope in requested
+             if scope["attributes"]["include.in.token.scope"] == "true"],
+            ["workstream:access", "workstream-mcp-audience"],
+        )
+
     def test_import_defines_every_assigned_scope_including_subject(self):
         realm = config.realm()
         scopes = {scope["name"]: scope for scope in realm["clientScopes"]}

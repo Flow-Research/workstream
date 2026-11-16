@@ -264,7 +264,7 @@ class IdentityProviderTests(unittest.TestCase):
         # rejected before the actual assertion-grant downscope policy runs.
         extra_scope = "fixture-extra-permission"
         self.probe.request("/admin/realms/flow/client-scopes",
-            realm_config.client_scope(extra_scope, [], visible=True), token=self.operator)
+            realm_config.client_scope(extra_scope, [], include_in_token_scope=True), token=self.operator)
         scopes = self.probe.request("/admin/realms/flow/client-scopes", token=self.operator)
         scope_id = next(scope["id"] for scope in scopes if scope["name"] == extra_scope)
         scope_path = f"/admin/realms/flow/clients/{client['id']}/optional-client-scopes/{scope_id}"
