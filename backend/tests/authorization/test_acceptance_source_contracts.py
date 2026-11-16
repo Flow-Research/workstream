@@ -144,6 +144,10 @@ def test_route_projection_and_digest_bind_complete_reconstructed_source(human_re
             continue
         if name == "locked_policy":
             changed = value.model_copy(update={"locked_review_policy_hash": SHA_B})
+        elif name == "task_size":
+            changed = "medium" if value == "small" else "small"
+        elif value is None and name.endswith("_id"):
+            changed = new_record_id()
         elif type(value) is UUID:
             changed = new_record_id()
         elif type(value) is bool:

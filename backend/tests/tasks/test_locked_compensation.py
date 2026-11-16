@@ -28,6 +28,7 @@ from tests.test_tasks import (
 
 
 EXPECTED_PAID = {
+    "task_size": "small",
     "accepted_submission": [
         {"instrument": "money", "unit": "USD", "quantity": "2.125000000000000001"},
     ],
@@ -68,6 +69,7 @@ async def test_unpaid_ready_and_detail_share_the_task_locked_version(task_client
     assert queue.status_code == detail.status_code == 200, (queue.text, detail.text)
     expected = {
         "contribution_policy_version_id": task["locked_contribution_policy_version_id"],
+        "task_size": task["task_size"],
         "accepted_submission": "unpaid",
         "completed_review": "unpaid",
     }

@@ -1376,3 +1376,24 @@ Exact isolated9ec6a8c claim migration proof passed all3 cases in307.55 seconds
 with complete cleanup; its test source is byte-identical in d68131c. This closes
 execution gaps for these bounded repairs, pending focused implementation review;
 full hosted execution and Finance runtime remain unqualified.
+
+## Remaining current-selection consumer proof
+
+The complete hosted5c30 candidate ran actual merge source58b71e0e. Artifacts
+identify additional affected test consumers; no full-suite success is inferred.
+The next repair extends the already approved current-selection replacement in
+three files: authorization/test_acceptance_source_contracts.py,
+tasks/test_locked_compensation.py and tasks/test_public_queues.py, plus this
+record. Use a valid alternate task_size and UUID for nullable selection fields
+in source-digest substitution proof; malformed scalar hashes cannot substitute
+for those typed fields. Exact locked paid/unpaid projections include stored size.
+Ready-queue selected-column proof includes precisely size and selected-definition
+columns, preserving the unexpected-description-column mutant and no-lock check.
+No production, schema, AUTH authority, test skip, workflow or quota changes.
+Risk L1 proof integrity within existing selection scope. Required verification:
+pure source commitment tests and real PostgreSQL locked paid/unpaid read branches
+and exact queue columns, followed by QA/test-delta/CI/reuse review. Human focus:
+new required selection facts are asserted, not ignored or defaulted. No capability
+ledger change is claimed by this test-only repair. Remaining hosted failures
+include predecessor-only fixtures, native negatives and other affected consumers
+and remain blocking.

@@ -23,7 +23,7 @@ from tests.test_tasks import (
 
 METHODS = {"ready": "read_ready_tasks", "management": "read_management_tasks", "operational": "read_operational_tasks"}
 COLUMNS = {
-    "ready": {"id", "project_id", "title", "task_type", "difficulty", "skill_tags", "estimated_time_minutes", "created_at", "locked_contribution_policy_version_id"},
+    "ready": {"id", "project_id", "title", "task_type", "difficulty", "skill_tags", "estimated_time_minutes", "created_at", "locked_contribution_policy_version_id", "task_size", "locked_submission_award_definition_id"},
     "management": {"id", "project_id", "title", "task_type", "difficulty", "skill_tags", "estimated_time_minutes", "status", "deadline_at", "created_at", "updated_at"},
     "operational": {"id", "project_id", "status", "created_at", "updated_at"},
 }
