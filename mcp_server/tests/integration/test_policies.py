@@ -309,11 +309,13 @@ async def test_installed_mcp_preserves_policy_lineage_authority_and_replay() -> 
                     version_id
                 ]
                 rules = {
+                    "instrument_type": None,
+                    "unit_code": None,
+                    "adapter_binding_id": None,
                     "rules": [
                         {
                             "contribution_type": contribution_type,
                             "compensation_mode": "unpaid",
-                            "definitions": [],
                         }
                         for contribution_type in (
                             "accepted_submission",

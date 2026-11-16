@@ -1648,3 +1648,24 @@ CLI repairs are preserved. The bridge is recorded locally at
 `/tmp/workstream-finance-9f65a63-g5-proof-bridge.json`.
 These are fixture and evidence repairs, with no additional capability/roadmap
 claim. Full hosted execution and the actual Finance runtime remain unfinished.
+
+## Installed MCP current-policy fixture repair
+
+Exact pushed66732c42f hosted Backend run43918882555 passed all17 backend lanes,
+but its installed MCP real-API policy case failed on contribution_policy_update
+with invalid_tool_input. The test still sends the removed unpaid definitions
+input and omits the required shared null financial header. The existing MCP
+unit fixture and frozen public contract already use the current input; do not
+add a compatibility parser or relax schema validation.
+Allowed: this record and mcp_server/tests/integration/test_policies.py only.
+Replace that obsolete positive input with explicit null instrument/unit/binding
+and the two current unpaid rules without definitions. Preserve the complete
+installed-wheel/public-HTTP lifecycle, exact replay, policy lineage, retirement
+and authority negative cases. No MCP production code, contract, CI, permission,
+backend or roadmap capability changes. Risk: low test-only current-consumer
+repair. Verify current MCP contribution-policy/unit contracts and rerun the
+exact installed-wheel real-API case against isolated PostgreSQL after the
+already-running native receipt-AUTH proof releases the owned database slot.
+QA/test-delta/CI/docs review should confirm the obsolete input is replaced and
+all distinct failure boundaries remain; human focus is the same real HTTP and
+installed-package proof, with no compatibility path or Finance-completion claim.
