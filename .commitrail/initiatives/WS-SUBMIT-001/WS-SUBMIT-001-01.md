@@ -3855,3 +3855,55 @@ QA/test-delta and docs/CI reviews remain required before pushing this repair.
 This candidate commit does not mark the full submission initiative complete or
 the single draft PR ready. The public API/client/downstream/cleanup/provider
 work listed in the implementation snapshot remains in scope.
+
+### CI repair proof closure
+
+Frozen implementation8f7e5eae3 has these completed receipts:
+- Source/receipt/manifest/port/wire selection:105 passed,168 deselected,54.22s;
+  `/tmp/submission-source-codec-frozen-pure.log` and `.head` bind the exact commit.
+- Atomic acceptance/rollback/concurrent replay:12 passed,27 deselected,580.68s;
+  `/tmp/submission-source-codec-frozen-t4.log/json` binds that commit, Alembic0080
+  and completed isolated database cleanup.
+- Original finalization and Operator/lost-ack recovery:5 passed,34 deselected,
+  460.51s; `/tmp/submission-source-codec-finalization.log/json` has the same
+  exact-commit/database custody. This proves retained Submission/POST dispatch
+  composition, not the entire governed contribution journey.
+- Installed MCP wheel/public-API access-read parity on Python3.12.13:1 passed,
+  100.39s; `/tmp/submission-mcp-wheel-py312.log/json` binds the exact commit and
+  database cleanup. `/tmp/submission-mcp-py312-provenance.json` records the
+  isolated site-packages path and wheel SHA256
+  35f1574d1649e2d72d8c329613f8d1a95552b37b3e54d9c9cc830ee44981afe0.
+
+Pure selection command (backend cwd): pytest
+`tests/checkers/external/test_selected_pre_submit_coordination.py`
+`tests/checkers/external/test_pre_invocation.py`
+`tests/artifacts/test_submission_intake_contracts.py`
+`tests/test_submission_manifest.py`, with `-k 'source_first or historical_pre_values or receipt or invocation or completed_worker or source_validation_dependency or source_profile_preserves or checker_source_contracts or checker_manifest_port' -q --tb=short`.
+T4/T5 used `scripts/run_isolated_tests.py` on
+`tests/artifacts/test_submission_intake_admission.py`, respectively `-k t4` and
+`-k 't5_finalizes or operator_recovers_same or finalization_outbox_recovers'`.
+The wheel proof used the same isolated runner with MCP's test interpreter on
+`mcp_server/tests/integration/test_access_reads.py` and the separately installed
+wheel executable. A temporary diagnostic plugin only enabled API faulthandler
+and copied subprocess logs before fixture cleanup; assertions were unchanged.
+
+The initial wheel attempt failed before API readiness with backend process
+SIGSEGV; its temporary logs had already been removed. A diagnostic replay passed,
+but its accidentally selected Python3.14 wheel environment is excluded from the
+supported-runtime claim. The explicit Python3.12 replay above passed. The first
+startup crash is unreproduced and unroot-caused, not silently declared fixed.
+Keep its `/tmp/submission-mcp-wheel-parity.log/json` failure and later captured
+subprocess diagnostics as an outstanding stability observation for full CI.
+
+ARCH/SEC and QA/test-delta reviewers independently closed PASS on clean8f7e5eae3
+once exact-commit T4/T5/pure receipts were available. Both inspected the relevant
+unchanged owners; adversarial probes rejected forged source facts and detected
+restoring the integer-seconds serialization defect. Documentation/CI review
+passed with no gate suppression or snapshot mismatch. No code changes followed
+those reviews. The earlier19-case portable worker proof does not qualify native
+Smol or AWS. Main was fetched at94334ccf4 with zero missing commits.
+
+This closes only the bounded CI-repair implementation. Full hosted CI, existing
+obsolete PRE consumers, provider cleanup/qualification, public API/client cutover,
+revision/contribution journeys and the specification acceptance audit remain.
+Keep the single PR draft; no merge or complete-initiative claim is authorized.
