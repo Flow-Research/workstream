@@ -1089,6 +1089,10 @@ class SelectedPreSubmitCompletion:
 class SelectedPreSubmitCoordinationPort(Protocol):
     """CHECKERS-owned durable lease operations used by the ART workflow."""
 
+    async def read_source_terminal(self, *, source_operation_id: UUID) -> SelectedPreSubmitTerminalFacts | None:
+        """Read retained terminal evidence after ART authorizes the exact operation."""
+        ...
+
     async def read_current(
         self, facts: SelectedPreSubmitReservationFacts
     ) -> SelectedPreSubmitCurrentFacts | None:

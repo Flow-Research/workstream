@@ -23,7 +23,7 @@ from app.modules.artifacts.api.submission_intake import (
 from app.interfaces.artifacts import (
     ArtifactInputMismatchError, ArtifactLimitExceededError, ArtifactStoreUnavailableError,
 )
-from app.modules.artifacts.intake.streaming import receive_submission_source
+from app.modules.artifacts.intake.streaming import receive_submission_source, SubmissionUploadTimeout
 
 
 OPERATION = UUID("019a0000-0000-7000-8000-000000000001")
@@ -447,7 +447,7 @@ async def test_discard_replay_deadlines_drain_pending_body_read(total_deadline):
         finally:
             stopped.set()
 
-    with pytest.raises(ArtifactStoreUnavailableError):
+    with pytest.raises(SubmissionUploadTimeout):
         await hash_submission_replay(
             chunks(), maximum_raw_bytes=100, declared_raw_bytes=None,
             idle_timeout_seconds=10 if total_deadline else 0.01,
@@ -502,7 +502,7 @@ async def test_non_yielding_ingress_cannot_escape_deadline(path, deadline, stall
 
     idle = 0.01 if deadline == "idle" else 10
     expires = datetime.now(UTC) + timedelta(seconds=0.01 if deadline == "total" else 10)
-    with pytest.raises(ArtifactStoreUnavailableError):
+    with pytest.raises(SubmissionUploadTimeout):
         if path == "replay":
             await hash_submission_replay(chunks(), maximum_raw_bytes=100, declared_raw_bytes=None,
                                          idle_timeout_seconds=idle, deadline_at=expires)
@@ -525,7 +525,7 @@ async def test_non_yielding_final_part_cannot_return_completion_after_deadline()
     async def chunks():
         yield b"abc"
 
-    with pytest.raises(ArtifactStoreUnavailableError):
+    with pytest.raises(SubmissionUploadTimeout):
         await receive_submission_source(BufferedStore(), upload_value(
             upload_deadline_at=datetime.now(UTC) + timedelta(seconds=0.01),
         ), chunks())

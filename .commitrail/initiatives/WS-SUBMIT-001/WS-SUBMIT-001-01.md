@@ -4225,3 +4225,59 @@ client cutover, revision-path integration and full acceptance proof remain pendi
 This intermediate commit is part of the same PR, not a merge checkpoint. Focused
 architecture/security, QA and docs/CI review remains required before claiming this
 public cutover stage complete. The full goal stays active.
+
+### Foreground command composition implementation
+
+The coordinated cutover now composes existing admission/upload/lease/PRE/T4
+owners in intake/foreground_command.py. Explicit transport/runtime values are
+injected; no production defaults or provider qualification are introduced.
+Accepted actor/key replays discard/hash bytes and return the original receipt.
+Known failed foreground work is terminalized only after the lease runner drains
+its child tasks. Accepted, expired or superseded ownership cannot be overwritten.
+Unknown acceptance or terminalization commit outcomes remain unresolved for
+same-key observation instead of inviting new work. Physical charges stay retained.
+
+QC rejection replay uses CHECKERS' retained source-operation terminal evidence,
+with fresh ART read authority, original packet/key/source comparison and existing
+bounded public findings. This reuses immutable stored evidence rather than create
+another findings copy. Read authorization commits before returning QC feedback.
+The command remains private and unwired pending HTTP composition/client cutover.
+
+Initial integration attempts found two test composition mistakes: missing TASK
+context port, then a Local store root differing from the registered namespace.
+Both were corrected without weakening custody checks. Logs remain at
+/tmp/submission-foreground-command-db.log and
+/tmp/submission-foreground-command-full-db.log. Neither run is passing evidence.
+The corrected five-scenario run uses /tmp/submission-foreground-command-corrected-db.log/json;
+its result is pending at this record entry. Scenarios are acceptance/replay,
+infrastructure-failure replay, unsafe-ZIP QC rejection/replay, cancellation and
+unknown accepted-response replay. Portable worker execution is not native Smol.
+
+CI registration adds only intake/foreground_command.py, preserving all691 existing
+assignments and protected base. Full ownership validation and exact-addition test
+passed. Required specialist review, upload-timeout HTTP classification, deployment
+configuration/readiness, public routes, clients and full end-to-end proof remain.
+
+The corrected command selection passed5 tests in83.45s with database cleanup
+complete. Test-structure validation then identified admission-suite growth above
+1200 lines. Moved the three new command test functions and the committed T3
+substitution function into tests/artifacts/test_submission_foreground_command.py.
+The T3 function AST, including decorators and every assertion, is identical to
+87d8cbafb; this is relocation, not weakened/decomposed behavior. The relocated
+module passed all8 parameterized cases in188.95s, isolated PostgreSQL0080 cleanup
+complete (/tmp/submission-foreground-final-db.log/json). Runtime implementation
+was unchanged for those eight scenarios; a later added upload-timeout classification
+has its own supplemental regression, currently pending.
+
+Upload/replay deadline expiration now has a distinct typed streaming exception,
+normalized by the command to submission_upload_timeout. Existing deadline/drain
+assertions now require that type. The complete intake-contract suite passed113
+in9.02s (/tmp/submission-foreground-contracts.log). The dedicated database timeout
+case uses /tmp/submission-foreground-timeout-db.log/json and remains pending here.
+
+Structure validation passes after relocation. The new module remains in the
+shared-foundations family; independent hashing confirmed exactly the previous275
+members plus the new module before updating the276-member fingerprint. All59 CI
+lane catalogue tests passed in6.59s. Ownership validation/exact-addition proof,
+module boundaries, Ruff, Commitrail records, markdown links and diff checks passed.
+These are scoped worktree receipts, not full CI or public end-to-end readiness.

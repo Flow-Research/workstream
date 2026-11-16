@@ -20,7 +20,8 @@ from app.core.cancellation import await_completion_preserving_cancellation
 from app.core.identifiers import new_record_id
 from app.db.errors import integrity_constraint_name
 from app.modules.artifacts.api.submission_archive import MAXIMUM_SUBMISSION_ZIP_BYTES
-from app.modules.artifacts.api.submission_intake import SealedSubmissionSource, SubmissionIntakeMetadata, SubmissionSourceCapacityLimits
+from app.modules.artifacts.api.submission_intake import SealedSubmissionSource, SubmissionIntakeFailure, SubmissionIntakeMetadata, SubmissionSourceCapacityLimits
+from app.modules.artifacts.api.submission_preparation import public_pre_submission_results
 from app.modules.artifacts.intake.repository import IntakeCustodyConflict, SubmissionIntakeRepository
 from app.modules.artifacts.intake.progress import finalization_progress
 from app.modules.artifacts.api.submission_finalization import SubmissionFinalizationProgress
@@ -296,6 +297,24 @@ class ForegroundIntakeAdmission:
                 self._match_acceptance_command(row, request, terminal_digest, accepted=True)
                 return await self._accepted_receipt(session, authority, row)
 
+    async def finish(self, owner: IntakeReservationOwner, *, state: str, failure_code: str) -> bool:
+        """End drained foreground work, retaining all physical source obligations.
+
+        A committed acceptance, another generation or an expired owner cannot be
+        overwritten by a late request exception. Expiry remains the reaper's job.
+        """
+        async with self._root() as (session, _authority):
+            repository = SubmissionIntakeRepository(session, self._tasks(session))
+            try:
+                await repository._owned(owner.operation_id, owner.lease_id, owner.generation)
+            except IntakeCustodyConflict:
+                return False
+            await repository.terminalize(
+                owner.operation_id, owner.lease_id, owner.generation,
+                state=state, failure_code=failure_code,
+            )
+        return True
+
     @staticmethod
     def _match_acceptance_command(row, request, terminal_digest, *, accepted):
         if (row.id != str(request.source.location.operation_id)
@@ -379,6 +398,46 @@ class ForegroundIntakeAdmission:
                                   await self._accepted_receipt(session, authority, row)
                                   if row.state in {"finalization_pending", "finalized"} else None)
         return result
+
+    async def replay_failure(
+        self, metadata: SubmissionIntakeMetadata, *, actor_id: UUID, idempotency_key: UUID,
+        operation_id: UUID, checkers: Callable[[AsyncSession], SelectedPreSubmitCoordinationPort],
+    ) -> dict:
+        """Project retained failure after verified-byte replay and fresh read authority."""
+        async with self._root() as (session, authority):
+            repository = SubmissionIntakeRepository(session, self._tasks(session))
+            row = await repository._lock(operation_id)
+            await authority.authorize_read(IntakeOperationReadFacts(
+                UUID(row.id), UUID(row.project_id), UUID(row.task_id), UUID(row.actor_profile_id)))
+            if (row.actor_profile_id != str(actor_id) or row.idempotency_key != str(idempotency_key)
+                    or row.metadata_sha256 != metadata.metadata_sha256()):
+                raise IntakeCustodyConflict("submission_idempotency_conflict")
+            if row.state in {"finalization_pending", "finalized"}:
+                return await self._accepted_receipt(session, authority, row)
+            if row.state in {"receiving", "pre_checking"}:
+                raise IntakeCustodyConflict("submission_operation_in_progress")
+            if row.raw_sha256 is None or row.raw_byte_count is None:
+                raise IntakeCustodyConflict("submission_operation_terminal")
+            if row.state == "rejected" and row.failure_code == "pre_submission_checker_failed":
+                terminal = await checkers(session).read_source_terminal(source_operation_id=operation_id)
+                if (terminal is None or terminal.execution is None or terminal.execution.eligible
+                        or terminal.lease.reservation.metadata_sha256 != row.metadata_sha256
+                        or terminal.lease.reservation.actor_profile_id != actor_id
+                        or terminal.lease.reservation.idempotency_key != idempotency_key
+                        or terminal.lease.reservation.source != repository._sealed_source(row)):
+                    raise IntakeCustodyConflict("intake_pre_result_mismatch")
+                failure = SubmissionIntakeFailure(
+                    "pre_submission_checker_failed",
+                    pre_submission_results=public_pre_submission_results(terminal.execution),
+                )
+            else:
+                code = row.failure_code if row.failure_code in {
+                    "submission_packet_invalid", "submission_archive_limit_exceeded",
+                    "submission_upload_timeout", "submission_infrastructure_unavailable",
+                } else "submission_operation_terminal"
+                failure = SubmissionIntakeFailure(code)
+        # Commit the current read authorization before returning QC feedback.
+        raise failure
 
     async def replay(
         self, metadata: SubmissionIntakeMetadata, chunks: AsyncIterator[bytes], *,

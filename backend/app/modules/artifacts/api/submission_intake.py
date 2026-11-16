@@ -20,6 +20,15 @@ from app.modules.artifacts.api.submission_archive import MAXIMUM_SUBMISSION_ZIP_
 Sha256 = Annotated[str, Field(pattern=r"^sha256:[0-9a-f]{64}$")]
 
 
+class SubmissionIntakeFailure(RuntimeError):
+    """Bounded public failure classification; never raw provider diagnostics."""
+
+    def __init__(self, code: str, *, pre_submission_results: list[dict[str, object]] | None = None):
+        super().__init__(code)
+        self.code = code
+        self.pre_submission_results = pre_submission_results
+
+
 class _IntakeValue(BaseModel):
     """Closed, frozen values accepting typed Python or canonical JSON input."""
 

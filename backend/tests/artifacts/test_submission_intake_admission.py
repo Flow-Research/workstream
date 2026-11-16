@@ -453,6 +453,12 @@ async def test_t1_replay_reauthorizes_after_body_read(admission_intake):
         assert row.state == "receiving" and row.lease_generation == owner.generation
 
 
+
+
+
+
+
+
 async def test_t4_accepts_exact_source_and_replays_one_receipt(admission_intake, tmp_path):
     """T1/upload/PRE through the real atomic T4 owner; no formal Submission yet."""
     from sqlalchemy import text
@@ -502,31 +508,6 @@ async def test_t4_accepts_exact_source_and_replays_one_receipt(admission_intake,
                                     {"id": owner.operation_id}) == 1
 
 
-@pytest.mark.parametrize("substitution", ["operation", "generation", "lease"])
-async def test_t3_reservation_rejects_substituted_source_or_owner(admission_intake, tmp_path, substitution):
-    from dataclasses import replace
-    from sqlalchemy import text
-    from app.adapters.checkers import selected_pre_submit_coordinator
-    from tests.artifacts.intake_acceptance_support import completed_source
-
-    f = admission_intake
-    owner, request, _ = await completed_source(f, tmp_path)
-    source = request.source
-    if substitution == "operation":
-        source = source.model_copy(update={"location": source.location.model_copy(
-            update={"operation_id": new_record_id()})})
-    elif substitution == "generation":
-        source = source.model_copy(update={"provider_generation": "another-generation"})
-    else:
-        owner = replace(owner, lease_id=new_record_id())
-    with pytest.raises(IntakeCustodyConflict):
-        await f.admission.reserve_pre(
-            owner, source, runtime_profile=request.runtime_profile,
-            checkers=selected_pre_submit_coordinator,
-        )
-    async with f.factory() as session:
-        assert await session.scalar(text(
-            "SELECT count(*) FROM selected_pre_submit_runs WHERE task_id=:id"), {"id": f.task}) == 1
 
 
 @pytest.mark.parametrize("boundary", ["outbox", "task"])

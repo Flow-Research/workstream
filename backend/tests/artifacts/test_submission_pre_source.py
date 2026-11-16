@@ -441,7 +441,7 @@ def _source_runtime(payload, tmp_path, runtime_outcome):
             try:
                 return await self.run(lease, grant)
             except Exception:
-                if runtime_outcome == "completed":
+                if runtime_outcome in {"completed", "rejected"}:
                     import traceback
                     runtime_errors.append(traceback.format_exc())
                 raise
@@ -453,7 +453,7 @@ def _source_runtime(payload, tmp_path, runtime_outcome):
                 body = receipt_body(lease, outcome="infrastructure_failure", reason="capacity_exceeded")
                 body["cleanup"]["disposition"] = "pending"
                 return SelectedPreSubmitInvocationResult.from_canonical_body(body | {"execution": None}, source_contracts=selected_pre_submit_source_contracts())
-            if runtime_outcome == "completed":
+            if runtime_outcome in {"completed", "rejected"}:
                 worker, output, reply, actual_lease = _pre_worker(
                     tmp_path, payload, lease=lease,
                     isolation_override={"runtime": "smolvm", "isolation_mode": "smol-microvm"},
@@ -461,8 +461,12 @@ def _source_runtime(payload, tmp_path, runtime_outcome):
                 assert actual_lease is lease
                 worker.run()
                 output.seek(0)
-                project_frame, completion = _read(output), _read(output)
-                assert project_frame["operation"] == "project" and reply.calls == 1
+                if runtime_outcome == "completed":
+                    project_frame, completion = _read(output), _read(output)
+                    assert project_frame["operation"] == "project" and reply.calls == 1
+                else:
+                    completion = _read(output)
+                    assert completion["payload"]["eligible"] is False and reply.calls == 0
                 assert completion["operation"] == "completed" and output.read() == b""
                 response = receipt_body(lease) | {"execution": completion["payload"]}
                 return SelectedPreSubmitInvocationResult.from_canonical_body(response, source_contracts=selected_pre_submit_source_contracts())

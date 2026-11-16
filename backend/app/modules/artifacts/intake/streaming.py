@@ -30,6 +30,10 @@ from app.modules.artifacts.api.submission_intake import (
 MAXIMUM_INGRESS_CHUNK_BYTES = 1024 * 1024
 
 
+class SubmissionUploadTimeout(ArtifactStoreUnavailableError):
+    """The request's idle/aggregate upload envelope expired, not a QC verdict."""
+
+
 @dataclass(frozen=True, slots=True)
 class RawSubmissionIdentity:
     raw_sha256: str
@@ -102,7 +106,7 @@ async def hash_submission_replay(
         raise ValueError("submission replay limits are invalid")
     remaining = (deadline_at - datetime.now(UTC)).total_seconds()
     if remaining <= 0:
-        raise ArtifactStoreUnavailableError("submission replay deadline expired")
+        raise SubmissionUploadTimeout("submission replay deadline expired")
     receipt = _IngressReceipt()
     try:
         async with asyncio.timeout(remaining):
@@ -112,7 +116,7 @@ async def hash_submission_replay(
                 pass
             _require_deadline(deadline_at)
     except TimeoutError:
-        raise ArtifactStoreUnavailableError("submission replay deadline expired") from None
+        raise SubmissionUploadTimeout("submission replay deadline expired") from None
     return receipt.identity()
 
 
@@ -130,12 +134,12 @@ async def receive_submission_source(
     upload = SubmissionSourceUpload.model_validate(upload)
     remaining = (upload.intent.upload_deadline_at - datetime.now(UTC)).total_seconds()
     if remaining <= 0:
-        raise ArtifactStoreUnavailableError("submission upload deadline expired")
+        raise SubmissionUploadTimeout("submission upload deadline expired")
     try:
         async with asyncio.timeout(remaining):
             return await _receive_parts(store, upload, chunks, operation_evidence)
     except TimeoutError:
-        raise ArtifactStoreUnavailableError("submission upload deadline expired") from None
+        raise SubmissionUploadTimeout("submission upload deadline expired") from None
 
 
 async def _receive_parts(
