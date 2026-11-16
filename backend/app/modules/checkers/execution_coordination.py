@@ -3,7 +3,7 @@
 import json
 from uuid import UUID
 
-from sqlalchemy import select, text
+from sqlalchemy import select, text, func
 from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,6 +15,7 @@ from app.modules.checkers.api.execution import (
     CheckerRetrySourceUnavailable,
     CompletedEvaluation,
     EvaluationReservation,
+    EvaluationProgress,
     ReservedEvaluation,
     EvaluationCompletion,
     EvaluationTaskGuard,
@@ -39,7 +40,9 @@ from app.modules.checkers.execution_repository import (
     stored_result,
     stored_request,
 )
-from app.modules.checkers.models import CheckerRun, CheckerSubmissionFence
+from app.modules.outbox.api import OutboxAppendInput
+from app.modules.checkers.execution_results import evaluation_completion_event
+from app.modules.checkers.models import CheckerRun, CheckerSubmissionFence, CheckerRetryReceipt
 
 
 class EvaluationCoordinator:
@@ -180,6 +183,90 @@ class EvaluationCoordinator:
         ):
             raise CheckerExecutionUnavailable("checker_reservation_unavailable")
         return ReservedEvaluation(request=request, reservation=reservation(run))
+
+    async def read_current_progress(
+        self, *, project_id: UUID, task_id: UUID, submission_id: UUID,
+        original_request_id: UUID,
+    ) -> EvaluationProgress:
+        """Read the exact Submission fence; never follow the task's newest attempt."""
+        original = await self.read_reserved_evaluation(
+            project_id=project_id, task_id=task_id, submission_id=submission_id,
+            request_id=original_request_id,
+        )
+        unavailable = "checker_progress_unavailable"
+        if original.reservation.evaluation_generation != 1:
+            raise CheckerExecutionUnavailable(unavailable)
+        run = await self._session.scalar(select(CheckerRun).join(
+            CheckerSubmissionFence, CheckerSubmissionFence.current_run_id == CheckerRun.id,
+        ).where(
+            CheckerSubmissionFence.submission_id == str(submission_id),
+            CheckerRun.submission_id == str(submission_id),
+            CheckerRun.project_id == str(project_id), CheckerRun.task_id == str(task_id),
+            CheckerRun.phase == "post_submission",
+        ).with_for_update(read=True, of=(CheckerSubmissionFence, CheckerRun))
+          .execution_options(populate_existing=True))
+        if run is None:
+            raise CheckerExecutionUnavailable(unavailable)
+        current = await self.read_reserved_evaluation(
+            project_id=project_id, task_id=task_id, submission_id=submission_id,
+            request_id=UUID(run.evaluation_request_id),
+        )
+        if (current.request.assignment_id != original.request.assignment_id
+                or current.request.submission_version != original.request.submission_version):
+            raise CheckerExecutionUnavailable(unavailable)
+        retry_event_id = None
+        delivery_event = None
+        if current.reservation.attempt_id == original.reservation.attempt_id:
+            if run.supersedes_checker_run_id is not None:
+                raise CheckerExecutionUnavailable(unavailable)
+        else:
+            receipt = await self._session.scalar(select(CheckerRetryReceipt).where(
+                CheckerRetryReceipt.successor_run_id == run.id,
+                CheckerRetryReceipt.project_id == str(project_id),
+                CheckerRetryReceipt.task_id == str(task_id),
+                CheckerRetryReceipt.submission_id == str(submission_id),
+                CheckerRetryReceipt.source_run_id == run.supersedes_checker_run_id,
+                CheckerRetryReceipt.successor_generation == run.evaluation_generation,
+            ))
+            if receipt is None or run.evaluation_generation <= 1:
+                raise CheckerExecutionUnavailable(unavailable)
+            retained = await self.read_retry_delivery(
+                project_id=project_id, submission_id=submission_id, event_id=receipt.event_id,
+            )
+            if retained is None or retained.request != current.request:
+                raise CheckerExecutionUnavailable(unavailable)
+            retry_event_id = receipt.event_id
+            expected = retained.expected_event
+            delivery_event = OutboxAppendInput(
+                **expected.model_dump(exclude={"payload_json", "payload_digest"}),
+                project_id=project_id, payload=json.loads(expected.payload_json),
+            )
+        terminal = run.status in {"completed", "infrastructure_failed"}
+        if terminal:
+            result = stored_result(run)
+            if (result.outcome != run.status or run.finalize_evidence_id is None
+                    or (run.status == "completed") != (run.completion_event_id is not None)):
+                raise CheckerExecutionUnavailable(unavailable)
+            if run.status == "completed":
+                if run.execute_evidence_id is None:
+                    raise CheckerExecutionUnavailable(unavailable)
+                delivery_event = evaluation_completion_event(
+                    current.request, result, attempt_id=UUID(run.id),
+                    execute_evidence_id=UUID(run.execute_evidence_id),
+                    finalize_evidence_id=UUID(run.finalize_evidence_id),
+                    routing_recommendation=run.routing_recommendation,
+                )
+        elif run.completion_event_id is not None:
+            raise CheckerExecutionUnavailable(unavailable)
+        now = await self._session.scalar(select(func.clock_timestamp()))
+        live = (run.status == "running" and run.worker_lease_id is not None
+                and run.worker_lease_generation > 0 and run.worker_lease_expires_at is not None
+                and run.worker_lease_expires_at > now)
+        return EvaluationProgress(
+            current=current, status=run.status, live_worker_lease=live,
+            retry_event_id=retry_event_id, completion_event_id=run.completion_event_id,
+            delivery_event=delivery_event,
+        )
 
     async def read_retry_delivery(
         self, *, project_id: UUID, submission_id: UUID, event_id: UUID,

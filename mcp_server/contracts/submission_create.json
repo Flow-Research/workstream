@@ -1,96 +1,7 @@
 {
-  "canonical_sha256": "1a81a3241210182829f40a72634eae30189abe5aaf983f8530bbd0adb46f4d0b",
+  "canonical_sha256": "024903204b1e82816bd0b9f9cdfcf3b5336e91d967840a6d411b4bc13aa91d75",
   "components": {
     "schemas": {
-      "AdmissionBackedSubmissionCreate": {
-        "additionalProperties": false,
-        "description": "Contributor packet and selectors for the canonical ready-admission POST.",
-        "properties": {
-          "admission_id": {
-            "format": "uuid",
-            "title": "Admission Id",
-            "type": "string"
-          },
-          "assignment_id": {
-            "format": "uuid",
-            "title": "Assignment Id",
-            "type": "string"
-          },
-          "contributor_attestation": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Contributor Attestation"
-          },
-          "predecessor_submission_id": {
-            "anyOf": [
-              {
-                "format": "uuid",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Predecessor Submission Id"
-          },
-          "summary": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Summary"
-          }
-        },
-        "required": [
-          "admission_id",
-          "assignment_id"
-        ],
-        "title": "AdmissionBackedSubmissionCreate",
-        "type": "object"
-      },
-      "AdmissionBackedSubmissionResponse": {
-        "additionalProperties": false,
-        "description": "Stable Workstream result without provider or scratch coordinates.",
-        "properties": {
-          "admission_id": {
-            "format": "uuid",
-            "title": "Admission Id",
-            "type": "string"
-          },
-          "evaluation_request_id": {
-            "format": "uuid",
-            "title": "Evaluation Request Id",
-            "type": "string"
-          },
-          "submission_id": {
-            "format": "uuid",
-            "title": "Submission Id",
-            "type": "string"
-          },
-          "submission_version": {
-            "title": "Submission Version",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "submission_id",
-          "submission_version",
-          "admission_id",
-          "evaluation_request_id"
-        ],
-        "title": "AdmissionBackedSubmissionResponse",
-        "type": "object"
-      },
       "ApiError": {
         "additionalProperties": false,
         "description": "Canonical machine-readable API error.",
@@ -149,12 +60,78 @@
         ],
         "title": "ApiErrorResponse",
         "type": "object"
+      },
+      "SubmissionAcceptedResponse": {
+        "additionalProperties": false,
+        "description": "Stable T4 snapshot; Submission/evaluation IDs do not exist until T5.",
+        "properties": {
+          "accepted_at": {
+            "format": "date-time",
+            "title": "Accepted At",
+            "type": "string"
+          },
+          "assignment_id": {
+            "format": "uuid",
+            "title": "Assignment Id",
+            "type": "string"
+          },
+          "operation_id": {
+            "format": "uuid",
+            "title": "Operation Id",
+            "type": "string"
+          },
+          "pre_submission_results": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Pre Submission Results",
+            "type": "array"
+          },
+          "processing_stage_at_acceptance": {
+            "const": "finalization_pending",
+            "title": "Processing Stage At Acceptance",
+            "type": "string"
+          },
+          "replayed": {
+            "title": "Replayed",
+            "type": "boolean"
+          },
+          "status": {
+            "const": "accepted",
+            "title": "Status",
+            "type": "string"
+          },
+          "task_id": {
+            "format": "uuid",
+            "title": "Task Id",
+            "type": "string"
+          },
+          "task_status_at_acceptance": {
+            "const": "evaluation_pending",
+            "title": "Task Status At Acceptance",
+            "type": "string"
+          }
+        },
+        "required": [
+          "operation_id",
+          "task_id",
+          "assignment_id",
+          "status",
+          "accepted_at",
+          "task_status_at_acceptance",
+          "processing_stage_at_acceptance",
+          "replayed",
+          "pre_submission_results"
+        ],
+        "title": "SubmissionAcceptedResponse",
+        "type": "object"
       }
     }
   },
   "operation": {
-    "description": "Consume one verified admission through the existing atomic TASK writer.",
-    "operationId": "create_admission_backed_submission_api_v1_tasks__task_id__submissions_post",
+    "description": "Acknowledge only committed acceptance, with no fabricated T5 identifiers.",
+    "operationId": "submit_source_api_v1_tasks__task_id__submissions_post",
     "parameters": [
       {
         "in": "path",
@@ -163,6 +140,69 @@
         "schema": {
           "format": "uuid",
           "title": "Task Id",
+          "type": "string"
+        }
+      },
+      {
+        "in": "header",
+        "name": "Idempotency-Key",
+        "required": true,
+        "schema": {
+          "format": "uuid",
+          "type": "string"
+        }
+      },
+      {
+        "in": "header",
+        "name": "X-Task-Assignment-Id",
+        "required": true,
+        "schema": {
+          "format": "uuid",
+          "type": "string"
+        }
+      },
+      {
+        "in": "header",
+        "name": "X-Submission-Summary",
+        "required": false,
+        "schema": {
+          "maxLength": 65536,
+          "type": "string"
+        }
+      },
+      {
+        "in": "header",
+        "name": "X-Contributor-Attestation",
+        "required": false,
+        "schema": {
+          "maxLength": 65536,
+          "type": "string"
+        }
+      },
+      {
+        "in": "header",
+        "name": "X-Predecessor-Submission-Id",
+        "required": false,
+        "schema": {
+          "format": "uuid",
+          "type": "string"
+        }
+      },
+      {
+        "in": "header",
+        "name": "X-Revision-Preparation-Id",
+        "required": false,
+        "schema": {
+          "format": "uuid",
+          "type": "string"
+        }
+      },
+      {
+        "in": "header",
+        "name": "X-Revision-Preparation-Sha256",
+        "required": false,
+        "schema": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
           "type": "string"
         }
       },
@@ -191,20 +231,21 @@
     ],
     "requestBody": {
       "content": {
-        "application/json": {
+        "application/zip": {
           "schema": {
-            "$ref": "#/components/schemas/AdmissionBackedSubmissionCreate"
+            "format": "binary",
+            "type": "string"
           }
         }
       },
       "required": true
     },
     "responses": {
-      "201": {
+      "202": {
         "content": {
           "application/json": {
             "schema": {
-              "$ref": "#/components/schemas/AdmissionBackedSubmissionResponse"
+              "$ref": "#/components/schemas/SubmissionAcceptedResponse"
             }
           }
         },
@@ -310,7 +351,26 @@
         }
       },
       "404": {
-        "description": "Submission or contributor authority unavailable",
+        "description": "Task or contributor authority unavailable",
+        "headers": {
+          "X-Correlation-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "X-Request-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "408": {
+        "description": "Upload idle or total deadline expired",
         "headers": {
           "X-Correlation-ID": {
             "required": true,
@@ -329,7 +389,45 @@
         }
       },
       "409": {
-        "description": "Admission, predecessor or packet conflicts",
+        "description": "Operation, idempotency or governed revision conflict",
+        "headers": {
+          "X-Correlation-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "X-Request-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "413": {
+        "description": "Raw ZIP exceeds the permitted limit",
+        "headers": {
+          "X-Correlation-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "X-Request-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "415": {
+        "description": "Unsupported media type or content encoding",
         "headers": {
           "X-Correlation-ID": {
             "required": true,
@@ -348,7 +446,26 @@
         }
       },
       "422": {
-        "description": "Invalid submission packet",
+        "description": "Invalid packet or bounded pre-submission QC feedback",
+        "headers": {
+          "X-Correlation-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "X-Request-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "429": {
+        "description": "Submission capacity exhausted",
         "headers": {
           "X-Correlation-ID": {
             "required": true,
@@ -393,7 +510,7 @@
         }
       },
       "503": {
-        "description": "Submission infrastructure unavailable",
+        "description": "Infrastructure unavailable or acceptance outcome unknown",
         "headers": {
           "X-Correlation-ID": {
             "required": true,
@@ -417,7 +534,7 @@
         "HTTPBearer": []
       }
     ],
-    "summary": "Create Admission Backed Submission",
+    "summary": "Submit Source",
     "tags": [
       "tasks"
     ],
@@ -428,6 +545,6 @@
     "method": "POST",
     "openapi_version": "3.1.0",
     "path": "/api/v1/tasks/{task_id}/submissions",
-    "repository_sha": "f0431385573eb53353c5ffc3c6cdb6a93d206b73"
+    "repository_sha": "53d369b4ceb9c19f621d95ece18e6bb91284b651"
   }
 }

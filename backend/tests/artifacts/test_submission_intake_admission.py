@@ -800,8 +800,8 @@ async def test_t4_cancellation_drains_commit_and_keeps_accepted_custody(admissio
     assert receipt["status"] == "accepted" and receipt["replayed"] is True
 
 
-@pytest.mark.parametrize("expired_claim", [False, True])
-async def test_t5_finalizes_same_source_with_one_submission_and_post_dispatch(admission_intake, tmp_path, expired_claim):
+@pytest.mark.parametrize("expired_claim,post_failure", [(False, False), (True, False), (False, True)])
+async def test_t5_finalizes_same_source_with_one_submission_and_post_dispatch(admission_intake, tmp_path, monkeypatch, expired_claim, post_failure):
     from datetime import timedelta
     from sqlalchemy import text
     from app.adapters.artifacts import submission_admission_consumption_port
@@ -862,6 +862,41 @@ async def test_t5_finalizes_same_source_with_one_submission_and_post_dispatch(ad
                 {"id": owner.operation_id}) == 1
         # Removing retained provenance must fail at commit even when all other
         # replica coordinates remain unchanged.
+        from app.adapters.tasks import submission_history_repository
+        from app.modules.tasks.api.submission_history import SubmissionOperationAssociationUnavailable
+        from app.adapters.checkers import evaluation_coordinator
+        from app.modules.checkers.api.execution import CheckerExecutionUnavailable
+        evaluation_selectors = dict(project_id=f.project, task_id=f.task,
+                                    submission_id=result.submission_id,
+                                    original_request_id=result.evaluation_request_id)
+        async with f.factory.begin() as session:
+            coordinator = evaluation_coordinator(session)
+            queued = await coordinator.read_current_progress(**evaluation_selectors)
+            assert queued.status == "queued" and not queued.live_worker_lease
+            assert queued.retry_event_id is queued.completion_event_id is None
+            for field in evaluation_selectors:
+                with pytest.raises(CheckerExecutionUnavailable):
+                    await coordinator.read_current_progress(**(evaluation_selectors | {field: new_record_id()}))
+        selectors = dict(project_id=f.project, task_id=f.task, assignment_id=request.assignment_id,
+                         contributor_id=request.actor_profile_id, submission_id=result.submission_id,
+                         admission_id=result.admission_id)
+        async with f.factory.begin() as session:
+            history = submission_history_repository(session)
+            outcome = await history.read_operation_outcome(**selectors)
+            assert outcome.submission_id == result.submission_id
+            assert outcome.submission_version == result.submission_version
+            assert outcome.evaluation_request_id == result.evaluation_request_id
+            assert outcome.status == "evaluation_pending"
+            from app.modules.artifacts.intake.progress import evaluation_delivery_progress
+            from app.adapters.outbox import finalized_unknown_deliveries
+            pending = await evaluation_delivery_progress(
+                outcome.evaluation_event_id, outcome.evaluation_event, queued,
+                outbox_append(session), finalized_unknown_deliveries(session),
+            )
+            assert pending.state == "pending"
+            for field in selectors:
+                with pytest.raises(SubmissionOperationAssociationUnavailable):
+                    await history.read_operation_outcome(**(selectors | {field: new_record_id()}))
         from sqlalchemy.exc import IntegrityError
         async with f.factory() as session:
             with pytest.raises(IntegrityError, match="retained source ownership is immutable"):
@@ -884,7 +919,59 @@ async def test_t5_finalizes_same_source_with_one_submission_and_post_dispatch(ad
                     async with session.begin():
                         await session.execute(text(statement), {"id": identity})
         from tests.artifacts.intake_post_support import exercise_source_post
-        await exercise_source_post(f, result, store, request.source, tmp_path)
+        from tests.checkers.execution.support import ControlledSelectedExecution
+        running_observations = []
+        original_execute = ControlledSelectedExecution.execute
+        async def observe_running(runtime, execution_request, grant):
+            async with f.factory.begin() as session:
+                running = await evaluation_coordinator(session).read_current_progress(**evaluation_selectors)
+                assert running.status == "running" and running.live_worker_lease
+                assert running.completion_event_id is None
+                running_observations.append(running)
+            return await original_execute(runtime, execution_request, grant)
+        with monkeypatch.context() as patch:
+            patch.setattr(ControlledSelectedExecution, "execute", observe_running)
+            if post_failure:
+                from app.interfaces.artifacts import ArtifactObjectMissingError
+                def missing_source(*_args, **_kwargs):
+                    raise ArtifactObjectMissingError("controlled source unavailable")
+                patch.setattr(type(store), "open_source", missing_source)
+            await exercise_source_post(f, result, store, request.source, tmp_path, missing=post_failure)
+        assert len(running_observations) == (0 if post_failure else 1)
+        async with f.factory.begin() as session:
+            # Completed checker evidence alone does not change the governed attempt.
+            after_post = await submission_history_repository(session).read_operation_outcome(**selectors)
+            assert after_post == outcome
+            completed = await evaluation_coordinator(session).read_current_progress(**evaluation_selectors)
+            assert completed.status == ("infrastructure_failed" if post_failure else "completed")
+            assert not completed.live_worker_lease and completed.current == queued.current
+            assert (completed.completion_event_id is None) is post_failure
+            assert completed.retry_event_id is None
+            if not post_failure:
+                pending_completion = await evaluation_delivery_progress(
+                    completed.completion_event_id, completed.delivery_event, completed,
+                    outbox_append(session), finalized_unknown_deliveries(session),
+                )
+                assert pending_completion.state == "pending"
+        if post_failure:
+            from app.adapters.checkers import checker_retry_service
+            from tests.checkers.execution.test_checker_retry import _operator_for, _command
+            harness = SimpleNamespace(factory=f.factory, request=queued.current.request, created=result)
+            operator = await _operator_for(harness)
+            async with f.factory.begin() as session:
+                retry = await checker_retry_service(session, operator).retry(_command(harness, operator))
+            async with f.factory.begin() as session:
+                retrying = await evaluation_coordinator(session).read_current_progress(**evaluation_selectors)
+                assert retrying.status == "queued" and not retrying.live_worker_lease
+                assert retrying.current.reservation.attempt_id == retry.successor.run_id
+                assert retrying.retry_event_id == retry.successor.event_id
+                assert retrying.completion_event_id is None
+                pending_retry = await evaluation_delivery_progress(
+                    retrying.retry_event_id, retrying.delivery_event, retrying,
+                    outbox_append(session), finalized_unknown_deliveries(session),
+                )
+                assert pending_retry.state == "pending"
+
     finally:
         store.close()
 

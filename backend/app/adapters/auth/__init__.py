@@ -484,6 +484,13 @@ def post_submit_execution_authority(session):
     return PostSubmitExecutionAuthorization(session)
 
 
+def submission_intake_authority(session, context):
+    """Compose current contributor reservation and operation-read authority."""
+    from app.modules.authorization.submission_intake import SubmissionIntakeAuthorization
+
+    return SubmissionIntakeAuthorization(session, context)
+
+
 def selected_pre_submit_authority(session):
     """Compose fixed selected-PRE execute/finalize authority."""
     from app.modules.authorization.pre_submit_authorization import (

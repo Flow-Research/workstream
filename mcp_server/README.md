@@ -68,9 +68,9 @@ An independently installed adapter exposing 132 tools under the caller's authori
   projections plus deliberate operator retry, reconciliation and registration.
 - Nine operator-artifact tools cover readiness, bindings, replicas, receipts,
   verification/recovery, admission usage and audit events.
-- Seventeen task-execution tools cover bounded preparation ZIPs, contributor and
+- Sixteen task-execution tools cover bounded submission ZIPs, contributor and
   manager task context, screen/release/claim, guide-document reads and
-  admission-backed submission creation/history.
+  submission acceptance and immutable history.
 - Twenty-three project, task-management, import, audit, service-actor and model
   operations complete the current public product catalogue. Task-import source
   content uses an 8 MiB exact-byte boundary; health routes remain operational
@@ -220,12 +220,12 @@ Task execution uses separate contributor and manager read tools so the adapter
 never chooses an authority path on the caller's behalf. Screen, release and claim
 require typed UUID idempotency keys. Claim atomically assigns and starts a ready
 task through one request, returning `in_progress` and the started assignment.
-Submission creation consumes caller-supplied admission and assignment
-identifiers and stays unkeyed because that is the current backend contract.
-Preparation accepts a bounded Base64 ZIP, decodes it once and forwards the
+Submission creation accepts a bounded Base64 ZIP, decodes it once and forwards the
 caller's typed assignment/key and optional submission or revision fields as the
-fixed backend headers. Revision preparation ID and digest must be supplied
-together. Workstream owns ZIP validation, pre-submit checks, replay and all task
+fixed backend headers. The raw-ZIP POST returns a `202` acceptance snapshot with
+an operation ID; formal Submission creation and evaluation continue durably.
+Revision preparation ID and digest are both required with a predecessor and
+forbidden for initial submission. Workstream owns ZIP validation, pre-submit checks, replay and all task
 state changes. A checker rejection is a normal safe tool failure; an unverified
 mutation success remains uncertain and is never retried automatically.
 

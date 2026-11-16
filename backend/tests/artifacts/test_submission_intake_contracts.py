@@ -41,6 +41,26 @@ def metadata(**updates):
     })
 
 
+@pytest.mark.parametrize("missing", ["capacity", "runtime", "upload_total_seconds", "upload_idle_seconds",
+    "foreground_lease_seconds", "heartbeat_seconds", "replay_total_seconds", "part_bytes"])
+def test_submission_execution_profile_requires_explicit_deployment_values(missing):
+    from app.modules.artifacts.api.submission_command import SubmissionExecutionProfile
+    from app.modules.checkers.api.source_contracts import source_contracts_context
+    from app.adapters.artifacts import selected_pre_submit_source_contracts
+    from tests.checkers.external.test_selected_pre_submit_coordination import _source_reservation
+
+    values = dict(capacity={"maximum_total_bytes": 1_000_000},
+        runtime=_source_reservation().runtime_profile.model_dump(mode="json"),
+        upload_total_seconds=300.0, upload_idle_seconds=10.0, foreground_lease_seconds=60.0,
+        heartbeat_seconds=10.0, replay_total_seconds=30.0, part_bytes=5 * 1024**2)
+    context = source_contracts_context(selected_pre_submit_source_contracts())
+    assert SubmissionExecutionProfile.model_validate(values, context=context).upload_total_seconds == 300.0
+    del values[missing]
+    with pytest.raises(ValidationError) as caught:
+        SubmissionExecutionProfile.model_validate(values, context=context)
+    assert any(error["loc"] == (missing,) and error["type"] == "missing" for error in caught.value.errors())
+
+
 def location(**updates):
     return SubmissionSourceLocation.model_validate({
         "operation_id": OPERATION, "namespace_id": "primary",
@@ -577,3 +597,62 @@ def test_checker_source_contracts_preserve_closed_limits_and_source_wire(changed
     del source_body["media_type"]
     with pytest.raises(ValueError, match="not canonical"):
         contracts.parse_source(source_body)
+
+
+@pytest.mark.parametrize("changed", [None, "original_event_id", "original_claim_generation",
+    "original_payload_digest", "original_event_type", "evaluation_request_id", "checker_run_id",
+    "evaluation_generation", "retained_digest"])
+async def test_evaluation_progress_follows_only_exact_reconciliation_child(changed):
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+    from app.core.hashing import canonical_json_hash
+    from app.modules.artifacts.intake.progress import evaluation_delivery_progress
+    from app.modules.artifacts.intake.repository import IntakeCustodyConflict
+    from app.modules.checkers.api.delivery_reconciliation import PostSubmitDeliveryChildPayload
+    from app.modules.outbox.api import OutboxAppendInput
+    event_id, child_id, project, run, request = (new_record_id() for _ in range(5))
+    event = OutboxAppendInput(event_type="PostSubmissionEvaluationRequested", event_version=1,
+        aggregate_type="submission", aggregate_id=new_record_id(), project_id=project,
+        correlation_id=str(request), idempotency_key="progress-fixture", payload={})
+    resource = {"resource_context": {}}
+    payload = PostSubmitDeliveryChildPayload(
+        original_event_id=event_id, original_claim_generation=2, original_payload_digest=canonical_json_hash(event.payload),
+        original_event_type=event.event_type, original_event_version=1,
+        evaluation_request_id=request, checker_run_id=run, evaluation_generation=1,
+        classification="retry_safe", reconciliation_request_id=new_record_id(), request_digest=SHA,
+        authorization_decision_id=new_record_id(),
+        authorization_resource_digest=canonical_json_hash(resource),
+        authorization_resource_json=json.dumps(resource, sort_keys=True, separators=(",", ":")),
+        operator_actor_profile_id=new_record_id(), operator_identity_link_id=new_record_id(),
+    )
+    body = payload.model_dump(mode="json")
+    if changed == "retained_digest":
+        body["original_payload_digest"] = SHA
+    elif changed is not None:
+        body[changed] = (3 if changed.endswith("generation") else
+                         "sha256:" + "b" * 64 if changed.endswith("digest") else
+                         "PostSubmissionEvaluationCompleted" if changed.endswith("type") else
+                         str(new_record_id()))
+    original = SimpleNamespace(state="dead_letter", error_code="INVOKE_OUTCOME_UNKNOWN")
+    child = SimpleNamespace(state="pending", error_code=None)
+    events = SimpleNamespace(observe_delivery=AsyncMock(side_effect=[original, child]))
+    retained = SimpleNamespace(
+        envelope=SimpleNamespace(claim=SimpleNamespace(event_id=event_id, project_id=project,
+            claim_generation=2, payload_digest=SHA if changed == "retained_digest" else canonical_json_hash(event.payload))),
+        child=SimpleNamespace(event_id=child_id, payload_json=json.dumps(body)),
+    )
+    deliveries = SimpleNamespace(read_finalized_unknown=AsyncMock(return_value=retained))
+    evaluation = SimpleNamespace(current=SimpleNamespace(
+        request=SimpleNamespace(evaluation_request_id=request),
+        reservation=SimpleNamespace(attempt_id=run, evaluation_generation=1),
+    ))
+    if changed:
+        with pytest.raises(IntakeCustodyConflict):
+            await evaluation_delivery_progress(event_id, event, evaluation, events, deliveries)
+        assert events.observe_delivery.await_count == 1
+    else:
+        assert await evaluation_delivery_progress(event_id, event, evaluation, events, deliveries) is child
+        observed_id, expected = events.observe_delivery.await_args.args
+        assert observed_id == child_id and expected.payload == payload.model_dump(mode="json")
+        assert expected.causation_event_id == event_id and expected.aggregate_id == event_id
+    assert deliveries.read_finalized_unknown.await_args.kwargs["lock"] is False

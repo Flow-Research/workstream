@@ -7,6 +7,8 @@ from sqlalchemy import Subquery
 from typing import Literal, Protocol
 from uuid import UUID
 
+from app.modules.outbox.api import OutboxAppendInput
+
 HistoryKind = Literal["task_submission_history", "submission_history", "checker_history"]
 
 
@@ -135,6 +137,22 @@ class ManagementSubmissionHistoryPage(BaseModel):
     next_cursor: str | None
 
 
+class SubmissionOperationAssociationUnavailable(RuntimeError):
+    """The operation's exact finalized TASK association cannot be proven."""
+
+
+@dataclass(frozen=True, slots=True)
+class SubmissionOperationOutcome:
+    """One retained attempt and original dispatch, never current-task status."""
+
+    submission_id: UUID
+    submission_version: int
+    status: SubmissionAttemptStatus
+    evaluation_request_id: UUID
+    evaluation_event_id: UUID
+    evaluation_event: OutboxAppendInput
+
+
 class SubmissionHistoryReadPort(Protocol):
     """TASK selects ownership before projection; the caller owns the transaction."""
 
@@ -153,3 +171,11 @@ class SubmissionHistoryReadPort(Protocol):
         submission_id: UUID | None = None, limit: int = 25,
         after: tuple[int, UUID] | None = None,
     ) -> tuple[list[ContributorSubmissionHistory | ManagementSubmissionHistory], bool]: ...
+
+
+    async def read_operation_outcome(
+        self, *, project_id: UUID, task_id: UUID, assignment_id: UUID,
+        contributor_id: UUID, submission_id: UUID, admission_id: UUID,
+    ) -> SubmissionOperationOutcome:
+        """Read exact finalized association after caller-owned authorization."""
+        ...

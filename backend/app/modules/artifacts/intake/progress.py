@@ -2,6 +2,8 @@
 
 from uuid import UUID
 
+from app.core.hashing import canonical_json_hash
+
 from app.modules.artifacts.api.submission_finalization import SubmissionFinalizationProgress
 from app.modules.artifacts.intake.acceptance import finalization_event
 from app.modules.artifacts.intake.repository import IntakeCustodyConflict
@@ -10,6 +12,10 @@ from app.modules.artifacts.api.submission_recovery import (
     FINALIZATION_RECOVERY_EVENT, FINALIZATION_RECOVERY_SOURCES, SubmissionRecoveryPayload,
 )
 from app.modules.outbox.api import OutboxAppendPort, OutboxIdempotencyConflict, DeliveryUnavailable
+from app.modules.checkers.api.delivery_reconciliation import (
+    POST_SUBMIT_DELIVERY_RECONCILIATION_EVENT, POST_SUBMIT_DELIVERY_SUPPORTED_EVENTS,
+    PostSubmitDeliveryChildPayload, post_submit_reconciliation_event,
+)
 
 
 async def finalization_progress(row, events: OutboxAppendPort, deliveries) -> SubmissionFinalizationProgress | None:
@@ -51,3 +57,40 @@ async def finalization_progress(row, events: OutboxAppendPort, deliveries) -> Su
         next_retry_at=delivery.next_attempt_at if not finalized else None,
         attempt_count=attempt_count, stalled_reason=delivery.error_code if stalled else None,
     )
+
+
+async def evaluation_delivery_progress(event_id, event, evaluation, events, deliveries):
+    """Observe one exact current evaluation delivery, including its recovery child."""
+    unavailable = "submission_evaluation_progress_unavailable"
+    try:
+        observation = await events.observe_delivery(event_id, event)
+        if observation.state != "dead_letter" or observation.error_code != "INVOKE_OUTCOME_UNKNOWN":
+            return observation
+        retained = await deliveries.read_finalized_unknown(
+            project_id=event.project_id, event_id=event_id,
+            event_types=POST_SUBMIT_DELIVERY_SUPPORTED_EVENTS,
+            child_event_type=POST_SUBMIT_DELIVERY_RECONCILIATION_EVENT, lock=False,
+        )
+        if retained is None:
+            raise IntakeCustodyConflict(unavailable)
+        if retained.child is None:
+            return observation
+        payload = PostSubmitDeliveryChildPayload.model_validate_json(retained.child.payload_json)
+        claim = retained.envelope.claim
+        request, reservation = evaluation.current.request, evaluation.current.reservation
+        if (payload.original_event_id != event_id or claim.event_id != event_id
+                or claim.project_id != event.project_id
+                or payload.original_claim_generation != claim.claim_generation
+                or payload.original_payload_digest != claim.payload_digest
+                or claim.payload_digest != canonical_json_hash(event.payload)
+                or payload.original_event_type != event.event_type
+                or payload.original_event_version != event.event_version
+                or payload.evaluation_request_id != request.evaluation_request_id
+                or payload.checker_run_id != reservation.attempt_id
+                or payload.evaluation_generation != reservation.evaluation_generation):
+            raise IntakeCustodyConflict(unavailable)
+        return await events.observe_delivery(
+            retained.child.event_id, post_submit_reconciliation_event(event.project_id, payload),
+        )
+    except (OutboxIdempotencyConflict, DeliveryUnavailable, ValueError) as exc:
+        raise IntakeCustodyConflict(unavailable) from exc

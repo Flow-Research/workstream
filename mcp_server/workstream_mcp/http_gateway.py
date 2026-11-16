@@ -363,11 +363,6 @@ _CHECKER_ARTIFACT_MUTATIONS = frozenset(
 )
 
 TASK_EXECUTION_OPERATIONS = {
-    "preparation_create": (
-        "POST",
-        "/api/v1/tasks/{task_id}/submission-bundle-preparations",
-        202,
-    ),
     "preparations_list": (
         "GET",
         "/api/v1/tasks/{task_id}/submission-bundle-preparations",
@@ -393,7 +388,7 @@ TASK_EXECUTION_OPERATIONS = {
         "/api/v1/tasks/{task_id}/guide/documents/{document_id}/content",
         200,
     ),
-    "submission_create": ("POST", "/api/v1/tasks/{task_id}/submissions", 201),
+    "submission_create": ("POST", "/api/v1/tasks/{task_id}/submissions", 202),
     "task_submissions_list": ("GET", "/api/v1/tasks/{task_id}/submissions", 200),
     "submission_get": ("GET", "/api/v1/submissions/{submission_id}", 200),
     "management_task_submissions_list": (
@@ -419,7 +414,6 @@ TASK_EXECUTION_OPERATIONS = {
 }
 _TASK_EXECUTION_MUTATIONS = frozenset(
     {
-        "preparation_create",
         "task_screen",
         "task_release",
         "task_claim",
@@ -1511,7 +1505,7 @@ class WorkstreamGateway:
             if value is not None and key not in excluded
         }
         extra_headers: dict[str, str] | None = None
-        if name == "preparation_create":
+        if name == "submission_create":
             if upload is None:
                 return GatewayResult(failure=SafeFailure("invalid_tool_input", status=400))
             extra_headers = {"X-Task-Assignment-Id": arguments["assignment_id"]}
@@ -1539,10 +1533,10 @@ class WorkstreamGateway:
             expected_status=expected_status,
             mutation=mutation,
             raw_body=upload,
-            content_type="application/zip" if name == "preparation_create" else None,
+            content_type="application/zip" if name == "submission_create" else None,
             operation_timeout_seconds=(
                 self._settings.document_timeout_seconds
-                if name == "preparation_create"
+                if name == "submission_create"
                 else None
             ),
             extra_headers=extra_headers,
@@ -1565,15 +1559,6 @@ class WorkstreamGateway:
     ) -> bool:
         task_id = arguments.get("task_id")
         project_id = arguments.get("project_id")
-        if name == "preparation_create":
-            put_attempt_id = data.get("put_attempt_id")
-            if not isinstance(put_attempt_id, str):
-                return False
-            try:
-                UUID(put_attempt_id)
-            except ValueError:
-                return False
-            return True
         if name in {"submission_get", "management_submission_get"}:
             return cls._same_uuid(data.get("id"), arguments["submission_id"])
         if not isinstance(task_id, str):
@@ -1616,8 +1601,9 @@ class WorkstreamGateway:
                 )
             )
         if name == "submission_create":
-            body = arguments["body"]
-            return cls._same_uuid(data.get("admission_id"), body["admission_id"])
+            return cls._fields_match(
+                data, {"task_id": task_id, "assignment_id": arguments["assignment_id"]}
+            )
         if name in {"task_submissions_list", "management_task_submissions_list"}:
             return cls._items_match(data, {"task_id": task_id}, unique="id")
         if name == "management_task_submission_requirements_get":

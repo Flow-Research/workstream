@@ -625,7 +625,6 @@ def test_openapi_documents_request_error_and_response_context() -> None:
         "schema": {"type": "string", "format": "uuid"},
     }]
     public_entry_actions = {
-        "POST /api/v1/tasks/{task_id}/submission-bundle-preparations": "artifact.submission_bundle.prepare",
         "POST /api/v1/tasks/{task_id}/submissions": "submission.create",
     }
     assert public_entry_actions.keys() <= set(protected_inventory)
@@ -664,13 +663,13 @@ def test_openapi_documents_request_error_and_response_context() -> None:
         operation = schema["paths"][path][method.lower()]
         assert operation["x-workstream-action-id"] == action
         assert operation["security"]
-    assert len(route_inventory) == 134
+    assert len(route_inventory) == 133
     retained_routes = sorted(set(route_inventory) - proposal_routes - post_policy_routes - queue_routes - new_manager_reads - guide_read - contribution_reads.keys() - public_entry_actions.keys() - registry_actions.keys() - recovery_actions.keys() - model_actions.keys())
     retained_protected = sorted(set(protected_inventory) - proposal_routes - post_policy_routes - queue_routes - new_manager_reads - guide_read - contribution_reads.keys() - public_entry_actions.keys() - registry_actions.keys() - recovery_actions.keys() - model_actions.keys())
     assert sha256("\n".join(retained_routes).encode()).hexdigest() == (
         "9a495b21b504f27997a26c233e7dc4b814133038a063376b760147118bd44b7e"
     )
-    assert len(protected_inventory) == 132
+    assert len(protected_inventory) == 131
     assert sha256("\n".join(retained_protected).encode()).hexdigest() == (
         "8aa0828260680a7bccdb055ebb3f21fcd06d4e37a808b4a0a37dcbf77ffa0732"
     )
@@ -1018,6 +1017,48 @@ def _casefold_packet_headers():
         (b'content-encoding', b'identity'),
         (b'content-length', b'1'),
     ]
+
+
+def test_submission_mutation_is_one_raw_zip_acceptance_contract():
+    from app.api.routes.artifact_submissions import router as intake_router
+    from app.modules.tasks.router import router as task_router
+
+    app = create_app()
+    path = "/api/v1/tasks/{task_id}/submissions"
+    # Inspect both route owners; the application lazily includes their router.
+    routes = [*intake_router.routes, *task_router.routes]
+    assert len([route for route in routes if getattr(route, "path", None) == "/tasks/{task_id}/submissions"
+                and "POST" in getattr(route, "methods", set())]) == 1
+    assert "post" not in app.openapi()["paths"].get("/api/v1/tasks/{task_id}/submission-bundle-preparations", {})
+    operation = app.openapi()["paths"][path]["post"]
+    assert operation["x-workstream-action-id"] == "submission.create"
+    assert set(operation["requestBody"]["content"]) == {"application/zip"}
+    assert "202" in operation["responses"] and "201" not in operation["responses"]
+    receipt = app.openapi()["components"]["schemas"]["SubmissionAcceptedResponse"]
+    assert set(receipt["required"]) == {"operation_id", "task_id", "assignment_id", "status", "accepted_at",
+        "task_status_at_acceptance", "processing_stage_at_acceptance", "replayed", "pre_submission_results"}
+    assert receipt["additionalProperties"] is False
+
+
+async def test_submission_route_refuses_ambiguous_packet_before_body_or_command():
+    from app.adapters.artifacts import get_submission_intake_command
+
+    app, consumed = create_app(), []
+    def forbidden_command():
+        pytest.fail("Ambiguous packet reached command construction")
+    app.dependency_overrides[get_submission_intake_command] = forbidden_command
+    async def body():
+        consumed.append(True)
+        yield b"not consumed"
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+        response = await client.post(f"/api/v1/tasks/{uuid4()}/submissions", content=body(), headers=[
+            ("Content-Type", "application/zip"), ("Idempotency-Key", str(uuid4())),
+            ("X-Task-Assignment-Id", str(uuid4())), ("X-Submission-Summary", "one"),
+            ("x-submission-summary", "two"),
+        ])
+    assert response.status_code == 422, response.text
+    assert response.json()["error"]["code"] == "submission_packet_invalid"
+    assert consumed == []
 
 
 def _casefold_request(headers):

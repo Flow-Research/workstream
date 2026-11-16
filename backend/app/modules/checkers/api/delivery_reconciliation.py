@@ -9,6 +9,7 @@ from uuid import UUID
 from pydantic import AwareDatetime, AfterValidator, BaseModel, ConfigDict, Field, model_validator
 
 from app.core.hashing import canonical_json_hash
+from app.modules.outbox.api import OutboxAppendInput
 from app.modules.checkers.api.evaluation_contract import PostSubmissionExecutionRequest
 
 
@@ -364,3 +365,17 @@ class PostSubmitDeliveryAuthorizationPort(Protocol):
     def close(self, handle: object) -> None: ...
 
     async def restage_denial(self, error: PostSubmitDeliveryAuthorityDenied) -> bool: ...
+
+
+def post_submit_reconciliation_event(
+    project_id: UUID, payload: PostSubmitDeliveryChildPayload,
+) -> OutboxAppendInput:
+    """Exact child envelope shared by publication and read-only observation."""
+    return OutboxAppendInput(
+        event_type=POST_SUBMIT_DELIVERY_RECONCILIATION_EVENT, event_version=1,
+        aggregate_type="outbox_delivery", aggregate_id=payload.original_event_id,
+        project_id=project_id, correlation_id=str(payload.reconciliation_request_id),
+        causation_event_id=payload.original_event_id,
+        idempotency_key="post-submit-reconcile:" + str(payload.original_event_id),
+        payload=payload.model_dump(mode="json"),
+    )

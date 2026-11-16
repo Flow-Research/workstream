@@ -282,6 +282,9 @@ class Settings(BaseSettings):
         le=86_400,
     )
     artifact_intake_service_socket: Path | None = None
+    # Required source-intake envelopes and runtime/capacity profile. No old
+    # preparation timers or unmeasured deployment defaults are inherited.
+    submission_execution_profile: dict[str, object] | None = None
     artifact_intake_image_digest: str | None = None
     artifact_intake_config_digest: str | None = None
     external_checker_service_socket: Path | None = None

@@ -867,37 +867,6 @@ def _task_transition_input() -> dict[str, Any]:
 
 
 TASK_EXECUTION_INPUT_SCHEMAS: dict[str, dict[str, Any]] = {
-    "preparation_create": {
-        "type": "object",
-        "properties": {
-            "task_id": _UUID_INPUT,
-            "assignment_id": _UUID_INPUT,
-            "zip_base64": {
-                "type": "string",
-                "minLength": 4,
-                "maxLength": SUBMISSION_BUNDLE_MAX_BASE64_CHARS,
-                "pattern": r"^[A-Za-z0-9+/]*={0,2}$",
-            },
-            "idempotency_key": _IDEMPOTENCY_KEY_INPUT,
-            "summary": _ASCII_PACKET_TEXT,
-            "contributor_attestation": _ASCII_PACKET_TEXT,
-            "predecessor_submission_id": _UUID_INPUT,
-            "revision_preparation_id": _UUID_INPUT,
-            "revision_preparation_sha256": _SHA256_INPUT,
-        },
-        "required": ["task_id", "assignment_id", "zip_base64", "idempotency_key"],
-        "allOf": [
-            {
-                "if": {"required": ["revision_preparation_id"]},
-                "then": {"required": ["revision_preparation_sha256"]},
-            },
-            {
-                "if": {"required": ["revision_preparation_sha256"]},
-                "then": {"required": ["revision_preparation_id"]},
-            },
-        ],
-        "additionalProperties": False,
-    },
     "preparations_list": {
         "type": "object",
         "properties": {
@@ -944,20 +913,35 @@ TASK_EXECUTION_INPUT_SCHEMAS: dict[str, dict[str, Any]] = {
         "type": "object",
         "properties": {
             "task_id": _UUID_INPUT,
-            "body": {
-                "type": "object",
-                "properties": {
-                    "admission_id": _UUID_INPUT,
-                    "assignment_id": _UUID_INPUT,
-                    "predecessor_submission_id": {"anyOf": [_UUID_INPUT, {"type": "null"}]},
-                    "summary": {"type": ["string", "null"]},
-                    "contributor_attestation": {"type": ["string", "null"]},
-                },
-                "required": ["admission_id", "assignment_id"],
-                "additionalProperties": False,
+            "assignment_id": _UUID_INPUT,
+            "zip_base64": {
+                "type": "string",
+                "minLength": 4,
+                "maxLength": SUBMISSION_BUNDLE_MAX_BASE64_CHARS,
+                "pattern": r"^[A-Za-z0-9+/]*={0,2}$",
             },
+            "idempotency_key": _IDEMPOTENCY_KEY_INPUT,
+            "summary": _ASCII_PACKET_TEXT,
+            "contributor_attestation": _ASCII_PACKET_TEXT,
+            "predecessor_submission_id": _UUID_INPUT,
+            "revision_preparation_id": _UUID_INPUT,
+            "revision_preparation_sha256": _SHA256_INPUT,
         },
-        "required": ["task_id", "body"],
+        "required": ["task_id", "assignment_id", "zip_base64", "idempotency_key"],
+        "allOf": [
+            {
+                "if": {"required": ["predecessor_submission_id"]},
+                "then": {"required": ["revision_preparation_id", "revision_preparation_sha256"]},
+            },
+            {
+                "if": {"required": ["revision_preparation_id"]},
+                "then": {"required": ["revision_preparation_sha256", "predecessor_submission_id"]},
+            },
+            {
+                "if": {"required": ["revision_preparation_sha256"]},
+                "then": {"required": ["revision_preparation_id", "predecessor_submission_id"]},
+            },
+        ],
         "additionalProperties": False,
     },
     "task_submissions_list": {

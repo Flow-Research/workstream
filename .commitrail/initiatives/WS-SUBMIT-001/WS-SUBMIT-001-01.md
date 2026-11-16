@@ -4333,3 +4333,230 @@ also passed after repair. This evidence closure changes no implementation.
 The full goal remains active: public HTTP/configuration/progress/client cutover,
 remaining cleanup/worker/provider qualification, downstream journeys and full CI
 are still required in PR708 before readiness. No merge request or new PR is made.
+
+### Public raw-ZIP composition and CLI cutover worktree evidence
+
+The public POST now composes the foreground command through the canonical ART
+adapter root and returns the closed nine-field T4 acceptance snapshot. Removed
+the preparation POST and the old TASK JSON/admission mutation. An explicit
+submission execution profile supplies capacity, runtime and timing limits;
+missing/invalid configuration fails before provider work. No deployment values
+or provider qualification are inferred from test configuration. The new public
+command contract is registered without reassigning prior ownership targets.
+
+Real signed-HTTP tests exercise source upload and PRE with real owner/DB custody
+and a portable worker: rejected replay passed in the initial two-case run; accepted
+replay passed separately in `/tmp/submission-public-accepted-db.log/json` (1 pass,
+Alembic0080, isolated database cleanup complete). The initial accepted case failed
+in registry fixture setup: Docker logs establish a PostgreSQL backend signal11 at
+2026-11-16 12:16:28 UTC, before the submission request. Evidence is retained in
+`/tmp/submission-public-postgres-crash.log`. Recovery and a passing replay do not
+resolve that infrastructure defect or replace a clean combined run.
+
+CLI submit now streams the ZIP with the same caller key and exact packet/revision
+headers, validates the stable202 receipt and bounded PRE feedback, and distinguishes
+acceptance for evaluation from a final Submission. Removed the prepare command and
+admission-consuming mutation. Migrated the hostile-peer process tests to the new
+single mutation: preserve exact bytes/headers on explicit replay, revision pairing,
+local source bounds/change detection, unknown outcomes, no retry after HTTP2 GOAWAY,
+closed response identities, safe feedback and response size limits. The old JSON
+creation assertions are superseded by raw-ZIP acceptance assertions; immutable
+history/findings tests remain intact. Their shared fixtures remain consumed by
+TUI, contributor and management read tests.
+
+`go test ./internal/api ./internal/command` passed from cli/. The first attempted
+Go command from repository root did not run tests and is not validation. Initial
+migrated process suite:14 passed,1 failed in36.39s
+(`/tmp/submission-cli-http-cutover.log`): human rendering included a null feedback
+field before the readable findings. Fix omits that nil field during human
+serialization; raw API receipt validation still requires nonnull feedback. Final
+replay evidence follows when available. These local changes remain in progress;
+MCP, real public CLI journeys, progress exposure, full API controls and coordinated
+cutover review must close before treating this as a finished checkpoint.
+
+Corrected worktree replay: Go API/command packages passed and rebuilt executable
+passed all15 hostile-HTTP submission process tests in42.70s
+(`/tmp/submission-cli-http-cutover-fixed.log`). Full backend API-controls module
+passed57 in135.06s (`/tmp/submission-public-controls-rerun.log`), including the
+single raw-ZIP OpenAPI contract and ambiguous-header refusal before body/command
+execution. No files under either completed suite changed during that replay.
+A fresh origin/main fetch reported zero commits missing from this branch.
+These receipts close the local display and API-control test failures only;
+coordinated MCP/public journey migration and final scoped reviews remain open.
+
+### MCP single-mutation cutover worktree evidence
+
+Replaced the MCP admission JSON mutation with raw-ZIP submission acceptance.
+`submission_create` now accepts the caller assignment/key, bounded Base64 ZIP and
+exact packet/revision fields; the gateway sends one202 POST to submissions and
+binds response task/assignment identities. Removed preparation_create from input
+schemas, tool catalogue, fixed gateway operations, packaged contracts and wheel
+inclusions. Existing preparation reads remain until their retained-reader/public
+progress migration is complete. No second supported mutation or compatibility
+alias was added. The16 remaining execution tools preserve their prior read and
+management routes. Refreshed submission_create's snapshot from actual backend
+OpenAPI and updated MCP documentation.
+
+Retained upload/header, safe checker failure and fixed-route tests now exercise
+submission_create. Added acceptance substitutions/malformed-snapshot and revision
+pairing cases. Initial run42passed2skipped (backend comparison command absent),
+`/tmp/submission-mcp-cutover.log`; this does not establish OpenAPI drift closure.
+Ruff and diff checks passed. A configured backend comparison plus adversarial
+cases and package/catalogue checks are running; final receipts follow.
+
+Expanded configured MCP run:53passed1failed in54.22s
+(`/tmp/submission-mcp-cutover-verified.log`). Failure was the backend OpenAPI
+subprocess dying withSIGSEGV, not a reported contract difference. Exact failed
+test replay with PYTHONFAULTHANDLER=1/PYTHONMALLOC=debug passed1 in56.28s
+(`/tmp/submission-mcp-openapi-diagnostic.log`). The live backend OpenAPI matches
+all16 execution snapshots on replay; no root-cause fix is claimed. The retained
+first-run crash is additional native instability evidence.
+
+Catalogue/package command passed3 with1skip because no clean-wheel interpreter
+was configured. Built the wheel using the canonical isolated uv build (the earlier
+no-isolation attempt lacked hatchling and did not build), installed it into a
+fresh /tmp environment and started the configured independence proof. This removes
+the obsolete preparation contract from wheel inputs without requiring backend
+sources at runtime. Final package/type receipts follow when terminal.
+
+Configured clean-wheel independence proof passed1 in22.71s
+(`/tmp/submission-mcp-wheel-proof.log`), and mypy passed all25 source files
+(`/tmp/submission-mcp-types.log`). No MCP code changed during these final checks.
+This closes the bounded MCP upload/acceptance transport migration, not the full
+public journey: operation-progress API/client reads, bounded feedback parity,
+remaining real public CLI/backend fixtures, coordinated reviews, deployment
+qualification and the full acceptance audit remain required on the same PR.
+
+### Operation progress: exact finalized TASK association
+
+Within the coordinated public-read scope, extend TASK's existing immutable history
+port/repository to resolve the operation's exact finalized Submission and dispatch.
+Require project/task/assignment/contributor/admission identity together and equal
+stored Submission/dispatch versions. Return only the exact attempt status and
+original evaluation request identity; do not read the latest task Submission or
+infer evaluation activity from TASK status. Missing/mismatched association is an
+integrity-unavailable result, never fallback history. This is a read participant;
+its caller must establish AUTH in the read transaction before exposing facts.
+
+Allowed: existing TASK history API/repository and the existing real T5 integration
+proof. Preserve canonical adapter composition and all immutable rows. No new route
+or authorization grant is supplied by this participant. Verify real accepted T5
+association, each substituted selector and stored outcome after actual POST.
+Required coordinated ARCH/SEC, QA and DOCS review remains open for the complete
+public read; this participant alone cannot close progress or end-to-end delivery.
+
+Exact-association worktree verification: both real T5 cases (normal and expired
+finalizer claim) passed2,37deselected in64.69s, with migrations through0080 and
+isolated database cleanup complete (`/tmp/submission-progress-task-association.log/json`).
+Each case rejects substitution of project/task/assignment/contributor/Submission/
+admission and confirms that completed POST evidence without governed routing
+leaves this exact attempt's outcome unchanged. The added reader neither queries
+current task status nor selects a latest Submission. Ruff, diff and module-boundary
+validation passed (`/tmp/submission-progress-boundaries.log`, exit0).
+
+This is one required TASK read participant, not a publicly usable progress API.
+CHECKERS current-attempt/stall observation, contributor/management AUTH composition,
+current-task visibility and next-action eligibility, final closed response, route,
+CLI/MCP reads and their real public journeys remain open. Tests ran on the current
+worktree; metadata HEAD53d369b4c does not imply the uncommitted delta was frozen in
+that commit. Coordinated review and proper implementation commits remain pending.
+
+### Operation progress: current CHECKERS attempt evidence
+
+Extend the existing evaluation coordination port/owner with an exact current
+progress observation anchored to the original Submission dispatch request. Read
+that Submission's current fence and run; validate original and current scope,
+request/reservation, terminal result, and committed retry receipt for successors.
+Return the current request/reservation, owner status, database-clock live-lease
+fact, exact retry event (when applicable) and completion event. These are internal
+facts for progress composition; no new execution authority or public diagnostics.
+The caller owns the root transaction and TASK-first locking. Do not derive
+running/stalled status from TASK status or rewrite fences/leases. OUTBOX stall
+and reconciliation-child observation remains a separate required composition.
+
+Allowed: existing CHECKERS execution API/coordinator and existing real T5/retry
+integration tests. Retain exact historical Submission association and prior
+request validation. Verify queued/completed states through real source T5/POST,
+selector substitution and a real committed retry. Coordinated risk/reviewer
+requirements from the public cutover apply unchanged.
+
+Initial CHECKERS observation run passed the two source T5 cases but failed the
+existing retry test before the new observation: its shared material_fixture still
+calls retired bundle preparation and passes PreSubmitMaterializationPreparationFacts
+to the now guide-only resource mapper (AttributeError:guide_source_item_id).
+`/tmp/submission-progress-checker-observation.log/json`:2passed1failed,97.82s;
+isolated database cleanup complete. Do not restore the obsolete API or treat that
+fixture as proof of current intake. Its original assertions remain unchanged and
+its migration remains a full-suite requirement.
+
+Moved new retry-progress proof into the actual source T5 test: a controlled exact
+source-read outage produces retained infrastructure failure, then the real Operator
+retry owner commits a successor and the read follows its audited event. Successful
+POST cases additionally observe the actual running lease from an independent root
+session during the controlled worker call. No execution, authorization or retry
+owner is mocked. The controlled runtime/provider outage is not native qualification.
+Expanded source replay is running. Module-boundary validation passed before this
+test-only refinement; production CHECKERS files are unchanged since that check.
+
+Expanded source-first progress proof passed3,37deselected in98.68s
+(`/tmp/submission-progress-checker-source-retry.log/json`), Alembic0080 and database
+cleanup complete. It proves queued and completed exact-request observations,
+substituted-selector refusal, actual live-worker observation through an independent
+session, infrastructure failure, and current-fence transition to an authorized
+retry successor/event. The worker observation returned during execution; it did
+not wait for completion. No native-runtime or AWS qualification is inferred.
+
+One Pydantic serialization warning occurs on the real retry path: existing
+checker_retry builds request_fields with nested dicts, then
+make_selected_post_submit_request uses model_construct before serialized hashing
+and final model_validate. The final request and new read validate successfully;
+this warning does not originate from the progress read. It remains recorded and
+is not silenced. The earlier obsolete-fixture failure remains outstanding.
+
+CHECKERS runtime progress is now available internally through its existing port.
+Public progress still requires exact OUTBOX delivery/recovery-child observation,
+reader AUTH/current-task concealment and next-action eligibility, closed projection,
+HTTP/CLI/MCP reads, and end-to-end verification. These are uncommitted worktree
+receipts, not a reviewed/frozen implementation checkpoint or overall completion.
+
+### Operation progress: exact delivery observation
+
+Reuse publisher event construction for initial dispatch, completion and authorized
+reconciliation child. Extend the existing internal TASK/CHECKERS progress facts
+with their exact event expectations. ART's existing progress module will observe
+OUTBOX against those expectations and follow only a child bound to the same
+original event, claim generation/digest and current evaluation identity. Never
+expose event payloads/private coordinates in the public projection. A finalized
+UNKNOWN original with a pending authorized child is not itself proof of a current
+stall. Missing/mismatched custody fails closed.
+
+Allowed: existing TASK history API/repository, CHECKERS execution API/results/
+coordinator/publisher and reconciliation API/service, ART progress module and the
+existing source T5/contract tests. Preserve emitted event bytes, existing authority
+and original terminal evidence; no retries, publishes or claims from a read.
+Verify real stored initial/completion/retry event comparison and focused child
+association/refusal cases. Full public-route/read AUTH and final review remain
+required; this change only closes the durable delivery observation prerequisite.
+
+Delivery observation proof: real source T5 suite passed3 in92.12s with0080 and
+isolated database cleanup complete (`/tmp/submission-progress-delivery-db.log/json`).
+It compares stored initial, completion and retry events through OUTBOX's exact
+observation owner. Reconciliation contract module passed34 in5.39s; initial child
+association checks passed8 in1.94s. Module-boundary and all changed backend Python
+Ruff checks passed.
+
+An additional controlled retained-digest substitution reproduced a missing guard:
+parent read and child agreed with each other on a digest different from the
+owner's expected event. Before repair the new test failed DID NOT RAISE
+(`/tmp/submission-progress-delivery-digest-before.log`). Compare the retained claim
+to canonical_json_hash(event.payload) before following a child. All9 child identity
+cases now pass in2.39s (`/tmp/submission-progress-delivery-digest-after.log`). This
+repair adds no event publication or authority and changes only that read guard.
+
+Freeze the accumulated raw-ZIP API/CLI/MCP mutation cutover and internal progress
+participants as a proper implementation commit on the existing PR branch. The
+commit is an incomplete-goal checkpoint: public operation GET and client reads,
+MCP feedback parity, obsolete fixture/shared producer migration, complete downstream
+journeys, cleanup/runtime/provider/deployment qualification and full CI remain open.
+No PR readiness or merge request is made. Scoped internal reviews will assess this
+implemented delta with those omissions explicit, rather than certify goal completion.

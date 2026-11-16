@@ -2,6 +2,39 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
+import logging
+
+from pydantic import ValidationError
+from sqlalchemy.exc import SQLAlchemyError
+
+from app.adapters.auth import selected_pre_submit_authority, submission_intake_authority
+from app.adapters.checkers import selected_pre_submit_checker_execution, selected_pre_submit_coordinator
+from app.adapters.outbox import outbox_append, finalized_unknown_deliveries
+from app.adapters.tasks import intake_task_custody_port
+from app.interfaces.artifacts import ArtifactInputMismatchError, ArtifactLimitExceededError, ArtifactStoreError
+from app.interfaces.external_services import ExternalServiceAdapterError
+from app.modules.artifacts.api.submission_archive import MAXIMUM_SUBMISSION_ZIP_BYTES
+from app.modules.artifacts.api.submission_command import SubmissionExecutionProfile, SubmissionIntakeCommand
+from app.modules.artifacts.api.submission_intake import SubmissionIntakeFailure
+from app.modules.artifacts.authorization import PreparedPreSubmitMaterializationAuthorization
+from app.modules.artifacts.intake.capacity import SubmissionSourceCapacityConflict
+from app.modules.artifacts.intake.foreground_admission import ForegroundIntakeAdmission, IntakeCommitUnknown
+from app.modules.artifacts.intake.foreground_command import ForegroundSubmissionCommand, SubmissionForegroundLimits
+from app.modules.artifacts.intake.foreground_lease import ForegroundIntakeLease
+from app.modules.artifacts.intake.foreground_upload import ForegroundSourceUpload
+from app.modules.artifacts.intake.repository import IntakeCustodyConflict
+from app.modules.artifacts.selected_pre_submit_execution import SelectedPreSubmitExecutionService, SelectedPreSubmitSourceReads
+from app.modules.artifacts.service import artifact_storage_namespace_spec
+from app.modules.authorization.api.submission_intake import IntakeAuthorityDenied
+from app.modules.checkers.api.source_contracts import source_contracts_context
+from app.modules.checkers.api.selected_pre_submit import (
+    SelectedPreSubmitAuthorityUnavailable, SelectedPreSubmitInfrastructureUnavailable,
+    SelectedPreSubmitRequestConflict, SelectedPreSubmitUnavailable,
+)
+from app.modules.tasks.api.submission_context import TaskSubmissionContextUnavailable
+
+
 from contextlib import asynccontextmanager
 from collections.abc import Callable
 from typing import Annotated, cast
@@ -1051,3 +1084,121 @@ def create_submission_source_cleanup_provider(*, settings, namespace_claim, uplo
     factory.register("local", lambda: construct(LocalSubmissionSourceCleanup))
     factory.register("s3_compatible", lambda: construct(S3SubmissionSourceCleanup))
     return factory.create(settings.artifact_store_backend)
+
+
+logger = logging.getLogger(__name__)
+
+
+def _submission_public_failure(exc: Exception) -> SubmissionIntakeFailure:
+    """Keep private custody/provider diagnostics out of the public error envelope."""
+    code = "submission_infrastructure_unavailable"
+    if isinstance(exc, IntakeCommitUnknown):
+        code = "submission_outcome_unknown"
+    elif isinstance(exc, IntakeAuthorityDenied):
+        code = "submission_unavailable"
+    elif isinstance(exc, ArtifactLimitExceededError):
+        code = "submission_archive_limit_exceeded"
+    elif isinstance(exc, ArtifactInputMismatchError):
+        code = "submission_packet_invalid"
+    elif isinstance(exc, SubmissionSourceCapacityConflict) and str(exc) == "source_capacity_exhausted":
+        code = "submission_capacity_exceeded"
+    elif isinstance(exc, IntakeCustodyConflict) and str(exc) in {
+        "submission_idempotency_conflict", "submission_operation_in_progress", "submission_operation_terminal",
+    }:
+        code = str(exc)
+    elif isinstance(exc, TaskSubmissionContextUnavailable):
+        if exc.code == "task_submission_operation_in_progress":
+            code = "submission_operation_in_progress"
+        elif exc.code in {
+            "task_submission_predecessor_changed", "revision_limit_reached", "revision_deadline_expired",
+            "revision_context_blocked", "revision_context_changed", "revision_acknowledgement_required",
+            "revision_acknowledgement_invalid",
+        }:
+            code = exc.code
+        else:
+            code = "submission_unavailable"
+    return SubmissionIntakeFailure(code)
+
+
+class ConfiguredSubmissionCommand:
+    def __init__(self, *, settings, sessions, context):
+        self._settings, self._sessions, self._context = settings, sessions, context
+
+    async def submit(self, metadata, chunks, *, actor_id, identity_link_id, idempotency_key, declared_raw_bytes):
+        if (actor_id, identity_link_id) != (self._context.actor_profile_id, self._context.identity_link_id):
+            raise SubmissionIntakeFailure("submission_unavailable")
+        try:
+            return await self._submit(metadata, chunks, actor_id=actor_id, identity_link_id=identity_link_id,
+                                      idempotency_key=idempotency_key, declared_raw_bytes=declared_raw_bytes)
+        except SubmissionIntakeFailure:
+            raise
+        except (IntakeCommitUnknown, IntakeAuthorityDenied, IntakeCustodyConflict,
+                SubmissionSourceCapacityConflict, TaskSubmissionContextUnavailable,
+                ArtifactStoreError, ExternalServiceAdapterError, SQLAlchemyError, ValidationError,
+                SelectedPreSubmitAuthorityUnavailable, SelectedPreSubmitInfrastructureUnavailable,
+                SelectedPreSubmitRequestConflict, SelectedPreSubmitUnavailable) as exc:
+            failure = _submission_public_failure(exc)
+            if failure.code in {"submission_infrastructure_unavailable", "submission_outcome_unknown"}:
+                logger.exception("Submission command unavailable")
+            raise failure from None
+
+    async def _submit(self, metadata, chunks, **arguments):
+        settings, sessions, context = self._settings, self._sessions, self._context
+        profile = SubmissionExecutionProfile.model_validate(
+            settings.submission_execution_profile,
+            context=source_contracts_context(selected_pre_submit_source_contracts()),
+        )
+        bootstrap = create_artifact_store_bootstrap(
+            settings, activation_guard=artifact_provider_activation_guard(settings, sessions=sessions))
+        try:
+            namespace = artifact_storage_namespace_spec(settings, bootstrap)
+            store = bootstrap.initialize_after_namespace_claim(ArtifactStoreNamespaceClaim(
+                adapter_identity=bootstrap.identity, namespace_identity=bootstrap.namespace_identity,
+                namespace_fingerprint=namespace.namespace_fingerprint,
+            ))
+            admission = ForegroundIntakeAdmission(
+                sessions, tasks=intake_task_custody_port, task_contexts=task_submission_context_port,
+                projects=project_locked_policy_context_port,
+                authorization=lambda session: submission_intake_authority(session, context),
+                events=outbox_append, deliveries=finalized_unknown_deliveries,
+                namespace=namespace, capacity_limits=profile.capacity,
+                maximum_raw_bytes=MAXIMUM_SUBMISSION_ZIP_BYTES,
+                upload_duration=timedelta(seconds=profile.upload_total_seconds),
+                lease_duration=timedelta(seconds=profile.foreground_lease_seconds),
+            )
+
+            async def execute(reservation):
+                async with sessions() as session:
+                    service = SelectedPreSubmitExecutionService(
+                        session=session, coordinator=selected_pre_submit_coordinator(session),
+                        authority=selected_pre_submit_authority(session),
+                        source_reads=SelectedPreSubmitSourceReads(
+                            session=session, sources=submission_intake_pre_source_port(session), store=store,
+                            authority=PreparedPreSubmitMaterializationAuthorization(
+                                session, request_id=context.request_id, correlation_id=context.correlation_id)),
+                        execution=selected_pre_submit_checker_execution(settings=settings),
+                    )
+                    return await service.execute(reservation=reservation)
+
+            command = ForegroundSubmissionCommand(
+                admission=admission, upload=ForegroundSourceUpload(sessions, intake_task_custody_port, store),
+                lease=ForegroundIntakeLease(sessions, intake_task_custody_port,
+                    lease_duration=timedelta(seconds=profile.foreground_lease_seconds),
+                    heartbeat_interval=timedelta(seconds=profile.heartbeat_seconds)),
+                limits=SubmissionForegroundLimits(part_bytes=profile.part_bytes,
+                    idle_timeout_seconds=profile.upload_idle_seconds,
+                    pre_lease_seconds=profile.foreground_lease_seconds,
+                    replay_duration=timedelta(seconds=profile.replay_total_seconds)),
+                runtime_profile=profile.runtime, execute=execute,
+                checkers=selected_pre_submit_coordinator, outbox=outbox_append,
+            )
+            return await command.submit(metadata, chunks, **arguments)
+        finally:
+            bootstrap.close()
+
+
+def get_submission_intake_command(
+    request: Request, context: Annotated[object, Depends(get_artifact_authorization_context)],
+) -> SubmissionIntakeCommand:
+    return ConfiguredSubmissionCommand(
+        settings=request.app.state.settings, sessions=get_session_factory(), context=context)

@@ -16,6 +16,66 @@ from tests.artifacts.test_submission_intake_admission import (
 )
 
 
+@pytest.mark.parametrize("outcome", ["completed", "rejected"])
+async def test_public_raw_zip_submission_uses_real_owners_and_stable_replay(admission_intake, tmp_path, monkeypatch, outcome):
+    from sqlalchemy import text
+    from app.adapters import artifacts as composition
+    from app.adapters.checkers import SelectedPreSubmitCheckerExecutionAdapter
+    from app.modules.actors.api import ServiceIdentity
+    from tests.artifacts.test_submission_pre_source import _source_runtime
+    from tests.authorization.test_pre_submit_attempt_authority import _seed_materializer
+    from tests.checkers.execution.support import provision_post_submit_service
+    from tests.checkers.external.test_selected_pre_submit_coordination import _source_reservation
+    from tests.test_artifact_admission import _settings
+    from tests.test_trusted_intake import _archive
+
+    f, key = admission_intake, new_record_id()
+    payload = _archive("../escape") if outcome == "rejected" else _archive()
+    runtime, errors = _source_runtime(payload, tmp_path, outcome)
+    calls, original = [], runtime.execute_pre
+    async def execute(lease, grant):
+        calls.append(lease.reservation.attempt_id)
+        return await original(lease, grant)
+    runtime.execute_pre = execute
+    monkeypatch.setattr(composition, "selected_pre_submit_checker_execution",
+                        lambda **kwargs: SelectedPreSubmitCheckerExecutionAdapter(external_execution=runtime))
+    await provision_post_submit_service(f.factory, ServiceIdentity.CHECKER_PRE_SUBMIT)
+    await _seed_materializer(f.factory)
+    client = f.access.signed.client
+    app = client._transport.app
+    storage = {name: value for name, value in _settings(tmp_path).model_dump().items() if name.startswith("artifact_")}
+    settings = app.state.settings.model_copy(update=storage | {"submission_execution_profile": {
+        "capacity": {"maximum_total_bytes": 1_000_000},
+        "runtime": _source_reservation().runtime_profile.model_dump(mode="json"),
+        "upload_total_seconds": 300.0, "upload_idle_seconds": 10.0,
+        "foreground_lease_seconds": 60.0, "heartbeat_seconds": 10.0,
+        "replay_total_seconds": 30.0, "part_bytes": 5 * 1024**2,
+    }})
+    monkeypatch.setattr(app.state, "settings", settings)
+    headers = f.access.target.headers | {"Content-Type": "application/zip",
+        "X-Task-Assignment-Id": str(f.assignment), "Idempotency-Key": str(key)}
+    url = f"/api/v1/tasks/{f.task}/submissions"
+    first = await client.post(url, headers=headers, content=payload)
+    second = await client.post(url, headers=headers, content=payload)
+    assert not errors, "\n".join(errors)
+    assert len(calls) == 1
+    if outcome == "completed":
+        assert first.status_code == second.status_code == 202, (first.text, second.text)
+        receipt = first.json()
+        assert second.json() == dict(receipt, replayed=True)
+        assert receipt["status"] == "accepted" and receipt["replayed"] is False
+        assert set(receipt) == {"operation_id", "task_id", "assignment_id", "status", "accepted_at",
+                                "task_status_at_acceptance", "processing_stage_at_acceptance", "replayed", "pre_submission_results"}
+    else:
+        assert first.status_code == second.status_code == 422, (first.text, second.text)
+        assert first.json()["error"]["code"] == second.json()["error"]["code"] == "pre_submission_checker_failed"
+        assert first.json()["error"]["details"] == second.json()["error"]["details"]
+        assert first.json()["error"]["details"]["eligible_to_submit"] is False
+    async with f.factory() as session:
+        assert await session.scalar(text("SELECT count(*) FROM submissions WHERE task_id=:id"), {"id": f.task}) == 0
+        assert await session.scalar(text("SELECT count(*) FROM submission_intake_operations WHERE task_id=:id"), {"id": f.task}) == 1
+
+
 async def test_foreground_command_upload_timeout_retains_charge(admission_intake, tmp_path):
     from sqlalchemy import text
     from app.modules.artifacts.api.submission_intake import SubmissionIntakeFailure

@@ -11,18 +11,11 @@ from http2_fixture import goaway_fixture
 TASK = "018f0ebc-7966-7e8d-bc4d-1cae1e000010"
 ASSIGNMENT = "018f0ebc-7966-7e8d-bc4d-1cae1e000011"
 KEY = "018f0ebc-7966-7e8d-bc4d-1cae1e000012"
-PUT = "018f0ebc-7966-7e8d-bc4d-1cae1e000013"
-ADMISSION = "018f0ebc-7966-7e8d-bc4d-1cae1e000014"
+OPERATION = "018f0ebc-7966-7e8d-bc4d-1cae1e000013"
 SUBMISSION = "018f0ebc-7966-7e8d-bc4d-1cae1e000015"
 RUN = "018f0ebc-7966-7e8d-bc4d-1cae1e000016"
 REVISION_PREPARATION = "018f0ebc-7966-7e8d-bc4d-1cae1e000017"
 REVISION_DIGEST = "sha256:" + "a" * 64
-RECEIPT = {
-    "submission_id": SUBMISSION,
-    "submission_version": 1,
-    "admission_id": ADMISSION,
-    "evaluation_request_id": RUN,
-}
 HISTORY = {
     "id": SUBMISSION,
     "task_id": TASK,
@@ -64,10 +57,10 @@ CHECKER = {
 }
 
 
-def prepare_args(path):
+def submit_args(path):
     return (
         "task",
-        "prepare",
+        "submit",
         TASK,
         "--assignment",
         ASSIGNMENT,
@@ -75,20 +68,6 @@ def prepare_args(path):
         str(path),
         "--idempotency-key",
         KEY,
-        "-o",
-        "json",
-    )
-
-
-def submit_args():
-    return (
-        "task",
-        "submit",
-        TASK,
-        "--assignment",
-        ASSIGNMENT,
-        "--admission",
-        ADMISSION,
         "-o",
         "json",
     )
@@ -127,12 +106,16 @@ INTAKE_FEEDBACK = [
 ]
 
 
-def preparation(status="stored_pending_verification"):
+def acceptance(replayed=False):
     return {
-        "put_attempt_id": PUT,
-        "admission_id": ADMISSION if status == "ready" else None,
-        "submission_bundle_preparation_status": status,
-        "replayed": status == "ready",
+        "operation_id": OPERATION,
+        "task_id": TASK,
+        "assignment_id": ASSIGNMENT,
+        "status": "accepted",
+        "accepted_at": "2026-10-14T10:00:00Z",
+        "task_status_at_acceptance": "evaluation_pending",
+        "processing_stage_at_acceptance": "finalization_pending",
+        "replayed": replayed,
         "pre_submission_results": INTAKE_FEEDBACK,
     }
 
@@ -141,17 +124,17 @@ def respond(response, value, status=200):
     response.update(status=status, body=json.dumps(value, ensure_ascii=False).encode())
 
 
-def test_explicit_prepare_replay_then_create_preserves_packet_and_bytes(cli, tmp_path):
+def test_explicit_submit_replay_preserves_packet_and_bytes(cli, tmp_path):
     path = tmp_path / "submission.zip"
     path.write_bytes(b"PK\x03\x04exact-archive")
     packet = ("--summary", "Completed work", "--attestation", "")
     with http_fixture() as (origin, response, requests):
-        for status in ("stored_pending_verification", "ready"):
-            respond(response, preparation(status), 202)
-            result = cli(origin, TOKEN, *prepare_args(path), *packet)
+        for replayed in (False, True):
+            respond(response, acceptance(replayed), 202)
+            result = cli(origin, TOKEN, *submit_args(path), *packet)
             assert result.returncode == 0, result.stderr
-            assert json.loads(result.stdout) == preparation(status)
-        assert len(requests) == 2
+            assert json.loads(result.stdout) == acceptance(replayed)
+        assert len(requests) == 2  # Only caller-requested replay.
         assert response["raw_commands"] == [path.read_bytes()] * 2
         for headers in response["request_headers"]:
             assert headers["X-Task-Assignment-Id"] == ASSIGNMENT
@@ -159,45 +142,28 @@ def test_explicit_prepare_replay_then_create_preserves_packet_and_bytes(cli, tmp
             assert headers["X-Contributor-Attestation"] == ""
             assert headers["Idempotency-Key"] == KEY
             assert headers["Content-Type"] == "application/zip"
-        respond(response, RECEIPT, 201)
-        for _ in range(2):
-            result = cli(origin, TOKEN, *submit_args(), *packet)
-            assert result.returncode == 0 and json.loads(result.stdout) == RECEIPT
-        assert len(requests) == 4  # Caller explicitly replayed; CLI never did.
-        assert response["commands"][-1] == (
-            "application/json",
-            None,
-            {
-                "assignment_id": ASSIGNMENT,
-                "admission_id": ADMISSION,
-                "summary": "Completed work",
-                "contributor_attestation": "",
-            },
-        )
-        assert requests[-1] == (
-            "POST",
-            f"/api/v1/tasks/{TASK}/submissions",
-            "Bearer " + TOKEN,
-        )
+        assert requests == [
+            ("POST", f"/api/v1/tasks/{TASK}/submissions", "Bearer " + TOKEN)
+        ] * 2
 
 
-def test_admitted_preparation_shows_nonblocking_intake_feedback(cli, tmp_path):
+def test_accepted_submission_shows_nonblocking_intake_feedback(cli, tmp_path):
     path = tmp_path / "submission.zip"
     path.write_bytes(b"PK\x03\x04feedback")
-    human = prepare_args(path)[:-2]
+    human = submit_args(path)[:-2]
     with http_fixture() as (origin, response, requests):
-        respond(response, preparation("ready"), 202)
+        respond(response, acceptance(), 202)
         result = cli(origin, TOKEN, *human)
         assert result.returncode == 0, result.stderr
         receipt_line = result.stdout.splitlines()[0]
-        assert receipt_line.startswith("Preparation receipt")
+        assert receipt_line.startswith("Submission accepted for evaluation")
         assert "pre_submission_results" not in receipt_line
         assert "Intake feedback: warning submission_summary_missing" in result.stdout
         assert (
             "Intake feedback: coverage_incomplete coverage.files results/vendor.bin: "
             "One file was not evaluated." in result.stdout
         )
-        # An admitted receipt cannot carry blocking results or omit its feedback.
+        # An accepted receipt cannot carry blocking results or omit its feedback.
         blocked_check = copy.deepcopy(INTAKE_FEEDBACK)
         blocked_check[0] |= {
             "status": "failed",
@@ -208,23 +174,23 @@ def test_admitted_preparation_shows_nonblocking_intake_feedback(cli, tmp_path):
         error_finding[2]["findings"][0]["level"] = "error"
         failed_member = copy.deepcopy(INTAKE_FEEDBACK)
         failed_member[2]["status"] = "failed"
-        missing = preparation("ready")
+        missing = acceptance()
         missing.pop("pre_submission_results")
         for invalid in (
-            preparation("ready") | {"pre_submission_results": blocked_check},
-            preparation("ready") | {"pre_submission_results": error_finding},
-            preparation("ready") | {"pre_submission_results": failed_member},
-            preparation("ready") | {"pre_submission_results": None},
+            acceptance() | {"pre_submission_results": blocked_check},
+            acceptance() | {"pre_submission_results": error_finding},
+            acceptance() | {"pre_submission_results": failed_member},
+            acceptance() | {"pre_submission_results": None},
             missing,
         ):
             respond(response, invalid, 202)
             assert_failure(
-                cli(origin, TOKEN, *prepare_args(path)), "invalid_api_response"
+                cli(origin, TOKEN, *submit_args(path)), "invalid_api_response"
             )
         assert len(requests) == 6
 
 
-def test_revision_prepare_requires_and_replays_exact_acknowledgement_headers(
+def test_revision_submit_requires_and_replays_exact_acknowledgement_headers(
     cli, tmp_path
 ):
     path = tmp_path / "revision.zip"
@@ -254,13 +220,13 @@ def test_revision_prepare_requires_and_replays_exact_acknowledgement_headers(
             ("--predecessor", SUBMISSION, *pair[:-1], "sha256:" + "A" * 64),
         ):
             assert_failure(
-                cli(origin, TOKEN, *prepare_args(path), *args), "invalid_arguments", 2
+                cli(origin, TOKEN, *submit_args(path), *args), "invalid_arguments", 2
             )
         assert requests == []
-        respond(response, preparation("ready"), 202)
+        respond(response, acceptance(), 202)
         for _ in range(2):
             result = cli(
-                origin, TOKEN, *prepare_args(path), "--predecessor", SUBMISSION, *pair
+                origin, TOKEN, *submit_args(path), "--predecessor", SUBMISSION, *pair
             )
             assert result.returncode == 0, result.stderr
         assert len(requests) == 2
@@ -268,40 +234,32 @@ def test_revision_prepare_requires_and_replays_exact_acknowledgement_headers(
             assert headers["X-Predecessor-Submission-Id"] == SUBMISSION
             assert headers["X-Revision-Preparation-Id"] == REVISION_PREPARATION
             assert headers["X-Revision-Preparation-Sha256"] == REVISION_DIGEST
-        respond(response, RECEIPT | {"submission_version": 2}, 201)
-        result = cli(origin, TOKEN, *submit_args(), "--predecessor", SUBMISSION)
-        assert result.returncode == 0, result.stderr
-        assert response["commands"][-1][2] == {
-            "assignment_id": ASSIGNMENT,
-            "predecessor_submission_id": SUBMISSION,
-            "admission_id": ADMISSION,
-        }
 
 
-def test_prepare_rejects_untransportable_packet_before_request(cli, tmp_path):
+def test_submit_rejects_untransportable_packet_before_request(cli, tmp_path):
     path = tmp_path / "submission.zip"
     path.write_bytes(b"zip")
     with http_fixture() as (origin, _, requests):
         for summary in ("é", "line\nbreak", " leading", "trailing ", "x" * 65537):
-            result = cli(origin, TOKEN, *prepare_args(path), "--summary", summary)
+            result = cli(origin, TOKEN, *submit_args(path), "--summary", summary)
             assert_failure(result, "invalid_arguments", 2)
         assert requests == []
 
 
-def test_prepare_detects_file_change_and_never_confirms_success(cli, tmp_path):
+def test_submit_detects_file_change_and_never_confirms_success(cli, tmp_path):
     path = tmp_path / "submission.zip"
     for changed in (b"original-appended", b"modified"):
         path.write_bytes(b"original")
         with http_fixture() as (origin, response, requests):
-            respond(response, preparation(), 202)
+            respond(response, acceptance(), 202)
             response["after_body"] = lambda: path.write_bytes(changed)
-            result = cli(origin, TOKEN, *prepare_args(path))
+            result = cli(origin, TOKEN, *submit_args(path))
             assert_failure(result, "submission_source_changed")
             assert json.loads(result.stderr)["error"]["outcome_unknown"] is True
             assert len(requests) == 1
 
 
-def test_preparation_rejects_empty_nonregular_and_oversized_sources_without_request(
+def test_submission_rejects_empty_nonregular_and_oversized_sources_without_request(
     cli, tmp_path
 ):
     empty, oversized, pipe = (
@@ -314,7 +272,7 @@ def test_preparation_rejects_empty_nonregular_and_oversized_sources_without_requ
     with http_fixture() as (origin, _, requests):
         for path in (empty, tmp_path, pipe, oversized):
             assert_failure(
-                cli(origin, TOKEN, *prepare_args(path)), "invalid_arguments", 2
+                cli(origin, TOKEN, *submit_args(path)), "invalid_arguments", 2
             )
         assert requests == []
 
@@ -323,7 +281,7 @@ def test_submission_uncertain_responses_are_not_retried(cli, tmp_path):
     path = tmp_path / "submission.zip"
     path.write_bytes(b"zip")
     with http_fixture() as (origin, response, requests):
-        for args in (prepare_args(path), submit_args()):
+        for args in (submit_args(path),):
             for drop, status, body in (
                 (True, 200, {}),
                 (False, 503, {}),
@@ -351,54 +309,45 @@ def test_submission_uncertain_responses_are_not_retried(cli, tmp_path):
                 assert len(requests) == before + 1
 
 
-def test_submission_receipts_fail_closed_but_preserve_uuid_identity_and_large_versions(
-    cli,
-):
+def test_submission_receipts_fail_closed_and_preserve_uuid_identity(cli, tmp_path):
+    path = tmp_path / "submission.zip"
+    path.write_bytes(b"zip")
     with http_fixture() as (origin, response, requests):
-        valid = RECEIPT | {
-            "admission_id": ADMISSION.replace("-", ""),
-            "submission_version": 2**80,
-        }
-        respond(response, valid, 201)
-        result = cli(origin, TOKEN, *submit_args())
+        valid = acceptance() | {"assignment_id": ASSIGNMENT.replace("-", "")}
+        respond(response, valid, 202)
+        result = cli(origin, TOKEN, *submit_args(path))
         assert result.returncode == 0 and json.loads(result.stdout) == valid
-        for change in (
-            {"admission_id": KEY},
-            {"submission_version": None},
-            {"submission_version": 0},
-            {"submission_id": "bad"},
-            {"evaluation_request_id": None},
+        changes = (
+            {"assignment_id": KEY},
+            {"task_id": KEY},
+            {"operation_id": "bad"},
+            {"accepted_at": "bad"},
+            {"status": "completed"},
+            {"task_status_at_acceptance": "accepted"},
+            {"processing_stage_at_acceptance": "post_pending"},
+            {"replayed": None},
+            {"submission_id": SUBMISSION},
             {"internal_url": "private"},
-        ):
-            respond(response, RECEIPT | change, 201)
-            result = cli(origin, TOKEN, *submit_args())
+        )
+        for change in changes:
+            respond(response, acceptance() | change, 202)
+            result = cli(origin, TOKEN, *submit_args(path))
             assert_failure(result, "invalid_api_response")
             assert json.loads(result.stderr)["error"]["outcome_unknown"] is True
-        assert len(requests) == 7
+        assert len(requests) == 1 + len(changes)
 
 
 def test_submission_posts_are_not_replayed_after_http2_goaway(cli, tmp_path):
     path = tmp_path / "submission.zip"
     path.write_bytes(b"zip-bytes")
-    for args, expected in (
-        (prepare_args(path), path.read_bytes()),
-        (submit_args(), None),
-    ):
-        with goaway_fixture(tmp_path) as (origin, env, bodies, connections):
-            result = cli(origin, TOKEN, *args, extra_env=env)
-            assert_failure(result, "service_unavailable")
-            assert json.loads(result.stderr)["error"]["outcome_unknown"] is True
-            assert connections == ["h2"] and len(bodies) == 1
-            if expected is not None:
-                assert bodies == [expected]
-            else:
-                assert json.loads(bodies[0]) == {
-                    "assignment_id": ASSIGNMENT,
-                    "admission_id": ADMISSION,
-                }
+    with goaway_fixture(tmp_path) as (origin, env, bodies, connections):
+        result = cli(origin, TOKEN, *submit_args(path), extra_env=env)
+        assert_failure(result, "service_unavailable")
+        assert json.loads(result.stderr)["error"]["outcome_unknown"] is True
+        assert connections == ["h2"] and bodies == [path.read_bytes()]
 
 
-def test_preparation_feedback_is_closed_safe_and_not_a_submission(cli, tmp_path):
+def test_submission_feedback_is_closed_safe_and_not_a_submission(cli, tmp_path):
     path = tmp_path / "submission.zip"
     path.write_bytes(b"zip")
     details = {
@@ -435,7 +384,7 @@ def test_preparation_feedback_is_closed_safe_and_not_a_submission(cli, tmp_path)
     }
     with http_fixture() as (origin, response, requests):
         respond(response, envelope, 422)
-        result = cli(origin, TOKEN, *prepare_args(path))
+        result = cli(origin, TOKEN, *submit_args(path))
         assert_failure(result, "pre_submission_checker_failed")
         error = json.loads(result.stderr)["error"]
         assert error["details"] == details and not error.get("outcome_unknown", False)
@@ -447,12 +396,12 @@ def test_preparation_feedback_is_closed_safe_and_not_a_submission(cli, tmp_path)
         ):
             respond(response, {"error": envelope["error"] | {"details": invalid}}, 422)
             assert_failure(
-                cli(origin, TOKEN, *prepare_args(path)), "invalid_api_response"
+                cli(origin, TOKEN, *submit_args(path)), "invalid_api_response"
             )
         reflected = copy.deepcopy(envelope)
         reflected["error"]["details"]["results"][0]["findings"][0]["message"] = TOKEN
         respond(response, reflected, 422)
-        assert_failure(cli(origin, TOKEN, *prepare_args(path)), "invalid_api_response")
+        assert_failure(cli(origin, TOKEN, *submit_args(path)), "invalid_api_response")
         assert len(requests) == 5
 
 
@@ -739,7 +688,7 @@ def test_submission_response_caps_reject_otherwise_valid_oversized_json(cli, tmp
     path.write_bytes(b"zip")
     cap = 2 * 1024 * 1024
     cases = (
-        (prepare_args(path), preparation(), 202),
+        (submit_args(path), acceptance(), 202),
         (("submission", "show", SUBMISSION, "-o", "json"), HISTORY, 200),
         (
             ("task", "submissions", TASK, "-o", "json"),

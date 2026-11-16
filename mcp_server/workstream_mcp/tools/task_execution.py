@@ -23,7 +23,6 @@ from workstream_mcp.schemas import (
 )
 
 _DESCRIPTIONS = {
-    "preparation_create": "Prepare and check one bounded submission ZIP.",
     "preparations_list": "List submission-bundle preparations for one task.",
     "preparation_get": "Read one submission-bundle preparation.",
     "task_get": "Read one task available to the current contributor.",
@@ -33,7 +32,7 @@ _DESCRIPTIONS = {
     "task_claim": "Claim and start one ready task atomically.",
     "task_work_context_get": "Read the current contributor work context for one task.",
     "task_guide_document_content_get": "Read one assigned guide document as bounded bytes.",
-    "submission_create": "Create one submission from a ready admission.",
+    "submission_create": "Upload one ZIP for initial checks and durable evaluation acceptance.",
     "task_submissions_list": "List the current contributor's submissions for one task.",
     "submission_get": "Read one submission visible to the current contributor.",
     "management_task_submissions_list": "List submissions for one managed project task.",
@@ -49,7 +48,6 @@ if tuple(_DESCRIPTIONS) != tuple(TASK_EXECUTION_INPUT_SCHEMAS):  # pragma: no co
 TOOL_NAMES = tuple(f"workstream_{name}" for name in _DESCRIPTIONS)
 _MUTATIONS = frozenset(
     {
-        "preparation_create",
         "task_screen",
         "task_release",
         "task_claim",
@@ -113,7 +111,7 @@ async def invoke(
         return adapter_failure("invalid_tool_input", status=400)
 
     upload: bytes | None = None
-    if name == "preparation_create":
+    if name == "submission_create":
         upload = _decode_bundle(arguments)
         if upload is None:
             return adapter_failure("invalid_tool_input", status=400)

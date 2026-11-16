@@ -2763,6 +2763,7 @@ def test_submission_intake_partition_addition_is_exact_and_retains_existing_targ
     retained = "backend/app/core/config.py"
     target = "backend/app/modules/artifacts/api/submission_intake.py"
     additions = {
+        "backend/app/modules/artifacts/api/submission_command.py",
         "backend/app/modules/artifacts/intake/foreground_command.py",
         "backend/app/api/submission_intake.py",
         target, "backend/app/modules/artifacts/intake/models.py",

@@ -126,7 +126,6 @@ packages = ["workstream_mcp"]
 "contracts/artifact_recovery_attempt_get.json" = "workstream_mcp/contracts/artifact_recovery_attempt_get.json"
 "contracts/artifact_admission_usage_get.json" = "workstream_mcp/contracts/artifact_admission_usage_get.json"
 "contracts/artifact_audit_events_list.json" = "workstream_mcp/contracts/artifact_audit_events_list.json"
-"contracts/preparation_create.json" = "workstream_mcp/contracts/preparation_create.json"
 "contracts/preparations_list.json" = "workstream_mcp/contracts/preparations_list.json"
 "contracts/preparation_get.json" = "workstream_mcp/contracts/preparation_get.json"
 "contracts/task_get.json" = "workstream_mcp/contracts/task_get.json"

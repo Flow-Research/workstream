@@ -15,7 +15,6 @@ import pytest
 from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
 
-from app.core.api_controls import StructuredHTTPException
 from app.core.config import Settings, get_settings
 from app.core.identifiers import new_record_id
 from app.api.deps.rate_controls import get_rate_control_service
@@ -28,7 +27,6 @@ from app.modules.outbox.models import OutboxEvent
 from app.modules.tasks.models import Submission
 from app.modules.tasks.models import TaskAssignment, WorkstreamTask
 from app.modules.tasks.api import SubmissionCreationRequest
-from app.modules.tasks.router import create_admission_backed_submission
 from app.modules.tasks.schemas import AdmissionBackedSubmissionCreate
 from app.modules.api_controls.service import AUTHORIZATION_READ_SCOPE, RateControlService
 from app.modules.actors.models import ActorProfile
@@ -408,22 +406,20 @@ async def test_public_preparation_returns_nonblocking_feedback_on_success_and_re
 
 
 async def test_public_submission_infrastructure_error_is_retryable_only_for_sql():
-    """A broken command composition must not be reported as transient storage."""
-    actor = SimpleNamespace(actor_profile_id=new_record_id())
-    payload = AdmissionBackedSubmissionCreate(
-        admission_id=new_record_id(), assignment_id=new_record_id(),
-        summary="test", contributor_attestation="test",
-    )
-    command = SimpleNamespace(create=AsyncMock(side_effect=SQLAlchemyError("database unavailable")))
-    with pytest.raises(StructuredHTTPException) as failure:
-        await create_admission_backed_submission(new_record_id(), payload, actor, command)
-    assert failure.value.status_code == 503
-    assert failure.value.error_code == "submission_infrastructure_unavailable"
-    assert failure.value.retryable is True
-
-    command.create.side_effect = RuntimeError("invalid composition")
+    """Known database failure is bounded; a programming defect is not relabeled."""
+    from app.adapters.artifacts import ConfiguredSubmissionCommand
+    from app.modules.artifacts.api.submission_intake import SubmissionIntakeFailure
+    actor = SimpleNamespace(actor_profile_id=new_record_id(), identity_link_id=new_record_id())
+    command = ConfiguredSubmissionCommand(settings=None, sessions=None, context=actor)
+    command._submit = AsyncMock(side_effect=SQLAlchemyError("database unavailable"))
+    arguments = dict(actor_id=actor.actor_profile_id, identity_link_id=actor.identity_link_id,
+                     idempotency_key=new_record_id(), declared_raw_bytes=None)
+    with pytest.raises(SubmissionIntakeFailure) as failure:
+        await command.submit(None, None, **arguments)
+    assert failure.value.code == "submission_infrastructure_unavailable"
+    command._submit.side_effect = RuntimeError("invalid composition")
     with pytest.raises(RuntimeError, match="invalid composition"):
-        await create_admission_backed_submission(new_record_id(), payload, actor, command)
+        await command.submit(None, None, **arguments)
 
 
 async def test_public_initial_submission_replays_and_recovers_ready_upload(

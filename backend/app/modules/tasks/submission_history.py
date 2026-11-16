@@ -7,8 +7,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.tasks.api.submission_history import (
     SubmissionFindingCounts, SubmissionFindingCountsPort, SubmissionHistoryTarget,
+    SubmissionOperationAssociationUnavailable, SubmissionOperationOutcome,
 )
-from app.modules.tasks.models import EvidenceItem, Submission, WorkstreamTask
+from app.modules.tasks.submission_dispatch import evaluation_request_event
+from app.modules.tasks.models import EvidenceItem, Submission, SubmissionDispatch, WorkstreamTask
 from app.modules.tasks.api.submission_history import ContributorSubmissionHistory, ManagementSubmissionHistory
 
 
@@ -97,3 +99,38 @@ class SubmissionHistoryRepository:
             for row in page
         ]
         return values, len(rows) > limit
+
+
+    async def read_operation_outcome(
+        self, *, project_id: UUID, task_id: UUID, assignment_id: UUID,
+        contributor_id: UUID, submission_id: UUID, admission_id: UUID,
+    ) -> SubmissionOperationOutcome:
+        """Prove exact accepted association; never substitute a newer attempt."""
+        if not self._session.in_transaction() or self._session.in_nested_transaction():
+            raise SubmissionOperationAssociationUnavailable("submission_operation_association_unavailable")
+        row = (await self._session.execute(select(
+            Submission.id, Submission.version, Submission.attempt_status,
+            SubmissionDispatch,
+        ).join(SubmissionDispatch, SubmissionDispatch.submission_id == Submission.id).join(
+            WorkstreamTask, WorkstreamTask.id == Submission.task_id,
+        ).where(
+            Submission.id == str(submission_id),
+            Submission.task_id == str(task_id),
+            Submission.task_assignment_id == str(assignment_id),
+            Submission.contributor_id == str(contributor_id),
+            WorkstreamTask.project_id == str(project_id),
+            SubmissionDispatch.project_id == str(project_id),
+            SubmissionDispatch.task_id == str(task_id),
+            SubmissionDispatch.assignment_id == str(assignment_id),
+            SubmissionDispatch.contributor_id == str(contributor_id),
+            SubmissionDispatch.admission_id == str(admission_id),
+            SubmissionDispatch.submission_version == Submission.version,
+        ))).one_or_none()
+        if row is None:
+            raise SubmissionOperationAssociationUnavailable("submission_operation_association_unavailable")
+        return SubmissionOperationOutcome(
+            submission_id=UUID(row.id), submission_version=row.version,
+            status=row.attempt_status, evaluation_request_id=UUID(row.SubmissionDispatch.evaluation_request_id),
+            evaluation_event_id=UUID(str(row.SubmissionDispatch.evaluation_event_id)),
+            evaluation_event=evaluation_request_event(row.SubmissionDispatch),
+        )
