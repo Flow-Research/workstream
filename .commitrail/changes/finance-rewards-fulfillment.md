@@ -2043,3 +2043,19 @@ Exactly that one additional fragment differs, only by the three ActionId members
 its operation/other schemas are unchanged. Refresh its canonical hash/capture
 metadata and rerun the exact tamper-evidence and actual drift checks. Preserve
 the308 passing execution provenance rather than rerunning unchanged read cases.
+
+
+Exactd65393baa capture applied the checked AUDIT extensions and failed the
+unchanged strict schema check with observed new fingerprint
+`549cabb5003959a3e3b2c3bbf08608d59f591a27c58c2fd8dba730d5fe47c781`.
+Owned PostgreSQL/MinIO cleanup completed. Pin that exact inventory; retain the
+strict validator. No native vocabulary or latest migration pass is inferred
+from this expected capture refusal. Repeat vocabulary and retained-data tests.
+
+Integrated the receipt development commits into the single PR branch without
+pushing a known stale fingerprint. Exact1baaa9286 matches all65 affected source
+files fromd65393baa byte-for-byte (apart from the combined append-only record);
+separate78f89684c ActionId snapshot repair is also retained. Earlier G5 migration
+repairs and installed MCP unpaid-policy input repair remain present. Hosted
+backend/full-suite execution on preceding pushedbebc90463 completed SUCCESS;
+it does not qualify these later receipt changes.
