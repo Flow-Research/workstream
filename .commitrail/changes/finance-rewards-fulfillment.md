@@ -2272,3 +2272,11 @@ app/api/deps/compensation_fulfillment.py::FulfillmentEvidenceRequest.finish is t
 The transactions.py response-failure test must establish a real receipt/exception and its actual allow were flushed inside the transaction before inducing serialization or detached-validation/postcondition failure, then inspect independent PG state after the API error. A move of commit ahead of serialization/validation must fail this test. The lookup-miss test uses finish with the existing ApiErrorResponse and404 after source-read consumption, so it deliberately commits the one read allow rather than raising into generic rollback. Commit-before-effect failures leave no product/AUTH effect; response loss after an actual commit may leave exactly one complete receipt+allow pair and is recovered by exact GET/POST replay. Do not make the impossible promise that transport loss proves rollback, nor retain an allow without its evidence.
 
 PREP precision from security review: inactive/revoked service preparation raises PreparedAuthorizationUnsupported. The adapter must call the existing deny_unsupported(action,input,exact_resource,error) to obtain genuine AuthorizationDenied and capture that ISSUING kernel; only its exact pending decision may be restaged after rollback. Unsupported alone, a copied/foreign decision, resolver failure, unavailable evidence, invalid wire and incompatible isolation cannot trigger restaging. Existing canonical restage_denial enforces request/correlation/object identity and single use. No alternate denial store or fabricated allow is added.
+
+
+Structural validation correctly requires the changed oversized test owner's
+exact source inventory. Reconcile only its smaller file hash/span and shifted
+function coordinates. Every remaining frozen function body/hash/length and
+every hard limit/policy digest is unchanged; no new debt or exemption is added.
+The matrix repair shrinks the owner while retaining its no-lock/no-handle/
+no-event assertions. Re-run the unchanged structural validator before review.
