@@ -41,6 +41,7 @@ from tests.authorization.admin_access.support import SignedActor
 from tests.authorization.task_authority.test_postgresql import grant, project_manager
 from tests.authorization.task_reads.support import create_task
 from tests.conftest import (
+    configured_source_instance_id as configured_source_instance_id,
     pagination_cursor_hmac_secret as pagination_cursor_hmac_secret,
 )
 from tests.tasks.test_submission_lineage import _prepared_packet

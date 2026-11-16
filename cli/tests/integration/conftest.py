@@ -9,11 +9,6 @@ from collections.abc import Callable
 
 import pytest
 
-from tests.conftest import (
-    configured_source_instance_id as configured_source_instance_id,
-)
-
-
 @pytest.fixture
 def cli(tmp_path: Path) -> Callable[..., subprocess.CompletedProcess[str]]:
     executable = os.environ.get("WORKSTREAM_CLI_EXECUTABLE")

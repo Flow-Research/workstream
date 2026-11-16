@@ -27,6 +27,7 @@ from tests.contributions.exports.conftest import (
     live_acceptance_lifecycle as _live_acceptance_lifecycle,
 )
 from tests.conftest import (
+    configured_source_instance_id as configured_source_instance_id,
     pagination_cursor_hmac_secret as pagination_cursor_hmac_secret,
 )
 from tests.authorization.admin_access.support import create_project

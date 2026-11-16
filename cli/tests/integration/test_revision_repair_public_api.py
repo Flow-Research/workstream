@@ -14,6 +14,7 @@ sys.path.insert(0, str(BACKEND / "tests"))
 from app.core.identifiers import new_record_id  # noqa: E402
 from app.modules.tasks.revision.models import TaskRevisionPreparation  # noqa: E402
 from tests.conftest import (  # noqa: E402
+    configured_source_instance_id as configured_source_instance_id,
     clean_postgres_database as clean_postgres_database,
     postgres_database_url as postgres_database_url,
     isolated_database_env as isolated_database_env,

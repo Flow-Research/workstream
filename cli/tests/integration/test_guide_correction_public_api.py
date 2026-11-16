@@ -35,6 +35,10 @@ from tests.projects.guide_compilation.runtime_fixtures import (
     scripted_model_profile_spec,
 )
 
+from tests.conftest import (  # noqa: E402
+    configured_source_instance_id as configured_source_instance_id,
+)
+
 
 @pytest.mark.asyncio
 async def test_guide_correction_public_save_dispatch_replay_and_authority(

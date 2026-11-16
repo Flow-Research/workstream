@@ -22,6 +22,7 @@ from tests.contributions.exports.conftest import (
     rsa_signing_material as rsa_signing_material,
 )
 from tests.conftest import (
+    configured_source_instance_id as configured_source_instance_id,
     pagination_cursor_hmac_secret as pagination_cursor_hmac_secret,
 )
 from tests.authorization.admin_access.fixtures import (

@@ -1309,3 +1309,18 @@ Exact isolatede26ab6e completeness proof passed both predecessor upgrade cases
 in329.66 seconds. Complete two-award rows are preserved, incomplete rows cause
 refusal without partial conversion, and owned PostgreSQL/MinIO cleanup completed.
 This is migration evidence only, not current dual-instrument runtime behavior.
+
+## CLI native-lane fixture isolation
+
+Hosted native_proof at5c30 exposed a backend-only source fixture imported by
+the generic CLI conftest. A fresh hash-locked CPython3.12 minimal environment
+reproduces exit4 before collection. Move that import to the exact25 existing
+backend API test consumers of clean_postgres_database; keep its canonical
+backend body unchanged. Allowed: generic CLI conftest, those25 API files and
+this record. Prohibited: production, schema, workflow, dependencies, conditional
+imports, copied fixture, skipped proof or test deselection. Risk L1 test-proof
+integrity. QA/CI plan review passes with bootstrap-order and execution controls.
+Verify exact inventory, lint, minimal native falsification/PTY proof, and an
+actual backend API case; then QA/test-delta/CI/reuse review. Human focus: no
+backend dependency enters isolated socket/terminal tests. No capability-ledger
+change is claimed by this test-scoping repair.

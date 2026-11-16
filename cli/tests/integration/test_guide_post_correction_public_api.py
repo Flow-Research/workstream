@@ -28,6 +28,10 @@ from test_public_self_service import _ready
 from app.core.hashing import canonical_json_hash
 from app.modules.projects.api.post_policy import PostPolicyTarget
 
+from tests.conftest import (  # noqa: E402
+    configured_source_instance_id as configured_source_instance_id,
+)
+
 
 @pytest.mark.asyncio
 async def test_post_correction_public_socket_replay_and_authority(

@@ -35,6 +35,7 @@ from app.main import create_app  # noqa: E402
 from app.modules.authorization.models import AdminRoleGrant  # noqa: E402
 from app.modules.tasks.api.task_import import TaskImportRow  # noqa: E402
 from tests.conftest import (  # noqa: E402
+    configured_source_instance_id as configured_source_instance_id,
     clean_postgres_database as clean_postgres_database,
     postgres_database_url as postgres_database_url,
     pagination_cursor_hmac_secret as pagination_cursor_hmac_secret,
