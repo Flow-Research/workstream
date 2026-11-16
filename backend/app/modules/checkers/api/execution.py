@@ -10,7 +10,6 @@ from typing import Annotated, Literal, Protocol
 from pydantic import AfterValidator, AwareDatetime, Field, model_validator
 
 from app.core.hashing import canonical_json_hash
-from app.modules.outbox.api import OutboxAppendInput
 
 from app.modules.checkers.api.evaluation_contract import (
     PostSubmissionExecutionRequest,
@@ -348,7 +347,7 @@ class EvaluationProgress(CheckerValue):
     live_worker_lease: bool
     retry_event_id: ResourceId | None
     completion_event_id: ResourceId | None
-    delivery_event: OutboxAppendInput | None
+    delivery_event_json: str | None
 
 
 class ExecutionLease(CheckerValue):

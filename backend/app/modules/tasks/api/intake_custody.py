@@ -4,7 +4,8 @@ from dataclasses import dataclass
 from typing import Protocol
 from uuid import UUID
 
-from app.modules.tasks.api.submission_context import TaskSubmissionContextRequest
+from app.modules.tasks.api.submission_context import TaskSubmissionContextRequest, TaskSubmissionContextFacts
+from app.modules.tasks.api.management_queue import TaskStatus
 
 
 @dataclass(frozen=True, slots=True)
@@ -14,6 +15,13 @@ class IntakeTaskSnapshot:
     project_id: UUID
     eligible_status: str
     context_json: str
+
+
+@dataclass(frozen=True, slots=True)
+class IntakeTaskReadContext:
+    """Current visibility and candidate facts, never a historical attempt outcome."""
+    current_task_status: TaskStatus | None
+    candidate: TaskSubmissionContextFacts | None
 
 
 class IntakeTaskCustodyPort(Protocol):
@@ -37,4 +45,12 @@ class IntakeTaskCustodyPort(Protocol):
 
     async def accept(self, task_id: UUID, operation_id: UUID, expected_status: str) -> None:
         """T4-only direct transition; deferred custody requires exact accepted AUTH/event."""
+        ...
+
+
+    async def read_operation_context(
+        self, request: TaskSubmissionContextRequest, *, project_id: UUID,
+        reader_id: UUID, management: bool, own_submitter: bool,
+    ) -> IntakeTaskReadContext:
+        """After AUTH, read visibility and a candidate needing locked policy/ack checks."""
         ...

@@ -142,9 +142,10 @@ def test_explicit_submit_replay_preserves_packet_and_bytes(cli, tmp_path):
             assert headers["X-Contributor-Attestation"] == ""
             assert headers["Idempotency-Key"] == KEY
             assert headers["Content-Type"] == "application/zip"
-        assert requests == [
-            ("POST", f"/api/v1/tasks/{TASK}/submissions", "Bearer " + TOKEN)
-        ] * 2
+        assert (
+            requests
+            == [("POST", f"/api/v1/tasks/{TASK}/submissions", "Bearer " + TOKEN)] * 2
+        )
 
 
 def test_accepted_submission_shows_nonblocking_intake_feedback(cli, tmp_path):

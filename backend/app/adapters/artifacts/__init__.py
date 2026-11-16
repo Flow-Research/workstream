@@ -9,13 +9,13 @@ from pydantic import ValidationError
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.adapters.auth import selected_pre_submit_authority, submission_intake_authority
-from app.adapters.checkers import selected_pre_submit_checker_execution, selected_pre_submit_coordinator
+from app.adapters.checkers import selected_pre_submit_checker_execution, selected_pre_submit_coordinator, evaluation_coordinator
 from app.adapters.outbox import outbox_append, finalized_unknown_deliveries
-from app.adapters.tasks import intake_task_custody_port
+from app.adapters.tasks import intake_task_custody_port, submission_history_repository
 from app.interfaces.artifacts import ArtifactInputMismatchError, ArtifactLimitExceededError, ArtifactStoreError
 from app.interfaces.external_services import ExternalServiceAdapterError
 from app.modules.artifacts.api.submission_archive import MAXIMUM_SUBMISSION_ZIP_BYTES
-from app.modules.artifacts.api.submission_command import SubmissionExecutionProfile, SubmissionIntakeCommand
+from app.modules.artifacts.api.submission_command import SubmissionExecutionProfile, SubmissionIntakeCommand, SubmissionOperationReader
 from app.modules.artifacts.api.submission_intake import SubmissionIntakeFailure
 from app.modules.artifacts.authorization import PreparedPreSubmitMaterializationAuthorization
 from app.modules.artifacts.intake.capacity import SubmissionSourceCapacityConflict
@@ -24,6 +24,7 @@ from app.modules.artifacts.intake.foreground_command import ForegroundSubmission
 from app.modules.artifacts.intake.foreground_lease import ForegroundIntakeLease
 from app.modules.artifacts.intake.foreground_upload import ForegroundSourceUpload
 from app.modules.artifacts.intake.repository import IntakeCustodyConflict
+from app.modules.artifacts.intake.progress import SubmissionOperationReadService
 from app.modules.artifacts.selected_pre_submit_execution import SelectedPreSubmitExecutionService, SelectedPreSubmitSourceReads
 from app.modules.artifacts.service import artifact_storage_namespace_spec
 from app.modules.authorization.api.submission_intake import IntakeAuthorityDenied
@@ -1202,3 +1203,44 @@ def get_submission_intake_command(
 ) -> SubmissionIntakeCommand:
     return ConfiguredSubmissionCommand(
         settings=request.app.state.settings, sessions=get_session_factory(), context=context)
+
+
+class ConfiguredSubmissionOperationReader:
+    """Read stored progress without provider credentials or an execution profile."""
+
+    def __init__(self, *, sessions, context):
+        self._sessions, self._context = sessions, context
+
+    async def read(self, task_id, selector):
+        from app.modules.checkers.api.execution import CheckerExecutionUnavailable
+        from app.modules.projects.api.locked_policy import ProjectLockedPolicyContextUnavailable
+        from app.modules.tasks.api.submission_history import SubmissionOperationAssociationUnavailable
+
+        async with self._sessions() as session:
+            authority = submission_intake_authority(session, self._context)
+            try:
+                async with session.begin():
+                    service = SubmissionOperationReadService(
+                        session, tasks=intake_task_custody_port(session), authority=authority,
+                        history=submission_history_repository(session), evaluations=evaluation_coordinator(session),
+                        prechecks=selected_pre_submit_coordinator(session), projects=project_locked_policy_context_port(session),
+                        events=outbox_append(session), deliveries=finalized_unknown_deliveries(session),
+                    )
+                    return await service.read(task_id, selector, actor_id=self._context.actor_profile_id)
+            except IntakeAuthorityDenied as exc:
+                if await authority.restage_denial(exc):
+                    await session.commit()
+                raise SubmissionIntakeFailure("submission_unavailable") from None
+            except (IntakeCustodyConflict, TaskSubmissionContextUnavailable, SubmissionOperationAssociationUnavailable,
+                    CheckerExecutionUnavailable, SelectedPreSubmitUnavailable, ProjectLockedPolicyContextUnavailable,
+                    SQLAlchemyError, ValidationError) as exc:
+                logger.exception("Submission operation progress unavailable")
+                raise SubmissionIntakeFailure("submission_infrastructure_unavailable") from exc
+            finally:
+                authority.close()
+
+
+def get_submission_operation_reader(
+    context: Annotated[object, Depends(get_artifact_authorization_context)],
+) -> SubmissionOperationReader:
+    return ConfiguredSubmissionOperationReader(sessions=get_session_factory(), context=context)

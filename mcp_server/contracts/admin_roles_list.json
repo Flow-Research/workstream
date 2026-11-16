@@ -1,5 +1,5 @@
 {
-  "canonical_sha256": "c08ddf466d13a8ac0a3241e2b9beede0cda9eaf798fda8a446036685e25bdc0f",
+  "canonical_sha256": "b09af3f83afbfbe787e85834dfd4b21efe6a6dbc5c3bb3c7f16bef9b4ce2a87c",
   "components": {
     "schemas": {
       "AdminRole": {
@@ -223,6 +223,7 @@
           "artifact.recovery_attempt.read",
           "artifact.audit.read",
           "artifact.guide_source.ingest",
+          "artifact.submission_source.cleanup",
           "artifact.binding.create",
           "artifact.verification.execute",
           "artifact.pending_work.scan",

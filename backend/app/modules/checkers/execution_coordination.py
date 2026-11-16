@@ -265,7 +265,7 @@ class EvaluationCoordinator:
         return EvaluationProgress(
             current=current, status=run.status, live_worker_lease=live,
             retry_event_id=retry_event_id, completion_event_id=run.completion_event_id,
-            delivery_event=delivery_event,
+            delivery_event_json=delivery_event.model_dump_json() if delivery_event is not None else None,
         )
 
     async def read_retry_delivery(

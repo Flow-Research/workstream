@@ -315,3 +315,47 @@ async def test_operation_management_read_uses_current_manager_authority(admin_ac
                 assert rows and all(row.after_facts["allowed"] is False for row in rows)
         finally:
             authority.close()
+
+
+@pytest.mark.parametrize("case,management,own_submitter", [
+    ("own_submitter", False, True), ("own_manager", True, False),
+    ("own_both", True, True), ("other_manager", True, False),
+    ("other_submitter", None, False), ("foreign_manager", None, False),
+    ("absent", None, False),
+])
+async def test_public_operation_read_selects_live_authority(admin_access, case, management, own_submitter):
+    project = await create_project("Public operation reader selection")
+    if case in {"own_submitter", "own_both", "other_submitter"}:
+        manager = await project_manager(admin_access, project)
+        await grant(admin_access, manager, project)
+    if case in {"own_manager", "own_both", "other_manager", "foreign_manager"}:
+        scope = await create_project("Foreign management scope") if case == "foreign_manager" else project
+        await admin_access.signed.grant(admin_access.admin, admin_access.target,
+            role="project_manager", project_id=scope)
+    ctx = await context(admin_access)
+    owner = new_record_id() if case.startswith("other_") else ctx.actor_profile_id
+    read = IntakeOperationReadFacts(new_record_id(), project, new_record_id(), owner)
+    async with db_session.get_session_factory()() as session:
+        authority = SubmissionIntakeAuthorization(session, ctx)
+        try:
+            if management is None:
+                with pytest.raises(IntakeAuthorityDenied) as caught:
+                    async with session.begin():
+                        await authority.authorize_operation_read(read)
+                assert await authority.restage_denial(caught.value)
+                await session.commit()
+            else:
+                async with session.begin():
+                    access = await authority.authorize_operation_read(read)
+                assert access.management is management
+                assert access.own_submitter is own_submitter
+                row = await session.get(AuditEvent, str(access.decision_id))
+                assert row.action_id == ("project.task.submission_operation.read" if management
+                                         else "task.submission_operation.read")
+            rows = list(await session.scalars(select(AuditEvent).where(
+                AuditEvent.request_id == str(ctx.request_id))))
+            assert len(rows) == 1  # No denied contributor read used as a role probe.
+            assert rows[0].after_facts["allowed"] is (management is not None)
+            assert rows[0].resource_id == str(read.operation_id)
+        finally:
+            authority.close()

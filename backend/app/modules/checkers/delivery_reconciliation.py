@@ -30,7 +30,7 @@ from app.modules.checkers.api.delivery_reconciliation import (
     POST_SUBMIT_DELIVERY_RECONCILIATION_EVENT,
     POST_SUBMIT_DELIVERY_SUPPORTED_EVENTS,
     post_submit_delivery_request_digest,
-    post_submit_reconciliation_event,
+    post_submit_reconciliation_event_json,
 )
 from app.modules.checkers.api.execution import (
     COMPLETION_EVENT,
@@ -41,6 +41,7 @@ from app.modules.checkers.api.execution import (
 )
 from app.modules.checkers.api.evaluation_contract import PostSubmissionExecutionRequest
 from app.modules.outbox.api import (
+    OutboxAppendInput,
     DeliveryUnavailable,
     FinalizedUnknownDelivery,
     FinalizedUnknownDeliveryPort,
@@ -322,7 +323,7 @@ class PostSubmitDeliveryService:
             )
             try:
                 appended = await self._events.append(
-                    post_submit_reconciliation_event(source.project_id, payload)
+                    OutboxAppendInput.model_validate_json(post_submit_reconciliation_event_json(source.project_id, payload))
                 )
             except OutboxIdempotencyConflict as exc:
                 raise PostSubmitDeliveryConflict(

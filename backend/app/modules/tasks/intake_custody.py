@@ -6,7 +6,7 @@ from uuid import UUID
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.tasks.api.intake_custody import IntakeTaskSnapshot
+from app.modules.tasks.api.intake_custody import IntakeTaskSnapshot, IntakeTaskReadContext
 from app.modules.tasks.api.submission_context import (
     TaskSubmissionContextPort, TaskSubmissionContextRequest, TaskSubmissionContextUnavailable,
 )
@@ -77,3 +77,30 @@ class IntakeTaskCustody:
             raise TaskSubmissionContextUnavailable("task_submission_context_invalid")
         task.status = "evaluation_pending"
         await self._session.flush()
+
+
+    async def read_operation_context(
+        self, request: TaskSubmissionContextRequest, *, project_id: UUID,
+        reader_id: UUID, management: bool, own_submitter: bool,
+    ) -> IntakeTaskReadContext:
+        """Keep current visibility separate from the operation's retained outcome."""
+        if await self.lock(request.task_id) != project_id:
+            raise TaskSubmissionContextUnavailable("task_submission_context_invalid")
+        task = await self._tasks.get_task(str(request.task_id), for_update=True)
+        assignment = await self._tasks.lock_accepted_assignment(
+            project_id=project_id, task_id=request.task_id, assignment_id=request.assignment_id,
+        )
+        if assignment is None or assignment.contributor_id != str(request.contributor_id):
+            raise TaskSubmissionContextUnavailable("task_submission_context_invalid")
+        own_active = (reader_id == request.contributor_id and assignment.status == "active"
+                      and task.assigned_to == str(request.contributor_id))
+        visible = management or (own_submitter and own_active)
+        status = task.status if visible else None
+        if (not own_submitter or not own_active or task.active_submission_operation_id is not None
+                or task.status not in {"in_progress", "needs_revision"}):
+            return IntakeTaskReadContext(status, None)
+        try:
+            candidate = await self._contexts.lock_submission_context(request)
+        except TaskSubmissionContextUnavailable:
+            return IntakeTaskReadContext(status, None)
+        return IntakeTaskReadContext(status, candidate)

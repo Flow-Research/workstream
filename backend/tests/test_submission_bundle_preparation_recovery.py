@@ -13,23 +13,17 @@ from app.core.identifiers import new_record_id
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from fastapi import HTTPException
-from starlette.requests import Request
 
 import app.modules.artifacts.submission_admission as submission_admission
-from app.api.routes.artifact_submissions import prepare_submission_bundle
-from app.adapters.artifacts import (
-    get_submission_bundle_preparation_actor,
-    get_submission_bundle_preparation_command,
-)
+from app.api.deps.authorization import get_authorization_actor_identity
+from app.adapters.artifacts import get_submission_intake_command
+from app.modules.artifacts.api.submission_intake import SubmissionIntakeFailure
+from app.modules.artifacts.api.submission_preparation import public_pre_submission_results
 from app.main import create_app
-from app.db.session import get_db_session
 from app.modules.artifacts.api import (
     SubmissionBundlePreparationRequest,
     SubmissionBundlePreparationCheckFailed,
-    SubmissionBundlePreparationRejected, SubmissionBundlePreparationUnavailable,
-    SubmissionBundlePreparationInfrastructureUnavailable, SubmissionBundlePreparationResult,
-    SubmissionBundlePreparationStatus,
+    SubmissionBundlePreparationRejected,
 )
 from app.modules.artifacts.submission_admission import (
     PreparedSubmissionBundlePreparationCommand,
@@ -63,51 +57,56 @@ def _feedback_facts(*, eligible: bool = False) -> SelectedPreSubmitExecutionFact
         eligible=eligible, checks=checks,
         warnings=({"code": "submission_summary_missing"}, {"code": "submission_attestation_missing"}),
     )
-    return SelectedPreSubmitExecutionFacts(
-        policy_sha256="sha256:" + "1" * 64, workstream_default=default,
-        required_external_count=0, external_members=(), eligible=eligible,
-     source_contracts=selected_pre_submit_source_contracts())
+    from dataclasses import replace
+    from tests.checkers.external.test_selected_pre_submit_coordination import (
+        _source_completed_execution, _source_reservation,
+    )
+    execution = _source_completed_execution(_source_reservation())
+    return replace(
+        execution, workstream_default=default, eligible=eligible,
+        external_members=execution.external_members if eligible else (),
+        source_contracts=selected_pre_submit_source_contracts(),
+    )
 
 
-async def _mounted_preparation_response(error: RuntimeError):
+
+async def _mounted_submission_response(error=None, *, command=None, packet_text=True):
     app = create_app()
-    app.dependency_overrides[get_submission_bundle_preparation_actor] = _actor
-    app.dependency_overrides[get_submission_bundle_preparation_command] = lambda: SimpleNamespace(
-        prepare=AsyncMock(side_effect=error)
-    )
-    app.dependency_overrides[get_db_session] = lambda: SimpleNamespace(
-        rollback=AsyncMock()
-    )
+    app.dependency_overrides[get_authorization_actor_identity] = _actor
+    command = command or SimpleNamespace(submit=AsyncMock(side_effect=error))
+    app.dependency_overrides[get_submission_intake_command] = lambda: command
     task_id, assignment_id, key = (new_record_id() for _ in range(3))
+    headers = {
+        "Content-Type": "application/zip",
+        "X-Task-Assignment-Id": str(assignment_id),
+        "Idempotency-Key": str(key),
+    }
+    if packet_text:
+        headers.update({"X-Submission-Summary": "summary",
+                        "X-Contributor-Attestation": "attestation"})
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://testserver"
     ) as client:
         return await client.post(
-            f"/api/v1/tasks/{task_id}/submission-bundle-preparations",
-            headers={
-                "Content-Type": "application/zip",
-                "X-Task-Assignment-Id": str(assignment_id),
-                "Idempotency-Key": str(key),
-                "X-Submission-Summary": "summary",
-                "X-Contributor-Attestation": "attestation",
-            },
-            content=b"PK\x03\x04blocked",
+            f"/api/v1/tasks/{task_id}/submissions",
+            headers=headers, content=b"PK\x03\x04blocked",
         )
 
 
 @pytest.mark.asyncio
-async def test_mounted_preparation_returns_exact_ordered_bounded_feedback() -> None:
+async def test_mounted_submission_returns_exact_ordered_bounded_feedback() -> None:
     facts = _feedback_facts()
 
-    response = await _mounted_preparation_response(
-        SubmissionBundlePreparationCheckFailed(facts)
+    response = await _mounted_submission_response(
+        SubmissionIntakeFailure("pre_submission_checker_failed",
+                                pre_submission_results=public_pre_submission_results(facts))
     )
 
     assert response.status_code == 422
     payload = response.json()
     assert set(payload) == {"error"}
     assert payload["error"]["code"] == "pre_submission_checker_failed"
-    assert payload["error"]["message"] == "Pre-submission checks failed"
+    assert payload["error"]["message"] == "pre_submission_checker_failed"
     assert payload["error"]["retryable"] is False
     assert payload["error"]["details"] == {
         "status": "failed",
@@ -126,15 +125,15 @@ async def test_mounted_preparation_returns_exact_ordered_bounded_feedback() -> N
 
 
 @pytest.mark.asyncio
-async def test_mounted_preparation_returns_sanitized_archive_rejection() -> None:
-    response = await _mounted_preparation_response(
-        SubmissionBundlePreparationRejected("submission_archive_malformed")
+async def test_mounted_submission_returns_sanitized_archive_rejection() -> None:
+    response = await _mounted_submission_response(
+        SubmissionIntakeFailure("submission_packet_invalid")
     )
 
     assert response.status_code == 422
     payload = response.json()
-    assert payload["detail"] == "submission_archive_malformed"
-    assert payload["error"]["code"] == "invalid_request"
+    assert set(payload) == {"error"}
+    assert payload["error"]["code"] == "submission_packet_invalid"
     assert payload["error"]["retryable"] is False
     assert payload["error"]["details"] == {}
     assert all(
@@ -144,30 +143,19 @@ async def test_mounted_preparation_returns_sanitized_archive_rejection() -> None
 
 
 @pytest.mark.asyncio
-async def test_mounted_preparation_does_not_reclassify_unexpected_failure() -> None:
-    command = SimpleNamespace(
-        prepare=AsyncMock(side_effect=RuntimeError("unexpected inspector failure"))
-    )
-    request = Request(
-        {
-            "type": "http",
-            "method": "POST",
-            "path": "/",
-            "headers": [(b"content-type", b"application/zip")],
-        }
-    )
+async def test_mounted_submission_does_not_reclassify_unexpected_failure() -> None:
+    from starlette.requests import Request
+    from app.api.routes.artifact_submissions import submit_source
+    from app.api.submission_intake import SubmissionIntakeHeaders
+    from app.modules.artifacts.api.submission_intake import SubmissionIntakeMetadata
 
+    metadata = SubmissionIntakeMetadata(task_id=new_record_id(), assignment_id=new_record_id())
+    command = SimpleNamespace(submit=AsyncMock(side_effect=RuntimeError("unexpected inspector failure")))
     with pytest.raises(RuntimeError, match="unexpected inspector failure"):
-        await prepare_submission_bundle(
-            task_id=str(new_record_id()),
-            request=request,
-            actor=_actor(),
-            command=command,
-            session=SimpleNamespace(rollback=AsyncMock()),
-            assignment_id=str(new_record_id()),
-            idempotency_key=str(new_record_id()),
-            summary="summary",
-            contributor_attestation="attestation",
+        await submit_source(
+            task_id=metadata.task_id, request=Request({"type": "http", "headers": []}),
+            headers=SubmissionIntakeHeaders(metadata, new_record_id(), None),
+            actor=_actor(), command=command,
         )
 
 
@@ -370,45 +358,24 @@ async def test_post_reservation_archive_failure_remains_recoverable(
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "error,status_code,detail",
-    (
-        (
-            SubmissionBundlePreparationRejected(
-                "submission_bundle_preparation_context_changed"
-            ),
-            409,
-            "submission_bundle_preparation_context_changed",
-        ),
-        (
-            SubmissionBundlePreparationUnavailable(
-                "submission bundle preparation is unavailable"
-            ),
-            404,
-            "Task not found",
-        ),
-        (
-            SubmissionBundlePreparationInfrastructureUnavailable(
-                "pre_submission_attempt_outcome_unresolved"
-            ),
-            503,
-            "pre_submission_attempt_outcome_unresolved",
-        ),
-        (
-            SubmissionBundlePreparationInfrastructureUnavailable("deadline_exceeded"),
-            503,
-            "deadline_exceeded",
-        ),
-    ),
-)
-async def test_mounted_preparation_preserves_non_feedback_error_boundaries(
-    error, status_code, detail,
+@pytest.mark.parametrize("code,status_code,retryable", (
+    ("submission_operation_in_progress", 409, False),
+    ("submission_unavailable", 404, False),
+    ("submission_outcome_unknown", 503, True),
+    ("submission_upload_timeout", 408, False),
+    ("submission_infrastructure_unavailable", 503, True),
+    ("submission_capacity_exceeded", 429, True),
+    ("submission_archive_limit_exceeded", 413, False),
+))
+async def test_mounted_submission_preserves_non_feedback_error_boundaries(
+    code, status_code, retryable,
 ) -> None:
-    response = await _mounted_preparation_response(error)
-
+    response = await _mounted_submission_response(SubmissionIntakeFailure(code))
     assert response.status_code == status_code
     payload = response.json()
-    assert payload["detail"] == detail
+    assert set(payload) == {"error"}
+    assert payload["error"]["code"] == code
+    assert payload["error"]["retryable"] is retryable
     assert payload["error"]["details"] == {}
     assert "results" not in payload["error"]["details"]
 
@@ -429,70 +396,25 @@ def test_blocked_feedback_rejects_noncanonical_or_non_false_facts(eligible) -> N
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("error,status_code,detail", (
-    (SubmissionBundlePreparationRejected("submission_bundle_preparation_context_changed"),
-     409,"submission_bundle_preparation_context_changed"),
-    (SubmissionBundlePreparationInfrastructureUnavailable("pre_submission_checked_custody_unavailable"),
-     503,"pre_submission_checked_custody_unavailable"),
-    (SubmissionBundlePreparationInfrastructureUnavailable("pre_submission_attempt_outcome_unresolved"),
-     503,"pre_submission_attempt_outcome_unresolved"),
-    (SubmissionBundlePreparationUnavailable("submission bundle preparation is unavailable"),
-     404,"Task not found"),
-))
-async def test_hidden_preparation_maps_context_custody_and_authority_distinctly(
-    error, status_code, detail,
-) -> None:
-    command = SimpleNamespace(
-        prepare=AsyncMock(
-            side_effect=error
-        )
-    )
-    request = Request(
-        {
-            "type": "http",
-            "method": "POST",
-            "path": "/",
-            "headers": [(b"content-type", b"application/zip")],
-        }
-    )
-
-    with pytest.raises(HTTPException) as failure:
-        await prepare_submission_bundle(
-            task_id=str(new_record_id()),
-            request=request,
-            actor=_actor(),
-            command=command,
-            session=SimpleNamespace(rollback=AsyncMock()),
-            assignment_id=str(new_record_id()),
-            idempotency_key=str(new_record_id()),
-            summary="summary",
-            contributor_attestation="attestation",
-        )
-
-    assert failure.value.status_code == status_code
-    assert failure.value.detail == detail
-
-
-@pytest.mark.asyncio
-async def test_hidden_preparation_treats_missing_optional_packet_text_as_warnings() -> None:
+async def test_mounted_submission_keeps_missing_optional_packet_text_warning_only() -> None:
     """Missing summary and attestation reach PRE as empty warning-only values."""
-    command = SimpleNamespace(prepare=AsyncMock(return_value=SubmissionBundlePreparationResult(
-        put_attempt_id=new_record_id(), admission_id=None,
-        submission_bundle_preparation_status=SubmissionBundlePreparationStatus.PREPARED,
-        replayed=False, pre_submission_results=(),
-    )))
-    request = Request({
-        "type": "http", "method": "POST", "path": "/",
-        "headers": [(b"content-type", b"application/zip")],
-    })
+    from datetime import UTC, datetime
 
-    await prepare_submission_bundle(
-        task_id=str(new_record_id()), request=request, actor=_actor(), command=command,
-        session=SimpleNamespace(rollback=AsyncMock()),
-        assignment_id=str(new_record_id()), idempotency_key=str(new_record_id()),
-        summary=None, contributor_attestation=None,
-    )
+    async def accept(metadata, chunks, **kwargs):
+        return {
+            "operation_id": new_record_id(), "task_id": metadata.task_id,
+            "assignment_id": metadata.assignment_id, "status": "accepted",
+            "accepted_at": datetime.now(UTC), "task_status_at_acceptance": "evaluation_pending",
+            "processing_stage_at_acceptance": "finalization_pending", "replayed": False,
+            "pre_submission_results": public_pre_submission_results(_feedback_facts(eligible=True)),
+        }
 
-    prepared = command.prepare.await_args.args[0]
-    assert prepared.summary == ""
-    assert prepared.contributor_attestation == ""
+    command = SimpleNamespace(submit=AsyncMock(side_effect=accept))
+    response = await _mounted_submission_response(command=command, packet_text=False)
+    assert response.status_code == 202
+    submitted = command.submit.await_args.args[0]
+    assert submitted.summary == ""
+    assert submitted.contributor_attestation == ""
+    warnings = [item["warning_code"] for item in response.json()["pre_submission_results"]
+                if item["status"] == "warning"]
+    assert warnings == ["submission_summary_missing", "submission_attestation_missing"]

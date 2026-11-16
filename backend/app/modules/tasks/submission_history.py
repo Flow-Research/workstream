@@ -132,5 +132,5 @@ class SubmissionHistoryRepository:
             submission_id=UUID(row.id), submission_version=row.version,
             status=row.attempt_status, evaluation_request_id=UUID(row.SubmissionDispatch.evaluation_request_id),
             evaluation_event_id=UUID(str(row.SubmissionDispatch.evaluation_event_id)),
-            evaluation_event=evaluation_request_event(row.SubmissionDispatch),
+            evaluation_event_json=evaluation_request_event(row.SubmissionDispatch).model_dump_json(),
         )

@@ -52,6 +52,7 @@ async def test_stalled_accepted_source_is_protected_from_cleanup(recovery_intake
 
 @pytest.fixture
 async def admission_intake(tmp_path, isolated_database_env, admin_access, request):
+    from sqlalchemy import text
     from app.adapters.outbox import outbox_append, finalized_unknown_deliveries
     from app.adapters.projects import project_locked_policy_context_port
     from app.modules.artifacts.intake.foreground_admission import ForegroundIntakeAdmission
@@ -94,6 +95,10 @@ async def admission_intake(tmp_path, isolated_database_env, admin_access, reques
             await seed_started_task_for_artifact_test(connection, dict(
                 task=str(task), assignment=str(assignment), project=str(project), actor=str(actor.actor_profile_id),
             ))
+            # ART's shared seed omits work acceptance; this fixture also proves TASK routing.
+            await connection.execute(text(
+                "UPDATE task_assignments SET accepted_at=clock_timestamp() WHERE id=:id"
+            ), {"id": assignment})
         admission = ForegroundIntakeAdmission(
             factory, tasks=lambda session: IntakeTaskCustody(session, task_submission_context_port(session)),
             task_contexts=task_submission_context_port, projects=project_locked_policy_context_port,
@@ -808,6 +813,7 @@ async def test_t5_finalizes_same_source_with_one_submission_and_post_dispatch(ad
     from app.adapters.checkers import selected_pre_submit_coordinator
     from app.adapters.outbox import outbox_append
     from app.adapters.tasks import accepted_submission_creation_service
+    from app.modules.outbox.api import OutboxAppendInput
     from app.modules.actors.api import ServiceIdentity
     from app.modules.artifacts.authorization import PreparedSubmissionFinalizationAuthorization
     from app.modules.artifacts.intake.finalization import AcceptedSubmissionFinalization
@@ -839,6 +845,23 @@ async def test_t5_finalizes_same_source_with_one_submission_and_post_dispatch(ad
         assert await finalizer.run(owner.operation_id) == result
         assert await f.admission.accept(owner, request, terminal.terminal_digest,
             checkers=selected_pre_submit_coordinator, outbox=outbox_append) == dict(accepted, replayed=True)
+        async def public_progress(stage, evaluation_request_id, *, stalled=False, governed=False):
+            response = await f.access.signed.client.get(
+                f"/api/v1/tasks/{f.task}/submission-operations", headers=f.access.target.headers,
+                params={"operation_id": str(owner.operation_id)},
+            )
+            assert response.status_code == 200, response.text
+            observed = response.json()
+            assert observed["operation_state"] == "finalized"
+            assert observed["submission_id"] == str(result.submission_id)
+            assert observed["submission_version"] == result.submission_version
+            assert observed["evaluation_request_id"] == str(evaluation_request_id)
+            assert observed["processing_stage"] == stage
+            assert observed["operationally_stalled"] is stalled
+            assert observed["next_action"] == ("inspect_governed_outcome" if governed else "wait")
+            return observed
+
+        await public_progress("evaluation_pending", result.evaluation_request_id)
         async with f.factory() as session:
             row = await session.get(SubmissionIntakeOperation, str(owner.operation_id))
             assert row.state == "finalized" and row.finalized_submission_id == str(result.submission_id)
@@ -890,7 +913,7 @@ async def test_t5_finalizes_same_source_with_one_submission_and_post_dispatch(ad
             from app.modules.artifacts.intake.progress import evaluation_delivery_progress
             from app.adapters.outbox import finalized_unknown_deliveries
             pending = await evaluation_delivery_progress(
-                outcome.evaluation_event_id, outcome.evaluation_event, queued,
+                outcome.evaluation_event_id, OutboxAppendInput.model_validate_json(outcome.evaluation_event_json), queued,
                 outbox_append(session), finalized_unknown_deliveries(session),
             )
             assert pending.state == "pending"
@@ -928,6 +951,7 @@ async def test_t5_finalizes_same_source_with_one_submission_and_post_dispatch(ad
                 assert running.status == "running" and running.live_worker_lease
                 assert running.completion_event_id is None
                 running_observations.append(running)
+            await public_progress("evaluation_running", result.evaluation_request_id)
             return await original_execute(runtime, execution_request, grant)
         with monkeypatch.context() as patch:
             patch.setattr(ControlledSelectedExecution, "execute", observe_running)
@@ -949,10 +973,12 @@ async def test_t5_finalizes_same_source_with_one_submission_and_post_dispatch(ad
             assert completed.retry_event_id is None
             if not post_failure:
                 pending_completion = await evaluation_delivery_progress(
-                    completed.completion_event_id, completed.delivery_event, completed,
+                    completed.completion_event_id, OutboxAppendInput.model_validate_json(completed.delivery_event_json), completed,
                     outbox_append(session), finalized_unknown_deliveries(session),
                 )
                 assert pending_completion.state == "pending"
+        await public_progress("operationally_stalled" if post_failure else "evaluation_pending",
+                              result.evaluation_request_id, stalled=post_failure)
         if post_failure:
             from app.adapters.checkers import checker_retry_service
             from tests.checkers.execution.test_checker_retry import _operator_for, _command
@@ -967,10 +993,36 @@ async def test_t5_finalizes_same_source_with_one_submission_and_post_dispatch(ad
                 assert retrying.retry_event_id == retry.successor.event_id
                 assert retrying.completion_event_id is None
                 pending_retry = await evaluation_delivery_progress(
-                    retrying.retry_event_id, retrying.delivery_event, retrying,
+                    retrying.retry_event_id, OutboxAppendInput.model_validate_json(retrying.delivery_event_json), retrying,
                     outbox_append(session), finalized_unknown_deliveries(session),
                 )
                 assert pending_retry.state == "pending"
+            await public_progress("evaluation_pending", retrying.current.request.evaluation_request_id)
+        else:
+            from app.adapters.auth import outbox_dispatch_authorization
+            from app.adapters.outbox import outbox_delivery
+            from app.adapters.tasks import evaluation_completion_handler
+            from app.modules.checkers.api.execution import COMPLETION_EVENT
+            from app.modules.outbox.api import DeliveryOptions
+            from app.modules.outbox.registry import HandlerRegistry
+            from tests.authorization.post_submit_routing.support import provision_router
+            from tests.tasks.evaluation_delivery.support import outcome as delivery_outcome
+
+            await provision_post_submit_service(f.factory, ServiceIdentity.OUTBOX_DISPATCHER)
+            await provision_router(f.factory)
+            dispatcher = outbox_delivery(
+                f.factory, authorization_factory=outbox_dispatch_authorization,
+                registry=HandlerRegistry([(COMPLETION_EVENT, 1,
+                    evaluation_completion_handler(sessions=f.factory))]),
+                options=DeliveryOptions(),
+            )
+            delivered = await dispatcher.deliver(
+                completed.completion_event_id, f.project, "source-progress-governed-outcome")
+            assert delivery_outcome(delivered)["delivery_state"] == "acknowledged", delivery_outcome(delivered)
+            async with f.factory.begin() as session:
+                governed = await submission_history_repository(session).read_operation_outcome(**selectors)
+                assert governed.status == "review_pending"
+            await public_progress("review_pending", result.evaluation_request_id, governed=True)
 
     finally:
         store.close()

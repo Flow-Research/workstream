@@ -2,14 +2,17 @@
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, Query
 from fastapi.responses import JSONResponse
 
-from app.adapters.artifacts import get_submission_intake_command
+from app.adapters.artifacts import get_submission_intake_command, get_submission_operation_reader
 from app.api.deps.authorization import get_authorization_actor_identity
 from app.api.submission_intake import SubmissionIntakeHeaders, submission_intake_headers, submission_intake_body
 from app.core.api_controls import error_response
-from app.modules.artifacts.api.submission_command import SubmissionAcceptedResponse, SubmissionIntakeCommand
+from app.modules.artifacts.api.submission_command import (
+    SubmissionAcceptedResponse, SubmissionIntakeCommand, SubmissionOperationReader,
+    SubmissionOperationResponse, SubmissionOperationSelector,
+)
 from app.modules.artifacts.api.submission_intake import SubmissionIntakeFailure
 from app.modules.authorization.api import ActorIdentityFacts
 
@@ -89,3 +92,27 @@ async def submit_source(
             details=details, retryable=exc.code in {"submission_capacity_exceeded", "submission_infrastructure_unavailable", "submission_outcome_unknown"},
         )
     return SubmissionAcceptedResponse.model_validate(receipt)
+
+
+@router.get(
+    "/tasks/{task_id}/submission-operations", response_model=SubmissionOperationResponse,
+    openapi_extra={
+        "x-workstream-action-id": "task.submission_operation.read",
+        "x-workstream-management-action-id": "project.task.submission_operation.read",
+    },
+    responses={404: {"description": "Operation or current read authority unavailable"},
+               422: {"description": "Exactly one operation UUID or actor-scoped idempotency key is required"},
+               503: {"description": "Stored operation progress cannot be verified"}},
+)
+async def read_submission_operation(
+    task_id: UUID, request: Request,
+    selector: Annotated[SubmissionOperationSelector, Query()],
+    reader: Annotated[SubmissionOperationReader, Depends(get_submission_operation_reader)],
+) -> SubmissionOperationResponse | JSONResponse:
+    """Read this operation's own evidence under current contributor or management authority."""
+    try:
+        return await reader.read(task_id, selector)
+    except SubmissionIntakeFailure as exc:
+        return error_response(request, status_code=_failure_status(exc.code), code=exc.code,
+            message="Submission unavailable" if exc.code == "submission_unavailable" else exc.code,
+            retryable=exc.code == "submission_infrastructure_unavailable")

@@ -52,6 +52,14 @@ class IntakeOperationReadFacts:
     actor_profile_id: UUID
 
 
+@dataclass(frozen=True, slots=True)
+class IntakeOperationReadAccess:
+    """Current read projection facts; TASK still owns all submission eligibility."""
+    decision_id: UUID
+    management: bool
+    own_submitter: bool
+
+
 class IntakeAuthorityDenied(RuntimeError):
     """Concealed intake authorization failure."""
 
@@ -66,5 +74,6 @@ class IntakeAuthorizationPort(Protocol):
     async def consume_acceptance(self, handle: object, facts: IntakeAcceptanceAuthorityFacts) -> UUID: ...
     async def validate_acceptance_receipt(self, facts: IntakeAcceptanceAuthorityFacts, decision_id: UUID) -> None: ...
     async def authorize_read(self, facts: IntakeOperationReadFacts, *, manager: bool = False) -> UUID: ...
+    async def authorize_operation_read(self, facts: IntakeOperationReadFacts) -> IntakeOperationReadAccess: ...
     async def restage_denial(self, error: IntakeAuthorityDenied) -> bool: ...
     def close(self) -> None: ...

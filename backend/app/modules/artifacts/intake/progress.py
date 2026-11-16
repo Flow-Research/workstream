@@ -11,10 +11,10 @@ from app.modules.artifacts.intake.recovery import recovery_event
 from app.modules.artifacts.api.submission_recovery import (
     FINALIZATION_RECOVERY_EVENT, FINALIZATION_RECOVERY_SOURCES, SubmissionRecoveryPayload,
 )
-from app.modules.outbox.api import OutboxAppendPort, OutboxIdempotencyConflict, DeliveryUnavailable
+from app.modules.outbox.api import OutboxAppendInput, OutboxAppendPort, OutboxIdempotencyConflict, DeliveryUnavailable
 from app.modules.checkers.api.delivery_reconciliation import (
     POST_SUBMIT_DELIVERY_RECONCILIATION_EVENT, POST_SUBMIT_DELIVERY_SUPPORTED_EVENTS,
-    PostSubmitDeliveryChildPayload, post_submit_reconciliation_event,
+    PostSubmitDeliveryChildPayload, post_submit_reconciliation_event_json,
 )
 
 
@@ -90,7 +90,149 @@ async def evaluation_delivery_progress(event_id, event, evaluation, events, deli
                 or payload.evaluation_generation != reservation.evaluation_generation):
             raise IntakeCustodyConflict(unavailable)
         return await events.observe_delivery(
-            retained.child.event_id, post_submit_reconciliation_event(event.project_id, payload),
+            retained.child.event_id, OutboxAppendInput.model_validate_json(post_submit_reconciliation_event_json(event.project_id, payload)),
         )
     except (OutboxIdempotencyConflict, DeliveryUnavailable, ValueError) as exc:
         raise IntakeCustodyConflict(unavailable) from exc
+
+
+class SubmissionOperationReadService:
+    """One root-transaction read across the existing durable evidence owners."""
+
+    def __init__(self, session, *, tasks, authority, history, evaluations, prechecks, projects, events, deliveries):
+        self._session, self._tasks, self._authority = session, tasks, authority
+        self._history, self._evaluations, self._prechecks = history, evaluations, prechecks
+        self._projects, self._events, self._deliveries = projects, events, deliveries
+
+    async def read(self, task_id, selector, *, actor_id):
+        import json
+        from sqlalchemy import text
+        from app.modules.artifacts.api.submission_command import SubmissionOperationResponse
+        from app.modules.artifacts.api.submission_intake import SubmissionIntakeMetadata
+        from app.modules.artifacts.intake.repository import SubmissionIntakeRepository
+        from app.modules.authorization.api.submission_intake import IntakeAuthorityDenied, IntakeOperationReadFacts
+        from app.modules.tasks.api.submission_context import TaskSubmissionContextRequest
+
+        repository = SubmissionIntakeRepository(self._session, self._tasks)
+        operation_id = selector.operation_id
+        if operation_id is None:
+            found = await repository.find_actor_key(actor_id, selector.idempotency_key)
+            if found is None:
+                raise IntakeAuthorityDenied("submission intake is unavailable")
+            operation_id = UUID(found.id)
+        try:
+            row = await repository._lock(operation_id)
+        except IntakeCustodyConflict as exc:
+            if str(exc) == "intake_unavailable":
+                raise IntakeAuthorityDenied("submission intake is unavailable") from None
+            raise
+        if row.task_id != str(task_id):
+            raise IntakeAuthorityDenied("submission intake is unavailable")
+        access = await self._authority.authorize_operation_read(IntakeOperationReadFacts(
+            UUID(row.id), UUID(row.project_id), task_id, UUID(row.actor_profile_id)))
+        metadata = SubmissionIntakeMetadata.model_validate_json(json.dumps(row.command_metadata))
+        if (metadata.task_id != task_id or metadata.assignment_id != UUID(row.assignment_id)
+                or metadata.metadata_sha256() != row.metadata_sha256):
+            raise IntakeCustodyConflict("submission_operation_metadata_inconsistent")
+        current = await self._tasks.read_operation_context(
+            TaskSubmissionContextRequest(task_id, UUID(row.assignment_id), UUID(row.actor_profile_id),
+                                         metadata.predecessor_submission_id),
+            project_id=UUID(row.project_id), reader_id=actor_id,
+            management=access.management, own_submitter=access.own_submitter,
+        )
+        accepted = row.state in {"finalization_pending", "finalized"}
+        if accepted:
+            await self._session.execute(text("SELECT public.require_submission_acceptance(o) "
+                "FROM public.submission_intake_operations o WHERE id=:id"), {"id": UUID(row.id)})
+            results = row.acceptance_receipt["pre_submission_results"]
+        else:
+            results = await self._feedback(row, repository)
+        stage, action, stalled = row.state, "wait", False
+        submission_id = version = request_id = None
+        if row.state == "finalization_pending":
+            progress = await finalization_progress(row, self._events, self._deliveries)
+            stalled = progress.operationally_stalled
+            stage = "operationally_stalled" if stalled else "finalization_pending"
+        elif row.state == "finalized":
+            if row.finalized_submission_id is None or row.finalized_admission_id is None:
+                raise IntakeCustodyConflict("submission_operation_association_unavailable")
+            outcome = await self._history.read_operation_outcome(
+                project_id=UUID(row.project_id), task_id=task_id, assignment_id=UUID(row.assignment_id),
+                contributor_id=UUID(row.actor_profile_id), submission_id=UUID(row.finalized_submission_id),
+                admission_id=UUID(row.finalized_admission_id),
+            )
+            evaluation = await self._evaluations.read_current_progress(
+                project_id=UUID(row.project_id), task_id=task_id, submission_id=outcome.submission_id,
+                original_request_id=outcome.evaluation_request_id,
+            )
+            submission_id, version = outcome.submission_id, outcome.submission_version
+            request_id = evaluation.current.request.evaluation_request_id
+            if outcome.status != "evaluation_pending":
+                stage, action = outcome.status, "inspect_governed_outcome"
+            else:
+                event_id = evaluation.completion_event_id or evaluation.retry_event_id or outcome.evaluation_event_id
+                event = OutboxAppendInput.model_validate_json(evaluation.delivery_event_json or outcome.evaluation_event_json)
+                delivery = await evaluation_delivery_progress(event_id, event, evaluation, self._events, self._deliveries)
+                stalled = evaluation.status == "infrastructure_failed" or delivery.state == "dead_letter"
+                stage = ("operationally_stalled" if stalled else
+                         "evaluation_running" if evaluation.live_worker_lease else "evaluation_pending")
+        elif row.state in {"rejected", "failed", "abandoned", "cancelled"}:
+            action = "inspect_governed_outcome"
+            if row.state != "cancelled" and await self._permits_new_intake(current.candidate, metadata):
+                action = "correct_and_submit_new_key" if row.state == "rejected" else "retry_new_key_after_terminal"
+        code = row.failure_code
+        if code is not None and code not in {
+            "submission_packet_invalid", "submission_archive_limit_exceeded", "submission_upload_timeout",
+            "submission_infrastructure_unavailable", "pre_submission_checker_failed",
+            "submission_foreground_expired", "submission_operation_cancelled",
+        }:
+            code = "submission_operation_terminal"
+        return SubmissionOperationResponse(
+            operation_id=UUID(row.id), task_id=task_id, assignment_id=UUID(row.assignment_id),
+            idempotency_key=UUID(row.idempotency_key), operation_state=row.state,
+            processing_stage=stage, accepted_at=row.accepted_at,
+            task_status_at_acceptance="evaluation_pending" if accepted else None,
+            current_task_status=current.current_task_status, submission_id=submission_id,
+            submission_version=version, evaluation_request_id=request_id,
+            pre_submission_results=results, failure_code=code, operationally_stalled=stalled, next_action=action,
+        )
+
+    async def _feedback(self, row, repository):
+        from app.modules.artifacts.api.submission_preparation import public_pre_submission_results
+        terminal = await self._prechecks.read_source_terminal(source_operation_id=UUID(row.id))
+        if terminal is None or terminal.execution is None:
+            return []
+        reservation = terminal.lease.reservation
+        if (reservation.metadata_sha256 != row.metadata_sha256
+                or reservation.actor_profile_id != UUID(row.actor_profile_id)
+                or reservation.idempotency_key != UUID(row.idempotency_key)
+                or reservation.task_id != UUID(row.task_id)
+                or reservation.assignment_id != UUID(row.assignment_id)
+                or reservation.source != repository._sealed_source(row)):
+            raise IntakeCustodyConflict("submission_operation_pre_inconsistent")
+        return public_pre_submission_results(terminal.execution)
+
+    async def _permits_new_intake(self, candidate, metadata):
+        from dataclasses import asdict
+        from app.modules.projects.api.locked_policy import (
+            ProjectLockedPolicyContextRequest, ProjectLockedPolicyContextUnavailable,
+        )
+        from app.modules.projects.api.policy_lineage import RevisionPolicySemantics
+        from app.modules.tasks.api.submission_context import (
+            TaskSubmissionContextUnavailable, require_revision_acknowledgement, require_revision_capacity,
+        )
+        if candidate is None:
+            return False
+        references = asdict(candidate.locked_project_context)
+        references.pop("locked_contribution_policy_version_id")
+        try:
+            project = await self._projects.lock_locked_policy_context(ProjectLockedPolicyContextRequest(**references))
+            if candidate.predecessor is not None:
+                revision = project.activation_receipt.command.revision
+                require_revision_capacity(candidate, project_id=project.project_id,
+                    policy_id=revision.policy_id, policy_generation=revision.generation, policy_hash=revision.policy_hash,
+                    max_revision_rounds=RevisionPolicySemantics.model_validate_json(project.revision_policy.value).max_revision_rounds)
+            require_revision_acknowledgement(candidate, metadata.revision_preparation_id, metadata.revision_preparation_sha256)
+        except (ProjectLockedPolicyContextUnavailable, TaskSubmissionContextUnavailable):
+            return False
+        return True

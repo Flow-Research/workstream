@@ -85,6 +85,41 @@ async def test_public_raw_zip_submission_uses_real_owners_and_stable_replay(admi
         assert first.json()["error"]["code"] == second.json()["error"]["code"] == "pre_submission_checker_failed"
         assert first.json()["error"]["details"] == second.json()["error"]["details"]
         assert first.json()["error"]["details"]["eligible_to_submit"] is False
+    if framing == "small":
+        # Reads need no writer/runtime deployment configuration or provider bootstrap.
+        monkeypatch.setattr(app.state, "settings", settings.model_copy(update={"submission_execution_profile": None}))
+        progress_url = f"/api/v1/tasks/{f.task}/submission-operations"
+        progress = await client.get(progress_url, headers=f.access.target.headers,
+                                    params={"idempotency_key": str(key)})
+        assert progress.status_code == 200, progress.text
+        observed = progress.json()
+        expected = "finalization_pending" if outcome == "completed" else "rejected"
+        assert observed["operation_state"] == observed["processing_stage"] == expected
+        assert observed["next_action"] == ("wait" if outcome == "completed" else "correct_and_submit_new_key")
+        assert observed["operationally_stalled"] is False
+        assert observed["current_task_status"] == ("evaluation_pending" if outcome == "completed" else "in_progress")
+        assert observed["submission_id"] is observed["submission_version"] is observed["evaluation_request_id"] is None
+        assert observed["pre_submission_results"] == (receipt["pre_submission_results"] if outcome == "completed"
+                                                       else first.json()["error"]["details"]["results"])
+        by_id = await client.get(progress_url, headers=f.access.target.headers,
+                                 params={"operation_id": observed["operation_id"]})
+        assert by_id.status_code == 200 and by_id.json() == observed, by_id.text
+        managed = await client.get(progress_url, headers=f.manager.headers,
+                                   params={"operation_id": observed["operation_id"]})
+        assert managed.status_code == 200, managed.text
+        assert managed.json()["processing_stage"] == expected
+        assert managed.json()["next_action"] == ("wait" if outcome == "completed" else "inspect_governed_outcome")
+        manager_key = await client.get(progress_url, headers=f.manager.headers,
+                                       params={"idempotency_key": str(key)})
+        assert manager_key.status_code == 404, manager_key.text
+        stranger = await f.access.signed.actor("progress-stranger")
+        concealed = await client.get(progress_url, headers=stranger.headers,
+                                     params={"operation_id": observed["operation_id"]})
+        assert concealed.status_code == 404, concealed.text
+        for params in ({}, {"operation_id": observed["operation_id"], "idempotency_key": str(key)},
+                       {"operation_id": "invalid"}, {"operation_id": observed["operation_id"], "actor_id": str(f.actor.actor_profile_id)}):
+            invalid = await client.get(progress_url, headers=f.access.target.headers, params=params)
+            assert invalid.status_code == 422, invalid.text
     async with f.factory() as session:
         assert await session.scalar(text("SELECT count(*) FROM submissions WHERE task_id=:id"), {"id": f.task}) == 0
         assert await session.scalar(text("SELECT count(*) FROM submission_intake_operations WHERE task_id=:id"), {"id": f.task}) == 1

@@ -967,3 +967,47 @@ async def test_foreground_lease_exhausted_commit_response_budget_does_not_start(
     with pytest.raises(IntakeCustodyConflict, match="renewal_expired"):
         await runner.run(operation, lease, 1, command)
     assert not called
+
+
+async def test_operation_read_context_keeps_visibility_and_guard_separate(intake):
+    from dataclasses import replace
+    from app.modules.tasks.api.submission_context import TaskSubmissionContextRequest
+
+    request = TaskSubmissionContextRequest(intake.task, intake.assignment,
+        intake.actor.actor_profile_id, None)
+    async with intake.factory.begin() as session:
+        owner = IntakeTaskCustody(session, task_submission_context_port(session))
+        project_id = await owner.lock(intake.task)
+
+        async def read(selected=request, **updates):
+            return await owner.read_operation_context(selected, **{
+                "project_id": project_id, "reader_id": request.contributor_id,
+                "management": False, "own_submitter": True, **updates,
+            })
+
+        initial = await read()
+        assert initial.current_task_status == "in_progress"
+        assert initial.candidate is not None and initial.candidate.assignment_id == intake.assignment
+        changed_predecessor = await read(replace(request, predecessor_submission_id=new_record_id()))
+        assert changed_predecessor.current_task_status == "in_progress"
+        assert changed_predecessor.candidate is None
+        # These booleans are already authorized by AUTH; this proves only TASK projection.
+        management = await read(reader_id=new_record_id(), management=True, own_submitter=False)
+        assert management.current_task_status == "in_progress" and management.candidate is None
+        hidden = await read(reader_id=new_record_id())
+        assert hidden.current_task_status is None and hidden.candidate is None
+        read_only = await read(own_submitter=False)
+        assert read_only.current_task_status is None and read_only.candidate is None
+        for field in ("task_id", "assignment_id", "contributor_id"):
+            with pytest.raises(TaskSubmissionContextUnavailable):
+                await read(replace(request, **{field: new_record_id()}))
+        with pytest.raises(TaskSubmissionContextUnavailable):
+            await read(project_id=new_record_id())
+
+        row = await reserve(intake, session, with_upload=False)
+        guarded = await read()
+        assert guarded.current_task_status == "in_progress" and guarded.candidate is None
+        await repository(session).terminalize(UUID(row.id), UUID(row.lease_id), row.lease_generation,
+            state="failed", failure_code="submission_infrastructure_unavailable")
+        released = await read()
+        assert released.current_task_status == "in_progress" and released.candidate is not None

@@ -7,7 +7,6 @@ from sqlalchemy import Subquery
 from typing import Literal, Protocol
 from uuid import UUID
 
-from app.modules.outbox.api import OutboxAppendInput
 
 HistoryKind = Literal["task_submission_history", "submission_history", "checker_history"]
 
@@ -150,7 +149,7 @@ class SubmissionOperationOutcome:
     status: SubmissionAttemptStatus
     evaluation_request_id: UUID
     evaluation_event_id: UUID
-    evaluation_event: OutboxAppendInput
+    evaluation_event_json: str
 
 
 class SubmissionHistoryReadPort(Protocol):

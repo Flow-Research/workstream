@@ -8,9 +8,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.hashing import canonical_json_hash
 from app.modules.authorization.api.submission_intake import (
     IntakeAuthorityDenied, IntakeOperationReadFacts, IntakeReservationAuthorityFacts, IntakeReservationPreflightFacts,
-    IntakeAcceptanceAuthorityFacts,
+    IntakeAcceptanceAuthorityFacts, IntakeOperationReadAccess,
 )
-from app.modules.authorization.catalogue import ActionId
+from app.modules.authorization.catalogue import ActionId, PermissionId
+from app.modules.authorization.schemas import AdminRole
 from app.modules.authorization.domain.submission_history import OperationReadResourceContext
 from app.modules.authorization.domain.submission_intake import (
     IntakeReservationResourceContext, IntakeReservationPreflightResourceContext, IntakeAcceptanceResourceContext,
@@ -200,6 +201,29 @@ class SubmissionIntakeAuthorization:
             return (await self._kernel.require(action, resource)).decision_id
         except AuthorizationDenied as exc:
             raise IntakeAuthorityDenied("submission intake is unavailable") from exc
+
+    async def authorize_operation_read(self, facts: IntakeOperationReadFacts) -> IntakeOperationReadAccess:
+        """Select public read authority from live grants, not a client role flag."""
+        context = self._context
+        if type(facts) is not IntakeOperationReadFacts or not isinstance(context, HumanAuthorizationContext):
+            raise IntakeAuthorityDenied("submission intake is unavailable")
+        await self.lock_actor(context.actor_profile_id, context.identity_link_id)
+        manager = await self._repository.find_effective_grant(
+            context.actor_profile_id, PermissionId.PROJECT_TASK_MANAGE,
+            scope_project_id=facts.project_id, for_update=True,
+            allowed_roles=frozenset({AdminRole.PROJECT_MANAGER}),
+        )
+        submitter = None
+        if facts.actor_profile_id == context.actor_profile_id:
+            submitter = await self._repository.find_active_project_role(
+                project_id=facts.project_id, actor_profile_id=context.actor_profile_id,
+                role="submitter", for_update=True,
+            )
+        # A foreign contributor needs management authority even when no such
+        # grant exists; the kernel records that exact denied request once.
+        management = manager is not None or facts.actor_profile_id != context.actor_profile_id
+        decision_id = await self.authorize_read(facts, manager=management)
+        return IntakeOperationReadAccess(decision_id, management, submitter is not None)
 
     async def restage_denial(self, error: IntakeAuthorityDenied) -> bool:
         """Restage only this request kernel's retained denial after root rollback."""

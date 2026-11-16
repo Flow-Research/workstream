@@ -625,6 +625,7 @@ def test_openapi_documents_request_error_and_response_context() -> None:
         "schema": {"type": "string", "format": "uuid"},
     }]
     public_entry_actions = {
+        "GET /api/v1/tasks/{task_id}/submission-operations": "task.submission_operation.read",
         "POST /api/v1/tasks/{task_id}/submissions": "submission.create",
     }
     assert public_entry_actions.keys() <= set(protected_inventory)
@@ -663,13 +664,13 @@ def test_openapi_documents_request_error_and_response_context() -> None:
         operation = schema["paths"][path][method.lower()]
         assert operation["x-workstream-action-id"] == action
         assert operation["security"]
-    assert len(route_inventory) == 133
+    assert len(route_inventory) == 134
     retained_routes = sorted(set(route_inventory) - proposal_routes - post_policy_routes - queue_routes - new_manager_reads - guide_read - contribution_reads.keys() - public_entry_actions.keys() - registry_actions.keys() - recovery_actions.keys() - model_actions.keys())
     retained_protected = sorted(set(protected_inventory) - proposal_routes - post_policy_routes - queue_routes - new_manager_reads - guide_read - contribution_reads.keys() - public_entry_actions.keys() - registry_actions.keys() - recovery_actions.keys() - model_actions.keys())
     assert sha256("\n".join(retained_routes).encode()).hexdigest() == (
         "9a495b21b504f27997a26c233e7dc4b814133038a063376b760147118bd44b7e"
     )
-    assert len(protected_inventory) == 131
+    assert len(protected_inventory) == 132
     assert sha256("\n".join(retained_protected).encode()).hexdigest() == (
         "8aa0828260680a7bccdb055ebb3f21fcd06d4e37a808b4a0a37dcbf77ffa0732"
     )

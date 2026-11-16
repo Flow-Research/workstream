@@ -4771,3 +4771,258 @@ Freeze this contract/authorization checkpoint for required ARCH/SEC and QA revie
 These are worktree receipts on parent121, not an exact committed-head full suite.
 Public route composition, TASK eligibility/concealment, client progress wiring,
 full journeys/CI and native instability remain open. Keep the one PR708 draft.
+
+
+### Public reader authority selection
+
+Continue in temporary worktree /tmp/workstream-submission-progress-read while the
+primary checkout remains frozen atc11 for its exact-head proof. This is a local
+implementation branch feeding the same PR708, not a second PR or replacement goal.
+The prior allowed public-reader scope and ARCH/SEC/QA review requirements apply.
+First close AUTH selection: the route cannot choose by actor ownership alone,
+because the stored contributor may now have only Project Manager authority.
+Extend the existing intake authority with a composition method selecting its
+existing read decision from current locked grants; never probe access by staging
+an intentional failed decision. Reuse authorize_read for the one actual decision.
+Return separate management visibility and same-owner Submitter-grant facts:
+a dual-role actor must not lose authorized management visibility or be treated as
+management-only for next-action eligibility. These facts do not grant submission;
+TASK must still validate original active assignment, predecessor/revision and
+operation guard. Prefer the manager read when its grant exists, and preserve the
+separately locked contributor fact for subsequent TASK eligibility. Replay callers
+retain the existing explicit contributor path. No client role selector is added.
+Allowed files for this step: AUTH api/submission_intake.py, submission_intake.py,
+existing task_authority/test_intake_authority.py, and this record. Tests exercise
+own Submitter, own Manager, dual-role, other-contributor Manager, wrong contributor,
+foreign Manager and absent grants using real decisions/audit rows. No provider,
+TASK mutation, route exposure or migration changes are part of this selection step.
+
+
+### TASK operation-read visibility and candidate context
+
+Extend the existing IntakeTaskCustodyPort and owner (api/intake_custody.py and
+intake_custody.py) with a read of the operation's exact original assignment.
+Allowed proof extends existing artifacts/test_submission_intake_custody.py.
+This does not change the frozen primary checkout or AUTH selection source under
+test. The reader receives authenticated projection facts from AUTH, checks exact
+TASK/project/assignment/contributor association under TASK-first locks, and exposes
+current status only to management or the active original contributor. A candidate
+new-intake context is returned only for an authorized same-owner Submitter with
+an active original assignment, matching current predecessor and no operation guard.
+Reuse the canonical Submission context service, not a second revision resolver.
+The candidate is not final eligibility: composition must apply the existing locked
+PROJECT revision-capacity and explicit acknowledgement checks before recommending
+a new submission. Missing original ownership is an integrity error. Current
+ineligibility yields no candidate without changing historical operation outcome.
+Acceptance/proof: initial active context, active-operation guard, cleared terminal
+guard, hidden status for non-active/unauthorized contributor projection, manager
+visibility, exact selector substitution refusal; existing AUTH tests supply the
+separate permission proof. No TASK writes or new submission transition are added.
+
+Frozen primary c11 replay passed14 in214.43s with exact c11 metadata,0081 and
+cleanup complete (/tmp/submission-progress-frozen-c11.log/json). ARCH/SEC, QA
+and DOCS/CI scoped reviews now closed with no required repairs.
+Isolated public automatic-authority selection passed7 in45.42s with0081 and
+cleanup complete (/tmp/submission-progress-auto-authority.log/json); these are
+worktree receipts on c11, not committed public-reader delivery. TASK-only additions
+were independent of that AUTH test scope. Closed/reassigned assignment public
+concealment and complete next-action policy checks still require composition proof.
+
+Reviewed commits666be5893,121f8dfbb,c11ed9101 were pushed together to existing
+PR708 branch after all three scoped reviews closed. The public-reader continuation
+remains uncommitted in the temporary worktree; primary checkout stays clean atc11.
+TASK context proof is live under /tmp/submission-progress-task-context-v2.log/json
+(session21862); inspect terminal result before rerunning or claiming proof.
+
+
+### Owner-backed progress read composition
+
+Compose the actual read in existing ART intake/progress.py, existing public
+submission_command.py, canonical adapters/artifacts/__init__.py and public
+api/routes/artifact_submissions.py. Extend existing public/intake tests rather
+than creating another reader subsystem. AUTH selects live read mode after exact
+TASK-first operation locking; key lookup is scoped to the current actor. Validate
+accepted custody with the existing database acceptance verifier, which checks
+retained PRE/receipt/AUTH/event evidence independently of the current reader.
+Read exact TASK finalized association and CHECKERS current attempt; follow the
+existing OUTBOX delivery/reconciliation observer. Governed attempt status outranks
+pending delivery, never current task status. Infrastructure-failed current CHECKERS
+attempt and dead-letter current delivery supply explicit operational stall facts;
+no expired clock alone is a stall. Live worker lease is required for running.
+TASK current status is contextual only; new-key advice requires its candidate plus
+shared locked PROJECT revision capacity and original acknowledgement validation.
+Errors are concealed/sanitized; no storage provider or execution profile is needed
+for a read. Commit the read audit before returning; restage canonical denials after
+rollback. Acceptance: public selectors, actor-scoped key, initial/PRE/accepted/
+finalized state progression, management/own authority, retained-attempt isolation,
+closed/reassigned concealment and bounded failures. Required ARCH/SEC and QA apply.
+
+Allowed API proof includes existing tests/test_api_controls.py exact route/action
+inventory addition and artifacts/test_submission_foreground_command.py public
+acceptance/QC read assertions. TASK context test hit PostgreSQL internal node61440
+during existing guide fixture setup (43.64s), before new assertions; cleanup
+complete. Saved server log /tmp/submission-progress-postgres-before-restart.log,
+confirmed no client backends, and restarted only the owned test PostgreSQL container.
+No native root cause is claimed. Replay the unchanged TASK proof on fresh server.
+
+
+Public accepted/QC progress reads and TASK context proof passed3 (67deselected)
+in203.47s with0081 and cleanup complete (/tmp/submission-progress-public-read.log/json).
+This is scoped portable/local proof after the owned server restart, not resolution
+of native failures. API controls found the intentional new GET needs count134,
+protected132; retain prior inventory hashes by explicitly classifying that new
+route in public_entry_actions, not refreshing unrelated hashes.
+
+CI on pushedc11 found two real public-contract boundary violations introduced in
+prior owner observations: TASK and CHECKERS API contracts import OUTBOX types.
+Do not relax architecture tests. Allowed repair extends tasks/api/submission_history.py,
+tasks/submission_history.py, checkers/api/execution.py, checkers/execution_coordination.py,
+checkers/api/delivery_reconciliation.py, checkers/delivery_reconciliation.py and
+existing intake-admission proof callers. Carry immutable serialized event facts
+across those public boundaries; reconstruct OutboxAppendInput only in private
+composers/observers. Preserve single shared event builders, exact envelopes,
+canonical payload digests and stored-event comparison. Rename the replaced fields
+and helper, update every consumer, and remove the prohibited imports entirely.
+No parallel old/new field or producer is retained. Run the actual architecture
+unit tests as well as module-boundary validation; generic validator alone missed
+these narrower dependency invariants. Other CI lane failures still need artifact
+inspection; /tmp/submission-c11-ci-task-lane.log alone has no terminal diagnosis.
+
+Extend the existing real T5/PRE/POST proof with actual public progress reads
+for finalized queued, worker-live running, completed awaiting governed routing,
+explicit infrastructure stall, and Operator successor retry. Retain all original
+owner association/substitution, retained-data and dispatch assertions. The revised
+API fields carry serialized event envelopes and observers revalidate via OUTBOX
+before exact comparison; public HTTP exposes neither those envelopes nor providers.
+
+### Removed-route test migration
+
+The raw CI task-lane log confirms collection errors in three modules rooted in
+recovery tests importing the removed preparation handler. Migrate the HTTP tests
+in tests/test_submission_bundle_preparation_recovery.py and the binary OpenAPI
+assertion in tests/test_submission_bundle_admission.py to the sole raw-ZIP submit
+contract. Preserve ordered bounded feedback, sanitized error categories, unexpected
+failure propagation and optional packet-text warning semantics. Keep the shared
+_feedback_facts and internal preparation tests until their remaining consumers are
+replaced; no compatibility route or production alias is permitted. This is test
+contract repair with QA review in the existing checkpoint, not a new product path.
+Verify collection of all three affected modules, targeted HTTP assertions and
+existing internal command assertions. Human review focus is preservation of error
+boundaries despite replacement error codes and response schema.
+
+Finalized public progress proof passed all3 cases in165.85s with0081 and isolated
+cleanup complete (/tmp/submission-progress-finalized-public.log/json). One Pydantic
+serializer warning in the existing forged-context case remains visible. This is
+uncommitted worktree proof, not full CI qualification.
+
+The three modules now collect: first execution reached61 cases,29passed/32failed.
+Failures expose the shared feedback fixture still constructing the removed
+zero-project-PRE facts shape (seven missing source evidence fields), plus the
+unexpected-error assertion now encountering mounted middleware's500 conversion.
+Use the existing structural source-completed fixture and required one-project
+member, retaining no-member default rejection; test unexpected propagation at the
+handler boundary as before. Do not relax production evidence validation.
+
+Additional CI repairs allowed: format cli/tests/integration/test_submission_http.py
+using the configured Ruff formatter; reconcile only the missing manager operation
+read ActionId in MCP contract snapshots containing that schema and recompute their
+canonical hashes. Verify full MCP OpenAPI comparison, not only task contracts.
+No unrelated schema refresh is authorized by this repair. Rust runtime log shows
+five unwrap failures in old PRE fixture helpers; investigation remains separate.
+
+Corrected route/fixture replay passed61 in36.52s across all three previously
+uncollectable modules (/tmp/submission-route-migration-v2.log/json), with0081 and
+isolated cleanup complete. The scoped CLI formatter check passes. MCP full drift
+probe still reports an ActionId schema mismatch; inspect exact normalized diff
+before refreshing anything else. The initial local MCP invocation incorrectly
+used PYTHONPATH=src although this package lives at its root; it collected78 tests
+rather than CI's144, so its scope is not accepted as complete MCP qualification.
+
+Exact normalized MCP diagnosis also finds the previously committed source-cleanup
+action, permission and service identity missing in authorization_context_get,
+admin_roles_list and actor_get snapshots. Extend snapshot repair only to these
+three existing enums from canonical authorization catalogue; prohibit removal or
+any other added enum member. This closes existing cleanup contract drift rather
+than changing authorization behavior.
+
+The fail-closed enum updater additionally identifies the already implemented
+artifact.submission.finalize action absent from the authorization-context snapshot
+(no removed actions). Include that exact canonical action in the repair scope.
+The intermediate MCP replay started before this last omission was repaired; its
+result cannot qualify the final snapshots.
+
+Scope correction: inspection of .github/workflows/mcp.yml shows CI's144 cases
+span four drift files; test_contract_drift.py alone has78 cases even with the
+correct package path. The count difference was not evidence of an import failure.
+Run the remaining three files too before claiming equivalence to that CI step.
+
+Final main MCP drift file passed78 in35.75s against configured current backend
+OpenAPI (/tmp/submission-mcp-full-drift-v3.log). Remaining three CI drift files
+are running under /tmp/submission-mcp-remaining-drift.log (session41274).
+Backend-wide collect-only verification is running under
+/tmp/submission-backend-collection.log (session77217). Preserve these live handles;
+do not restart based on observation timeout. All changed Python files passed Ruff
+and git diff --check. Current work remains uncommitted in the temporary worktree.
+
+Remaining MCP drift run passed64 and failed only the exact public route count:
+new operation progress GET makes132, not131. Extend allowed test scope to
+mcp_server/tests/test_task_operation_contract_drift.py: assert the exact GET path,
+security and contributor/management action metadata, then count132. This records
+backend exposure; CLI/MCP progress tool wiring remains required and is not implied
+by this inventory repair. Backend collect-only remains live (session77217).
+
+### Governed completion in public progress proof
+
+Extend only existing artifacts/test_submission_intake_admission.py T5 drill to
+actually deliver the retained POST completion through OUTBOX with fixed dispatcher
+and router authority. After acknowledgement assert public progress reflects the
+persisted governed submission outcome and inspect-governed-outcome next action,
+while preserving all pending/running/stall/retry checks. No direct outcome SQL
+mutation or fabricated acceptance is allowed. This closes the gap between completed
+checker evidence and governed progress. Existing ARCH/SEC and QA review applies.
+
+Backend collection reached12174 tests but8 modules require missing httpx2. This
+is a local environment mismatch: pyproject's agents extra pins httpx2==2.12.0.
+A separate /tmp/workstream-submission-agents-env is being provisioned using
+uv sync --frozen --extra agents, preserving the shared current environment.
+The MCP task-operation inventory replay passed25 in30.46s; combined with78 main
+and the other40 passing drift cases, all four CI drift files have scoped passing
+coverage after the intended inventory repair (not an entire MCP lifecycle suite).
+
+Correct locked agents+dev environment collects all12486 backend tests successfully
+in111.30s (/tmp/submission-backend-agents-collection.log). This closes collection
+only, not execution. Generic module-boundary validation also passed. The new
+real governed-completion drill remains live at /tmp/submission-progress-governed.log
+(session69102); do not claim its outcome yet. Rust investigation shows the failing
+fixture's prepared_generation_id belongs to the superseded PRE material-grant
+path; the corresponding production branch still exists. Its removal and transfer
+of output/cleanup/security proof to supported execution requires a focused owner
+cleanup, not insertion of old fields into the new source-bound request fixture.
+
+Governed drill ended2failed/1passed in171.48s, followed by a Python GC shutdown
+SIGSEGV; isolated cleanup completed. Both non-infrastructure cases dead-lettered.
+Inspection shows ART's seed_started_task_for_artifact_test deliberately arranges
+an ART-only active assignment without accepted_at, while TASK routing requires
+accepted work. Complete that prerequisite in this fixture's initial setup before
+any intake (not after routing), retaining production routing guards. This still
+is not public claim authority proof. Include full delivery outcome on assertion
+failure to distinguish any remaining cause. Replay one successful branch first.
+
+Focused governed replay uses the clean locked agents+dev environment and is live
+under /tmp/submission-progress-governed-v2.log/json (session84882). Fixture-local
+sqlalchemy.text import was corrected before test execution; Ruff/diff pass. Read
+its terminal result before further changes or qualification claims. Public progress
+and CI repairs remain local/uncommitted; required review and same-PR push remain
+outstanding, alongside full goal requirements.
+
+Focused governed replay passed1 in81.80s on the corrected initial assignment,
+with0081 and complete isolated cleanup (/tmp/submission-progress-governed-v2.log/json).
+Real OUTBOX completion delivery acknowledges, TASK persists review_pending and the
+public reader returns inspect_governed_outcome for that original submission.
+This proves the default human-review admission branch, not human terminal review
+or automatic final acceptance. No native crash occurred in this run; its cause
+is still unresolved. Freeze the current public reader plus scoped CI repairs for
+required ARCH/SEC, QA/test-delta and DOCS/CI review, with exact committed-head
+regression to cover all three T5 cases after the fixture correction. CLI/MCP
+progress commands, other governed outcomes, historical/new-revision concealment,
+old runtime removal and full acceptance/qualification remain open.

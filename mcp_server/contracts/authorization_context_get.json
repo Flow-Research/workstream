@@ -1,5 +1,5 @@
 {
-  "canonical_sha256": "9e60e21c075c212a67255a1bef3bbff256541e40d773e087b3a3bbfdcc6eda1c",
+  "canonical_sha256": "e8809457e0535252680c1da3d7a95876261005706b1c597228d8436fc93ef210",
   "components": {
     "schemas": {
       "ActionId": {
@@ -7,6 +7,7 @@
         "enum": [
           "submission.intake.reserve",
           "task.submission_operation.read",
+          "project.task.submission_operation.read",
           "task.submission.list",
           "submission.read",
           "submission.checker_run.list",
@@ -157,6 +158,8 @@
           "artifact.task_import_source.read",
           "artifact.guide_source.read",
           "artifact.submission_bundle.prepare",
+          "artifact.submission_source.cleanup",
+          "artifact.submission.finalize",
           "artifact.submission.binding.create",
           "artifact.checker_output.binding.create",
           "artifact.verification.execute",
