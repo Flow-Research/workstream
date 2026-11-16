@@ -24,8 +24,7 @@ from app.modules.contributions.api import (
     ProjectCompensationUnitCreateRequest,
     ProjectCompensationUnitCreateResult,
 )
-from app.modules.contributions.models import ProjectCompensationUnit
-from app.modules.contributions.units.models import ProjectCompensationUnitCreationEvent
+from app.modules.contributions.units.models import ProjectCompensationUnit, ProjectCompensationUnitCreationEvent
 from app.modules.contributions.policy_mutation_support import consume_and_close_policy_authority
 from app.modules.contributions.policy_validation import policy_request_digest
 from app.modules.contributions.repository import ContributionPolicyRepository

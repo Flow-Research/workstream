@@ -28,6 +28,8 @@ from app.modules.contributions.models import (
     ContributionPolicy,
     ContributionPolicyVersion,
     ContributionRule,
+)
+from app.modules.contributions.units.models import (
     ProjectCompensationUnit,
 )
 from app.modules.contributions.api import (

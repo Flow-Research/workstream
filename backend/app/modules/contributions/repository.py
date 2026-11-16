@@ -17,7 +17,6 @@ from app.modules.contributions.api import (
     RewardSelectionFacts,
     RewardSelectionRequest,
     ContributionPolicyUnavailable,
-    ContributionPolicyConflict,
 )
 from app.modules.compensation.api import CompensationInstrumentType
 from app.modules.contributions.api.published_selection import PublishedContributionPolicySelection
@@ -29,10 +28,9 @@ from app.modules.contributions.models import (
     ContributionPolicyTransitionCustody,
     ContributionPolicyVersion,
     ContributionRule,
-    ProjectCompensationUnit,
 )
-from app.modules.contributions.units.models import ProjectCompensationUnitCreationEvent
-from app.modules.contributions.policy_eligibility import require_complete_policy_graph
+from app.modules.contributions.units.models import ProjectCompensationUnit, ProjectCompensationUnitCreationEvent
+from app.modules.contributions.policy_eligibility import reward_selection_facts
 from app.core.financial_wire import format_award_quantity
 
 
@@ -73,45 +71,7 @@ class ContributionPolicyRepository:
             )
             .execution_options(populate_existing=True)
         )
-        return self._reward_selection(version, checked)
-
-    @staticmethod
-    def _reward_selection(version, checked: RewardSelectionRequest) -> RewardSelectionFacts:
-        """Validate one complete policy graph and select the exact requested size."""
-        if version is None:
-            raise ContributionPolicyUnavailable("reward_selection_unavailable")
-        rules = list(version.rules)
-        definitions = [definition for rule in rules for definition in rule.award_definitions]
-        try:
-            require_complete_policy_graph(version, rules, definitions)
-        except ContributionPolicyConflict as exc:
-            raise ContributionPolicyUnavailable("reward_selection_unavailable") from exc
-        rule = next(rule for rule in rules if rule.contribution_type == "accepted_submission")
-        common = dict(
-            policy_version_id=version.id,
-            task_size=checked.task_size,
-            compensation_mode=rule.compensation_mode,
-        )
-        if rule.compensation_mode == "unpaid":
-            return RewardSelectionFacts(
-                **common,
-                award_definition_id=None,
-                instrument_type=None,
-                unit_code=None,
-                quantity=None,
-                adapter_binding_id=None,
-            )
-        selected = next(
-            item for item in rule.award_definitions if item.task_size == checked.task_size
-        )
-        return RewardSelectionFacts(
-            **common,
-            award_definition_id=selected.id,
-            instrument_type=CompensationInstrumentType(selected.instrument_type),
-            unit_code=selected.unit_code,
-            quantity=format_award_quantity(selected.quantity),
-            adapter_binding_id=selected.adapter_binding_id,
-        )
+        return reward_selection_facts(version, checked)
 
     async def current_policy_candidates(self, project_id: UUID) -> list[UUID]:
         """Select IDs only, without locks; a second candidate means ambiguity."""
@@ -209,8 +169,6 @@ class ContributionPolicyRepository:
         if not rows:
             return None
         if len(rows) != 1:
-            from app.modules.contributions.api import ContributionPolicyUnavailable
-
             raise ContributionPolicyUnavailable("contribution_policy_unavailable")
         project, policy, version = rows[0]
         return PublishedContributionPolicySelection(UUID(project), policy, version)
@@ -235,7 +193,7 @@ class ContributionPolicyRepository:
         result = []
         for key in selections:
             version = by_id.get(key.contribution_policy_version_id)
-            selected = self._reward_selection(version, RewardSelectionRequest(
+            selected = reward_selection_facts(version, RewardSelectionRequest(
                 project_id=project_id, policy_version_id=key.contribution_policy_version_id,
                 task_size=key.task_size,
             ))

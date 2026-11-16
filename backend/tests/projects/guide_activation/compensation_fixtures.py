@@ -10,7 +10,9 @@ from app.modules.actors.api import ServiceIdentity
 from app.modules.actors.models import ActorProfile, ActorIdentityLink
 from app.modules.actors.compensation_adapter import CompensationAdapterActorEligibility
 from app.modules.compensation.api import AdapterBindingCreateRequest
-from app.modules.contributions.models import ProjectCompensationUnit
+from app.modules.contributions.units.models import (
+    ProjectCompensationUnit,
+)
 from app.modules.compensation.service import AdapterBindingService
 from app.modules.projects.compensation_binding import ProjectCompensationBindingEligibility
 

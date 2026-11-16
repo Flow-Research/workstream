@@ -11,7 +11,7 @@ from app.modules.compensation.api import (
     PolicyAdapterBindingUnavailable,
 )
 from app.modules.contributions.api import (
-    ContributionPolicyConflict,
+    ContributionPolicyConflict, ContributionPolicyUnavailable, RewardSelectionFacts, RewardSelectionRequest,
 )
 from app.modules.contributions.models import (
     ContributionAwardDefinition,
@@ -19,6 +19,7 @@ from app.modules.contributions.models import (
     ContributionRule,
 )
 from app.modules.contributions.api.quantities import canonical_award_quantity
+from app.core.financial_wire import format_award_quantity
 
 if TYPE_CHECKING:
     from app.modules.contributions.repository import ContributionPolicyRepository
@@ -124,3 +125,41 @@ async def lock_policy_resources(
             or binding.instrument_type.value != item.instrument_type
         ):
             raise ContributionPolicyConflict("contribution_policy_not_found")
+
+
+def reward_selection_facts(version, checked: RewardSelectionRequest) -> RewardSelectionFacts:
+    """Validate one complete policy graph and select the exact requested size."""
+    if version is None:
+        raise ContributionPolicyUnavailable("reward_selection_unavailable")
+    rules = list(version.rules)
+    definitions = [definition for rule in rules for definition in rule.award_definitions]
+    try:
+        require_complete_policy_graph(version, rules, definitions)
+    except ContributionPolicyConflict as exc:
+        raise ContributionPolicyUnavailable("reward_selection_unavailable") from exc
+    rule = next(rule for rule in rules if rule.contribution_type == "accepted_submission")
+    common = dict(
+        policy_version_id=version.id,
+        task_size=checked.task_size,
+        compensation_mode=rule.compensation_mode,
+    )
+    if rule.compensation_mode == "unpaid":
+        return RewardSelectionFacts(
+            **common,
+            award_definition_id=None,
+            instrument_type=None,
+            unit_code=None,
+            quantity=None,
+            adapter_binding_id=None,
+        )
+    selected = next(
+        item for item in rule.award_definitions if item.task_size == checked.task_size
+    )
+    return RewardSelectionFacts(
+        **common,
+        award_definition_id=selected.id,
+        instrument_type=CompensationInstrumentType(selected.instrument_type),
+        unit_code=selected.unit_code,
+        quantity=format_award_quantity(selected.quantity),
+        adapter_binding_id=selected.adapter_binding_id,
+    )

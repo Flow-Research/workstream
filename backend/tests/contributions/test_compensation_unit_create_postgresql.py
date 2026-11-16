@@ -23,7 +23,9 @@ from app.modules.contributions.api import (
     ProjectCompensationUnitCreateRequest,
 )
 from app.modules.contributions.units.service import ProjectCompensationUnitService
-from app.modules.contributions.models import ProjectCompensationUnit
+from app.modules.contributions.units.models import (
+    ProjectCompensationUnit,
+)
 from app.modules.contributions.repository import ContributionPolicyRepository
 from app.modules.contributions.units.models import ProjectCompensationUnitCreationEvent
 from app.modules.projects.api import (

@@ -12,6 +12,9 @@ def test_cp04a_changed_behavior_files_remain_below_500_lines() -> None:
     paths = (
         ROOT / "app/modules/contributions/service.py",
         ROOT / "app/modules/contributions/repository.py",
+        ROOT / "app/modules/contributions/models.py",
+        ROOT / "app/modules/contributions/units/models.py",
+        ROOT / "app/modules/contributions/policy_eligibility.py",
         ROOT / "app/modules/contributions/policy_validation.py",
         ROOT / "app/modules/contributions/api/policies.py",
         ROOT / "app/modules/compensation/policy_binding_service.py",

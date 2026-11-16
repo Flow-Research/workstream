@@ -39,7 +39,9 @@ from app.modules.authorization.runtime import (
 from app.modules.compensation.api import AdapterBindingCreateRequest, AdapterBindingReadRequest
 from app.modules.compensation.service import AdapterBindingService
 from app.modules.contributions.api import ProjectCompensationUnitCreateRequest
-from app.modules.contributions.models import ProjectCompensationUnit
+from app.modules.contributions.units.models import (
+    ProjectCompensationUnit,
+)
 from app.modules.projects.compensation_binding import ProjectCompensationBindingEligibility
 
 INSTRUMENT = "project_points"

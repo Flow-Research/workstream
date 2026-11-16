@@ -1179,3 +1179,46 @@ The aligned native-lane run reaches the public policy journey and exposed a
 fixture assertion assuming every mutation actor was Finance. The added manager
 retirement now supplies its exact manager ID to the same event-identity assertion;
 no caller identity check is removed. These CLI results do not claim S3 custody.
+
+## Contribution owner cohesion and independent native guards
+
+Both focused plan tracks approve the affected CON cleanup, including a full
+tracked-Python caller sweep and the provisioning script. Move currency/unit
+classes unchanged into the existing units/models.py; update every actual import
+and metadata registration with no re-export. Move the pure selected-reward
+transformation into existing policy_eligibility.py; both repository operations
+retain their queries, session/lock ownership and exact exception translation.
+Preserve all SQL/metadata and class/function-body semantics. Add source and
+destination modules to existing structural guards; do not raise the 500-line
+limits. Verify before/after table/index DDL and moved AST equivalence.
+
+For the remaining native fixture repair, drafts declare the common financial
+header. Remove the old per-rule binding helper input; explicit award population
+copies that header into three submitter tiers or one fixed reviewer definition.
+Invalid quantity/unit/binding rows start with an empty compensated rule and a
+valid size and assert the intended named constraint. Keep missing-size and
+duplicate-tier guards separate and retain exact maximum positive controls.
+Reparent an existing published money/small row into an empty draft rule and
+assert the published-child guard plus unchanged rows. The publication race
+updates a current-valid existing tier, proving SQLSTATE55P03, rollback and an
+unchanged graph; retain the distinct rule-row race.
+
+Replace the current draft behavior contract's obsolete dual-instrument and
+unavailable-action assertions with current owner rules. Map all nine stale
+references to exact current tests, strengthen the rule matrix for duplicate
+review as well as submitter rules, and remove the structural test's old-name
+translation/skip path. Keep each required failure boundary and honest exposure
+claims. Reviewers approved this plan against an isolated clean2773 snapshot;
+no plan verdict is implementation proof. Actual receipt/Finance runtime and
+full-suite qualification remain unfinished.
+
+Cohesion development proof: all 133 registered table/index DDL entries are
+identical before/after; moved class ASTs and the selection-function body match
+exactly. All nine tracked import sites now use the units owner, with no old
+import or re-export. Removing a redundant local import and consolidating the
+unit imports leaves repository.py at 497 lines and models.py at 481; both source
+and destination files remain under the unchanged guards. The focused structural,
+module-boundary and policy-contract run passed 63 cases on development source;
+this is supporting proof, not an exact-clean final runtime qualification.
+The actual CLI socket proof at clean aaa9599ff passed all three cases in 373.84
+seconds with owned database cleanup; its native lane deliberately has no S3 claim.
