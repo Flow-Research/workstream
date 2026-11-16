@@ -1131,3 +1131,36 @@ docs/spec_review_lifecycle.md, docs/architecture_data_model.md,
 docs/roadmap_status.md and backend/app/modules/finance/README.md during
 implementation. This planning-only update changes no delivered capability and
 requires no no-op roadmap edit. Full Finance remains unfinished in draft PR #709.
+
+## Current-contract CI repair
+
+Hosted complete-suite execution exposed remaining consumers of superseded
+policy, Task and source contracts. Repair the affected current fixtures and
+catalogues before extending callback runtime. Allowed scope: failed CON policy,
+TASK/ART routing/replay, migration and CLI integration fixtures/tests; current
+behavior-catalogue references and behavior-contract test mappings; affected CON
+model/repository cohesion and their traced consumers if needed to preserve
+existing file limits; exact UUID metadata/typed-boundary proof. No compatibility
+reader/default, data rewrite, authorization relaxation, raised size limit, skip,
+lane removal or assertion deletion that loses a required failure boundary.
+
+First batch replaces per-rule definitions with the current header/three-tier
+quantity contract in real AUTH negative guards and identity-map refresh proof;
+uses an unprivileged actor for retained-denial evidence where project managers
+now have the required permission; updates the stale module-count catalogue
+reference; replaces obsolete historical-hash invariance with current canonical
+commitment proof; and fixes malformed test UUIDs so authorization/source rejection
+is actually reached. Preserve rollback, fresh denial evidence, foreign binding,
+all policy branches, and positive controls. Required subsequent repairs include
+CLI source configuration and explicit Task size, incomplete current graphs and
+metadata, predecessor-only installed-schema setup, and replay/input-source cases.
+Trace each failure before changing its expectation. Keep native enforcement strict.
+
+Risk: L1 within the approved policy/selection replacement, with no new product
+policy or external effects in the test repair. Verification: focused pure and
+real PostgreSQL failed selectors; current catalogue collection/structure checks;
+a complete hosted suite after the batched repairs. Required reviews: QA/test
+delta and CI integrity, plus security/architecture/reuse for any production
+owner refactor. Human focus: obsolete requirements removed explicitly while
+required authorization, isolation, immutable evidence, concurrency and replay
+proof remains. The capability ledger is unchanged by fixture/catalogue repair.

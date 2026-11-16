@@ -169,7 +169,7 @@ async def test_transition_replay_does_not_issue_sql_writes(admin_access):
 
 
 async def test_shared_reset_restores_activated_controller(admin_access, isolated_database_env):
-    from conftest import _reset_test_database_state
+    from tests.conftest import _reset_test_database_state
 
     before = (await snapshot())["control"][0]
     await admin_access.signed.grant(admin_access.admin, admin_access.target)

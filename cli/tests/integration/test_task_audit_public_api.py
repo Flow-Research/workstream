@@ -63,6 +63,7 @@ async def test_audit_task_reads_real_public_api_scope_and_fresh_authority(
         session.add(
             WorkstreamTask(
                 id=str(empty_task),
+                task_size="small",
                 project_id=str(project),
                 title="Empty evidence",
                 description="Fixture task",

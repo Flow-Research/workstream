@@ -121,7 +121,6 @@ async def test_denied_decision_is_retained(admin_access, operation):
         if operation == "publish":
             valid = await mutate(admin_access, admin_access.target, "PUT", path(target.project, receipt), UNPAID)
             assert valid.status_code == 200, valid.text
-    await admin_access.signed.grant(admin_access.admin, actor, role="project_manager", project_id=target.project)
     root = path(target.project)
     before = await snapshot(target.project)
     async def request(caller):
