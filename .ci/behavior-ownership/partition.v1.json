@@ -345,6 +345,10 @@
       "target": "backend/app/api/routes/project_work_reads.py"
     },
     {
+      "group": "lifecycle",
+      "target": "backend/app/api/submission_intake.py"
+    },
+    {
       "group": "shared",
       "target": "backend/app/core/api_controls.py"
     },
@@ -2761,7 +2765,7 @@
       "target": "backend/scripts/validate_test_lane_evidence.py"
     }
   ],
-  "authority_digest": "f904ce88d1dce00fdba24e8504521f25d6f01dca0ec46b90d5065f1f605c2236",
+  "authority_digest": "3b48cdabc1b0032b10e371e55cf72142c19ab69447741bd173fd78c0da4b692b",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }

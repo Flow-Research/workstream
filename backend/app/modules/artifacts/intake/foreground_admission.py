@@ -20,19 +20,22 @@ from app.core.cancellation import await_completion_preserving_cancellation
 from app.core.identifiers import new_record_id
 from app.db.errors import integrity_constraint_name
 from app.modules.artifacts.api.submission_archive import MAXIMUM_SUBMISSION_ZIP_BYTES
-from app.modules.artifacts.api.submission_intake import SubmissionIntakeMetadata, SubmissionSourceCapacityLimits
+from app.modules.artifacts.api.submission_intake import SealedSubmissionSource, SubmissionIntakeMetadata, SubmissionSourceCapacityLimits
 from app.modules.artifacts.intake.repository import IntakeCustodyConflict, SubmissionIntakeRepository
 from app.modules.artifacts.intake.progress import finalization_progress
 from app.modules.artifacts.api.submission_finalization import SubmissionFinalizationProgress
 from app.modules.artifacts.intake.streaming import hash_submission_replay
-from app.modules.artifacts.models import ArtifactStorageNamespace
+from app.modules.artifacts.models import ArtifactStorageNamespace, SubmissionBundleAdmission
+from app.modules.artifacts.selected_pre_submit_admission import bind_selected_pre_submit_admission, build_selected_pre_submit_reservation
+from app.modules.artifacts.submission_manifest import SubmissionCanonicalPredecessor
 from app.modules.artifacts.service import ArtifactStorageNamespaceSpec
 from app.modules.authorization.api.submission_intake import (
     IntakeAuthorizationPort, IntakeAuthorityDenied, IntakeOperationReadFacts,
     IntakeReservationAuthorityFacts, IntakeReservationPreflightFacts,
 )
 from app.modules.checkers.api.external_policy import LockedExternalCheckerPolicies
-from app.modules.checkers.api.selected_pre_submit import SelectedPreSubmitCoordinationPort, SelectedPreSubmitReservationFacts
+from app.modules.checkers.api.selected_pre_submit import SelectedPreSubmitCoordinationPort, SelectedPreSubmitReservationFacts, SelectedPreSubmitRuntimeProfile
+from app.modules.checkers.api.pre_submit_material import SubmissionPacketView
 from app.modules.outbox.api import OutboxAppendPort, FinalizedUnknownDeliveryPort
 from app.modules.projects.api.locked_policy import ProjectLockedPolicyContextPort, ProjectLockedPolicyContextRequest
 from app.modules.projects.api.policy_lineage import RevisionPolicySemantics
@@ -60,6 +63,7 @@ class IntakeReplay:
     raw_sha256: str | None
     raw_byte_count: int | None
     finalization: SubmissionFinalizationProgress | None
+    acceptance_receipt: dict | None
 
 
 class IntakeCommitUnknown(RuntimeError):
@@ -201,6 +205,63 @@ class ForegroundIntakeAdmission:
             raise IntakeCustodyConflict("intake_source_provider_unqualified")
         return task, project
 
+    async def reserve_pre(
+        self, owner: IntakeReservationOwner, source: SealedSubmissionSource, *,
+        runtime_profile: SelectedPreSubmitRuntimeProfile,
+        checkers: Callable[[AsyncSession], SelectedPreSubmitCoordinationPort],
+    ) -> SelectedPreSubmitReservationFacts:
+        """Commit one source-bound PRE reservation under fresh contributor authority.
+
+        The original operation supplies every command selector. No body or provider
+        I/O occurs under these locks; execution starts only after this commit.
+        An uncertain commit never grants permission to start the guest.
+        """
+        async with self._root() as (session, authority):
+            repository = SubmissionIntakeRepository(session, self._tasks(session))
+            row = await repository._owned(owner.operation_id, owner.lease_id, owner.generation)
+            if source.location.operation_id != owner.operation_id:
+                raise IntakeCustodyConflict("intake_pre_source_mismatch")
+            await authority.lock_actor(UUID(row.actor_profile_id), UUID(row.identity_link_id))
+            await authority.preflight(IntakeReservationPreflightFacts(
+                UUID(row.id), UUID(row.project_id), UUID(row.task_id), UUID(row.assignment_id),
+                UUID(row.actor_profile_id), UUID(row.identity_link_id), UUID(row.idempotency_key),
+                row.metadata_sha256,
+            ))
+            metadata = SubmissionIntakeMetadata.model_validate_json(json.dumps(row.command_metadata))
+            task, project = await self._validate_context(session, metadata, UUID(row.actor_profile_id))
+            custody = await repository.lock_pre_source(
+                source=source, lease_id=owner.lease_id, generation=owner.generation)
+            predecessor, predecessor_rules = None, None
+            if task.predecessor is not None:
+                admission = await session.scalar(select(SubmissionBundleAdmission).where(
+                    SubmissionBundleAdmission.consumed_by_submission_id == str(task.predecessor.submission_id),
+                    SubmissionBundleAdmission.status == "consumed",
+                ))
+                if (admission is None or admission.selected_pre_submit_run_id is None
+                        or admission.pre_submit_evidence_set_id is not None
+                        or admission.selected_rules_sha256 is None):
+                    raise IntakeCustodyConflict("submission_canonical_predecessor_unavailable")
+                predecessor = SubmissionCanonicalPredecessor(
+                    submission_id=task.predecessor.submission_id,
+                    submission_version=task.predecessor.version,
+                    archive_sha256=admission.archive_sha256,
+                    semantic_manifest_sha256=admission.semantic_manifest_sha256,
+                )
+                predecessor_rules = admission.selected_rules_sha256
+            selected = bind_selected_pre_submit_admission(
+                task=task, project=project, predecessor=predecessor,
+                predecessor_rules_sha256=predecessor_rules,
+                predecessor_exists=task.predecessor is not None,
+                packet=SubmissionPacketView(metadata.summary, metadata.contributor_attestation),
+            )
+            reservation = build_selected_pre_submit_reservation(
+                source=custody, metadata=metadata, task=task, project=project,
+                attempt_id=new_record_id(), idempotency_key=UUID(row.idempotency_key),
+                selected=selected, runtime_profile=runtime_profile,
+            )
+            await checkers(session).reserve(reservation)
+        return reservation
+
     async def accept(
         self, owner: IntakeReservationOwner, request: SelectedPreSubmitReservationFacts, terminal_digest: str, *,
         checkers: Callable[[AsyncSession], SelectedPreSubmitCoordinationPort],
@@ -314,7 +375,9 @@ class ForegroundIntakeAdmission:
                 raise IntakeCustodyConflict("submission_idempotency_conflict")
             result = IntakeReplay(UUID(row.id), row.state, row.failure_code,
                                   row.maximum_raw_bytes, row.raw_sha256, row.raw_byte_count,
-                                  await finalization_progress(row, self._events(session), self._deliveries(session)))
+                                  await finalization_progress(row, self._events(session), self._deliveries(session)),
+                                  await self._accepted_receipt(session, authority, row)
+                                  if row.state in {"finalization_pending", "finalized"} else None)
         return result
 
     async def replay(

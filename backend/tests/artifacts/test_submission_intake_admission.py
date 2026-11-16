@@ -467,6 +467,18 @@ async def test_t4_accepts_exact_source_and_replays_one_receipt(admission_intake,
     assert receipt["operation_id"] == str(owner.operation_id)
     assert receipt["pre_submission_results"]
     assert await f.admission.accept(owner, request, terminal.terminal_digest, **kwargs) == dict(receipt, replayed=True)
+    # A new HTTP request has only actor/key, packet and bytes, not the private
+    # PRE reservation/terminal values used by the original foreground owner.
+    from tests.test_trusted_intake import _archive
+    async def repeated_body():
+        yield _archive()
+    replay = await f.admission.replay(
+        SubmissionIntakeMetadata(task_id=f.task, assignment_id=f.assignment),
+        repeated_body(), actor_id=f.actor.actor_profile_id,
+        idempotency_key=request.idempotency_key, declared_raw_bytes=None,
+        idle_timeout_seconds=1, replay_duration=timedelta(seconds=10),
+    )
+    assert replay.acceptance_receipt == dict(receipt, replayed=True)
     async with f.factory.begin() as session:
         row = await session.get(SubmissionIntakeOperation, str(owner.operation_id))
         assert row.state == "finalization_pending" and row.acceptance_receipt == receipt
@@ -488,6 +500,33 @@ async def test_t4_accepts_exact_source_and_replays_one_receipt(admission_intake,
                                          "AND event_type='SubmissionFinalizationRequested'"), {"id": owner.operation_id}) == 1
         assert await session.scalar(text("SELECT count(*) FROM submission_source_charges WHERE operation_id=:id"),
                                     {"id": owner.operation_id}) == 1
+
+
+@pytest.mark.parametrize("substitution", ["operation", "generation", "lease"])
+async def test_t3_reservation_rejects_substituted_source_or_owner(admission_intake, tmp_path, substitution):
+    from dataclasses import replace
+    from sqlalchemy import text
+    from app.adapters.checkers import selected_pre_submit_coordinator
+    from tests.artifacts.intake_acceptance_support import completed_source
+
+    f = admission_intake
+    owner, request, _ = await completed_source(f, tmp_path)
+    source = request.source
+    if substitution == "operation":
+        source = source.model_copy(update={"location": source.location.model_copy(
+            update={"operation_id": new_record_id()})})
+    elif substitution == "generation":
+        source = source.model_copy(update={"provider_generation": "another-generation"})
+    else:
+        owner = replace(owner, lease_id=new_record_id())
+    with pytest.raises(IntakeCustodyConflict):
+        await f.admission.reserve_pre(
+            owner, source, runtime_profile=request.runtime_profile,
+            checkers=selected_pre_submit_coordinator,
+        )
+    async with f.factory() as session:
+        assert await session.scalar(text(
+            "SELECT count(*) FROM selected_pre_submit_runs WHERE task_id=:id"), {"id": f.task}) == 1
 
 
 @pytest.mark.parametrize("boundary", ["outbox", "task"])
@@ -612,6 +651,12 @@ async def test_t4_revocation_blocks_new_acceptance_but_preserves_accepted_custod
         headers=f.manager.headers | {"Idempotency-Key": str(new_record_id())},
         json={"reason": "Withdraw grant before accepted handoff"})
     assert response.status_code == 200, response.text
+    if when == "before":
+        with pytest.raises(IntakeAuthorityDenied):
+            await f.admission.reserve_pre(
+                owner, request.source, runtime_profile=request.runtime_profile,
+                checkers=selected_pre_submit_coordinator,
+            )
     with pytest.raises(IntakeAuthorityDenied):
         await f.admission.accept(owner, request, terminal.terminal_digest,
             checkers=selected_pre_submit_coordinator, outbox=outbox_append)

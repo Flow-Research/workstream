@@ -4139,3 +4139,89 @@ AWS or IAM-level version-only deletion. Worker startup/scheduling, unsealed and
 uncertain reconciliation, public API/CLI/MCP cutover, downstream journeys, remaining
 hosted-CI failures, deployment values and complete A01–A35 proof remain required in
 this same PR before readiness. The full thread goal stays active and incomplete.
+
+## Coordinated public submission cutover scope
+
+The next gap is the public journey: internal T1/upload/PRE/T4 owners exist, while
+API/CLI/MCP still expose preparation followed by admission-consuming creation.
+Reuse those owners and replace that obsolete public contract together. Begin with
+strict request parsing, then compose foreground execution, authorized operation
+reads and clients. Do not expose a second supported mutation or restore obsolete
+prepared-PRE interfaces merely to satisfy old fixtures.
+
+Allowed: backend/app/api/submission_intake.py and existing artifact/task routes;
+ART public intake/command contracts and private foreground orchestration; canonical
+ART/TASK/CHECKERS adapter roots and narrow read/continuation owner ports; required
+Settings transport/resource profiles; existing backend submission/API/fixture tests;
+cli/internal/api/submission*.go, cli/internal/command/submission.go and affected CLI
+tests; mcp_server/workstream_mcp task-execution schemas/tools/gateway, corresponding
+contracts/tests; affected OpenAPI/catalogue/docs and exact CI ownership registration.
+The Rust/guest obsolete PRE consumers and fixtures are within the same source-first
+cutover scope where required by real execution. Each repair retains its named
+behavior proof; no policy or assertion is discarded just to make CI pass.
+
+Prohibited: unaudited handoff, database locks across provider I/O, renamed legacy
+aliases, client-supplied authority/checksums, implicit background PRE, fabricated
+Submission IDs before T5, changed review/revision policy, default deployment values
+for unresolved C01–C07, new paid provider selection or retained-data deletion.
+Acceptance: exactly one raw-ZIP submission mutation, strict duplicate/framing/
+packet validation before body consumption, actor-key replay, stable post-T4 receipt,
+correct cancellation/unknown-outcome handling, owner-backed progress, coordinated
+CLI/MCP upload/replay/revision behavior and removal of superseded public paths.
+Risk:L0. Verify header refusal without reading body, real PostgreSQL/Local and
+MinIO command/acceptance paths, public HTTP and CLI/MCP contract journeys, durable
+continuation and all governed downstream branches, plus full relevant CI gates.
+Required reviews:architecture/security, QA/test_delta and documentation/CI integrity;
+human focus is authority, exact identity, transport limits, retained lineage and
+truthful client progress. Full unsealed cleanup/scheduling/provider qualification
+and the complete acceptance/deployment audit remain required before PR readiness.
+
+### Public request parsing worktree proof
+
+Added strict HTTP parsing in backend/app/api/submission_intake.py and proof in
+existing backend/tests/test_api_controls.py. Reject duplicate packet/selector and
+framing headers, conflicting length/transfer framing, unsupported media/encoding,
+invalid UUID/packet/revision values and excessive declared length before consuming
+the body. Preserve exact packet text, empty omission semantics, valid revision
+acknowledgements and the permitted declared-byte boundary using canonical ART
+metadata validation.
+
+The complete API-controls module passed:43 tests in40.10s, run from backend with
+`.venv/bin/python -m pytest tests/test_api_controls.py -q --tb=short`.
+Ruff passed for both changed Python files. This is uncommitted worktree evidence,
+not frozen-commit or public journey proof. The parser remains unwired; command and
+route composition, clients, ownership registration and reviews remain pending.
+Inspection confirms obsolete preparation orchestration still calls replaced PRE
+builder signatures; remove that path during coordinated cutover rather than
+restore superseded signatures. The full goal remains active and incomplete.
+
+### Public command owner composition progress
+
+ForegroundIntakeAdmission now owns reserve_pre: lock the original operation and
+lease, recheck contributor authority and locked context, bind exact sealed source
+and retained predecessor facts, and commit CHECKERS reservation before execution.
+The shared acceptance fixture now uses this owner instead of privately rebuilding
+T3. Actor/key replay now includes the stable accepted receipt only after its
+existing authorization and database evidence validation; matching replay bytes
+remain required before returning that result to the command caller.
+
+Worktree verification on the unchanged Python implementation: six PostgreSQL tests
+passed in142.03s, covering T4 receipt replay, three source/owner substitutions and
+both revocation orders. Command from backend used PYTHONFAULTHANDLER=1,
+PYTHONMALLOC=debug and the owned PostgreSQL55440 isolated runner:
+`.venv/bin/python scripts/run_isolated_tests.py --metadata-json /tmp/submission-public-t3-db.json -- .venv/bin/python -m pytest tests/artifacts/test_submission_intake_admission.py -k 't3_reservation or t4_accepts_exact_source_and_replays_one_receipt or t4_revocation_blocks' -q --tb=short`.
+Log:/tmp/submission-public-t3-db.log; metadata confirms0080 and complete database
+cleanup. These are worktree receipts; tree_sha identifies the parent commit and
+must not be represented as a clean committed candidate. Earlier actor/key replay
+selection also passed2 tests. Ruff and module-boundary validation passed.
+
+Registered exactly backend/app/api/submission_intake.py in the existing explicit
+CI addition set and partition. Preserved all690 previous assignments and protected
+base; new total691. Exact-addition regression passed and full ownership validation
+passed. No CI lane was narrowed. The complete API-controls proof remains43passed.
+
+Public command orchestration, lifecycle failure terminalization, HTTP wiring,
+client cutover, revision-path integration and full acceptance proof remain pending.
+This intermediate commit is part of the same PR, not a merge checkpoint. Focused
+architecture/security, QA and docs/CI review remains required before claiming this
+public cutover stage complete. The full goal stays active.

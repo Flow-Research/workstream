@@ -936,6 +936,7 @@ PROJECT_CATALOGUE_TARGETS = frozenset({
     "backend/app/modules/authorization/project_catalogue.py",
 })
 SUBMISSION_INTAKE_TARGETS = frozenset({
+    "backend/app/api/submission_intake.py",
     "backend/app/adapters/artifacts/source_cleanup.py",
     "backend/app/modules/artifacts/api/submission_cleanup.py",
     "backend/app/modules/artifacts/api/submission_finalization.py",

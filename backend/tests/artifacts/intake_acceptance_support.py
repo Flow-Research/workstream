@@ -6,11 +6,7 @@ from app.core.identifiers import new_record_id
 from app.modules.actors.api import ServiceIdentity
 from app.modules.artifacts.api.submission_intake import SubmissionIntakeMetadata
 from app.modules.artifacts.authorization import PreparedPreSubmitMaterializationAuthorization
-from app.modules.artifacts.selected_pre_submit_admission import (
-    bind_selected_pre_submit_admission, build_selected_pre_submit_reservation,
-)
 from app.modules.artifacts.selected_pre_submit_execution import SelectedPreSubmitSourceReads, SelectedPreSubmitExecutionService
-from app.modules.checkers.api.pre_submit_material import SubmissionPacketView
 from tests.artifact_store_helpers import initialize_local_store
 from tests.artifacts.test_submission_intake_custody import foreground_upload, foreground_limits
 from tests.artifacts.test_submission_pre_source import _source_runtime
@@ -34,17 +30,10 @@ async def completed_source(f, tmp_path):
     try:
         source = await foreground_upload(f, store).receive(
             owner.operation_id, owner.lease_id, owner.generation, body(), **foreground_limits())
-        async with f.factory.begin() as session:
-            task, project = await f.admission._validate_context(session, metadata, f.actor.actor_profile_id)
-            custody = await submission_intake_pre_source_port(session).lock_pre_source(
-                source=source, lease_id=owner.lease_id, generation=owner.generation)
-            selected = bind_selected_pre_submit_admission(
-                task=task, project=project, predecessor=None, predecessor_rules_sha256=None,
-                predecessor_exists=False, packet=SubmissionPacketView(metadata.summary, metadata.contributor_attestation))
-            request = build_selected_pre_submit_reservation(
-                source=custody, metadata=metadata, task=task, project=project, attempt_id=new_record_id(),
-                idempotency_key=key, selected=selected, runtime_profile=_source_reservation().runtime_profile)
-            await selected_pre_submit_coordinator(session).reserve(request)
+        request = await f.admission.reserve_pre(
+            owner, source, runtime_profile=_source_reservation().runtime_profile,
+            checkers=selected_pre_submit_coordinator,
+        )
         await provision_post_submit_service(f.factory, ServiceIdentity.CHECKER_PRE_SUBMIT)
         await _seed_materializer(f.factory)
         runtime, errors = _source_runtime(payload, tmp_path, "completed")

@@ -908,3 +908,98 @@ def test_openapi_documents_request_error_and_response_context() -> None:
                 assert {"X-Request-ID", "X-Correlation-ID"} <= set(response["headers"])
                 assert response["headers"]["X-Request-ID"]["required"] is True
                 assert response["headers"]["X-Correlation-ID"]["required"] is True
+def _raw_submission_request(extra=(), *, omit=()):
+    from starlette.requests import Request
+
+    async def unread_body():
+        raise AssertionError("Header validation must not consume the ZIP body")
+
+    headers = [
+        (b"content-type", b"application/zip"),
+        (b"idempotency-key", b"019a0000-0000-7000-8000-000000000001"),
+        (b"x-task-assignment-id", b"019a0000-0000-7000-8000-000000000002"),
+    ]
+    return Request(
+        {"type": "http", "headers": [pair for pair in headers if pair[0] not in omit] + list(extra)},
+        receive=unread_body,
+    )
+
+
+def test_raw_submission_headers_preserve_packet_without_consuming_body():
+    from uuid import UUID
+    from app.api.submission_intake import submission_intake_headers
+
+    task = UUID("019a0000-0000-7000-8000-000000000003")
+    parsed = submission_intake_headers(_raw_submission_request([
+        (b"x-submission-summary", b"Exact  spacing"),
+        (b"x-contributor-attestation", b"x" * 65536),
+        (b"transfer-encoding", b"chunked"),
+    ]), task)
+    assert parsed.metadata.task_id == task
+    assert parsed.metadata.summary == "Exact  spacing"
+    assert parsed.metadata.contributor_attestation == "x" * 65536
+    assert parsed.declared_raw_bytes is None
+
+
+def test_raw_submission_rejects_every_duplicate_packet_or_framing_header():
+    from uuid import UUID
+    from app.api.submission_intake import submission_intake_headers
+    from app.core.api_controls import StructuredHTTPException
+
+    # Deliberately independent of the parser's list: additions cannot silently
+    # remove a required ambiguity check from this contract proof.
+    names = (
+        b"idempotency-key", b"x-task-assignment-id", b"x-submission-summary",
+        b"x-contributor-attestation", b"x-predecessor-submission-id",
+        b"x-revision-preparation-id", b"x-revision-preparation-sha256",
+        b"content-type", b"content-encoding", b"content-length", b"transfer-encoding",
+    )
+    for name in names:
+        request = _raw_submission_request([(name, b"same"), (name, b"same")], omit=(name,))
+        with pytest.raises(StructuredHTTPException) as caught:
+            submission_intake_headers(request, UUID(int=3))
+        assert (caught.value.status_code, caught.value.error_code) == (422, "submission_packet_invalid")
+
+
+def test_raw_submission_headers_preserve_revision_and_declared_limit():
+    from app.api.submission_intake import submission_intake_headers
+    from app.modules.artifacts.api.submission_archive import MAXIMUM_SUBMISSION_ZIP_BYTES
+
+    predecessor, revision = uuid4(), uuid4()
+    parsed = submission_intake_headers(_raw_submission_request([
+        (b"content-length", str(MAXIMUM_SUBMISSION_ZIP_BYTES).encode()),
+        (b"content-encoding", b"identity"),
+        (b"x-predecessor-submission-id", str(predecessor).encode()),
+        (b"x-revision-preparation-id", str(revision).encode()),
+        (b"x-revision-preparation-sha256", b"sha256:" + b"a" * 64),
+    ]), uuid4())
+    assert parsed.declared_raw_bytes == MAXIMUM_SUBMISSION_ZIP_BYTES
+    assert parsed.metadata.predecessor_submission_id == predecessor
+    assert parsed.metadata.revision_preparation_id == revision
+    assert parsed.metadata.revision_preparation_sha256 == "sha256:" + "a" * 64
+    assert parsed.metadata.summary == parsed.metadata.contributor_attestation == ""
+
+
+@pytest.mark.parametrize("extra,omit,status,code", [
+    ([], [b"idempotency-key"], 422, "submission_packet_invalid"),
+    ([], [b"x-task-assignment-id"], 422, "submission_packet_invalid"),
+    ([(b"content-type", b"multipart/form-data")], [b"content-type"], 415, "submission_media_type_unsupported"),
+    ([(b"content-encoding", b"gzip")], [], 415, "submission_media_type_unsupported"),
+    ([(b"content-length", b"12"), (b"transfer-encoding", b"chunked")], [], 422, "submission_packet_invalid"),
+    ([(b"transfer-encoding", b"gzip, chunked")], [], 422, "submission_packet_invalid"),
+    ([(b"content-length", b"+12")], [], 422, "submission_packet_invalid"),
+    ([(b"content-length", b"0")], [], 422, "submission_packet_invalid"),
+    ([(b"content-length", b"524288001")], [], 413, "submission_archive_limit_exceeded"),
+    ([(b"x-submission-summary", b" trimmed ")], [], 422, "submission_packet_invalid"),
+    ([(b"x-contributor-attestation", b"\xff")], [], 422, "submission_packet_invalid"),
+    ([(b"x-submission-summary", b"x" * 65537)], [], 422, "submission_packet_invalid"),
+    ([(b"x-revision-preparation-sha256", b"sha256:" + b"a" * 64)], [], 422, "submission_packet_invalid"),
+])
+def test_raw_submission_invalid_headers_refuse_before_body(extra, omit, status, code):
+    from uuid import UUID
+    from app.api.submission_intake import submission_intake_headers
+    from app.core.api_controls import StructuredHTTPException
+
+    with pytest.raises(StructuredHTTPException) as caught:
+        submission_intake_headers(_raw_submission_request(extra, omit=omit), UUID(int=3))
+    assert (caught.value.status_code, caught.value.error_code) == (status, code)
