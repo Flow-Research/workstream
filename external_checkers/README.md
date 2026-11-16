@@ -37,8 +37,8 @@ for separate runner provisioning and Operator registration; it changes no policy
 
 - Workstream owns guide compilation, authorization, policy approvals, registry
   identity, immutable submission custody and lifecycle decisions.
-- ART provides request-bound verified material. The service independently checks
-  its grant and manifest before mounting the material read-only.
+- For POST, ART provides request-bound verified material. The service independently
+  checks its grant and manifest before mounting the material read-only.
 - The service executes the selected cached digest-pinned image under the
   configured sandbox, limits, deadline and output budget, then validates its
   normalized result and settles owned resources.
@@ -54,8 +54,9 @@ may additionally expose the exact prior attempt at `/work/context/predecessor`
 and bounded prior findings in `input.evaluation_context`. Neither a global
 Submission version nor a project image request authorizes historical access.
 Initial attempts carry explicit null prior context, including after another
-contributor releases a task. PRE keeps its distinct pre-admission grant; there
-is no POST fallback to the PRE protocol. See the
+contributor releases a task. PRE streams the sealed raw source into one session
+for default intake and the selected PRE checker; prepared-PRE workspace grants
+are rejected. See the
 [POST contract](../docs/architecture_checker_framework.md#post-submit-contract)
 for selection, evidence, quota and replay rules.
 

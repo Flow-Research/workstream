@@ -211,7 +211,8 @@ fn host_launch_passes_identical_clamped_limits_to_argv_and_job() {
 #[test]
 fn large_log_allowances_do_not_prevent_deadline_or_successful_completion() {
     assert_eq!(run_case("log_stall").unwrap_err(), "deadline_exceeded");
-    assert!(run_case("permitted_logs").is_ok());
+    let result = run_case("permitted_logs");
+    assert!(result.is_ok(), "permitted log exchange failed: {result:?}");
 }
 
 #[test]

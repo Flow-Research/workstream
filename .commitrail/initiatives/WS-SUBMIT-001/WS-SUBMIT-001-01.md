@@ -5216,3 +5216,57 @@ CI4346 preflight now passes structure but finds one unused dataclasses.asdict
 import in backend/tests/test_authorization.py, left by removed-route migration.
 Extend the repair scope to removing only that unused import; no test behavior or
 production code changes. Verify the full backend Ruff gate before the same-PR push.
+
+### Remove superseded runtime prepared-PRE grants
+
+The source-bound execute_pre path is separate from execute/POST grant handling.
+The service still parses the removed prepared_generation PRE material grant, and
+five runtime tests panic when their helper looks for prepared_generation_id in
+the current source request. This is an affected obsolete implementation, not a
+reason to add legacy fields back to the source contract. Next bounded scope is
+external_checkers/workstream-checker-service/src/main.rs and this record only.
+Remove PRE_GRANT_PROTOCOL/GrantManifest/GrantIdentity, old matching and its unused
+semantic wrapper. Keep shared POST semantic hashing and all POST retained/source
+custody validation. General wire/output/uncertain-cleanup tests use a valid parsed
+POST request and exact published POST grant. Keep explicit current PRE model-grant
+refusal without manufacturing prepared material. Replace old positive prepared-PRE
+lineage test with binding-valid old protocol refusal at verify_grant. Prohibited:
+new compatibility path, relaxed request/grant/custody checks, test skips or reduced
+execution/cleanup assertions. Risk: runtime architecture/security and proof fidelity.
+Verify pinned Rust1.84 service tests and workspace tests; ARCH/SEC and QA/test-delta
+review before samePR push. This closes obsolete runtime acceptance and its failing
+consumer proofs; shared backend fixtures, native deployment and full goal remain.
+
+Extend scope to external_checkers/README.md's affected grant paragraph: POST owns
+verified aggregate workspace grants; PRE owns the sealed-source single session.
+Remove the stale statement that PRE retains a distinct prepared material grant.
+Initial service run:132passed/3failed. Two fixture repairs preserve assertions:
+match the POST fixture's image digest in test cache and release the POST materials
+directory for teardown. An unchanged Smol launch-bound test also hit its500ms
+execution deadline; its unchanged second-run case passes, not a root-cause fix.
+No deadline or production execution bound has been relaxed.
+
+Service v2 passes135 unit cases and11/26/16 integration cases. Full workspace
+then passes guest/SDK suites but fails one unchanged PRE transport permitted-log
+case (134servicepass/1fail). Its is_ok assertion hides the actual error. Extend
+scope solely to a diagnostic assertion in smol/pre/transport/tests.rs; retain the
+same is_ok predicate and every deadline/bound. Run that exact case to expose the
+cause before claiming workspace success. Log:/tmp/submission-runtime-workspace.log.
+
+The diagnostic log-limit case passes once under cargo and three direct repeats
+with the same bounds; no hidden error reproduced. Artifacts:
+/tmp/submission-runtime-log-diagnostic.log and /tmp/submission-runtime-log-repeats.log.
+Do not infer that the earlier transient transport failures are fixed. Keep the
+improved error assertion and replay the workspace with it; no production timing,
+log limit, cleanup assertion or test selection has changed.
+
+Workspace replay with diagnostic assertion passes the permitted-log case but
+fails the unchanged launch-bound positive with deadline_exceeded (134service
+pass/1fail); /tmp/submission-runtime-workspace-v2.log. Guest/SDK suites12/40/9pass.
+Do not call the workspace green. No further repeat-until-pass attempts: keep
+these timing failures open for dedicated transport diagnosis/native qualification.
+The grant-cutover service v2 proof passed135unit+11/26/16integration before the
+error-only diagnostic edit, with no grant implementation changes afterward.
+Rustfmt, Commitrail, Markdown link and whitespace checks pass. Freeze this
+bounded removal for ARCH/SEC, QA/test-delta and affected documentation review;
+full goal still requires the failed gate and all other lifecycle work to close.
