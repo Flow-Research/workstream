@@ -1236,7 +1236,8 @@ It extends the same Operator action, singleton and fence;
 it does not grant routing or acceptance authority. Every enabled writer must
 appear in its reviewed manifest. Server-derived observations are checked under
 the canonical lock. Unsupported surfaces and unlisted writers deny. Human
-queues/leases/decisions and fulfillment remain unavailable. Retained mechanical
+queues/leases/decisions and Finance admission/delivery/callback execution remain
+unavailable. Retained mechanical
 acceptance facts cannot establish missing originating AUTH receipts.
 
 For atomic participants, the shared transaction fence waits for earlier writers;

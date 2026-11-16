@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from tests.checker_output_admission_helpers import seed_checker_output_relationships
+from tests.checker_output_admission_helpers import seed_checker_output_relationships, unrelated_checker_task
 
 from projects.unified_policy_fixtures import create_standalone_unified_policy
 
@@ -2239,7 +2239,7 @@ async def test_checker_output_requires_exact_active_fixed_service_identity(
             await session.commit()
             canonical_task = await session.get(WorkstreamTask, task_id)
             assert canonical_task is not None
-            unrelated_task_id = await _unrelated_checker_task(session, canonical_task)
+            unrelated_task_id = await unrelated_checker_task(session, canonical_task)
             checker_run = await session.get(CheckerRun, checker_run_id)
             assert checker_run is not None
             checker_run.task_id = unrelated_task_id
@@ -2364,65 +2364,6 @@ async def _seed_verification_scan_jobs(factory, settings, namespace, store, tmp_
         await seed_session.rollback()
 
     return job_ids, prior_audit_ids
-
-
-async def _unrelated_checker_task(session, canonical_task):
-    """Keep the same locked policy tuple on a distinct task for ownership rejection."""
-    unrelated_task_id = str(new_record_id())
-    session.add(
-        WorkstreamTask(
-            id=unrelated_task_id,
-            task_size=canonical_task.task_size,
-            project_id=canonical_task.project_id,
-            locked_guide_version=canonical_task.locked_guide_version,
-            locked_post_submit_checker_policy_id=(
-                canonical_task.locked_post_submit_checker_policy_id
-            ),
-            locked_post_submit_checker_policy_version=(
-                canonical_task.locked_post_submit_checker_policy_version
-            ),
-            locked_post_submit_checker_policy_hash=(
-                canonical_task.locked_post_submit_checker_policy_hash
-            ),
-            locked_post_submit_checker_policy_body=(
-                canonical_task.locked_post_submit_checker_policy_body
-            ),
-            locked_review_policy_id=canonical_task.locked_review_policy_id,
-            locked_review_policy_generation=(
-                canonical_task.locked_review_policy_generation
-            ),
-            locked_review_policy_hash=canonical_task.locked_review_policy_hash,
-            locked_revision_policy_id=canonical_task.locked_revision_policy_id,
-            locked_revision_policy_generation=(
-                canonical_task.locked_revision_policy_generation
-            ),
-            locked_revision_policy_hash=(canonical_task.locked_revision_policy_hash),
-            locked_guide_source_snapshot_id=(
-                canonical_task.locked_guide_source_snapshot_id
-            ),
-            locked_guide_source_snapshot_hash=(
-                canonical_task.locked_guide_source_snapshot_hash
-            ),
-            locked_effective_project_submission_artifact_policy_id=(
-                canonical_task.locked_effective_project_submission_artifact_policy_id
-            ),
-            locked_effective_project_submission_artifact_policy_hash=(
-                canonical_task.locked_effective_project_submission_artifact_policy_hash
-            ),
-            locked_pre_submit_checker_policy_id=(
-                canonical_task.locked_pre_submit_checker_policy_id
-            ),
-            locked_pre_submit_checker_bundle_hash=(
-                canonical_task.locked_pre_submit_checker_bundle_hash
-            ),
-            title="Unrelated checker task",
-            description="Must not own the checker output.",
-            status="draft",
-            created_by="setup-actor",
-        )
-    )
-    await session.flush()
-    return unrelated_task_id
 
 
 async def _conflicting_checker_replica(session, attempt, namespace, provider_object_ref):

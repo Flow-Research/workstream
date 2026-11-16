@@ -949,12 +949,8 @@ class AuthorizationService:
             grant_filters["allowed_roles"] = ACTIVE_GUIDE_ADMIN_ROLES
         else:
             grant_filters.update(adapter_bindings.finance_authority_grant_filters(action.action_id))
-        grant_filters.update(
-            {
-                **contribution_policies.policy_grant_filters(action.action_id),
-                **checker_registry.checker_registry_grant_filters(action.action_id),
-            }
-        )
+        grant_filters.update(contribution_policies.policy_grant_filters(action.action_id))
+        grant_filters.update(checker_registry.checker_registry_grant_filters(action.action_id))
         if action.action_id in checker_retry.CHECKER_RETRY_ACTIONS | post_submit_deliveries.POST_SUBMIT_DELIVERY_MUTATION_ACTIONS | checker_models.MODEL_ADMIN_ACTIONS | artifact_operator.ARTIFACT_OPERATOR_ACTIONS:
             grant_filters["allowed_roles"] = (AdminRole.OPERATOR,)
         matched = await self._admin.find_effective_grant(

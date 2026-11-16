@@ -420,7 +420,7 @@ Before entering the live lifecycle phase, configure `WORKSTREAM_SOURCE_INSTANCE_
 with one canonical UUIDv7 provisioned through `app.core.identifiers.new_record_id()`.
 Persist that value in deployment configuration and use it across all API and Celery worker
 replicas and restarts. Missing configuration prevents activation; a value different
-from committed roots prevents further earning. Never mint an identity per process
+from the anchored REV source prevents further earning even before the first root. Never mint an identity per process
 or rotate it to bypass retained source custody.
 
 The current COMP owner stages one root and its exact initial shared-outbox event

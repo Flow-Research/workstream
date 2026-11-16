@@ -4,7 +4,7 @@
 - Durable disposition: Planned
 - Intended merge outcome: One current Workstream v0.1 implementation of sized rewards and Finance fulfillment, in one PR with cohesive, revertible commits.
 
-## Goal and human direction
+## Intent
 
 Implement `workstream_finance_exec.md` under the user's explicit correction:
 Workstream has not shipped. Completely replace superseded development behavior.
@@ -36,7 +36,7 @@ reads, and extends existing revision/replay owners. Full migration, concurrency,
 revision/replay and suite qualification remains required.
 No complete Finance runtime or end-to-end fulfillment journey is delivered.
 
-## Immediate bounded replacement
+## Bounded change
 
 Allowed files: this specification/change record; the affected CON policy/API,
 COMP award/API, TASK create/import/replay/schema owners; FIN wire schemas and
@@ -76,7 +76,7 @@ or fabricate values to make migration pass. This refusal is a data protection
 boundary, not another implementation. Actual retained-data deletion needs
 explicit authorization; removing obsolete code/tests does not authorize it.
 
-Acceptance criteria:
+## Acceptance criteria
 - No reward-model marker, old/new policy branch, archived response decoder or
   old-hash fallback remains in the affected runtime or current contracts.
 - Compensated accepted submissions require exactly Small/Medium/Large quantities;
@@ -92,7 +92,7 @@ Acceptance criteria:
 - Current docs describe only this v0.1 behavior and explicitly qualify unfinished
   selection/revision/award/Finance execution.
 
-## Risk, review and human focus
+## Risk and review routing
 
 Risk: L0 for the complete financial initiative; the immediate replacement changes
 architecture, authorization/replay and migration boundaries. Before code, obtain
@@ -107,7 +107,7 @@ retained-data refusal without deletion, current AUTH/replay boundaries, exact
 public-API and durable-worker evidence. Prior compatibility review passes do not
 qualify the replacement.
 
-## Replacement evidence and remaining dependency
+## Evidence
 
 Plan feasibility was reviewed at `dc6a621a90bbcd7ea41ec078b095e7420e9fc496`
 under the corrected user direction. No compatibility requirement survives that
@@ -1005,3 +1005,32 @@ fresh PostgreSQL16 source-custody schema fingerprint is
 No local sheet export directory is present. Prior source-binding and reviewer
 findings remain open until fresh implementation review; full Finance runtime,
 full-suite and actual worker/HTTP/S3 qualification are not delivered by this repair.
+
+
+The 90de review closed source/behavior findings by inspection but kept execution
+qualification provisional; two current doc sentences still required correction.
+Hosted CI independently found the record's noncanonical heading names and stale
+structural-debt fingerprints on two earlier affected files. Repair scope is this
+record, the two current doc sentences, existing AUTH kernel grant-filter assembly,
+`test_artifact_admission.py`, its already-used CHECKERS output-custody fixture
+module, and the exact structural ledger. Replace redundant dict unpack/merge with
+ordered updates preserving overwrite precedence. Move the same unrelated-checker
+Task fixture to that existing helper owner; keep its full locked tuple, mandatory
+size and ownership-denial assertions. There is no new exception, size limit,
+allowlist or test skip. Regenerate only the two changed debt entries after actual
+simplification/fixture relocation, and validate against the trusted main ledger.
+
+
+Hosted-gate repairs validated locally: canonical record headings pass; the exact
+structural ledger passes its trusted-main validator with unchanged limits,
+exceptions and 34 debt entries. Ordered grant-filter updates preserve checker
+precedence and reduce the affected kernel from1265 to1261 lines. Relocating the
+same unrelated-checker fixture into its already-used CHECKERS helper owner keeps
+all locked facts/size and ownership-denial assertions and reduces the oversized
+artifact test module from2453 to2395 lines. Only those two debt fingerprints were
+regenerated. All114 actual authorization contract/kernel/PREP cases passed;
+Ruff, current Markdown links and stale authorization wording passed. Current doc
+residues now identify anchored REV source and unavailable external Finance
+execution precisely. A final clean-source native run must additionally exercise
+the relocated fixture and source/closure/reviewer/migration boundaries before
+reviewers can qualify execution. The full financial specification remains unfinished.
