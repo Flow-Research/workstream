@@ -2964,3 +2964,76 @@ async def test_task_metadata_round_trips(task_client: AsyncClient) -> None:
     assert task is not None
     assert task.skill_tags == ["stem", "proofs"]
     assert task.source_payload_hash == "hash-123"
+
+
+async def test_active_revision_prevents_manager_target_change_before_acceptance(task_client, monkeypatch):
+    """A genuine PM rebase cannot invalidate an in-flight successful PRE."""
+    from app.modules.artifacts.intake.foreground_admission import ForegroundIntakeAdmission
+    from app.modules.tasks.authorized_commands import AuthorizedTaskCommands
+    from tests.tasks.submission_dispatch.accepted_revision_probes import revision_target_snapshot
+
+    project = await create_active_project(task_client)
+    task = await create_started_task(task_client, project["id"], monkeypatch)
+    first = await seed_retained_submission(task["id"], complete_submission_payload())
+    await route_retained_checker_remediation(first)
+    factory = db_session.get_session_factory()
+    original_accept = ForegroundIntakeAdmission.accept
+    original_repair = AuthorizedTaskCommands.repair_revision_context
+    failures, observed = [], []
+
+    async def observe_repair(commands, *args, **kwargs):
+        try:
+            return await original_repair(commands, *args, **kwargs)
+        except IntegrityError as exc:
+            failures.append(str(exc.orig))
+            raise
+
+    async def before_accept(admission, owner, request, terminal_digest, **kwargs):
+        # PRE has committed; T4 has not acquired its transaction or TASK lock.
+        assert request.admission_lineage.predecessor_submission_id == UUID(first)
+        async with factory() as session:
+            pending = (await session.execute(text("""
+                SELECT state,command_metadata FROM submission_intake_operations WHERE id=:id
+            """), {"id": owner.operation_id})).one()
+            assert pending.state == "pre_checking"
+        set_dev_actor(monkeypatch, roles="project_manager", subject="project-manager-subject")
+        guide = await task_client.post(
+            f"/api/v1/projects/{project['id']}/guides", headers=auth_headers(),
+            json=complete_guide_payload("v2"),
+        )
+        assert guide.status_code == 201, guide.text
+        await create_policy_bundle_for_guide(task_client, project["id"], guide.json()["id"])
+        await seed_active_guide_for_downstream_test(
+            factory, project_id=project["id"], guide_id=guide.json()["id"],
+        )
+        before = await revision_target_snapshot(factory, task["id"])
+        assert guide.json()["version"] == "v2" != before[0]["locked_guide_version"]
+        response = await task_client.post(
+            f"/api/v1/projects/{project['id']}/tasks/{task['id']}/revision-context/repair",
+            headers=auth_headers() | {"Idempotency-Key": str(new_record_id())},
+            json={"parent_preparation_id": pending.command_metadata["revision_preparation_id"],
+                  "parent_preparation_sha256": pending.command_metadata["revision_preparation_sha256"],
+                  "reason": "Adopt the corrected active guide after successful PRE"},
+        )
+        assert response.status_code == 503, response.text
+        assert response.json()["error"]["code"] == "task_authority_unavailable"
+        assert len(failures) == 1 and "intake task custody mismatch" in failures[0]
+        assert await revision_target_snapshot(factory, task["id"]) == before
+        set_dev_actor(monkeypatch, roles="worker", subject="worker-one")
+        receipt = await original_accept(admission, owner, request, terminal_digest, **kwargs)
+        assert receipt["status"] == "accepted"
+        observed.append(owner.operation_id)
+        return receipt
+
+    set_dev_actor(monkeypatch, roles="worker", subject="worker-one")
+    with monkeypatch.context() as patch:
+        patch.setattr(ForegroundIntakeAdmission, "accept", before_accept)
+        patch.setattr(AuthorizedTaskCommands, "repair_revision_context", observe_repair)
+        second = await seed_retained_submission(task["id"], complete_submission_payload(), predecessor_id=first)
+    assert len(observed) == 1
+    async with factory() as session:
+        prior, current = await session.get(Submission, first), await session.get(Submission, second)
+        assert current.version == 2 and current.supersedes_submission_id == first
+        assert current.locked_guide_version == prior.locked_guide_version
+        stored_task = await session.get(WorkstreamTask, task["id"])
+        assert stored_task.active_submission_operation_id is None

@@ -34,7 +34,8 @@ async def test_inactive_fixed_actor_denies_phase(tmp_path, isolated_database_env
                 suspended_by='test',suspended_at=clock_timestamp(),suspension_reason='test'
                 WHERE service_identity=:identity"""), {"identity": identity.value})
         before = await snapshot(h)
-        consumer = Consumer(h.files)
+        consumer = (Consumer(h.files, ExecuteFacts(request=h.request, lease=lease))
+                    if phase == "materialize" else None)
 
         async def invoke():
             if phase == "execute":
@@ -47,7 +48,7 @@ async def test_inactive_fixed_actor_denies_phase(tmp_path, isolated_database_env
         with pytest.raises(expected):
             await invoke()
         assert await snapshot(h) == before
-        assert not h.store.opens and not h.preparation._active and consumer.calls == 0
+        assert not h.store.opens and not h.preparation._active and (consumer is None or consumer.calls == 0)
         # Restore the fixture to prove that the same complete operation is valid.
         async with h.factory() as session, session.begin():
             await session.execute(text("""UPDATE actor_profiles SET status='active', suspended_by=NULL,

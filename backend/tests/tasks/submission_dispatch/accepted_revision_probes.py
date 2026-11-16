@@ -100,3 +100,16 @@ def stale_fence_before_acceptance_commit():
     with patch.object(ForegroundIntakeAdmission, "_accept_new", accept):
         yield observed
     assert len(observed) == 1
+
+
+async def revision_target_snapshot(factory, task_id):
+    """Observe all repair-owned writes, excluding foreground lease heartbeats."""
+    async with factory() as session:
+        return (await session.execute(text("""
+            SELECT
+              (SELECT to_jsonb(t) FROM workstream_tasks t WHERE t.id=:task),
+              (SELECT jsonb_agg(to_jsonb(p) ORDER BY p.id)
+                 FROM task_revision_preparations p WHERE p.task_id=:task),
+              (SELECT jsonb_agg(to_jsonb(a) ORDER BY a.id) FROM audit_events a),
+              (SELECT jsonb_agg(to_jsonb(e) ORDER BY e.event_id) FROM outbox_events e)
+        """), {"task": task_id})).one()

@@ -33,7 +33,9 @@ async def test_shared_delivery_runs_exact_request_once(tmp_path, isolated_databa
         assert saved["run"]["worker_lease_generation"] == 1
         assert set(saved["allows"]) == {saved["run"]["execute_evidence_id"], saved["run"]["finalize_evidence_id"]}
         assert len(saved["allows"]) == 2 and saved["events"] == 1
-        assert saved["members"] == len(h.request.policy.entries)
+        assert saved["members"] == 1
+        assert len(d.selected.requests) == 1
+        assert d.selected.requests[0].identity.phase == "post_submit"
         assert saved["run"]["material_custody"] == {
             "submission_id": str(h.created.submission_id), "submission_version": h.created.submission_version,
             "admission_id": str(h.created.admission_id), "binding_id": str(h.created.artifact_binding_id),

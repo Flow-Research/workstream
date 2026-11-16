@@ -91,21 +91,26 @@ async def test_worker_art_lease_cancellation_revokes_view_and_scratch(
     async with material_fixture(tmp_path, isolated_database_env) as h:
         port = _worker_port(h, monkeypatch)
         try:
-            consumer = Consumer(h.files)
+            execution = await material_execution(h)
+            consumer = Consumer(h.files, execution)
             consumer.release = asyncio.Event()
             stream_entered, stream_release = asyncio.Event(), asyncio.Event()
-            original_open = LocalStorageAdapter.open
+            original_open = LocalStorageAdapter.open_source
 
-            async def paused_stream(store, reference):
-                async for chunk in original_open(store, reference):
-                    stream_entered.set()
-                    await stream_release.wait()
-                    yield chunk
+            async def paused_stream(store, reference, **kwargs):
+                source = original_open(store, reference, **kwargs)
+                try:
+                    async for chunk in source:
+                        stream_entered.set()
+                        await stream_release.wait()
+                        yield chunk
+                finally:
+                    await source.aclose()
 
             with monkeypatch.context() as patch:
                 if stage == "stream":
-                    patch.setattr(LocalStorageAdapter, "open", paused_stream)
-                operation = asyncio.create_task(port.materialize(await material_execution(h), consumer))
+                    patch.setattr(LocalStorageAdapter, "open_source", paused_stream)
+                operation = asyncio.create_task(port.materialize(execution, consumer))
                 try:
                     entered = stream_entered if stage == "stream" else consumer.entered
                     await asyncio.wait_for(entered.wait(), 20)
@@ -169,7 +174,7 @@ async def test_worker_scratch_construction_failure_releases_provider_lease(
             with monkeypatch.context() as patch:
                 patch.setattr(artifact_adapter, "create_artifact_scratch_manager", unavailable)
                 with pytest.raises(RuntimeError, match="scratch construction outage"):
-                    await port.materialize(execution, Consumer(h.files))
+                    await port.materialize(execution, Consumer(h.files, execution))
             assert internal_workers._runtime is not None
             assert internal_workers._runtime_active_operations == 0
         finally:
@@ -192,7 +197,7 @@ async def test_worker_post_acquisition_failure_closes_scratch_and_lease(
             with monkeypatch.context() as patch:
                 patch.setattr(artifact_adapter, "post_submission_materialization", unavailable)
                 with pytest.raises(RuntimeError, match="materializer construction outage"):
-                    await port.materialize(execution, Consumer(h.files))
+                    await port.materialize(execution, Consumer(h.files, execution))
             await _scratch_is_closed(h)
         finally:
             internal_workers.shutdown_artifact_internal_runtime()
@@ -206,13 +211,13 @@ async def test_worker_known_missing_object_records_infrastructure_result(
     async with material_fixture(tmp_path, isolated_database_env) as h:
         port = _worker_port(h, monkeypatch)
 
-        def missing(_store, _reference):
+        def missing(_store, _reference, **_kwargs):
             raise ArtifactObjectMissingError("controlled verified object loss")
 
         try:
             d = await delivery_fixture(h, materialization=port)
             with monkeypatch.context() as patch:
-                patch.setattr(LocalStorageAdapter, "open", missing)
+                patch.setattr(LocalStorageAdapter, "open_source", missing)
                 receipt = await d.delivery.deliver(
                     h.created.evaluation_event_id, h.request.project_id, "missing-object",
                 )
@@ -222,7 +227,10 @@ async def test_worker_known_missing_object_records_infrastructure_result(
             assert json.loads(saved["run"]["result_json"])["infrastructure_failure_code"] == "material_unavailable"
             assert saved["events"] == 0
             async with h.factory() as session:
-                assert await session.scalar(select(func.count()).select_from(OutboxEvent)) == 1
+                assert await session.scalar(select(func.count()).select_from(OutboxEvent)) == 2
+                assert set(await session.scalars(select(OutboxEvent.event_type))) == {
+                    "SubmissionFinalizationRequested", REQUEST_EVENT,
+                }
             await _scratch_is_closed(h)
         finally:
             internal_workers.shutdown_artifact_internal_runtime()
