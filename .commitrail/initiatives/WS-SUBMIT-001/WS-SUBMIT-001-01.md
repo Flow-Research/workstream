@@ -6666,3 +6666,35 @@ Both isolated probes cleaned database and MinIO completely; current files were
 unchanged. Historical reader probe accepts the captured completed row and rejects
 an indexed request-digest substitution. Fresh main fetch:191ahead/0missing before
 this commit. Full old put/admission cutover and publisher retirement remain open.
+
+Current binding cutover scope: app/modules/artifacts/submission_bindings.py and
+tests/test_artifact_bindings.py. Current consume compares nullable operation IDs;
+two absent IDs pass, allowing an old ready admission into the current writer.
+Require a nonnull accepted source operation before any content/binding mutation.
+Preserve the separate read_consumed authority/receipt path for historical data.
+Acceptance: valid old ready lineage with both IDs absent rejects before SQL/content
+or writes; current T5 binding remains valid; consumed historical evidence replays
+without new writes. Prohibited: old ready auto-acceptance, deletion, historical
+reader changes, authority shortcuts. High lifecycle/authority risk; ARCH and QA
+review, targeted unit regression and real public initial submit/T5/replay proof.
+Human review focus: retained data is readable but cannot become a new accepted
+submission without the current operation owner. Full old writer retirement remains
+separate; this closes a live consumption boundary rather than reviving that path.
+
+Binding regression reproduced before production repair: historical_ready with
+both operation IDs absent reached consumption (DID NOT RAISE,3.03s). Require exact
+UUID accepted ID/matching source and unconditional SQL source validation; remove
+tautological source-nonnull OR revision branches from consume-only lineage helper.
+Historical read_consumed is unchanged. Final units21passed5.61s; Ruff, structure,
+record and whitespace pass. QA independently verifies AUTH-before-disclosure,
+UUID-string rejection, no downstream mutation, old-guard regression detection and
+historical read preservation. ARCH agrees removed branches were unreachable.
+Public initial/T5/replay v1 passed104.89s but may have imported before dead-code
+cleanup; frozen final v2 pending. TASK create replay-only and SQL old ready-to-
+consumed barrier remain required follow-ups; no full old-writer closure claim.
+
+Frozen binding public v2 terminal0:1passed75.71s, database/MinIO cleanup complete
+(/tmp/submission-binding-cutover-public-v2.json). Current signed raw ZIP acceptance,
+durable T5, retained history and accepted replay remain valid with the final guard
+and dead-branch cleanup. No code changes after this run; final reviewer closure
+requested on these results. Same single draft PR708; full goal remains active.

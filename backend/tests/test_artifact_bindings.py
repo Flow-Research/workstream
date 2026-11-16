@@ -229,12 +229,14 @@ async def test_ready_admission_creates_exact_binding_and_consumes_once() -> None
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("missing", [False, True])
-async def test_source_admission_rejects_foreign_or_missing_accepted_operation(missing):
+@pytest.mark.parametrize("operation", ["foreign", "missing", "historical_ready"])
+async def test_source_admission_rejects_foreign_or_missing_accepted_operation(operation):
     request = _request()
     admission, content = _lineage(request)
     session, authority = _session(admission, content, None, datetime.now(UTC)), _Allow()
-    changed = replace(request, accepted_operation_id=None if missing else new_record_id())
+    changed = replace(request, accepted_operation_id=new_record_id() if operation == "foreign" else None)
+    if operation == "historical_ready":
+        admission.source_operation_id = None
     with pytest.raises(SubmissionAdmissionConsumptionError, match="submission_bundle_admission_unavailable"):
         await SubmissionAdmissionConsumptionService(session, authority).consume(changed)
     assert session.scalar.await_count == 1
@@ -307,9 +309,12 @@ async def test_broken_art_lineage_denies_without_staling_admission() -> None:
 
 
 @pytest.mark.asyncio
-async def test_matching_consumed_admission_replays_exact_binding() -> None:
+@pytest.mark.parametrize("historical", [False, True])
+async def test_matching_consumed_admission_replays_exact_binding(historical) -> None:
     request = _request()
     admission, content = _lineage(request)
+    if historical:
+        admission.source_operation_id = None
     admission.status = "consumed"
     decision_id = new_record_id()
     admission.consumed_by_submission_id = str(request.submission_id)
