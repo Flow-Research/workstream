@@ -5293,3 +5293,16 @@ import-only edit, without accepting new or growing structural debt.
 Full structural validator passes exit0 with the reconciled digest, including
 trusted-main transition and assertion-map checks; log:
 /tmp/submission-structure-reconciliation.log. No test or policy edit was needed.
+
+Focused CI review closes the digest repair without findings. Latest CLI HTTP job
+133428292508 stops before HTTP tests: Ruff check passes, formatter rejects only
+cli/tests/integration/test_submission_public_api.py. Extend repair scope to pinned
+Ruff formatting of that already-reviewed drill. Require identical Python AST,
+full CLI lint/format gates, and unchanged structural inventory; no behavior edits.
+
+Formatting repair preserves the complete Python AST. Move the existing E402
+annotation to the formatter-expanded import's opening line so Ruff still applies
+it. All98 CLI test files pass lint and format checks; full structural validation
+again passes exit0 (/tmp/submission-format-structure.log). Both latest CLI jobs
+stop at this same formatting gate before integration execution. No new journey
+execution evidence is claimed. Latest fetched main is already contained in HEAD.
