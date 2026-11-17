@@ -1,7 +1,8 @@
 # Browser-accessible Flow Identity administration
 
-Initiative: None
-Status: Planned
+- Initiative: None
+- Durable disposition: Planned
+- Intended merge outcome: Browser administration on the canonical identity HTTPS hostname.
 
 ## Intent and scope
 
@@ -23,3 +24,11 @@ Change deploy/hosted/public.Caddyfile, compose.identity.yml, preflight.py, deplo
 ## Risk and review
 
 L1 security-sensitive ingress change. Focused plan and final security/architecture/QA/docs review. Human focus: deliberately public authenticated administration, stable issuer, no anonymous administration or product grants. Deployment proof is separate from source and CI checks.
+
+## Delivered verification
+
+Real-socket Caddy proof passed, including exact-host routing, body limits, forwarded-header replacement and denied management/registration paths. Hosted-release and Keycloak configuration tests passed (91 tests, 325 subtests); the added canonical-admin override regression independently passed.
+
+Hosted configuration from ab97028e5 was applied without rebuilding application images or resetting data. The fixed public admin URL serves the console. A fresh sandboxed browser rejected invalid MFA then authenticated the named administrator with valid MFA and read the master realm. Fresh participant code/PKCE login passed. Administrative user reads reject absent credentials and a freshly issued participant token. Both realms retain disabled registration; the flow issuer and admin-only human marker remain unchanged. Health, metrics and both realm dynamic-registration paths returned 404. Private credential material and browser evidence remain outside Git.
+
+The initial deployment pull failed because registry authentication had expired. Temporary ECR authentication allowed the pinned image reconciliation and was removed afterward. A first participant proof expected consent on every login; the existing consent legitimately skipped that screen, so the proof now accepts either consent or the verified callback. Neither observation required a product permission change.
