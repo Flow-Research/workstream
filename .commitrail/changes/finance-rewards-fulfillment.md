@@ -2471,3 +2471,32 @@ immutable earning facts and canonical denial evidence. Then restore the link
 through its public operation and prove fresh reporting under the new draining
 generation retains the original admission lineage. No fake authority or new
 lifecycle implementation is introduced.
+
+### Native independent guard qualification
+
+Implement the approved direct-SQL selectors in an isolated checkout while the
+separate authority-race source remains frozen. Allowed additions are
+backend/tests/finance/test_fulfillment_evidence_native.py and its focused
+fulfillment_native_support.py fixture, plus existing project-family/literal
+lane controls and this record. Production code, migrations, AUTH decisions and
+clocks remain unchanged. RiskL0 and the existing QA/security/architecture/reuse/
+CI tracks apply; human focus is exact genuine authority and rollback-contained
+mutation controls.
+
+The native fixture deliberately bypasses only the application report/exception
+writer. Signed Flow/JWKS verification, actual request actor/link, current REV
+custody, canonical AUTH/PREP consumption and the request root transaction remain
+real. Use SQLAlchemy Core INSERT against installed PostgreSQL guards, never an
+ORM writer or fabricated allow. The helper separates the held current fence
+from authority preparation so two exact allows in one closure probe do not
+reacquire REV after AUTH. Caller-supplied ordinal/time fields must be overwritten
+by native insertion. No controlled invalid row or DDL may commit.
+
+Require named source/reporter/authority/body/digest/parent refusals, immutable
+UPDATE/DELETE/TRUNCATE, and deferred allow/evidence closure. A body-guard-only
+mutation must demonstrate the missing native defense, then roll back both the
+invalid row and DDL and verify the installed definition is restored. Native
+RR/SERIALIZABLE rejection must be tested after genuine preparation while the
+ordinary app RC gate remains unchanged. The remaining approved RR collision
+and post-wait receiver-clock probes follow this same actual authority fixture;
+no second storage, policy or production bypass is introduced.
