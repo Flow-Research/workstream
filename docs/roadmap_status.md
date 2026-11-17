@@ -776,8 +776,8 @@ cannot be reused as post-submission review-gate evidence. See the
   issuer with stock browser code/PKCE login and administrator-provisioned accounts.
   A temporary password must be changed before issuing participant credentials.
   Email remains an unverified identifier; SMTP and public registration are not
-  required. The hosted provider has its own database role, private administrator
-  ingress, pinned image and bounded resources. Its regular container holds no
+  required. The hosted provider has its own database role, authenticated HTTPS administrator
+  console on the identity hostname, pinned image and bounded resources. Its regular container holds no
   bootstrap credential.
 - MCP verifies its resource-scoped token and exchanges it for a short-lived API
   token for the same user; an API-only bearer is rejected by MCP. Real local

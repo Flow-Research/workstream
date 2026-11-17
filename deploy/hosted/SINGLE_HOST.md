@@ -93,7 +93,7 @@ migration step exercises the non-superuser connection.
 
 Initialize fresh accounts through the independent
 [Keycloak identity provider](../identity/README.md).
-Follow its offline temporary-administrator setup, private administration and
+Follow its offline temporary-administrator setup, authenticated HTTPS administration and
 persistent database ownership. An issuer administrator is not a Workstream administrator. Bootstrap
 Workstream authority using its existing supported operator command, not database
 edits or saved fixture tokens.

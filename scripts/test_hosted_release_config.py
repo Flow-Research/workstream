@@ -340,6 +340,12 @@ class HostedReleaseConfigTests(unittest.TestCase):
         issuer = rendered["services"]["identity"]
         self.assertEqual(issuer["networks"], {"default": None})
         self.assertEqual(issuer["environment"]["KC_DB_USERNAME"], "flow_identity")
+        self.assertEqual(issuer["environment"]["KC_HOSTNAME"], "https://" + values["FLOW_IDENTITY_HOSTNAME"])
+        self.assertNotIn("KC_HOSTNAME_ADMIN", issuer["environment"])
+        changed = copy.deepcopy(rendered)
+        changed["services"]["identity"]["environment"]["KC_HOSTNAME_ADMIN"] = "https://identity-admin.localhost:19443"
+        with self.assertRaises(preflight.PreflightError):
+            preflight.validate_compose(changed, values)
         self.assertFalse(any("BOOTSTRAP" in name for name in issuer["environment"]))
         self.assertEqual(len(issuer["volumes"]), 3)
         for key, value in (
