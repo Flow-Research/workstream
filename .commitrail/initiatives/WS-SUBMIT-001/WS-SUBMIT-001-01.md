@@ -7020,3 +7020,25 @@ foreground96751781c3aeffb398b4bdf677539ba0101835e8. Scoped QA/security reports n
 remaining actionable finding. Shared modified-content execution over11e7c36c7,
 not independent or clean-commit rerun. Other capacity cases and full old-producer/
 provider/specification qualification remain open; same single draft PR708.
+
+Zero-cap and rebase public proof scope: migrate coverage-return and policy-rebase
+cases in test_revision_capacity.py to rawZIP202 acceptance/OUTBOX T5. Preserve
+zero-round coverage semantics, actual terminal exhaustion/status timestamps and
+backfill parity. Rebase must replay original accepted source using its persisted
+key/metadata despite new guide, reject wrong acknowledgement before PRE, finalize
+one v2 under exact acknowledgement, and preserve old Submission/checker evidence
+and preparation immutability. Extract shared test runtime/profile composition for
+these and existing two-revision cap case; preserve16MiB already-claimed namespace.
+Run all three public journeys. Other capacity/recovery helpers remain unchanged;
+QA/security review required, no provider or full specification claim.
+
+Zero-cap/rebase/cap control v1 terminal0:3passed171.12s/schema0084/allcleanuptrue
+(/tmp/submission-zero-cap-rebase-v1.json/.log). Frozenblob
+7e89f998d9d4b3553ce0b643275142087913faaa. Zero-cap coverage preserves round0 and
+exact terminal status/time/backfill semantics; rebase replays initial accepted
+source without PRE, refuses wrong acknowledgement before PRE, then finalizes v2
+without changing original Submission/checker custody. Existing two-round cap
+control passes after shared runtime extraction. Ruff/structure/record/whitespace
+pass. Scoped QA/security inspection found no actionable gap. Shared modified
+content over0c801dc84, not independent or clean-commit rerun. Remaining capacity/
+recovery consumers, producer retirement and full specification qualification open.

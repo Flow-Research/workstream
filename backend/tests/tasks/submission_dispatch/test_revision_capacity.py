@@ -100,6 +100,19 @@ def _revision_upload_headers(h):
     }
 
 
+async def _revision_http_runtime(h, client, tmp_path, monkeypatch, data):
+    """Use controlled PRE with the already claimed source namespace capacity."""
+    from tests.artifacts.test_submission_foreground_command import configure_source_http
+    _, settings, errors, calls = await configure_source_http(
+        h.factory, client, tmp_path, monkeypatch, data, "completed")
+    settings = settings.model_copy(update={"submission_execution_profile": {
+        **settings.submission_execution_profile,
+        "capacity": {"maximum_total_bytes": 16 * 1024**2},
+    }})
+    monkeypatch.setattr(client._transport.app.state, "settings", settings)
+    return settings, errors, calls
+
+
 async def test_two_revisions_then_public_and_sql_refusal(
     tmp_path, isolated_database_env, monkeypatch,
 ):
@@ -107,7 +120,6 @@ async def test_two_revisions_then_public_and_sql_refusal(
     from types import SimpleNamespace
     from app.modules.tasks.models import SubmissionDispatch
     from app.modules.artifacts.intake.models import SubmissionIntakeOperation
-    from tests.artifacts.test_submission_foreground_command import configure_source_http
     from tests.retained_material_fixtures import finalize_retained_intake
     from app.modules.tasks.revision.models import TaskRevisionPreparation
 
@@ -128,13 +140,8 @@ async def test_two_revisions_then_public_and_sql_refusal(
             route = f"/api/v1/tasks/{h.request.task_id}/submissions"
             for round_number in (1, 2):
                 h.data = revision_archive(h.data)
-                client, settings, errors, calls = await configure_source_http(
-                    h.factory, client, tmp_path, monkeypatch, h.data, "completed")
-                settings = settings.model_copy(update={"submission_execution_profile": {
-                    **settings.submission_execution_profile,
-                    "capacity": {"maximum_total_bytes": 16 * 1024**2},
-                }})
-                monkeypatch.setattr(client._transport.app.state, "settings", settings)
+                settings, errors, calls = await _revision_http_runtime(
+                    h, client, tmp_path, monkeypatch, h.data)
                 headers = _revision_upload_headers(h)
                 response = await client.post(route, headers=headers, content=h.data)
                 assert response.status_code == 202, response.text
@@ -231,7 +238,9 @@ async def test_coverage_return_spends_no_round_under_a_zero_revision_policy(
     its genuine failure exhausts the assignment immediately. Counting the
     coverage return would make v2 a round beyond the policy instead.
     """
-    from app.modules.tasks.schemas import AdmissionBackedSubmissionResponse
+    from types import SimpleNamespace
+    from app.modules.tasks.models import SubmissionDispatch
+    from tests.retained_material_fixtures import finalize_retained_intake
     from app.modules.tasks.revision.models import TaskRevisionPreparation
     from tests.tasks.submission_dispatch.test_revision_exhaustion import terminal_facts
 
@@ -247,12 +256,19 @@ async def test_coverage_return_spends_no_round_under_a_zero_revision_policy(
         route = f"/api/v1/tasks/{h.request.task_id}/submissions"
         async with _client(h, monkeypatch, isolated_database_env) as client:
             h.data = revision_archive(h.data)
-            prepared, admission = await _ready_replacement(h, h.data)
-            payload = _payload(prepared, admission)
-            response = await client.post(route, json=payload)
-            assert response.status_code == 201, response.text
-            assert response.json()["submission_version"] == 2
-            h.created = AdmissionBackedSubmissionResponse.model_validate(response.json())
+            settings, errors, calls = await _revision_http_runtime(h, client, tmp_path, monkeypatch, h.data)
+            headers = _revision_upload_headers(h)
+            response = await client.post(route, headers=headers, content=h.data)
+            assert response.status_code == 202, response.text
+            accepted = response.json()
+            assert accepted["status"] == "accepted" and accepted["replayed"] is False
+            assert len(calls) == 1 and not errors, errors
+            submission_id = await finalize_retained_intake(h.factory, SimpleNamespace(
+                operation_id=UUID(accepted["operation_id"]), store=h.store.wrapped,
+                namespace=h.namespace, settings=settings))
+            async with h.factory() as session:
+                h.created = (await session.get(SubmissionDispatch, submission_id)).result()
+                assert h.created.submission_version == 2
             outcome = await _fail_current_submission(h, terminal=True)
             receipt = await terminal_facts(h, outcome, expected_round=0)
             async with h.factory() as session:
@@ -265,9 +281,10 @@ async def test_coverage_return_spends_no_round_under_a_zero_revision_policy(
                     ["checker_coverage_incomplete", "revision_limit_reached"],
                     [first.requested_at, receipt.exhausted_at],
                 )
-            replay = await client.post(route, json=payload)
-            assert replay.status_code == 201, replay.text
-            assert replay.json() == response.json()
+            replay = await client.post(route, headers=headers, content=h.data)
+            assert replay.status_code == 202, replay.text
+            assert replay.json() == dict(accepted, replayed=True)
+            assert len(calls) == 1
         await assert_backfill_matches_live(h.factory)
 
 
@@ -334,7 +351,10 @@ async def test_rebase_keeps_history_and_requires_exact_acknowledgement(
     tmp_path, isolated_database_env, monkeypatch,
 ):
     """A real v2 activation rebases only the next attempt and preserves v1 evidence."""
-    from app.modules.tasks.models import WorkstreamTask, TaskAssignment
+    from types import SimpleNamespace
+    from app.modules.artifacts.intake.models import SubmissionIntakeOperation
+    from app.modules.tasks.models import WorkstreamTask, TaskAssignment, SubmissionDispatch
+    from tests.retained_material_fixtures import finalize_retained_intake
     from app.modules.tasks.revision.models import TaskRevisionPreparation
     from tests.tasks.post_submit_routing.support import activate_successor_guide
 
@@ -373,34 +393,39 @@ async def test_rebase_keeps_history_and_requires_exact_acknowledgement(
             assert view["preparation_id"] == str(h.revision_preparation_id)
             assert view["outcome"] == "rebased" and view["disposition"] == "ready"
             assert "contribution" in {change["component"] for change in view["changes"]}
-            replayed_initial = await client.post(
-                f"/api/v1/tasks/{h.request.task_id}/submissions",
-                json=_payload(h.creation_request, h.creation_request.admission_id),
-            )
-            assert replayed_initial.status_code == 201, replayed_initial.text
-            assert replayed_initial.json()["submission_id"] == str(h.created.submission_id)
-            assert replayed_initial.json()["submission_version"] == 1
+            data = revision_archive(h.data)
+            settings, errors, calls = await _revision_http_runtime(h, client, tmp_path, monkeypatch, data)
+            route = f"/api/v1/tasks/{h.request.task_id}/submissions"
+            async with h.factory() as session:
+                initial = await session.scalar(select(SubmissionIntakeOperation).where(
+                    SubmissionIntakeOperation.finalized_submission_id == str(h.created.submission_id)))
+            replayed_initial = await client.post(route, headers={
+                "Content-Type": "application/zip", "Idempotency-Key": initial.idempotency_key,
+                "X-Task-Assignment-Id": initial.assignment_id,
+                "X-Submission-Summary": initial.command_metadata["summary"],
+                "X-Contributor-Attestation": initial.command_metadata["contributor_attestation"],
+            }, content=h.data)
+            assert replayed_initial.status_code == 202, replayed_initial.text
+            assert replayed_initial.json() == dict(initial.acceptance_receipt, replayed=True)
+            assert calls == []
             before = await _creation_snapshot(h)
-            refused = await client.post(
-                f"/api/v1/tasks/{h.request.task_id}/submission-bundle-preparations",
-                headers={
-                    "Content-Type": "application/zip",
-                    "X-Task-Assignment-Id": str(h.request.assignment_id),
-                    "X-Predecessor-Submission-Id": str(h.created.submission_id),
-                    "X-Revision-Preparation-Id": str(new_record_id()),
-                    "X-Revision-Preparation-Sha256": h.revision_preparation_sha256,
-                    "Idempotency-Key": str(new_record_id()),
-                }, content=b"not a zip",
-            )
+            headers = _revision_upload_headers(h)
+            refused = await client.post(route, headers=headers | {
+                "X-Revision-Preparation-Id": str(new_record_id()),
+            }, content=b"not a zip")
             assert refused.status_code == 409, refused.text
             assert refused.json()["error"]["code"] == "revision_context_changed"
-            assert await _creation_snapshot(h) == before
-            prepared, admission = await _ready_replacement(h, revision_archive(h.data))
-            created = await client.post(
-                f"/api/v1/tasks/{h.request.task_id}/submissions", json=_payload(prepared, admission),
-            )
-            assert created.status_code == 201, created.text
-            assert created.json()["submission_version"] == 2
+            assert await _creation_snapshot(h) == before and calls == []
+            created = await client.post(route, headers=headers, content=data)
+            assert created.status_code == 202, created.text
+            assert len(calls) == 1 and not errors, errors
+            submission_id = await finalize_retained_intake(h.factory, SimpleNamespace(
+                operation_id=UUID(created.json()["operation_id"]), store=h.store.wrapped,
+                namespace=h.namespace, settings=settings))
+            async with h.factory() as session:
+                dispatch = await session.get(SubmissionDispatch, submission_id)
+                assert dispatch.submission_version == 2
+                assert dispatch.checker_remediation_manifest_id == source_id
         async with h.factory() as session:
             assert await session.scalar(text(
                 "SELECT to_jsonb(s)-ARRAY['attempt_status','status_reason','decided_at','updated_at'] FROM public.submissions s WHERE id=:id"
