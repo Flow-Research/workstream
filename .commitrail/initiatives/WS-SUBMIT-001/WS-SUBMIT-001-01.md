@@ -6845,3 +6845,31 @@ Scoped QA/security inspection found no remaining issues. Evidence is shared
 executions on frozen modified bytes over b388401ba, not an independent rerun or
 clean postcommit execution. Broader old-command removal and final qualification
 remain open. Same draft PR708 only.
+
+Predecessor receipt proof migration scope: replace the old verified-ready admission
+and hidden TASK creation in test_predecessor_receipt.py with current source T1/PRE/
+T4 and production OUTBOX T5. Use genuine local and foreign routed failures. Change
+only the new dispatch remediation manifest. Force its deferred constraint after
+T5 has staged finalized operation custody, not prematurely inside create_accepted.
+Add matching valid revision control to exclude incomplete-finalization false proof.
+Require exact23514 replacement-cause guard, no T5 owner effects after rollback,
+and preserved accepted operation/source/event/task pointer. QA/security review and
+isolated PostgreSQL positive/negative cases required. Old producer retirement is
+still incomplete; this ports another required negative test before deletion.
+
+Accepted predecessor v1 terminal0:2passed120.19s, complete cleanup
+(/tmp/submission-predecessor-receipt-v1.json/.log). The matching valid revision
+commits; changing only its dispatch manifest reaches exact23514 replacement
+currentness refusal after complete T5 staging. Strengthen negative rollback with
+explicit absent candidate Submission/CheckerRun/POST event and retained exact T4
+event. Rerun only changed foreign case; valid control remains unchanged.
+
+Final foreign predecessor case v2 terminal0:1passed58.76s, complete database/MinIO
+cleanup (/tmp/submission-predecessor-receipt-v2.json/.log). Final test blob
+e0b0633363349f61867dda1809b0a5b0219baabc; valid v1 control unchanged. QA/security
+inspection found no actionable issue. This explicitly forced deferred-constraint
+check proves cause validation after complete staging and rollback, not native
+COMMIT constraint ordering. Retained T4 event is checked by its persisted ID,
+type and operation association, not full payload byte equality. Shared executed
+content over b2e621581 is the evidence; no independent or clean-commit rerun claim.
+Ruff, structure, record and whitespace checks passed. Full retirement remains open.
