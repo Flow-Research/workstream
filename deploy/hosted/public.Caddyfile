@@ -1,4 +1,4 @@
-# Public API and OAuth ingress. Keep upstream and administration listeners loopback-only.
+# Public API and OAuth ingress. Keep upstream listeners loopback-only.
 # Configure the four variables described in PUBLIC_ACCESS.md in the existing
 # ingress service's private environment file. Preserve its persistent TLS state.
 {
@@ -36,31 +36,28 @@
 
 {$FLOW_IDENTITY_HOSTNAME} {
 	header Cache-Control no-store
-	request_body {
-		max_size 64KiB
-	}
-	@registration path /realms/flow/clients-registrations*
-	@flow path /realms/flow /realms/flow/* /resources/*
+	@registration path /realms/flow/clients-registrations* /realms/master/clients-registrations*
+	@administration path /admin /admin/*
+	@identity path /realms/flow /realms/flow/* /realms/master /realms/master/* /resources/*
 	route {
 		respond @registration 404
-		reverse_proxy @flow https://127.0.0.1:18443 {
-			import issuer_transport 443
+		handle @administration {
+			request_body {
+				max_size 1MiB
+			}
+			reverse_proxy https://127.0.0.1:18443 {
+				import issuer_transport 443
+			}
+		}
+		handle @identity {
+			request_body {
+				max_size 64KiB
+			}
+			reverse_proxy https://127.0.0.1:18443 {
+				import issuer_transport 443
+			}
 		}
 		respond 404
-	}
-}
-
-# One process and one persistent certificate store. Reach this through SSH;
-# trust the Caddy internal CA on the operator's machine. Never publish this port.
-https://identity-admin.localhost:19443 {
-	bind 127.0.0.1
-	tls internal
-	header Cache-Control no-store
-	request_body {
-		max_size 1MiB
-	}
-	reverse_proxy https://127.0.0.1:18443 {
-		import issuer_transport 19443
 	}
 }
 

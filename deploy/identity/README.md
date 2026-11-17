@@ -25,8 +25,9 @@ runtime image is built from the pinned upstream digest in `Dockerfile`.
 4. Configure the existing [public Caddy ingress](../hosted/public.Caddyfile).
    `FLOW_IDENTITY_PROXY_ADDRESS` is the one source address actually observed from
    that proxy, not a trusted subnet or arbitrary forwarded header. Public access
-   exposes the `flow` realm and login assets. Administration and the master realm
-   are reachable only through the separate loopback administration listener.
+   exposes the `flow` realm and login assets. The administration console and master-realm login use the same public HTTPS
+   hostname. Keycloak enforces administrator authentication and permissions; health,
+   metrics and dynamic client registration are not exposed.
 5. Start the local database services using the checked hosted wrapper:
 
    ```sh
@@ -53,15 +54,20 @@ cleans up its one-off container. Routine identity configuration contains no
 bootstrap secret. A failed or repeated bootstrap requires inspection; it does
 not reset accounts or choose a different administrator automatically.
 
-Reach `https://identity-admin.localhost:19443` through an SSH loopback tunnel to
-the host's port 19443, trusting the verified Caddy internal CA on the operator's
-machine. Keep the master realm's `frontendUrl` set to that exact private origin;
-`KC_HOSTNAME_ADMIN` alone does not set master-realm login URLs. Preserve other
-master-realm attributes when setting it. The flow realm inherits the fixed public
-origin and must have no `frontendUrl` override.
-After changing the master realm's frontend URL, authenticate again before
-continuing administrative API calls: a token issued under the previous master
-issuer is rejected after the change. Do not relax issuer validation to reuse it.
+Open `https://IDENTITY_HOST/admin/` in your browser (for this deployment,
+`https://identity.flowresearch.tech/admin/`). Sign in to the **master** realm.
+The console uses the same fixed HTTPS hostname as participant login; no SSH
+login or tunnel is required for routine account administration. Keep administrator
+passwords private and require MFA for every administrator.
+
+For an existing deployment previously using a private admin origin, authenticate
+through that origin before cutover and change only the master realm's
+`attributes.frontendUrl` to `https://IDENTITY_HOST`, preserving its other
+attributes. Remove the obsolete `KC_HOSTNAME_ADMIN` override and private ingress
+listener. Then authenticate again at the public origin: tokens issued under the
+old master issuer must not be reused. The flow realm must have no `frontendUrl`
+override; its public issuer, participant accounts and OAuth clients do not change.
+Never recreate either realm or rerun bootstrap to change this URL.
 
 Establish a named administrator with MFA, verify recovery access, delete the
 temporary `workstream-bootstrap` account, and remove its password file. This
@@ -86,12 +92,12 @@ python3 deploy/identity/realm_config.py --output /private/operator/flow-realm.js
 ```
 
 The output contains no users, passwords, client secrets or signing keys. Import
-it into a fresh provider through private administration; do not overwrite an
+it into a fresh provider through authenticated administration; do not overwrite an
 existing realm as a reconciliation shortcut. The `human_profile()` operation
 in the same module merges the administrator-only `workstream_subject_kind`
 attribute into the stock user profile and makes email required. Apply that
 profile before provisioning participants. Export the stock profile from
-`GET /admin/realms/flow/users/profile` through private administration, then render
+`GET /admin/realms/flow/users/profile` through authenticated administration, then render
 its replacement without discarding other fields:
 
 ```sh
@@ -103,11 +109,28 @@ python3 deploy/identity/realm_config.py \
 Apply that document with `PUT /admin/realms/flow/users/profile`. Assign `human`
 explicitly only to human accounts; a user cannot assign the marker themselves.
 
-Invite participants with their email and a temporary password, requiring
-`UPDATE_PASSWORD`. They change it in Keycloak's browser UI before receiving a
-usable access token. Mail delivery and email-ownership verification are not
-claimed by this configuration. Direct password grants and public registration
-stay disabled.
+## Invite a participant in the browser
+
+1. Open `https://IDENTITY_HOST/admin/` and sign in with your named **master**
+   administrator account and MFA. Select **flow** in the realm selector.
+2. Choose **Users → Add user**. Set **Username** to their email, enter **Email**
+   and their name, and enable the account. Do not mark email verified unless
+   its ownership has actually been verified.
+3. Set the administrator-only **workstream_subject_kind** attribute to `human`.
+   This attribute comes from the user-profile configuration above; participants
+   cannot set it themselves. Save the user.
+4. Open **Credentials → Set password**, choose a unique initial password and
+   leave **Temporary** enabled. Confirm **Update Password** is required.
+5. Transfer the username and temporary password privately. No invitation email
+   is sent. They connect Workstream in Garden or run the terminal login helper
+   below, then replace the password on the Flow Identity page before receiving
+   usable access credentials.
+
+Keep public registration and participant direct password grants disabled.
+Creating an identity grants no Workstream admission or project role. An existing
+Workstream Access Administrator must admit the participant and arrange the
+required project grants through Workstream's APIs. Keycloak administration is
+not Workstream administration.
 
 The direct client requests `workstream:access workstream-api-audience`; its
 callback is exactly `http://127.0.0.1:17843/callback`. An inspected Garden client
@@ -127,7 +150,7 @@ python3 deploy/identity/realm_config.py \
   --output /private/operator/garden-client.json
 ```
 
-Create it through `POST /admin/realms/flow/clients` using private administration.
+Create it through `POST /admin/realms/flow/clients` using authenticated administration.
 The Garden dev operator must set `WORKSTREAM_MCP_CLIENT_ID=garden-dev` for the
 Workstream connector; generating this document alone does not connect Garden.
 Other deployment environments require their own exact client/callback registration.

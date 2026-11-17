@@ -256,8 +256,8 @@ its credentials are never mounted into the API or workers. Follow the provider
 guide for offline first-administrator bootstrap and participant provisioning.
 
 The issuer port stays on loopback. The [Caddy ingress](public.Caddyfile) exposes
-only the public realm and login assets; administration uses a separate loopback
-listener. Confirm real login and token validation before switching the backend.
+realm login, assets and the authenticated administration console on the fixed
+identity hostname. Health, metrics and dynamic registration remain hidden. Confirm real login and token validation before switching the backend.
 An issuer administrator receives no Workstream administrative grant. Preserve
 retained actor links and records during any non-disposable cutover; never
 substitute identities by matching email. Explicitly authorized development

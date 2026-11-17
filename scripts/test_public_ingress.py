@@ -82,8 +82,7 @@ class PublicIngressTest(unittest.TestCase):
                 config = json.loads(adapted.stdout)
                 servers = list(config['apps']['http']['servers'].values())
                 server = next(item for item in servers if item['listen'] == [':443'])
-                private_server = next(item for item in servers if item['listen'] == ['127.0.0.1:19443'])
-                self.assertEqual(len(servers), 2)
+                self.assertEqual(len(servers), 1)
                 self.assertEqual(config['admin'], {'disabled': True})
                 # Only transport addresses/frontend TLS are changed for this fixture.
                 # Routing, host/header rules, body limits and upstream TLS stay intact.
@@ -113,12 +112,6 @@ class PublicIngressTest(unittest.TestCase):
                 with socket.socket() as probe:
                     probe.bind(('127.0.0.1', 0))
                     port = probe.getsockname()[1]
-                with socket.socket() as probe:
-                    probe.bind(('127.0.0.1', 0))
-                    private_port = probe.getsockname()[1]
-                private_server['listen'] = [f'127.0.0.1:{private_port}']
-                private_server['automatic_https'] = {'disable': True}
-                private_server.pop('tls_connection_policies', None)
                 server['listen'] = [f'127.0.0.1:{port}']
                 server['automatic_https'] = {'disable': True}
                 server.pop('tls_connection_policies', None)
@@ -140,8 +133,8 @@ class PublicIngressTest(unittest.TestCase):
                 else:
                     self.fail('Caddy did not listen')
 
-                def request(host, target, body=None, extra=None, *, private=False):
-                    connection = http.client.HTTPConnection('127.0.0.1', private_port if private else port, timeout=10)
+                def request(host, target, body=None, extra=None):
+                    connection = http.client.HTTPConnection('127.0.0.1', port, timeout=10)
                     try:
                         connection.request('POST' if body is not None else 'GET', target,
                                            body=body, headers={'Host': host, **(extra or {})})
@@ -152,11 +145,15 @@ class PublicIngressTest(unittest.TestCase):
 
                 self.assertEqual(request('identity.example.test', '/realms/flow/protocol/openid-connect/certs')[0], 200)
                 self.assertEqual(request('identity.example.test', '/realms/flow/protocol/openid-connect/token', b'x' * 65537)[0], 413)
-                self.assertEqual(request('identity-admin.localhost', '/admin/master/console/', private=True)[0], 200)
+                for target in ('/admin', '/admin/master/console/', '/admin/realms/flow/users',
+                               '/realms/master', '/realms/master/protocol/openid-connect/auth'):
+                    self.assertEqual(request('identity.example.test', target)[0], 200)
+                self.assertEqual(request('identity.example.test', '/admin/realms/flow/users', b'x' * 65537)[0], 200)
+                self.assertEqual(request('identity.example.test', '/admin/realms/flow/users', b'x' * (1024**2 + 1))[0], 413)
+                self.assertEqual(request('identity.example.test', '/realms/master/protocol/openid-connect/token', b'x' * 65537)[0], 413)
                 self.assertEqual(request('workstream.example.test', '/.well-known/oauth-protected-resource/mcp')[0], 200)
                 before = len(calls)
-                for target in ('/admin', '/admin/master/console/', '/realms/master', '/realms/master/protocol/openid-connect/token',
-                               '/health/ready', '/metrics', '/realms/flow/clients-registrations/default', '/jwks.json', '/login'):
+                for target in ('/admin-other', '/realms/other', '/health/ready', '/metrics', '/realms/flow/clients-registrations/default', '/realms/master/clients-registrations/default', '/jwks.json', '/login'):
                     self.assertEqual(request('identity.example.test', target)[0], 404)
                 self.assertEqual(request('identity.example.test', '/not-a-route')[0], 404)
                 self.assertEqual(request('foreign.example.test', '/api/v1/health')[0], 404)
@@ -185,6 +182,14 @@ class PublicIngressTest(unittest.TestCase):
                            'Forwarded': 'for=192.0.2.66;host=evil.invalid',
                            'X-Forwarded-Host': 'evil.invalid', 'X-Forwarded-Proto': 'http',
                            'Authorization': 'Bearer synthetic-test-only'}
+                for target in ('/admin/realms/flow/users', '/realms/master/protocol/openid-connect/token'):
+                    self.assertEqual(request('foreign.example.test', target)[0], 404)
+                    self.assertEqual(request('identity.example.test', target, b'{}', spoofed)[0], 200)
+                    identity_headers = {k.lower(): v for k, v in calls[-1][1].items()}
+                    self.assertEqual(identity_headers['x-forwarded-host'], 'identity.example.test')
+                    self.assertEqual(identity_headers['x-forwarded-port'], '443')
+                    self.assertNotIn('192.0.2.66', json.dumps(identity_headers))
+                    self.assertNotIn('evil.invalid', json.dumps(identity_headers))
                 self.assertEqual(request('workstream.example.test', '/mcp', b'{}', spoofed)[0], 200)
                 headers = {k.lower(): v for k, v in calls[-1][1].items()}
                 self.assertEqual(headers['host'], '127.0.0.1:8080')

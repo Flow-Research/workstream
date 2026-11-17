@@ -1680,7 +1680,6 @@ def validate_identity_compose(rendered: dict[str, Any], values: dict[str, str]) 
         "KC_DB_USERNAME": "flow_identity", "KC_DB_PASSWORD_FILE": "/run/identity/database-password",
         "KC_DB_POOL_INITIAL_SIZE": "1", "KC_DB_POOL_MIN_SIZE": "1", "KC_DB_POOL_MAX_SIZE": "10",
         "KC_HOSTNAME": "https://" + values["FLOW_IDENTITY_HOSTNAME"],
-        "KC_HOSTNAME_ADMIN": "https://identity-admin.localhost:19443",
         "KC_HOSTNAME_STRICT": "true", "KC_HOSTNAME_BACKCHANNEL_DYNAMIC": "false",
         "KC_PROXY_HEADERS": "xforwarded", "KC_PROXY_TRUSTED_ADDRESSES": values["FLOW_IDENTITY_PROXY_ADDRESS"],
         "KC_HTTPS_CERTIFICATE_FILE": "/run/identity/tls-cert.pem",

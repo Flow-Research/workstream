@@ -20,7 +20,7 @@ service. Keep the root domain unchanged. Permit inbound TCP 80/443; keep SSH
 restricted to administrators and all application ports loopback-only.
 
 Use the existing [Caddy service](workstream-ingress.service) with
-[public.Caddyfile](public.Caddyfile), using the two public virtual hosts and the private administration listener.
+[public.Caddyfile](public.Caddyfile), using the two public virtual hosts.
 Do not start a second listener on 443. In its root-owned environment file set:
 
 ```dotenv
@@ -49,7 +49,7 @@ only after the public path passes; retain the separate upstream TLS certificate.
 
 ## Participant workflow
 
-1. A named identity administrator uses Keycloak's private administration UI to
+1. A named identity administrator uses Keycloak's authenticated HTTPS administration UI to
    create the email account, set the administrator-only human marker, and assign
    a temporary password with `UPDATE_PASSWORD`. Transfer it privately.
 2. The participant signs in through Keycloak's browser page and replaces the
@@ -78,7 +78,7 @@ client and live connection proof, not metadata discovery alone.
 
 ## Bounds and verification
 
-Public identity request bodies are capped at 64 KiB; private administration has
+Realm login/token request bodies are capped at 64 KiB; HTTPS administration has
 a separate 1 MiB bound. Binary API bodies are streamed with a 500 MiB
 proxy ceiling; the owning API applies its per-operation policy limits. MCP uses
 its 96 MiB transport ceiling and stricter owner limits. The proxy applies finite
