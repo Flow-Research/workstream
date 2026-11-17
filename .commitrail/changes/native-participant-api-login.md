@@ -1,7 +1,7 @@
 # Native participant CLI and direct API authorization
 
 - Initiative: None
-- Durable disposition: Planned
+- Durable disposition: Complete
 - Intended merge outcome: Official native CLI login and Swagger code/PKCE authorization without a repository login helper.
 
 ## Intent
@@ -18,11 +18,13 @@ docs and CI integrity reviews. Human focus: exact issuer/API binding, no passwor
 grant, safe refresh and logout, and real browser/API evidence. Prohibited scope:
 Garden chat repairs, signup/SMTP, product grants, or replacement backend authority.
 
-## API and CLI onboarding extension
+## Bounded change
 
 The same requested identity usability correction also removes dependence on a repository login helper. Native CLI `login`, `logout`, and explicit `auth token` use the existing public code/S256-PKCE client, private locally stored refresh credentials, same-subject renewal and fixed audience/issuer validation. Normal CLI commands consume the saved session unless an explicit environment bearer is supplied; reject saved credentials bound to a different API origin. Refresh is serialized and an uncertain refresh response requires fresh login rather than automatic retries. No participant passwords are handled by the CLI or Workstream.
 
-Swagger gains a public PKCE OAuth client with one exact HTTPS callback and origin, while preserving bearer API support and the unchanged backend verifier. API consumers can sign in using Authorize or a standard OAuth client; direct participant password grants stay disabled. Allow files additionally: cli auth owner/commands/tests/dependency lockfiles/docs, backend Swagger/OpenAPI owner and focused tests, realm configuration/tests and hosted callback ingress/tests, identity browser/protocol proofs and affected identity CI helper references. Remove the superseded participant Python helper and replace its distinct proof with native-client and provider tests; preserve browser/provider integration coverage. No Garden, signup, SMTP, machine impersonation or human-review work.
+Swagger gains a public PKCE OAuth client with one exact HTTPS callback and origin, while preserving bearer API support and the unchanged backend verifier. API consumers can sign in using Authorize or a standard OAuth client; direct participant password grants stay disabled. Allowed files: cli auth owner/commands/tests/dependency lockfiles/docs, backend Swagger/OpenAPI owner and focused tests, realm configuration/tests and hosted callback ingress/tests, identity browser/protocol proofs and affected identity CI helper references. Remove the superseded participant Python helper and replace its distinct proof with native-client and provider tests; preserve browser/provider integration coverage. No Garden, signup, SMTP, machine impersonation or human-review work.
+
+## Acceptance criteria
 
 Proof must cover callback state/PKCE and timeout, invalid issuer/audience/token, OS credential-store and lock custody, API-origin substitution, concurrent/uncertain refresh, logout and explicit token output; a real invited participant browser login with the built CLI and direct API call; Swagger browser authorization against the hosted provider. Review security and architecture before implementation and replay relevant QA/docs/CI tracks before readiness.
 
@@ -34,6 +36,8 @@ Proof must cover callback state/PKCE and timeout, invalid issuer/audience/token,
 - Swagger explicitly serves `/docs/oauth2-redirect`, exposes that exact ingress path, initializes `workstream-swagger` with S256 PKCE, and adds an OAuth authorization-code alternative to bearer-secured OpenAPI operations (OR, not AND). Runtime bearer parsing/verification stays unchanged. Register only the exact API-origin callback and browser webOrigin; no client secret or token persistence in Swagger.
 - Native CLI auth code owns provider/client+OS-secret-store integration; command.go owns command registration and client resolution. Existing provider/Chrome tests must invoke the built CLI, retaining forced-password-change, signed token, renewal and cleanup proof. Identity CI builds the binary instead of installing the deleted Python login helper. New tests belong to CLI auth/command and existing backend docs/OpenAPI owner; package checks and current boundary catalogues must still pass.
 
+## Evidence
+
 Native-client proof replaces the retired helper's callback substitution, signed
 contract, foreign-origin, same-subject renewal, uncertain refresh, logout and
 concurrent-operation tests. File-token permission tests are replaced by OS-secret
@@ -42,7 +46,7 @@ and no-overwrite file workflow are removed rather than preserved as alternate
 login paths. Browser proof invokes the built binary and keeps forced password
 change, renewal and provider-session logout assertions. The hosted Linux CLI
 already completed browser PKCE, OS-keyring storage, exact-email `whoami`, explicit
-token output and logout; Swagger hosted qualification remains to be completed.
+token output and logout; Swagger hosted qualification is recorded below.
 
 The replacement real-provider/browser fixture passed with the built native CLI:
 forced first-password change, browser code/PKCE, signed API identity, near-expiry
@@ -54,3 +58,20 @@ is not Windows credential-store runtime qualification. Hosted Linux runtime proo
 uses the real Secret Service. Measured hosted access/refresh strings were 1,046
 and 844 bytes; platform credential-store limits still apply and failures are
 reported without plaintext fallback.
+
+
+Hosted Swagger qualification passed against the deployed API image built from
+`4c75c6986`: a fresh browser sent S256 authorization and exchanged the code with
+its verifier, signed in through Flow Identity, and used Swagger **Try it out** to
+read the invited participant's exact profile. Reload removed the browser token;
+an anonymous API request remained 401. The image is pinned at
+`sha256:a106607b53b92333b5ea1c1a380669c2cb531943436ec04ce473f6d09cdbe6bb`.
+API and MCP returned healthy after the coordinated deployment.
+
+The first hosted Swagger probe caught use of the local-test issuer setting. The
+repair uses the canonical production `token_issuer` and its regression constructs
+the real verifier configuration, without mocking validity. Local HMAC/development
+configuration does not advertise browser OAuth. The initial image pull required
+renewing temporary ECR authentication; the previous registry configuration was
+restored after deployment. No identity accounts, product roles or retained data
+were reset. Private participant credentials and browser artifacts stay outside Git.
