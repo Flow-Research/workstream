@@ -179,11 +179,39 @@ substitutions, registered-scope downscoping with a guard-removal counterexample,
 session expiry, real signing-key rotation and provider outage/recovery. The
 participant helper uses verified credentials and qualified logout cleanup.
 
-These are hosted provider and standalone-client observations, not actual Garden
-integration or execution of every MCP tool. Actual Garden registration/access
-and connector qualification remain required. Private operator credentials and
-raw receipts are not Git artifacts; redacted proof summaries identify their
-runtime source separately from later helper and documentation commits.
+The observations above distinguish standalone clients from Garden. The subsequent
+Garden dev drill used the automatically deployed #393 merge `36d8560a` and two
+members of the same workspace. Each completed personal browser OAuth without
+manual bearer entry; consent displayed the Workstream permission once. Stored
+Executor results from normal chats proved distinct Workstream actor identities,
+authorized profile reads, administrator-read denial, and a successful profile
+read after credential renewal without another login. The second member could
+not read or post to the first member's private chat (404), or open its WebSocket.
+
+An administrator explicitly confirmed temporary suspension of the dedicated
+isolation participant. That participant's existing Garden connection then
+returned `403 actor_suspended`. Confirmed reactivation restored the same actor;
+no administrator or project grants were changed. Earlier Garden resync after
+Identity/MCP service restart retained its connection and renewed credentials.
+These are representative connection and authorization proofs, not execution
+of all 132 tools or a complete contribution lifecycle through Garden.
+
+The drill also exposed two Garden-owned limitations. Integration selection can
+choose Executor over an explicitly named Workstream tool. Exact discovered tool
+ownership must govern selection; the correction tracked in
+[Garden #397](https://github.com/Flow-Research/garden/pull/397) requires its own
+deployed proof.
+Separately, captured WebSocket frames arrived out of order and caused the chat
+UI to report a stream error despite a completed tool response. That SDK
+investigation is deferred to Garden maintenance at the user's direction; no
+SDK upgrade or backport is included in Workstream's delivery. Reliable Garden
+chat completion is therefore not claimed.
+
+Private operator credentials, participant transcripts and raw receipts are not
+Git artifacts. The local `live-qualification-summary.json` asserts results from
+persisted tool outputs; `stream-probe-report.md` records the independent wire
+capture and its limits. Runtime source is distinct from later helper and
+presentation-only configuration commits.
 
 ## Review findings
 
@@ -205,6 +233,8 @@ is a registry requirement. These corrections require affected review replay.
 
 - Current-source reconciliation: main `94334ccf4`; open intake/finance/CLI work
   remains outside this change's implementation ownership.
-- Next usable boundary: qualified Keycloak and real Garden MCP OAuth access.
-- Remaining risks: provider feature compatibility, Garden client provisioning,
-  shared-host capacity and scoped destructive reset must be resolved with proof.
+- Delivered evidence: Keycloak cutover and real Garden personal OAuth, caller
+  isolation, representative allowed/denied tool calls, renewal and service restart.
+- Next usable boundary: deploy and verify Garden's routing correction. Garden
+  stream reliability remains a separate maintenance limitation; broader tool and
+  contribution-journey qualification is not implied by these connection proofs.

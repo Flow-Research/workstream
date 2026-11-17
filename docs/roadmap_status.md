@@ -787,8 +787,14 @@ cannot be reused as post-submission review-gate evidence. See the
   authenticated MCP allowance/denial and caller isolation, and retained sessions
   after service restart. A complete identity/product development reset and fresh
   administrator, participant, project/service and public guide-upload setup also
-  passed, preserving retained S3 objects and protections. The actual Garden
-  connector remains unqualified; a standalone MCP client is not Garden proof. See the
+  passed, preserving retained S3 objects and protections. Actual Garden dev
+  browser OAuth and representative tool calls now prove distinct member identities,
+  permission/suspension denial, renewal and private-chat isolation; the temporary
+  test suspension was restored. Garden connection renewal after Identity/MCP
+  restart also passed. Complete Garden chat reliability remains unqualified:
+  its router correction needs deployed verification, and an observed SDK stream
+  ordering defect is deferred to Garden maintenance. This does not establish all
+  tools or a full contribution journey through Garden. See the
   [replacement record](../.commitrail/changes/keycloak-mcp-oauth.md).
 - Earlier [Rust-hosted account](reports/demo-identity-hosted-2026-11-06.md),
   [login-based client](reports/demo-identity-clients-2026-11-07.md),
@@ -853,8 +859,9 @@ cannot be reused as post-submission review-gate evidence. See the
   WS-MCP-002-12 adds 18 task execution, preparation, context and submission
   bindings. WS-MCP-002-13 adds the remaining 24 project, task, import,
   service-actor and model-operation bindings. The assembled release proof
-  remains. Public routing exists; hosted OAuth/Garden qualification and a
-  certified release require their own evidence.
+  remains. Public routing and bounded hosted OAuth/Garden authorization proof
+  exist; complete Garden chat reliability and a certified release remain distinct
+  qualification boundaries.
   The [CLI foundation](../.commitrail/initiatives/WS-CLI-001/WS-CLI-001-01.md)
   provides `whoami` and `project access PROJECT_ID` through those public REST
   contracts. [CLI profile editing](../.commitrail/initiatives/WS-CLI-001/WS-CLI-001-02.md)
