@@ -95,6 +95,14 @@ def swagger_client(api_origin: str = "https://workstream.flowresearch.tech") -> 
     return client
 
 
+def direct_api_client() -> dict:
+    """Allow human password grants at the issuer after required actions finish."""
+    client = restricted_client("workstream-api-login")
+    client.update(publicClient=True, directAccessGrantsEnabled=True,
+                  optionalClientScopes=[ACCESS_SCOPE, "workstream-api-audience"])
+    return client
+
+
 def exchange_policy() -> tuple[dict, dict]:
     """Select only the administratively marked requester and enforce source claims."""
     profile = {
@@ -175,7 +183,7 @@ def realm() -> dict:
         "clients": [
             browser_client("workstream-cli-login", "http://127.0.0.1:17843/callback", "workstream-api-audience"),
             browser_client("workstream-mcp-proof", "http://127.0.0.1:17844/callback", "workstream-mcp-audience"),
-            swagger_client(), exchange, api,
+            swagger_client(), direct_api_client(), exchange, api,
         ],
         "clientProfiles": profiles, "clientPolicies": policies,
     }

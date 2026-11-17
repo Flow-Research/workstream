@@ -8,7 +8,6 @@ proof runs against this same isolated fixture.
 """
 from __future__ import annotations
 
-from concurrent.futures import ThreadPoolExecutor
 import os
 import secrets
 import shutil
@@ -20,6 +19,7 @@ import jwt
 from playwright.sync_api import sync_playwright
 
 from scripts import test_identity_provider as provider
+from scripts.identity_browser_runner import login_line
 
 
 class IdentityBrowserTests(provider.IdentityProviderTests):
@@ -73,8 +73,7 @@ class IdentityBrowserTests(provider.IdentityProviderTests):
         command = subprocess.Popen([binary, "login", "--issuer", self.origin + "/realms/flow"],
                                    env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         try:
-            with ThreadPoolExecutor(max_workers=1) as executor:
-                line = executor.submit(command.stderr.readline).result(timeout=20)
+            line = login_line(command)
             self.assertTrue(line.startswith("Sign in using your browser: "), "CLI failed before browser login")
             address = line.split("Sign in using your browser: ", 1)[1].strip()
             with sync_playwright() as playwright:
@@ -111,6 +110,11 @@ class IdentityBrowserTests(provider.IdentityProviderTests):
             time.sleep(max(0, claims["exp"] - time.time() - 29))
             renewed = cli("auth", "token")
             self.assertNotEqual(first, renewed, "near-expiry token was not renewed")
+            renewed_claims = jwt.decode(renewed, jwt.PyJWK.from_dict(key).key,
+                algorithms=["RS256"], audience="workstream-api", issuer=self.origin + "/realms/flow")
+            self.assertEqual(renewed_claims["sub"], claims["sub"])
+            self.assertEqual(renewed_claims["email"], email)
+            self.assertEqual(renewed_claims["subject_kind"], "human")
             cli("logout")
             result = subprocess.run([binary, "auth", "token"], env=env, capture_output=True, text=True, timeout=30)
             self.assertNotEqual(result.returncode, 0)

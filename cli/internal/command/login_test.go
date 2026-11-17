@@ -2,6 +2,8 @@ package command
 
 import (
 	"bytes"
+	"compress/zlib"
+	"encoding/base64"
 	"encoding/json"
 	"path/filepath"
 	"testing"
@@ -20,7 +22,11 @@ func TestTokenCommandHonorsConfiguredAPIOrigin(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = keyring.Set("workstream-cli", "participant", string(raw)); err != nil {
+	var packed bytes.Buffer
+	writer := zlib.NewWriter(&packed)
+	writer.Write(raw)
+	writer.Close()
+	if err = keyring.Set("workstream-cli", "participant", base64.RawStdEncoding.EncodeToString(packed.Bytes())); err != nil {
 		t.Fatal(err)
 	}
 	var out, errors bytes.Buffer

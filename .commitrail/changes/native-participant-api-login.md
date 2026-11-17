@@ -22,7 +22,7 @@ Garden chat repairs, signup/SMTP, product grants, or replacement backend authori
 
 The same requested identity usability correction also removes dependence on a repository login helper. Native CLI `login`, `logout`, and explicit `auth token` use the existing public code/S256-PKCE client, private locally stored refresh credentials, same-subject renewal and fixed audience/issuer validation. Normal CLI commands consume the saved session unless an explicit environment bearer is supplied; reject saved credentials bound to a different API origin. Refresh is serialized and an uncertain refresh response requires fresh login rather than automatic retries. No participant passwords are handled by the CLI or Workstream.
 
-Swagger gains a public PKCE OAuth client with one exact HTTPS callback and origin, while preserving bearer API support and the unchanged backend verifier. API consumers can sign in using Authorize or a standard OAuth client; direct participant password grants stay disabled. Allowed files: cli auth owner/commands/tests/dependency lockfiles/docs, backend Swagger/OpenAPI owner and focused tests, realm configuration/tests and hosted callback ingress/tests, identity browser/protocol proofs and affected identity CI helper references. Remove the superseded participant Python helper and replace its distinct proof with native-client and provider tests; preserve browser/provider integration coverage. No Garden, signup, SMTP, machine impersonation or human-review work.
+Swagger gains a public PKCE OAuth client with one exact HTTPS callback and origin, while preserving bearer API support and the unchanged backend verifier. API consumers can sign in using Authorize or a standard OAuth client; the explicitly approved direct API client below is the sole password-grant exception. Allowed files: cli auth owner/commands/tests/dependency lockfiles/docs, backend Swagger/OpenAPI owner and focused tests, realm configuration/tests and hosted callback ingress/tests, identity browser/protocol proofs and affected identity CI helper references. Remove the superseded participant Python helper and replace its distinct proof with native-client and provider tests; preserve browser/provider integration coverage. No Garden, signup, SMTP, machine impersonation or human-review work.
 
 ## Acceptance criteria
 
@@ -75,3 +75,58 @@ configuration does not advertise browser OAuth. The initial image pull required
 renewing temporary ECR authentication; the previous registry configuration was
 restored after deployment. No identity accounts, product roles or retained data
 were reset. Private participant credentials and browser artifacts stay outside Git.
+
+## Direct API password grant
+
+Explicit user direction adds a dedicated public `workstream-api-login` client for
+curl-only password-to-token requests at Flow Identity. Enable direct grants only
+on this client, with API access/audience scopes, no browser redirect, no service
+account, no exchange, no MCP scope, and the existing five-minute token lifetime.
+Keep browser clients unchanged. Keycloak required actions must reject temporary
+password accounts until browser completion; disabled accounts and wrong passwords
+must fail. Workstream receives only bearer tokens and retains its verifier and
+permission checks. No password handling is added to Workstream or its CLI.
+This client must not depend on invitation state: later self-service registrations
+will use the same token flow after their issuer-required actions are complete.
+Public signup itself remains a later explicitly staged change.
+
+Allowed additions: existing realm configuration and tests, provider/browser proof,
+identity/public-access documentation, current roadmap and this record. Prove a
+real temporary-password denial, browser password update, password grant, exact
+API profile, API-only audience, incorrect-password denial and refresh/logout.
+Use private test credentials; examples must not put passwords into shell history
+or command arguments. Apply the client through authenticated Keycloak admin API
+without realm reset or existing-client changes. Focused security/QA plan and final
+review cover this extension; preserve CLI/Swagger proof and regression coverage.
+
+The request contract is `grant_type=password`, `client_id=workstream-api-login`,
+`username=<email>`, and `scope=openid workstream:access workstream-api-audience`.
+Verify signed human identity, exact API-only audience, `azp`, same-subject scoped
+refresh and rejection of rotated-refresh replay. A fresh account's profile can
+resolve but an administrator operation must deny without its Workstream grant.
+Retain enabled realm brute-force protection and explicit disabled direct grants
+on every other client. Browser completion of required actions remains mandatory.
+
+CodeRabbit repairs additionally update the JOSE dependency, bound the browser
+runner's first-line wait by killing/reaping its child before executor shutdown,
+and verify renewed-token identity. To fit OS keyring limits without introducing
+multi-entry atomicity problems, encode the single session as bounded compressed
+JSON inside the OS-protected secret; no plaintext fallback or old-format decoder.
+Handle capacity rejection distinctly from an unavailable keychain, and test size
+reduction, bounded decoding, and preservation of the previous secret on failure.
+
+The dedicated client was applied to the hosted realm without changing existing
+browser or MCP clients. A new synthetic participant proved temporary-password
+rejection, real browser password change, direct password grant with signed exact
+API identity, own-profile resolution and denial of an administrative read. Wrong
+password, rotated-refresh replay, post-logout refresh and disabled-account login
+were rejected. The synthetic account was disabled after proof; its Workstream
+identity/audit facts were retained. The isolated provider regression also passed.
+
+CodeRabbit's JOSE finding is addressed by v4.1.6. Single-entry compressed keyring
+encoding reduces representative valid token pairs below the Windows secret limit;
+bounded decoding and distinct capacity errors retain fail-closed behavior. A
+failed new login/oversized save preserves the existing session. The native browser
+runner now kills and reaps a stalled child before waiting on its reader thread;
+an actual partial-line child regression proves timely completion. Renewed browser
+tokens are checked for signature, issuer, audience and unchanged identity.

@@ -2,8 +2,12 @@
 package login
 
 import (
+	"bytes"
+	"compress/zlib"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -68,22 +72,64 @@ func (s Store) read() (*Session, error) {
 	if err != nil {
 		return nil, errors.New("cannot access the OS credential store; unlock your desktop keychain")
 	}
+	return decodeSession(raw)
+}
+
+func decodeSession(raw string) (*Session, error) {
+	invalid := errors.New("invalid saved session; run workstream login")
+	if len(raw) > 65536 {
+		return nil, invalid
+	}
+	packed, err := base64.RawStdEncoding.DecodeString(raw)
+	if err != nil {
+		return nil, invalid
+	}
+	reader, err := zlib.NewReader(bytes.NewReader(packed))
+	if err != nil {
+		return nil, invalid
+	}
+	defer reader.Close()
+	data, err := io.ReadAll(io.LimitReader(reader, 65537))
+	if err != nil || len(data) > 65536 {
+		return nil, invalid
+	}
 	var result Session
-	if len(raw) > 65536 || json.Unmarshal([]byte(raw), &result) != nil || result.Token == nil {
-		return nil, errors.New("invalid saved session; run workstream login")
+	if json.Unmarshal(data, &result) != nil || result.Token == nil {
+		return nil, invalid
 	}
 	return &result, nil
 }
-func (s Store) save(session *Session) error {
+
+func encodeSession(session *Session) (string, error) {
 	data, err := json.Marshal(session)
 	if err != nil || len(data) > 65536 {
-		return errors.New("cannot encode login session")
+		return "", errors.New("cannot encode login session")
 	}
-	if keyring.Set(secretService, secretAccount, string(data)) != nil {
+	var packed bytes.Buffer
+	writer := zlib.NewWriter(&packed)
+	if _, err = writer.Write(data); err != nil {
+		return "", errors.New("cannot encode login session")
+	}
+	if err = writer.Close(); err != nil {
+		return "", errors.New("cannot encode login session")
+	}
+	return base64.RawStdEncoding.EncodeToString(packed.Bytes()), nil
+}
+
+func (s Store) save(session *Session) error {
+	data, err := encodeSession(session)
+	if err != nil {
+		return err
+	}
+	if err = keyring.Set(secretService, secretAccount, data); err != nil {
+		if errors.Is(err, keyring.ErrSetDataTooBig) {
+			return errors.New("login session exceeds this OS credential store's capacity; contact the identity administrator to reduce token claims")
+		}
 		return errors.New("cannot save session in the OS credential store; unlock your desktop keychain")
 	}
 	return nil
 }
+
 func (s Store) remove() error {
 	err := keyring.Delete(secretService, secretAccount)
 	if err != nil && !errors.Is(err, keyring.ErrNotFound) {

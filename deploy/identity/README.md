@@ -126,7 +126,7 @@ explicitly only to human accounts; a user cannot assign the marker themselves.
    below, then replace the password on the Flow Identity page before receiving
    usable access credentials.
 
-Keep public registration and participant direct password grants disabled.
+Keep public registration disabled for this phase. Direct password grants are enabled only on the dedicated `workstream-api-login` client; CLI, Swagger, Garden and MCP clients retain their separate browser/exchange flows.
 Creating an identity grants no Workstream admission or project role. An existing
 Workstream Access Administrator must admit the participant and arrange the
 required project grants through Workstream's APIs. Keycloak administration is
@@ -165,6 +165,43 @@ Flow Identity issues API credentials as well as MCP credentials. A participant
 uses the same invited email/password for both, and completes a mandatory initial
 password change on Flow Identity's HTTPS page. Workstream does not accept passwords
 or implement a separate login endpoint.
+
+### Curl: email/password to API token
+
+First sign in through Flow Identity in your browser and finish any required
+password change. After that, POST your email/password to the **issuer**, not to
+Workstream. The dedicated public client is `workstream-api-login`; it needs no
+client secret. For Bash, these commands avoid putting the password into shell
+history or curl's process arguments:
+
+```bash
+set +x
+read -r -p 'Email: ' FLOW_EMAIL
+read -r -s -p 'Password: ' FLOW_PASSWORD
+printf '\n'
+printf '%s' "$FLOW_PASSWORD" | curl --fail-with-body --silent --show-error \
+  'https://identity.flowresearch.tech/realms/flow/protocol/openid-connect/token' \
+  --data-urlencode 'grant_type=password' \
+  --data-urlencode 'client_id=workstream-api-login' \
+  --data-urlencode "username=$FLOW_EMAIL" \
+  --data-urlencode 'password@-' \
+  --data-urlencode 'scope=openid workstream:access workstream-api-audience'
+unset FLOW_PASSWORD
+```
+
+The response contains `access_token`, `expires_in`, and `refresh_token`. Keep the
+response private. Send the access token to Workstream as `Authorization: Bearer
+<access_token>`; it lasts up to five minutes. To renew, POST `grant_type=refresh_token`,
+`client_id=workstream-api-login`, and the current `refresh_token` to the same token
+endpoint. Store the replacement refresh token; the old one cannot be reused.
+To close that refresh session, POST the client ID and refresh token to
+`https://identity.flowresearch.tech/realms/flow/protocol/openid-connect/logout`.
+
+A temporary password, incomplete required action, wrong password or disabled
+account does not produce a token. Login does not grant project or administrator
+permissions. This client issues API credentials, not MCP credentials. Later
+self-service signup will use the same endpoint after account setup; this release
+still uses administrator invitations and does not enable public registration.
 
 ### CLI
 
@@ -209,7 +246,7 @@ performs the code/PKCE exchange and attaches the API bearer to **Try it out**
 requests. Tokens are not persisted across page reloads. The OAuth callback is
 `https://workstream.flowresearch.tech/docs/oauth2-redirect`.
 
-An application calling the API uses the same standard OAuth authorization-code
+A browser application calling the API uses the standard OAuth authorization-code
 flow with PKCE. Its operator must register its own public client and exact callback
 in the Flow realm, using the API audience scope. Request `openid`,
 `workstream:access`, and `workstream-api-audience`; exchange the returned code at

@@ -1,6 +1,8 @@
 package login
 
 import (
+	"bytes"
+	"compress/zlib"
 	"context"
 	"crypto"
 	"crypto/rand"
@@ -370,5 +372,78 @@ func TestDiscoveryCannotRedirectCredentials(t *testing.T) {
 				t.Fatal("untrusted discovery reached refresh endpoint")
 			}
 		})
+	}
+}
+
+func TestSessionEncodingFitsSmallCredentialStores(t *testing.T) {
+	f := newFixture(t)
+	token := f.signed(map[string]any{"name": strings.Repeat("Participant Long Name ", 60)})
+	session := &Session{Issuer: f.issuer, APIOrigin: DefaultAPI, Subject: "participant", Token: &oauth2.Token{AccessToken: token, RefreshToken: f.signed(map[string]any{"typ": "Refresh"}), TokenType: "Bearer"}}
+	plain, _ := json.Marshal(session)
+	if len(plain) <= 2560 {
+		t.Fatal("fixture does not exercise Windows size limit")
+	}
+	encoded, err := encodeSession(session)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(encoded) > 2560 {
+		t.Fatal("encoded session still exceeds small-store limit")
+	}
+	decoded, err := decodeSession(encoded)
+	if err != nil || decoded.Token.AccessToken != token || decoded.Token.RefreshToken != session.Token.RefreshToken {
+		t.Fatal("session did not round trip")
+	}
+}
+func TestCapacityErrorIsNotReportedAsLockedKeychain(t *testing.T) {
+	keyring.MockInitWithError(keyring.ErrSetDataTooBig)
+	t.Cleanup(keyring.MockInit)
+	err := (Store{}).save(&Session{Token: &oauth2.Token{AccessToken: "access", RefreshToken: "refresh"}})
+	if err == nil || !strings.Contains(err.Error(), "capacity") || strings.Contains(err.Error(), "unlock") {
+		t.Fatalf("wrong capacity error: %v", err)
+	}
+}
+func TestOversizedSessionCannotReplacePriorCredential(t *testing.T) {
+	f := newFixture(t)
+	s := f.save(t, false)
+	before, _ := keyring.Get(secretService, secretAccount)
+	err := s.save(&Session{Token: &oauth2.Token{AccessToken: strings.Repeat("x", 65537)}})
+	if err == nil {
+		t.Fatal("oversized session accepted")
+	}
+	after, _ := keyring.Get(secretService, secretAccount)
+	if before != after {
+		t.Fatal("failed save replaced prior credential")
+	}
+}
+func TestFailedNewLoginPreservesExistingSession(t *testing.T) {
+	f := newFixture(t)
+	s := f.save(t, false)
+	before, _ := keyring.Get(secretService, secretAccount)
+	f.subject = ""
+	err := f.client.Login(context.Background(), s, f.issuer, DefaultAPI, io.Discard, func(address string) error {
+		u, _ := url.Parse(address)
+		response, err := http.Get(Callback + "?state=" + url.QueryEscape(u.Query().Get("state")) + "&code=code")
+		if err == nil {
+			response.Body.Close()
+		}
+		return err
+	})
+	if err == nil {
+		t.Fatal("invalid participant accepted")
+	}
+	after, _ := keyring.Get(secretService, secretAccount)
+	if before != after {
+		t.Fatal("failed login replaced prior session")
+	}
+}
+
+func TestCompressedSessionExpansionIsBounded(t *testing.T) {
+	var packed bytes.Buffer
+	writer := zlib.NewWriter(&packed)
+	writer.Write([]byte(strings.Repeat("x", 65537)))
+	writer.Close()
+	if _, err := decodeSession(base64.RawStdEncoding.EncodeToString(packed.Bytes())); err == nil {
+		t.Fatal("oversized expanded credential accepted")
 	}
 }

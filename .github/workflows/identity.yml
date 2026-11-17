@@ -10,6 +10,8 @@ on:
       - 'scripts/identity_protocol_probe.py'
       - 'cli/**'
       - 'scripts/test_identity_browser.py'
+      - 'scripts/identity_browser_runner.py'
+      - 'scripts/test_identity_browser_runner.py'
       - 'scripts/test_identity_provider.py'
       - 'scripts/test_keycloak_configuration.py'
       - 'scripts/test_identity_bootstrap.py'
@@ -70,7 +72,7 @@ jobs:
       - name: Build pinned Keycloak identity image
         run: docker build --file deploy/identity/Dockerfile --tag workstream-keycloak:test .
       - name: Verify configuration and deployment boundaries
-        run: backend/.venv/bin/python -m unittest scripts.test_keycloak_configuration scripts.test_identity_bootstrap scripts.test_hosted_release_config scripts.test_hosted_local_data_initialization.HostedLocalDataInitializationTests -q
+        run: backend/.venv/bin/python -m unittest scripts.test_keycloak_configuration scripts.test_identity_browser_runner scripts.test_identity_bootstrap scripts.test_hosted_release_config scripts.test_hosted_local_data_initialization.HostedLocalDataInitializationTests -q
       - name: Prove real provider login, exchange, renewal and restart
         env:
           PYTHONPATH: .:backend:mcp_server

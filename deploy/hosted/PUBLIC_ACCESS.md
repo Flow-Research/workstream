@@ -54,8 +54,10 @@ only after the public path passes; retain the separate upstream TLS certificate.
    a temporary password with `UPDATE_PASSWORD`. Transfer it privately.
 2. The participant signs in through Keycloak's browser page and replaces the
    temporary password. The application never receives or stores their password.
-3. Direct API/CLI clients complete authorization code with S256 PKCE for
-   `workstream-api`. Keep access and refresh tokens out of URLs, process arguments,
+3. CLI/browser clients complete authorization code with S256 PKCE for
+   `workstream-api`. Curl users may instead POST email/password to the issuer
+   using the dedicated `workstream-api-login` client after the initial browser
+   password change; see the [direct token commands](../identity/README.md#curl-emailpassword-to-api-token). Keep access and refresh tokens out of URLs, process arguments,
    logs and shell history.
 4. Garden uses its registered OAuth client and exact callback to obtain a token
    for `https://HOST/mcp`. MCP exchanges that token into a bounded API token for
