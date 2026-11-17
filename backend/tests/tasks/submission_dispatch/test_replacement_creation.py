@@ -277,16 +277,62 @@ async def test_competing_ready_admissions_commit_one_and_winner_replays_exactly(
         assert await _creation_snapshot(h) == committed
 
 
-async def test_late_outbox_insert_failure_rolls_back_and_ready_retry_succeeds(
-    tmp_path,
-    isolated_database_env,
+async def test_late_outbox_insert_failure_rolls_back_and_accepted_retry_succeeds(
+    tmp_path, isolated_database_env,
 ):
+    """Real failed POST INSERT leaves T4 custody; the same event retries real T5."""
+    from datetime import timedelta
+    from uuid import UUID
+    from app.adapters.artifacts import submission_finalization_handler
+    from app.adapters.auth import outbox_dispatch_authorization
+    from app.adapters.outbox import outbox_delivery
+    from app.modules.artifacts.api.submission_intake import SubmissionIntakeMetadata
+    from app.modules.artifacts.intake.models import SubmissionIntakeOperation, SubmissionSourceCharge
+    from app.modules.outbox.api import DeliveryOptions
+    from app.modules.outbox.registry import HandlerRegistry
+    from tests.artifacts.test_submission_pre_source import _source_runtime
+    from tests.post_submit_materialization_helpers import _submit_current_source
+    from tests.retained_material_fixtures import _foreground
+    from tests.selected_predecessor_fixtures import _snapshot as artifact_snapshot
+
     async with remediation_source(tmp_path, isolated_database_env) as h:
         source_id = await _fixture_revision_context(h)
-        prepared, admission_id = await _ready_replacement(h, revision_archive(h.data))
-        creation = _creation_request(h, prepared, admission_id)
+        data = revision_archive(h.data)
+        runtime_root = tmp_path / "revision-runtime"
+        runtime_root.mkdir()
+        runtime, errors = _source_runtime(data, runtime_root, "completed")
+        command = _foreground(h.factory, h.actor_context, h.namespace, h.store.wrapped, runtime)
+        metadata = SubmissionIntakeMetadata(
+            task_id=h.request.task_id, assignment_id=h.request.assignment_id,
+            predecessor_submission_id=h.created.submission_id,
+            revision_preparation_id=UUID(str(h.revision_preparation_id)),
+            revision_preparation_sha256=h.revision_preparation_sha256,
+            summary=h.creation_request.summary,
+            contributor_attestation=h.creation_request.contributor_attestation,
+        )
+        receipt = await _submit_current_source(h.factory, h.actor_context, command, metadata, data)
+        assert receipt["status"] == "accepted" and not errors, errors
+        operation_id = receipt["operation_id"]
+        async with h.factory() as session:
+            operation = await session.get(SubmissionIntakeOperation, operation_id)
+            event_id, project_id = UUID(operation.finalization_event_id), UUID(operation.project_id)
+            event_ids = set((await session.execute(select(OutboxEvent.event_id))).scalars())
         before = await _creation_snapshot(h)
-
+        artifacts_before = await artifact_snapshot(h)
+        handler = submission_finalization_handler(sessions=h.factory, settings=h.settings,
+            store=h.store.wrapped, lease_duration=timedelta(seconds=40))
+        failures = []
+        async def observed(envelope):
+            try:
+                return await handler(envelope)
+            except Exception as error:
+                failures.append(error)
+                raise
+        event_type = "SubmissionFinalizationRequested"
+        delivery = outbox_delivery(h.factory, authorization_factory=outbox_dispatch_authorization,
+            registry=HandlerRegistry([(event_type, 1, observed)], replay_safe=frozenset({(event_type, 1)})),
+            options=DeliveryOptions(lease_seconds=60, handler_timeout_seconds=50,
+                                    retry_base_seconds=1, retry_cap_seconds=1))
         async with h.factory() as session, session.begin():
             await session.execute(
                 text("CREATE SEQUENCE public.test_replacement_outbox_attempt")
@@ -317,21 +363,32 @@ async def test_late_outbox_insert_failure_rolls_back_and_ready_retry_succeeds(
             )
 
         try:
-            with pytest.raises(
-                OutboxPersistenceError, match="outbox_persistence_failed"
-            ):
-                await _create(h, creation)
+            assert await delivery.deliver(event_id, project_id, "failed-revision-worker") is not None
+            assert len(failures) == 1 and isinstance(failures[0], OutboxPersistenceError)
+            assert str(failures[0]) == "outbox_persistence_failed"
+            # OUTBOX deliberately suppresses provider/database details; the sequence
+            # below independently proves the real SQL fault executed.
+            assert failures[0].__cause__ is None
             async with h.factory() as session:
-                assert (
-                    await session.execute(
-                        text(
-                            "SELECT last_value,is_called "
-                            "FROM public.test_replacement_outbox_attempt"
-                        )
-                    )
-                ).one() == (1, True)
-            assert await _creation_snapshot(h) == before
-            assert await _admission_status(h, admission_id) == "ready"
+                assert (await session.execute(text(
+                    "SELECT last_value,is_called FROM public.test_replacement_outbox_attempt"
+                ))).one() == (1, True)
+                operation = await session.get(SubmissionIntakeOperation, operation_id)
+                assert operation.state == "finalization_pending" and operation.acceptance_receipt == receipt
+                assert operation.finalized_submission_id is None
+                charge = await session.get(SubmissionSourceCharge, operation_id)
+                assert charge.state == "sealed" and charge.accounted_bytes > 0
+                event = await session.get(OutboxEvent, event_id)
+                assert event.delivery_state == "retryable" and event.attempt_count == 1
+                assert set((await session.execute(select(OutboxEvent.event_id))).scalars()) == event_ids
+                ready_at = max(event.next_attempt_at, operation.continuation_expires_at)
+                remaining = (ready_at - await session.scalar(select(func.clock_timestamp()))).total_seconds()
+            after = await _creation_snapshot(h)
+            # OUTBOX delivery state and continuation authority legitimately advance;
+            # product/ART/checker rows, human/binding allows and TASK remain unchanged.
+            assert after[:8] == before[:8]
+            assert await artifact_snapshot(h) == artifacts_before
+            assert after[9] == before[9]
         finally:
             async with h.factory() as session, session.begin():
                 await session.execute(
@@ -353,19 +410,23 @@ async def test_late_outbox_insert_failure_rolls_back_and_ready_retry_succeeds(
                     )
                 )
 
-        created = await _create(h, creation)
-        assert created.submission_version == 2
-        assert created.admission_id == admission_id
-        assert await _admission_status(h, admission_id) == "consumed"
+        await asyncio.sleep(max(0, remaining) + 0.05)
+        assert await delivery.deliver(event_id, project_id, "retry-revision-worker") is not None
+        assert len(failures) == 1
         async with h.factory() as session:
-            dispatch = await session.get(SubmissionDispatch, str(created.submission_id))
-            assert dispatch is not None
-            assert dispatch.checker_remediation_manifest_id == source_id
-            assert await session.scalar(
-                text(
-                    "SELECT public.submission_dispatch_valid(d) "
-                    "FROM public.submission_dispatches d "
-                    "WHERE d.submission_id=:submission_id"
-                ),
-                {"submission_id": created.submission_id},
-            ) is True
+            operation = await session.get(SubmissionIntakeOperation, operation_id)
+            assert operation.state == "finalized" and operation.continuation_generation == 2
+            event = await session.get(OutboxEvent, event_id)
+            assert event.delivery_state == "acknowledged" and event.attempt_count == 2
+            dispatch = await session.get(SubmissionDispatch, operation.finalized_submission_id)
+            assert dispatch.submission_version == 2 and dispatch.checker_remediation_manifest_id == source_id
+            submission = await session.get(Submission, operation.finalized_submission_id)
+            assert submission.supersedes_submission_id == str(h.created.submission_id)
+            admission = await session.get(SubmissionBundleAdmission, operation.finalized_admission_id)
+            assert admission.status == "consumed" and admission.source_operation_id == operation_id
+            assert await session.scalar(select(func.count()).select_from(Submission).where(
+                Submission.task_id == str(h.request.task_id), Submission.version == 2)) == 1
+            assert set((await session.execute(select(OutboxEvent.event_id))).scalars()) == event_ids | {UUID(str(dispatch.evaluation_event_id))}
+            assert await session.scalar(text(
+                "SELECT public.submission_dispatch_valid(d) FROM public.submission_dispatches d WHERE d.submission_id=:id"
+            ), {"id": dispatch.submission_id}) is True

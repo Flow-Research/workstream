@@ -6873,3 +6873,41 @@ COMMIT constraint ordering. Retained T4 event is checked by its persisted ID,
 type and operation association, not full payload byte equality. Shared executed
 content over b2e621581 is the evidence; no independent or clean-commit rerun claim.
 Ruff, structure, record and whitespace checks passed. Full retirement remains open.
+
+Revision POST-insert rollback/retry migration scope: port the late outbox failure
+case in test_replacement_creation.py from old ready admission/create to real source
+acceptance and OUTBOX T5. Keep actual SQL insert-trigger failure with nontransactional
+sequence witness. Compare retained product/binding/checker/creation-audit snapshots,
+retain accepted source/task/event custody, then remove fault and retry the same
+finalization event after actual recorded retry/continuation deadlines. No clock
+patches or fabricated ready state. Assert one version2 successor with exact local
+cause and one new POST event. Remaining stale-cause/race tests are separate pending
+consumers; this change does not claim their coverage or production retirement.
+QA/security review and isolated PostgreSQL execution required.
+
+POST rollback v1:1failed50.17s, cleanup complete. Actual handler returned the
+expected OutboxPersistenceError, but the test wrongly expected its SQL cause to
+be exposed. OUTBOX's payload-free error frame deliberately removes that cause.
+Assert exact stable error and absent cause, retaining the nontransactional sequence
+witness of the unconditional SQL fault. Do not expose diagnostics or weaken owner
+error handling for the test. Retry/post-rollback assertions were not yet reached.
+
+POST rollback v2 terminal0:1passed121.89s, complete cleanup. QA-ROLLBACK001 tightens
+stable error to equality (substring allowed leaked suffix). QA-ROLLBACK002 adds
+existing ART snapshot at accepted baseline and after failure: source registration
+now creates artifact_contents/artifact_replicas inside T5, unlike old ready/create,
+so preserved binding/admission rows alone would miss orphaned registered rows.
+Retain that helper's content/replica counts plus other ART owner counts, and keep
+existing projected product snapshot (four mutable Submission status/time fields
+excluded by its preexisting definition). No claim of byte-identical every-row
+state. Both repairs will run together on final bytes, including real retry.
+
+Final POST rollback/retry v3 terminal0:1passed125.71s, schema0084 and complete
+DB/MinIO cleanup (/tmp/submission-revision-post-rollback-v3.json/.log). Frozen test
+blob facd01d41abba1933ac3a36c9de1f5484b11acd9. Exact sanitized error/SQL witness,
+ART registration counts, retained projected product state and same-event real
+retry all pass. QA-ROLLBACK001/002 code findings closed with final executed
+repairs; scoped QA/security reports no further finding. Other two tests/helpers
+in module AST-unchanged and still pending migration. Shared modified-content
+execution over a091cb7d6 only; no independent or clean-commit rerun claim. Final
+Ruff/structure/record/whitespace checks passed. Full retirement and goal open.
