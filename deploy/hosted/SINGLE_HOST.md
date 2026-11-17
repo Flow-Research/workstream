@@ -92,14 +92,14 @@ migration step exercises the non-superuser connection.
 ## Identity, storage and application activation
 
 Initialize fresh accounts through the independent
-[Rust identity issuer](../../experiments/demo_identity/README.md#initialize-and-run).
-Follow its private-stdin password procedure and persistent account/signing-key
-ownership. An issuer administrator is not a Workstream administrator. Bootstrap
+[Keycloak identity provider](../identity/README.md).
+Follow its offline temporary-administrator setup, private administration and
+persistent database ownership. An issuer administrator is not a Workstream administrator. Bootstrap
 Workstream authority using its existing supported operator command, not database
 edits or saved fixture tokens.
 
 Configure the issuer's trusted HTTPS origin and JWKS URL. Use the existing
-[Caddy deployment instructions](../../experiments/demo_identity/README.md#hosted-https-and-cutover).
+[Caddy deployment instructions](PUBLIC_ACCESS.md).
 Public participant access requires DNS and a trusted public certificate. The
 documented private access profile remains suitable only for authorized operators;
 never disable TLS verification to bypass missing DNS.

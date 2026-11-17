@@ -72,16 +72,18 @@ class PublicIngressTest(unittest.TestCase):
                 thread.start()
             process = None
             try:
-                env = dict(os.environ, DEMO_IDENTITY_HOSTNAME='identity.example.test',
-                           DEMO_IDENTITY_UPSTREAM_CERT=str(cert),
+                env = dict(os.environ, FLOW_IDENTITY_HOSTNAME='identity.example.test',
+                           FLOW_IDENTITY_UPSTREAM_CERT=str(cert),
                            WORKSTREAM_PUBLIC_HOSTNAME='workstream.example.test',
                            WORKSTREAM_API_HOST_PORT='18027')
                 adapted = subprocess.run([binary, 'adapt', '--config',
                     str(ROOT / 'deploy/hosted/public.Caddyfile'), '--adapter', 'caddyfile'],
                     env=env, check=True, capture_output=True, text=True)
                 config = json.loads(adapted.stdout)
-                server = next(iter(config['apps']['http']['servers'].values()))
-                self.assertEqual(server['listen'], [':443'])
+                servers = list(config['apps']['http']['servers'].values())
+                server = next(item for item in servers if item['listen'] == [':443'])
+                private_server = next(item for item in servers if item['listen'] == ['127.0.0.1:19443'])
+                self.assertEqual(len(servers), 2)
                 self.assertEqual(config['admin'], {'disabled': True})
                 # Only transport addresses/frontend TLS are changed for this fixture.
                 # Routing, host/header rules, body limits and upstream TLS stay intact.
@@ -93,10 +95,10 @@ class PublicIngressTest(unittest.TestCase):
                             limits.append(value['max_size'])
                         if value.get('handler') == 'reverse_proxy':
                             address = value['upstreams'][0]['dial']
-                            self.assertIn(address, ['127.0.0.1:8080', '127.0.0.1:8443',
+                            self.assertIn(address, ['127.0.0.1:8080', '127.0.0.1:18443',
                                                     '127.0.0.1:18027'])
                             seen.append(address)
-                            port = secure.server_port if address.endswith(':8443') else plain.server_port
+                            port = secure.server_port if address.endswith(':18443') else plain.server_port
                             value['upstreams'][0]['dial'] = f'127.0.0.1:{port}'
                         for child in value.values():
                             relocate(child)
@@ -105,12 +107,18 @@ class PublicIngressTest(unittest.TestCase):
                             relocate(child)
 
                 relocate(config)
-                self.assertCountEqual(seen, ['127.0.0.1:8443'] * 2 +
-                                      ['127.0.0.1:8080', '127.0.0.1:18027'])
-                self.assertCountEqual(limits, [4096, 96 * 1024**2, 500 * 1024**2])
+                self.assertCountEqual(seen, ['127.0.0.1:18443'] * 2 +
+                                      ['127.0.0.1:8080'] * 2 + ['127.0.0.1:18027'])
+                self.assertCountEqual(limits, [65536, 1024**2, 96 * 1024**2, 500 * 1024**2])
                 with socket.socket() as probe:
                     probe.bind(('127.0.0.1', 0))
                     port = probe.getsockname()[1]
+                with socket.socket() as probe:
+                    probe.bind(('127.0.0.1', 0))
+                    private_port = probe.getsockname()[1]
+                private_server['listen'] = [f'127.0.0.1:{private_port}']
+                private_server['automatic_https'] = {'disable': True}
+                private_server.pop('tls_connection_policies', None)
                 server['listen'] = [f'127.0.0.1:{port}']
                 server['automatic_https'] = {'disable': True}
                 server.pop('tls_connection_policies', None)
@@ -132,8 +140,8 @@ class PublicIngressTest(unittest.TestCase):
                 else:
                     self.fail('Caddy did not listen')
 
-                def request(host, target, body=None, extra=None):
-                    connection = http.client.HTTPConnection('127.0.0.1', port, timeout=10)
+                def request(host, target, body=None, extra=None, *, private=False):
+                    connection = http.client.HTTPConnection('127.0.0.1', private_port if private else port, timeout=10)
                     try:
                         connection.request('POST' if body is not None else 'GET', target,
                                            body=body, headers={'Host': host, **(extra or {})})
@@ -142,9 +150,14 @@ class PublicIngressTest(unittest.TestCase):
                     finally:
                         connection.close()
 
-                self.assertEqual(request('identity.example.test', '/jwks.json')[0], 200)
-                self.assertEqual(request('identity.example.test', '/login', b'x' * 4097)[0], 413)
+                self.assertEqual(request('identity.example.test', '/realms/flow/protocol/openid-connect/certs')[0], 200)
+                self.assertEqual(request('identity.example.test', '/realms/flow/protocol/openid-connect/token', b'x' * 65537)[0], 413)
+                self.assertEqual(request('identity-admin.localhost', '/admin/master/console/', private=True)[0], 200)
+                self.assertEqual(request('workstream.example.test', '/.well-known/oauth-protected-resource/mcp')[0], 200)
                 before = len(calls)
+                for target in ('/admin', '/admin/master/console/', '/realms/master', '/realms/master/protocol/openid-connect/token',
+                               '/health/ready', '/metrics', '/realms/flow/clients-registrations/default', '/jwks.json', '/login'):
+                    self.assertEqual(request('identity.example.test', target)[0], 404)
                 self.assertEqual(request('identity.example.test', '/not-a-route')[0], 404)
                 self.assertEqual(request('foreign.example.test', '/api/v1/health')[0], 404)
                 self.assertEqual(request('workstream.example.test', '/admin/accounts', b'{}')[0], 404)

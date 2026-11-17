@@ -22,7 +22,7 @@ from app.interfaces.trusted_submission_intake import (
 
     TrustedSubmissionIntakeAdapter,
 )
-from app.interfaces.external_services import ExternalServiceAdapterError
+from workstream_external_services import ExternalServiceAdapterError
 from app.modules.artifacts.trusted_intake import (
     prepared_trusted_intake,
     TrustedArchiveInspector,

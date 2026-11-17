@@ -183,15 +183,15 @@ class HostedReleaseConfigTests(unittest.TestCase):
                     preflight.validate_compose(changed, values)
 
     def test_local_data_bootstrap_does_not_start_application_or_replace_mcp(self):
-        values = self.local_data_environment() | {"WORKSTREAM_MCP_IMAGE": "mcp@sha256:" + "3" * 64}
+        values = self.mcp_environment() | self.local_data_environment()
         with patch.object(preflight.subprocess, "run", return_value=subprocess.CompletedProcess([], 0)) as run:
             self.assertEqual(preflight.run_compose(self.environment_path, values, ["start", "local-data"]), 0)
         run.assert_called_once()
         self.assertEqual(run.call_args.args[0][-8:], ["up", "--detach", "--no-deps", "--wait", "--wait-timeout", "120", "postgres", "redis"])
         self.assertEqual(run.call_args.kwargs["timeout"], 150)
 
-    def test_mcp_overlay_is_private_and_has_no_server_credentials(self):
-        values = dict(self.environment, WORKSTREAM_MCP_IMAGE="example.test/mcp@sha256:" + "b" * 64)
+    def test_mcp_overlay_is_private_and_has_only_its_exchange_credential(self):
+        values = self.mcp_environment()
         preflight.validate_environment(values)
         rendered = preflight.render_compose(self.environment_path, values)
         preflight.validate_compose(rendered, values)
@@ -206,7 +206,7 @@ class HostedReleaseConfigTests(unittest.TestCase):
             with self.subTest(field=key):
                 changed = copy.deepcopy(rendered)
                 changed["services"]["mcp"][key] = value
-                with self.assertRaisesRegex(preflight.PreflightError, "MCP isolation"):
+                with self.assertRaisesRegex(preflight.PreflightError, "MCP isolation|mcp bind mount"):
                     preflight.validate_compose(changed, values)
         changed = copy.deepcopy(rendered)
         next(p for p in changed["services"]["api"]["ports"] if p["target"] == 8080)["host_ip"] = "0.0.0.0"
@@ -227,7 +227,7 @@ class HostedReleaseConfigTests(unittest.TestCase):
                 preflight.validate_environment(dict(values, WORKSTREAM_MCP_IMAGE=image))
 
     def test_api_replacement_stops_then_recreates_mcp_and_binds_current_namespace(self):
-        values = dict(self.environment, WORKSTREAM_MCP_IMAGE="example.test/mcp@sha256:" + "b" * 64)
+        values = self.mcp_environment()
         api_id, mcp_id = "a" * 64, "b" * 64
         calls = []
         def run(command, **kwargs):
@@ -258,7 +258,7 @@ class HostedReleaseConfigTests(unittest.TestCase):
                 preflight.validate_running_mcp_namespace(["docker", "compose"], values)
 
     def test_full_launch_waits_for_api_before_starting_stale_mcp(self):
-        values = self.environment | {"WORKSTREAM_MCP_IMAGE": "mcp@sha256:" + "b" * 64}
+        values = self.mcp_environment()
         calls = []
         def run(command, **kwargs):
             calls.append(command)
@@ -285,8 +285,8 @@ class HostedReleaseConfigTests(unittest.TestCase):
         namespace.assert_called_once()
 
     def test_isolated_bootstrap_does_not_start_or_stop_mcp(self):
-        values = dict(self.environment, WORKSTREAM_MCP_IMAGE="example.test/mcp@sha256:" + "b" * 64)
-        for service in ("model-proxy", "demo-identity", "guide-document-parser"):
+        values = self.mcp_environment()
+        for service in ("model-proxy", "identity", "guide-document-parser"):
             with self.subTest(service=service), patch.object(
                 preflight.subprocess, "run", return_value=subprocess.CompletedProcess([], 0)
             ) as run:
@@ -296,7 +296,7 @@ class HostedReleaseConfigTests(unittest.TestCase):
                 self.assertEqual(run.call_args.args[0][-3:], ["up", "-d", service])
 
     def test_failed_api_replacement_does_not_restart_mcp(self):
-        values = dict(self.environment, WORKSTREAM_MCP_IMAGE="example.test/mcp@sha256:" + "b" * 64)
+        values = self.mcp_environment()
         with patch.object(preflight.subprocess, "run", side_effect=[
             subprocess.CompletedProcess([], 0), subprocess.CompletedProcess([], 1),
         ]) as run:
@@ -304,147 +304,105 @@ class HostedReleaseConfigTests(unittest.TestCase):
                              ["up", "--detach", "--no-deps", "api"]), 1)
         self.assertEqual(run.call_count, 2)
 
-    def demo_identity_values(self):
-        values = dict(self.environment)
-        values.update(
-            {
-                "DEMO_IDENTITY_IMAGE": "example.test/issuer@sha256:" + "a" * 64,
-                "DEMO_IDENTITY_ISSUER": "https://identity.example.test",
-                "DEMO_IDENTITY_AUDIENCE": values["WORKSTREAM_TOKEN_AUDIENCE"],
-                "DEMO_IDENTITY_HOSTNAME": "identity.example.test",
-                "DEMO_IDENTITY_DATA_DIR": str(self.root / "issuer-data"),
-                "DEMO_IDENTITY_TLS_CERT_FILE": str(self.root / "issuer-cert.pem"),
-                "DEMO_IDENTITY_TLS_KEY_FILE": str(self.root / "issuer-tls-key.pem"),
-                "WORKSTREAM_TOKEN_ISSUER": "https://identity.example.test",
-                "WORKSTREAM_TOKEN_JWKS_URL": "https://identity.example.test/jwks.json",
-            }
-        )
-        return values
+    def mcp_environment(self):
+        return self.environment | {
+            "WORKSTREAM_MCP_IMAGE": "example.test/mcp@sha256:" + "b" * 64,
+            "WORKSTREAM_MCP_RESOURCE_URL": "https://workstream.example.test/mcp",
+            "WORKSTREAM_MCP_EXCHANGE_SECRET_FILE": str(self.root / "mcp-exchange-secret"),
+        }
 
-    def test_issuer_host_mapping_is_absent_without_issuer_profile(self):
+    def identity_values(self):
+        return self.local_data_environment() | {
+            "FLOW_IDENTITY_IMAGE": "example.test/identity@sha256:" + "a" * 64,
+            "FLOW_IDENTITY_HOSTNAME": "identity.example.test",
+            "FLOW_IDENTITY_DATABASE_PASSWORD_FILE": str(self.root / "identity-db-password"),
+            "FLOW_IDENTITY_TLS_CERT_FILE": str(self.root / "identity-cert.pem"),
+            "FLOW_IDENTITY_TLS_KEY_FILE": str(self.root / "identity-tls-key.pem"),
+            "FLOW_IDENTITY_PROXY_ADDRESS": "172.18.0.1",
+            "WORKSTREAM_TOKEN_ISSUER": "https://identity.example.test/realms/flow",
+            "WORKSTREAM_TOKEN_AUDIENCE": "workstream-api",
+            "WORKSTREAM_TOKEN_JWKS_URL": "https://identity.example.test/realms/flow/protocol/openid-connect/certs",
+        }
+
+    def test_identity_resolution_has_no_host_alias_override(self):
         rendered = preflight.render_compose(self.environment_path, self.environment)
         preflight.validate_compose(rendered, self.environment)
         rendered["services"]["api"]["extra_hosts"] = ["identity.example.test=host-gateway"]
-        with self.assertRaisesRegex(preflight.PreflightError, "host mapping"):
+        with self.assertRaisesRegex(preflight.PreflightError, "public DNS"):
             preflight.validate_compose(rendered, self.environment)
 
-    def test_demo_identity_overlay_preserves_default_and_bounds_authority(self):
-        self.assertNotIn(
-            str(preflight.DEMO_IDENTITY_COMPOSE_PATH),
-            preflight._compose_file_arguments(self.environment),
-        )
-        values = self.demo_identity_values()
+    def test_identity_overlay_bounds_process_storage_and_exposure(self):
+        self.assertNotIn(str(preflight.IDENTITY_COMPOSE_PATH), preflight._compose_file_arguments(self.environment))
+        values = self.identity_values()
         preflight.validate_environment(values)
         rendered = preflight.render_compose(self.environment_path, values)
         preflight.validate_compose(rendered, values)
-        self.assertEqual(
-            rendered["services"]["demo-identity"]["networks"], {"demo_identity": None}
-        )
-        self.assertEqual(rendered["services"]["api"]["networks"], {"default": None})
-        self.assertEqual(
-            rendered["services"]["api"]["extra_hosts"],
-            [values["DEMO_IDENTITY_HOSTNAME"] + "=host-gateway"],
-        )
-        self.assertEqual(rendered["networks"]["demo_identity"]["driver"], "bridge")
-        self.assertFalse(rendered["networks"]["demo_identity"].get("internal", False))
-        mutations = []
-        for hosts in ([], [values["DEMO_IDENTITY_HOSTNAME"] + "=127.0.0.1"],
-                      ["other.example.test=host-gateway"],
-                      [values["DEMO_IDENTITY_HOSTNAME"] + "=host-gateway", "extra.test=host-gateway"]):
-            changed = copy.deepcopy(rendered)
-            changed["services"]["api"]["extra_hosts"] = hosts
-            mutations.append(changed)
-        changed = copy.deepcopy(rendered)
-        changed["services"]["worker"]["extra_hosts"] = {values["DEMO_IDENTITY_HOSTNAME"]: "host-gateway"}
-        mutations.append(changed)
+        issuer = rendered["services"]["identity"]
+        self.assertEqual(issuer["networks"], {"default": None})
+        self.assertEqual(issuer["environment"]["KC_DB_USERNAME"], "flow_identity")
+        self.assertFalse(any("BOOTSTRAP" in name for name in issuer["environment"]))
+        self.assertEqual(len(issuer["volumes"]), 3)
         for key, value in (
-            ("user", "10001:10001"),
-            ("mem_limit", 0),
-            ("command", ["init", "/data", "admin@example.test"]),
+            ("user", "10001:10001"), ("mem_limit", 0), ("command", ["start-dev"]),
             ("environment", {"WORKSTREAM_DATABASE_URL": "forbidden"}),
+            ("networks", {"foreign": None}), ("tmpfs", []),
         ):
-            changed = copy.deepcopy(rendered)
-            changed["services"]["demo-identity"][key] = value
-            mutations.append(changed)
-        for role in ("api", "worker", "beat"):
-            changed = copy.deepcopy(rendered)
-            changed["services"][role]["networks"] = {"demo_identity": None}
-            mutations.append(changed)
-        # The reproduced live failure: an internal bridge reports healthy but
-        # does not expose the requested loopback host port to the ingress proxy.
-        for key, value in (
-            ("internal", True),
-            ("driver", "host"),
-            ("external", True),
-            ("ipam", {"driver": "custom"}),
-            ("driver_opts", {"com.docker.network.bridge.gateway_mode_ipv4": "isolated"}),
-        ):
-            changed = copy.deepcopy(rendered)
-            changed["networks"]["demo_identity"][key] = value
-            mutations.append(changed)
-        changed = copy.deepcopy(rendered)
-        changed["services"]["demo-identity"]["networks"]["default"] = None
-        mutations.append(changed)
-        changed = copy.deepcopy(rendered)
-        changed["services"]["demo-identity"]["ports"][0]["host_ip"] = "0.0.0.0"
-        mutations.append(changed)
-        changed = copy.deepcopy(rendered)
-        changed["services"]["demo-identity"]["volumes"][0]["source"] = str(self.root)
-        mutations.append(changed)
-        changed = copy.deepcopy(rendered)
-        changed["services"]["demo-identity"]["healthcheck"]["test"].append("--insecure")
-        mutations.append(changed)
-        for changed in mutations:
-            with self.subTest(changed=changed["services"]["demo-identity"]):
+            with self.subTest(field=key):
+                changed = copy.deepcopy(rendered)
+                changed["services"]["identity"][key] = value
                 with self.assertRaises(preflight.PreflightError):
                     preflight.validate_compose(changed, values)
+        for field, value in (("internal", True), ("driver", "host"), ("external", True),
+                              ("ipam", {"driver": "custom"}), ("driver_opts", {"x": "y"})):
+            changed = copy.deepcopy(rendered)
+            changed["networks"]["default"][field] = value
+            with self.subTest(network=field), self.assertRaises(preflight.PreflightError):
+                preflight.validate_compose(changed, values)
+        changed = copy.deepcopy(rendered)
+        changed["services"]["identity"]["ports"][0]["host_ip"] = "0.0.0.0"
+        with self.assertRaises(preflight.PreflightError):
+            preflight.validate_compose(changed, values)
+        changed = copy.deepcopy(rendered)
+        changed["services"]["identity"]["volumes"][0]["source"] = str(self.root)
+        with self.assertRaises(preflight.PreflightError):
+            preflight.validate_compose(changed, values)
+        changed = copy.deepcopy(rendered)
+        changed["services"]["identity"]["healthcheck"]["test"] = ["CMD", "true"]
+        with self.assertRaises(preflight.PreflightError):
+            preflight.validate_compose(changed, values)
 
-    def test_demo_identity_configuration_rejects_partial_unpinned_and_public_settings(
-        self,
-    ):
-        values = self.demo_identity_values()
+    def test_identity_configuration_rejects_partial_unpinned_and_unbounded_trust(self):
+        values = self.identity_values()
         for key, value in (
-            ("DEMO_IDENTITY_IMAGE", "issuer:latest"),
-            ("DEMO_IDENTITY_HOSTNAME", "wrong.example.test"),
+            ("FLOW_IDENTITY_IMAGE", "identity:latest"),
+            ("FLOW_IDENTITY_HOSTNAME", "wrong.example.test"),
             ("WORKSTREAM_TOKEN_AUDIENCE", "foreign"),
             ("WORKSTREAM_TOKEN_JWKS_URL", "https://foreign.example.test/jwks.json"),
-            ("DEMO_IDENTITY_PUBLISHED_BIND", "0.0.0.0"),
-            ("DEMO_IDENTITY_ISSUER", "https://identity.example.test/path"),
-            ("DEMO_IDENTITY_TLS_KEY_FILE", "relative/key.pem"),
+            ("FLOW_IDENTITY_PROXY_ADDRESS", "172.16.0.0/12"),
+            ("FLOW_IDENTITY_TLS_KEY_FILE", "relative/key.pem"),
         ):
-            with self.subTest(key=key):
-                with self.assertRaises(preflight.PreflightError):
-                    preflight.validate_environment({**values, key: value})
-        del values["DEMO_IDENTITY_DATA_DIR"]
+            with self.subTest(key=key), self.assertRaises(preflight.PreflightError):
+                preflight.validate_environment(values | {key: value})
+        del values["FLOW_IDENTITY_DATABASE_PASSWORD_FILE"]
         with self.assertRaises(preflight.PreflightError):
             preflight.validate_environment(values)
 
-    def test_demo_identity_host_custody_is_separate_and_rejects_missing_state(self):
-        values = self.demo_identity_values()
-        with (
-            patch.object(preflight, "_private_metadata") as metadata,
-            patch.object(
-                Path,
-                "stat",
-                return_value=type("Metadata", (), {"st_ino": 1, "st_dev": 1})(),
-            ),
-        ):
-            with self.assertRaisesRegex(preflight.PreflightError, "distinct"):
-                preflight.validate_demo_identity_host_inputs(values)
-            self.assertEqual(
-                metadata.call_args_list[0].kwargs,
-                {"kind": "directory", "uid": 12001, "gid": 12001, "mode": 0o700},
-            )
+    def test_identity_host_custody_rejects_missing_and_reused_private_files(self):
+        values = self.identity_values()
+        with (patch.object(preflight, "_private_metadata") as metadata,
+              patch.object(Path, "stat", return_value=type("Metadata", (), {"st_ino": 1, "st_dev": 1})())):
+            with self.assertRaisesRegex(preflight.PreflightError, "reuse"):
+                preflight.validate_identity_host_inputs(values)
+            self.assertEqual(metadata.call_args_list[0].kwargs,
+                             {"kind": "file", "uid": 1000, "gid": 1000, "mode": 0o400})
         with self.assertRaises(preflight.PreflightError):
-            preflight.validate_demo_identity_host_inputs(values)
-        values["DEMO_IDENTITY_DATA_DIR"] = str(
-            preflight.deployment_paths(values).scratch / "issuer"
-        )
-        with self.assertRaisesRegex(preflight.PreflightError, "shared runtime roots"):
+            preflight.validate_identity_host_inputs(values)
+        values["FLOW_IDENTITY_DATABASE_PASSWORD_FILE"] = str(preflight.deployment_paths(values).scratch / "identity")
+        with self.assertRaisesRegex(preflight.PreflightError, "outside processing roots"):
             preflight.validate_environment(values)
 
-    def test_demo_identity_bootstrap_checks_only_issuer_inputs_and_waits(self):
-        values = self.demo_identity_values()
+    def test_identity_startup_checks_only_issuer_inputs_and_waits(self):
+        values = self.identity_values()
         with (
             patch.object(
                 compose,
@@ -454,7 +412,7 @@ class HostedReleaseConfigTests(unittest.TestCase):
                     (),
                     {
                         "env_file": self.environment_path,
-                        "compose_arguments": ["start", "demo-identity"],
+                        "compose_arguments": ["start", "identity"],
                     },
                 )(),
             ),
@@ -462,7 +420,7 @@ class HostedReleaseConfigTests(unittest.TestCase):
             patch.object(compose, "render_compose", return_value={}),
             patch.object(compose, "validate_compose"),
             patch.object(
-                compose, "validate_demo_identity_host_inputs"
+                compose, "validate_identity_host_inputs"
             ) as issuer_inputs,
             patch.object(compose, "validate_private_host_inputs") as backend_inputs,
             patch.object(compose, "load_checker_config") as checker_inputs,
@@ -479,7 +437,7 @@ class HostedReleaseConfigTests(unittest.TestCase):
         ) as run:
             self.assertEqual(
                 preflight.run_compose(
-                    self.environment_path, values, ["start", "demo-identity"]
+                    self.environment_path, values, ["start", "identity"]
                 ),
                 0,
             )
@@ -492,11 +450,11 @@ class HostedReleaseConfigTests(unittest.TestCase):
                     "--no-deps",
                     "--wait",
                     "--wait-timeout",
-                    "60",
-                    "demo-identity",
+                    "360",
+                    "identity",
                 ],
             )
-            self.assertEqual(run.call_args.kwargs["timeout"], 120)
+            self.assertEqual(run.call_args.kwargs["timeout"], 390)
 
     def test_optional_github_app_render_is_worker_only(self) -> None:
         values = dict(self.environment)
@@ -2220,7 +2178,7 @@ class HostedReleaseConfigTests(unittest.TestCase):
                 run.assert_not_called()
 
     def test_resume_orders_dependencies_before_native_and_application(self):
-        values = self.demo_identity_values() | self.local_data_environment()
+        values = self.local_data_environment() | self.identity_values()
         events = []
         def run(path, release, arguments, **kwargs):
             self.assertTrue(kwargs["cached_images"])
@@ -2229,7 +2187,7 @@ class HostedReleaseConfigTests(unittest.TestCase):
         with (
             patch.object(compose, "validate_private_host_inputs"),
             patch.object(compose, "validate_local_data_host_inputs"),
-            patch.object(compose, "validate_demo_identity_host_inputs"),
+            patch.object(compose, "validate_identity_host_inputs"),
             patch.object(compose, "validate_checker_config"),
             patch.object(compose, "run_compose", side_effect=run),
             patch.object(compose.subprocess, "run", side_effect=lambda command, **kw:
@@ -2242,7 +2200,7 @@ class HostedReleaseConfigTests(unittest.TestCase):
         ):
             self.assertEqual(compose.resume_release(self.environment_path, values), 0)
         self.assertEqual(events[0], ["start", "local-data"])
-        self.assertEqual(events[1], ["start", "demo-identity"])
+        self.assertEqual(events[1], ["start", "identity"])
         self.assertEqual(events[2][-1], "model-proxy")
         self.assertEqual(events[3], ["systemctl", "reset-failed", "workstream-checker.service"])
         self.assertEqual(events[4], ["systemctl", "start", "workstream-checker.service"])

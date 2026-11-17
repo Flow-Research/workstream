@@ -6,7 +6,7 @@ from uuid import uuid4
 import pytest
 
 from app.core.config import get_settings
-from app.interfaces.external_services import UnknownExternalServiceProviderError
+from workstream_external_services import UnknownExternalServiceProviderError
 from app.workers.task_settings import sync_task_settings
 
 from .helpers import manager_runtime_configuration, runtime_configuration

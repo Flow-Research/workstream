@@ -35,7 +35,7 @@ from app.interfaces.artifacts import (
     ArtifactStoreUnavailableError,
     artifact_store_namespace_material,
 )
-from app.interfaces.external_services import ExternalServiceAdapterIdentity
+from workstream_external_services import ExternalServiceAdapterIdentity
 from app.modules.artifacts.preparation import ArtifactPreparationService
 from app.modules.artifacts.sources import ArtifactCommitment
 from tests.assertion_helpers import assert_secret_not_retained

@@ -81,7 +81,7 @@ from app.interfaces.artifacts import (
     artifact_store_namespace_material,
     parse_artifact_provider_object_ref,
 )
-from app.interfaces.external_services import ExternalServiceAdapterIdentity
+from workstream_external_services import ExternalServiceAdapterIdentity
 from app.modules.artifacts.preparation import HARD_MAXIMUM_ARTIFACT_BYTES
 from app.modules.artifacts.sources import ArtifactCommitment, CommittedArtifactSource
 

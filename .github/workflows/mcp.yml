@@ -45,6 +45,7 @@ jobs:
           uv run --frozen ruff check workstream_mcp tests
           uv run --frozen mypy workstream_mcp
           uv run --frozen pytest -q --ignore=tests/integration --cov=workstream_mcp --cov-report=term-missing
+          uv build --project ../packages/external-services --wheel --out-dir "$PWD/dist"
           uv build --wheel --out-dir dist
 
       - name: Prove wheel independence from backend source
@@ -63,25 +64,8 @@ jobs:
         run: |
           set -euo pipefail
           image="workstream-mcp-foundation:${GITHUB_SHA}"
-          docker build --tag "${image}" mcp_server
+          docker build --file mcp_server/Dockerfile --tag "${image}" .
           python scripts/test_hosted_mcp_container.py --image "${image}"
-          docker run --detach --rm --name workstream-mcp-foundation \
-            --publish 127.0.0.1:18080:8080 \
-            --env WORKSTREAM_API_URL=http://127.0.0.1:9 \
-            "${image}"
-          trap 'docker logs workstream-mcp-foundation; docker stop workstream-mcp-foundation' EXIT
-          for attempt in $(seq 1 30); do
-            if curl --fail --silent --show-error \
-              --header 'Accept: application/json, text/event-stream' \
-              --header 'Content-Type: application/json' \
-              --data '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' \
-              http://127.0.0.1:18080/mcp \
-              | python -c 'import json, sys; tools = [tool["name"] for tool in json.load(sys.stdin)["result"]["tools"]]; expected = ["workstream_projects_list", "workstream_service_actor_create", "workstream_task_import_batch_create", "workstream_management_tasks_list", "workstream_management_task_create", "workstream_operational_tasks_list", "workstream_task_import_batch_screen", "workstream_task_import_batch_release", "workstream_task_import_batch_get", "workstream_management_task_get", "workstream_management_task_locked_context_get", "workstream_operational_task_locked_context_get", "workstream_audit_task_locked_context_get", "workstream_task_revision_context_repair", "workstream_audit_task_evidence_get", "workstream_project_model_profile_provision", "workstream_project_model_budget_configure", "workstream_project_model_usage_effect_get", "workstream_project_model_recovery_child_create", "workstream_task_import_source_declare", "workstream_task_import_source_content_upload", "workstream_task_import_source_content_get", "workstream_task_import_source_get"]; assert len(tools) == len(set(tools)) == 132; assert tools[-23:] == expected'; then
-              exit 0
-            fi
-            sleep 1
-          done
-          exit 1
 
   real-api-contract:
     needs: package
@@ -130,6 +114,7 @@ jobs:
           uv sync --frozen --extra agents --extra dev --project backend
           cd mcp_server
           uv sync --frozen --extra dev
+          uv build --project ../packages/external-services --wheel --out-dir "$PWD/dist"
           uv build --wheel --out-dir dist
           python -m venv "${RUNNER_TEMP}/workstream-mcp-wheel"
           "${RUNNER_TEMP}/workstream-mcp-wheel/bin/pip" install --upgrade pip

@@ -937,6 +937,11 @@ FORGE_PROOF_FACTS_TARGETS = frozenset({
     "backend/app/interfaces/forge_facts.py",
     "backend/app/modules/checkers/api/forge_locator.py",
 })
+# Keycloak MCP shares the same convention through the independent wheel; the
+# backend-only partition no longer owns its former module location.
+SHARED_ADAPTER_PACKAGE_REMOVED_TARGETS = frozenset({
+    "backend/app/interfaces/external_services.py",
+})
 # WS-GHPROOF-001-04 replaced the GitHub-named port with the forge-neutral one.
 FORGE_PROOF_FACTS_REMOVED_TARGETS = frozenset({"backend/app/interfaces/github_facts.py"})
 
@@ -1112,7 +1117,7 @@ def _validate_additive_partition_transition(
     ]
     if (
         trusted_targets != sorted(trusted_targets)
-        or removed - (NEUTRAL_GUIDE_RUNTIME_REMOVED_TARGETS | REV_04C_REMOVED_TARGETS | ARCH_04D2_REMOVED_TARGETS | ARCH_03D_REMOVED_TARGETS | TASK_CHECKER_CLEANUP_REMOVED_TARGETS | ARCH_03C2_REMOVED_TARGETS | OUTBOX_IDENTITY_REMOVED_TARGETS | V01_BASELINE_REMOVED_TARGETS | POL_03B_REMOVED_TARGETS | POL_04B_REMOVED_TARGETS | POL_05A_REMOVED_TARGETS | ARCH_03A_GUIDE_CONTEXT_REMOVED_TARGETS | ARCH_04B_SEAM_REMOVED_TARGETS | PILOT_04_RETIRED_CATALOGUE_TARGETS | FORGE_PROOF_FACTS_REMOVED_TARGETS)
+        or removed - (NEUTRAL_GUIDE_RUNTIME_REMOVED_TARGETS | REV_04C_REMOVED_TARGETS | ARCH_04D2_REMOVED_TARGETS | ARCH_03D_REMOVED_TARGETS | TASK_CHECKER_CLEANUP_REMOVED_TARGETS | ARCH_03C2_REMOVED_TARGETS | OUTBOX_IDENTITY_REMOVED_TARGETS | V01_BASELINE_REMOVED_TARGETS | POL_03B_REMOVED_TARGETS | POL_04B_REMOVED_TARGETS | POL_05A_REMOVED_TARGETS | ARCH_03A_GUIDE_CONTEXT_REMOVED_TARGETS | ARCH_04B_SEAM_REMOVED_TARGETS | PILOT_04_RETIRED_CATALOGUE_TARGETS | FORGE_PROOF_FACTS_REMOVED_TARGETS | SHARED_ADAPTER_PACKAGE_REMOVED_TARGETS)
         or [current_by_target[item["target"]] for item in retained_trusted]
         != retained_trusted
     ):

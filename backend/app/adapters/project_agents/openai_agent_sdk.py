@@ -27,7 +27,7 @@ from app.adapters.model_usage.openrouter import (
     openrouter_request_options,
     require_direct_openrouter_model,
 )
-from app.interfaces.external_services import ExternalServiceAdapterIdentity
+from workstream_external_services import ExternalServiceAdapterIdentity
 from app.interfaces.project_agents import (
     ProjectAgentRuntimeConfigurationError,
     ProjectAgentRuntimeError,

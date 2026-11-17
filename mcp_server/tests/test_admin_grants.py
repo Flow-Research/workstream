@@ -60,7 +60,10 @@ def _receipt(name: str) -> dict[str, Any]:
 def _catalogue(client: TestClient) -> dict[str, Any]:
     response = client.post(
         "/mcp",
-        headers={"accept": "application/json, text/event-stream"},
+        headers={
+            "accept": "application/json, text/event-stream",
+            "authorization": "Bearer fixture-token",
+        },
         json={"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}},
     )
     assert response.status_code == 200
@@ -127,7 +130,7 @@ def test_admin_grant_mutations_forward_exact_fixed_request(
     assert request.method == "POST"
     assert request.url.path == expected_path
     assert request.url.query == b""
-    assert request.headers["authorization"] == "Bearer admin-caller"
+    assert request.headers["authorization"] == 'Bearer api-admin-caller'
     assert request.headers["idempotency-key"] == KEY
     assert "if-match" not in request.headers
     assert json.loads(request.content) == arguments["body"]

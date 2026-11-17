@@ -130,7 +130,10 @@ def test_approval_requires_explicit_phase_image_choice(
 def _catalogue(client: TestClient) -> dict[str, Any]:
     response = client.post(
         "/mcp",
-        headers={"accept": "application/json, text/event-stream"},
+        headers={
+            "accept": "application/json, text/event-stream",
+            "authorization": "Bearer fixture-token",
+        },
         json={"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}},
     )
     return {tool["name"]: tool for tool in response.json()["result"]["tools"]}
@@ -168,7 +171,7 @@ def test_project_guide_list_forwards_only_typed_query_and_bearer(
     assert request.method == "GET"
     assert request.url.path == f"/api/v1/projects/{PROJECT_ID}/guides"
     assert dict(request.url.params) == {"limit": "25", "cursor": "opaque+/="}
-    assert request.headers["authorization"] == "Bearer guide-caller"
+    assert request.headers["authorization"] == 'Bearer api-guide-caller'
     assert "idempotency-key" not in request.headers
     assert "if-match" not in request.headers
 
@@ -595,7 +598,7 @@ def test_initial_dispatch_forwards_exact_key_and_caller_without_body(
     assert request.url.path == f"/api/v1/projects/{PROJECT_ID}/guides/{GUIDE_ID}/{suffix}"
     assert not request.url.query
     assert request.content == b""
-    assert request.headers["authorization"] == "Bearer explicit-guide-caller"
+    assert request.headers["authorization"] == 'Bearer api-explicit-guide-caller'
     assert request.headers["idempotency-key"] == IDEMPOTENCY_KEY
     annotations = _catalogue(client)[f"workstream_{name}"]["annotations"]
     assert annotations["destructiveHint"] is True

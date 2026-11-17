@@ -1,4 +1,4 @@
-# Private native-client MCP access. Forward host loopback through authenticated SSH.
+# OAuth MCP listener; publish through the bounded HTTPS ingress only.
 services:
   api:
     ports:
@@ -27,9 +27,19 @@ services:
       WORKSTREAM_MCP_PORT: "8080"
       WORKSTREAM_MCP_MAX_IN_FLIGHT: "1"
       WORKSTREAM_MCP_ALLOWED_HOSTS: 127.0.0.1:8080,localhost:8080
+      WORKSTREAM_MCP_TOKEN_ISSUER: ${WORKSTREAM_TOKEN_ISSUER:?set the exact external issuer}
+      WORKSTREAM_MCP_RESOURCE_URL: ${WORKSTREAM_MCP_RESOURCE_URL:?set the canonical HTTPS MCP URL}
+      WORKSTREAM_MCP_EXCHANGE_CLIENT_ID: workstream-mcp
+      WORKSTREAM_MCP_API_AUDIENCE: ${WORKSTREAM_TOKEN_AUDIENCE:?set the exact API audience}
+      WORKSTREAM_MCP_EXCHANGE_SECRET_FILE: /run/secrets/mcp-exchange-secret
+    volumes:
+      - type: bind
+        source: ${WORKSTREAM_MCP_EXCHANGE_SECRET_FILE:?set the private MCP client secret file}
+        target: /run/secrets/mcp-exchange-secret
+        read_only: true
     healthcheck:
-      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health', timeout=2); r=urllib.request.Request('http://127.0.0.1:8080/mcp', data=b'{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\",\"params\":{}}', headers={'Content-Type':'application/json','Accept':'application/json, text/event-stream'}); import json; assert len(json.load(urllib.request.urlopen(r,timeout=3))['result']['tools']) == 132"]
+      test: [CMD, python, -m, workstream_mcp.healthcheck]
       interval: 10s
-      timeout: 6s
+      timeout: 7s
       retries: 3
       start_period: 10s

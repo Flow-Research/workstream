@@ -1,7 +1,8 @@
 """Exercise the shipped hosted MCP overlay with a real container/API transport fixture.
 
-This checks container networking and caller credential forwarding, not production
-authentication. Requires Docker Compose >=2.24.4 and an explicitly built MCP image.
+This checks container networking and signed per-caller OAuth exchange against a
+fixture HTTPS provider. Real Keycloak semantics have a separate provider proof.
+Requires Docker Compose >=2.24.4 and an explicitly built MCP image.
 """
 
 from __future__ import annotations
@@ -13,7 +14,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 import time
-from urllib.error import URLError
+from urllib.error import HTTPError, URLError
 from urllib.request import Request, build_opener, ProxyHandler
 import uuid
 
@@ -23,6 +24,63 @@ API_FIXTURE = r'''
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
 import os
+from pathlib import Path
+import ssl
+import threading
+import time
+from urllib.parse import parse_qs
+import jwt
+from cryptography.hazmat.primitives.serialization import load_pem_private_key
+
+ISSUER = "https://127.0.0.1:8443/realms/flow"
+RESOURCE = "https://workstream.example/mcp"
+KEY = Path('/fixture/key.pem').read_text()
+PUBLIC = load_pem_private_key(KEY.encode(), password=None).public_key()
+JWK = json.loads(jwt.algorithms.RSAAlgorithm.to_jwk(PUBLIC))
+JWK.update(kid="fixture-key", use="sig", alg="RS256")
+
+def claims(raw, audience):
+    return jwt.decode(raw, PUBLIC, algorithms=['RS256'], issuer=ISSUER, audience=audience)
+
+class Provider(BaseHTTPRequestHandler):
+    def log_message(self, *args):
+        pass
+
+    def reply(self, status, body):
+        payload = json.dumps(body).encode()
+        self.send_response(status)
+        self.send_header('Content-Type', 'application/json')
+        self.send_header('Content-Length', str(len(payload)))
+        self.end_headers()
+        self.wfile.write(payload)
+
+    def do_GET(self):
+        self.reply(200, {'keys': [JWK]}) if self.path == '/realms/flow/protocol/openid-connect/certs' else self.reply(404, {})
+
+    def do_POST(self):
+        try:
+            if self.path != '/realms/flow/protocol/openid-connect/token':
+                raise ValueError()
+            if self.headers.get('Authorization') != 'Basic d29ya3N0cmVhbS1tY3A6Zml4dHVyZS1leGNoYW5nZS1zZWNyZXQ=':
+                raise ValueError()
+            length = int(self.headers.get('Content-Length', '0'))
+            if not 0 < length <= 32768:
+                raise ValueError()
+            form = parse_qs(self.rfile.read(length).decode(), max_num_fields=10)
+            source = claims(form['subject_token'][0], RESOURCE)
+            if (set(source['aud']) != {RESOURCE, 'workstream-mcp'} or source['sub'] not in {'alice', 'bob'}
+                    or form.get('audience') != ['workstream-api']
+                    or form.get('scope') != ['workstream:access']
+                    or form.get('grant_type') != ['urn:ietf:params:oauth:grant-type:token-exchange']):
+                raise ValueError()
+            now = int(time.time())
+            token = jwt.encode({**source, 'aud': 'workstream-api', 'azp': 'workstream-mcp',
+                'iat': now, 'exp': min(now + 120, source['exp']), 'jti': 'exchange-' + source['jti']},
+                KEY, algorithm='RS256', headers={'kid': 'fixture-key'})
+            self.reply(200, {'access_token': token, 'token_type': 'Bearer', 'expires_in': 120,
+                            'issued_token_type': 'urn:ietf:params:oauth:token-type:access_token'})
+        except (KeyError, ValueError, jwt.PyJWTError):
+            self.reply(400, {'error': 'invalid_grant'})
 
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, *args):
@@ -33,9 +91,11 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/api/v1/health":
             body = {"status": "healthy"}
         elif self.path == "/api/v1/actors/me":
-            caller = {"Bearer fixture-alice": "alice", "Bearer fixture-bob": "bob"}.get(
-                self.headers.get("Authorization")
-            )
+            try:
+                token = claims(self.headers.get('Authorization', '')[7:], 'workstream-api')
+                caller = token['sub'] if token['azp'] == 'workstream-mcp' and token['aud'] == 'workstream-api' else None
+            except (jwt.PyJWTError, KeyError):
+                caller = None
             if caller is None:
                 status = 401
                 body = {"error": {"code": "invalid_token", "message": "denied", "details": {}}}
@@ -58,7 +118,23 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(payload)
 
+provider = ThreadingHTTPServer(('127.0.0.1', 8443), Provider)
+tls = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+tls.load_cert_chain('/fixture/cert.pem', '/fixture/key.pem')
+provider.socket = tls.wrap_socket(provider.socket, server_side=True)
+threading.Thread(target=provider.serve_forever, daemon=True).start()
 ThreadingHTTPServer(("0.0.0.0", 8000), Handler).serve_forever()
+'''
+
+TOKEN_FIXTURE = r'''
+import jwt,sys,time,uuid
+from pathlib import Path
+now=int(time.time())
+print(jwt.encode({'iss':'https://127.0.0.1:8443/realms/flow', 'sub':sys.argv[1],
+ 'aud':['workstream-mcp','https://workstream.example/mcp'], 'azp':'fixture-client',
+ 'typ':'Bearer','subject_kind':'human','scope':'workstream:access',
+ 'iat':now,'exp':now+300,'jti':str(uuid.uuid4())},Path('/fixture/key.pem').read_text(),
+ algorithm='RS256',headers={'kid':'fixture-key'}))
 '''
 
 
@@ -77,6 +153,29 @@ def main() -> None:
     image_id = run("docker", "image", "inspect", args.image, "--format", "{{.Id}}", env=env)
     project = "ws-mcp-proof-" + uuid.uuid4().hex[:12]
     with tempfile.TemporaryDirectory(prefix=project) as temporary:
+        private = Path(temporary)
+        subprocess.run([
+            'openssl', 'req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '1',
+            '-subj', '/CN=127.0.0.1', '-addext', 'subjectAltName=IP:127.0.0.1',
+            '-keyout', str(private / 'key.pem'), '-out', str(private / 'cert.pem'),
+        ], check=True, capture_output=True, timeout=30)
+        (private / 'key.pem').chmod(0o444)
+        secret = private / 'exchange-secret'
+        secret.write_text('fixture-exchange-secret')
+        secret.chmod(0o400)
+        if os.getuid() != 1000:
+            run('docker', 'run', '--rm', '--network', 'none', '--read-only', '--user', '0:0',
+                '--entrypoint', 'python', '--mount',
+                f'type=bind,source={secret},target=/fixture-secret', args.image,
+                '-c', "import os; os.chown('/fixture-secret',1000,1000)", env=env)
+        trust_path = run('docker', 'run', '--rm', '--entrypoint', 'python', args.image,
+                         '-c', 'import certifi; print(certifi.where())', env=env)
+        env.update({
+            'WORKSTREAM_TOKEN_ISSUER': 'https://127.0.0.1:8443/realms/flow',
+            'WORKSTREAM_TOKEN_AUDIENCE': 'workstream-api',
+            'WORKSTREAM_MCP_RESOURCE_URL': 'https://workstream.example/mcp',
+            'WORKSTREAM_MCP_EXCHANGE_SECRET_FILE': str(secret),
+        })
         base = Path(temporary) / "fixture.json"
         overrides = Path(temporary) / "ports.yml"
         # Retain loopback publication while avoiding collisions with a running demo.
@@ -91,10 +190,18 @@ def main() -> None:
             return run(*command, *arguments, env=env, timeout=timeout)
 
         def write_fixture(generation: str) -> None:
-            base.write_text(json.dumps({"services": {"api": {
+            base.write_text(json.dumps({"services": {"mcp": {"volumes": [{
+                "type": "bind", "source": str(private / 'cert.pem'),
+                "target": trust_path, "read_only": True,
+            }]}, "api": {
                 "image": args.image,
                 "entrypoint": ["python", "-c", API_FIXTURE],
                 "environment": {"FIXTURE_GENERATION": generation},
+                "volumes": [
+                    {"type": "bind", "source": str(private / name),
+                     "target": '/fixture/' + name, "read_only": True}
+                    for name in ('key.pem', 'cert.pem')
+                ],
                 "healthcheck": {
                     "test": ["CMD", "python", "-c", "import urllib.request; "
                              "urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health', timeout=2)"],
@@ -139,19 +246,29 @@ def main() -> None:
                 return json.load(response)["result"]
 
         def prove_calls(generation: str) -> None:
-            tools = rpc("tools/list", {})["tools"]
+            api = compose("ps", "--quiet", "api")
+
+            def bearer(caller: str) -> str:
+                return run('docker', 'exec', api, 'python', '-c', TOKEN_FIXTURE, caller, env=env)
+
+            tools = rpc("tools/list", {}, bearer('alice'))["tools"]
             assert len(tools) == len({tool["name"] for tool in tools}) == 132
+            assert [tool["name"] for tool in tools][-23:] == ['workstream_projects_list', 'workstream_service_actor_create', 'workstream_task_import_batch_create', 'workstream_management_tasks_list', 'workstream_management_task_create', 'workstream_operational_tasks_list', 'workstream_task_import_batch_screen', 'workstream_task_import_batch_release', 'workstream_task_import_batch_get', 'workstream_management_task_get', 'workstream_management_task_locked_context_get', 'workstream_operational_task_locked_context_get', 'workstream_audit_task_locked_context_get', 'workstream_task_revision_context_repair', 'workstream_audit_task_evidence_get', 'workstream_project_model_profile_provision', 'workstream_project_model_budget_configure', 'workstream_project_model_usage_effect_get', 'workstream_project_model_recovery_child_create', 'workstream_task_import_source_declare', 'workstream_task_import_source_content_upload', 'workstream_task_import_source_content_get', 'workstream_task_import_source_get']
             params = {"name": "workstream_profile_get", "arguments": {}}
             for caller in ("alice", "bob"):
-                result = rpc("tools/call", params, "fixture-" + caller)
-                assert not result.get("isError", False)
+                result = rpc("tools/call", params, bearer(caller))
+                assert not result.get("isError", False), result.get('structuredContent', {}).get('error')
                 assert result["structuredContent"]["actor_profile_id"] == "profile-" + caller
                 assert result["structuredContent"]["display_name"] == caller + "-" + generation
-            missing = rpc("tools/call", params)
-            assert missing["isError"] is True
-            assert missing["structuredContent"]["error"] == "invalid_credentials"
-            assert missing["structuredContent"]["status"] == 401
-            again = rpc("tools/call", params, "fixture-alice")
+            try:
+                rpc("tools/call", params)
+            except HTTPError as error:
+                assert error.code == 401
+                assert 'resource_metadata=' in error.headers['www-authenticate']
+                error.close()
+            else:
+                raise AssertionError('Unauthenticated MCP call did not reject')
+            again = rpc("tools/call", params, bearer('alice'))
             assert again["structuredContent"]["display_name"] == "alice-" + generation
 
         write_fixture("initial")
@@ -171,6 +288,9 @@ def main() -> None:
             # namespace. The new API's published port has no MCP listener yet.
             try:
                 rpc("tools/list", {})
+            except HTTPError as error:
+                error.close()
+                raise AssertionError("MCP unexpectedly answered in the replacement namespace") from None
             except (URLError, ConnectionResetError):
                 # Docker may refuse the empty port or reset its TCP forwarder.
                 pass

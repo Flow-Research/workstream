@@ -43,7 +43,7 @@ from app.interfaces.artifacts import (
     ArtifactStoreBootstrap,
     ArtifactStoreNamespaceClaim,
 )
-from app.interfaces.external_services import ExternalServiceAdapterFactory, ExternalServiceConfigurationError
+from workstream_external_services import ExternalServiceAdapterFactory, ExternalServiceConfigurationError
 from app.interfaces.trusted_submission_intake import TrustedSubmissionIntakeAdapter
 from app.adapters.artifacts.trusted_intake import CAPABILITY, PROVIDER, UnixSocketTrustedIntakeAdapter
 from app.modules.artifacts.preparation import (

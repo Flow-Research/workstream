@@ -397,7 +397,7 @@ async def broker_main() -> int:
         security_state,
     )
     import app.adapters.guide_document_tools.service as service_module
-    from app.interfaces.external_services import ExternalServiceUnavailableError
+    from workstream_external_services import ExternalServiceUnavailableError
 
     bootstrap_broker_identity()
     state = security_state()

@@ -114,6 +114,23 @@ class HostedLocalDataInitializationTests(unittest.TestCase):
                     self.assertEqual(self.file_owners[path.stat().st_ino], expected)
         self.assertEqual(self.fchown.call_count, 5)
 
+    def test_keycloak_has_separate_owner_credentials_and_database_access(self) -> None:
+        paths = initializer.initialize(self.root, 10001, 10002, with_keycloak=True)
+        identity = self.root / "identity_database_password"
+        password = identity.read_text().strip()
+        sql = (self.root / "postgres_init.sql").read_text()
+        self.assertEqual(paths["FLOW_IDENTITY_DATABASE_PASSWORD_FILE"], str(identity))
+        self.assertEqual(self.file_owners[identity.stat().st_ino], (1000, 1000))
+        self.assertEqual(stat.S_IMODE(identity.stat().st_mode), 0o400)
+        self.assertNotIn(password, (self.root / "database_url").read_text())
+        self.assertNotIn(password, (self.root / "postgres_password").read_text())
+        self.assertIn("CREATE ROLE flow_identity LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE "
+                      f"NOREPLICATION NOBYPASSRLS PASSWORD '{password}';", sql)
+        self.assertIn("CREATE DATABASE flow_identity OWNER flow_identity;", sql)
+        for name in ("workstream", "flow_identity"):
+            self.assertIn(f"REVOKE ALL ON DATABASE {name} FROM PUBLIC;", sql)
+            self.assertIn(f"GRANT CONNECT ON DATABASE {name} TO {name};", sql)
+
     def test_retry_refuses_existing_state_without_changing_any_file(self) -> None:
         initializer.initialize(self.root, 10001, 10002)
         data = self.root / "postgres" / "retained-data"

@@ -10,7 +10,7 @@ import re
 from uuid import UUID
 from app.core.hashing import canonical_json_hash
 from app.interfaces.trusted_submission_intake import TrustedSubmissionIntakeAdapter
-from app.interfaces.external_services import ExternalServiceAdapterError
+from workstream_external_services import ExternalServiceAdapterError
 from app.core.identifiers import new_record_id
 
 from sqlalchemy import func, select

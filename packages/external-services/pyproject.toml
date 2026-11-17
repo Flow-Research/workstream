@@ -1,0 +1,14 @@
+[build-system]
+requires = ["hatchling==1.27.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "workstream-external-services"
+version = "0.1.0"
+description = "Shared dependency-free construction contracts for Workstream external adapters"
+requires-python = ">=3.11,<3.13"
+license = "AGPL-3.0-only"
+dependencies = []
+
+[tool.hatch.build.targets.wheel]
+packages = ["workstream_external_services"]

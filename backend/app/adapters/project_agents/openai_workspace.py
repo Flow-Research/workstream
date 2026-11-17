@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import os
 
-from app.interfaces.external_services import ExternalServiceAdapterIdentity
+from workstream_external_services import ExternalServiceAdapterIdentity
 from app.modules.projects.api.guide_documents import (
     GUIDE_RUNTIME_RESOURCE_CLEANUP_CAPABILITY_KEY,
     GuideRuntimeCleanupCustody,

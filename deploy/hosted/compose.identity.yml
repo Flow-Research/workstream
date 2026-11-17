@@ -1,0 +1,60 @@
+# Optional managed Flow Identity provider; requires the local-data overlay.
+# Database credentials are separate from every Workstream runtime identity.
+services:
+  identity:
+    image: ${FLOW_IDENTITY_IMAGE:?set the digest-qualified Keycloak image}
+    pull_policy: always
+    restart: on-failure:5
+    init: true
+    user: "1000:1000"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 1536m
+    memswap_limit: 1536m
+    cpus: 1.0
+    pids_limit: 256
+    stop_grace_period: 60s
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/flow_identity
+      KC_DB_USERNAME: flow_identity
+      KC_DB_PASSWORD_FILE: /run/identity/database-password
+      KC_DB_POOL_INITIAL_SIZE: "1"
+      KC_DB_POOL_MIN_SIZE: "1"
+      KC_DB_POOL_MAX_SIZE: "10"
+      KC_HOSTNAME: https://${FLOW_IDENTITY_HOSTNAME:?set the canonical identity hostname}
+      KC_HOSTNAME_ADMIN: https://identity-admin.localhost:19443
+      KC_HOSTNAME_STRICT: "true"
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "false"
+      KC_PROXY_HEADERS: xforwarded
+      KC_PROXY_TRUSTED_ADDRESSES: ${FLOW_IDENTITY_PROXY_ADDRESS:?set the observed proxy IP}
+      KC_HTTPS_CERTIFICATE_FILE: /run/identity/tls-cert.pem
+      KC_HTTPS_CERTIFICATE_KEY_FILE: /run/identity/tls-key.pem
+      KC_CACHE: local
+      KC_HTTP_MANAGEMENT_SCHEME: http
+      JAVA_OPTS_KC_HEAP: -XX:MaxRAMPercentage=60 -XX:InitialRAMPercentage=30
+    volumes:
+      - type: bind
+        source: ${FLOW_IDENTITY_DATABASE_PASSWORD_FILE:?set the private database password file}
+        target: /run/identity/database-password
+        read_only: true
+      - type: bind
+        source: ${FLOW_IDENTITY_TLS_CERT_FILE:?set the upstream TLS certificate file}
+        target: /run/identity/tls-cert.pem
+        read_only: true
+      - type: bind
+        source: ${FLOW_IDENTITY_TLS_KEY_FILE:?set the upstream TLS private key file}
+        target: /run/identity/tls-key.pem
+        read_only: true
+    tmpfs:
+      - /tmp:uid=1000,gid=1000,mode=0700,size=134217728,noexec,nosuid,nodev
+      - /opt/keycloak/data:uid=1000,gid=1000,mode=0700,size=134217728,nosuid,nodev
+    ports:
+      - "127.0.0.1:18443:8443"
+    healthcheck:
+      test: [CMD, bash, -ec, "exec 3<>/dev/tcp/127.0.0.1/9000; printf 'GET /health/ready HTTP/1.0\\r\\nHost: localhost\\r\\nConnection: close\\r\\n\\r\\n' >&3; IFS= read -r status <&3; [[ \"$$status\" == *' 200 '* ]]"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 180s

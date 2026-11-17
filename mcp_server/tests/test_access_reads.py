@@ -125,7 +125,10 @@ def _response(name: str) -> dict[str, Any]:
 def _catalogue(client: TestClient) -> dict[str, Any]:
     response = client.post(
         "/mcp",
-        headers={"accept": "application/json, text/event-stream"},
+        headers={
+            "accept": "application/json, text/event-stream",
+            "authorization": "Bearer fixture-token",
+        },
         json={"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}},
     )
     assert response.status_code == 200
@@ -203,7 +206,7 @@ def test_access_read_exact_get_wire_and_projection(adapter: Adapter, call: Call,
         [("scope_type", "system")] if name in GRANT_TOOLS else []
     )
     assert request.content == b""
-    assert request.headers["authorization"] == "Bearer read-caller"
+    assert request.headers["authorization"] == 'Bearer api-read-caller'
     assert request.headers["accept"] == "application/json"
     for header in ("idempotency-key", "if-match", "if-none-match", "x-actor-id", "content-type"):
         assert header not in request.headers
@@ -381,7 +384,9 @@ def test_missing_bearer_prevents_access_read_dispatch(
 ) -> None:
     client, received, _ = adapter
     response = call(client, name=name, arguments=_arguments(name), token=None)
-    assert response.json()["result"]["isError"] is True
+    assert response.status_code == 401
+    metadata = "https://workstream.flowresearch.tech/.well-known/oauth-protected-resource/mcp"
+    assert f'resource_metadata="{metadata}"' in response.headers["www-authenticate"]
     assert received == []
 
 
@@ -579,7 +584,7 @@ def test_access_read_success_is_not_reused_after_authority_revocation(
         assert "items" not in result["structuredContent"]
         assert "actor_profile_id" not in result["structuredContent"]
     assert [request.headers["authorization"] for request in received] == [
-        "Bearer first-caller",
-        "Bearer first-caller",
-        "Bearer second-caller",
+        'Bearer api-first-caller',
+        'Bearer api-first-caller',
+        'Bearer api-second-caller',
     ]

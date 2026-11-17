@@ -19,7 +19,7 @@ from app.core.config import get_settings
 from app.core.hashing import canonical_json_hash
 from app.core.identifiers import new_record_id
 from app.core.project_agents import project_guide_runtime_configuration
-from app.interfaces.external_services import (
+from workstream_external_services import (
     ExternalServiceAdapterFactory,
     ExternalServiceAdapterIdentity,
 )

@@ -6,7 +6,7 @@ from collections.abc import Callable
 from dataclasses import asdict
 
 from app.interfaces.external_checker_execution import ExternalCheckerExecutionAdapter
-from app.interfaces.external_services import (
+from workstream_external_services import (
     ExternalServiceConfigurationError,
     ExternalServiceProtocolError,
     ExternalServiceUnavailableError,

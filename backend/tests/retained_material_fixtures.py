@@ -29,7 +29,7 @@ from app.interfaces.artifacts import (
     ArtifactPutResult,
     artifact_provider_object_ref,
 )
-from app.interfaces.external_services import ExternalServiceAdapterIdentity
+from workstream_external_services import ExternalServiceAdapterIdentity
 from app.modules.artifacts.api import SubmissionBundlePreparationRequest
 from app.modules.artifacts.authorization import (
     PreparedPreSubmitMaterializationAuthorization,

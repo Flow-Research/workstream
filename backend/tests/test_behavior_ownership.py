@@ -2757,3 +2757,17 @@ def test_art_operator_ownership_accepts_only_exact_new_modules():
         wrong_group["authority_digest"] = ownership._digest(authority)
         with pytest.raises(ownership.BehaviorOwnershipError, match="untrusted_partition_change"):
             ownership._validate_additive_partition_transition(wrong_group, trusted)
+
+
+def test_partition_allows_only_the_shared_adapter_package_relocation() -> None:
+    retained = "backend/app/core/config.py"
+    removed = "backend/app/interfaces/external_services.py"
+    current = _partition([retained])
+    ownership._validate_additive_partition_transition(
+        current, _partition(sorted([retained, removed])),
+    )
+    with pytest.raises(ownership.BehaviorOwnershipError, match="untrusted_partition_change"):
+        ownership._validate_additive_partition_transition(
+            current,
+            _partition(sorted([retained, removed, "backend/app/interfaces/forge_facts.py"])),
+        )

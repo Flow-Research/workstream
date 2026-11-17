@@ -20,7 +20,7 @@ import pytest
 
 from app.adapters.artifacts.trusted_intake import UnixSocketTrustedIntakeAdapter
 from app.core.identifiers import new_record_id
-from app.interfaces.external_services import ExternalServiceProtocolError
+from workstream_external_services import ExternalServiceProtocolError
 from app.interfaces.trusted_submission_intake import TrustedDefaultBinding, TrustedIntakePreparation
 from app.modules.artifacts.api.submission_archive import SubmissionArchiveLimits
 from app.modules.artifacts.submission_archive import SubmissionArchiveInspector
@@ -345,7 +345,7 @@ def test_raw_guest_export_requires_exact_inventory_and_content(tmp_path, failure
 def test_composition_requires_every_trusted_intake_identity(tmp_path, missing):
     from app.adapters.artifacts import trusted_submission_intake
     from app.core.config import Settings
-    from app.interfaces.external_services import ExternalServiceConfigurationError
+    from workstream_external_services import ExternalServiceConfigurationError
 
     settings = Settings(
         artifact_intake_service_socket=tmp_path / "intake.sock",
@@ -379,7 +379,7 @@ def test_intake_factory_is_independent_of_project_engine(tmp_path):
 async def test_interrupted_export_disconnects_before_cleanup_can_read_raw_bytes(tmp_path, failure):
     import time
     from app.adapters.artifacts.trusted_intake import _Session, _CHUNK
-    from app.interfaces.external_services import ExternalServiceUnavailableError
+    from workstream_external_services import ExternalServiceUnavailableError
 
     content = b"x" * (_CHUNK + 64)
     inspection = SubmissionArchiveInspector(SubmissionArchiveLimits()).inspect(

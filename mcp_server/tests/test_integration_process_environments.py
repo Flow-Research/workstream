@@ -42,8 +42,13 @@ def test_api_and_bootstrap_execute_with_backend_python(monkeypatch, tmp_path):
     monkeypatch.setattr(journey.subprocess, "run", start)
     monkeypatch.setattr(journey.subprocess, "Popen", start)
     environment = {"WORKSTREAM_ENVIRONMENT": "local"}
+    identity_environments = []
+    identity = SimpleNamespace(
+        configure_processes=lambda api, mcp: identity_environments.append((api, mcp)),
+    )
     journey._bootstrap_access_administrator("actor-probe", environment)
     _, _, api_log, mcp_log = journey._start_processes(
+        identity=identity,
         api_port=12345, api_env=environment, mcp_port=12346,
         mcp_env={}, executable="/independent-wheel/workstream-mcp", scratch=str(tmp_path),
     )
@@ -55,3 +60,4 @@ def test_api_and_bootstrap_execute_with_backend_python(monkeypatch, tmp_path):
     assert commands[0][1]["cwd"] == commands[1][1]["cwd"] == journey.BACKEND
     assert commands[0][1]["env"] == commands[1][1]["env"] == environment
     assert commands[2][0] == ["/independent-wheel/workstream-mcp"]
+    assert identity_environments == [(environment, {})]
