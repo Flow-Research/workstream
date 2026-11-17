@@ -1,7 +1,7 @@
 # Browser-accessible Flow Identity administration
 
 - Initiative: None
-- Durable disposition: Planned
+- Durable disposition: Complete
 - Intended merge outcome: Browser administration on the canonical identity HTTPS hostname.
 
 ## Intent
