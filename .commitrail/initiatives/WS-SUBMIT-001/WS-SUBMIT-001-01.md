@@ -6911,3 +6911,38 @@ repairs; scoped QA/security reports no further finding. Other two tests/helpers
 in module AST-unchanged and still pending migration. Shared modified-content
 execution over a091cb7d6 only; no independent or clean-commit rerun claim. Final
 Ruff/structure/record/whitespace checks passed. Full retirement and goal open.
+
+Remaining revision admission proof migration scope: port stale-cause and competing
+ready-admission tests to current source owners, then remove their obsolete local
+preparation/hidden-create helpers/imports. Stale cause: execute genuine eligible
+PRE, reserve a newer predecessor evaluation before T4, require refused acceptance
+and retained failed-source cleanup custody without new Submission/POST. Competition:
+two real commands with distinct keys, observe actual blocked PostgreSQL TASK lock,
+hold winner body until loser exits so refusal occurs against receiving custody,
+require loser never reads bytes, winner accepted once, finalize via production
+OUTBOX and replay same immutable receipt without new product writes. Preserve prior
+POST rollback test unchanged and run all three module cases. QA/security review
+required; does not claim removal of other modules' obsolete consumers.
+
+Revision admission v1 terminal0:3passed151.09s/allcleanuptrue. Dependency search
+found indirect old-helper consumers in test_alembic, revision_capacity,
+revision_exhaustion_recovery, checker_retry_history_replay and related modules.
+Restore existing shared helpers/imports unchanged; no compatibility alias or new
+old writer. AST comparison confirms all five prior helpers and previous rollback
+case unchanged. Those dependents remain explicit retirement work. Scope removes
+old-path calls only from this module's two test bodies, not the shared helper API.
+QA-REVISION001 requires exact context-invalid refusal and current-checker cause;
+QA-REVISION002 adds unchanged OUTBOX rows at the post-PRE/pre-T4 baseline, since
+no delivery mutation is legitimate here. Run repaired stale case and collection
+of shared consumers; current race/rollback v1 bodies remain unchanged. Existing
+Pydantic generation-fixture serialization warning is retained, not suppressed.
+
+Final stale-cause v2 terminal0:1passed54.72s/schema0084/allcleanuptrue
+(/tmp/submission-revision-admission-v2.json/.log). Exact context-invalid and checker
+cause plus unchanged OUTBOX snapshot pass, addressing QA-REVISION001/002. Final
+blob862eb2621b00a54fe32a07ed96560639406cadcc; race and prior POST rollback ASTs
+unchanged from v1 three-pass run. Six shared-helper consumer modules collect
+92tests19.12s; collection is not runtime qualification. All five shared helper
+ASTs restored unchanged; broader old-path dependencies remain. Ruff/structure/
+record/whitespace checks passed. Evidence is shared execution of modified content
+over559617e9f, not clean-commit execution or independent rerun. Full goal open.
