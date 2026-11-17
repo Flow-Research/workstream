@@ -10,6 +10,7 @@ from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.encoders import jsonable_encoder
+from fastapi.openapi.docs import get_swagger_ui_oauth2_redirect_html
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import HTMLResponse, JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -293,7 +294,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     @app.get("/docs", include_in_schema=False, response_class=HTMLResponse)
     async def swagger_docs() -> HTMLResponse:
-        """Serve bearer-token documentation with integrity-checked assets."""
+        """Serve bearer and browser OAuth documentation with integrity-checked assets."""
+        oauth = settings.auth_provider == "flow" and app.state.auth_configuration_valid
+        oauth_init = "ui.initOAuth({clientId: \"workstream-swagger\", usePkceWithAuthorizationCodeGrant: true, scopes: \"openid workstream:access workstream-api-audience\"});" if oauth else ""
         # Fixed release and SRI: a changed CDN response must not execute with tokens.
         return HTMLResponse("""<!DOCTYPE html>
 <html><head><title>""" + escape(app.title) + """ - Swagger UI</title>
@@ -302,10 +305,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 </head><body><div id="swagger-ui"></div>
 <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.32.0/swagger-ui-bundle.js"
  integrity="sha384-7xcoc6ZKDFF7Ek627QTC3Bg/K+5Y36NJ8MWAE43D2m6+3Sh9XO3tdsfHhrS8gNIQ" crossorigin="anonymous"></script>
-<script>SwaggerUIBundle({url: '/openapi.json', dom_id: '#swagger-ui',
+<script>const ui = SwaggerUIBundle({url: '/openapi.json', dom_id: '#swagger-ui',
  deepLinking: true, showExtensions: true, showCommonExtensions: true,
  presets: [SwaggerUIBundle.presets.apis, SwaggerUIBundle.SwaggerUIStandalonePreset],
- layout: 'BaseLayout', persistAuthorization: false});</script></body></html>""")
+ layout: 'BaseLayout', persistAuthorization: false, oauth2RedirectUrl: window.location.origin + '/docs/oauth2-redirect'});""" + oauth_init + """</script></body></html>""", headers={"Cache-Control": "no-store", "Referrer-Policy": "no-referrer"})
+
+    @app.get("/docs/oauth2-redirect", include_in_schema=False, response_class=HTMLResponse)
+    async def swagger_oauth_callback() -> HTMLResponse:
+        response = get_swagger_ui_oauth2_redirect_html()
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["Referrer-Policy"] = "no-referrer"
+        return response
 
     app.state.settings = settings
     app.state.auth_verifier, app.state.auth_configuration_valid = prepare_auth_verifier(settings)
@@ -318,6 +328,30 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_exception_handler(Exception, unhandled_exception_handler)
     app.include_router(api_router)
     install_api_control_openapi(app)
+    if settings.auth_provider == "flow" and app.state.auth_configuration_valid:
+        original_openapi = app.openapi
+
+        def browser_oauth_openapi() -> dict[str, Any]:
+            schema = original_openapi()
+            schemes = schema.setdefault("components", {}).setdefault("securitySchemes", {})
+            schemes["FlowIdentity"] = {
+                "type": "oauth2",
+                "flows": {"authorizationCode": {
+                    "authorizationUrl": settings.flow_auth_issuer + "/protocol/openid-connect/auth",
+                    "tokenUrl": settings.flow_auth_issuer + "/protocol/openid-connect/token",
+                    "scopes": {"openid": "Sign in", "workstream:access": "Access Workstream under your assigned permissions", "workstream-api-audience": "Workstream API credential"},
+                }},
+            }
+            for path_item in schema.get("paths", {}).values():
+                for operation in path_item.values():
+                    if not isinstance(operation, dict):
+                        continue
+                    security = operation.get("security", [])
+                    if {"HTTPBearer": []} in security and not any("FlowIdentity" in item for item in security):
+                        security.append({"FlowIdentity": ["openid", "workstream:access", "workstream-api-audience"]})
+            return schema
+
+        app.openapi = browser_oauth_openapi
     route_templates = _registered_route_paths(list(app.routes))
     runtime = ObservabilityRuntime(
         settings,

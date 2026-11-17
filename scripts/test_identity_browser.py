@@ -1,4 +1,4 @@
-"""Real Chrome qualification of the participant helper, with an isolated CA store.
+"""Real Chrome qualification of the native participant CLI, with an isolated CA store.
 
 Requires Playwright, Chrome and certutil on the qualification host. No TLS
 verification or browser sandbox is disabled; no personal browser profile is used.
@@ -14,13 +14,11 @@ import secrets
 import shutil
 import subprocess
 import unittest
-from urllib.parse import parse_qs, urlencode, urlsplit
-from urllib.request import ProxyHandler, build_opener
+import time
 
 import jwt
 from playwright.sync_api import sync_playwright
 
-from scripts import identity_login as login
 from scripts import test_identity_provider as provider
 
 
@@ -56,77 +54,75 @@ class IdentityBrowserTests(provider.IdentityProviderTests):
             "attributes": {"workstream_subject_kind": ["human"]},
             "credentials": [{"type": "password", "value": temporary_password, "temporary": True}],
         }, token=self.operator)
-        authorization, token_endpoint = login.endpoints(self.origin + "/realms/flow", self.context)
-        futures = []
-        with ThreadPoolExecutor(max_workers=1) as executor:
-            def launch(url):
-                def browser():
-                    stage = "browser startup"
-                    with sync_playwright() as playwright:
-                        chromium = playwright.chromium.launch(
-                            executable_path=chrome, headless=True, chromium_sandbox=True,
-                            env={**os.environ, "HOME": str(home)},
-                        )
-                        try:
-                            page = chromium.new_page()
-                            stage = "trusted HTTPS login page"
-                            page.goto(url, wait_until="domcontentloaded", timeout=30000)
-                            stage = "initial login"
-                            page.locator("#username").fill(email)
-                            page.locator("#password").fill(temporary_password)
-                            page.locator("#kc-login").click()
-                            stage = "mandatory password change"
-                            page.locator("#password-new").fill(replacement)
-                            page.locator("#password-confirm").fill(replacement)
-                            page.locator("form").first.locator(
-                                'button[type="submit"], input[type="submit"]',
-                            ).first.click()
-                            stage = "consent"
-                            page.locator('input[name="accept"], button[name="accept"]').click()
-                            stage = "loopback callback"
-                            page.wait_for_url(login.CALLBACK + "**", timeout=15000)
-                            self.assertIn("Return to your terminal", page.locator("body").inner_text())
-                        except Exception as error:
-                            # Unblock the helper, then fail before any token
-                            # exchange. Do not expose Playwright call logs: a
-                            # failed fill operation can include a password.
-                            state = parse_qs(urlsplit(url).query)["state"][0]
-                            try:
-                                with build_opener(ProxyHandler({})).open(
-                                    login.CALLBACK + "?" + urlencode({"state": state, "code": "fixture-abort"}),
-                                    timeout=5,
-                                ):
-                                    pass
-                            except OSError:
-                                pass
-                            raise RuntimeError(f"Browser qualification failed at {stage}: {type(error).__name__}") from None
-                        finally:
-                            chromium.close()
-                futures.append(executor.submit(browser))
-                return True
-
-            code, verifier = login.browser_code(authorization, launch=launch)
-            futures[0].result(timeout=30)
-        result = login.request_json(token_endpoint, self.context, {
-            "grant_type": "authorization_code", "client_id": login.CLIENT,
-            "redirect_uri": login.CALLBACK, "code": code, "code_verifier": verifier,
-        })
-        path = self.root / "browser-credentials.json"
-        issuer = self.origin + "/realms/flow"
-        login.save_credentials(login.private_path(path), issuer, result, login.validate_tokens(result, issuer, self.context), replace=False)
-        saved = login.read_credentials(path, issuer)
-        keys = self.probe.request("/realms/flow/protocol/openid-connect/certs")["keys"]
-        key = next(k for k in keys if k["kid"] == jwt.get_unverified_header(saved["access_token"])["kid"])
-        claims = jwt.decode(saved["access_token"], jwt.PyJWK.from_dict(key).key,
-                            algorithms=["RS256"], audience="workstream-api", issuer=issuer)
-        self.assertEqual(claims["email"], email)
-        self.assertEqual(claims["subject_kind"], "human")
-        renewed = login.request_json(token_endpoint, self.context, {
-            "grant_type": "refresh_token", "client_id": login.CLIENT,
-            "refresh_token": saved["refresh_token"],
-        })
-        login.save_credentials(path, issuer, renewed, login.validate_tokens(renewed, issuer, self.context, expected_subject=claims["sub"]), replace=True)
-        self.assertNotEqual(login.read_credentials(path, issuer)["refresh_token"], saved["refresh_token"])
+        binary = os.environ.get("WORKSTREAM_TEST_CLI")
+        self.assertTrue(binary and os.path.isfile(binary), "build the native CLI and set WORKSTREAM_TEST_CLI")
+        self.assertTrue(os.environ.get("DBUS_SESSION_BUS_ADDRESS"), "run with an isolated unlocked Secret Service")
+        clients = self.probe.request("/admin/realms/flow/clients?clientId=workstream-cli-login", token=self.operator)
+        self.assertEqual(len(clients), 1)
+        client = clients[0]
+        client["attributes"]["access.token.lifespan"] = "35"
+        self.probe.request("/admin/realms/flow/clients/" + client["id"], client, token=self.operator, method="PUT")
+        launcher = self.root / "bin"
+        launcher.mkdir()
+        (launcher / "xdg-open").write_text("#!/bin/sh\nexit 1\n")
+        (launcher / "xdg-open").chmod(0o700)
+        env = {**os.environ, "XDG_CONFIG_HOME": str(self.root / "cli-config"),
+               "SSL_CERT_FILE": str(self.root / "cert.pem"), "PATH": str(launcher) + ":" + os.environ["PATH"]}
+        env.pop("WORKSTREAM_TOKEN", None)
+        env.pop("WORKSTREAM_API_URL", None)
+        command = subprocess.Popen([binary, "login", "--issuer", self.origin + "/realms/flow"],
+                                   env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        try:
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                line = executor.submit(command.stderr.readline).result(timeout=20)
+            self.assertTrue(line.startswith("Sign in using your browser: "), "CLI failed before browser login")
+            address = line.split("Sign in using your browser: ", 1)[1].strip()
+            with sync_playwright() as playwright:
+                browser = playwright.chromium.launch(executable_path=chrome, headless=True,
+                    chromium_sandbox=True, env={**os.environ, "HOME": str(home)})
+                try:
+                    page = browser.new_page()
+                    page.goto(address, wait_until="domcontentloaded", timeout=30000)
+                    page.locator("#username").fill(email)
+                    page.locator("#password").fill(temporary_password)
+                    page.locator("#kc-login").click()
+                    page.locator("#password-new").fill(replacement)
+                    page.locator("#password-confirm").fill(replacement)
+                    page.locator("form").first.locator('button[type="submit"], input[type="submit"]').first.click()
+                    page.locator('input[name="accept"], button[name="accept"]').click()
+                    page.wait_for_url("http://127.0.0.1:17843/callback**", timeout=15000)
+                except Exception as error:
+                    raise RuntimeError("Native browser qualification failed: " + type(error).__name__) from None
+                finally:
+                    browser.close()
+            command.wait(timeout=30)
+            self.assertEqual(command.returncode, 0, "native CLI login failed")
+            def cli(*args):
+                result = subprocess.run([binary, *args], env=env, capture_output=True, text=True, timeout=30)
+                self.assertEqual(result.returncode, 0, "native CLI command failed")
+                return result.stdout.strip()
+            first = cli("auth", "token")
+            keys = self.probe.request("/realms/flow/protocol/openid-connect/certs")["keys"]
+            key = next(k for k in keys if k["kid"] == jwt.get_unverified_header(first)["kid"])
+            claims = jwt.decode(first, jwt.PyJWK.from_dict(key).key, algorithms=["RS256"],
+                                audience="workstream-api", issuer=self.origin + "/realms/flow")
+            self.assertEqual(claims["email"], email)
+            self.assertEqual(claims["subject_kind"], "human")
+            time.sleep(max(0, claims["exp"] - time.time() - 29))
+            renewed = cli("auth", "token")
+            self.assertNotEqual(first, renewed, "near-expiry token was not renewed")
+            cli("logout")
+            result = subprocess.run([binary, "auth", "token"], env=env, capture_output=True, text=True, timeout=30)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(result.stdout, "")
+            self.setUp()  # Refresh the short-lived operator token after browser/renewal work.
+            sessions = self.probe.request("/admin/realms/flow/users/" + claims["sub"] + "/sessions", token=self.operator)
+            self.assertFalse(any("workstream-cli-login" in item.get("clients", {}).values() for item in sessions),
+                             "CLI logout retained its provider session")
+        finally:
+            if command.poll() is None:
+                command.kill()
+                command.wait(timeout=10)
 
 
 if __name__ == "__main__":

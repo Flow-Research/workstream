@@ -63,7 +63,7 @@
 
 {$WORKSTREAM_PUBLIC_HOSTNAME} {
 	header Cache-Control no-store
-	@api path /api/* /docs /openapi.json
+	@api path /api/* /docs /docs/oauth2-redirect /openapi.json
 	route {
 		handle /.well-known/oauth-protected-resource/mcp {
 			reverse_proxy 127.0.0.1:8080 {

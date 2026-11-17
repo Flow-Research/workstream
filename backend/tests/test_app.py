@@ -98,3 +98,32 @@ async def test_swagger_uses_pinned_integrity_checked_assets() -> None:
         assert asset["crossorigin"] == "anonymous"
     assert "url: '/openapi.json'" in response.text
     assert "persistAuthorization: false" in response.text
+
+
+async def test_swagger_browser_oauth_preserves_bearer_api_authority(monkeypatch) -> None:
+    from app.core.config import Settings
+    monkeypatch.setattr("app.main.prepare_auth_verifier", lambda settings: (None, True))
+    settings = Settings(auth_provider="flow", flow_auth_issuer="https://identity.example.test/realms/flow")
+    app = create_app(settings)
+    schema = app.openapi()
+    oauth = schema["components"]["securitySchemes"]["FlowIdentity"]["flows"]["authorizationCode"]
+    assert oauth["authorizationUrl"] == settings.flow_auth_issuer + "/protocol/openid-connect/auth"
+    assert oauth["tokenUrl"] == settings.flow_auth_issuer + "/protocol/openid-connect/token"
+    assert set(oauth["scopes"]) == {"openid", "workstream:access", "workstream-api-audience"}
+    protected = schema["paths"]["/api/v1/actors/me"]["get"]["security"]
+    assert {"HTTPBearer": []} in protected
+    assert {"FlowIdentity": ["openid", "workstream:access", "workstream-api-audience"]} in protected
+    assert all(not ("HTTPBearer" in item and "FlowIdentity" in item) for item in protected)
+    assert not schema["paths"]["/api/v1/health"]["get"].get("security")
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="https://api.example.test") as client:
+        page = await client.get("/docs")
+        callback = await client.get("/docs/oauth2-redirect")
+        denied = await client.get("/api/v1/actors/me")
+    assert "usePkceWithAuthorizationCodeGrant: true" in page.text
+    assert 'clientId: "workstream-swagger"' in page.text
+    assert "persistAuthorization: false" in page.text
+    assert page.headers["cache-control"] == "no-store"
+    assert callback.status_code == 200
+    assert "swaggerUIRedirectOauth2" in callback.text
+    assert callback.headers["referrer-policy"] == "no-referrer"
+    assert denied.status_code == 401

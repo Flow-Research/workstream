@@ -30,6 +30,18 @@ class KeycloakConfigurationTests(unittest.TestCase):
             self.assertEqual(len(client["redirectUris"]), 1)
             self.assertNotIn("*", client["redirectUris"][0])
 
+    def test_swagger_has_exact_callback_origin_and_api_scope_only(self):
+        client = config.swagger_client("https://api.example.test")
+        self.assertEqual(client["redirectUris"], ["https://api.example.test/docs/oauth2-redirect"])
+        self.assertEqual(client["webOrigins"], ["https://api.example.test"])
+        self.assertEqual(client["optionalClientScopes"], ["workstream:access", "workstream-api-audience"])
+        self.assertEqual(client["attributes"]["pkce.code.challenge.method"], "S256")
+        self.assertTrue(client["publicClient"])
+        self.assertFalse(client["directAccessGrantsEnabled"])
+        for origin in ("http://api.example.test", "https://user@api.example.test", "https://api.example.test/other", "https://api.example.test?x=1"):
+            with self.subTest(origin=origin), self.assertRaises(ValueError):
+                config.swagger_client(origin)
+
     def test_exchange_cannot_issue_refresh_or_extend_source(self):
         exchange = next(c for c in config.realm()["clients"] if c["clientId"] == "workstream-mcp")
         self.assertFalse(exchange["publicClient"])

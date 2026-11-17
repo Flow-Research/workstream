@@ -159,15 +159,15 @@ class PublicIngressTest(unittest.TestCase):
                 self.assertEqual(request('foreign.example.test', '/api/v1/health')[0], 404)
                 self.assertEqual(request('workstream.example.test', '/admin/accounts', b'{}')[0], 404)
                 self.assertEqual(len(calls), before)
-                for target in ('/docs', '/openapi.json'):
+                for target in ('/docs', '/docs/oauth2-redirect', '/openapi.json'):
                     status, result = request('workstream.example.test', target)
                     self.assertEqual(status, 200)
                     self.assertEqual(json.loads(result)['path'], target)
                     self.assertEqual(calls[-1][0], target)
                 before = len(calls)
-                for target in ('/docs/', '/docs-extra', '/redoc', '/openapi.json-extra'):
+                for target in ('/docs/', '/docs-extra', '/docs/oauth2-redirect-extra', '/redoc', '/openapi.json-extra'):
                     self.assertEqual(request('workstream.example.test', target)[0], 404)
-                for target in ('/docs', '/openapi.json'):
+                for target in ('/docs', '/docs/oauth2-redirect', '/openapi.json'):
                     self.assertEqual(request('foreign.example.test', target)[0], 404)
                     self.assertEqual(request('identity.example.test', target)[0], 404)
                 self.assertEqual(len(calls), before)
