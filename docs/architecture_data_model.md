@@ -92,11 +92,15 @@ without asserting that its identity link, grants, or fixed-service admission
 make the whole actor effective.
 
 The closed service identity `workstream.compensation.adapter` identifies an
-eligible adapter-binding target and has exactly three PLANNED fulfillment
-memberships: source read, report and exception report. These memberships grant
-no executable action authority. ACTORS locks the exact active service profile and its active
-service identity link before returning immutable eligibility facts; generic
-service kind and every other fixed-service identity are insufficient.
+eligible adapter-binding target and has exactly three active, request-bound
+fulfillment memberships: source read, report and exception report. Prepared AUTH
+uses the exact current actor/link and original binding to authorize only the
+four COMP evidence APIs: source evidence, exact-event lookup, report and linked
+exception report. These memberships confer no Finance or provider-execution
+authority. Binding-target eligibility alone is not action authority. ACTORS locks
+the exact active service profile and its active service identity link before
+returning immutable eligibility facts; generic service kind and every other
+fixed-service identity are insufficient.
 
 ### ActorIdentityLink
 

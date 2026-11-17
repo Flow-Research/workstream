@@ -2668,3 +2668,10 @@ alone does not establish Finance admission, dispatch or drain-controller readine
 Plan correction custody: PLAN-OUTBOX-001 through005 are incorporated above.
 No runtime evidence is claimed. Public observers are query capabilities only;
 family/support facts confer no AUTH or lifecycle transition permission.
+
+
+DOC-RECEIPT-SNAPSHOT-002 extends the same current-document repair to
+docs/architecture_data_model.md: the canonical actor definition still described
+all three memberships as planned. Its current wording now distinguishes active
+request-bound evidence authority from binding-target eligibility and unfinished
+Finance/provider execution. No executable or retained-data change is involved.
