@@ -4,15 +4,15 @@
 - Durable disposition: Planned
 - Intended merge outcome: Browser administration on the canonical identity HTTPS hostname.
 
-## Intent and scope
+## Intent
 
 The administrator must invite participants through the normal HTTPS identity website, without SSH tunnels. Replace the superseded private console origin with the existing fixed identity origin; preserve Keycloak authentication/MFA and independent Workstream authorization.
 
-## Plan and allowed files
+## Bounded change
 
 Change deploy/hosted/public.Caddyfile, compose.identity.yml, preflight.py, deploy/identity/README.md, related hosted documentation, scripts/test_public_ingress.py and affected identity configuration tests, docs/roadmap_status.md, and this record. Hosted reconciliation changes only ingress, identity configuration and the master realm frontend URL, preserving other realm attributes and all accounts/data. No Garden, product roles, OAuth scopes, registration activation, database reset or secret disclosure.
 
-## Acceptance and verification
+## Acceptance criteria
 
 - Public /admin/ reaches Keycloak console; admin browser login and MFA succeed.
 - Missing credentials and participant tokens cannot read administrative user data.
@@ -21,11 +21,11 @@ Change deploy/hosted/public.Caddyfile, compose.identity.yml, preflight.py, deplo
 - Remove private console route and stale deployment guidance; document creating a human account, temporary password, and separate Workstream authority.
 - Real-socket ingress and configuration tests; hosted administrator/browser and denial probes. Preserve named admin MFA and recovery before removing the old origin.
 
-## Risk and review
+## Risk and review routing
 
 L1 security-sensitive ingress change. Focused plan and final security/architecture/QA/docs review. Human focus: deliberately public authenticated administration, stable issuer, no anonymous administration or product grants. Deployment proof is separate from source and CI checks.
 
-## Delivered verification
+## Evidence
 
 Real-socket Caddy proof passed, including exact-host routing, body limits, forwarded-header replacement and denied management/registration paths. Hosted-release and Keycloak configuration tests passed (91 tests, 325 subtests); the added canonical-admin override regression independently passed.
 
