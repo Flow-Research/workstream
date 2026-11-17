@@ -13,7 +13,10 @@ async def validate_post_submit_replay(owner, issuance, action, caller_input, res
     if (
         type(authority.context) is not ServiceAuthorizationContext
         or authority.action_id is not action
-        or not fixed_service_resource_matches(action, resource, authority.scope_project_id, None, None, None)
+        or not fixed_service_resource_matches(action, resource, authority.scope_project_id, None, None, None,
+            actor_profile_id=authority.context.actor_profile_id,
+            identity_link_id=authority.context.identity_link_id,
+        )
     ):
         raise PreparedAuthorizationHandleInvalid("invalid post-submit replay authority")
     event = await owner._authorization._audit.get_authority_event(decision_id)

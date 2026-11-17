@@ -1,6 +1,8 @@
 """Populated source upgrade preserves retained truth; downgrade never deletes it."""
 
-from tests.contributions.records.historical_support import historical_contribution_source
+from tests.contributions.records.historical_support import (
+    historical_contribution_source, award_values_at_0018,
+)
 
 import asyncio
 from pathlib import Path
@@ -12,7 +14,6 @@ from sqlalchemy.exc import DBAPIError
 
 from app.db import session as db_session
 from tests.contributions.records.support import (
-    award_values,
     insert_award,
     insert_record,
 )
@@ -128,7 +129,7 @@ async def test_completeness_upgrade_preserves_complete_retained_awards(
         ) as h:
             async with h.factory() as session:
                 await insert_record(session, h.submitter_record)
-                for award in await award_values(session, h.submitter_record):
+                for award in await award_values_at_0018(session, h.submitter_record):
                     await insert_award(session, award)
                 await session.commit()
             connection = await asyncpg.connect(isolated_database_env.replace("+asyncpg", ""))
@@ -203,7 +204,7 @@ async def test_completeness_upgrade_refuses_incomplete_retained_awards_unchanged
             async with h.factory() as session:
                 await insert_record(session, h.submitter_record)
                 await insert_award(
-                    session, (await award_values(session, h.submitter_record))[0]
+                    session, (await award_values_at_0018(session, h.submitter_record))[0]
                 )
                 await session.commit()
             connection = await asyncpg.connect(isolated_database_env.replace("+asyncpg", ""))

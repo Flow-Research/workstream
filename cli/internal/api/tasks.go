@@ -28,6 +28,7 @@ type TaskSummary struct {
 
 type TaskDetail struct {
 	TaskSummary
+	TaskSize              string             `json:"task_size"`
 	Description           string             `json:"description"`
 	AcceptanceCriteria    *string            `json:"acceptance_criteria"`
 	RejectionCriteria     *string            `json:"rejection_criteria"`
@@ -178,7 +179,7 @@ func (c *Client) Task(ctx context.Context, project, selector string) (Result[Tas
 	if value.AssignedTo != nil {
 		_, validAssignment = uuidIdentity(*value.AssignedTo)
 	}
-	if err != nil || !validTask(value.TaskSummary, project) || !valid || selected != returned || !validCreator || !validAssignment {
+	if err != nil || !validTask(value.TaskSummary, project) || !oneOf(value.TaskSize, "small", "medium", "large") || !valid || selected != returned || !validCreator || !validAssignment {
 		return result, &Failure{Code: "invalid_api_response"}
 	}
 	return Result[TaskDetail]{Raw: raw, Value: value}, nil
@@ -202,8 +203,8 @@ func decodeTask(raw json.RawMessage, value any, detail bool) error {
 	required := append([]string{}, strings...)
 	required = append(required, "skill_tags")
 	if detail {
-		strings = append(strings, "description", "source_type", "created_by")
-		required = append(required, "description", "source_type", "created_by")
+		strings = append(strings, "task_size", "description", "source_type", "created_by")
+		required = append(required, "task_size", "description", "source_type", "created_by")
 	} else {
 		required = append(required, "task_type", "difficulty", "estimated_time_minutes", "deadline_at")
 	}

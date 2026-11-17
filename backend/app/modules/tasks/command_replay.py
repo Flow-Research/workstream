@@ -5,14 +5,15 @@ from uuid import UUID
 from app.core.identifiers import new_record_id
 
 from pydantic import ValidationError
+from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.hashing import canonical_json_hash
 from app.modules.tasks.api.authorization import TaskAuthorityFacts, TaskAuthorityOperation
-from app.modules.tasks.models import TaskAssignment, TaskCommandReceipt, WorkstreamTask
-from app.modules.tasks.schemas import TaskResponse, TaskWithAssignmentResponse
-from app.modules.tasks.service import TaskServiceError
+from app.modules.tasks.models import TaskAssignment, TaskCommandReceipt, WorkstreamTask, Submission
+from app.modules.tasks.schemas import ContributorClaimTaskResponse, TaskResponse, TaskWithAssignmentResponse
+from app.modules.tasks.service import TaskServiceError, LOCKED_CONTEXT_HASH_FIELDS
 
 
 class TaskReplayConflict(TaskServiceError):
@@ -83,13 +84,14 @@ class TaskCommandReplay:
             return UUID(receipt.assignment_id)
         return None
 
-    @staticmethod
-    def recover(
-        receipt: TaskCommandReceipt, digest: str, facts: TaskAuthorityFacts,
+    async def recover(
+        self, receipt: TaskCommandReceipt, digest: str, facts: TaskAuthorityFacts,
         task: WorkstreamTask, assignment: TaskAssignment | None, *, reserved: bool,
     ) -> TaskResponse | TaskWithAssignmentResponse | None:
         """Call only after fresh exact AUTH; a receipt never supplies authority."""
-        if receipt.request_digest != digest or receipt.task_id != task.id:
+        if (receipt.request_digest != digest or receipt.task_id != task.id
+                or receipt.action_id != facts.operation.value
+                or receipt.actor_profile_id != str(facts.actor_profile_id)):
             raise TaskReplayConflict("idempotency_mismatch")
         if receipt.status == "pending":
             if reserved:
@@ -101,10 +103,22 @@ class TaskCommandReplay:
             except ValidationError as exc:
                 raise TaskReplayConflict("task_replay_state_changed") from exc
             if (receipt.assignment_id is not None or receipt.contributor_id is not None
-                    or receipt.locked_context_hash != facts.locked_context_hash
                     or response.id != task.id or response.project_id != task.project_id
-                    or response.status != task.status or assignment is not None
-                    or task.assigned_to is not None):
+                    or response.task_size != task.task_size or response.assigned_to is not None
+                    or response.status != {TaskAuthorityOperation.CREATE: "draft",
+                        TaskAuthorityOperation.SCREEN: "screening",
+                        TaskAuthorityOperation.RELEASE: "ready"}[facts.operation]):
+                raise TaskReplayConflict("task_replay_state_changed")
+            if facts.operation is TaskAuthorityOperation.CREATE:
+                context = {field: response.task_size if field == "task_size" else None
+                           for field in LOCKED_CONTEXT_HASH_FIELDS}
+            elif receipt.locked_context_hash == facts.locked_context_hash:
+                context = {field: getattr(task, field) for field in LOCKED_CONTEXT_HASH_FIELDS}
+            else:
+                context = await self._original_submission_context(task, receipt)
+            if (context is None or self._context_hash(context) != receipt.locked_context_hash
+                    or any(str(getattr(response, field)) != str(value)
+                           for field,value in context.items() if field in TaskResponse.model_fields)):
                 raise TaskReplayConflict("task_replay_state_changed")
             return response
         if (
@@ -112,7 +126,6 @@ class TaskCommandReplay:
             or receipt.assignment_id != assignment.id
             or receipt.contributor_id != assignment.contributor_id
             or task.assigned_to != assignment.contributor_id
-            or receipt.locked_context_hash != facts.locked_context_hash
         ):
             raise TaskReplayConflict("task_replay_state_changed")
         response_type = TaskWithAssignmentResponse if facts.operation is TaskAuthorityOperation.CLAIM else TaskResponse
@@ -123,7 +136,8 @@ class TaskCommandReplay:
         captured_task = response.task if isinstance(response, TaskWithAssignmentResponse) else response
         if (
             captured_task.id != task.id or captured_task.project_id != task.project_id
-            or captured_task.status != task.status or captured_task.assigned_to is not None
+            or captured_task.task_size != task.task_size
+            or captured_task.status != "in_progress" or captured_task.assigned_to is not None
             or (isinstance(response, TaskWithAssignmentResponse) and (
                 response.assignment.id != assignment.id
                 or response.assignment.task_id != task.id
@@ -131,7 +145,39 @@ class TaskCommandReplay:
             ))
         ):
             raise TaskReplayConflict("task_replay_state_changed")
+        if (receipt.actor_profile_id != str(facts.actor_profile_id)
+                or task.status not in {"in_progress", "needs_revision", "evaluation_pending", "review_pending"}):
+            raise TaskReplayConflict("task_replay_state_changed")
+        if receipt.locked_context_hash != facts.locked_context_hash or task.status != captured_task.status:
+            context = await self._original_submission_context(task, receipt, assignment)
+            # The immutable context proves the hash; contributor receipts mask
+            # private coordinates through their canonical public projection.
+            if (context is None or any(str(getattr(captured_task, field)) != str(value)
+                    for field,value in context.items() if field in ContributorClaimTaskResponse.model_fields)):
+                raise TaskReplayConflict("task_replay_state_changed")
         return response
+
+    @staticmethod
+    def _context_hash(context: dict) -> str:
+        return canonical_json_hash({field: str(value) if isinstance(value, UUID) else value
+                                    for field,value in context.items()})
+
+    async def _original_submission_context(
+        self, task: WorkstreamTask, receipt: TaskCommandReceipt,
+        assignment: TaskAssignment | None = None,
+    ) -> dict | None:
+        statement = select(Submission).where(Submission.task_id == task.id)
+        if assignment is not None:
+            statement = statement.where(Submission.task_assignment_id == assignment.id,
+                                        Submission.contributor_id == assignment.contributor_id)
+        original = await self._session.scalar(statement.order_by(Submission.version).limit(1))
+        if original is None or original.task_size != task.task_size:
+            return None
+        source_fields = {"locked_contribution_policy_version_id": "contribution_policy_version_id",
+                         "locked_submission_award_definition_id": "contribution_award_definition_id"}
+        context = {field: getattr(original, source_fields.get(field, field))
+                   for field in LOCKED_CONTEXT_HASH_FIELDS}
+        return context if self._context_hash(context) == receipt.locked_context_hash else None
 
     @staticmethod
     def complete(

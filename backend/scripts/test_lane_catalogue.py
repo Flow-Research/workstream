@@ -47,6 +47,15 @@ class TestLane:
 
 
 SHARED_FOUNDATION_MODULES = (
+    "tests/authorization/test_fulfillment_evidence_registration.py",
+    "tests/finance/test_fulfillment_obligation.py",
+    "tests/finance/test_fulfillment_contracts.py",
+    "tests/finance/test_fulfillment_evidence_commands.py",
+    "tests/finance/test_fulfillment_evidence_read_contracts.py",
+    "tests/finance/test_obligation_contracts.py",
+    "tests/finance/test_policy_contract.py",
+    "tests/finance/test_reward_policy_storage.py",
+    "tests/finance/test_reward_selection_contract.py",
     "tests/reviews/lifecycle/test_transitions.py",
     "tests/reviews/lifecycle/test_authority_binding.py",
     "tests/artifacts/test_review_packet_contract.py",
@@ -245,6 +254,7 @@ SHARED_FOUNDATION_MODULES = (
     "tests/test_auth_concurrency_observer.py",
     "tests/test_authorization.py",
     "tests/authorization/test_catalogue.py",
+    "tests/authorization/test_fulfillment_evidence_contracts.py",
     "tests/authorization/test_authorization_custody_documentation.py",
     "tests/authorization/test_acceptance_source_contracts.py",
     "tests/authorization/test_outbox_dispatch_contract.py",
@@ -314,6 +324,16 @@ SHARED_FOUNDATION_MODULES = (
 ) + STATIC_FOUNDATION_MODULES
 
 PROJECT_MODULES = (
+    "tests/finance/test_fulfillment_evidence_native.py",
+    "tests/finance/test_fulfillment_evidence_concurrency.py",
+    "tests/finance/test_fulfillment_evidence_transactions.py",
+    "tests/finance/test_fulfillment_evidence_public_api.py",
+    "tests/finance/test_fulfillment_roots.py",
+    "tests/finance/test_fulfillment_evidence_native_bodies.py",
+    "tests/finance/test_fulfillment_audit_vocabulary.py",
+    "tests/finance/test_selected_reward_journey.py",
+    "tests/finance/test_selected_reward_storage.py",
+    "tests/finance/test_selected_award_closure.py",
     "tests/projects/guide_compilation/test_evaluation_context_specifications.py",
     "tests/projects/post_policy/test_compiler.py",
     "tests/tasks/submission_dispatch/test_evaluation_revision.py",
@@ -349,8 +369,6 @@ PROJECT_MODULES = (
     "tests/tasks/submission_dispatch/test_revision_pause.py",
     "tests/tasks/submission_dispatch/test_revision_pause_races.py",
     "tests/tasks/submission_dispatch/test_revision_clock_sql.py",
-    "tests/tasks/submission_dispatch/test_revision_exhaustion_recovery.py",
-    "tests/tasks/submission_dispatch/test_revision_retained_pause.py",
     "tests/tasks/submission_dispatch/test_revision_expiry.py",
     "tests/tasks/submission_dispatch/test_revision_expiry_security.py",
     "tests/tasks/submission_dispatch/test_revision_recovery_postgresql.py",
@@ -582,6 +600,8 @@ CHECKER_DELIVERY_MODULES = (
 
 
 TASK_MODULES = (
+    "tests/finance/test_task_size_contract.py",
+    "tests/finance/test_task_size_postgresql.py",
     "tests/tasks/submission_dispatch/test_revision_recovery_contracts.py",
     "tests/tasks/submission_dispatch/test_predecessor_receipt.py",
     "tests/tasks/test_revision_error_mapping.py",
@@ -730,12 +750,6 @@ PROJECT_MODULE_LANE_OVERRIDES = {
         "project_lifecycle_c",
     ),
     "tests/tasks/submission_dispatch/test_revision_clock_sql.py": ("project_lifecycle_f",),
-    "tests/tasks/submission_dispatch/test_revision_retained_pause.py": (
-        # The measured historical cases move from D to the new G lane.
-        "project_lifecycle_a",
-        "project_lifecycle_c",
-        "project_lifecycle_g",
-    ),
     "tests/tasks/submission_dispatch/test_revision_pause_races.py": (
         # The waits move from D to the new F lane, leaving busy B clear.
         "project_lifecycle_a",
@@ -771,6 +785,11 @@ LANES = (
         "schema_contracts",
         (
             SCHEMA_MODULE,
+            "tests/finance/test_reward_transition.py",
+            "tests/finance/test_selected_reward_migration.py",
+            "tests/finance/test_fulfillment_root_migration.py",
+            "tests/finance/test_fulfillment_receipt_migration.py",
+            "tests/migrations/test_assignment_outcome_backfill.py",
             "tests/test_checker_evidence_migrations.py",
             "tests/migrations/test_project_catalogue_read.py",
             "tests/migrations/test_guide_check_specification.py",

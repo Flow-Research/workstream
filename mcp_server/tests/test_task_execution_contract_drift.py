@@ -116,7 +116,8 @@ from tests.tasks.test_payment_policy_removal import _command_receipt,MANAGEMENT_
 async def observe():
     receipt,facts,task,assignment,fresh=_command_receipt(TaskAuthorityOperation.CLAIM,'in_progress')
     stored=deepcopy(receipt.response)
-    replay=TaskCommandReplay.recover(receipt,receipt.request_digest,facts,task,assignment,reserved=False)
+    replay=await TaskCommandReplay(AsyncMock()).recover(
+        receipt,receipt.request_digest,facts,task,assignment,reserved=False)
     private={key:'PRIVATE_'+key for key in MANAGEMENT_ONLY}
     fresh=fresh.model_copy(update={'task':fresh.task.model_copy(update=private)})
     app=FastAPI()

@@ -18,6 +18,7 @@ type CompensationAward struct {
 }
 
 type CompensationTerms struct {
+	TaskSize                    string          `json:"task_size"`
 	ContributionPolicyVersionID string          `json:"contribution_policy_version_id"`
 	AcceptedSubmission          json.RawMessage `json:"accepted_submission"`
 	CompletedReview             json.RawMessage `json:"completed_review"`
@@ -45,6 +46,7 @@ type ReadyTaskPage struct {
 // ContributorTaskDetail excludes management-only source and actor metadata.
 type ContributorTaskDetail struct {
 	TaskSummary
+	TaskSize              string             `json:"task_size"`
 	Description           string             `json:"description"`
 	AcceptanceCriteria    *string            `json:"acceptance_criteria"`
 	RejectionCriteria     *string            `json:"rejection_criteria"`
@@ -66,7 +68,7 @@ func compensationAwards(raw json.RawMessage) ([]CompensationAward, bool) {
 		return nil, unpaid == "unpaid"
 	}
 	var awards []CompensationAward
-	if err := jsonv2.Unmarshal(raw, &awards, jsonv2.RejectUnknownMembers(true)); err != nil || len(awards) < 1 || len(awards) > 2 {
+	if err := jsonv2.Unmarshal(raw, &awards, jsonv2.RejectUnknownMembers(true)); err != nil || len(awards) < 1 || len(awards) > 1 {
 		return nil, false
 	}
 	seen := make(map[string]bool)
@@ -83,7 +85,7 @@ func ValidCompensation(value CompensationTerms) bool {
 	_, validID := uuidIdentity(value.ContributionPolicyVersionID)
 	_, validAccepted := compensationAwards(value.AcceptedSubmission)
 	_, validReviewed := compensationAwards(value.CompletedReview)
-	return validID && validAccepted && validReviewed
+	return validID && oneOf(value.TaskSize, "small", "medium", "large") && validAccepted && validReviewed
 }
 
 func CompensationAwards(raw json.RawMessage) ([]CompensationAward, bool) {
@@ -140,10 +142,10 @@ func (c *Client) ContributorTask(ctx context.Context, selector string) (Result[C
 	}
 	var value ContributorTaskDetail
 	err = decodeTaskFields(raw, &value,
-		[]string{"task_id", "project_id", "title", "description", "status", "created_at", "updated_at"},
+		[]string{"task_id", "project_id", "task_size", "title", "description", "status", "created_at", "updated_at"},
 		[]string{"skill_tags", "compensation"})
 	returned, valid := uuidIdentity(value.TaskID)
-	if err != nil || !valid || returned != selected || !validTask(value.TaskSummary, value.ProjectID) || !ValidCompensation(value.Compensation) {
+	if err != nil || !valid || returned != selected || !validTask(value.TaskSummary, value.ProjectID) || !ValidCompensation(value.Compensation) || value.TaskSize != value.Compensation.TaskSize {
 		return result, &Failure{Code: "invalid_api_response"}
 	}
 	return Result[ContributorTaskDetail]{Raw: raw, Value: value}, nil

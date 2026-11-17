@@ -63,7 +63,7 @@ from app.modules.tasks.schemas import (
     TaskWithAssignmentResponse,
 )
 from app.modules.tasks.service import (
-    LOCKED_CONTEXT_REQUIRED_FIELDS,
+    LOCKED_CONTEXT_HASH_FIELDS,
     LockedTaskContext,
     TaskAssignmentConflict,
     TaskNotFound,
@@ -173,7 +173,7 @@ class AuthorizedTaskCommands:
             assignment_contributor_id=UUID(assignment.contributor_id) if assignment else None,
             locked_context_hash=canonical_json_hash(
                 {field: (str(getattr(task, field)) if isinstance(getattr(task, field), UUID)
-                         else getattr(task, field)) for field in LOCKED_CONTEXT_REQUIRED_FIELDS}
+                         else getattr(task, field)) for field in LOCKED_CONTEXT_HASH_FIELDS}
             ),
             reason=reason,
             idempotency_key=idempotency_key,
@@ -273,7 +273,7 @@ class AuthorizedTaskCommands:
             created_by=str(self._actor_id), **payload.model_dump(),
         )
         facts = self._facts(task, None, TaskAuthorityOperation.CREATE, None)
-        replayed = self._replay.recover(
+        replayed = await self._replay.recover(
             prepared.receipt, prepared.request_digest, facts, task, None, reserved=prepared.reserved,
         )
         if replayed is not None:
@@ -411,8 +411,6 @@ class AuthorizedTaskCommands:
                     or (head := await head_for_source(self._session, manifest.id)) is None
                     or head.id != parent.id):
                 await reject("revision_context_changed")
-            if parent.blocked_reason == "revision_limit_reached":
-                await reject("revision_limit_reached")
             now = await self._session.scalar(select(func.clock_timestamp()))
             if parent.deadline_at is not None and now >= parent.deadline_at:
                 await reject("revision_deadline_expired")
@@ -432,14 +430,16 @@ class AuthorizedTaskCommands:
                     select(func.revision_routing_source_current(manifest.id))
                 ):
                     await reject("revision_context_changed")
-                candidate = await select_candidate(self._contexts._project_contexts, historical)
+                candidate = await select_candidate(
+                    self._contexts._project_contexts, self._contexts._rewards, historical,
+                    task_size=latest.task_size,
+                    prior_award_definition_id=latest.contribution_award_definition_id,
+                )
                 original = candidate_from_packet(parent.packet)
             except (ProjectLockedPolicyContextUnavailable, ValueError, KeyError, TypeError):
                 await reject("revision_context_blocked")
             if candidate.prior != original.prior or candidate.prior != snapshot(historical):
                 await reject("revision_context_changed")
-            if parent.next_revision_round > parent.max_revision_rounds:
-                await reject("revision_limit_reached")
             if candidate == original:
                 await reject("revision_context_unchanged")
             decision = await self._authorize_facts(facts)
@@ -552,7 +552,11 @@ class AuthorizedTaskCommands:
                         pre_submit_policy_bundle_hash=latest.locked_pre_submit_checker_bundle_hash,
                     )
                 )
-                candidate = await select_candidate(self._contexts._project_contexts, historical)
+                candidate = await select_candidate(
+                    self._contexts._project_contexts, self._contexts._rewards, historical,
+                    task_size=latest.task_size,
+                    prior_award_definition_id=latest.contribution_award_definition_id,
+                )
             except (ProjectLockedPolicyContextUnavailable, ValueError, KeyError, TypeError):
                 await self._authorize_facts(facts)
                 raise TaskRevisionRepairError("revision_context_blocked") from None
@@ -713,7 +717,7 @@ class AuthorizedTaskCommands:
         self._validate_transition_preparation(prepared)
         task, assignment, operation, reason = (prepared.task, prepared.assignment,
                                                prepared.operation, prepared.reason)
-        replayed = self._replay.recover(
+        replayed = await self._replay.recover(
             prepared.receipt, prepared.request_digest, self._facts(task, assignment, operation, reason),
             task, assignment, reserved=prepared.reserved,
         )
@@ -730,6 +734,7 @@ class AuthorizedTaskCommands:
             )
             self._contexts._validate_task_contract_fields(task)
             self._contexts._stamp_locked_context(task, context)
+            await self._contexts.resolve_task_reward(task, select=True)
         else:
             if not reason or not reason.strip():
                 raise TaskValidationError("release decision reason is required")
@@ -742,6 +747,7 @@ class AuthorizedTaskCommands:
                 )
             )
             self._contexts._validate_installed_plans(context.facts)
+            await self._contexts.resolve_task_reward(task)
         task.status = target
         await self._session.flush()
         await self._record_management(task, operation, decision, before, reason)
@@ -783,7 +789,7 @@ class AuthorizedTaskCommands:
                     idempotency_key=idempotency_key, receipt=receipt,
                 )
                 facts = self._facts(task, assignment, TaskAuthorityOperation.CLAIM, reason, idempotency_key)
-                replayed = self._replay.recover(receipt, digest, facts, task, assignment, reserved=reserved)
+                replayed = await self._replay.recover(receipt, digest, facts, task, assignment, reserved=reserved)
                 if replayed is not None:
                     if not isinstance(replayed, TaskWithAssignmentResponse):
                         raise RuntimeError("invalid claim response")
@@ -792,12 +798,15 @@ class AuthorizedTaskCommands:
                 if assignment is not None or task.assigned_to is not None:
                     raise TaskAssignmentConflict("task already has an active assignment")
                 await self._contexts._load_locked_task_context(task)
+                await self._contexts.resolve_task_reward(task)
                 assignment = await self._repo.add_assignment(
                     TaskAssignment(
                         id=str(new_record_id()),
                         task_id=task.id,
                         project_id=task.project_id,
                         submitter_contribution_policy_version_id=task.locked_contribution_policy_version_id,
+                        submitter_task_size=task.task_size,
+                        submitter_award_definition_id=task.locked_submission_award_definition_id,
                         contributor_id=str(self._actor_id),
                         assigned_by=str(self._actor_id),
                         # Claim insertion follows live AUTH consumption; transaction

@@ -20,6 +20,7 @@ from test_submission_public_api import socket_api
 BACKEND = Path(__file__).resolve().parents[3] / "backend"
 sys.path.insert(0, str(BACKEND / "tests"))
 from tests.conftest import (  # noqa: E402
+    configured_source_instance_id as configured_source_instance_id,
     clean_postgres_database as clean_postgres_database,
     postgres_database_url as postgres_database_url,
     isolated_database_env as isolated_database_env,

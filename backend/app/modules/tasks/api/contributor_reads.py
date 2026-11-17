@@ -18,7 +18,7 @@ AssignmentStatus = Literal["active", "completed", "revision_expired", "revision_
 AssignmentState = Literal["active", "closed"]
 NextAction = Literal["prepare_submission", "awaiting_evaluation", "revise", "none"]
 RevisionDisposition = Literal[
-    "ready", "context_blocked", "revision_limit_reached", "revision_deadline_expired",
+    "ready", "context_blocked", "revision_deadline_expired",
 ]
 
 _FROZEN = ConfigDict(extra="forbid", frozen=True)

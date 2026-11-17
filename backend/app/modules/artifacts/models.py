@@ -1577,6 +1577,12 @@ class SubmissionBundleAdmission(Base):
 
     __tablename__ = "submission_bundle_admissions"
     __table_args__ = (
+        CheckConstraint("task_size in ('small','medium','large')", name="reward_size"),
+        ForeignKeyConstraint(
+            ["contribution_policy_version_id", "project_id"],
+            ["contribution_policy_versions.id", "contribution_policy_versions.project_id"],
+            name="fk_submission_admission_contribution_project",
+        ),
         CheckConstraint("(get_byte(uuid_send(id), 6) >> 4) = 7 and (get_byte(uuid_send(id), 8) & 192) = 128", name="id_uuid7"),
         UniqueConstraint("durable_intent_id", name="uq_submission_bundle_admission_intent"),
         UniqueConstraint(
@@ -1747,6 +1753,11 @@ class SubmissionBundleAdmission(Base):
     )
     assignment_id: Mapped[str] = mapped_column(
         ForeignKey("task_assignments.id", ondelete="RESTRICT"), nullable=False
+    )
+    task_size: Mapped[str] = mapped_column(String(8), nullable=False)
+    contribution_policy_version_id: Mapped[UUID] = mapped_column(Uuid(), nullable=False)
+    contribution_award_definition_id: Mapped[UUID | None] = mapped_column(
+        Uuid(), ForeignKey("contribution_award_definitions.id", name="fk_admission_selected_reward")
     )
     predecessor_submission_id: Mapped[str | None] = mapped_column(
         ForeignKey("submissions.id", ondelete="RESTRICT")

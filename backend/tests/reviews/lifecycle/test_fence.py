@@ -318,12 +318,17 @@ async def test_root_probe_preserves_other_database_errors(clean_postgres_databas
         await owner.rollback()
 
 
+@pytest.mark.parametrize("current", [False, True])
 async def test_held_fence_reuses_custody_without_controller_lock(
-    clean_postgres_database, monkeypatch
+    clean_postgres_database, monkeypatch, current
 ):
     async with get_session_factory()() as session, session.begin():
         fence = PostgresJointLifecycleMutationFence(session)
-        async with fence.hold(0) as held:
+        scope = fence.hold_current() if current else fence.hold(0)
+        async with scope as value:
+            facts, held = value if current else (None, value)
+            if current:
+                assert facts.generation == 0 and facts.phase == "disabled"
 
             async def unexpected_lock(*args, **kwargs):
                 raise AssertionError("held custody must not reacquire REV")
@@ -337,11 +342,15 @@ async def test_held_fence_reuses_custody_without_controller_lock(
             await held.acquire(0)
 
 
+@pytest.mark.parametrize("current", [False, True])
 @pytest.mark.parametrize("end", ["commit", "rollback"])
-async def test_held_fence_rejects_new_root(clean_postgres_database, end):
+async def test_held_fence_rejects_new_root(clean_postgres_database, end, current):
     async with get_session_factory()() as session:
         await session.begin()
-        async with PostgresJointLifecycleMutationFence(session).hold(0) as held:
+        fence = PostgresJointLifecycleMutationFence(session)
+        scope = fence.hold_current() if current else fence.hold(0)
+        async with scope as value:
+            held = value[1] if current else value
             await getattr(session, end)()
             await session.begin()
             with pytest.raises(JointLifecycleUnavailable, match="unavailable"):
@@ -349,10 +358,14 @@ async def test_held_fence_rejects_new_root(clean_postgres_database, end):
             await session.rollback()
 
 
-async def test_held_fence_rejects_raw_savepoint(clean_postgres_database):
+@pytest.mark.parametrize("current", [False, True])
+async def test_held_fence_rejects_raw_savepoint(clean_postgres_database, current):
     async with get_session_factory()() as session:
         await session.begin()
-        async with PostgresJointLifecycleMutationFence(session).hold(0) as held:
+        fence = PostgresJointLifecycleMutationFence(session)
+        scope = fence.hold_current() if current else fence.hold(0)
+        async with scope as value:
+            held = value[1] if current else value
             await session.execute(text("SAVEPOINT hidden_scope"))
             assert session.in_nested_transaction() is False
             with pytest.raises(JointLifecycleUnavailable, match="root transaction"):
@@ -362,3 +375,49 @@ async def test_held_fence_rejects_raw_savepoint(clean_postgres_database):
             with pytest.raises(JointLifecycleUnavailable, match="unavailable"):
                 await held.acquire(0)
         await session.rollback()
+
+
+async def test_current_custody_observes_each_phase_without_writes(admin_access):
+    from tests.reviews.lifecycle.transition_support import command_for, snapshot, transition
+
+    await admin_access.signed.grant(admin_access.admin, admin_access.target)
+    for generation, phase in enumerate(("disabled", "shadow", "live", "draining", "disabled")):
+        if generation:
+            await transition(await command_for(admin_access.target.id, phase))
+        before = await snapshot()
+        async with get_session_factory()() as session, session.begin():
+            async with PostgresJointLifecycleMutationFence(session).hold_current() as (facts, held):
+                assert facts.generation == generation and facts.phase == phase
+                assert facts.new_effects_enabled is (phase == "live")
+                assert await held.acquire(generation) == facts
+        assert await snapshot() == before
+
+
+async def test_current_custody_reads_generation_after_waiting_for_transition(admin_access):
+    from tests.reviews.lifecycle.transition_support import command_for, controller
+
+    await admin_access.signed.grant(admin_access.admin, admin_access.target)
+    command = await command_for(admin_access.target.id, "shadow")
+    factory = get_session_factory()
+    async with factory() as owner, factory() as contender:
+        await owner.begin()
+        await controller(owner, command).transition(command)
+        pid = await contender.scalar(text("SELECT pg_backend_pid()"))
+
+        async def read_current():
+            async with PostgresJointLifecycleMutationFence(contender).hold_current() as (facts, held):
+                assert await held.acquire(facts.generation) == facts
+                return facts
+
+        pending = asyncio.create_task(read_current())
+        try:
+            await observe_advisory_wait(factory, pid, pending)
+            await owner.commit()
+            facts = await asyncio.wait_for(pending, 5)
+            assert facts.generation == 1 and facts.phase == "shadow"
+        finally:
+            await owner.rollback()
+            if not pending.done():
+                pending.cancel()
+            await asyncio.gather(pending, return_exceptions=True)
+            await contender.rollback()

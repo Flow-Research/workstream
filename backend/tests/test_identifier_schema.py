@@ -43,10 +43,12 @@ def test_every_generated_primary_key_uses_native_uuid_and_v7_constraint():
             for constraint in table.constraints
             if isinstance(constraint, CheckConstraint)
         }
-        assert constraints[f"ck_{table.name}_{key.name}_uuid7"] == (
+        expected = (
             f"(get_byte(uuid_send({key.name}), 6) >> 4) = 7 and "
             f"(get_byte(uuid_send({key.name}), 8) & 192) = 128"
-        ), table.name
+        )
+        actual = constraints[f"ck_{table.name}_{key.name}_uuid7"]
+        assert "".join(actual.split()) == "".join(expected.split()), table.name
 
 
 def test_every_relational_uuid_reference_uses_the_same_native_type():
@@ -57,7 +59,11 @@ def test_every_relational_uuid_reference_uses_the_same_native_type():
                 continue
             local = reference.parent.type
             assert isinstance(local, Uuid) and local.native_uuid, str(reference)
-            assert local.as_uuid == reference.column.type.as_uuid, str(reference)
+            # Owners may use string or Python UUID representations; the native
+            # PostgreSQL relation must use the same UUID type on both sides.
+            assert str(local.compile(dialect=postgresql.dialect())) == str(
+                reference.column.type.compile(dialect=postgresql.dialect())
+            ) == "UUID", str(reference)
             checked += 1
     assert checked > 0
 

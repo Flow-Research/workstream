@@ -5,7 +5,6 @@ from datetime import UTC, datetime
 import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
-from uuid import UUID
 
 import pytest
 from fastapi import FastAPI
@@ -13,7 +12,8 @@ from httpx import ASGITransport, AsyncClient
 from pydantic import ValidationError
 
 from app.core.identifiers import new_record_id
-from app.modules.tasks.api.authorization import TaskAuthorityFacts, TaskAuthorityOperation
+from app.modules.tasks.api.authorization import TaskAuthorityOperation
+from app.modules.tasks.authorized_commands import AuthorizedTaskCommands
 from app.modules.tasks.command_replay import TaskCommandReplay, TaskReplayConflict
 from app.modules.tasks.models import TaskAssignment, TaskCommandReceipt, WorkstreamTask
 from app.modules.tasks.schemas import AssignmentResponse, TaskClaimResponse, TaskResponse, TaskWithAssignmentResponse
@@ -26,17 +26,18 @@ def _command_receipt(operation, status):
     actor, contributor, task_id, project_id = [new_record_id() for _ in range(4)]
     now = datetime.now(UTC)
     task = WorkstreamTask(id=str(task_id), project_id=str(project_id), title="Task", description="Work",
-                         source_type="manual", skill_tags=[], status=status, created_at=now, updated_at=now)
+                         source_type="manual", task_size="small", skill_tags=[], status=status, created_at=now, updated_at=now)
     uses_assignment = operation is TaskAuthorityOperation.CLAIM
     assignment = None
     if uses_assignment:
         task.assigned_to = str(contributor)
         assignment = TaskAssignment(id=str(new_record_id()), task_id=task.id, project_id=task.project_id,
             contributor_id=str(contributor), assigned_by=str(actor), assigned_at=now, status="active",
-            submitter_contribution_policy_version_id=new_record_id())
-    facts = TaskAuthorityFacts(operation, task_id, project_id, actor, status,
-        contributor if assignment else None, UUID(assignment.id) if assignment else None,
-        contributor if assignment else None, "sha256:" + "a" * 64)
+            submitter_contribution_policy_version_id=new_record_id(),
+            submitter_task_size=task.task_size, submitter_award_definition_id=None)
+    facts = AuthorizedTaskCommands._facts(
+        SimpleNamespace(_actor_id=actor), task, assignment, operation, None,
+    )
     captured_task = TaskResponse.model_validate(task).model_copy(update={"assigned_to": None})
     response = (TaskWithAssignmentResponse(task=captured_task, assignment=AssignmentResponse.model_validate(assignment))
                 if operation is TaskAuthorityOperation.CLAIM else captured_task)
@@ -52,12 +53,12 @@ def _command_receipt(operation, status):
     (TaskAuthorityOperation.RELEASE, "ready"),
     (TaskAuthorityOperation.CLAIM, "in_progress"),
 ])
-def test_current_command_receipts_replay_without_obsolete_payment_fields(operation, status):
+async def test_current_command_receipts_replay_without_obsolete_payment_fields(operation, status):
     receipt, facts, task, assignment, _ = _command_receipt(operation, status)
     stored = receipt.response["task"] if operation is TaskAuthorityOperation.CLAIM else receipt.response
     assert set(REMOVED_FIELDS).isdisjoint(stored)
     original = deepcopy(receipt.response)
-    replay = TaskCommandReplay.recover(receipt, receipt.request_digest, facts, task, assignment, reserved=False)
+    replay = await TaskCommandReplay(AsyncMock()).recover(receipt, receipt.request_digest, facts, task, assignment, reserved=False)
     assert replay.model_dump(mode="json") == original
 
     # Independently exercise direct, claim-wrapper and nested task rejection.
@@ -67,11 +68,11 @@ def test_current_command_receipts_replay_without_obsolete_payment_fields(operati
             target = receipt.response["task"] if nested else receipt.response
             target[field] = None
             with pytest.raises(TaskReplayConflict) as rejected:
-                TaskCommandReplay.recover(receipt, receipt.request_digest, facts, task, assignment, reserved=False)
+                await TaskCommandReplay(AsyncMock()).recover(receipt, receipt.request_digest, facts, task, assignment, reserved=False)
             assert rejected.value.code == "task_replay_state_changed"
     receipt.response = original
-    assert TaskCommandReplay.recover(receipt, receipt.request_digest, facts, task, assignment,
-                                    reserved=False).model_dump(mode="json") == original
+    assert (await TaskCommandReplay(AsyncMock()).recover(receipt, receipt.request_digest, facts, task, assignment,
+                                    reserved=False)).model_dump(mode="json") == original
 
 
 MANAGEMENT_ONLY = {
@@ -94,7 +95,7 @@ async def test_command_http_nulls_and_claim_privacy_preserve_internal_replay(ope
 
     receipt, facts, task, assignment, fresh = _command_receipt(operation, status)
     original = deepcopy(receipt.response)
-    replay = TaskCommandReplay.recover(receipt, receipt.request_digest, facts, task, assignment, reserved=False)
+    replay = await TaskCommandReplay(AsyncMock()).recover(receipt, receipt.request_digest, facts, task, assignment, reserved=False)
     claim = operation is TaskAuthorityOperation.CLAIM
     if claim:
         # The route's closed audience type must protect even non-null private data.

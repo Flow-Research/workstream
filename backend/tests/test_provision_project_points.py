@@ -31,7 +31,9 @@ from app.modules.compensation.api import (
 )
 from app.modules.compensation.models import ProjectCompensationAdapterBinding
 from app.modules.contributions.api import ContributionPolicyAuthorizationDenied
-from app.modules.contributions.models import ProjectCompensationUnit
+from app.modules.contributions.units.models import (
+    ProjectCompensationUnit,
+)
 from app.modules.contributions.units.models import ProjectCompensationUnitCreationEvent
 from project_create_fixtures import insert_historical_project
 from tests.authentication.fixtures import rsa_signing_material as rsa_signing_material

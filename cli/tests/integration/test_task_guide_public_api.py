@@ -25,6 +25,7 @@ from app.db import session as db_session  # noqa: E402
 from app.modules.artifacts.models import ArtifactPutAttempt, ArtifactReplica  # noqa: E402
 from tests.test_guide_document_intake import _open_store  # noqa: E402
 from tests.conftest import (  # noqa: E402
+    configured_source_instance_id as configured_source_instance_id,
     clean_postgres_database as clean_postgres_database,
     postgres_database_url as postgres_database_url,
     pagination_cursor_hmac_secret as pagination_cursor_hmac_secret,

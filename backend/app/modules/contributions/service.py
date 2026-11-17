@@ -11,7 +11,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.modules.compensation.api import (
     PolicyAdapterBindingPort,
-    PolicyAdapterBindingUnavailable,
 )
 from app.modules.contributions.api import (
     ContributionPolicyProjectReadRequest,
@@ -26,7 +25,8 @@ from app.modules.contributions.api import (
     ContributionPolicyPublishRequest,
     ContributionPolicyRetireRequest,
     ContributionPolicyUnavailable,
-    ContributionPolicyAuthorizationDenied, ContributionPolicyAuthorizationUnavailable,
+    ContributionPolicyAuthorizationDenied,
+    ContributionPolicyAuthorizationUnavailable,
     ContributionPolicyUpdateDraftRequest,
     ContributionPolicyView,
     DenyContributionPolicyAuthorization,
@@ -48,6 +48,7 @@ from app.modules.contributions.policy_validation import (
     validate_policy_name,
 )
 from app.modules.contributions.policy_views import policy_version_list_item, policy_view
+from app.modules.contributions.policy_eligibility import lock_policy_resources
 from app.modules.contributions.policy_publication import ContributionPolicyPublicationService
 from app.modules.contributions.policy_mutation_support import (
     begin_and_recover_policy_mutation,
@@ -123,27 +124,38 @@ class ContributionPolicyService:
         return policy_view(policy, version)
 
     async def read_versions(
-        self, project_id: UUID, *, after: tuple[datetime, UUID] | None, limit: int,
+        self,
+        project_id: UUID,
+        *,
+        after: tuple[datetime, UUID] | None,
+        limit: int,
     ) -> tuple[tuple[ContributionPolicyVersionListItem, ...], bool]:
         """Every stored version of the project's policies, oldest first.
 
         The caller has already authorized ``contribution.policy.list`` for the
         project in this transaction; this read takes no locks and writes nothing.
         """
-        rows, more = await self._repository.read_policy_versions(project_id, after=after, limit=limit)
+        rows, more = await self._repository.read_policy_versions(
+            project_id, after=after, limit=limit
+        )
         return tuple(policy_version_list_item(policy, version) for policy, version in rows), more
 
-    async def read_current(self, request: ContributionPolicyProjectReadRequest) -> ContributionPolicyProjectSelection:
+    async def read_current(
+        self, request: ContributionPolicyProjectReadRequest
+    ) -> ContributionPolicyProjectSelection:
         """Authorize one current aggregate, then refresh its exact public selectors."""
         self._require_request(request, ContributionPolicyProjectReadRequest, mutation=False)
         candidates = await self._repository.current_policy_candidates(request.project_id)
         if len(candidates) != 1:
             raise ContributionPolicyConflict("contribution_policy_not_found")
         try:
-            await self._read_authorization.authorize_contribution_policy_read(ContributionPolicyReadRequest(
-                actor_profile_id=request.actor_profile_id, project_id=request.project_id,
-                contribution_policy_id=candidates[0],
-            ))
+            await self._read_authorization.authorize_contribution_policy_read(
+                ContributionPolicyReadRequest(
+                    actor_profile_id=request.actor_profile_id,
+                    project_id=request.project_id,
+                    contribution_policy_id=candidates[0],
+                )
+            )
         except (ContributionPolicyAuthorizationDenied, ContributionPolicyAuthorizationUnavailable):
             raise
         except (ContributionPolicyUnavailable, ContributionPolicyConflict) as exc:
@@ -225,7 +237,12 @@ class ContributionPolicyService:
     ) -> ContributionPolicyMutationResult:
         """Replace one exact draft graph after all owner and AUTH checks."""
         self._require_request(request, ContributionPolicyUpdateDraftRequest, mutation=True)
-        rules = validate_policy_graph(request.rules)
+        rules = validate_policy_graph(
+            request.rules,
+            instrument_type=request.instrument_type,
+            unit_code=request.unit_code,
+            adapter_binding_id=request.adapter_binding_id,
+        )
         action: PolicyAction = "contribution.policy.update_draft"
         digest = policy_request_digest(action, request)
         recovered = await self._recover(action, request, digest)
@@ -255,6 +272,11 @@ class ContributionPolicyService:
             action, request, digest, policy.id, version.id, policy.status, version.status
         )
         actor = await consume_and_close_policy_authority(self._mutation_authorization, facts)
+        version.instrument_type = (
+            request.instrument_type.value if request.instrument_type is not None else None
+        )
+        version.unit_code = request.unit_code
+        version.adapter_binding_id = request.adapter_binding_id
         version.last_updated_by = str(actor)
         version.last_updated_at = await self._session.scalar(select(func.clock_timestamp()))
         event = self._event(
@@ -285,7 +307,10 @@ class ContributionPolicyService:
         selectors = ("actor_profile_id", "project_id")
         if mutation:
             selectors += ("operation_id",)
-        if type(request) not in {ContributionPolicyCreateDraftRequest, ContributionPolicyProjectReadRequest}:
+        if type(request) not in {
+            ContributionPolicyCreateDraftRequest,
+            ContributionPolicyProjectReadRequest,
+        }:
             selectors += ("contribution_policy_id",)
         if type(request) is ContributionPolicyUpdateDraftRequest:
             selectors += ("contribution_policy_version_id",)
@@ -329,26 +354,14 @@ class ContributionPolicyService:
                     compensation_mode=rule_input.compensation_mode,
                 )
             )
-            for item in rule_input.definitions:
-                unit = await self._repository.lock_unit(
-                    request.project_id, item.instrument_type.value, item.unit_code
-                )
-                if unit is None or unit.status != "active":
-                    raise ContributionPolicyConflict("contribution_policy_not_found")
-                try:
-                    binding = await self._bindings.lock_policy_adapter_binding(
-                        project_id=request.project_id,
-                        adapter_binding_id=item.adapter_binding_id,
-                        instrument_type=item.instrument_type,
-                    )
-                except PolicyAdapterBindingUnavailable as exc:
-                    raise ContributionPolicyConflict("contribution_policy_not_found") from exc
-                if (
-                    binding.project_id != request.project_id
-                    or binding.adapter_binding_id != item.adapter_binding_id
-                    or binding.instrument_type is not item.instrument_type
-                ):
-                    raise ContributionPolicyConflict("contribution_policy_not_found")
+            if rule_input.compensation_mode == "unpaid":
+                continue
+            quantities = (
+                tuple(rule_input.quantities.model_dump().items())
+                if rule_input.contribution_type == "accepted_submission"
+                else ((None, rule_input.quantity),)
+            )
+            for size, quantity in quantities:
                 definitions.append(
                     ContributionAwardDefinition(
                         id=new_record_id(),
@@ -356,12 +369,16 @@ class ContributionPolicyService:
                         contribution_policy_version_id=request.contribution_policy_version_id,
                         project_id=str(request.project_id),
                         contribution_type=rule_input.contribution_type,
-                        instrument_type=item.instrument_type.value,
-                        unit_code=item.unit_code,
-                        quantity=Decimal(item.quantity),
-                        adapter_binding_id=item.adapter_binding_id,
+                        instrument_type=request.instrument_type.value,
+                        unit_code=request.unit_code,
+                        quantity=Decimal(quantity),
+                        adapter_binding_id=request.adapter_binding_id,
+                        task_size=size,
                     )
                 )
+        await lock_policy_resources(
+            self._repository, self._bindings, request.project_id, definitions
+        )
         return built_rules, definitions
 
     def _facts(

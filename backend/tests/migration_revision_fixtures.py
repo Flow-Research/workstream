@@ -1,235 +1,214 @@
-"""Checksum-bound historical revision inputs and guarded 0047 writers."""
+"""Exact original 0047 data and SQL validation for migration tests only.
 
-import base64
-from tests.trusted_intake_fixtures import LocalIntakeAdapter
+Captured by the unmodified original owner at 1a4cd1e27a401308960d4d8e9fabe40282a9a79f
+using its frozen dependencies. Synthetic evaluator/local-provider fixtures supply
+stored data, not public checker or provider-object qualification. No historical
+application writer or current-reader projection belongs in this module.
+"""
 
-from contextlib import asynccontextmanager
-from datetime import timedelta
-from functools import lru_cache
+from copy import deepcopy
+from datetime import datetime, timedelta
 import gzip
 import hashlib
 import json
 from pathlib import Path
-from types import SimpleNamespace
 from uuid import UUID
 
-from sqlalchemy import func, select, text
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+import asyncpg
+import pytest
+from sqlalchemy import text
 
-from app.adapters.artifacts import post_submission_materialization
-from app.core.hashing import canonical_json_hash
-from app.core.identifiers import new_record_id
-from app.interfaces.artifacts import ArtifactStoreNamespaceClaim, ArtifactStoreNamespaceIdentity
-from app.modules.artifacts.models import ArtifactStorageNamespace
-from app.modules.artifacts.preparation import ArtifactPreparationService, ArtifactScratchManager
-from app.modules.artifacts.service import ArtifactStorageNamespaceSpec
-from app.modules.artifacts.api.submission_archive import (
-    SubmissionArchiveLimits,
-)
-from app.modules.authorization.runtime import HumanAuthorizationContext
-from app.modules.checkers.api import SelectedPostSubmissionEvaluationRequest
-from app.modules.tasks.api import SubmissionCreationRequest
-from app.modules.tasks.api.transition_audit import TaskPolicyLineage
-from app.modules.tasks.models import Submission, WorkstreamTask
-from app.modules.tasks.schemas import AdmissionBackedSubmissionResponse
-from tests.historical_submission_fixtures import (
-    _restore_validated_snapshot_rows,
-)
-from tests.retained_material_fixtures import retained_archive_store
-from tests.test_artifact_admission import _settings
-from tests.test_checker_materialization import _limits
+from tests import conftest as suite_fixtures
+from tests.historical_submission_fixtures import _restore_validated_snapshot_rows
+
+_REVISION = "0047_revision_recovery"
+_SOURCE = "1a4cd1e27a401308960d4d8e9fabe40282a9a79f"
+_SCHEMA = "e4572d8ea010965ee2a943ed0cdf7f7946a4c7fcf97a14478e8a0a603ed13ae1"
+_ARCHIVE = Path(__file__).with_name("fixtures") / "historical_revision_window_0047.json.gz"
+_ARCHIVE_SHA256 = "65de7efe3e8e8ad4b14f289b51d2e4e3c7e10cee326cb7487f746c5d5a4e4768"
 
 
-_REVISION_ARCHIVE = Path(__file__).with_name("fixtures") / "historical_revision_rows.json.gz"
-_REVISION_ARCHIVE_SHA256 = "40b4c2bde917e6c8907da7d5462f6876a268952c449997af1ea93bffe6058420"
-_REVISION_ARCHIVE_SCHEMA = "workstream.historical_revision_rows.v1"
-_REVISION_ARCHIVE_SOURCE = "6fa9a9b557fa3ae22c16af67bca25dc868f67b38"
-_OWNER_READ_PROJECTION_COLUMNS = (
-    ("actor_identity_links", "email_observed_issued_at", "bigint"),
-    ("project_guide_compilation_attempts", "result_schema_version", "varchar(100)"),
-    ("project_guide_compilations", "result_schema_version", "varchar(100)"),
-    ("project_guide_proposal_approvals", "request_json", "jsonb"),
-)
+def captured_revision_window():
+    """Load one pinned original capture, including its empty-table inventory."""
+    encoded = _ARCHIVE.read_bytes()
+    assert len(encoded) == 48987
+    assert hashlib.sha256(encoded).hexdigest() == _ARCHIVE_SHA256
+    raw = gzip.decompress(encoded)
+    assert len(raw) == 344548
+    capture = json.loads(raw)
+    assert capture["schema_version"] == "workstream.historical_revision_window.v1"
+    assert capture["source_revision"] == _SOURCE
+    assert capture["source_schema_sha256"] == _SCHEMA
+    assert capture["source_operation"] == "tests.test_submission_predecessor_custody._fixture_revision_context"
+    assert capture["provider"] == "local" and capture["provider_objects_captured"] is False
+    assert capture["snapshot"]["revision"] == _REVISION
+    assert capture["snapshot"]["tables"]["alembic_version"] == [{"version_num": _REVISION}]
+    assert len(capture["table_inventory"]) == len(set(capture["table_inventory"])) == 117
+    assert set(capture["column_inventory"]) == set(capture["table_inventory"])
+    assert len(capture["snapshot"]["tables"]) == 71
+    assert set(capture["raw_row_sha256"]) == set(capture["snapshot"]["tables"])
+    return capture
 
 
-async def add_retained_owner_read_projection(connection):
-    """Expose null-only current ORM fields after exact predecessor restoration."""
-    for table, column, column_type in _OWNER_READ_PROJECTION_COLUMNS:
-        await connection.execute(text(
-            f"ALTER TABLE public.{table} ADD COLUMN {column} {column_type}"
-        ))
-
-
-async def drop_retained_owner_read_projection(connection):
-    """Reject new-format writes before removing placeholders for the real upgrade."""
-    for table, column, _column_type in _OWNER_READ_PROJECTION_COLUMNS:
-        assert await connection.scalar(text(
-            f"SELECT count(*) FROM public.{table} WHERE {column} IS NOT NULL"
-        )) == 0, f"historical owner projection contains new evidence: {table}.{column}"
-    for table, column, _column_type in _OWNER_READ_PROJECTION_COLUMNS:
-        await connection.execute(text(f"ALTER TABLE public.{table} DROP COLUMN {column}"))
-
-
-async def add_historical_revision_read_projection(connection):
-    """Expose current owner reads only after validating the exact archive."""
-    await connection.execute(text(
-        "ALTER TABLE public.checker_runs ADD COLUMN input_context_custody jsonb"
-    ))
-    await add_retained_owner_read_projection(connection)
-
-
-@lru_cache(maxsize=1)
-def _historical_revision_snapshots() -> dict[str, dict[str, object]]:
-    encoded = _REVISION_ARCHIVE.read_bytes()
-    assert hashlib.sha256(encoded).hexdigest() == _REVISION_ARCHIVE_SHA256, (
-        "historical revision row archive checksum mismatch"
-    )
-    body = json.loads(gzip.decompress(encoded))
-    assert body["schema_version"] == _REVISION_ARCHIVE_SCHEMA
-    assert body["source_revision"] == _REVISION_ARCHIVE_SOURCE
-    return body["snapshots"]
-
-
-async def _restore_historical_revision_rows(
-    database_url: str, snapshot_name: str
-) -> dict[str, object]:
-    """Restore captured setup rows; this setup step is not a writer-guard proof."""
-    snapshot = _historical_revision_snapshots()[snapshot_name]
-    return await _restore_validated_snapshot_rows(
-        database_url,
-        snapshot,
-        expected_revision=snapshot["revision"],
-    )
-
-
-class _HistoricalArtifactBootstrap:
-    """Compose the current in-memory test store for an archived namespace."""
-
-    def __init__(self, store, namespace: ArtifactStorageNamespaceSpec):
-        self._store = store
-        self.identity = store.identity
-        descriptor = {
-            key: value
-            for key, value in namespace.namespace_descriptor.items()
-            if key not in {"backend", "adapter", "provider_profile"}
-        }
-        self.namespace_identity = ArtifactStoreNamespaceIdentity(
-            namespace.provider_profile,
-            tuple(sorted((key, str(value)) for key, value in descriptor.items())),
-        )
-        self._claim = ArtifactStoreNamespaceClaim(
-            self.identity, self.namespace_identity, namespace.namespace_fingerprint
-        )
-
-    def initialize_after_namespace_claim(self, claim):
-        assert claim == self._claim
-        return self._store
-
-    def close(self):
-        return None
-
-
-@asynccontextmanager
-async def historical_revision_source(tmp_path, database_url, monkeypatch, snapshot_name: str):
-    """Load archived setup facts and current test-only ART composition."""
-    seed = await _restore_historical_revision_rows(database_url, snapshot_name)
-    engine = create_async_engine(database_url)
-    factory = async_sessionmaker(engine, expire_on_commit=False)
-    # Restore and validate the exact archived column inventory first. Only then
-    # add nullable current-ORM projections, removed before the real upgrade.
-    async with engine.begin() as connection:
-        await add_historical_revision_read_projection(connection)
-    settings = _settings(tmp_path, maximum_bytes=1024 * 1024)
-    manager = ArtifactScratchManager(
-        root=tmp_path / "historical-post-scratch",
-        limits=_limits(reservation_ttl_seconds=300, total_deadline_seconds=180),
-    )
+async def restore_revision_window(database_url, capture):
+    """Restore literal 0047 rows, then independently validate their semantics."""
+    connection = await asyncpg.connect(database_url.replace("+asyncpg", ""))
     try:
-        async with factory() as session:
-            persisted = await session.get(ArtifactStorageNamespace, "primary")
-            assert persisted is not None
-            namespace = ArtifactStorageNamespaceSpec(
-                persisted.backend,
-                persisted.adapter,
-                persisted.provider_profile,
-                persisted.namespace_descriptor,
-                persisted.namespace_fingerprint,
-            )
-        store = retained_archive_store(factory, namespace)
-        data = base64.b64decode(seed["data_base64"])
-        assert len(data) == seed["request"]["byte_count"]
-        assert "sha256:" + hashlib.sha256(data).hexdigest() == seed["request"]["content_sha256"]
-        async with factory() as session:
-            provider_object_ref = await session.scalar(
-                text(
-                    "SELECT provider_object_ref FROM artifact_replicas "
-                    "WHERE content_id=CAST(:content_id AS uuid)"
-                ),
-                {"content_id": seed["request"]["content_id"]},
-            )
-        assert provider_object_ref is not None
-        store.objects[provider_object_ref] = data
-        preparation = ArtifactPreparationService(manager)
-        service = post_submission_materialization(
-            sessions=factory,
-            store=store,
-            namespace=namespace,
-            preparation=preparation,
-            intake=LocalIntakeAdapter(), archive_limits=SubmissionArchiveLimits(), artifact_deadline_ms=180_000,
-        )
-
-        def archived_bootstrap(_settings, *, activation_guard):
-            assert activation_guard is None
-            return _HistoricalArtifactBootstrap(store, namespace)
-
-        monkeypatch.setattr(
-            "app.adapters.artifacts.create_artifact_store_bootstrap", archived_bootstrap
-        )
-        creation = seed["creation_request"]
-        yield SimpleNamespace(
-            factory=factory,
-            engine=engine,
-            request=SelectedPostSubmissionEvaluationRequest.model_validate_json(
-                json.dumps(seed["request"])
-            ),
-            created=AdmissionBackedSubmissionResponse.model_validate_json(
-                json.dumps(
-                    {
-                        name: seed["created"][name]
-                        for name in AdmissionBackedSubmissionResponse.model_fields
-                    }
-                )
-            ),
-            actor_context=HumanAuthorizationContext.model_validate_json(
-                json.dumps(seed["actor_context"])
-            ),
-            creation_request=SubmissionCreationRequest(
-                admission_id=UUID(creation["admission_id"]),
-                task_id=UUID(creation["task_id"]),
-                assignment_id=UUID(creation["assignment_id"]),
-                contributor_id=UUID(creation["contributor_id"]),
-                predecessor_submission_id=(
-                    UUID(creation["predecessor_submission_id"])
-                    if creation["predecessor_submission_id"] is not None
-                    else None
-                ),
-                summary=creation["summary"],
-                contributor_attestation=creation["contributor_attestation"],
-            ),
-            source={"completion_event_id": UUID(seed["source"]["completion_event_id"])},
-            data=data,
-            settings=settings,
-            namespace=namespace,
-            store=store,
-            service=service,
-        )
+        assert set(suite_fixtures.PROTECTED_TEST_TABLES).issubset(capture["table_inventory"])
+        with pytest.MonkeyPatch.context() as patch:
+            patch.setattr(suite_fixtures, "RESETTABLE_TEST_TABLES", tuple(
+                name for name in capture["table_inventory"]
+                if name not in suite_fixtures.PROTECTED_TEST_TABLES
+            ))
+            patch.setattr(suite_fixtures, "EXPECTED_PUBLIC_SCHEMA_SHA256", _SCHEMA)
+            await suite_fixtures._assert_canonical_test_schema(connection)
+        for table, expected in capture["column_inventory"].items():
+            actual = await connection.fetchval("""SELECT array_agg(column_name ORDER BY ordinal_position)
+                FROM information_schema.columns WHERE table_schema='public' AND table_name=$1""", table)
+            assert list(actual) == expected, table
     finally:
-        manager.close()
-        await engine.dispose()
+        await connection.close()
+    seed = await _restore_validated_snapshot_rows(
+        database_url, capture["snapshot"], expected_revision=_REVISION,
+    )
+    connection = await asyncpg.connect(database_url.replace("+asyncpg", ""))
+    try:
+        for table, expected in capture["raw_row_sha256"].items():
+            assert table.replace("_", "").isalnum()
+            rows = await connection.fetch(
+                f'SELECT to_jsonb(r)::text AS body FROM public."{table}" r ORDER BY to_jsonb(r)::text'
+            )
+            actual = hashlib.sha256(_canonical_bytes([row["body"] for row in rows])).hexdigest()
+            assert actual == expected, table
+        await validate_revision_window(connection, seed, capture_time=_instant(capture["capture_time"]))
+    finally:
+        await connection.close()
+    return deepcopy(seed)
+
+
+def _canonical_bytes(value):
+    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False, allow_nan=False).encode()
+
+
+def _instant(value):
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
+async def _row(connection, table, record_id):
+    assert table in {"task_revision_preparations", "task_post_submit_routing_manifests", "workstream_tasks", "task_assignments", "submissions", "revision_policies", "audit_events"}
+    value = await connection.fetchval(f"SELECT to_jsonb(r)::text FROM public.{table} r WHERE id=$1::uuid", UUID(str(record_id)))
+    assert value is not None, f"missing {table}"
+    return json.loads(value)
+
+
+async def validate_revision_window(connection, identities, *, capture_time):
+    """Validate stored facts independently after both writer commit and backup restore."""
+    assert await connection.fetchval("SELECT version_num FROM public.alembic_version") == "0047_revision_recovery"
+    assert await connection.fetchval("SHOW session_replication_role") == "origin"
+    assert await connection.fetchval("""SELECT count(*) FROM pg_trigger t
+        JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_namespace n ON n.oid=c.relnamespace
+        WHERE n.nspname='public' AND NOT t.tgisinternal AND t.tgenabled NOT IN ('O','A')""") == 0
+    assert await connection.fetchval("SELECT count(*) FROM public.task_revision_preparations") == 1
+    p = await _row(connection, "task_revision_preparations", identities["preparation_id"])
+    m = await _row(connection, "task_post_submit_routing_manifests", identities["routing_manifest_id"])
+    t = await _row(connection, "workstream_tasks", identities["task_id"])
+    a = await _row(connection, "task_assignments", identities["assignment_id"])
+    s = await _row(connection, "submissions", identities["submission_id"])
+    policy = await _row(connection, "revision_policies", s["locked_revision_policy_id"])
+    assert p["predecessor_id"] is None and p["sequence"] == 1
+    assert p["outcome"] == "kept" and p["blocked_reason"] is None
+    assert p["repair_actor_id"] is None
+    assert p["routing_manifest_id"] == m["id"]
+    assert t["status"] == m["routing_recommendation"] == "needs_revision"
+    assert a["status"] == "active" and a["released_at"] is None
+    for name in ("project_id", "task_id", "assignment_id", "submission_id", "contributor_id"):
+        assert p[name] == m[name] == identities[name], name
+    assert t["id"] == a["task_id"] == s["task_id"] == p["task_id"]
+    assert t["project_id"] == a["project_id"] == p["project_id"]
+    assert t["assigned_to"] == a["contributor_id"] == s["contributor_id"] == p["contributor_id"]
+    assert s["task_assignment_id"] == a["id"] == p["assignment_id"]
+    assert p["source_submission_version"] == m["submission_version"] == s["version"]
+    assert s["contribution_policy_version_id"] == a["submitter_contribution_policy_version_id"] == t["locked_contribution_policy_version_id"]
+    assert p["next_revision_round"] == await connection.fetchval("""SELECT count(*) FROM public.submissions
+        WHERE task_assignment_id=$1::uuid AND version<=$2""", UUID(a["id"]), s["version"])
+    assert 0 < p["next_revision_round"] <= p["max_revision_rounds"] == policy["max_revision_rounds"]
+    assert _instant(p["requested_at"]) == _instant(m["created_at"])
+    assert _instant(p["deadline_at"]) == _instant(p["requested_at"]) + timedelta(hours=policy["revision_deadline_hours"])
+    assert _instant(p["requested_at"]) <= _instant(p["created_at"]) <= capture_time < _instant(p["deadline_at"])
+    packet = p["packet"]
+    assert p["preparation_sha256"] == "sha256:" + hashlib.sha256(_canonical_bytes(packet)).hexdigest(), "preparation digest mismatch"
+    for name in ("id", "routing_manifest_id", "predecessor_id", "sequence", "source_submission_version", "next_revision_round", "max_revision_rounds", "outcome", "blocked_reason"):
+        assert packet[name] == p[name], name
+    assert _instant(packet["requested_at"]) == _instant(p["requested_at"])
+    assert _instant(packet["deadline_at"]) == _instant(p["deadline_at"])
+    lineage = await connection.fetchval("SELECT public.revision_task_lineage(to_jsonb(t))::text FROM public.workstream_tasks t WHERE id=$1::uuid", UUID(t["id"]))
+    assert packet["previous_task_lineage"] == packet["candidate"]["prior"]["lineage"] == packet["candidate"]["target"]["lineage"] == json.loads(lineage)
+    assert packet["candidate"]["prior"] == packet["candidate"]["target"]
+    checks = await connection.fetchrow("""SELECT public.task_routing_receipt_valid(m) AS receipt,
+        public.task_routing_context_valid(m) AS context, public.task_routing_outcome_complete(m) AS complete,
+        public.task_routing_resource_digest(m) AS digest
+        FROM public.task_post_submit_routing_manifests m WHERE id=$1::uuid""", UUID(m["id"]))
+    assert checks is not None and all(checks[name] is True for name in ("receipt", "context", "complete"))
+    assert p["authorization_decision_id"] == m["authorization_decision_id"]
+    assert p["audit_event_id"] == m["audit_event_id"]
+    auth = await _row(connection, "audit_events", p["authorization_decision_id"])
+    audit = await _row(connection, "audit_events", p["audit_event_id"])
+    assert auth["event_domain"] == "authority" and auth["event_type"] == "SensitiveAuthorizationAllowed"
+    assert auth["action_id"] == auth["permission_id"] == "task.post_submit.route"
+    assert auth["denial_code"] is None and auth["matched_grant_id"] is None
+    assert auth["project_id"] == p["project_id"] and auth["actor_id"] == m["router_actor_id"]
+    assert auth["resource_type"] == "task_post_submit_routing_manifest" and auth["resource_id"] == m["id"]
+    assert auth["after_facts"] == {"allowed": True, "resource_context_digest": checks["digest"]}
+    assert auth["request_id"] == auth["correlation_id"] == m["authority_context"]["request"]["route_operation_id"]
+    assert audit["event_domain"] == "legacy_lifecycle" and audit["entity_type"] == "task" and audit["entity_id"] == p["task_id"]
+    events = await connection.fetch("""SELECT to_jsonb(e)::text AS body FROM public.outbox_events e
+        WHERE idempotency_key=$1""", "task.revision.expire:" + m["id"])
+    assert len(events) == 1
+    event = json.loads(events[0]["body"])
+    assert event["event_type"] == "TaskRevisionExpiryRequested" and event["event_version"] == 1
+    assert event["aggregate_type"] == "task" and event["aggregate_id"] == p["task_id"]
+    assert event["project_id"] == p["project_id"] and event["correlation_id"] == m["id"]
+    assert event["causation_event_id"] == m["outcome_event_id"]
+    assert _instant(event["not_before_at"]) == _instant(p["deadline_at"])
+    payload = event["payload"]
+    assert set(payload) == {"project_id", "task_id", "assignment_id", "contributor_id", "source_submission_id", "routing_manifest_id", "root_preparation_id", "root_preparation_sha256", "deadline_at"}
+    for name in ("project_id", "task_id", "assignment_id", "contributor_id", "routing_manifest_id"):
+        assert payload[name] == p[name]
+    assert payload["source_submission_id"] == p["submission_id"]
+    assert payload["root_preparation_id"] == p["id"] and payload["root_preparation_sha256"] == p["preparation_sha256"]
+    assert _instant(payload["deadline_at"]) == _instant(p["deadline_at"])
+    return {"preparation_id": p["id"], "routing_manifest_id": m["id"], "expiry_event_id": event["event_id"], "deadline_at": p["deadline_at"]}
+
+
+async def retained_revision_rows(session, manifest_id):
+    """Compare retained bytes plus table and physical row identities across ADD COLUMN."""
+    selectors = {
+        "revision_policies": "id=(SELECT s.locked_revision_policy_id FROM public.submissions s "
+        "JOIN public.task_post_submit_routing_manifests m ON m.submission_id=s.id WHERE m.id=:id)",
+        "workstream_tasks": "id=(SELECT task_id FROM public.task_post_submit_routing_manifests WHERE id=:id)",
+        "task_assignments": "id=(SELECT assignment_id FROM public.task_post_submit_routing_manifests WHERE id=:id)",
+        "submissions": "id=(SELECT submission_id FROM public.task_post_submit_routing_manifests WHERE id=:id)",
+        "task_revision_preparations": "routing_manifest_id=:id",
+        "task_post_submit_routing_manifests": "id=:id",
+        "audit_events": "id IN (SELECT authorization_decision_id FROM public.task_revision_preparations "
+        "WHERE routing_manifest_id=:id UNION SELECT audit_event_id FROM public.task_revision_preparations "
+        "WHERE routing_manifest_id=:id)",
+        "outbox_events": "idempotency_key='task.revision.expire:'||CAST(CAST(:id AS uuid) AS text)",
+    }
+    result = {}
+    for table, where in selectors.items():
+        excluded = ("remaining_microseconds", "clock_observed_at") if table == "task_revision_preparations" else ()
+        values = await session.execute(text(
+            f"SELECT (to_jsonb(row)-CAST(:excluded AS text[]))::text,tableoid::bigint,"
+            f"xmin::text FROM public.{table} row WHERE {where} ORDER BY 1"
+        ), {"id": manifest_id, "excluded": list(excluded)})
+        result[table] = [tuple(row) for row in values]
+        assert len(result[table]) == (2 if table == "audit_events" else 1), table
+    return result
 
 
 async def assert_historical_revision_guards(factory, revision: str) -> None:
-    """Confirm restore is closed before a real historical writer runs."""
+    """Confirm the exact migration revision and enabled native guards."""
     async with factory() as session:
         assert await session.scalar(text("SELECT version_num FROM alembic_version")) == revision
         assert (
@@ -242,145 +221,3 @@ async def assert_historical_revision_guards(factory, revision: str) -> None:
             )
             == 0
         )
-
-
-async def insert_0047_preparation(session, *, manifest, candidate, audit_event_id):
-    """Seed the old INSERT shape; current runtime never calls this test-only writer."""
-    task = await session.get(WorkstreamTask, manifest.task_id)
-    source_round = await session.scalar(select(func.count(Submission.id)).where(
-        Submission.task_assignment_id == manifest.assignment_id,
-        Submission.version <= manifest.submission_version,
-    ))
-    preparation_id = new_record_id()
-    deadline = manifest.created_at + timedelta(hours=candidate.revision_deadline_hours)
-    now = await session.scalar(select(func.clock_timestamp()))
-    reason = (
-        "revision_limit_reached" if source_round > candidate.max_revision_rounds or (
-            candidate.target_max_revision_rounds is not None
-            and source_round > candidate.target_max_revision_rounds
-        ) else "revision_deadline_expired" if now >= deadline else
-        "context_blocked" if candidate.target is None else None
-    )
-    outcome = "blocked" if reason else "kept"
-    assert outcome == "blocked" or candidate.prior == candidate.target
-    packet = {
-        "domain": "workstream.task_revision_preparation.v1",
-        "id": str(preparation_id), "routing_manifest_id": str(manifest.id),
-        "predecessor_id": None, "sequence": 1,
-        "requested_at": manifest.created_at.isoformat(), "deadline_at": deadline.isoformat(),
-        "source_submission_version": manifest.submission_version,
-        "next_revision_round": source_round, "max_revision_rounds": candidate.max_revision_rounds,
-        "outcome": outcome, "blocked_reason": reason,
-        "candidate": candidate.model_dump(mode="json"),
-        "previous_task_lineage": {
-            name: str(getattr(task, name)) if name.endswith("_id") else getattr(task, name)
-            for name in TaskPolicyLineage.model_fields
-        },
-    }
-    row = {
-        "id": str(preparation_id), "project_id": manifest.project_id, "task_id": manifest.task_id,
-        "assignment_id": manifest.assignment_id, "contributor_id": manifest.contributor_id,
-        "submission_id": manifest.submission_id, "routing_manifest_id": str(manifest.id),
-        "predecessor_id": None, "sequence": 1, "source_submission_version": manifest.submission_version,
-        "next_revision_round": source_round, "max_revision_rounds": candidate.max_revision_rounds,
-        "requested_at": manifest.created_at.isoformat(), "deadline_at": deadline.isoformat(),
-        "outcome": outcome, "blocked_reason": reason, "packet": packet,
-        "preparation_sha256": canonical_json_hash(packet),
-        "authorization_decision_id": manifest.authorization_decision_id,
-        "audit_event_id": str(audit_event_id),
-    }
-    columns = ",".join(row)
-    result = (await session.execute(text(
-        f"INSERT INTO public.task_revision_preparations ({columns}) "
-        f"SELECT {columns} FROM jsonb_populate_record("
-        "NULL::public.task_revision_preparations,CAST(:row AS jsonb)) RETURNING *"
-    ), {"row": json.dumps(row)})).mappings().one()
-    return SimpleNamespace(**result, remaining_microseconds=None, clock_observed_at=None)
-
-
-async def retained_revision_rows(session, manifest_id, *, root_only=False):
-    """Compare retained bytes plus table and physical row identities across ADD COLUMN."""
-    selectors = {
-        "revision_policies": "id=(SELECT s.locked_revision_policy_id FROM public.submissions s "
-        "JOIN public.task_post_submit_routing_manifests m ON m.submission_id=s.id WHERE m.id=:id)",
-        "workstream_tasks": "id=(SELECT task_id FROM public.task_post_submit_routing_manifests WHERE id=:id)",
-        "task_assignments": "id=(SELECT assignment_id FROM public.task_post_submit_routing_manifests WHERE id=:id)",
-        "submissions": "id=(SELECT submission_id FROM public.task_post_submit_routing_manifests WHERE id=:id)",
-        "task_revision_preparations": "routing_manifest_id=:id",
-        "task_post_submit_routing_manifests": "id=:id",
-        "outbox_events": "idempotency_key='task.revision.expire:'||CAST(CAST(:id AS uuid) AS text)",
-    }
-    if root_only:
-        selectors["task_revision_preparations"] += " AND predecessor_id IS NULL"
-    result = {}
-    for table, where in selectors.items():
-        # 0049 backfills every submission and assignment by design, so those
-        # rows keep their bytes minus its columns, not their physical version.
-        rewritten = table in _ATTEMPT_OUTCOME_COLUMNS
-        excluded = ("remaining_microseconds", "clock_observed_at", *_ATTEMPT_OUTCOME_COLUMNS.get(table, ()))
-        values = await session.execute(text(
-            f"SELECT (to_jsonb(row)-CAST(:excluded AS text[]))::text,tableoid::bigint,"
-            f"{'NULL' if rewritten else 'xmin::text'} FROM public.{table} row WHERE {where}"
-        ), {"id": manifest_id, "excluded": list(excluded)})
-        result[table] = [tuple(row) for row in values]
-        assert len(result[table]) == 1, table
-    return result
-
-
-_ATTEMPT_OUTCOME_COLUMNS = {
-    "submissions": ("attempt_status", "status_reason", "decided_at", "updated_at"),
-    "task_assignments": ("started_at", "updated_at"),
-}
-_PREDECESSOR_SHAPE = """
-ALTER TABLE public.submissions ADD COLUMN attempt_status varchar(30) DEFAULT 'evaluation_pending' NOT NULL,
-  ADD COLUMN status_reason varchar(40), ADD COLUMN decided_at timestamptz,
-  ADD COLUMN updated_at timestamptz DEFAULT now() NOT NULL;
-ALTER TABLE public.task_assignments ADD COLUMN started_at timestamptz,
-  ADD COLUMN updated_at timestamptz DEFAULT now() NOT NULL;
-CREATE TABLE public.checker_result_findings (
-  id uuid PRIMARY KEY, checker_result_id uuid NOT NULL, checker_run_id uuid NOT NULL,
-  task_id uuid NOT NULL, submission_id uuid NOT NULL, member_order integer NOT NULL,
-  finding_order integer NOT NULL, check_id varchar(100) NOT NULL, code varchar(100) NOT NULL,
-  level varchar(30) NOT NULL, path varchar(1000), line integer,
-  created_at timestamptz DEFAULT now() NOT NULL)
-"""
-_ATTEMPT_OUTCOME_WRITERS = (
-    "app.modules.tasks.post_submit_routing.outcome",
-    "app.modules.tasks.accepted_effects",
-    "app.modules.tasks.revision.expiry",
-    "app.modules.tasks.revision.exhaustion",
-)
-
-
-async def enter_predecessor_owner_shape(execute, database_url, patch):
-    """Let current owners build history on a pre-0049 schema, as its owners did.
-
-    Predecessor owners stored no input context, attempt outcomes, assignment starts or finding
-    rows, so those writes are disabled and the ORM gets placeholder columns.
-    ``leave_predecessor_owner_shape`` removes them before the real upgrade, so
-    0049 runs against the genuine predecessor shape.
-    """
-    await execute(database_url, _PREDECESSOR_SHAPE)
-
-    async def no_attempt_outcome(*_args, **_kwargs):
-        return None
-
-    for module in _ATTEMPT_OUTCOME_WRITERS:
-        patch.setattr(f"{module}.record_attempt_outcome", no_attempt_outcome)
-
-
-async def leave_predecessor_owner_shape(execute, database_url):
-    """Remove the placeholders so the upgrade sees only predecessor DDL."""
-    engine = create_async_engine(database_url)
-    try:
-        async with engine.begin() as connection:
-            await drop_retained_owner_read_projection(connection)
-    finally:
-        await engine.dispose()
-    await execute(database_url, (
-        "DROP TABLE public.checker_result_findings; "
-        "ALTER TABLE public.checker_runs DROP COLUMN input_context_custody; "
-        "ALTER TABLE public.submissions DROP COLUMN attempt_status, DROP COLUMN status_reason, "
-        "DROP COLUMN decided_at, DROP COLUMN updated_at; "
-        "ALTER TABLE public.task_assignments DROP COLUMN started_at, DROP COLUMN updated_at"
-    ))

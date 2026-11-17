@@ -94,7 +94,7 @@ func jsonNull(raw []byte) bool { return bytes.Equal(bytes.TrimSpace(raw), []byte
 
 func validateJSONRow(raw []byte, index int) (string, error) {
 	allowed := map[string]bool{
-		"external_task_id": true, "title": true, "description": true, "task_type": true,
+		"external_task_id": true, "title": true, "description": true, "task_type": true, "task_size": true,
 		"difficulty": true, "skill_tags": true, "estimated_time_minutes": true,
 		"acceptance_criteria": true, "rejection_criteria": true,
 	}
@@ -125,6 +125,12 @@ func validateJSONRow(raw []byte, index int) (string, error) {
 				return "", invalid(index, field.name, "ambiguous_external_task_id")
 			}
 			id = value
+		}
+	}
+	if raw, present := fields["task_size"]; present {
+		size, err := jsonString(raw, false)
+		if err != nil || (size != "small" && size != "medium" && size != "large") {
+			return "", invalid(index, "task_size", "invalid_task_size")
 		}
 	}
 	if raw, present := fields["skill_tags"]; present {

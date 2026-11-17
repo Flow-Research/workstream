@@ -2,6 +2,7 @@
 
 import hashlib
 from contextlib import asynccontextmanager
+from uuid import UUID
 
 from pydantic import ValidationError
 from sqlalchemy import literal_column, select, text
@@ -46,11 +47,15 @@ class PostgresJointLifecycleMutationFence:
     async def hold(self, expected_generation: int):
         """Issue a root-bound view after the sole controller lock acquisition."""
         facts = await self.acquire(expected_generation)
-        held = _HeldLifecycleFence(self._session, facts)
-        try:
+        async with _held_fence(self._session, facts) as held:
             yield held
-        finally:
-            held.close()
+
+    @asynccontextmanager
+    async def hold_current(self):
+        """Read the actual generation under REV custody before caller AUTH locks."""
+        facts = await self.lock_controller()
+        async with _held_fence(self._session, facts) as held:
+            yield facts, held
 
     async def acquire(self, expected_generation: int) -> JointLifecycleControlFacts:
         """Return current locked scalar facts only for the expected generation."""
@@ -60,6 +65,11 @@ class PostgresJointLifecycleMutationFence:
         if facts.generation != expected_generation:
             raise JointLifecycleUnavailable("lifecycle controller missing or generation changed")
         return facts
+
+    async def require_fulfillment_source(self, expected_generation: int, source_instance_id: UUID) -> None:
+        """Match the configured source under the caller's canonical root fence."""
+        facts = await self.acquire(expected_generation)
+        await _require_fulfillment_source(self._session, facts, source_instance_id)
 
     async def lock_controller(self) -> JointLifecycleControlFacts:
         """Lock before transition history lookup; this never admits a mutation."""
@@ -119,6 +129,16 @@ class PostgresJointLifecycleMutationFence:
             raise JointLifecycleUnavailable("lifecycle controller malformed") from exc
 
 
+@asynccontextmanager
+async def _held_fence(session: AsyncSession, facts: JointLifecycleControlFacts):
+    """One capability lifetime for current and expected-generation acquisition."""
+    held = _HeldLifecycleFence(session, facts)
+    try:
+        yield held
+    finally:
+        held.close()
+
+
 class _HeldLifecycleFence:
     """REV-owned custody view; checking it never acquires a controller lock."""
 
@@ -132,6 +152,11 @@ class _HeldLifecycleFence:
     def close(self) -> None:
         """Invalidate the view when the owning fence context exits."""
         self._closed = True
+
+    async def require_fulfillment_source(self, expected_generation: int, source_instance_id: UUID) -> None:
+        """Retain closed/nested/replaced-root denial before reading the anchor."""
+        facts = await self.acquire(expected_generation)
+        await _require_fulfillment_source(self._session, facts, source_instance_id)
 
     async def acquire(self, expected_generation: int) -> JointLifecycleControlFacts:
         """Validate original root custody without reacquiring the controller lock."""
@@ -157,3 +182,13 @@ class _HeldLifecycleFence:
             self.close()
             raise JointLifecycleUnavailable("held lifecycle requires a root transaction") from exc
         return self._facts
+
+
+async def _require_fulfillment_source(
+    session: AsyncSession, facts: JointLifecycleControlFacts, source_instance_id: UUID,
+) -> None:
+    bound = await session.scalar(select(
+        JointLifecycleReleaseControl.fulfillment_source_instance_id,
+    ).where(JointLifecycleReleaseControl.id == facts.singleton_id))
+    if not isinstance(source_instance_id, UUID) or source_instance_id.version != 7 or bound != source_instance_id:
+        raise JointLifecycleUnavailable("fulfillment source differs from lifecycle activation")

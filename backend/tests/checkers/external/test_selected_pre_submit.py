@@ -17,6 +17,7 @@ from typing import cast
 from unittest.mock import AsyncMock, Mock, patch
 import zipfile
 import pytest
+from uuid import UUID
 
 from app.adapters.checkers import configured_external_checker_execution
 from app.core.config import Settings
@@ -122,6 +123,8 @@ def _selected_admission_reservation():
     post_policy_sha256 = canonical_json_hash(post_policy)
     post_policy["policy_sha256"] = post_policy_sha256
     lineage = SelectedPreSubmitAdmissionLineage(
+        task_size="small", contribution_policy_version_id=new_record_id(),
+        contribution_award_definition_id=None,
         predecessor_submission_id=None,
         predecessor_submission_version=None,
         checker_remediation_manifest_id=None,
@@ -987,7 +990,11 @@ async def test_selected_admission_binds_unchanged_work_to_current_task_rules(
         archive_sha256=request.prepared_artifact.commitment.sha256,
         semantic_manifest_sha256=request.manifest.sha256,
     )
+    from asyncpg.pgproto.pgproto import UUID as DriverUUID
     task = SimpleNamespace(
+        task_size="medium",
+        submitter_contribution_policy_version_id=DriverUUID(str(new_record_id())),
+        contribution_award_definition_id=DriverUUID(str(new_record_id())),
         contributor_id=actor_profile_id,
         task_id=request.task_id,
         assignment_id=assignment_id,
@@ -1056,6 +1063,11 @@ async def test_selected_admission_binds_unchanged_work_to_current_task_rules(
             execution_budget_ms=120_000,
         )
         assert reservation.admission_lineage is not None
+        assert type(reservation.admission_lineage.contribution_policy_version_id) is UUID
+        assert type(reservation.admission_lineage.contribution_award_definition_id) is UUID
+        assert reservation.admission_lineage.task_size == "medium"
+        assert reservation.admission_lineage.contribution_policy_version_id == task.submitter_contribution_policy_version_id
+        assert reservation.admission_lineage.contribution_award_definition_id == task.contribution_award_definition_id
         assert reservation.admission_lineage.semantic_manifest_body == (request.manifest.as_dict())
         assert reservation.admission_lineage.packet_sha256 == request.packet.sha256
         assert reservation.admission_lineage.revision_preparation_id == task.revision_context.preparation_id

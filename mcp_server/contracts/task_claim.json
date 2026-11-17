@@ -1,5 +1,5 @@
 {
-  "canonical_sha256": "c53fe1ee270d878745a7d6b6d0886b1b8381fc8180cfc73e24ba29f8c8ab4f3c",
+  "canonical_sha256": "a92be66f866466f7adb08ce0a5e320932cd504bb4eefe20acfd49fdb2b9290cb",
   "components": {
     "schemas": {
       "ApiError": {
@@ -319,6 +319,15 @@
             "title": "Status",
             "type": "string"
           },
+          "task_size": {
+            "enum": [
+              "small",
+              "medium",
+              "large"
+            ],
+            "title": "Task Size",
+            "type": "string"
+          },
           "task_type": {
             "anyOf": [
               {
@@ -341,6 +350,7 @@
           }
         },
         "required": [
+          "task_size",
           "id",
           "project_id",
           "locked_contribution_policy_version_id",
@@ -747,6 +757,6 @@
     "method": "POST",
     "openapi_version": "3.1.0",
     "path": "/api/v1/tasks/{task_id}/claim",
-    "repository_sha": "04437e7615f7693bfd9aa1706af933c61a1c4bc0"
+    "repository_sha": "e555aea7cc698f8119a01b0c5e0bd2f2b87c55db"
   }
 }

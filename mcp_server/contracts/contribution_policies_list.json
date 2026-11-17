@@ -1,5 +1,5 @@
 {
-  "canonical_sha256": "d213e85a844b2346abf498f797739f314ae3b31a0ddd84b66a123a92e3d2ea93",
+  "canonical_sha256": "3e0671942731c2852862ba47cf421ab1c172808091bd28e378e12d247498d4b9",
   "components": {
     "schemas": {
       "ApiError": {
@@ -62,8 +62,20 @@
         "type": "string"
       },
       "ContributionPolicyVersionListItem": {
+        "additionalProperties": false,
         "description": "One stored version of the project's policy with its lifecycle instants.",
         "properties": {
+          "adapter_binding_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "contribution_policy_id": {
             "format": "uuid",
             "type": "string"
@@ -75,6 +87,16 @@
           "created_at": {
             "format": "date-time",
             "type": "string"
+          },
+          "instrument_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CompensationInstrumentType"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "name": {
             "type": "string"
@@ -119,6 +141,16 @@
             },
             "type": "array"
           },
+          "unit_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "version_number": {
             "type": "integer"
           },
@@ -139,6 +171,9 @@
           "contribution_policy_version_id",
           "version_number",
           "version_status",
+          "instrument_type",
+          "unit_code",
+          "adapter_binding_id",
           "rules",
           "created_at",
           "published_at",
@@ -174,6 +209,7 @@
         "type": "object"
       },
       "PolicyDefinitionView": {
+        "additionalProperties": false,
         "description": "Server-owned immutable compensation definition facts.",
         "properties": {
           "adapter_binding_id": {
@@ -190,6 +226,21 @@
           "quantity": {
             "type": "string"
           },
+          "task_size": {
+            "anyOf": [
+              {
+                "enum": [
+                  "small",
+                  "medium",
+                  "large"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "unit_code": {
             "type": "string"
           }
@@ -199,11 +250,13 @@
           "instrument_type",
           "unit_code",
           "quantity",
-          "adapter_binding_id"
+          "adapter_binding_id",
+          "task_size"
         ],
         "type": "object"
       },
       "PolicyRuleView": {
+        "additionalProperties": false,
         "description": "Server-owned immutable contribution rule facts.",
         "properties": {
           "compensation_mode": {
@@ -561,6 +614,6 @@
     "method": "GET",
     "openapi_version": "3.1.0",
     "path": "/api/v1/projects/{project_id}/contribution-policies",
-    "repository_sha": "59c52cc81179611ea316935552cc177f83eec687"
+    "repository_sha": "e555aea7cc698f8119a01b0c5e0bd2f2b87c55db"
   }
 }

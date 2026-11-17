@@ -1,5 +1,5 @@
 {
-  "canonical_sha256": "c08ddf466d13a8ac0a3241e2b9beede0cda9eaf798fda8a446036685e25bdc0f",
+  "canonical_sha256": "6ad2647cc86950c64610cd1efbb7b38342d3318106115543bd0bde69a20cf45c",
   "components": {
     "schemas": {
       "AdminRole": {
@@ -208,6 +208,9 @@
           "compensation.adapter_binding.manage",
           "compensation.award.read",
           "compensation.delivery.reconcile",
+          "compensation.fulfillment.report",
+          "compensation.fulfillment.exception.report",
+          "compensation.fulfillment.source.read",
           "operations.status.read",
           "operations.timer.run",
           "operations.reconcile.run",
@@ -442,7 +445,7 @@
   "schema_version": 1,
   "source": {
     "action_id": "authorization.admin_role_definitions.read",
-    "backend_git_sha": "8b068f2b788f159b1085d47f162c39ce3323d5b6",
+    "backend_git_sha": "d92b1a1606ad5b49729396a2a349ecb5b7b838f2",
     "method": "GET",
     "openapi_version": "3.1.0",
     "path": "/api/v1/authorization/admin-role-definitions"

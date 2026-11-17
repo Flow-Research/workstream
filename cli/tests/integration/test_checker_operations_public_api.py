@@ -20,6 +20,7 @@ from test_public_self_service import (
     postgres_database_url as postgres_database_url,
 )
 from tests.conftest import (
+    configured_source_instance_id as configured_source_instance_id,
     pagination_cursor_hmac_secret as pagination_cursor_hmac_secret,
 )
 from tests.authentication.fixtures import (

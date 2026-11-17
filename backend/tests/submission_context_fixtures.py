@@ -8,6 +8,8 @@ from app.modules.tasks.api.transition_audit import TaskPolicyLineage
 def submission_context_facts(**fields) -> TaskSubmissionContextFacts:
     """Keep lifecycle fixtures explicit while supplying unrelated complete policy stamps."""
     refs = fields["locked_project_context"]
+    fields.setdefault("task_size", "small")
+    fields.setdefault("contribution_award_definition_id", None)
     fields.setdefault("acceptance_criteria", "Meet the project requirements")
     fields.setdefault("locked_policy", TaskPolicyLineage(
         locked_guide_version=refs.guide_version,

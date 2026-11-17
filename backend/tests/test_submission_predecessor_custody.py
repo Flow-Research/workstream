@@ -206,6 +206,32 @@ def _context_request(h) -> TaskSubmissionContextRequest:
     )
 
 
+async def _immutable_replacement_source(
+    session, *, submission_id, routing_manifest_id, checker_run_result_id, preparation_id,
+):
+    """Read the exact completed source graph before and after replacement creation."""
+    return (await session.execute(text("""
+                SELECT (SELECT to_jsonb(s) FROM public.submissions s WHERE s.id=:prior),
+                  (SELECT to_jsonb(m) FROM public.task_post_submit_routing_manifests m WHERE m.id=:cause),
+                  (SELECT jsonb_build_object(
+                    'run',to_jsonb(r),
+                    'members',(SELECT coalesce(jsonb_agg(to_jsonb(m) ORDER BY m.member_order),'[]'::jsonb)
+                      FROM public.checker_results m WHERE m.checker_run_id=r.id),
+                    'findings',(SELECT coalesce(jsonb_agg(to_jsonb(f) ORDER BY f.member_order,f.finding_order),'[]'::jsonb)
+                      FROM public.checker_result_findings f WHERE f.checker_run_id=r.id))
+                   FROM public.checker_runs r WHERE r.result_id=:result AND r.submission_id=:prior
+                     AND r.id=(SELECT checker_run_id FROM public.task_post_submit_routing_manifests WHERE id=:cause)),
+                  (SELECT to_jsonb(p) FROM public.revision_policies p
+                    JOIN public.submissions s ON s.locked_revision_policy_id=p.id WHERE s.id=:prior),
+                  (SELECT to_jsonb(p) FROM public.task_revision_preparations p WHERE p.id=:root),
+                  (SELECT to_jsonb(e) FROM public.outbox_events e
+                    WHERE e.idempotency_key='task.revision.expire:'||CAST(:cause AS text))
+            """), {
+        "prior": submission_id, "cause": routing_manifest_id,
+        "result": checker_run_result_id, "root": preparation_id,
+    })).one()
+
+
 @pytest.mark.parametrize("human_review_required", [True, False])
 async def test_real_replacement_compares_consumed_predecessor_and_replays_exactly(
     tmp_path,
@@ -277,12 +303,17 @@ async def test_real_replacement_compares_consumed_predecessor_and_replays_exactl
         assert provider_writes == ["put"]
 
         async with h.factory() as session:
-            immutable_before = (await session.execute(text("""
-                SELECT (SELECT to_jsonb(s) FROM public.submissions s WHERE s.id=:prior),
-                  (SELECT to_jsonb(m) FROM public.task_post_submit_routing_manifests m WHERE m.id=:cause),
-                  (SELECT to_jsonb(r) FROM public.checker_results r WHERE r.id=:result)
-            """), {"prior": predecessor_id, "cause": source_id,
-                   "result": h.completion.reference.result_id})).one()
+            immutable_before = await _immutable_replacement_source(
+                session, submission_id=predecessor_id, routing_manifest_id=source_id,
+                checker_run_result_id=h.completion.reference.result_id,
+                preparation_id=h.revision_preparation_id,
+            )
+            names = ("submission", "routing_manifest", "checker_evidence", "revision_policy", "preparation", "expiry_event")
+            assert all(value is not None for value in immutable_before), tuple(
+                name for name, value in zip(names, immutable_before, strict=True) if value is None
+            )
+            assert immutable_before[2]["run"]["id"] == str(h.run.id)
+            assert immutable_before[2]["members"] and immutable_before[2]["findings"]
         creation = SubmissionCreationRequest(
             task_id=h.request.task_id,
             assignment_id=h.request.assignment_id,
@@ -307,12 +338,11 @@ async def test_real_replacement_compares_consumed_predecessor_and_replays_exactl
                 SELECT public.submission_dispatch_valid(d) FROM public.submission_dispatches d
                 WHERE d.submission_id=:id
             """), {"id": created.submission_id}) is True
-            immutable_after = (await session.execute(text("""
-                SELECT (SELECT to_jsonb(s) FROM public.submissions s WHERE s.id=:prior),
-                  (SELECT to_jsonb(m) FROM public.task_post_submit_routing_manifests m WHERE m.id=:cause),
-                  (SELECT to_jsonb(r) FROM public.checker_results r WHERE r.id=:result)
-            """), {"prior": predecessor_id, "cause": source_id,
-                   "result": h.completion.reference.result_id})).one()
+            immutable_after = await _immutable_replacement_source(
+                session, submission_id=predecessor_id, routing_manifest_id=source_id,
+                checker_run_result_id=h.completion.reference.result_id,
+                preparation_id=h.revision_preparation_id,
+            )
             assert immutable_after == immutable_before
             await no_economic_effects(session)
         async with h.factory() as session:

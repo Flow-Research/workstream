@@ -84,10 +84,8 @@ class TaskRevisionExpiryOperation:
         ).order_by(TaskRevisionPreparation.sequence.desc()).limit(1))
         if head is None:
             return HandlerOutcome.REJECT
-        if (head.deadline_at is None or head.deadline_at != target.deadline_at
-                or head.next_revision_round > head.max_revision_rounds):
-            # Retained cap holds belong to the canonical recovery scan; their
-            # obsolete timer must not replace exhaustion with a timeout outcome.
+        if head.deadline_at is None or head.deadline_at != target.deadline_at:
+            # A paused or superseded timer cannot expire the current head.
             return HandlerOutcome.ACKNOWLEDGE
         now = await self._session.scalar(select(func.clock_timestamp()))
         if now < target.deadline_at:

@@ -224,18 +224,18 @@ async def test_retry_upgrade_preserves_evidence_and_installs_closure(
         finally:
             await connection.close()
 
-async def test_current_schema_refuses_new_archived_pre_submit_lineage(
+async def test_selected_checker_cutover_refuses_new_archived_pre_submit_lineage(
     isolated_database_env,
     migration_lock,
 ):
-    """Retain archived rows while refusing every new old-lineage insertion."""
+    """The selected-checker migration retains rows and refuses new archived PRE writes."""
     with migration_lock():
         await _reset_to_predecessor(isolated_database_env)
         await restore_archived_snapshot(
             isolated_database_env, "0034_checker_retry_source"
         )
         await db_session.dispose_engine()
-        await asyncio.to_thread(command.upgrade, _config(), "head")
+        await asyncio.to_thread(command.upgrade, _config(), "0036_selected_checker_flow")
         connection = await _connection(isolated_database_env)
         try:
             before = await _retained_rows(connection)

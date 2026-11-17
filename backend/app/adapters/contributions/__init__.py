@@ -16,6 +16,7 @@ from app.modules.contributions.api import (
     ContributionPolicyValidationPort,
     LockedCompensationTermsPort,
     ProjectCompensationUnitOperationsPort,
+    RewardSelectionPort,
 )
 from app.modules.contributions.service import ContributionPolicyService
 from app.modules.contributions.selected_policy_validation import (
@@ -86,13 +87,19 @@ def locked_compensation_terms_port(session: AsyncSession) -> LockedCompensationT
     return ContributionPolicyRepository(session)
 
 
+def reward_selection_port(session: AsyncSession) -> RewardSelectionPort:
+    """Compose exact tier resolution in the caller's existing owner transaction."""
+    from app.modules.contributions.repository import ContributionPolicyRepository
+    return ContributionPolicyRepository(session)
+
+
 def submitter_contribution_participant(session, fence):
     """Construct CON's atomic contribution and complete award participant."""
     from app.modules.contributions.records.participant import SubmitterContributionParticipant
     from app.adapters.compensation import compensation_award_participant
 
     return SubmitterContributionParticipant(
-        session, fence=fence, awards=compensation_award_participant(session)
+        session, fence=fence, awards=compensation_award_participant(session, fence)
     )
 
 
@@ -113,6 +120,7 @@ def contribution_export_service(
         authorization=authorization,
         records=ContributionReadRepository(
             session, cursor_codec=ContributionExportCursorCodec(cursor_secret),
+            tasks=contribution_task_evidence_port(session),
         ),
         awards=contribution_award_read_port(session), acceptances=final_acceptance_read_port(session),
         tasks=contribution_task_evidence_port(session), actors=contribution_actor_label_port(session),

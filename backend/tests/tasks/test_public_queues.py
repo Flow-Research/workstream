@@ -23,7 +23,7 @@ from tests.test_tasks import (
 
 METHODS = {"ready": "read_ready_tasks", "management": "read_management_tasks", "operational": "read_operational_tasks"}
 COLUMNS = {
-    "ready": {"id", "project_id", "title", "task_type", "difficulty", "skill_tags", "estimated_time_minutes", "created_at", "locked_contribution_policy_version_id"},
+    "ready": {"id", "project_id", "title", "task_type", "difficulty", "skill_tags", "estimated_time_minutes", "created_at", "locked_contribution_policy_version_id", "task_size", "locked_submission_award_definition_id"},
     "management": {"id", "project_id", "title", "task_type", "difficulty", "skill_tags", "estimated_time_minutes", "status", "deadline_at", "created_at", "updated_at"},
     "operational": {"id", "project_id", "status", "created_at", "updated_at"},
 }
@@ -74,7 +74,10 @@ async def test_public_queue_pages_preserve_owner_selection(task_client, monkeypa
         assert page["project_id"] == project["id"]
         assert len(page["items"]) == 1
         item = page["items"][0]
-        expected_fields = (COLUMNS[kind] - {"id", "locked_contribution_policy_version_id"}) | {"task_id"}
+        expected_fields = (COLUMNS[kind] - {
+            "id", "locked_contribution_policy_version_id", "task_size",
+            "locked_submission_award_definition_id",
+        }) | {"task_id"}
         if kind == "ready":
             expected_fields.add("compensation")
         assert set(item) == expected_fields

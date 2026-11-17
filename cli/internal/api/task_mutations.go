@@ -13,6 +13,7 @@ import (
 // MutationTask is the contributor-safe TaskResponse returned by claim,
 // not the management detail or contributor read projection.
 type MutationTask struct {
+	TaskSize                          string   `json:"task_size"`
 	ID                                string   `json:"id"`
 	ProjectID                         string   `json:"project_id"`
 	LockedContributionPolicyVersionID string   `json:"locked_contribution_policy_version_id"`
@@ -135,6 +136,10 @@ func decodeMutationTask(raw json.RawMessage, selector, status string) (MutationT
 		!policyHash.MatchString(task.LockedReviewPolicyHash) || !policyHash.MatchString(task.LockedRevisionPolicyHash) ||
 		task.Status != status || !validTime(task.CreatedAt) || !validTime(task.UpdatedAt) ||
 		(task.DeadlineAt != nil && !validTime(*task.DeadlineAt)) {
+		return task, &Failure{Code: "invalid_api_response"}
+	}
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(raw, &fields) != nil || !validTaskSizeField(fields, task.TaskSize) {
 		return task, &Failure{Code: "invalid_api_response"}
 	}
 	return task, nil

@@ -7,7 +7,6 @@ from pydantic import BaseModel, ConfigDict, Field
 from uuid import UUID
 
 from app.modules.tasks.api.authorization import TaskAuthorityDecision, TaskAuthorityOperation
-from app.modules.tasks.api.revision_exhaustion import TaskRevisionExhaustionAuditFacts
 
 
 class TaskPolicyLineage(BaseModel):
@@ -70,7 +69,3 @@ class TaskTransitionAuditPort(Protocol):
     async def record(self, facts: TaskTransitionFacts) -> None: ...
 
     async def record_revision_repair(self, facts: TaskRevisionRepairAuditFacts) -> None: ...
-
-    async def record_revision_exhaustion(self, facts: TaskRevisionExhaustionAuditFacts) -> None:
-        """Record terminal recovery with fresh consumed service authority."""
-        ...

@@ -42,18 +42,20 @@ class TaskCompensationTerms:
     """The two complete locked contribution rules disclosed by TASK."""
 
     contribution_policy_version_id: UUID
+    task_size: Literal["small", "medium", "large"]
     accepted_submission: TaskContributionTerms
     completed_review: TaskContributionTerms
 
     def __post_init__(self) -> None:
-        if not isinstance(self.contribution_policy_version_id, UUID):
+        if (not isinstance(self.contribution_policy_version_id, UUID)
+                or self.task_size not in {"small", "medium", "large"}):
             raise ValueError("task compensation terms are invalid")
         for value in (self.accepted_submission, self.completed_review):
             if value == "unpaid":
                 continue
             if (
                 type(value) is not tuple
-                or not 1 <= len(value) <= 2
+                or len(value) != 1
                 or any(not isinstance(item, TaskCompensationAward) for item in value)
                 or len({item.instrument for item in value}) != len(value)
             ):

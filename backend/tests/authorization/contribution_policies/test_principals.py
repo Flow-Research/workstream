@@ -11,7 +11,7 @@ from .postgresql_support import world, snapshot
 @pytest.mark.parametrize("operation", ("read", "create_draft", "update_draft", "publish", "retire"))
 @pytest.mark.parametrize(
     "principal",
-    ("access_administrator", "operator", "project_manager", "audit_authority", "foreign_finance"),
+    ("access_administrator", "operator", "audit_authority", "foreign_finance", "foreign_manager"),
 )
 async def test_real_policy_authority_rejects_other_roles_and_foreign_grants(
     admin_access, operation, principal
@@ -24,12 +24,12 @@ async def test_real_policy_authority_rejects_other_roles_and_foreign_grants(
         prior = await target.execute(setup, target.request(setup, prior))
     request = target.request(operation, prior)
     assert (await admin_access.signed.revoke(admin_access.admin, target.grant)).status_code == 200
-    if principal == "foreign_finance":
+    if principal in {"foreign_finance", "foreign_manager"}:
         other_project, _ = await foreign_project(target)
         await admin_access.signed.grant(
             admin_access.admin,
             admin_access.target,
-            role="finance_authority",
+            role="finance_authority" if principal == "foreign_finance" else "project_manager",
             project_id=other_project,
         )
     else:

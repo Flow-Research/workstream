@@ -2,6 +2,7 @@
 
 from dataclasses import replace
 from app.core.identifiers import new_record_id
+from app.modules.compensation.api import CompensationInstrumentType
 
 import pytest
 
@@ -21,6 +22,9 @@ def update_request(fixture: object) -> ContributionPolicyUpdateDraftRequest:
         project_id=fixture.project_id,  # type: ignore[attr-defined]
         contribution_policy_id=new_record_id(),
         contribution_policy_version_id=new_record_id(),
+        instrument_type=CompensationInstrumentType.MONEY,
+        unit_code="USD",
+        adapter_binding_id=new_record_id(),
         rules=complete_rules(),
     )
 
@@ -57,7 +61,8 @@ async def test_update_draft_replaces_entire_rule_definition_graph() -> None:
     assert result.event_type == "draft_updated"
     call = fixture.repository.replace_graph.await_args
     assert len(call.args[1]) == 2
-    assert len(call.args[2]) == 1
+    assert len(call.args[2]) == 3
+    assert {item.task_size for item in call.args[2]} == {"small", "medium", "large"}
     assert len(fixture.authorization.closed) == 1
 
 
@@ -152,7 +157,7 @@ async def test_invalid_compensation_mode_denies_before_authorization() -> None:
     request = replace(
         request,
         rules=(
-            replace(request.rules[0], compensation_mode="invalid"),  # type: ignore[arg-type]
+            request.rules[0].model_copy(update={"compensation_mode": "invalid"}),  # type: ignore[arg-type]
             request.rules[1],
         ),
     )
@@ -167,17 +172,7 @@ async def test_invalid_compensation_mode_denies_before_authorization() -> None:
 async def test_noncanonical_instrument_denies_before_authorization() -> None:
     fixture = service_fixture()
     request = update_request(fixture)
-    definition = replace(
-        request.rules[0].definitions[0],
-        instrument_type="money",  # type: ignore[arg-type]
-    )
-    request = replace(
-        request,
-        rules=(
-            replace(request.rules[0], definitions=(definition,)),
-            request.rules[1],
-        ),
-    )
+    request = replace(request, instrument_type="money")  # type: ignore[arg-type]
     with pytest.raises(ContributionPolicyConflict):
         await fixture.service.update_draft(request)
     assert fixture.authorization.prepared == []

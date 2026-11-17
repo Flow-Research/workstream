@@ -7,6 +7,8 @@ ROOT = Path(__file__).resolve().parents[2]
 SURFACES = (
     "app/modules/contributions/models.py",
     "app/modules/contributions/repository.py",
+    "app/modules/contributions/units/models.py",
+    "app/modules/contributions/policy_eligibility.py",
     "app/modules/contributions/service.py",
     "app/modules/contributions/policy_graph.py",
     "app/modules/contributions/policy_mutation_support.py",

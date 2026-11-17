@@ -10,7 +10,8 @@ from alembic import command
 
 from app.db import session as db_session
 from tests.historical_submission_fixtures import historical_material_fixture
-from tests.migration_fixtures import _config, current_schema_revision
+from tests.migration_fixtures import _config
+from tests.finance.migration_support import assert_reward_cutover_refusal
 
 pytestmark = pytest.mark.postgres_schema_contract
 
@@ -35,7 +36,7 @@ async def test_upgrade_preserves_retained_owners_without_backfill(tmp_path, isol
                 ) for table in tables}
             try:
                 before = await snapshot()
-                await asyncio.to_thread(command.upgrade, _config(), current_schema_revision())
+                await asyncio.to_thread(command.upgrade, _config(), "0068_issuer_profile_email")
                 after = await snapshot()
                 added_columns = {
                     "outbox_events": {"not_before_at"},
@@ -64,7 +65,7 @@ async def test_upgrade_preserves_retained_owners_without_backfill(tmp_path, isol
                     assert len(upgraded_rows) == len(retained_rows)
                     for retained, upgraded in zip(retained_rows, upgraded_rows, strict=True):
                         assert set(upgraded) == set(retained) | columns_added
-                        # 0048 backfills from retained owner evidence only: an unrouted
+                        # 0049 backfills from retained owner evidence only: an unrouted
                         # attempt stays pending and its stamps come from its own facts.
                         backfilled = {
                             "attempt_status": "evaluation_pending",
@@ -117,3 +118,5 @@ async def test_upgrade_preserves_retained_owners_without_backfill(tmp_path, isol
                 assert await connection.fetchval("SELECT status FROM public.submission_bundle_admissions WHERE id=$1", h.created["admission_id"]) == "consumed"
             finally:
                 await connection.close()
+
+        await assert_reward_cutover_refusal(isolated_database_env)

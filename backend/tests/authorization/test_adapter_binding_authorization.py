@@ -60,6 +60,7 @@ class _FinanceRepository:
         actor_status: ActorStatus = ActorStatus.ACTIVE,
         link_status: IdentityLinkStatus = IdentityLinkStatus.ACTIVE,
     ) -> None:
+        self.expected_roles = frozenset({"finance_authority"})
         self.grant_id = uuid4()
         self.grant_project_id = grant_project_id
         self.grant_available = grant_available
@@ -82,7 +83,7 @@ class _FinanceRepository:
         )
 
     async def find_effective_grant(self, *_args, **kwargs):
-        assert {role.value for role in kwargs["allowed_roles"]} == {"finance_authority"}
+        assert {role.value for role in kwargs["allowed_roles"]} == self.expected_roles
         if not self.grant_available:
             return None
         requested = kwargs["scope_project_id"]

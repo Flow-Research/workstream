@@ -3,6 +3,11 @@
 from __future__ import annotations
 from app.modules.authorization.catalogue import GUIDE_PROPOSAL_ACTION_IDS, POST_POLICY_ACTION_IDS
 from app.modules.authorization.domain.lifecycle import parse_lifecycle_prepare, lifecycle_matches
+from app.modules.authorization.domain.fulfillment_evidence import (
+    FULFILLMENT_EVIDENCE_ACTIONS, FulfillmentEvidenceResourceContext,
+    fulfillment_evidence_action_matches,
+)
+from app.modules.authorization.prepared_fulfillment_replay import validate_fulfillment_replay
 from app.modules.authorization.prepared_routing_replay import validate_routing_replay
 from app.modules.authorization.prepared_lifecycle_replay import validate_lifecycle_replay
 from app.modules.authorization.fixed_service_revalidation import fixed_service_context_revalidator
@@ -46,7 +51,7 @@ from app.modules.authorization.domain.checker_retry import (
     checker_retry_resource_matches,
     parse_checker_retry_prepare,
 )
-from app.modules.authorization.domain.prepared_checker_runtime import checker_runtime_binding_matches, checker_runtime_project_id, parse_checker_runtime_bindings
+from app.modules.authorization.domain.prepared_checker_runtime import checker_runtime_binding_matches, parse_checker_runtime_bindings
 from app.modules.checkers.api.execution import CheckerRetryPreparation
 from app.modules.authorization.domain.prepared_submission_policy import parse_submission_policy_prepare
 from app.modules.authorization.domain.prepared_compilation import prepared_compilation_matches
@@ -65,16 +70,15 @@ from app.modules.authorization.domain.prepared_adapter_bindings import (
     parse_prepared_adapter_binding,
     prepared_adapter_binding_matches,
 )
-from app.modules.authorization.domain.prepared_service import project_setup_resource_matches, prepared_fixed_service_bindings
-from app.modules.authorization.domain.prepared_guide_mutations import parse_prepared_guide_mutation
-from app.modules.authorization.domain.guide_compilation_projections import (
-    ProjectGuideProjectionResourceContext,
+from app.modules.authorization.domain.prepared_service import (
+    project_setup_resource_matches, prepared_fixed_service_bindings,
+    prepared_service_resource_scope,
 )
+from app.modules.authorization.domain.prepared_guide_mutations import parse_prepared_guide_mutation
 from app.modules.authorization.prepared_proposal_replay import (
     parse_review_bindings, review_context_matches, validate_review_replay,
 )
 from app.modules.authorization.domain.prepared_service import prepared_request_digest
-from app.modules.authorization.domain.post_policy import PostPolicyResourceContext
 from app.modules.authorization.domain.assignment_invalidation import (
     AssignmentInvalidationResourceContext,
 )
@@ -133,13 +137,12 @@ from app.modules.authorization.domain.task_authority import (
     TASK_ACTIONS, TASK_IMPORT_BATCH_ACTIONS, TaskAuthorityResourceContext, TaskImportBatchResourceContext, parse_task_authority_binding,
 )
 from app.modules.authorization.domain.post_submit_routing import (
-    ROUTE, PostSubmitRoutingResourceContext, post_submit_routing_prepare_matches,
+    ROUTE, post_submit_routing_prepare_matches,
 )
 from app.modules.tasks.api.post_submit_routing import TaskRoutingRequestFacts
-from app.modules.authorization.domain.post_submit import POST_SUBMIT_ACTIONS, PostSubmitResourceContext, post_submit_prepare_matches
+from app.modules.authorization.domain.post_submit import POST_SUBMIT_ACTIONS, post_submit_prepare_matches
 from app.modules.authorization.domain.pre_submit import (
     PRE_SUBMIT_ACTIONS,
-    PreSubmitResourceContext,
     pre_submit_prepare_matches,
 )
 from app.modules.authorization.prepared_submission_replay import validate_submission_replay
@@ -212,6 +215,7 @@ class _PreparedAuthorizationBinding:
     assignment_invalidation_context: AssignmentInvalidationResourceContext | None = None
     revision_expiry_context: RevisionExpiryResourceContext | None = None
     revision_recovery_context: RevisionRecoveryResourceContext | None = None
+    fulfillment_evidence_context: FulfillmentEvidenceResourceContext | None = None
     outbox_dispatch_digest: str | None = None
     post_submit_prepare_context: dict | None = None
     pre_submit_prepare_context: dict | None = None
@@ -632,6 +636,14 @@ class PreparedAuthorizationService:
             or issuance.binding.revision_recovery_context != final_resource_context
         ):
             raise PreparedAuthorizationHandleInvalid("invalid revision recovery authority")
+        if expected_action_id in FULFILLMENT_EVIDENCE_ACTIONS and (
+            issuance.binding.fulfillment_evidence_context != final_resource_context
+            or not fulfillment_evidence_action_matches(
+                expected_action_id, final_resource_context, issuance.authority.scope_project_id,
+                issuance.authority.context.actor_profile_id, issuance.authority.context.identity_link_id,
+            )
+        ):
+            raise PreparedAuthorizationHandleInvalid("invalid prepared fulfillment authority")
         if not lifecycle_matches(issuance.binding.lifecycle_command, final_resource_context):
             raise PreparedAuthorizationHandleInvalid("invalid lifecycle authority")
         if expected_action_id is ROUTE:
@@ -779,7 +791,9 @@ class PreparedAuthorizationService:
         self._issued[handle] = _CONSUMED
         try:
             replay = (
-                validate_routing_replay
+                validate_fulfillment_replay
+                if expected_action_id in FULFILLMENT_EVIDENCE_ACTIONS
+                else validate_routing_replay
                 if expected_action_id is ActionId.TASK_POST_SUBMIT_ROUTE
                 else validate_checker_retry_replay
                 if expected_action_id is ActionId.OPERATIONS_CHECKER_RETRY
@@ -908,16 +922,8 @@ class PreparedAuthorizationService:
         scope: PreparedAuthorityScope,
     ) -> _PreparedAuthorizationBinding:
         service_bindings = prepared_fixed_service_bindings(
-            action_id, caller_input.request_value, PreparedAuthorizationHandleInvalid,
+            action_id, caller_input, scope, self._context, PreparedAuthorizationHandleInvalid,
         )
-        if action_id is ROUTE:
-            request = service_bindings["routing_request"]
-            if not (
-                scope.kind is PreparedAuthorityScopeKind.PROJECT and scope.project_id == request.project_id
-                and caller_input.idempotency_key == self._context.request_id
-                == self._context.correlation_id == request.route_operation_id
-            ):
-                raise PreparedAuthorizationHandleInvalid("invalid prepared routing request")
         operation_id = project_id = operation_generation = None
         setup_bindings = parse_setup_bindings(action_id, caller_input, scope, self._context)
         if action_id is ActionId.PROJECT_CREATE:
@@ -983,16 +989,10 @@ class PreparedAuthorizationService:
         action_id: ActionId,
         resource: AuthorizationResourceContext,
     ) -> PreparedAuthorityScope:
-        artifact_resource = _EXACT_ARTIFACT_RESOURCE_BY_ACTION.get(action_id)
-        if artifact_resource is not None and isinstance(resource, artifact_resource[1]):
-            return PreparedAuthorityScope(kind=PreparedAuthorityScopeKind.ARTIFACT_INTERNAL, artifact_resource_type=artifact_resource[0], artifact_resource_id=resource.resource_id)
-        if isinstance(resource, (ProjectGuideProjectionResourceContext, PostPolicyResourceContext, OutboxDispatchResourceContext, AssignmentInvalidationResourceContext, RevisionExpiryResourceContext, RevisionRecoveryResourceContext, PreSubmitResourceContext, PostSubmitResourceContext, PostSubmitRoutingResourceContext)):
-            return PreparedAuthorityScope(
-                kind=PreparedAuthorityScopeKind.PROJECT,
-                project_id=resource.scope_project_id,
-            )
-        if checker_runtime_project := checker_runtime_project_id(action_id, resource):
-            return PreparedAuthorityScope(kind=PreparedAuthorityScopeKind.PROJECT, project_id=checker_runtime_project)
+        if service_scope := prepared_service_resource_scope(
+            action_id, resource, _EXACT_ARTIFACT_RESOURCE_BY_ACTION.get(action_id),
+        ):
+            return service_scope
         if action_id is ActionId.ACTOR_PROFILE_UPDATE_SELF and isinstance(
             resource, ActorSelfResourceContext
         ):

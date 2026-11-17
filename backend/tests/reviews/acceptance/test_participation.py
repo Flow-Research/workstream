@@ -17,8 +17,8 @@ pytestmark = pytest.mark.usefixtures("live_acceptance_lifecycle")
 
 @pytest.mark.parametrize(
     "instruments",
-    [(), ("money",), ("money", "project_points")],
-    ids=("unpaid", "one-award", "two-awards"),
+    [(), ("money",), ("project_points",)],
+    ids=("unpaid", "money", "points"),
 )
 async def test_authorized_acceptance_creates_and_exactly_replays_complete_effects(
     tmp_path,
@@ -147,8 +147,9 @@ async def test_foreign_stored_completion_cannot_use_another_invocation(
                 assert await outcome_snapshot(session) == before
 
 
+@pytest.mark.parametrize("instrument", ["money", "project_points"])
 async def test_project_award_totals_are_the_exact_sums_of_the_projects_stored_awards(
-    tmp_path, isolated_database_env
+    tmp_path, isolated_database_env, instrument
 ):
     """PILOT-READ-3 C6: the summary's project award totals over real accepted-work awards."""
     from decimal import Decimal
@@ -158,7 +159,7 @@ async def test_project_award_totals_are_the_exact_sums_of_the_projects_stored_aw
 
     # The fixture's published policy terms (PolicyWorld.request): one accepted
     # submission earns each configured award exactly once.
-    configured = {"money": ("USD", "2.125000000000000001"), "project_points": ("PTS", "7")}
+    configured = {instrument: {"money": ("USD", "2.125000000000000001"), "project_points": ("PTS", "7")}[instrument]}
     async with authorized_routing_source(
         tmp_path, isolated_database_env, contribution_awards=tuple(configured)
     ) as h:

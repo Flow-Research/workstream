@@ -117,6 +117,7 @@ async def test_remediation_delivery_bypasses_acceptance_generation_observation()
     operation = TaskPostSubmitOutcome(
         None,
         projects=None,
+        rewards=None,
         evaluations=None,
         authorization=None,
         acceptance=Acceptance(),

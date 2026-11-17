@@ -35,6 +35,10 @@ from tests.projects.guide_compilation.proposals.pg_support import (
 from tests.projects.public_activation.support import activation_body
 from contribution_policy_read_journey import publish_with_policy_reads
 
+from tests.conftest import (  # noqa: E402
+    configured_source_instance_id as configured_source_instance_id,
+)
+
 
 @pytest.mark.asyncio
 async def test_guide_activation_public_socket_replay_and_fresh_authority(
@@ -301,6 +305,7 @@ async def test_guide_activation_public_socket_replay_and_fresh_authority(
                     finance.actor_profile_id,
                     finance_grant,
                     caller,
+                    actor.actor_profile_id,
                     token(outsider),
                     token(foreign_finance),
                     admin,

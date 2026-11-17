@@ -1,8 +1,10 @@
 # Modular Monolith Architecture Boundaries
 
-Workstream has ten business modules: `actors`, `authorization`, `projects`,
+Workstream has eleven business modules: `actors`, `authorization`, `projects`,
 `tasks`, `artifacts`, `checkers`, `model_usage`, `reviews`, `contributions`,
-and `compensation`. It has three supporting modules: `audit`, `outbox`, and
+`compensation`, and `finance`. Finance currently exposes wire contracts only;
+this registration does not activate financial handlers or payments.
+It has three supporting modules: `audit`, `outbox`, and
 `api_controls`. The machine-readable canonical registry is
 `.ci/module-boundaries/registry.v1.json`.
 

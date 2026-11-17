@@ -134,7 +134,7 @@ func (c *Client) ManagementWorkContext(ctx context.Context, project, task string
 	if err != nil {
 		return result, &Failure{Code: "invalid_api_response"}
 	}
-	if err := decodeTask(fields["task"], &value.Task, true); err != nil || !sameUUID(value.Task.TaskID, task) || !validTask(value.Task.TaskSummary, project) || !oneOf(value.Task.Status, taskStatuses...) || !validUUID(value.Task.CreatedBy) ||
+	if err := decodeTask(fields["task"], &value.Task, true); err != nil || !sameUUID(value.Task.TaskID, task) || !validTask(value.Task.TaskSummary, project) || !oneOf(value.Task.TaskSize, "small", "medium", "large") || !oneOf(value.Task.Status, taskStatuses...) || !validUUID(value.Task.CreatedBy) ||
 		(value.Task.AssignedTo != nil && !validUUID(*value.Task.AssignedTo)) {
 		return result, &Failure{Code: "invalid_api_response"}
 	}

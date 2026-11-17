@@ -39,7 +39,7 @@ def test_next_action_covers_every_combination(state, task_status, latest, revisi
 def test_revise_requires_a_ready_revision_of_a_returned_attempt():
     """Only one active combination per blocked reason flips from revise to none."""
     assert next_action("active", "needs_revision", "needs_revision", "ready") == "revise"
-    for revision in ("context_blocked", "revision_limit_reached", "revision_deadline_expired", None):
+    for revision in ("context_blocked", "revision_deadline_expired", None):
         assert next_action("active", "needs_revision", "needs_revision", revision) == "none"
     assert next_action("active", "needs_revision", "evaluation_pending", "ready") == "none"
     assert next_action("closed", "needs_revision", "needs_revision", "ready") == "none"

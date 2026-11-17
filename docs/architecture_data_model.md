@@ -91,11 +91,16 @@ profile records `effective=false -> effective=true` for that profile projection
 without asserting that its identity link, grants, or fixed-service admission
 make the whole actor effective.
 
-The closed service identity `workstream.compensation.adapter` identifies only
-an eligible adapter-binding target. It has no service-action matrix row and no
-action authority. ACTORS locks the exact active service profile and its active
-service identity link before returning immutable eligibility facts; generic
-service kind and every other fixed-service identity are insufficient.
+The closed service identity `workstream.compensation.adapter` identifies an
+eligible adapter-binding target and has exactly three active, request-bound
+fulfillment memberships: source read, report and exception report. Prepared AUTH
+uses the exact current actor/link and original binding to authorize only the
+four COMP evidence APIs: source evidence, exact-event lookup, report and linked
+exception report. These memberships confer no Finance or provider-execution
+authority. Binding-target eligibility alone is not action authority. ACTORS locks
+the exact active service profile and its active service identity link before
+returning immutable eligibility facts; generic service kind and every other
+fixed-service identity are insufficient.
 
 ### ActorIdentityLink
 
@@ -1437,6 +1442,8 @@ Fields:
 - `locked_revision_policy_generation`
 - `locked_revision_policy_hash`
 - `locked_contribution_policy_version_id`
+- `task_size` (immutable `small`, `medium` or `large`; required in contributor and management detail and their work contexts, including unpaid tasks)
+- `locked_submission_award_definition_id` (null before screening or under an unpaid rule)
 - `source_type`
 - `source_ref`
 - `source_payload_hash`
@@ -1514,6 +1521,8 @@ Fields:
 - `contributor_id`
 - `assigned_by`
 - `submitter_contribution_policy_version_id`
+- `submitter_task_size`
+- `submitter_award_definition_id`
 - `assigned_at`
 - `accepted_at`
 - `released_at`
@@ -1528,17 +1537,16 @@ its task is `in_progress` for that contributor. `updated_at` on TaskAssignment a
 WorkstreamTask is PostgreSQL-owned on every committed change, including raw SQL
 updates.
 
-The v0.1 baseline excludes the retired persisted human
-owner to `contributor_id`. The non-null `varchar(36)` value is protected by
-foreign key `fk_task_assignments_contributor_id_actor_profiles`, index
-`ix_task_assignments_contributor_id`, and trigger
-`task_assignments_contributor_human`. The trigger reuses invoker-rights function
+`contributor_id` is a non-null native PostgreSQL UUID reference, protected by
+`fk_task_assignments_contributor_id_actor_profiles`, its index and the
+`task_assignments_contributor_human` trigger. The trigger reuses
 `public.require_human_actor_profile_reference()` to reject service profiles.
 It deliberately permits suspended and deactivated human profiles because this
 column preserves historical attribution rather than current authority.
 
 At initial claim, `submitter_contribution_policy_version_id` must equal the
-Task's locked version. It remains fixed throughout that submission attempt.
+Task's locked version. Size and selected definition copy the same exact Task
+selection. They remain fixed throughout that submission attempt.
 TASK's exact authorized complete-context revision preparation may atomically
 rebase it for the next attempt while retaining prior/next immutable lineage.
 Checker preparation implements this boundary; #554 owns the future genuine
@@ -1552,6 +1560,8 @@ Fields:
 - `id`
 - `task_id`
 - `task_assignment_id`
+- `task_size`
+- `contribution_award_definition_id`
 - `contributor_id`
 - `version`
 - `status`
@@ -2162,8 +2172,8 @@ PostgreSQL `requested_at`, nullable `deadline_at`, nullable
 context packet. The insertion guard computes the clock and packet digest. The packet retains guide activation operation/generation/time custody;
 it does not claim the planned activation-sequence fields above are live.
 `outcome` is `kept`, `rebased` or `blocked`; `blocked_reason` distinguishes
-`context_blocked` and `revision_deadline_expired`. Retained older cap-blocked
-records remain immutable history; new cap exhaustion has its own receipt.
+`context_blocked` and `revision_deadline_expired`. At the cap, routing creates
+its terminal exhaustion receipt atomically without another preparation.
 
 `preparation_sha256` freezes that packet and source/window facts. Exactly one
 root belongs to a routing manifest; `predecessor_id` and consecutive `sequence`
@@ -2198,15 +2208,10 @@ Contributor task detail exposes only that actor's `last_assignment_outcome`,
 while covered PM detail exposes the latest closed assignment. Its `next_action`
 is `none`, even when the task permits a fresh claim under a new assignment.
 
-Retained cap-blocked sources use this same terminal writer under fresh
-`task.revision.recover` authority. Their receipt additionally retains
-`recovery_authority_context`, with its own audit and outcome event references;
-new routing receipts leave it null. The recovery request binds the original
-root, current head and allocated exhaustion receipt. `TaskRevisionExhausted`
-is the durable recovery outcome notice. Original routing manifests,
-preparations, timers and Submission evidence remain unchanged. Exact original
-routing replay validates those original facts and the terminal receipt, including
-after reclaim, without creating a second outcome.
+Exact original routing replay validates the original manifest and its terminal
+receipt under fresh authority, including after reclaim, without creating a
+second outcome. Current recovery restores missing root/event custody; current
+PM repair governs blocked-context changes and pause/resume clocks.
 
 ## TaskRevisionExpiration
 
@@ -2325,8 +2330,9 @@ not replace it; reputation projection remains deferred.
 
 ## CompensationAward
 
-CON-03C implements immutable exact-definition storage; no payment/points
-delivery or runtime creation is activated.
+Governed automatic acceptance creates the exact immutable selected award and
+COMP root/outbox custody in one transaction. Payment/points delivery remains
+unavailable.
 
 Fields:
 
@@ -2345,51 +2351,63 @@ Fields:
 
 The award is immutable and copies its instrument, unit, quantity, and binding
 from the published definition without conversion or rounding. Explicit unpaid
-rules create no award. At most one award exists per contribution and instrument
-type; fulfillment state is not stored on the award.
+rules create no award. At most one award exists per contribution; fulfillment
+state is not stored on the award.
+
+## CompensationFulfillmentRoot
+
+Immutable COMP-owned fields:
+
+- `id`, `award_id`, `project_id`
+- unique increasing `ordinal` and original `admission_generation`
+- configured stable `source_instance_id`
+- original `adapter_binding_id` and `route_key`
+- `source_final_acceptance_id`, `source_authorization_decision_id`, `source_routing_manifest_id`
+- `source_award_digest`, `obligation_digest`, complete canonical `obligation_body`
+- exact `initial_outbox_event_id` and server `created_at`
+
+One root belongs to one automatically accepted-submission award. Fixed reviewer
+award storage/export remains supported without inventing reviewer execution or
+root authority. New roots require the canonical live REV fence;
+replay retains the original generation and exact event without allocation or
+repair. First authorized LIVE anchors the configured UUID in the existing REV
+control and transition observation; later phases cannot replace or clear it.
+Native guards enforce that identity even before the first root, sequential allocation,
+immutable evidence and deferred award/root/event closure. Suspended bindings do
+not change earned facts. The new selector/digest event stays unregistered; root
+custody does not activate Finance admission, public callbacks, payment or cutoff/drain.
 
 ## CompensationFulfillmentReceipt
 
-Fields:
+Internal immutable receipt storage binds `id`, `fulfillment_root_id`, `award_id`,
+`project_id`, `source_instance_id` and original `adapter_binding_id` to a canonical
+UUIDv7 `external_event_id`. It stores the complete closed `report_body`, its
+`report_digest`, `reported_status`, actual reporter actor/link, exact AUTH
+allow/resource digest, recording lifecycle generation, database receiver time
+and positive root-serialized evidence ordinal. Binding/event identity is unique;
+at most one fulfilled receipt exists per award. Full quantity and timestamp
+bounds are checked independently in native storage and the portable decoder.
+Public operations and complete transactional qualification remain pending.
 
-- `id`
-- `compensation_award_id`
-- `project_id`
-- `adapter_binding_id`
-- `external_event_id`
-- `reported_status`: `fulfilled | failed`
-- `external_reference`
-- `fulfilled_quantity`
-- `fulfilled_at`
-- `failure_code`
-- `reported_at`
-- `received_at`
-- `correlation_id`
+## CompensationFulfillmentException
 
-Receipts are immutable. `external_event_id` is a binding-scoped unique 1-128
-character opaque ASCII token from `[A-Za-z0-9._:-]`. Fulfilled receipts require
-the exact award `NUMERIC(38, 18)` quantity, a non-secret external reference with
-the same bounds, and a timestamp. Failed receipts require a closed Workstream
-failure code and null quantity, time, and external reference. Free-form provider
-messages/codes, payloads, headers, signatures, credentials, URLs, and metadata
-are never persisted, logged, emitted, exported, or returned. One award has at
-most one fulfilled receipt.
+Immutable exception storage binds the same original source and authority fields
+to UUIDv7 `exception_event_id`, actual `original_receipt_id` and
+`original_fulfillment_event_id`, closed `kind`, `exception_body` and
+`exception_digest`. It requires this award's actual success and shares the
+receipt's root-serialized ordinal sequence. It records attention without
+removing success or authorizing repayment. Both row types reject mutation.
+See the [canonical evidence fields](spec_contribution_compensation.md#compensationfulfillmentreceipt).
 
 ## CompensationStatusProjection
 
-Fields:
-
-- `compensation_award_id`
-- `delivery_status`: `pending_delivery | acknowledged_by_adapter`
-- `fulfillment_status`: `pending | failed | fulfilled`
-- `latest_receipt_id`
-- `external_reference`
-- `last_failure_code`
-- delivery, fulfillment, and update timestamps
-
-This projection is mutable and rebuildable. ContributionRecord,
-CompensationAward, outbox delivery history, and fulfillment receipts remain the
-authoritative records.
+A rebuilt owner read returns `delivery_status`, `fulfillment_status`,
+`fulfillment_attention_required`, `latest_receipt_id`, `latest_exception_id`,
+`last_failure_code` and `updated_at`. It uses evidence ordinals for latest
+selection, keeps fulfilled above late failure and retains exception attention.
+There is no mutable projection row or status cache. Callback evidence can prove
+adapter observation; generic OUTBOX completion cannot. Earned contribution and
+award facts remain immutable. Public status/delivery operations remain pending.
 
 ## ReputationEvent
 
@@ -2544,8 +2562,12 @@ identity and creation time remain unchanged. The root fence takes its advisory
 lock before the controller row. The transition operation takes this REV fence
 before AUTH custody; the fence itself grants no business authority. New participant effects
 require live/nonzero, while terminal replay stays read-only under the current
-generation. Fulfillment roots, ordinals and cutoffs remain deferred until
-fulfillment activation; conditional awards are separate atomic facts.
+generation. Automatically accepted-submission awards, COMP roots/ordinals and
+their initial selector-only outbox events now share atomic custody. The existing
+control and transition rows carry nullable `fulfillment_source_instance_id`: null
+before first activation, then one UUIDv7 anchored by the first authorized LIVE
+observation and retained across phase changes. Finance admission, delivery,
+callbacks and cutoff/drain qualification remain deferred.
 
 ### TASK routing request reservation
 

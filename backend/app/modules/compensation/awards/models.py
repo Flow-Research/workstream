@@ -4,7 +4,17 @@ from datetime import datetime
 from decimal import Decimal
 from uuid import UUID
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Numeric, String, UniqueConstraint, Uuid, text
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    ForeignKeyConstraint,
+    Numeric,
+    String,
+    UniqueConstraint,
+    Uuid,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base
@@ -19,11 +29,19 @@ class CompensationAward(Base):
             "(get_byte(uuid_send(id), 6) >> 4) = 7 and (get_byte(uuid_send(id), 8) & 192) = 128",
             name="id_uuid7",
         ),
-        UniqueConstraint("contribution_record_id", "instrument_type"),
+        UniqueConstraint("contribution_record_id", name="uq_compensation_award_contribution"),
+        ForeignKeyConstraint(
+            ["contribution_policy_version_id", "project_id"],
+            ["contribution_policy_versions.id", "contribution_policy_versions.project_id"],
+            name="fk_compensation_award_policy_project",
+            deferrable=True,
+            initially="DEFERRED",
+        ),
         CheckConstraint("instrument_type in ('money','project_points')", name="instrument_type"),
         CheckConstraint(
             "quantity > 0 and quantity < 100000000000000000000 "
-            "and scale(quantity) between 0 and 18", name="quantity_exact_bounds",
+            "and scale(quantity) between 0 and 18",
+            name="quantity_exact_bounds",
         ),
         CheckConstraint(
             "instrument_type <> 'project_points' or scale(quantity)=0", name="project_points_whole"
@@ -47,7 +65,9 @@ class CompensationAward(Base):
         Uuid(), ForeignKey("contribution_award_definitions.id", ondelete="RESTRICT"), nullable=False
     )
     adapter_binding_id: Mapped[UUID] = mapped_column(
-        Uuid(), ForeignKey("project_compensation_adapter_bindings.id", ondelete="RESTRICT"), nullable=False
+        Uuid(),
+        ForeignKey("project_compensation_adapter_bindings.id", ondelete="RESTRICT"),
+        nullable=False,
     )
     instrument_type: Mapped[str] = mapped_column(String(32), nullable=False)
     unit_code: Mapped[str] = mapped_column(String(32), nullable=False)

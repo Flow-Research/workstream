@@ -41,6 +41,7 @@ def _install_complete_draft(
         contribution_policy_id=policy.id,
         project_id=str(request.project_id),
         version_number=1,
+        instrument_type="money", unit_code="USD", adapter_binding_id=new_record_id(),
         status="draft",
         created_by=str(request.actor_profile_id),
     )
@@ -58,22 +59,18 @@ def _install_complete_draft(
         contribution_type="completed_review",
         compensation_mode="unpaid",
     )
-    definition = ContributionAwardDefinition(
-        id=new_record_id(),
-        contribution_rule_id=accepted.id,
-        contribution_policy_version_id=version.id,
-        project_id=policy.project_id,
-        contribution_type="accepted_submission",
-        instrument_type="money",
-        unit_code="USD",
-        quantity=Decimal("10"),
-        adapter_binding_id=new_record_id(),
-    )
-    accepted.award_definitions = [definition]
+    definitions = [ContributionAwardDefinition(
+        id=new_record_id(), contribution_rule_id=accepted.id,
+        contribution_policy_version_id=version.id, project_id=policy.project_id,
+        contribution_type="accepted_submission", instrument_type="money", unit_code="USD",
+        quantity=Decimal(quantity), adapter_binding_id=version.adapter_binding_id,
+        task_size=size,
+    ) for size, quantity in (("small", "10"), ("medium", "20"), ("large", "30"))]
+    accepted.award_definitions = definitions
     reviewed.award_definitions = []
     fixture.repository.get_policy.return_value = policy
     fixture.repository.get_version.return_value = version
-    fixture.repository.lock_publication_graph.return_value = ([accepted, reviewed], [definition])
+    fixture.repository.lock_publication_graph.return_value = ([accepted, reviewed], definitions)
 
     async def stamp(custody) -> None:
         custody.occurred_at = datetime.now(UTC)

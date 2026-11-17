@@ -1,0 +1,174 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Workstream Finance fulfillment report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "source_instance_id",
+    "fulfillment_root_id",
+    "award_id",
+    "project_id",
+    "adapter_binding_id",
+    "correlation_id",
+    "contract_version",
+    "route_key",
+    "external_event_id",
+    "instrument_type",
+    "unit_code",
+    "reported_status",
+    "fulfilled_quantity",
+    "fulfilled_at",
+    "external_reference",
+    "failure_code",
+    "reported_at"
+  ],
+  "properties": {
+    "source_instance_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "fulfillment_root_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "award_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "project_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "adapter_binding_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "correlation_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "contract_version": {
+      "type": "integer",
+      "const": 1
+    },
+    "route_key": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,119}$",
+      "not": {
+        "pattern": "\\.\\."
+      }
+    },
+    "external_event_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "instrument_type": {
+      "enum": [
+        "money",
+        "project_points"
+      ]
+    },
+    "unit_code": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9._:-]{0,31}$"
+    },
+    "reported_status": {
+      "enum": [
+        "fulfilled",
+        "failed"
+      ]
+    },
+    "fulfilled_quantity": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^(?:[1-9][0-9]{0,19}|(?:0|[1-9][0-9]{0,19})\\.[0-9]{0,17}[1-9])$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "fulfilled_at": {
+      "anyOf": [
+        {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{6}Z$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "external_reference": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9._:-]{1,128}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "failure_code": {
+      "enum": [
+        null,
+        "ADAPTER_REJECTED",
+        "DESTINATION_UNAVAILABLE",
+        "PROVIDER_UNAVAILABLE",
+        "PROVIDER_TIMEOUT",
+        "UNKNOWN_PROVIDER_FAILURE"
+      ]
+    },
+    "reported_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{6}Z$"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "reported_status": {
+            "const": "fulfilled"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "fulfilled_quantity": {
+            "type": "string"
+          },
+          "fulfilled_at": {
+            "type": "string"
+          },
+          "external_reference": {
+            "type": "string"
+          },
+          "failure_code": {
+            "type": "null"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "fulfilled_quantity": {
+            "type": "null"
+          },
+          "fulfilled_at": {
+            "type": "null"
+          },
+          "external_reference": {
+            "type": "null"
+          },
+          "failure_code": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  ]
+}

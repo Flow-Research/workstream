@@ -39,6 +39,7 @@ type metadata struct {
 }
 
 type row struct {
+	TaskSize             string   `json:"task_size"`
 	ExternalTaskID       string   `json:"external_task_id"`
 	Title                string   `json:"title"`
 	Description          string   `json:"description"`
@@ -201,7 +202,7 @@ func exactQuotedField(source []byte, normalizedLength int) (string, bool) {
 func headers(values []string) (map[string]int, error) {
 	allowed := map[string]bool{
 		"external_task_id": true, "source_id": true, "title": true, "description": true,
-		"task_type": true, "category": true, "difficulty": true, "skill_tags": true,
+		"task_type": true, "category": true, "difficulty": true, "task_size": true, "skill_tags": true,
 		"languages": true, "tools": true, "estimated_time_minutes": true,
 		"acceptance_criteria": true, "rejection_criteria": true,
 	}
@@ -243,9 +244,16 @@ func parseRow(values []string, columns map[string]int, index int) (row, error) {
 		return ""
 	}
 	result := row{
+		TaskSize:       "small",
 		ExternalTaskID: get("external_task_id"), Title: get("title"), Description: get("description"),
 		TaskType: get("task_type"), Difficulty: get("difficulty"), SkillTags: []string{},
 		AcceptanceCriteria: get("acceptance_criteria"), RejectionCriteria: get("rejection_criteria"),
+	}
+	if size := strings.TrimSpace(get("task_size")); size != "" {
+		if size != "small" && size != "medium" && size != "large" {
+			return row{}, invalid(index, "task_size", "invalid_task_size")
+		}
+		result.TaskSize = size
 	}
 	for _, field := range []struct {
 		name     string

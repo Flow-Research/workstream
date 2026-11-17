@@ -26,6 +26,16 @@
       "additionalProperties": false,
       "description": "Task instructions only; source custody and record IDs are server-owned.",
       "properties": {
+        "task_size": {
+          "default": "small",
+          "enum": [
+            "small",
+            "medium",
+            "large"
+          ],
+          "title": "Task Size",
+          "type": "string"
+        },
         "external_task_id": {
           "maxLength": 200,
           "minLength": 1,

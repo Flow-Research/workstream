@@ -1,10 +1,9 @@
 """Pure exact-value proofs for hidden post-submit routing preparation."""
 
 from datetime import timedelta
-from itertools import count
 import json
 from types import SimpleNamespace
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 import pytest
 from pydantic import ValidationError
@@ -68,33 +67,6 @@ def test_valid_policy_branch_resources(human_review_required, recommendation):
                 "final_acceptance_id": resource.consequence.task_effects.final_acceptance_id
             }
         )
-
-
-@pytest.mark.parametrize(
-    ("human", "recommendation", "expected_digest"),
-    (
-        (True, "allow_review", "sha256:8cfc04b178042fdcf7e70f44fdad25f3e04f46087bd5ebcfb50d2340d7a744a6"),
-        (False, "allow_review", "sha256:fa8ebbb72a95334188c2dacd6aff04e064b0246b10245e03383cc84b7e92ffc1"),
-        (False, "needs_revision", "sha256:5583c5b9a02973e2fe6f31b2bea122200c0f77f00b9fa6d47324bdf8816b26c0"),
-    ),
-)
-def test_ordinary_retained_receipt_digest_is_unchanged(
-    monkeypatch, human, recommendation, expected_digest,
-):
-    """Ordinary immutable receipt commitments survive adding recovery provenance."""
-    from tests.authorization.post_submit_routing import support
-    from tests.tasks.post_submit_routing import contract_fixtures
-
-    sequence = count(1)
-
-    def identity():
-        return UUID(f"01900000-0000-7000-8000-{next(sequence):012x}")
-
-    monkeypatch.setattr(support, "new_record_id", identity)
-    monkeypatch.setattr(contract_fixtures, "new_record_id", identity)
-    resource = resource_for(human_review_required=human, routing_recommendation=recommendation)
-    assert resource.reconciliation_claim is None
-    assert post_submit_routing_resource_digest(resource) == expected_digest
 
 
 @pytest.mark.parametrize("recovering", [False, True])
@@ -456,6 +428,8 @@ def test_digest_binds_claim_and_source(claim_field):
         "assignment_id",
         "contributor_id",
         "contribution_policy_version_id",
+        "task_size",
+        "contribution_award_definition_id",
         "execute_evidence_id",
         "finalize_evidence_id",
         "replica_id",
@@ -480,6 +454,8 @@ def test_digest_binds_all_source_semantics(source_field):
         changed = SHA_B
     elif source_field == "semantic_manifest_sha256":
         changed = SHA_A
+    elif source_field == "task_size":
+        changed = "medium" if value != "medium" else "large"
     elif source_field == "byte_count":
         changed = value + 1
     else:

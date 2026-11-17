@@ -1,5 +1,5 @@
 {
-  "canonical_sha256": "f8c0684b499f49b53428332dbfb28038bb2dd3c0a4f2495ecb6868307ec760e3",
+  "canonical_sha256": "4fb0a627f63e6cbd7ba60b4916b60aa3c07c984980db354a99bdcbf33db742cd",
   "components": {
     "schemas": {
       "ApiError": {
@@ -113,7 +113,6 @@
             "enum": [
               "ready",
               "context_blocked",
-              "revision_limit_reached",
               "revision_deadline_expired"
             ],
             "title": "Disposition",
@@ -163,6 +162,9 @@
           "prior": {
             "$ref": "#/components/schemas/RevisionContextSnapshot"
           },
+          "prior_reward_selection": {
+            "$ref": "#/components/schemas/ContributorRewardSelection"
+          },
           "remaining_microseconds": {
             "anyOf": [
               {
@@ -204,6 +206,16 @@
                 "type": "null"
               }
             ]
+          },
+          "target_reward_selection": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ContributorRewardSelection"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -224,9 +236,80 @@
           "direction",
           "prior",
           "target",
+          "prior_reward_selection",
+          "target_reward_selection",
           "changes"
         ],
         "title": "ContributorRevisionContext",
+        "type": "object"
+      },
+      "ContributorRewardSelection": {
+        "additionalProperties": false,
+        "description": "Exact earned terms for revision acknowledgement, without internal bindings.",
+        "properties": {
+          "compensation_mode": {
+            "enum": [
+              "unpaid",
+              "compensated"
+            ],
+            "title": "Compensation Mode",
+            "type": "string"
+          },
+          "instrument": {
+            "anyOf": [
+              {
+                "enum": [
+                  "money",
+                  "project_points"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Instrument"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quantity"
+          },
+          "task_size": {
+            "enum": [
+              "small",
+              "medium",
+              "large"
+            ],
+            "title": "Task Size",
+            "type": "string"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          }
+        },
+        "required": [
+          "compensation_mode",
+          "task_size",
+          "instrument",
+          "unit",
+          "quantity"
+        ],
+        "title": "ContributorRewardSelection",
         "type": "object"
       },
       "HTTPValidationError": {
@@ -420,6 +503,15 @@
             "title": "Task Id",
             "type": "string"
           },
+          "task_size": {
+            "enum": [
+              "small",
+              "medium",
+              "large"
+            ],
+            "title": "Task Size",
+            "type": "string"
+          },
           "task_type": {
             "anyOf": [
               {
@@ -444,6 +536,7 @@
         "required": [
           "task_id",
           "project_id",
+          "task_size",
           "title",
           "description",
           "task_type",
@@ -988,6 +1081,6 @@
     "method": "GET",
     "openapi_version": "3.1.0",
     "path": "/api/v1/projects/{project_id}/tasks/{task_id}",
-    "repository_sha": "f0431385573eb53353c5ffc3c6cdb6a93d206b73"
+    "repository_sha": "f5d795910be6f5e8256d7261857de1ce82f2fa39"
   }
 }

@@ -28,6 +28,7 @@ from app.db.session import dispose_engine  # noqa: E402
 from scripts.bootstrap_access_administrator import _run as run_bootstrap  # noqa: E402
 from tests.authorization.admin_access.support import create_project  # noqa: E402
 from tests.conftest import (  # noqa: E402
+    configured_source_instance_id as configured_source_instance_id,
     clean_postgres_database as clean_postgres_database,
     postgres_database_url as postgres_database_url,
 )
@@ -49,6 +50,7 @@ async def test_admin_inspection_follows_real_authority_and_scope(
     tmp_path: Path, cli, clean_postgres_database
 ) -> None:
     env = api_environment()
+    env["WORKSTREAM_ARTIFACT_SCRATCH_ROOT"] = str(tmp_path / "artifact-scratch")
     assert env["WORKSTREAM_DATABASE_URL"] == clean_postgres_database
     env["WORKSTREAM_E2E_FLOW_ISSUER"] = "https://identity.flowresearch.tech"
     env["WORKSTREAM_FLOW_AUTH_ISSUER"] = env["WORKSTREAM_E2E_FLOW_ISSUER"]
@@ -195,7 +197,7 @@ async def test_admin_inspection_follows_real_authority_and_scope(
                     assert value == expected.json()
                 assert (
                     inspected(cli, origin, tokens["auditor"], "permissions")["total"]
-                    == 94
+                    == 97
                 )
                 assert (
                     inspected(cli, origin, tokens["auditor"], "role-definitions")[

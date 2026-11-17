@@ -1,5 +1,5 @@
 {
-  "canonical_sha256": "71a41267cce48ef486d90bae34850659edcde9455a75ffd971fcdcb928f43f95",
+  "canonical_sha256": "2db0f5d1439ad1a66a47543889a0e0c88d063c3d94a54f1780398470f6dc483b",
   "components": {
     "schemas": {
       "ApiError": {
@@ -168,7 +168,6 @@
             "enum": [
               "ready",
               "context_blocked",
-              "revision_limit_reached",
               "revision_deadline_expired"
             ],
             "title": "Disposition",
@@ -218,6 +217,9 @@
           "prior": {
             "$ref": "#/components/schemas/RevisionContextSnapshot"
           },
+          "prior_reward_selection": {
+            "$ref": "#/components/schemas/ContributorRewardSelection"
+          },
           "remaining_microseconds": {
             "anyOf": [
               {
@@ -259,6 +261,16 @@
                 "type": "null"
               }
             ]
+          },
+          "target_reward_selection": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ContributorRewardSelection"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -279,9 +291,80 @@
           "direction",
           "prior",
           "target",
+          "prior_reward_selection",
+          "target_reward_selection",
           "changes"
         ],
         "title": "ContributorRevisionContext",
+        "type": "object"
+      },
+      "ContributorRewardSelection": {
+        "additionalProperties": false,
+        "description": "Exact earned terms for revision acknowledgement, without internal bindings.",
+        "properties": {
+          "compensation_mode": {
+            "enum": [
+              "unpaid",
+              "compensated"
+            ],
+            "title": "Compensation Mode",
+            "type": "string"
+          },
+          "instrument": {
+            "anyOf": [
+              {
+                "enum": [
+                  "money",
+                  "project_points"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Instrument"
+          },
+          "quantity": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quantity"
+          },
+          "task_size": {
+            "enum": [
+              "small",
+              "medium",
+              "large"
+            ],
+            "title": "Task Size",
+            "type": "string"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          }
+        },
+        "required": [
+          "compensation_mode",
+          "task_size",
+          "instrument",
+          "unit",
+          "quantity"
+        ],
+        "title": "ContributorRewardSelection",
         "type": "object"
       },
       "ContributorTaskDetail": {
@@ -386,6 +469,15 @@
             "title": "Task Id",
             "type": "string"
           },
+          "task_size": {
+            "enum": [
+              "small",
+              "medium",
+              "large"
+            ],
+            "title": "Task Size",
+            "type": "string"
+          },
           "task_type": {
             "anyOf": [
               {
@@ -410,6 +502,7 @@
         "required": [
           "task_id",
           "project_id",
+          "task_size",
           "title",
           "description",
           "task_type",
@@ -832,10 +925,20 @@
             "format": "uuid",
             "title": "Contribution Policy Version Id",
             "type": "string"
+          },
+          "task_size": {
+            "enum": [
+              "small",
+              "medium",
+              "large"
+            ],
+            "title": "Task Size",
+            "type": "string"
           }
         },
         "required": [
           "contribution_policy_version_id",
+          "task_size",
           "accepted_submission",
           "completed_review"
         ],
@@ -1239,6 +1342,6 @@
     "method": "GET",
     "openapi_version": "3.1.0",
     "path": "/api/v1/tasks/{task_id}/work-context",
-    "repository_sha": "8b068f2b788f159b1085d47f162c39ce3323d5b6"
+    "repository_sha": "f5d795910be6f5e8256d7261857de1ce82f2fa39"
   }
 }

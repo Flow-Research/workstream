@@ -38,12 +38,13 @@ class TaskRoutingSourcePreparer:
 
     def __init__(
         self, session: AsyncSession, *, evaluations: EvaluationCoordinationPort,
-        projects: ProjectLockedPolicyContextPort,
+        projects: ProjectLockedPolicyContextPort, rewards,
     ) -> None:
         self._session = session
         self._tasks = TaskRepository(session)
         self._requests = TaskRoutingRequests(session, evaluations)
         self._projects = projects
+        self._rewards = rewards
 
     async def prepare(
         self, event_id: UUID, completion: EvaluationCompletion,
@@ -159,7 +160,10 @@ class TaskRoutingSourcePreparer:
                 raise TaskRoutingRequestUnavailable("routing revision count differs")
             # PROJECT custody precedes the CHECKERS fence, so the candidate is
             # selected before the result shows whether this is a coverage return.
-            candidate = await select_candidate(self._projects, context)
+            candidate = await select_candidate(
+                self._projects, self._rewards, context, task_size=submission.task_size,
+                prior_award_definition_id=submission.contribution_award_definition_id,
+            )
         if stage:
             request, verified = await self._requests._stage(event_id, completion)
         else:
@@ -222,6 +226,8 @@ class TaskRoutingSourcePreparer:
             assignment_id=UUID(assignment.id),
             contributor_id=UUID(submission.contributor_id),
             contribution_policy_version_id=submission.contribution_policy_version_id,
+            task_size=submission.task_size,
+            contribution_award_definition_id=submission.contribution_award_definition_id,
             checker_run_id=request.checker_run_id,
             evaluation_request_id=request.evaluation_request_id,
             request_digest=request.evaluation_request_digest,

@@ -11,7 +11,7 @@ from uuid import UUID
 from sqlalchemy import case, func, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.contributions.api import LockedCompensationTermsPort
+from app.modules.contributions.api import LockedCompensationTermsPort, LockedCompensationSelection
 from app.modules.tasks.api.contributor_reads import (
     AssignmentState, ContributorAssignment, ContributorAssignmentCounts, ContributorAssignmentQuery,
     ContributorLatestSubmission, ContributorSubmission,
@@ -45,11 +45,11 @@ def next_action(
     return "none"
 
 
-def _locked_terms(compensation, version_id):
+def _locked_terms(compensation, selection):
     """A claim without its locked terms is an integrity failure, reported as unavailable."""
-    if version_id not in compensation:
+    if selection not in compensation:
         raise ValueError("assignment locked compensation terms are missing")
-    return compensation[version_id]
+    return compensation[selection]
 
 
 def _keyset(statement, page, *, updated_since, after, limit):
@@ -87,7 +87,8 @@ async def read_assignment_page(
     rows = select(
         assignment.id, assignment.project_id, assignment.task_id, assignment.contributor_id, assignment.status,
         assignment.assigned_at, assignment.started_at, assignment.released_at,
-        assignment.submitter_contribution_policy_version_id, task.title,
+        assignment.submitter_contribution_policy_version_id,
+        assignment.submitter_task_size, assignment.submitter_award_definition_id, task.title,
         task.status.label("task_status"), task.locked_guide_version,
         func.greatest(
             assignment.updated_at, case((active, task.updated_at)), submitted.c.stamp, revised.c.stamp,
@@ -110,7 +111,9 @@ async def read_assignment_page(
     compensation = {}
     for project_id in {row["project_id"] for row in selected}:
         compensation.update(await tasks.locked_compensation(UUID(str(project_id)), tuple(
-            row["submitter_contribution_policy_version_id"] for row in selected
+            LockedCompensationSelection(row["submitter_contribution_policy_version_id"],
+                                        row["submitter_task_size"], row["submitter_award_definition_id"])
+            for row in selected
             if row["project_id"] == project_id
         )))
     items = []
@@ -127,7 +130,9 @@ async def read_assignment_page(
                 row["locked_guide_version"] if row_state == "active"
                 else submission[1] if submission is not None else None
             ),
-            compensation=_locked_terms(compensation, row["submitter_contribution_policy_version_id"]),
+            compensation=_locked_terms(compensation, LockedCompensationSelection(
+                row["submitter_contribution_policy_version_id"], row["submitter_task_size"],
+                row["submitter_award_definition_id"])),
             latest_submission=submission[0] if submission is not None else None,
             revision=revision,
             next_action=next_action(

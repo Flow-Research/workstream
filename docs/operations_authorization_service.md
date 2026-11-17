@@ -733,15 +733,18 @@ actor, project, role, and cause event before a consumer changes product state.
 Revoking one role must leave the other project roles and all AdminRoleGrants
 unchanged.
 
-The closed registry now has seventeen fixed-service identities: sixteen
-action-bearing identities with twenty-five matrix memberships, plus the
-target-only `workstream.compensation.adapter` identity. The action-bearing
-set comprises seven ART identities, project setup, six exact REV identities,
-the active shared outbox dispatcher, and the task assignment reconciler. Missing
-provisioned rows deny without stopping the application.
-The target-only identity has no matrix membership, and the REV actions remain
-unavailable. Dispatcher authority grants no feature permission. Do not create a
-shared review service or a database service-grant table.
+The closed registry has twenty-one fixed-service identities and forty-five
+registered service-action memberships. The compensation adapter has exactly
+three active memberships: `compensation.fulfillment.source.read`,
+`compensation.fulfillment.report`, and `compensation.fulfillment.exception.report`.
+Its provisioned identity can be selected as a binding target. Request-local
+prepared authorization binds the actual active actor/link and original source
+for report, exception and the disjoint source-evidence/exact-event reads. The
+four service APIs require the original binding actor even after binding
+suspension; their evidence does not authorize Finance/provider execution. Missing
+provisioned rows deny without stopping the application. Dispatcher authority
+grants no feature permission. Do not create a shared review service or a
+database service-grant table.
 
 Historically, AUTH-12B extended the registry to an eighth identity,
 `workstream.project.setup`. Its execution memberships include:
@@ -851,12 +854,14 @@ IDs, subject kind, lifecycle state, and timestamps. Neither response includes
 issuer, subject, contact email, reason, lifecycle actor, token/claim, grant,
 assignment, or service-action-matrix data.
 
-Controlled provisioning may create the target-only
-`workstream.compensation.adapter` profile and service identity link. Operators
-must not add a service-action matrix row for it: it is a binding target, not an
-action-bearing service principal. CP03A left all adapter-binding actions
-unavailable; CP03B is the separate completed Finance Authority activation
-boundary.
+Controlled provisioning may create the `workstream.compensation.adapter`
+profile and service identity link for a binding target. Its exact three
+fulfillment matrix memberships are active for the four original-bound evidence
+APIs, each requiring fresh request authority and current custody. They grant no
+provider execution authority. Operators must not add ad hoc memberships.
+CP03A originally established target eligibility; CP03B separately activated the
+human Finance Authority binding actions. Binding management does not activate
+service fulfillment actions.
 
 The kernel locks and revalidates the human caller profile, exact link, and
 matched system grant before target lookup and holds those locks through

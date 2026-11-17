@@ -60,8 +60,8 @@ async def test_assignment_insert_rejects_same_project_wrong_stamp_direct_sql(tas
         assert other.contribution_policy_version_id != expected
         statement = text(
             "INSERT INTO task_assignments(id,task_id,project_id,contributor_id,assigned_by,status,"
-            "submitter_contribution_policy_version_id) "
-            "VALUES(:id,:task,:project,:actor,:assigned_by,'active',:policy)"
+            "submitter_contribution_policy_version_id,submitter_task_size,submitter_award_definition_id) "
+            "VALUES(:id,:task,:project,:actor,:assigned_by,'active',:policy,:size,:definition)"
         )
         params = dict(
             id=str(new_record_id()),
@@ -70,10 +70,13 @@ async def test_assignment_insert_rejects_same_project_wrong_stamp_direct_sql(tas
             actor=actor,
             assigned_by=actor,
             policy=other.contribution_policy_version_id,
+            size=stored.task_size,
+            definition=stored.locked_submission_award_definition_id,
         )
-        with pytest.raises(DBAPIError, match="assignment contribution stamp differs from task"):
+        with pytest.raises(DBAPIError, match="assignment contribution stamp differs from task") as failure:
             async with session.begin_nested():
                 await session.execute(statement, params)
+        assert failure.value.orig.sqlstate == "23514"
         assert (
             await session.scalar(select(TaskAssignment).where(TaskAssignment.task_id == task["id"]))
             is None
@@ -210,6 +213,8 @@ async def test_submission_sql_requires_exact_initial_assignment_and_freezes_its_
             contributor_id=assignment.contributor_id,
             task_assignment_id=assignment.id,
             contribution_policy_version_id=assignment.submitter_contribution_policy_version_id,
+            task_size=assignment.submitter_task_size,
+            contribution_award_definition_id=assignment.submitter_award_definition_id,
             version=1,
             summary="Database lineage prerequisite",
             worker_attestation="SQL guard test",
@@ -279,12 +284,13 @@ async def test_assignment_insert_rejects_foreign_project_tuples_direct_sql(task_
         assert local.locked_contribution_policy_version_id != other.locked_contribution_policy_version_id
         statement = text(
             "INSERT INTO task_assignments(id,task_id,project_id,contributor_id,assigned_by,status,"
-            "submitter_contribution_policy_version_id) "
-            "VALUES(:id,:task,:project,:actor,:assigned_by,'active',:policy)"
+            "submitter_contribution_policy_version_id,submitter_task_size,submitter_award_definition_id) "
+            "VALUES(:id,:task,:project,:actor,:assigned_by,'active',:policy,:size,:definition)"
         )
         params = dict(id=str(new_record_id()), task=local.id, project=local.project_id,
                       actor=local.created_by, assigned_by=local.created_by,
-                      policy=local.locked_contribution_policy_version_id)
+                      policy=local.locked_contribution_policy_version_id,
+                      size=local.task_size, definition=local.locked_submission_award_definition_id)
         # Isolate each selector, then also reject an internally valid foreign
         # tuple. A policy mismatch alone cannot prove project binding.
         for changed in (
@@ -292,9 +298,10 @@ async def test_assignment_insert_rejects_foreign_project_tuples_direct_sql(task_
             {"policy": other.locked_contribution_policy_version_id},
             {"project": other.project_id, "policy": other.locked_contribution_policy_version_id},
         ):
-            with pytest.raises(DBAPIError, match="assignment contribution stamp differs from task"):
+            with pytest.raises(DBAPIError, match="assignment contribution stamp differs from task") as failure:
                 async with session.begin_nested():
                     await session.execute(statement, params | changed)
+            assert failure.value.orig.sqlstate == "23514"
             assert await session.get(TaskAssignment, params["id"]) is None
         await session.execute(statement, params)
         await session.commit()

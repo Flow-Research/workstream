@@ -7,10 +7,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.hashing import canonical_json_hash
-from app.modules.tasks.api.task_import import TaskImportRow
 from app.modules.tasks.api.task_import_membership import (
-    TaskImportBatchError, TaskImportMemberIdentity,
+    TaskImportBatchError,
+    TaskImportMemberIdentity,
 )
+from app.modules.tasks.api.task_import import TaskImportRow
 from app.modules.tasks.models import TaskCommandReceipt, TaskImportBatch, TaskImportBatchMember
 from app.modules.tasks.schemas import TaskImportBatchResponse
 
@@ -58,13 +59,14 @@ class TaskImportMembership:
         ).where(TaskImportBatchMember.batch_id == batch.id).order_by(TaskImportBatchMember.row_index))).all()
         if len(rows) != batch.row_count:
             raise TaskImportBatchError("task_import_batch_custody_invalid", 409)
+        fields = tuple(TaskImportRow.model_fields)
         manifest = {"schema_version": response.schema_version, "metadata": {"label": response.label},
-                    "tasks": [{field: getattr(task, field) for field in TaskImportRow.model_fields} for task in response.tasks]}
+                    "tasks": [{field: getattr(task, field) for field in fields} for task in response.tasks]}
         if response.label != batch.metadata_label or canonical_json_hash(manifest) != batch.manifest_digest:
             raise TaskImportBatchError("task_import_batch_custody_invalid", 409)
         for index, (member, receipt) in enumerate(rows):
             original = response.tasks[index]
-            instructions = {field: getattr(original, field) for field in TaskImportRow.model_fields}
+            instructions = {field: getattr(original, field) for field in fields}
             if (member.row_index != index or member.project_id != batch.project_id or member.task_id != original.id
                     or member.external_task_id != original.external_task_id
                     or member.row_digest != canonical_json_hash(instructions)

@@ -105,8 +105,12 @@ class FinalAcceptanceParticipant:
             submission_id=source.submission_id, final_acceptance_id=source.id,
             task_assignment_id=task.assignment_id, contributor_id=task.contributor_id,
             contribution_policy_version_id=task.contribution_policy_version_id,
+            task_size=task.task_size,
+            contribution_award_definition_id=task.contribution_award_definition_id,
             artifact_hash=task.content_sha256, correlation_id=request.correlation_id,
             expected_generation=request.expected_generation,
+            source_authorization_decision_id=source.source_authorization_decision_id,
+            source_routing_manifest_id=source.source_routing_manifest_id,
         )
         participation = SubmitterParticipationResult.model_validate(
             await contributions.participate_submitter(participation_request)

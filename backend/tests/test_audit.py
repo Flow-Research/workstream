@@ -16,12 +16,10 @@ import pytest
 from sqlalchemy import delete, text
 from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import (  # type: ignore[import-not-found]
-    AsyncSession,
     async_sessionmaker,
     create_async_engine,
 )
 
-from app.adapters.audit import task_transition_audit
 from app.modules.audit.repository import AuditRepository, LifecycleAuditConflict
 from app.modules.audit.schemas import (
     ActorReferenceKind,
@@ -34,8 +32,6 @@ from app.modules.audit.schemas import (
     LifecycleAuditReferenceKind,
 )
 from app.modules.audit.service import AuditService, LifecycleAuditParticipant
-from app.modules.tasks.api.authorization import TaskAuthorityDecision
-from app.modules.tasks.api.revision_exhaustion import TaskRevisionExhaustionAuditFacts
 from app.modules.tasks.models import AuditEvent
 from tests.assertion_helpers import assert_secret_not_retained
 
@@ -878,34 +874,30 @@ async def test_authority_writer_persists_typed_privacy_neutral_events(audit_fact
     assert future_idempotency is not None
 
 
-async def test_legacy_writer_and_reader_remain_compatible(audit_factory) -> None:
-    event = AuditEvent(
-        id=str(new_record_id()),
-        entity_type="task",
-        entity_id=str(new_record_id()),
-        event_type="task_created",
-        from_status=None,
-        to_status="draft",
-        actor_id="legacy-actor",
-        external_subject="opaque-subject",
-        external_issuer="https://issuer.example.test",
-        actor_roles=["project_manager"],
-        claim_snapshot={"bounded": True},
-        auth_source="verified_token",
-        is_dev_auth=False,
-        event_payload={"source_type": "manual"},
+def _artifact_recovery_audit_event(event_id: str) -> AuditEvent:
+    from app.modules.actors.api import ServiceIdentity
+    from app.modules.artifacts.service import ArtifactRecoveryService
+
+    return ArtifactRecoveryService._audit_event(
+        event_id=event_id, event_type="ArtifactRecoveryCompleted",
+        recovery_id=str(new_record_id()), actor_id=ServiceIdentity.ARTIFACT_VERIFIER.value,
+        reason="recover_verified_artifact", payload={"terminal_result_code": "conflict"},
     )
+
+
+async def test_current_artifact_recovery_event_persists_and_reads(audit_factory) -> None:
+    event = _artifact_recovery_audit_event(str(new_record_id()))
     async with audit_factory() as session:
         repository = AuditRepository(session)
         stored = await repository.add_audit_event(event)
         await session.commit()
-        listed = await repository.list_audit_events("task", event.entity_id)
+        listed = await repository.list_audit_events(event.entity_type, event.entity_id)
 
     assert listed == [stored]
     assert stored.event_domain == "legacy_lifecycle"
     assert stored.event_version is None
     assert stored.occurred_at is None
-    assert stored.event_payload == {"source_type": "manual"}
+    assert stored.event_payload == {"terminal_result_code": "conflict"}
 
 
 async def test_authority_event_rollback_leaves_no_row(audit_factory) -> None:
@@ -918,7 +910,7 @@ async def test_authority_event_rollback_leaves_no_row(audit_factory) -> None:
 
 
 async def test_authority_invalidation_requires_an_existing_authority_cause(audit_factory) -> None:
-    legacy_id = str(new_record_id())
+    artifact_event_id = str(new_record_id())
     invalidation = _authority_input(
         AuthorityEventType.AUTHORITY_INVALIDATION_REQUESTED,
         permission_id=None,
@@ -930,28 +922,15 @@ async def test_authority_invalidation_requires_an_existing_authority_cause(audit
         with pytest.raises(ValueError, match="existing authority event"):
             await AuditService(session).add_authority_event(invalidation)
         await AuditRepository(session).add_audit_event(
-            AuditEvent(
-                id=legacy_id,
-                entity_type="task",
-                entity_id=str(new_record_id()),
-                event_type="task_created",
-                actor_id="legacy",
-                external_subject="opaque",
-                external_issuer="https://issuer.test",
-                actor_roles=[],
-                claim_snapshot={},
-                auth_source="verified_token",
-                is_dev_auth=False,
-                event_payload={},
-            )
+            _artifact_recovery_audit_event(artifact_event_id)
         )
-        invalidation.invalidation_cause_event_id = UUID(legacy_id)
+        invalidation.invalidation_cause_event_id = UUID(artifact_event_id)
         with pytest.raises(ValueError, match="existing authority event"):
             await AuditService(session).add_authority_event(invalidation)
         assert await session.get(AuditEvent, str(invalidation.event_id)) is None
 
 
-async def test_legacy_repository_rejects_unvalidated_authority_rows(audit_factory) -> None:
+async def test_raw_repository_rejects_unvalidated_authority_rows(audit_factory) -> None:
     raw = AuditEvent(
         id=str(new_record_id()),
         entity_type="actor",
@@ -973,29 +952,16 @@ async def test_legacy_repository_rejects_unvalidated_authority_rows(audit_factor
 
 async def test_database_rejects_malformed_and_mutated_audit_rows(audit_factory) -> None:
     value = _authority_input(AuthorityEventType.SENSITIVE_AUTHORIZATION_ALLOWED)
-    legacy_id = str(new_record_id())
+    artifact_event_id = str(new_record_id())
     async with audit_factory() as session:
         await AuditService(session).add_authority_event(value)
         await AuditRepository(session).add_audit_event(
-            AuditEvent(
-                id=legacy_id,
-                entity_type="task",
-                entity_id=str(new_record_id()),
-                event_type="task_created",
-                actor_id="legacy-actor",
-                external_subject="opaque-subject",
-                external_issuer="https://issuer.example.test",
-                actor_roles=[],
-                claim_snapshot={},
-                auth_source="verified_token",
-                is_dev_auth=False,
-                event_payload={},
-            )
+            _artifact_recovery_audit_event(artifact_event_id)
         )
         await session.commit()
 
     async with audit_factory() as session:
-        for event_id in (str(value.event_id), legacy_id):
+        for event_id in (str(value.event_id), artifact_event_id):
             with pytest.raises(DBAPIError, match="append-only"):
                 await session.execute(
                     text("update audit_events set reason = 'changed' where id = :id"),
@@ -1016,9 +982,9 @@ async def test_database_rejects_malformed_and_mutated_audit_rows(audit_factory) 
             await session.execute(
                 text(
                     "select id, reason, event_domain from audit_events "
-                    "where id in (:authority_id, :legacy_id) order by id"
+                    "where id in (:authority_id, :artifact_event_id) order by id"
                 ),
-                {"authority_id": str(value.event_id), "legacy_id": legacy_id},
+                {"authority_id": str(value.event_id), "artifact_event_id": artifact_event_id},
             )
         ).all()
         observed_rows = {row.id: [row.reason, row.event_domain] for row in rows}
@@ -1026,7 +992,7 @@ async def test_database_rejects_malformed_and_mutated_audit_rows(audit_factory) 
             "authorization_evaluation",
             "authority",
         ]
-        assert observed_rows[UUID(legacy_id)] == [None, "legacy_lifecycle"]
+        assert observed_rows[UUID(artifact_event_id)] == ["recover_verified_artifact", "legacy_lifecycle"]
         assert len(observed_rows) == 2
 
         with pytest.raises(IntegrityError):
@@ -1156,7 +1122,7 @@ async def test_database_rejects_malformed_and_mutated_audit_rows(audit_factory) 
             ":correlation_id, :cause_id, 'actor_profile', :target_ref, "
             "'authority_state_changed', '{\"effective\": true}', '{\"effective\": false}')"
         )
-        for cause_id in (str(new_record_id()), legacy_id):
+        for cause_id in (str(new_record_id()), artifact_event_id):
             with pytest.raises(IntegrityError):
                 await session.execute(
                     invalidation_insert,
@@ -1203,57 +1169,6 @@ def _lifecycle_input(**overrides) -> LifecycleAuditEventInput:
     return LifecycleAuditEventInput(**values)
 
 
-async def test_revision_exhaustion_adapter_stages_authorization_digest(monkeypatch) -> None:
-    ids = {key: new_record_id() for key in (
-        "event", "project", "task", "assignment", "submission", "routing_manifest",
-        "exhaustion_receipt", "actor", "outbox_event", "decision", "identity_link",
-    )}
-    digest = "sha256:" + "a" * 64
-    staged: list[AuditEvent] = []
-
-    async def stage(_repository: AuditRepository, event: AuditEvent) -> AuditEvent:
-        staged.append(event)
-        return event
-
-    monkeypatch.setattr(AuditRepository, "_add_validated_lifecycle_event", stage)
-    await task_transition_audit(cast(AsyncSession, object())).record_revision_exhaustion(
-        TaskRevisionExhaustionAuditFacts(
-            event_id=ids["event"],
-            project_id=ids["project"],
-            task_id=ids["task"],
-            assignment_id=ids["assignment"],
-            submission_id=ids["submission"],
-            routing_manifest_id=ids["routing_manifest"],
-            exhaustion_receipt_id=ids["exhaustion_receipt"],
-            actor_profile_id=ids["actor"],
-            outbox_event_id=ids["outbox_event"],
-            authority=TaskAuthorityDecision(
-                decision_id=ids["decision"],
-                identity_link_id=ids["identity_link"],
-                resource_context_digest=digest,
-                resource_context_json="{}",
-            ),
-        )
-    )
-
-    assert len(staged) == 1
-    assert staged[0].event_payload == {
-        "references": {
-            "project_id": str(ids["project"]),
-            "task_id": str(ids["task"]),
-            "assignment_id": str(ids["assignment"]),
-            "submission_id": str(ids["submission"]),
-            "routing_manifest_id": str(ids["routing_manifest"]),
-            "revision_exhaustion_id": str(ids["exhaustion_receipt"]),
-            "authorization_decision_id": str(ids["decision"]),
-            "outbox_event_id": str(ids["outbox_event"]),
-        },
-        "authorization_resource_digest": digest,
-    }
-
-
-
-
 def test_lifecycle_input_covers_every_canonical_event_entity_pair() -> None:
     event_groups = {
         LifecycleAuditEntityType.CHECKER_RUN: {LifecycleAuditEventType.CHECKER_RETRY_REQUESTED},
@@ -1266,7 +1181,6 @@ def test_lifecycle_input_covers_every_canonical_event_entity_pair() -> None:
             LifecycleAuditEventType.TASK_POST_SUBMIT_ROUTED,
             LifecycleAuditEventType.TASK_REVISION_CONTEXT_REPAIRED,
             LifecycleAuditEventType.TASK_REVISION_EXPIRED,
-            LifecycleAuditEventType.TASK_REVISION_EXHAUSTED,
         },
         LifecycleAuditEntityType.REVIEW_QUEUE_ENTRY: {
             LifecycleAuditEventType.REVIEW_QUEUE_ENTRY_CREATED,
@@ -1391,15 +1305,6 @@ def test_lifecycle_input_covers_every_canonical_event_entity_pair() -> None:
                     LifecycleAuditReferenceKind.ROUTING_MANIFEST: new_record_id(),
                 })
                 transition.update(from_status="evaluation_pending", to_status="review_pending")
-            if event_type is LifecycleAuditEventType.TASK_REVISION_EXHAUSTED:
-                references.update({reference: new_record_id() for reference in (
-                    LifecycleAuditReferenceKind.SUBMISSION,
-                    LifecycleAuditReferenceKind.ROUTING_MANIFEST,
-                    LifecycleAuditReferenceKind.REVISION_EXHAUSTION,
-                    LifecycleAuditReferenceKind.OUTBOX_EVENT,
-                )})
-                transition.update(from_status="needs_revision", to_status="ready",
-                                  authorization_resource_digest="sha256:" + "a" * 64)
             if event_type in {
                 LifecycleAuditEventType.TASK_REVISION_CONTEXT_REPAIRED,
                 LifecycleAuditEventType.TASK_REVISION_EXPIRED,

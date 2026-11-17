@@ -7,6 +7,7 @@ from typing import Literal
 from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
 
+from app.modules.authorization.domain.fulfillment_evidence import FulfillmentEvidenceResourceContext
 from app.modules.authorization.domain.guide_compilation import ProjectGuideCompilationExecuteResourceContext, ProjectGuideCompilationRequestResourceContext
 from app.modules.authorization.domain.resource_digest import authorization_resource_digest as authorization_resource_digest
 from app.modules.authorization.domain.guide_proposals import GuideProposalResourceContext
@@ -1062,7 +1063,7 @@ class PreSubmitCheckerInputResourceContext(PreSubmitCheckerInputPreparationConte
 
 
 AuthorizationResourceContext = (
-    ReviewLifecycleActivationContract | contribution_reads.ContributionSelfReadResourceContext | contribution_reads.ContributionProjectReadResourceContext
+    FulfillmentEvidenceResourceContext | ReviewLifecycleActivationContract | contribution_reads.ContributionSelfReadResourceContext | contribution_reads.ContributionProjectReadResourceContext
     | checker_models.CheckerModelCallResourceContext
     | checker_models.ProjectModelAdministrationResourceContext
     | checker_outputs.CheckerOutputResourceContext

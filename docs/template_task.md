@@ -23,6 +23,14 @@
 
 `DRAFT`
 
+## Task Size
+
+`small | medium | large`
+
+Creation defaults to `small` only when size is omitted. Explicit null is invalid.
+The recorded size is immutable; difficulty does not determine it. Financial terms
+come from the governing ContributionPolicy, without task-local price overrides.
+
 ## Difficulty
 
 `<easy | medium | hard | expert>`

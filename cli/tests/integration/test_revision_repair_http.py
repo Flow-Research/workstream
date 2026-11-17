@@ -69,6 +69,7 @@ def repaired(source="parent", *, clock="running"):
             disposition="context_blocked",
             direction=None,
             target=None,
+            target_reward_selection=None,
             changes=[],
         )
     return value

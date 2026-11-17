@@ -22,6 +22,7 @@ from tests.contributions.exports.conftest import (
     rsa_signing_material as rsa_signing_material,
 )
 from tests.conftest import (
+    configured_source_instance_id as configured_source_instance_id,
     pagination_cursor_hmac_secret as pagination_cursor_hmac_secret,
 )
 from tests.authorization.admin_access.fixtures import (
@@ -63,6 +64,7 @@ async def test_audit_task_reads_real_public_api_scope_and_fresh_authority(
         session.add(
             WorkstreamTask(
                 id=str(empty_task),
+                task_size="small",
                 project_id=str(project),
                 title="Empty evidence",
                 description="Fixture task",

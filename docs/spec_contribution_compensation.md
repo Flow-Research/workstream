@@ -63,11 +63,15 @@ flush-only consumer of a real stored FinalAcceptance and assignment lineage. It
 runs only inside the caller-owned root transaction after acquiring the supplied
 canonical lifecycle fence. It creates or exactly replays one
 `accepted_submission` ContributionRecord and the complete frozen award set:
-zero awards for unpaid work, one for money-only or points-only work, and two for
-combined work. Compensated replay checks the original correlation UUID and
+zero awards for unpaid work, or the one exact size-selected definition under
+the version's common money or project-points header. Compensated replay checks the original correlation UUID and
 award IDs; unpaid replay retains no correlation to compare. This participant
-adds no acceptance/source writer, TASK transition, authorization claim, route,
-fulfillment root or reviewer contribution.
+adds no acceptance/source writer, TASK transition, authorization claim, route
+or reviewer contribution. COMP now stages one immutable fulfillment root and
+selector-only outbox event with each award in the same transaction. The root
+retains the original authorization decision and routing manifest as provenance;
+those IDs do not independently authorize work. No Finance delivery handler is
+registered by this internal custody step.
 
 The boundary MUST preserve four distinct facts:
 
@@ -153,6 +157,9 @@ id
 contribution_policy_id
 project_id
 version_number
+instrument_type: money | project_points | null
+unit_code: string | null
+adapter_binding_id: UUID | null
 status: draft | published | retired
 created_by
 created_at
@@ -161,6 +168,14 @@ published_at
 retired_by
 retired_at
 ```
+
+All authoring, publication and reads use one current reward implementation
+within unreleased v0.1. A compensated policy version has one common instrument,
+unit and adapter binding for both contribution rules. A wholly unpaid version
+has explicit null financial headers and needs no financial setup. Superseded
+implementations, old-format readers and compatibility-only fixtures/tests are
+removed. Incompatible data transitions fail atomically without deleting facts
+or inventing prices.
 
 Draft content may be edited through the authorized policy service. Published
 and retired content is immutable. Publishing a later version affects a work
@@ -185,8 +200,11 @@ compensation_mode: unpaid | compensated
 
 Every publishable policy version MUST contain exactly one rule for each
 contribution type. An `unpaid` rule MUST have no award definitions. A
-`compensated` rule MUST have one or two definitions: at most one `money` and at
-most one `project_points` definition.
+`compensated` `accepted_submission` rule MUST have exactly three definitions,
+one each for `small`, `medium`, and `large`. A compensated `completed_review`
+rule MUST have exactly one fixed definition with null task size. All definitions
+match the version's common financial header. There is no alternate old graph
+validator, writer or response/hash format.
 
 ### ContributionAwardDefinition
 
@@ -202,6 +220,7 @@ instrument_type: money | project_points
 unit_code
 quantity
 adapter_binding_id
+task_size: small | medium | large | null
 ```
 
 Every policy, award, and fulfilled quantity uses the same fixed-point
@@ -224,7 +243,11 @@ configured project-scoped unit; its
 identity is `(project_id, unit_code)`, so equal text in another project is a
 different unit. A definition MUST match the rule's project, policy version,
 contribution type, and unit. Its binding MUST match the project and instrument.
-Published definitions are immutable.
+Published definitions are immutable. New policy input supplies the common
+header, a complete `quantities` object for paid submitter work, and a separate
+fixed `quantity` for paid reviewer work. Unpaid rules contain neither quantity
+field. Per-rule instrument, unit, binding and superseded `definitions` input
+are rejected. Equal or non-monotonic tier amounts are valid explicit choices.
 
 ### ProjectCompensationUnit
 
@@ -307,7 +330,9 @@ route, reviewer participant or fulfillment consumer is registered. Human decisio
 authority remains future work. Migration refuses retained pre-authority sources
 and dependent contribution/award rows unchanged, never backfilling receipts or
 deleting evidence. REV-12A4A supplies scoped lifecycle control;
-fulfillment-root ordinal custody is required only before fulfillment activation.
+COMP fulfillment-root ordinal custody is staged atomically with current awards;
+Finance obligation admission, callbacks and cutoff/drain qualification remain
+required before external fulfillment activation.
 
 Canonical fields:
 
@@ -389,74 +414,134 @@ creation never recalculates, converts, rounds, or accepts binary floating point.
 
 Fulfillment state MUST NOT be stored by mutating the award.
 
+### CompensationFulfillmentRoot
+
+Before entering the live lifecycle phase, configure `WORKSTREAM_SOURCE_INSTANCE_ID`
+with one canonical UUIDv7 provisioned through `app.core.identifiers.new_record_id()`.
+Persist that value in deployment configuration and use it across all API and Celery worker
+replicas and restarts. Missing configuration prevents activation; a value different
+from the anchored REV source prevents further earning even before the first root. Never mint an identity per process
+or rotate it to bypass retained source custody.
+
+The current COMP owner stages one root and its exact initial shared-outbox event
+with each automatically accepted-submission award. Unpaid and human-review
+handoff branches create neither. Fixed completed-review award storage and exports
+remain supported; this root writer does not claim human-review execution.
+The root stores UUIDv7 identity, unique award and increasing ordinal, original
+admission generation, configured source UUID, original binding/route,
+FinalAcceptance/authorization-decision/routing-manifest references, the complete
+canonical obligation, both digests and initial outbox event ID. PostgreSQL
+checks source equality, immutable evidence and deferred award/root/event closure.
+
+Allocation uses the existing held REV fence. Replay requires the stored root and
+event without repair or a new ordinal, including after lifecycle generations
+advance. A suspended original binding remains the earned source. Missing source
+configuration blocks live activation. First LIVE binds that UUID into the existing
+REV control and immutable transition observation under actual AUTH. Later phases
+and restarts retain it; a differently configured process cannot create even the
+first root or reactivate under another UUID. COMP checks through the same held
+REV capability, and native INSERT checks the anchored UUID. No per-request
+deployment identity is generated.
+
+The event contains selectors and digests only and stays unregistered for delivery
+in this step. COMP exposes authenticated report, exact-event lookup, bounded
+source-evidence and exception APIs. Finance HTTP admission, durable delivery,
+execution, product-status reads and cutoff/drain qualification remain unfinished. See the
+[implementation record](../.commitrail/changes/finance-rewards-fulfillment.md).
+
 ### CompensationFulfillmentReceipt
 
-Canonical fields:
+Current immutable storage and four original-bound service APIs implement
+report, exact-event lookup, source evidence and linked exception recording.
+Three active request-bound actions enforce exact service actor/link authority.
+Bounded signed PostgreSQL proof covers replay, response-loss recovery, rollback,
+concurrency, revocation, native closure/immutability and receiver-clock guards.
+Final-head/full-suite and durable delivery qualification remain unfinished;
+these evidence operations grant no payment or delivery authority.
+
+Canonical stored fields:
 
 ```text
 id
-compensation_award_id
+fulfillment_root_id
+award_id
 project_id
+source_instance_id
 adapter_binding_id
 external_event_id
+evidence_ordinal
+recording_lifecycle_generation
 reported_status: fulfilled | failed
-external_reference
-fulfilled_quantity
-fulfilled_at
-failure_code
-reported_at
+report_body
+report_digest
+reporter_actor_id
+reporter_identity_link_id
+authorization_decision_id
+authorization_resource_digest
 received_at
-correlation_id
 ```
 
-Receipts are immutable and idempotent by their exact provider/binding event
-identity. `external_event_id` is an opaque 1-128 character ASCII token matching
-`[A-Za-z0-9._:-]+`, unique per adapter binding. `external_reference` is either
-null or a non-secret opaque token with the same length and character bounds; it
-is required for `fulfilled` and null for `failed`. Neither value is returned by
-contributor/product reads or emitted in integration events.
+`external_event_id` is a canonical Finance-generated UUIDv7, unique per original
+adapter binding. Exact authorized replay retains the original row, allow,
+recording generation, receiver time and ordinal. Changed replay conflicts.
+`report_body` retains the complete closed normalized report; `report_digest`
+hashes that body. Fulfilled quantity must equal the original canonical award
+quantity and unit. `external_reference` is a required non-secret opaque token
+of 1–128 ASCII characters from `[A-Za-z0-9._:-]` for fulfilled reports. Failed
+reports require null quantity, fulfillment time and reference, plus one closed
+code: `ADAPTER_REJECTED`, `DESTINATION_UNAVAILABLE`, `PROVIDER_UNAVAILABLE`,
+`PROVIDER_TIMEOUT` or `UNKNOWN_PROVIDER_FAILURE`.
 
-A fulfilled receipt requires the exact award `NUMERIC(38, 18)` quantity, the
-exact binding unit, and a bounded fulfillment time. A failed receipt requires
-one closed Workstream code:
-`ADAPTER_REJECTED`, `DESTINATION_UNAVAILABLE`, `PROVIDER_UNAVAILABLE`,
-`PROVIDER_TIMEOUT`, or `UNKNOWN_PROVIDER_FAILURE`; unknown provider values map
-to the last code before persistence. Failed receipts have null quantity,
-fulfillment time, and external reference. One award has at most one fulfilled
-receipt. A conflicting replay fails closed.
+The native append guard assigns one receiver clock after custody waits and uses
+it for the 300-second timestamp bounds. Exact retained events have no maximum
+delivery age. At most one fulfilled receipt exists per award. Later failed
+reports retain evidence and cannot lower that historical success.
 
-Raw provider secrets, authentication tokens, unbounded callback bodies,
-free-form messages/codes, headers, signatures, endpoints, credentials, URLs,
-markup, provider metadata, PII, balances, ledgers, and settlement data MUST NOT
-be persisted, logged, emitted, exported,
-or returned. This prohibition does not include the bounded non-secret opaque
-`external_event_id` and `external_reference` identifiers defined above; those
-may be stored only in their canonical receipt/status fields and remain excluded
-from product reads and integration events. Only closed canonical facts, those
-bounded identifiers, and platform-generated digests derived exclusively from
-approved stored receipt fields may cross into receipt, audit, outbox, or
-diagnostic records. Digests derived from provider bodies, tokens, signatures,
-URLs, PII, balances, ledgers, settlement data, or any other forbidden input are
-themselves forbidden and MUST be rejected before persistence.
+### CompensationFulfillmentException
+
+The immutable exception shares the receipt's original source, reporter/AUTH,
+recording-generation, receiver-time and evidence-ordinal fields. Its own fields
+are `id`, `exception_event_id`, `original_receipt_id`,
+`original_fulfillment_event_id`, `kind`, `exception_body` and `exception_digest`.
+Both event IDs are canonical UUIDv7 values. The original row must be this
+award/binding's actual fulfilled receipt. Kind is only `provider_reversal` or
+`provider_status_conflict`; body and digest cover the exact closed request.
+Exact replay retains the original evidence; changed replay conflicts.
+Decode the retained success against its own stored receiver time. The new
+exception receiver time governs only the new observation bounds; a clock step
+back cannot invalidate an immutable successful receipt.
+
+An exception sets persistent attention while preserving historical fulfillment.
+It creates no payout, adjustment, contribution or award. There is no automatic
+clear or repayment operation. Native tables reject update, delete and truncate.
+
+Raw provider secrets, tokens, free-form messages, payloads, headers, signatures,
+URLs, account details and metadata must never cross this boundary. Only closed
+facts, exact event UUIDs, the bounded non-secret reference and their canonical
+digests may persist. Product reads and integration events exclude operational
+provider/event identifiers. Digests of forbidden provider input are forbidden.
 
 ### CompensationStatusProjection
 
-Canonical fields:
+The owner rebuilds this read from immutable evidence; no mutable status row or
+cache owns fulfillment truth:
 
 ```text
-compensation_award_id
 delivery_status: pending_delivery | acknowledged_by_adapter
 fulfillment_status: pending | failed | fulfilled
+fulfillment_attention_required
 latest_receipt_id
-external_reference
+latest_exception_id
 last_failure_code
-delivery_timestamps
-fulfillment_timestamps
 updated_at
 ```
 
-This projection is mutable and rebuildable from immutable awards, delivery
-history, and receipts. It is not eligibility or settlement truth.
+Latest evidence follows the positive cross-table ordinal assigned under the
+existing root mutex, never UUID time, caller time or wall-clock ordering.
+Fulfilled dominates a later failure; a linked exception retains attention.
+A recorded callback establishes adapter observation. Generic OUTBOX completion
+alone does not establish Finance acknowledgement. Actual authenticated delivery
+acknowledgement remains a separate unfinished operation.
 
 ## FinalAcceptance Boundary
 
@@ -658,7 +743,7 @@ Its typed input contains only locked:
 
 It contains no FinalAcceptance, TaskAssignment contribution source, submitter,
 or submitter policy. It creates exactly one `completed_review`, evaluates only
-the reviewer rule, stages zero to two awards, returns typed audit/outbox inputs,
+the reviewer rule, stages zero or one award, returns typed audit/outbox inputs,
 and flushes.
 
 ### Decision branches
@@ -720,7 +805,7 @@ participant in that transaction.
 
 It contains no direct Review or ReviewLease contribution-source fields. It
 creates or exactly replays one `accepted_submission`, evaluates only the frozen
-submitter rule, stages the complete zero-to-two award set, returns immutable
+submitter rule, stages the complete zero-or-one award set, returns immutable
 contribution/award facts, and flushes. Paid replay checks correlation equality;
 unpaid replay has no stored award correlation to compare.
 
@@ -771,8 +856,11 @@ AUTH alone owns:
 
 ACTORS owns and publicly exposes the closed ActorProfile `ServiceIdentity`
 vocabulary. AUTH consumes that vocabulary for controlled provisioning and owns
-which identities are action-bearing; a target-only identity does not acquire a
-service-action matrix row or execution authority.
+which identities have registered service-action memberships and which actions
+are executable. The compensation adapter has exactly three active fulfillment
+memberships: report, exception report and source read (also used by exact-event
+lookup). Each operation requires request-bound prepared AUTH; binding-target
+eligibility alone grants no executable authority.
 
 CON owns canonical resource loading, product guards, hidden behavior, and
 feature tests. Neither subsystem imports the other's repositories or mutates
@@ -865,12 +953,12 @@ release readiness, but MUST NOT prevent application startup or Access
 Administrator provisioning. Startup MAY fail on closed catalogue, matrix,
 context, evaluator, or active-behavior parity drift.
 
-A closed target-only service identity is not an action-bearing fixed service.
-It may be provisioned as a typed product resource, but it has no static matrix
-row, AUTH-09E runtime admission, action, permission, or executable feature
-authority. `workstream.compensation.adapter` is the only current target-only
-identity; it is eligible to be referenced by an adapter binding and cannot act
-as the Finance Authority caller.
+`workstream.compensation.adapter` is eligible to be referenced by an adapter
+binding and has exactly three active fulfillment action memberships. Each
+operation requires exact request-local prepared authority, original source and
+binding custody, and native evidence guards. The four public service APIs cover
+report, exception, source evidence and exact-event lookup; they do not make this
+service a human Finance Authority caller or authorize provider execution.
 
 Merged AUTH-09B provides the human-administrator-controlled
 `POST /api/v1/service-actors` provisioning route and activates only
@@ -928,8 +1016,11 @@ COMPENSATION and PROJECTS expose transaction-held public owner ports. Every
 mutation uses a caller-owned root transaction, advisory operation fence,
 opaque prepare/consume/close participant, complete graph replacement, and one
 immutable recoverable lifecycle event. Default composition remains deny-default. CP05 supplies explicit AUTH
-composition for all five actions, limited to active human Finance Authority
-with system or exact-project scope.
+composition for all five actions. Current policy read/create/update/publish/
+retire and version-list operations accept active human Project Manager or
+Finance Authority grants with system or exact-project scope. Unit creation and
+adapter binding management remain Finance Authority-only; sharing
+`compensation.policy.manage` does not widen those action-specific role guards.
 
 CP04B owns publication and terminal retirement. Publication locks and
 revalidates the complete server-owned graph, project units, and adapter
@@ -955,13 +1046,15 @@ remain unchanged, and downgrade refuses retained binding audit evidence.
 | `compensation.adapter_binding.suspend` | `compensation.adapter_binding.manage` | covered human Finance Authority / active binding | T | WS-ARCH-001-CP03B (active; CP01A registration custody) |
 | `compensation.adapter_binding.resume` | `compensation.adapter_binding.manage` | covered human Finance Authority / suspended binding | T | WS-ARCH-001-CP03B (active; CP01A registration custody) |
 | `compensation.adapter_binding.retire` | `compensation.adapter_binding.manage` | Finance / dependency-free binding | T | CON-10B |
-| `contribution.policy.read` | `compensation.policy.manage` | Finance / policy version | Q | WS-ARCH-001-CP05 (active AUTH; CP04A owner; CP05A public composition; CP01B registration custody) |
-| `contribution.policy.create_draft` | `compensation.policy.manage` | Finance / policy collection | T | WS-ARCH-001-CP05 (active AUTH; CP04A owner; CP05A public composition; CP01B registration custody) |
-| `contribution.policy.update_draft` | `compensation.policy.manage` | Finance / draft version | T | WS-ARCH-001-CP05 (active AUTH; CP04A owner; CP05A public composition; CP01B registration custody) |
-| `contribution.policy.publish` | `compensation.policy.manage` | Finance / complete draft | T | WS-ARCH-001-CP05 (active AUTH; CP04B owner; CP05A public composition; CP01B registration custody) |
-| `contribution.policy.retire` | `compensation.policy.manage` | Finance / published version | T | WS-ARCH-001-CP05 (active AUTH; CP04B owner; CP05A public composition; CP01B registration custody) |
+| `contribution.policy.read` | `compensation.policy.manage` | covering human PM or Finance / policy version | Q | WS-ARCH-001-CP05 (active AUTH; CP04A owner; CP05A public composition; CP01B registration custody) |
+| `contribution.policy.create_draft` | `compensation.policy.manage` | covering human PM or Finance / policy collection | T | WS-ARCH-001-CP05 (active AUTH; CP04A owner; CP05A public composition; CP01B registration custody) |
+| `contribution.policy.update_draft` | `compensation.policy.manage` | covering human PM or Finance / draft version | T | WS-ARCH-001-CP05 (active AUTH; CP04A owner; CP05A public composition; CP01B registration custody) |
+| `contribution.policy.publish` | `compensation.policy.manage` | covering human PM or Finance / complete draft | T | WS-ARCH-001-CP05 (active AUTH; CP04B owner; CP05A public composition; CP01B registration custody) |
+| `contribution.policy.retire` | `compensation.policy.manage` | covering human PM or Finance / published version | T | WS-ARCH-001-CP05 (active AUTH; CP04B owner; CP05A public composition; CP01B registration custody) |
 | `contribution.compensation_unit.create` | `compensation.policy.manage` | covered human Finance Authority / exact project | T | project-points-unit-creation (active; internal composition only; migration `0058_compensation_unit_create` admits its audit pair) |
-| `compensation.fulfillment.report` | proposed `compensation.fulfillment.report` | exact bound service / award and binding | T | CON-08B |
+| `compensation.fulfillment.report` | `compensation.fulfillment.report` | original bound active service / award, binding, source and exact event | T | COMP evidence API and native receipt owner |
+| `compensation.fulfillment.exception.report` | `compensation.fulfillment.exception.report` | original bound active service / immutable successful receipt and exact exception event | T | COMP evidence API and native exception owner |
+| `compensation.fulfillment.source.read` | `compensation.fulfillment.source.read` | original bound active service / disjoint source or exact-event lookup resource | Q | COMP evidence API |
 | `contribution.read_self` | `contribution.read_self` | active human / own records and complete awards | Q | PILOT-10A |
 | `contribution.read_project` | `contribution.read_project` | covering PM or exact-project Finance / project records and complete awards | Q | PILOT-10A |
 | `compensation.delivery.reconcile` | `compensation.delivery.reconcile` | D11 role set / delivery request | T | CON-10B |
@@ -1219,9 +1312,10 @@ includes delivered hidden AUTH preparation, CON-07 participation, REV-04C
 FinalAcceptance/TASK/CON composition and ARCH-04E2-B mandatory persisted receipt
 custody and complete authorized outcomes. B8 supplies completion delivery and the
 selected request/completion handlers are registered in production composition.
-False/pass effects require a live REV generation. Actual CON root
-storage and ordinal allocation remain required before either trigger creates
-fulfillment obligations; neither awards nor generic outbox rows substitute. REV-12A4A adds internal Operator transitions for the atomic-participant manifest.
+False/pass effects require a live REV generation. COMP root
+storage and ordinal allocation join the same earning transaction. Finance
+obligation admission and delivery remain unavailable; neither awards nor generic
+outbox rows substitute for the exact immutable root. REV-12A4A adds internal Operator transitions for the atomic-participant manifest.
 Later fulfillment drain work extends this same controller; it is not a prerequisite on live human
 review for the false branch.
 
@@ -1360,9 +1454,11 @@ covered; B8 supplies completion delivery with invocation, generation and
 commit-before-acknowledgment proof. Remediation and selected production composition
 are delivered. A complete supported false guide can activate when the approved
 inventory contains no `human_review` disposition. Conditional award facts remain atomic for paid and unpaid policies.
-The first-contribution manifest keeps fulfillment admission, dispatch and callbacks
-unavailable; obligation/root/ordinal/cutoff storage is required before a reviewed
-successor manifest enables fulfillment, not before this contribution path.
+The first-contribution manifest keeps Finance admission and financial dispatch
+unavailable. Internal COMP roots and ordinals accompany earned awards; the four
+original-bound evidence APIs retain service observations without executing a
+payment. Finance obligation admission, durable callback delivery and cutoff/drain
+still require their qualified runtime before a reviewed manifest enables execution.
 False guide activation follows joint proof. A stable Review FK target is
 not live ReviewLease/queue/decision behavior. The shared lifecycle
 fence is required for either acceptance trigger; obligation writers join that same
@@ -1441,7 +1537,7 @@ initiative [conformance matrix](../.commitrail/initiatives/WS-CON-001/CONFORMANC
 At minimum, final proof covers:
 
 - immutable policy publication and both-order freeze races;
-- explicit unpaid, money, project-points, and combined awards;
+- explicit unpaid, selected money and selected project-points awards;
 - one reviewer contribution for every valid Review;
 - accept-only FinalAcceptance and submitter contribution;
 - mutually exclusive contribution source shapes and concurrency uniqueness;

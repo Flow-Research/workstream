@@ -12,6 +12,10 @@ from app.modules.actors.api import ServiceIdentity
 from app.modules.authorization.catalogue import ActionId, PermissionId
 
 CONTEXT_DIGEST_RESOURCE_TYPES = (
+    "compensation_fulfillment_report",
+    "compensation_fulfillment_exception",
+    "compensation_fulfillment_evidence",
+    "compensation_fulfillment_report_lookup",
     "joint_lifecycle_control",
     "submission_creation",
     "submission_binding",
@@ -79,6 +83,10 @@ CONTEXT_DIGEST_RESOURCE_TYPES = (
 
 
 AuthorizationDecisionResourceType = Literal[
+    "compensation_fulfillment_report",
+    "compensation_fulfillment_exception",
+    "compensation_fulfillment_evidence",
+    "compensation_fulfillment_report_lookup",
     "joint_lifecycle_control",
     "outbox_event",
     "outbox_delivery",

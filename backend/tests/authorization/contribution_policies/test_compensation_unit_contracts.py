@@ -21,7 +21,7 @@ from app.modules.authorization.domain.audit_targets import project_authority_aud
 from app.modules.authorization.domain.contribution_policies import (
     CONTRIBUTION_POLICY_MUTATION_ACTIONS,
     ProjectCompensationUnitCreateResourceContext,
-    policy_finance_grant_filters,
+    policy_grant_filters,
 )
 from app.modules.authorization.domain.prepared_contribution_policies import (
     parse_prepared_contribution_policy,
@@ -66,7 +66,7 @@ def test_action_is_active_finance_policy_management_in_the_policy_mutation_famil
     assert definition.availability.value == "active" and definition.owner.value == "project-points-unit-creation"
     assert ACTION in CONTRIBUTION_POLICY_MUTATION_ACTIONS
     assert ACTION in PROJECT_SCOPED_ADMIN_MUTATIONS and ACTION in CONTEXT_DIGEST_ACTIONS
-    assert policy_finance_grant_filters(ACTION) == {
+    assert policy_grant_filters(ACTION) == {
         "allowed_roles": frozenset({AdminRole.FINANCE_AUTHORITY})
     }
 

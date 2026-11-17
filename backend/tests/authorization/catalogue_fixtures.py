@@ -4,6 +4,10 @@ from app.modules.actors.api import ServiceIdentity
 from app.modules.authorization.schemas import AdminRole, AdminScope
 
 FIXED_SERVICE_ACTION_EXPECTATIONS = {
+    ServiceIdentity.COMPENSATION_ADAPTER: {
+        "compensation.fulfillment.report", "compensation.fulfillment.exception.report",
+        "compensation.fulfillment.source.read",
+    },
     ServiceIdentity.TASK_REVISION_EXPIRER: {"task.revision.expire", "task.revision.recover"},
     ServiceIdentity.TASK_POST_SUBMIT_ROUTER: {"task.post_submit.route"},
     ServiceIdentity.TASK_ASSIGNMENT_RECONCILER: {"task.assignment.authority_reconcile"},
@@ -273,6 +277,8 @@ historical_permissions = frozenset(
 
 new_permissions = frozenset(
     """
+    compensation.fulfillment.report compensation.fulfillment.exception.report
+    compensation.fulfillment.source.read
     task.revision.expire task.revision.recover task.post_submit.route checker.pre_submit.execute checker.pre_submit.finalize checker.post_submit.execute checker.post_submit.finalize task.assignment.authority_reconcile outbox.dispatch project.setup_diagnostic.read project.effective_policy.read
     operations.submission_gate.repair
     operations.checker.retry artifact.binding.read artifact.replica.read
@@ -294,6 +300,9 @@ new_permissions = frozenset(
 )
 
 expected = {
+    "compensation.fulfillment.report": ("compensation.fulfillment.report", "compensation-fulfillment"),
+    "compensation.fulfillment.exception.report": ("compensation.fulfillment.exception.report", "compensation-fulfillment"),
+    "compensation.fulfillment.source.read": ("compensation.fulfillment.source.read", "compensation-fulfillment"),
     "actor.project.list": ("actor.profile.read_self", "PILOT-READ-2"),
     "project.catalogue.list": ("project.read", "WS-CLI-001-46"),
     **dict.fromkeys(
@@ -575,6 +584,9 @@ expected = {
 
 
 AUDIT_ALLOWED_ACTION_VALUES = {
+    "compensation.fulfillment.report",
+    "compensation.fulfillment.exception.report",
+    "compensation.fulfillment.source.read",
     "project.catalogue.list",
     "checker.model_call.prepare",
     "checker.model_call.dispatch",
@@ -765,7 +777,7 @@ ADMIN_ROLE_PERMISSION_EXPECTATIONS = {
         project.review_policy.manage project.role_grant.read project.role_grant.manage
         artifact.guide_source.ingest
         review.queue.inspect contribution.read_project compensation.award.read
-        audit.read""".split(),
+        compensation.policy.manage audit.read""".split(),
     AdminRole.FINANCE_AUTHORITY: """project.read contribution.read_project
         compensation.policy.manage compensation.adapter_binding.manage
         compensation.award.read compensation.delivery.reconcile audit.read""".split(),

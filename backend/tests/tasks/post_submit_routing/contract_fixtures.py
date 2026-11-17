@@ -44,6 +44,7 @@ def _source_values(**changes: object) -> dict[str, object]:
         "assignment_id": new_record_id(),
         "contributor_id": new_record_id(),
         "contribution_policy_version_id": contribution_policy_version_id,
+        "task_size": "small", "contribution_award_definition_id": None,
         "checker_run_id": new_record_id(),
         "evaluation_request_id": new_record_id(),
         "request_digest": SHA_A,

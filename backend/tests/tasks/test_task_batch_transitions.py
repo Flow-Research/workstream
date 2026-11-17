@@ -61,6 +61,7 @@ async def _success_facts(project):
         tasks = list((await session.execute(select(
             WorkstreamTask.id, WorkstreamTask.status, WorkstreamTask.locked_guide_version,
             WorkstreamTask.locked_contribution_policy_version_id,
+            WorkstreamTask.task_size, WorkstreamTask.locked_submission_award_definition_id,
         ).where(WorkstreamTask.project_id == project).order_by(WorkstreamTask.id))).all())
         roots = set(await session.scalars(select(TaskBatchTransitionReceipt.id).where(TaskBatchTransitionReceipt.project_id == project)))
         members = set(await session.scalars(select(TaskBatchTransitionMember.id).where(TaskBatchTransitionMember.project_id == project)))
@@ -315,7 +316,7 @@ async def test_missing_active_guide_refuses_whole_batch_without_success_effects(
     assert await _success_facts(project) == before
 
 
-async def test_late_staging_failure_and_partial_advance_replay_roll_back_whole_batch(import_source_client, monkeypatch):
+async def test_late_staging_failure_rolls_back_and_replay_retains_original_batch(import_source_client, monkeypatch):
     """A real second canonical write followed by failure leaves no partial success."""
     client = import_source_client
     project, batch = await _import(client)
@@ -351,8 +352,20 @@ async def test_late_staging_failure_and_partial_advance_replay_roll_back_whole_b
     assert advanced.status_code == 200, advanced.text
     before = await _success_facts(project)
     replay = await client.post(_path(project, batch, "screen"), headers=key, json=payload)
-    assert replay.status_code == 409 and replay.json()["error"]["code"] == "task_replay_state_changed", replay.text
-    assert await _success_facts(project) == before
+    assert replay.status_code == 200, replay.text
+    assert replay.json() == successful.json()
+    after = await _success_facts(project)
+    assert after[:5] == before[:5]  # No task, root, member, receipt or lifecycle write.
+    fresh = after[-1] - before[-1]
+    assert before[-1] <= after[-1] and len(fresh) == len(batch["tasks"])
+    async with db_session.get_session_factory()() as session:
+        root = await session.get(TaskBatchTransitionReceipt, next(iter(before[1])))
+        decisions = (await session.scalars(select(AuditEvent).where(AuditEvent.id.in_(fresh)))).all()
+        assert len(decisions) == len(fresh)
+        assert all((row.actor_id, row.action_id, row.resource_type, row.resource_id, row.project_id)
+                   == (root.actor_profile_id, "project.task.screen", "project", project, project)
+                   and row.matched_grant_id is not None and row.after_facts["allowed"] is True
+                   for row in decisions)
 
 
 async def test_revoked_manager_cannot_replay_a_successful_bulk_write(import_source_client):

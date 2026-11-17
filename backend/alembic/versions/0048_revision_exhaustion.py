@@ -27,6 +27,40 @@ def _execute_sql(sql: str) -> None:
         op.execute(statement)
 
 
+EXHAUSTION_TRANSITION_GUARDS = """
+CREATE FUNCTION public.guard_task_revision_exhaustion_transition() RETURNS trigger
+LANGUAGE plpgsql SET search_path=pg_catalog,public,pg_temp AS $$
+BEGIN
+ IF TG_TABLE_NAME='task_assignments' THEN
+  IF OLD.status='revision_exhausted' THEN
+   RAISE EXCEPTION 'exhausted assignment is immutable'
+    USING ERRCODE='23514', CONSTRAINT='ck_revision_exhausted_assignment_immutable';
+  ELSIF OLD.status='revision_expired' THEN
+   RAISE EXCEPTION 'expired assignment is immutable'
+    USING ERRCODE='23514', CONSTRAINT='ck_revision_expired_assignment_immutable';
+  END IF;
+  IF TG_OP='DELETE' THEN RETURN OLD; END IF;
+ END IF;
+ IF TG_TABLE_NAME='workstream_tasks' AND OLD.status='evaluation_pending' AND NEW.status='ready' THEN
+  IF NEW.assigned_to IS NOT NULL OR NOT EXISTS(SELECT 1 FROM public.task_revision_exhaustions e
+    WHERE e.task_id=OLD.id AND e.project_id=OLD.project_id AND e.contributor_id=OLD.assigned_to
+      AND e.creation_xid=pg_current_xact_id()::text)
+  THEN RAISE EXCEPTION 'revision exhaustion receipt required' USING ERRCODE='23514'; END IF;
+ ELSIF TG_TABLE_NAME='task_assignments' AND NEW.status='revision_exhausted' THEN
+  IF OLD.status<>'active' OR OLD.released_at IS NOT NULL OR NEW.released_at IS NULL
+    OR NOT EXISTS(SELECT 1 FROM public.task_revision_exhaustions e
+      WHERE e.assignment_id=OLD.id AND e.task_id=OLD.task_id AND e.contributor_id=OLD.contributor_id
+        AND e.exhausted_at=NEW.released_at AND e.creation_xid=pg_current_xact_id()::text)
+  THEN RAISE EXCEPTION 'revision exhaustion receipt required' USING ERRCODE='23514'; END IF;
+ END IF;
+ RETURN NEW;
+END $$;
+CREATE TRIGGER revision_exhaustion_task_transition BEFORE UPDATE ON public.workstream_tasks
+ FOR EACH ROW EXECUTE FUNCTION public.guard_task_revision_exhaustion_transition();
+CREATE TRIGGER a_revision_terminal_assignment_immutable BEFORE UPDATE OR DELETE ON public.task_assignments
+ FOR EACH ROW EXECUTE FUNCTION public.guard_task_revision_exhaustion_transition();
+    """
+
 def upgrade() -> None:
     """Add new-write custody without changing retained business facts."""
     op.execute("SET LOCAL search_path=pg_catalog,public,pg_temp")
@@ -268,39 +302,7 @@ def _route_exhaustion() -> None:
           'assignment_status','revision_exhausted','status_reason','revision_limit_reached');
       END IF;
       IF NOT EXISTS(SELECT 1 FROM public.outbox_events e WHERE e.event_id=m.outcome_event_id""")
-    _execute_sql("""
-CREATE FUNCTION public.guard_task_revision_exhaustion_transition() RETURNS trigger
-LANGUAGE plpgsql SET search_path=pg_catalog,public,pg_temp AS $$
-BEGIN
- IF TG_TABLE_NAME='task_assignments' THEN
-  IF OLD.status='revision_exhausted' THEN
-   RAISE EXCEPTION 'exhausted assignment is immutable'
-    USING ERRCODE='23514', CONSTRAINT='ck_revision_exhausted_assignment_immutable';
-  ELSIF OLD.status='revision_expired' THEN
-   RAISE EXCEPTION 'expired assignment is immutable'
-    USING ERRCODE='23514', CONSTRAINT='ck_revision_expired_assignment_immutable';
-  END IF;
-  IF TG_OP='DELETE' THEN RETURN OLD; END IF;
- END IF;
- IF TG_TABLE_NAME='workstream_tasks' AND OLD.status='evaluation_pending' AND NEW.status='ready' THEN
-  IF NEW.assigned_to IS NOT NULL OR NOT EXISTS(SELECT 1 FROM public.task_revision_exhaustions e
-    WHERE e.task_id=OLD.id AND e.project_id=OLD.project_id AND e.contributor_id=OLD.assigned_to
-      AND e.creation_xid=pg_current_xact_id()::text)
-  THEN RAISE EXCEPTION 'revision exhaustion receipt required' USING ERRCODE='23514'; END IF;
- ELSIF TG_TABLE_NAME='task_assignments' AND NEW.status='revision_exhausted' THEN
-  IF OLD.status<>'active' OR OLD.released_at IS NOT NULL OR NEW.released_at IS NULL
-    OR NOT EXISTS(SELECT 1 FROM public.task_revision_exhaustions e
-      WHERE e.assignment_id=OLD.id AND e.task_id=OLD.task_id AND e.contributor_id=OLD.contributor_id
-        AND e.exhausted_at=NEW.released_at AND e.creation_xid=pg_current_xact_id()::text)
-  THEN RAISE EXCEPTION 'revision exhaustion receipt required' USING ERRCODE='23514'; END IF;
- END IF;
- RETURN NEW;
-END $$;
-CREATE TRIGGER revision_exhaustion_task_transition BEFORE UPDATE ON public.workstream_tasks
- FOR EACH ROW EXECUTE FUNCTION public.guard_task_revision_exhaustion_transition();
-CREATE TRIGGER a_revision_terminal_assignment_immutable BEFORE UPDATE OR DELETE ON public.task_assignments
- FOR EACH ROW EXECUTE FUNCTION public.guard_task_revision_exhaustion_transition();
-    """)
+    _execute_sql(EXHAUSTION_TRANSITION_GUARDS)
 
 
 def _allow_reclaim() -> None:

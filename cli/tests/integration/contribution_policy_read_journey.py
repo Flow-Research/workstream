@@ -19,6 +19,7 @@ async def publish_with_policy_reads(
     finance_id,
     finance_grant,
     manager_token,
+    manager_id,
     other_token,
     foreign_finance_token,
     admin,
@@ -66,6 +67,7 @@ async def publish_with_policy_reads(
         body=None,
         key=None,
         token=finance_token,
+        actor_id=finance_id,
         selected_project=project,
         status=None,
     ):
@@ -125,7 +127,7 @@ async def publish_with_policy_reads(
             if str(row["id"]) == value["event_id"]
         ]
         assert len(events) == 1 and str(events[0]["operation_id"]) == key
-        assert str(events[0]["actor_profile_id"]) == str(finance_id)
+        assert str(events[0]["actor_profile_id"]) == str(actor_id)
         assert (
             str(events[0]["contribution_policy_version_id"])
             == value["contribution_policy_version_id"]
@@ -199,7 +201,7 @@ async def publish_with_policy_reads(
             spec[route]["get"]["x-workstream-action-id"] == "contribution.policy.read"
         )
     create_key = str(uuid4())
-    for presented in (manager_token, other_token, foreign_finance_token):
+    for presented in (other_token, foreign_finance_token):
         await mutate("create", body={"name": "Denied"}, token=presented, status=404)
     first = await mutate(
         "create", body={"name": "Governed project policy"}, key=create_key
@@ -218,7 +220,7 @@ async def publish_with_policy_reads(
         body=UNPAID,
         key=first_update_key,
     )
-    for presented in (manager_token, other_token, foreign_finance_token):
+    for presented in (other_token, foreign_finance_token):
         await mutate(
             "update",
             policy=first["contribution_policy_id"],
@@ -242,6 +244,13 @@ async def publish_with_policy_reads(
         key=first_publish_key,
     )
     view = await inspect(first, first_id, None, expected_status="published")
+    assert (
+        call("current", token=manager_token)["current_published_version_id"] == first_id
+    )
+    assert (
+        call("show", policy=first["contribution_policy_id"], token=manager_token)
+        == view
+    )
     assert {rule["contribution_type"] for rule in view["rules"]} == {
         "accepted_submission",
         "completed_review",
@@ -301,7 +310,7 @@ async def publish_with_policy_reads(
         {"Authorization": "Bearer " + foreign_finance_token},
     )
     before = await stored()
-    for presented in (manager_token, other_token, foreign_finance_token):
+    for presented in (other_token, foreign_finance_token):
         await mutate(
             "retire",
             policy=first["contribution_policy_id"],
@@ -419,7 +428,11 @@ async def publish_with_policy_reads(
 
     async def retire_and_inspect():
         retired = await mutate(
-            "retire", policy=first["contribution_policy_id"], version=next_id
+            "retire",
+            policy=first["contribution_policy_id"],
+            version=next_id,
+            token=manager_token,
+            actor_id=manager_id,
         )
         assert retired["prior_current_version_id"] == next_id
         assert (

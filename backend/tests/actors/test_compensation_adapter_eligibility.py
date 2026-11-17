@@ -12,7 +12,7 @@ from app.modules.actors.api import (
     ServiceIdentity,
 )
 from app.modules.actors.compensation_adapter import CompensationAdapterActorEligibility
-from app.modules.authorization.catalogue import SERVICE_ACTIONS_BY_IDENTITY
+from app.modules.authorization.catalogue import ActionId, SERVICE_ACTIONS_BY_IDENTITY
 from app.modules.authorization.service_actor_schemas import ServiceActorProvisionBody
 
 
@@ -37,7 +37,7 @@ def _link(actor_id, **overrides):
     return SimpleNamespace(**values)
 
 
-def test_target_identity_is_provisionable_but_has_no_service_actions() -> None:
+def test_target_identity_is_provisionable_with_only_fulfillment_actions() -> None:
     body = ServiceActorProvisionBody.model_validate(
         {
             "service_identity": ServiceIdentity.COMPENSATION_ADAPTER.value,
@@ -47,7 +47,11 @@ def test_target_identity_is_provisionable_but_has_no_service_actions() -> None:
     )
 
     assert body.service_identity is ServiceIdentity.COMPENSATION_ADAPTER
-    assert body.service_identity not in SERVICE_ACTIONS_BY_IDENTITY
+    assert SERVICE_ACTIONS_BY_IDENTITY[body.service_identity] == {
+        ActionId.COMPENSATION_FULFILLMENT_REPORT,
+        ActionId.COMPENSATION_FULFILLMENT_EXCEPTION_REPORT,
+        ActionId.COMPENSATION_FULFILLMENT_SOURCE_READ,
+    }
 
 
 @pytest.mark.asyncio
@@ -83,7 +87,7 @@ async def test_ineligible_profiles_are_concealed(profile) -> None:
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("identity", SERVICE_IDENTITIES - {ServiceIdentity.COMPENSATION_ADAPTER})
-async def test_every_action_bearing_service_identity_is_ineligible(identity) -> None:
+async def test_every_other_service_identity_is_ineligible(identity) -> None:
     session = SimpleNamespace(
         scalar=AsyncMock(return_value=_profile(new_record_id(), service_identity=identity.value))
     )

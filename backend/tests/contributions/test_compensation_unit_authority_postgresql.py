@@ -22,7 +22,9 @@ from app.modules.contributions.api import (
     ContributionPolicyConflict,
     ProjectCompensationUnitCreateRequest,
 )
-from app.modules.contributions.models import ProjectCompensationUnit
+from app.modules.contributions.units.models import (
+    ProjectCompensationUnit,
+)
 from project_create_fixtures import insert_historical_project
 from tests.projects.guide_compilation.proposals.pg_support import (
     revoke_review_grant,
@@ -116,6 +118,7 @@ async def test_finance_authority_creates_unit_and_records_allowed_evidence(
     ("role", "scope", "target"),
     [
         ("project_manager", "project", "same"),
+        ("project_manager", "system", "same"),
         ("operator", "system", "same"),
         ("finance_authority", "project", "other"),
     ],

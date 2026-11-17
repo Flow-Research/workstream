@@ -15,13 +15,15 @@ from app.modules.compensation.api import (
     CompensationInstrumentType,
 )
 from app.modules.compensation.awards.models import CompensationAward
+from app.modules.compensation.fulfillment.service import CompensationFulfillmentParticipant
 
 
 class CompensationAwardParticipant:
     """Create all new awards or exactly validate an existing complete set."""
 
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(self, session: AsyncSession, *, fulfillment: CompensationFulfillmentParticipant) -> None:
         self._session = session
+        self._fulfillment = fulfillment
 
     async def complete_award_set(
         self, request: CompleteAwardSetRequest
@@ -33,6 +35,7 @@ class CompensationAwardParticipant:
             raise CompensationAwardConflict("compensation_award_conflict") from exc
         if not self._session.in_transaction() or self._session.in_nested_transaction():
             raise CompensationAwardConflict("compensation_award_conflict")
+        await self._fulfillment.require_custody(checked)
 
         if checked.disposition == "new":
             self._session.add_all(
@@ -59,6 +62,7 @@ class CompensationAwardParticipant:
 
         awards = await self._load(checked)
         self._require_exact_complete_set(checked, awards)
+        await self._fulfillment.complete(checked, awards)
         return CompleteAwardSetResult(awards=awards)
 
     async def _load(

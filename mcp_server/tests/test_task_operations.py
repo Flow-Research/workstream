@@ -131,7 +131,7 @@ def _bound_response(name: str, upload: bytes | None = None) -> dict[str, Any]:
     if name in {"management_tasks_list", "operational_tasks_list"}:
         return {"project_id": PROJECT_ID, "items": [], "next_cursor": None}
     if name == "management_task_create":
-        return {"project_id": PROJECT_ID}
+        return {"project_id": PROJECT_ID, "task_size": "small"}
     if name in {"task_import_batch_screen", "task_import_batch_release"}:
         return {"project_id": PROJECT_ID, "batch_id": BATCH_ID}
     if name == "task_import_batch_get":
@@ -497,3 +497,20 @@ def test_source_and_cursor_bounds_are_explicit() -> None:
     Draft202012Validator(
         audit, format_checker=FormatChecker()
     ).validate({"project_id": PROJECT_ID, "task_id": TASK_ID, "cursor": "x" * 512})
+
+
+def test_task_creation_size_is_closed_and_omission_only_defaults() -> None:
+    validator = Draft202012Validator(
+        task_operation_input_schema("management_task_create"),
+        format_checker=FormatChecker(),
+    )
+    arguments = _arguments("management_task_create")
+    for fields in ({}, {"task_size": "small"}, {"task_size": "medium"}, {"task_size": "large"}):
+        validator.validate(arguments | {"body": {"title": "T", "description": "D", **fields}})
+    for fields in (
+        {"task_size": None}, {"task_size": "Small"}, {"task_size": True},
+        {"quantity": "10"}, {"unit_code": "USD"},
+    ):
+        assert list(validator.iter_errors(
+            arguments | {"body": {"title": "T", "description": "D", **fields}}
+        ))

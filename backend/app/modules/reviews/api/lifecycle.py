@@ -57,8 +57,22 @@ class JointLifecycleMutationFence(Protocol):
     PostgreSQL two-phase prepare is unsupported.
     """
 
+    async def require_fulfillment_source(self, expected_generation: int, source_instance_id: UUID) -> None:
+        """Match the durable source while retaining exact current root custody."""
+        ...
+
     async def acquire(self, expected_generation: int) -> JointLifecycleControlFacts:
         """Lock the canonical controller or deny stale/malformed transaction state."""
+        ...
+
+
+class JointLifecycleCurrentCustodyPort(Protocol):
+    """Acquire current REV custody before AUTH, without a caller generation."""
+
+    def hold_current(self) -> AbstractAsyncContextManager[
+        tuple[JointLifecycleControlFacts, JointLifecycleMutationFence]
+    ]:
+        """Yield locked facts and a root-bound view; neither grants authority."""
         ...
 
 

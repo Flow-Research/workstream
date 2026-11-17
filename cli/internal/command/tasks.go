@@ -85,8 +85,8 @@ func addTaskReads(project *cobra.Command, client func() (*api.Client, error), ou
 				}
 			}
 			_, err = fmt.Fprintf(stdout,
-				"Description: %s\nAcceptance criteria: %s\nRejection criteria: %s\nSource type: %s\nSource reference: %s\nSource hash: %s\nImport batch: %s\nExternal task: %s\nCreated by: %s\nAssigned to: %s\n",
-				safeText(t.Description), optional(t.AcceptanceCriteria), optional(t.RejectionCriteria), safeText(t.SourceType),
+				"Task size: %s\nDescription: %s\nAcceptance criteria: %s\nRejection criteria: %s\nSource type: %s\nSource reference: %s\nSource hash: %s\nImport batch: %s\nExternal task: %s\nCreated by: %s\nAssigned to: %s\n",
+				safeText(t.TaskSize), safeText(t.Description), optional(t.AcceptanceCriteria), optional(t.RejectionCriteria), safeText(t.SourceType),
 				optional(t.SourceRef), optional(t.SourcePayloadHash), optional(t.ImportBatchID), optional(t.ExternalTaskID), safeText(t.CreatedBy), optional(t.AssignedTo))
 			return err
 		},

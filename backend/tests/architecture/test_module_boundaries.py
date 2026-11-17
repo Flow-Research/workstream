@@ -30,10 +30,10 @@ def test_repository_matches_the_protected_module_boundary() -> None:
     boundary.validate(ROOT, REGISTRY, LEDGER, AUTH_LEDGER)
 
 
-def test_registry_names_exactly_ten_business_and_three_supporting_modules() -> None:
+def test_registry_names_exactly_eleven_business_and_three_supporting_modules() -> None:
     """The canonical ownership map cannot silently grow or collapse."""
     registry = boundary.load_registry(REGISTRY)
-    assert len(registry.business) == 10
+    assert len(registry.business) == 11
     assert len(registry.supporting) == 3
     assert registry.names == {
         "actors",
@@ -46,6 +46,7 @@ def test_registry_names_exactly_ten_business_and_three_supporting_modules() -> N
         "reviews",
         "contributions",
         "compensation",
+        "finance",
         "audit",
         "outbox",
         "api_controls",
@@ -249,10 +250,13 @@ def test_tasks_public_api_has_no_private_or_mutable_dependency() -> None:
     for path in api_files:
         imports.update(boundary.exact_source_imports(path, ROOT))
     assert imports
-    assert all(
-        not target.startswith("app.modules.") or target.startswith("app.modules.tasks.api")
-        for target in imports
-    )
+    cross_owner = {
+        target for target in imports
+        if target.startswith("app.modules.") and not target.startswith("app.modules.tasks.api")
+    }
+    # RevisionCandidate carries CON's canonical immutable selected terms.
+    # Keep this exact public edge; no other owner or private dependency is allowed.
+    assert cross_owner == {"app.modules.contributions.api.reward_selection"}
 
 
 def test_projects_public_api_has_no_private_or_mutable_dependency() -> None:
@@ -553,18 +557,23 @@ def test_policy_public_api_exports_immutable_contracts() -> None:
             "ContributionPolicyValidationFacts",
             "ContributionPolicyValidationRequest",
             "ContributionPolicyView",
-            "PolicyDefinitionInput",
             "PolicyDefinitionView",
-            "PolicyRuleInput",
             "PolicyRuleView",
             "LockedCompensationAward",
             "LockedCompensationTerms",
+            "LockedCompensationSelection",
             "CompensationUnitCreateAuthorizationFacts",
             "ProjectCompensationUnitCreateRequest",
             "ProjectCompensationUnitCreateResult",
         )
     }
     assert all(value.__dataclass_params__.frozen for value in public_dataclasses.values())
+    for name in ("AcceptedSubmissionPolicyRuleInput", "CompletedReviewPolicyRuleInput",
+                 "UnpaidPolicyRuleInput", "TaskSizeQuantities",
+                 "RewardSelectionRequest", "RewardSelectionFacts"):
+        model = getattr(policy_api, name)
+        assert model.model_config["frozen"] is True
+        assert model.model_config["extra"] == "forbid"
 
 
 def test_policy_public_api_exports_no_private_persistence_values() -> None:

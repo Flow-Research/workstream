@@ -1,4 +1,4 @@
-"""The manager uses displayed selectors; Finance publication remains separate."""
+"""The authorized manager reads policy selectors and activates their exact lineage."""
 
 from uuid import uuid4
 
@@ -13,8 +13,9 @@ async def test_public_activation_replay_after_retirement_and_revocation(isolated
         factory, command, actor, grant, manager, finance, policy_path, path, body, published, version_path,
     ):
         assert body['contribution_policy_version_id'] == published['contribution_policy_version_id']
-        forbidden = await manager.get(f"/api/v1/projects/{command.project_id}/contribution-policies/current")
-        assert forbidden.status_code == 404
+        current = await manager.get(f"/api/v1/projects/{command.project_id}/contribution-policies/current")
+        assert current.status_code == 200, current.text
+        assert current.json()["current_published_version_id"] == published["contribution_policy_version_id"]
         key = str(uuid4())
         response = await manager.post(path, json=body, headers={"Idempotency-Key": key})
         assert response.status_code == 200, response.text

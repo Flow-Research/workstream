@@ -15,20 +15,20 @@ from app.modules.tasks.api.transition_audit import TaskRevisionRepairAuditFacts
 from app.modules.tasks.post_submit_routing.models import TaskPostSubmitRoutingManifest
 from app.modules.tasks.repository import TaskRepository
 from app.modules.tasks.revision.expiry_event import revision_preparation_event
-from app.modules.tasks.revision.exhaustion_recovery import recover_exhausted_assignment
 from app.modules.tasks.revision.models import TaskRevisionPreparation
-from app.modules.tasks.revision.service import RevisionRepairReceipt, candidate_from_packet, head_for_source, prepare_revision, select_candidate
-from app.modules.tasks.service import LOCKED_CONTEXT_REQUIRED_FIELDS
+from app.modules.tasks.revision.service import RevisionRepairReceipt, head_for_source, prepare_revision, select_candidate
+from app.modules.tasks.service import LOCKED_CONTEXT_HASH_FIELDS
 
 
 class TaskRevisionRecovery:
     """Caller owns the root transaction; this operation locks TASK before dependents."""
 
-    def __init__(self, session, *, projects, authorization, audit, outbox):
+    def __init__(self, session, *, projects, rewards, authorization, audit, outbox):
         """Share the root transaction across source recovery and all owner ports."""
         self._session = session
         self._repo = TaskRepository(session)
         self._projects, self._authorization = projects, authorization
+        self._rewards = rewards
         self._audit, self._outbox = audit, outbox
 
     async def _missing_root_candidate(self, manifest, latest, task):
@@ -49,7 +49,10 @@ class TaskRevisionRecovery:
             )
         except (ProjectLockedPolicyContextUnavailable, TypeError, ValueError):
             return None
-        candidate = await select_candidate(self._projects, historical)
+        candidate = await select_candidate(
+            self._projects, self._rewards, historical, task_size=latest.task_size,
+            prior_award_definition_id=latest.contribution_award_definition_id,
+        )
         # System discovery may freeze an unchanged active context or a
         # blocked receipt. Only a PM can authorize a changed target.
         task_lineage = TaskPolicyLineage.model_validate_json(json.dumps({
@@ -66,7 +69,7 @@ class TaskRevisionRecovery:
                 or task_lineage != candidate.prior.lineage
                 or not same_post_policy):
             candidate = candidate.model_copy(update={
-                "target": None, "target_post_policy_json": None,
+                "target": None, "target_reward_selection": None, "target_post_policy_json": None,
                 "target_max_revision_rounds": None,
             })
         return candidate
@@ -105,15 +108,8 @@ class TaskRevisionRecovery:
             TaskRevisionPreparation.sequence == 1,
         ))
         head = await head_for_source(self._session, manifest_id) if root else None
-        if await recover_exhausted_assignment(
-            self._session, projects=self._projects, authorization=self._authorization,
-            audit=self._audit, outbox=self._outbox, manifest=manifest, task=task,
-            assignment=assignment, source=latest, root=root, head=head,
-        ):
-            return True
-        candidate = await self._retained_pause_candidate(head)
-        predecessor = head if candidate is not None else None
-        if root is not None and candidate is None:
+        candidate = None
+        if root is not None:
             try:
                 await self._outbox.require_existing(None, revision_preparation_event(manifest, root, head))
                 return False
@@ -126,7 +122,7 @@ class TaskRevisionRecovery:
                 return False
         context_hash = canonical_json_hash({
             field: str(getattr(task, field)) if isinstance(getattr(task, field), UUID)
-            else getattr(task, field) for field in LOCKED_CONTEXT_REQUIRED_FIELDS
+            else getattr(task, field) for field in LOCKED_CONTEXT_HASH_FIELDS
         })
         request_digest = canonical_json_hash({
             "routing_manifest_id": str(manifest_id),
@@ -148,36 +144,21 @@ class TaskRevisionRecovery:
             )
         )
         return await self._publish_recovery(
-            manifest=manifest, root=root, head=head, candidate=candidate, predecessor=predecessor,
+            manifest=manifest, root=root, head=head, candidate=candidate,
             actor_id=actor_id, decision=decision, request_digest=request_digest,
         )
 
-    async def _retained_pause_candidate(self, head):
-        """Pause an old blocked running head once, preserving only unspent time."""
-        if (head is None or head.clock_observed_at is not None or head.deadline_at is None
-                or head.outcome != "blocked"
-                or head.blocked_reason not in {"context_blocked", "revision_limit_reached"}):
-            return None
-        now = await self._session.scalar(select(func.clock_timestamp()))
-        if head.deadline_at <= now:
-            return None
-        candidate = candidate_from_packet(head.packet)
-        # Service recovery cannot adopt a changed active target on the PM's behalf.
-        return candidate.model_copy(update={
-            "target": None, "target_post_policy_json": None, "target_max_revision_rounds": None,
-        })
-
-    async def _publish_recovery(self, *, manifest, root, head, candidate, predecessor,
+    async def _publish_recovery(self, *, manifest, root, head, candidate,
                                 actor_id, decision, request_digest):
         """Commit one preparation or missing head event with exact AUTH/audit custody."""
         audit_event_id = new_record_id()
-        if root is None or predecessor is not None:
+        if root is None:
             head = await prepare_revision(
                 self._session, manifest=manifest, candidate=candidate,
-                audit_event_id=audit_event_id, predecessor=predecessor,
+                audit_event_id=audit_event_id,
                 authorization_decision_id=decision.decision_id,
                 repair_receipt=RevisionRepairReceipt(
-                    actor_id=actor_id, idempotency_key=predecessor.id if predecessor else manifest.id,
+                    actor_id=actor_id, idempotency_key=manifest.id,
                     request_digest=request_digest, reason=RECOVERY_REASON, authority=decision,
                 ),
             )

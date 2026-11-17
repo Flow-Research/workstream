@@ -193,7 +193,7 @@ def task_resource_guard(action: ActionId, resource: TaskAuthorityResourceContext
         ):
             return False
         if action is ActionId.TASK_CLAIM:
-            return resource.task_status == "in_progress" and own_assignment
+            return resource.task_status in {"in_progress", "needs_revision", "evaluation_pending", "review_pending"} and own_assignment
         return False
     if action is ActionId.TASK_CLAIM:
         return unassigned_ready

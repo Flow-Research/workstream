@@ -56,7 +56,6 @@ def production_outbox_delivery(session_factory):
         TransactionalTaskRevisionExpiryHandler,
         TransactionalTaskRevisionExpiredNoticeHandler,
         TransactionalTaskRevisionBlockedNoticeHandler,
-        TransactionalTaskRevisionExhaustedNoticeHandler,
         evaluation_completion_handler,
         evaluation_request_handler,
     )
@@ -70,7 +69,6 @@ def production_outbox_delivery(session_factory):
         SELECTED_POST_HANDLER_TIMEOUT_SECONDS,
     )
     from app.modules.tasks.api.assignment_invalidation import ASSIGNMENT_INVALIDATION_EVENT
-    from app.modules.tasks.api.revision_exhaustion import REVISION_EXHAUSTED_EVENT
     from app.modules.tasks.api.revision_expiry import (
         REVISION_EXPIRY_EVENT, REVISION_EXPIRED_EVENT, REVISION_CONTEXT_BLOCKED_EVENT,
     )
@@ -115,14 +113,6 @@ def production_outbox_delivery(session_factory):
                     ),
                 ),
                 (
-                    REVISION_EXHAUSTED_EVENT,
-                    1,
-                    TransactionalTaskRevisionExhaustedNoticeHandler(
-                        session_factory,
-                        observer=CommittedInvocationReader(session_factory),
-                    ),
-                ),
-                (
                     REQUEST_EVENT,
                     1,
                     evaluation_request_handler(
@@ -148,7 +138,7 @@ def production_outbox_delivery(session_factory):
                     ),
                 ),
             ],
-            replay_safe=frozenset({(REVISION_EXPIRY_EVENT, 1), (REVISION_EXPIRED_EVENT, 1), (REVISION_CONTEXT_BLOCKED_EVENT, 1), (REVISION_EXHAUSTED_EVENT, 1)}),
+            replay_safe=frozenset({(REVISION_EXPIRY_EVENT, 1), (REVISION_EXPIRED_EVENT, 1), (REVISION_CONTEXT_BLOCKED_EVENT, 1)}),
         ),
         options=DeliveryOptions(),
         event_options={

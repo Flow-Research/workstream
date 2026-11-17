@@ -104,31 +104,42 @@ async def test_malformed_reconciler_input_denies_before_database():
 
 def test_fixed_service_bindings_preserve_both_exact_contracts():
     from app.modules.authorization.domain.prepared_service import prepared_fixed_service_bindings
+    from app.modules.authorization.runtime import (
+        PreparedAuthorizationInput, PreparedAuthorityScope, PreparedAuthorityScopeKind,
+    )
+
+    def bindings(action, value):
+        return prepared_fixed_service_bindings(
+            action, PreparedAuthorizationInput(idempotency_key=uuid4(), request_value=value),
+            PreparedAuthorityScope(kind=PreparedAuthorityScopeKind.SYSTEM), None, ValueError,
+        )
 
     resource = assignment_invalidation_resource(facts())
-    assignment = prepared_fixed_service_bindings(
-        ActionId.TASK_ASSIGNMENT_AUTHORITY_RECONCILE, resource.model_dump(mode="json"), ValueError,
+    assignment = bindings(
+        ActionId.TASK_ASSIGNMENT_AUTHORITY_RECONCILE, resource.model_dump(mode="json"),
     )
     assert assignment == {"assignment_invalidation_context": resource, "outbox_dispatch_digest": None,
                           "post_submit_prepare_context": None, "pre_submit_prepare_context": None,
-                          "revision_expiry_context": None, "revision_recovery_context": None}
+                          "revision_expiry_context": None, "revision_recovery_context": None, "fulfillment_evidence_context": None}
     digest = "sha256:" + "a" * 64
-    assert prepared_fixed_service_bindings(ActionId.OUTBOX_DISPATCH, {"outbox_dispatch_digest": digest}, ValueError) == {
+    assert bindings(ActionId.OUTBOX_DISPATCH, {"outbox_dispatch_digest": digest}) == {
         "assignment_invalidation_context": None, "outbox_dispatch_digest": digest,
         "post_submit_prepare_context": None, "pre_submit_prepare_context": None,
         "revision_expiry_context": None, "revision_recovery_context": None,
+        "fulfillment_evidence_context": None,
     }
-    assert prepared_fixed_service_bindings(ActionId.ACTOR_PROFILE_READ_SELF, {}, ValueError) == {
+    assert bindings(ActionId.ACTOR_PROFILE_READ_SELF, {}) == {
         "assignment_invalidation_context": None, "outbox_dispatch_digest": None,
         "post_submit_prepare_context": None, "pre_submit_prepare_context": None,
         "revision_expiry_context": None, "revision_recovery_context": None,
+        "fulfillment_evidence_context": None,
     }
     for action, message in (
         (ActionId.TASK_ASSIGNMENT_AUTHORITY_RECONCILE, "invalid assignment reconciliation authority"),
         (ActionId.OUTBOX_DISPATCH, "invalid prepared outbox authority"),
     ):
         with pytest.raises(ValueError, match=message):
-            prepared_fixed_service_bindings(action, {}, ValueError)
+            bindings(action, {})
 
 
 def test_public_resource_selector_preserves_uuid_and_stable_invalid_identity():

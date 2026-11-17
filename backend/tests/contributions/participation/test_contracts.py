@@ -30,9 +30,12 @@ def request():
         task_assignment_id=new_record_id(),
         contributor_id=new_record_id(),
         contribution_policy_version_id=new_record_id(),
+        task_size="small", contribution_award_definition_id=None,
         artifact_hash="sha256:" + "a" * 64,
         correlation_id=new_record_id(),
         expected_generation=0,
+        source_authorization_decision_id=new_record_id(),
+        source_routing_manifest_id=new_record_id(),
     )
 
 
@@ -40,6 +43,9 @@ def request():
     "change",
     [
         {"acceptance_disposition": "repair"},
+        {"task_size": None},
+        {"task_size": "Medium"},
+        {"contribution_award_definition_id": str(new_record_id())},
         {"project_id": "01900000-0000-7000-8000-000000000001"},
         {"expected_generation": True},
         {"expected_generation": -1},
@@ -75,6 +81,8 @@ def award_request():
         contributor_id=new_record_id(),
         contribution_policy_version_id=new_record_id(),
         contribution_type="accepted_submission",
+        task_id=new_record_id(), submission_id=new_record_id(),
+        final_acceptance_id=new_record_id(), task_size="small",
     )
     definition = AwardDefinitionFacts(
         id=new_record_id(),
@@ -92,6 +100,8 @@ def award_request():
         contribution=contribution,
         definitions=(definition,),
         correlation_id=new_record_id(),
+        expected_generation=2,
+        source_authorization_decision_id=new_record_id(), source_routing_manifest_id=new_record_id(),
     )
 
 

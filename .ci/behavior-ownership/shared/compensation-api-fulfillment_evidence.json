@@ -1,0 +1,24 @@
+{
+  "behavior_id": "finance.fulfillment.compensation.api.fulfillment_evidence",
+  "callables": [
+    "app.modules.compensation.api.fulfillment_evidence.FulfillmentEvidenceAuthorizationPort.prepare",
+    "app.modules.compensation.api.fulfillment_evidence.FulfillmentEvidenceCurrentCustodyPort.hold_current",
+    "app.modules.compensation.api.fulfillment_evidence.FulfillmentRecordedException.require_exact_recorded_exception",
+    "app.modules.compensation.api.fulfillment_evidence.FulfillmentRecordedReport.require_exact_recorded_report",
+    "app.modules.compensation.api.fulfillment_evidence.FulfillmentSourceEvidence.require_integer_version",
+    "app.modules.compensation.api.fulfillment_evidence.FulfillmentSourceEvidence.require_source_and_receipt_consistency",
+    "app.modules.compensation.api.fulfillment_evidence.PreparedFulfillmentEvidence.consume_new",
+    "app.modules.compensation.api.fulfillment_evidence.PreparedFulfillmentEvidence.validate_replay",
+    "app.modules.compensation.api.fulfillment_evidence._evidence_time",
+    "app.modules.compensation.api.fulfillment_evidence._evidence_time_json",
+    "app.modules.compensation.api.fulfillment_evidence._exception_body",
+    "app.modules.compensation.api.fulfillment_evidence._obligation_body",
+    "app.modules.compensation.api.fulfillment_evidence._report_body",
+    "app.modules.compensation.api.fulfillment_evidence._wire_bytes"
+  ],
+  "group": "shared",
+  "schema": "workstream.behavior-ownership.v1",
+  "status": "candidate",
+  "target": "backend/app/modules/compensation/api/fulfillment_evidence.py",
+  "unresolved_reason": "Closed read contracts and unactivated receipt commands require actual authorized public route, native append/replay/currentness and contention proof."
+}

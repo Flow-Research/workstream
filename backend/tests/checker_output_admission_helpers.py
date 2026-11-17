@@ -502,3 +502,62 @@ async def seed_checker_output_relationships(
         async_sessionmaker(session.bind, expire_on_commit=False), submission_id, state="queued"
     )
     return project_id, task_id, checker_run_id
+
+
+async def unrelated_checker_task(session, canonical_task):
+    """Keep the same locked policy tuple on a distinct task for ownership rejection."""
+    unrelated_task_id = str(new_record_id())
+    session.add(
+        WorkstreamTask(
+            id=unrelated_task_id,
+            task_size=canonical_task.task_size,
+            project_id=canonical_task.project_id,
+            locked_guide_version=canonical_task.locked_guide_version,
+            locked_post_submit_checker_policy_id=(
+                canonical_task.locked_post_submit_checker_policy_id
+            ),
+            locked_post_submit_checker_policy_version=(
+                canonical_task.locked_post_submit_checker_policy_version
+            ),
+            locked_post_submit_checker_policy_hash=(
+                canonical_task.locked_post_submit_checker_policy_hash
+            ),
+            locked_post_submit_checker_policy_body=(
+                canonical_task.locked_post_submit_checker_policy_body
+            ),
+            locked_review_policy_id=canonical_task.locked_review_policy_id,
+            locked_review_policy_generation=(
+                canonical_task.locked_review_policy_generation
+            ),
+            locked_review_policy_hash=canonical_task.locked_review_policy_hash,
+            locked_revision_policy_id=canonical_task.locked_revision_policy_id,
+            locked_revision_policy_generation=(
+                canonical_task.locked_revision_policy_generation
+            ),
+            locked_revision_policy_hash=(canonical_task.locked_revision_policy_hash),
+            locked_guide_source_snapshot_id=(
+                canonical_task.locked_guide_source_snapshot_id
+            ),
+            locked_guide_source_snapshot_hash=(
+                canonical_task.locked_guide_source_snapshot_hash
+            ),
+            locked_effective_project_submission_artifact_policy_id=(
+                canonical_task.locked_effective_project_submission_artifact_policy_id
+            ),
+            locked_effective_project_submission_artifact_policy_hash=(
+                canonical_task.locked_effective_project_submission_artifact_policy_hash
+            ),
+            locked_pre_submit_checker_policy_id=(
+                canonical_task.locked_pre_submit_checker_policy_id
+            ),
+            locked_pre_submit_checker_bundle_hash=(
+                canonical_task.locked_pre_submit_checker_bundle_hash
+            ),
+            title="Unrelated checker task",
+            description="Must not own the checker output.",
+            status="draft",
+            created_by="setup-actor",
+        )
+    )
+    await session.flush()
+    return unrelated_task_id

@@ -72,14 +72,14 @@ async def test_exact_real_cause_releases_only_pre_submit_assignment(
     from app.core.hashing import canonical_json_hash
 
     cause = await committed_authority_invalidation(s.sessions).read_invalidation(s.invalidation_id)
-    from app.modules.tasks.service import LOCKED_CONTEXT_REQUIRED_FIELDS
+    from app.modules.tasks.service import LOCKED_CONTEXT_HASH_FIELDS
 
     facts = s.trace[0][1]
     assert facts.task_status == before[0]["status"]
     assert facts.locked_context_hash == canonical_json_hash(
         {
             key: str(before[0][key]) if isinstance(before[0][key], UUID) else before[0][key]
-            for key in LOCKED_CONTEXT_REQUIRED_FIELDS
+            for key in LOCKED_CONTEXT_HASH_FIELDS
         }
     )
     assert facts.target == target and facts.cause_event_id == cause.cause_event_id

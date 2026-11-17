@@ -14,7 +14,7 @@ import (
 
 // Exact public CSV schema; the backend owns serialization and neutralization.
 var contributionColumns = []string{
-	"contribution_id", "award_id", "project_id", "task_id", "external_task_id",
+	"contribution_id", "award_id", "project_id", "task_id", "task_size", "external_task_id",
 	"source_type", "source_ref", "task_title", "submission_id", "contributor_id",
 	"contributor_display_name", "contribution_type", "recorded_at", "accepted_at",
 	"acceptance_source", "acceptance_review_id", "acceptance_routing_manifest_id",
@@ -48,7 +48,7 @@ func (c *Client) decodeContributionCSV(
 		if err == io.EOF {
 			break
 		}
-		if err != nil || count >= 2000 {
+		if err != nil || count >= 1000 {
 			return nil, 0, bad
 		}
 		cells := make(map[string]string, len(header))

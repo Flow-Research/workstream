@@ -67,15 +67,18 @@ async def test_review_contribution_sources(tmp_path, isolated_database_env, deci
             assert len(await rows(session, "reviews")) == 1
 
 
+@pytest.mark.parametrize("instrument", ["money", "project_points"])
 @pytest.mark.parametrize("retired", [False, True])
-async def test_reviewer_frozen_awards(tmp_path, isolated_database_env, retired):
-    async with reviewer_contribution_source(tmp_path, isolated_database_env, paid=True) as h:
+async def test_reviewer_frozen_awards(tmp_path, isolated_database_env, retired, instrument):
+    async with reviewer_contribution_source(
+        tmp_path, isolated_database_env, paid=True, instrument=instrument
+    ) as h:
         if retired:
             await retire_policy_and_suspend_bindings(h)
         async with h.factory() as session, session.begin():
             await insert_record(session, h.reviewer_record)
             awards = await award_values(session, h.reviewer_record)
-            assert {a["instrument_type"] for a in awards} == {"money", "project_points"}
+            assert {a["instrument_type"] for a in awards} == {instrument}
             for award in awards:
                 await insert_award(session, award)
         async with h.factory() as session:
@@ -91,7 +94,7 @@ async def test_reviewer_frozen_awards(tmp_path, isolated_database_env, retired):
                 .mappings()
                 .all()
             )
-            assert len(actual) == 2
+            assert len(actual) == 1
             for a in actual:
                 assert (
                     a["quantity"]
@@ -147,13 +150,12 @@ async def test_reviewer_award_definition_substitution(tmp_path, isolated_databas
     async with reviewer_contribution_source(tmp_path, isolated_database_env, paid=True) as h:
         async with h.factory() as session, session.begin():
             await insert_record(session, h.reviewer_record)
-            money, points = await award_values(session, h.reviewer_record)
+            (money,) = await award_values(session, h.reviewer_record)
         async with h.factory() as session:
             for change in (
                 {"quantity": money["quantity"] + Decimal("0.000000000000000001")},
                 {"unit_code": "EUR"},
-                {"adapter_binding_id": points["adapter_binding_id"]},
-                {"award_definition_id": points["award_definition_id"]},
+                {"award_definition_id": new_record_id()},
                 {"instrument_type": "project_points", "quantity": Decimal("7"), "unit_code": "PTS"},
             ):
                 await reject_award(session, money, "award frozen definition mismatch", **change)
@@ -194,18 +196,21 @@ async def test_reviewer_award_definition_substitution(tmp_path, isolated_databas
                     await reject_award(
                         session, money, "award contribution lineage mismatch", **change
                     )
-                await reject_award(
-                    session,
-                    money,
-                    "award frozen definition mismatch",
-                    award_definition_id=foreign_money["award_definition_id"],
-                    adapter_binding_id=foreign_money["adapter_binding_id"],
-                )
+                for change in (
+                    {"award_definition_id": foreign_money["award_definition_id"]},
+                    {"adapter_binding_id": foreign_money["adapter_binding_id"]},
+                    {
+                        "award_definition_id": foreign_money["award_definition_id"],
+                        "adapter_binding_id": foreign_money["adapter_binding_id"],
+                    },
+                ):
+                    await reject_award(
+                        session, money, "award frozen definition mismatch", **change
+                    )
                 await insert_award(session, money)
-                await insert_award(session, points)
                 await session.commit()
         async with h.factory() as session, session.begin():
-            await reject_award(session, money, "uq_compensation_awards", id=new_record_id())
+            await reject_award(session, money, "uq_compensation_award_contribution", id=new_record_id())
 
 
 async def test_unpaid_routed_contribution_rejects_award(
@@ -335,14 +340,14 @@ async def test_routed_accepted_submission_requires_complete_awards(
     from app.modules.contributions.records.participant import SubmitterContributionParticipant
 
     async with authorized_routing_source(
-        tmp_path, isolated_database_env, contribution_awards=("money", "project_points")
+        tmp_path, isolated_database_env, contribution_awards=("money",)
     ) as h:
-        original = CompensationAwardParticipant.complete_award_set
-
         async def incomplete(owner, request):
-            return await original(
-                owner, request.model_copy(update={"definitions": request.definitions[:1]})
-            )
+            from app.modules.compensation.api import CompleteAwardSetResult
+
+            # Simulate a participant returning no required award. The current
+            # contract never has a second award to omit.
+            return CompleteAwardSetResult(awards=())
 
         async with h.factory() as session:
             before = await outcome_snapshot(session)
@@ -367,7 +372,7 @@ async def test_routed_accepted_submission_requires_complete_awards(
                         )
                     )
                 await apply_outcome(session, h, 2)
-                assert len(await rows(session, "compensation_awards")) == 1
+                assert len(await rows(session, "compensation_awards")) == 0
 
                 async def assert_reject():
                     with pytest.raises(DBAPIError, match="incomplete award set"):
@@ -382,7 +387,7 @@ async def test_routed_accepted_submission_requires_complete_awards(
         async with h.factory() as session:
             assert await outcome_snapshot(session) == before
         async with h.factory() as session, session.begin():
-            assert len((await apply_outcome(session, h, 2)).economic.award_ids) == 2
+            assert len((await apply_outcome(session, h, 2)).economic.award_ids) == 1
 
 
 async def test_uncommitted_acceptance_and_contribution_parents_are_invisible(

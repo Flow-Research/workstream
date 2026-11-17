@@ -64,30 +64,6 @@ def definitions() -> list[Tool]:
     ]
 
 
-def _valid_update_graph(arguments: dict[str, Any]) -> bool:
-    body = arguments.get("body")
-    if not isinstance(body, dict) or "rules" not in body:
-        return True
-    rules = body["rules"]
-    if not isinstance(rules, list):
-        return False
-    types = {rule.get("contribution_type") for rule in rules if isinstance(rule, dict)}
-    if types != {"accepted_submission", "completed_review"}:
-        return False
-    return all(
-        isinstance(rule, dict)
-        and (
-            (rule.get("compensation_mode") == "unpaid" and not rule.get("definitions", []))
-            or (
-                rule.get("compensation_mode") == "compensated"
-                and isinstance(rule.get("definitions"), list)
-                and bool(rule["definitions"])
-            )
-        )
-        for rule in rules
-    )
-
-
 async def invoke(
     gateway: WorkstreamGateway,
     tool_name: str,
@@ -101,8 +77,6 @@ async def invoke(
     try:
         _INPUT_VALIDATORS[name].validate(arguments)
     except ValidationError:
-        return adapter_failure("invalid_tool_input", status=400)
-    if not _valid_update_graph(arguments):
         return adapter_failure("invalid_tool_input", status=400)
     if "limit" in arguments:
         arguments = {**arguments, "limit": int(arguments["limit"])}

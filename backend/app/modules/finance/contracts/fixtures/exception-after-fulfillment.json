@@ -1,0 +1,15 @@
+{
+  "source_instance_id": "019a78b0-0000-7000-8000-000000000040",
+  "fulfillment_root_id": "019a78b0-0000-7000-8000-000000000060",
+  "award_id": "019a78b0-0000-7000-8000-000000000011",
+  "project_id": "019a78b0-0000-7000-8000-000000000001",
+  "adapter_binding_id": "019a78b0-0000-7000-8000-000000000010",
+  "correlation_id": "019a78b0-0000-7000-8000-000000000012",
+  "contract_version": 1,
+  "route_key": "finance.primary",
+  "original_fulfillment_event_id": "019a78b0-0000-7000-8000-000000000070",
+  "exception_event_id": "019a78b0-0000-7000-8000-000000000080",
+  "kind": "provider_reversal",
+  "observed_at": "2026-11-12T05:02:00.000000Z",
+  "reported_at": "2026-11-12T05:02:01.000000Z"
+}

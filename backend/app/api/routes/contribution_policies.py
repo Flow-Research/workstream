@@ -1,4 +1,4 @@
-"""Public Finance-authorized ContributionPolicy administration."""
+"""Public Project Manager and Finance ContributionPolicy administration."""
 
 from typing import Annotated
 from uuid import UUID
@@ -44,7 +44,7 @@ async def list_policy_versions(
 @router.get("/current", response_model=ContributionPolicyProjectSelection,
             openapi_extra={"x-workstream-action-id": "contribution.policy.read"})
 async def discover_policy(project_id: UUID, request: RequestOwner) -> ContributionPolicyProjectSelection:
-    """Recover exact draft and published selectors under current Finance authority."""
+    """Recover exact draft and published selectors under current scoped policy authority."""
     response = await request.service.read_current(ContributionPolicyProjectReadRequest(
         project_id=project_id, actor_profile_id=request.actor_profile_id,
     ))
@@ -91,6 +91,8 @@ async def update_draft(
     response = await request.service.update_draft(ContributionPolicyUpdateDraftRequest(
         project_id=project_id, actor_profile_id=request.actor_profile_id, operation_id=key,
         contribution_policy_id=policy_id, contribution_policy_version_id=version_id, rules=payload.rules,
+        instrument_type=payload.instrument_type, unit_code=payload.unit_code,
+        adapter_binding_id=payload.adapter_binding_id,
     ))
     return await commit_policy_response(request, response, ContributionPolicyMutationResult)
 
@@ -103,7 +105,7 @@ async def publish_policy(
     project_id: UUID, policy_id: UUID, version_id: UUID, payload: PolicyDecisionInput,
     key: ReplayKey, request: RequestOwner,
 ) -> ContributionPolicyMutationResult:
-    """Publish the selected complete draft under exact Finance authority."""
+    """Publish the selected complete draft under exact scoped policy authority."""
     response = await request.service.publish(ContributionPolicyPublishRequest(
         project_id=project_id, actor_profile_id=request.actor_profile_id, operation_id=key,
         contribution_policy_id=policy_id, contribution_policy_version_id=version_id,

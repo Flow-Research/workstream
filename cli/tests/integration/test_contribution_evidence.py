@@ -9,6 +9,7 @@ import json
 import os
 import subprocess
 import sys
+import pytest
 from threading import Thread
 from urllib.parse import parse_qs, urlsplit
 
@@ -32,6 +33,7 @@ def evidence():
                 "contribution_id": identity(3),
                 "project_id": PROJECT,
                 "task_id": identity(4),
+                "task_size": "medium",
                 "submission_id": identity(5),
                 "contributor_id": ACTOR,
                 "contributor_display_name": "Ada",
@@ -59,13 +61,6 @@ def evidence():
                         "instrument": "money",
                         "unit": "USD",
                         "quantity": "99999999999999999999.123456789012345678",
-                    },
-                    {
-                        "award_id": identity(12),
-                        "award_definition_id": identity(13),
-                        "instrument": "project_points",
-                        "unit": "POINTS",
-                        "quantity": "12",
                     },
                 ],
             }
@@ -188,6 +183,7 @@ def test_contributions_empty_review_and_filter_validation(cli):
             if value["items"]:
                 value["items"][0].update(
                     contribution_type="completed_review",
+                    task_size=None,
                     source_review_id=identity(20),
                     source_review_lease_id=identity(21),
                     source_final_acceptance_id=None,
@@ -235,7 +231,16 @@ def test_contributions_refuse_wrong_scope_shape_lineage_and_duplicate_identity(c
             {"policy_version_number": 0},
             {"artifact_hash": "sha256:bad"},
             {"awards": [original["items"][0]["awards"][0] | {"quantity": "1e2"}]},
-            {"awards": [original["items"][0]["awards"][1] | {"quantity": "1.0"}]},
+            {
+                "awards": [
+                    original["items"][0]["awards"][0]
+                    | {
+                        "instrument": "project_points",
+                        "unit": "POINTS",
+                        "quantity": "1.0",
+                    }
+                ]
+            },
         ]
         for patch in mutations:
             value = deepcopy(original)
@@ -429,7 +434,7 @@ def test_contribution_csv_refuses_malformed_foreign_and_unsafe_rows(cli, tmp_pat
             ("award_id", identity(10).replace("-", "")),
             ("quantity", ""),
         ):
-            changed = deepcopy(rows)
+            changed = deepcopy(rows) + [deepcopy(rows[1])]
             changed[2][changed[0].index(column)] = value
             stream = StringIO(newline="")
             csv.writer(stream).writerows(changed)
@@ -473,7 +478,13 @@ def test_contributions_redaction_and_failure_never_publish(cli, tmp_path):
             assert not target.exists()
 
 
-def test_contributions_human_acceptance_and_leading_zero_quantities(cli, tmp_path):
+@pytest.mark.parametrize(
+    "instrument,unit,quantity",
+    [("money", "USD", "000001.2300"), ("project_points", "POINTS", "00012")],
+)
+def test_contributions_human_acceptance_and_leading_zero_quantities(
+    cli, tmp_path, instrument, unit, quantity
+):
     value = evidence()
     item = value["items"][0]
     item.update(
@@ -481,8 +492,7 @@ def test_contributions_human_acceptance_and_leading_zero_quantities(cli, tmp_pat
         acceptance_review_id=identity(40),
         acceptance_routing_manifest_id=None,
     )
-    item["awards"][0]["quantity"] = "000001.2300"
-    item["awards"][1]["quantity"] = "00012"
+    item["awards"][0].update(instrument=instrument, unit=unit, quantity=quantity)
     with http_fixture() as (origin, response, _):
         response["body"] = json.dumps(api_page(value)).encode()
         result = cli(origin, TOKEN, "contributions", "-o", "json")
@@ -496,10 +506,7 @@ def test_contributions_human_acceptance_and_leading_zero_quantities(cli, tmp_pat
         assert saved.returncode == 0 and target.read_bytes() == response["body"], (
             saved.stderr
         )
-        assert (
-            b'"000001.2300"' in target.read_bytes()
-            and b'"00012"' in target.read_bytes()
-        )
+        assert ('"' + quantity + '"').encode() in target.read_bytes()
         response["headers"] = {"Content-Type": "application/json"}
         for patch in (
             {"acceptance_review_id": None},

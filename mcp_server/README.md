@@ -53,7 +53,10 @@ An independently installed adapter exposing 132 tools under the caller's authori
 - Three contribution-policy reads expose retained versions, the current
   selection and one exact version.
 - Four keyed contribution-policy mutations create, replace, publish and retire
-  an exact policy version.
+  an exact policy version under current Project Manager or Finance authority.
+  Updates use a common financial header, three explicit submitter size amounts,
+  and a separate fixed reviewer amount. Wholly unpaid updates use null financial
+  headers. Policy reads preserve retained v1 instrument facts.
 - Twenty-six guide-lifecycle tools cover retained guide reads, bounded verified
   document bytes, setup and sufficiency records, submission-artifact policies,
   compiled proposals, corrections, approvals and activation.

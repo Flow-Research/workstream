@@ -14,6 +14,10 @@ class ContributionTaskSourceFacts(BaseModel):
     model_config = _STRICT
     project_id: UUID
     task_id: UUID
+    submission_id: UUID
+    task_size: Literal["small", "medium", "large"]
+    contribution_policy_version_id: UUID
+    contribution_award_definition_id: UUID | None
     title: str
     source_type: str
     source_ref: str | None
@@ -49,7 +53,7 @@ class ContributionTaskSourceReadPort(Protocol):
     """The selected CON set fixes every project/task selector before owner reads."""
 
     async def read_contribution_tasks(
-        self, selectors: tuple[tuple[UUID, UUID], ...],
+        self, selectors: tuple[tuple[UUID, UUID, UUID], ...],
     ) -> tuple[ContributionTaskSourceFacts, ...]:
         """Return only the exact selected source labels in the caller's snapshot."""
         ...

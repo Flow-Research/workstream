@@ -23,6 +23,7 @@ def request():
             assignment_id=new_record_id(), submission_id=source.submission_id,
             submission_version=1, contributor_id=source.accepted_submitter_id,
             contribution_policy_version_id=new_record_id(), content_id=new_record_id(),
+            task_size="small", contribution_award_definition_id=None,
             content_sha256="sha256:" + "a" * 64, final_acceptance_id=source.id,
             expected_task_status="review_pending",
         ), correlation_id=new_record_id(), expected_generation=0,

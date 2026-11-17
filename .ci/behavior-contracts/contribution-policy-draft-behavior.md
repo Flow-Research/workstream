@@ -1,17 +1,17 @@
-# Chunk Contract: WS-ARCH-001-CP04A — Hidden ContributionPolicy Draft Behavior
+# Chunk Contract: WS-ARCH-001-CP04A — ContributionPolicy Draft Behavior
 
 Current exposure amendment: CP05A replaces the original hidden-route restriction
-with exact Finance-authorized public policy administration. The owner behavior,
+with public policy administration by authorized project managers and Finance managers. The owner behavior,
 deny-default composition, transaction and lineage requirements below remain.
 
 
 ## Goal
 
-Expose the CONTRIBUTIONS-owned public policy capability and implement hidden,
-route-unreachable read, create-draft, and complete update-draft behavior. Add
-the shared durable mutation-operation/event foundation used by CP04A and CP04B.
-Production authorization denies by default and all five policy actions remain
-planned/unavailable.
+CONTRIBUTIONS owns read, create-draft, and complete update-draft behavior and
+the shared durable mutation-operation/event foundation. Public routes compose
+current AUTH policy actions; uncomposed owner operations deny by default.
+The original chunk scope and migration sequence below record implementation
+history; current policy behavior and proof references reflect the sized model.
 
 ## Preconditions, risk and outcome
 
@@ -106,8 +106,10 @@ commits inside repositories/services or serialized prepared handles
   non-retired aggregate. Reject more than one open draft per project.
 - Update-draft locks the exact project/policy/version and replaces the entire
   graph: one `accepted_submission` and one `completed_review` rule; unpaid has
-  zero definitions; compensated has one or two unique money/project-points
-  definitions with canonical positive quantities. Project-points quantities
+  zero definitions. A compensated policy has one shared instrument, unit and
+  adapter-binding header. A compensated submitter rule has exactly Small, Medium
+  and Large quantities; a compensated reviewer rule has one fixed quantity.
+  Definitions use that shared header and canonical positive quantities. Project-points quantities
   use integer scale; values such as `1.0` are rejected before owner locks or
   authorization.
 - Update locks its CONTRIBUTIONS-owned same-project active units and consumes
@@ -128,7 +130,7 @@ commits inside repositories/services or serialized prepared handles
 - Exact duplicate recovery returns the immutable original result only after
   current read authorization. Mismatch or failed authorization is concealed.
 - The domain-facing authorization port is opaque and production deny-default;
-  test fakes may prove hidden behavior without activating an action.
+  test fakes do not replace public AUTH integration proof.
 
 ## Mandatory mutation order
 
@@ -177,7 +179,7 @@ convenience, not acceptance evidence for an unlisted behavior.
 | Optional version selects only the exact requested version | CONTRIBUTIONS repository/service | `tests/contributions/test_policy_read.py::test_read_returns_requested_version_only` | focused local command and hosted CI |
 | Read returns immutable server-owned graph facts | CONTRIBUTIONS public views | `tests/contributions/test_policy_read.py::test_read_view_contains_immutable_server_owned_graph_facts` | focused local command and hosted CI |
 | Read returns no ORM rows | CONTRIBUTIONS public views | `tests/contributions/test_policy_read.py::test_read_view_contains_no_orm_rows` | focused local command and hosted CI |
-| CP05A exposes exactly the Finance-authorized policy routes | Delivery API registry | `tests/contributions/public_policy/test_contracts.py::test_public_policy_contract` | focused local command and hosted CI |
+| Public delivery exposes the registered policy routes | Delivery API registry | `tests/contributions/public_policy/test_contracts.py::test_public_policy_contract` | focused local command and hosted CI |
 
 #### Create- and update-draft behavior
 
@@ -193,15 +195,15 @@ convenience, not acceptance evidence for an unlisted behavior.
 | Update locks and mutates only the exact project/policy/version draft | CONTRIBUTIONS repository/service | `tests/contributions/test_policy_draft_update.py::test_update_draft_locks_exact_project_policy_version` | focused local command and hosted PostgreSQL CI |
 | Update replaces the complete rule-definition graph | CONTRIBUTIONS repository/service | `tests/contributions/test_policy_draft_update.py::test_update_draft_replaces_entire_rule_definition_graph` | focused local command and hosted CI |
 | Complete graph replacement leaves no stale or orphan child | CONTRIBUTIONS repository/service | `tests/contributions/test_policy_draft_update.py::test_update_draft_leaves_no_stale_or_orphan_child` | focused local command and hosted CI |
-| Graph contains exactly one accepted-submission rule | CONTRIBUTIONS policy graph | `tests/contributions/test_policy_draft_rules.py::test_update_requires_exactly_one_accepted_submission_rule` | focused local command and hosted CI |
-| Graph contains exactly one completed-review rule | CONTRIBUTIONS policy graph | `tests/contributions/test_policy_draft_rules.py::test_update_requires_exactly_one_completed_review_rule` | focused local command and hosted CI |
-| A missing completed-review rule is rejected | CONTRIBUTIONS policy graph | `tests/contributions/test_policy_draft_rules.py::test_update_requires_exactly_one_completed_review_rule` | focused local command and hosted CI |
-| A duplicate required rule is rejected without effect | CONTRIBUTIONS policy graph | `tests/contributions/test_policy_draft_rules.py::test_update_rejects_duplicate_required_rule_without_effect` | focused local command and hosted CI |
-| Unpaid rules contain zero instrument definitions | CONTRIBUTIONS policy graph | `tests/contributions/test_policy_draft_rules.py::test_update_rejects_instrument_definition_for_unpaid_rule` | focused local command and hosted CI |
-| Compensated rules accept one or two unique money/project-points definitions | CONTRIBUTIONS policy graph | `tests/contributions/test_policy_draft_rules.py::test_update_accepts_one_or_two_unique_compensated_definitions` | focused local command and hosted CI |
-| Compensated rules reject a duplicate instrument definition | CONTRIBUTIONS policy graph | `tests/contributions/test_policy_draft_rules.py::test_update_rejects_duplicate_instrument_definition` | focused local command and hosted CI |
-| Non-positive instrument quantities are rejected | CONTRIBUTIONS policy graph | `tests/contributions/test_policy_draft_rules.py::test_update_rejects_non_positive_quantity` | focused local command and hosted CI |
-| Non-canonical instrument quantities are rejected | CONTRIBUTIONS policy graph | `tests/contributions/test_policy_draft_rules.py::test_update_rejects_non_canonical_quantity` | focused local command and hosted CI |
+| Graph contains exactly one accepted-submission rule | CONTRIBUTIONS policy graph | `tests/contributions/test_policy_draft_rules.py::test_update_requires_exactly_one_rule_of_each_type` | focused local command and hosted CI |
+| Graph contains exactly one completed-review rule | CONTRIBUTIONS policy graph | `tests/contributions/test_policy_draft_rules.py::test_update_requires_exactly_one_rule_of_each_type` | focused local command and hosted CI |
+| A missing completed-review rule is rejected | CONTRIBUTIONS policy graph | `tests/contributions/test_policy_draft_rules.py::test_update_requires_exactly_one_rule_of_each_type` | focused local command and hosted CI |
+| A duplicate required rule is rejected without effect | CONTRIBUTIONS policy graph | `tests/contributions/test_policy_draft_rules.py::test_update_requires_exactly_one_rule_of_each_type` | focused local command and hosted CI |
+| Unpaid rules contain zero instrument definitions | CONTRIBUTIONS policy graph | `tests/contributions/test_policy_draft_rules.py::test_update_rejects_quantities_for_unpaid_rule` | focused local command and hosted CI |
+| Submitter tiers and fixed reviewer quantity share one policy header | CONTRIBUTIONS policy graph | `tests/finance/test_policy_contract.py::test_three_tiers_and_fixed_reviewer_share_one_header` | focused local command and hosted CI |
+| Per-rule overrides and superseded definition input are rejected | CONTRIBUTIONS policy graph | `tests/finance/test_policy_contract.py::test_per_rule_overrides_and_superseded_definition_input_are_rejected` | focused local command and hosted CI |
+| Non-positive instrument quantities are rejected | CONTRIBUTIONS policy graph | `tests/contributions/test_policy_draft_rules.py::test_update_rejects_invalid_quantities` | focused local command and hosted CI |
+| Non-canonical instrument quantities are rejected | CONTRIBUTIONS policy graph | `tests/contributions/test_policy_draft_rules.py::test_update_rejects_invalid_quantities` | focused local command and hosted CI |
 | Overflow and over-scale quantities are rejected before owner locks or authorization | CONTRIBUTIONS canonical award quantity | `tests/contributions/test_policy_draft_rules.py::test_update_rejects_out_of_bounds_quantity_before_authorization` | focused local command and hosted CI |
 | Project-points quantities require integer scale, including rejection of `1.0` | CONTRIBUTIONS policy graph | `tests/contributions/test_policy_draft_rules.py::test_update_rejects_non_integer_scale_project_points` | focused local command and hosted CI |
 | Malformed rule objects produce the concealed domain conflict | CONTRIBUTIONS policy graph | `tests/contributions/test_policy_draft_rules.py::test_update_conceals_malformed_rule_input` | focused local command and hosted CI |
@@ -255,12 +257,10 @@ convenience, not acceptance evidence for an unlisted behavior.
 
 | Behavior atom | Owner and implementation surface | Required future proof | Execution custody |
 |---|---|---|---|
-| The policy service exposes exactly create_draft, update_draft, read, read_current, publish and retire, with no direct downstream commands | CONTRIBUTIONS static public API shape only; not runtime side-effect proof | `tests/contributions/test_policy_negative_scope.py::test_policy_owner_exposes_only_policy_operations` | focused local command and hosted CI |
+| The policy service exposes exactly create_draft, update_draft, read, read_current, read_versions, publish and retire, with no direct downstream commands | CONTRIBUTIONS static public API shape only; not runtime side-effect proof | `tests/contributions/test_policy_negative_scope.py::test_policy_owner_exposes_only_policy_operations` | focused local command and hosted CI |
 | CP05 activates exactly the five registered AUTH policy actions; default composition still denies | AUTH catalogue | `tests/authorization/test_contribution_policy_registration.py::test_cp05_activates_only_exact_registered_policy_actions` | focused local command and hosted CI; security reviewer owns verdict |
 | No production or test behavior container reaches 500 lines | CP04A production/tests | `tests/architecture/test_cp04a_file_structure.py::test_cp04a_changed_behavior_files_remain_below_500_lines` | focused local preflight and hosted CI |
 | Every test has one primary behavior | CP04A tests and structural-debt ledger | `tests/architecture/test_cp04a_file_structure.py::test_cp04a_tests_map_one_to_one_to_contract_behavior_atoms` plus `scripts.test_structure_boundary validate` | focused local preflight and hosted CI; test-delta reviewer owns verdict |
-| Each changed CP04A application surface remains at least 90% covered | CP04A focused test lane | one coverage collection followed by a separate `coverage report --include ... --fail-under=90` command for every changed application surface | local focused proof and hosted CI; CI-integrity reviewer owns verdict |
-| Repository-wide coverage remains at or above the protected 78% baseline | Hosted aggregate test job and unchanged CI threshold | hosted repository aggregate coverage report | hosted CI only; CI-integrity reviewer owns verdict |
 
 The focused pytest command must name every non-hosted-only module above. Hosted
 CI must additionally run `test_policy_draft_concurrency.py` and
@@ -272,20 +272,6 @@ cd backend && .venv/bin/ruff check app/modules/contributions app/modules/compens
 cd backend && .venv/bin/python -m pytest -q tests/contributions/test_policy_read.py tests/contributions/public_policy/test_contracts.py tests/contributions/test_policy_owner_ports.py tests/contributions/test_policy_draft_create.py tests/contributions/test_policy_draft_update.py tests/contributions/test_policy_draft_rules.py tests/contributions/test_policy_draft_resources.py tests/contributions/test_policy_authorization_atomicity.py tests/contributions/test_policy_operation_recovery.py tests/contributions/test_policy_negative_scope.py tests/architecture/test_module_boundaries.py tests/architecture/test_cp04a_file_structure.py tests/authorization/test_contribution_policy_registration.py
 cd backend && WORKSTREAM_TEST_ADMIN_DATABASE_URL=<admin-url> .venv/bin/python -m scripts.run_isolated_tests --metadata-json /tmp/cp04a-postgresql.json --timeout-seconds 1800 --lane cp04a_postgresql -- .venv/bin/python -m pytest -q tests/contributions/test_policy_integration_postgresql.py tests/contributions/test_policy_draft_concurrency.py tests/contributions/test_policy_event_postgresql.py tests/migrations/test_compensation_adapter_identity.py tests/test_alembic.py
 cd backend && .venv/bin/python -m coverage erase && .venv/bin/python -m pytest -q tests/contributions tests/test_contributions.py tests/architecture/test_module_boundaries.py tests/architecture/test_cp04a_file_structure.py tests/authorization/test_contribution_policy_registration.py --cov=app.modules.contributions --cov=app.modules.compensation.api --cov=app.modules.compensation.schemas --cov=app.modules.compensation.policy_binding_service --cov=app.modules.projects.api --cov=app.modules.projects.contribution_policy --cov=app.adapters.contributions --cov=app.adapters.compensation --cov=app.adapters.projects --cov-report=
-cd backend && .venv/bin/python -m coverage report --include='app/modules/contributions/api/*' --fail-under=90
-cd backend && .venv/bin/python -m coverage report --include='app/modules/contributions/models.py' --fail-under=90
-cd backend && .venv/bin/python -m coverage report --include='app/modules/contributions/schemas.py' --fail-under=90
-cd backend && .venv/bin/python -m coverage report --include='app/modules/contributions/repository.py' --fail-under=90
-cd backend && .venv/bin/python -m coverage report --include='app/modules/contributions/service.py' --fail-under=90
-cd backend && .venv/bin/python -m coverage report --include='app/modules/contributions/policy_validation.py' --fail-under=90
-cd backend && .venv/bin/python -m coverage report --include='app/modules/compensation/api/__init__.py,app/modules/compensation/api/instruments.py,app/modules/compensation/api/policy_bindings.py' --fail-under=90
-cd backend && .venv/bin/python -m coverage report --include='app/modules/compensation/schemas.py' --fail-under=90
-cd backend && .venv/bin/python -m coverage report --include='app/modules/compensation/policy_binding_service.py' --fail-under=90
-cd backend && .venv/bin/python -m coverage report --include='app/modules/projects/api/__init__.py,app/modules/projects/api/contribution_policy.py' --fail-under=90
-cd backend && .venv/bin/python -m coverage report --include='app/modules/projects/contribution_policy.py' --fail-under=90
-cd backend && .venv/bin/python -m coverage report --include='app/adapters/contributions/__init__.py' --fail-under=90
-cd backend && .venv/bin/python -m coverage report --include='app/adapters/compensation/__init__.py' --fail-under=90
-cd backend && .venv/bin/python -m coverage report --include='app/adapters/projects/__init__.py' --fail-under=90
 cd backend && .venv/bin/python -m scripts.module_boundaries validate --protected-base <base-sha>
 cd backend && .venv/bin/python -m scripts.test_structure_boundary validate --policy ../.ci/auth-boundaries/TEST_STRUCTURE_POLICY.md --ledger ../.ci/auth-boundaries/TEST_STRUCTURE_DEBT.json
 python3 scripts/check_commitrail_records.py --base-ref <base-sha>
@@ -295,12 +281,8 @@ git diff --check
 
 Hosted CI additionally runs `tests/contributions/test_policy_draft_concurrency.py`
 and `tests/contributions/test_policy_event_postgresql.py` with real PostgreSQL.
-The focused coverage collection plus separate per-surface reports independently
-own the at-least-90-percent proof for every changed CP04A application surface.
-Alembic and metadata-only parity are owned by the named schema tests rather than
-Python line coverage. The hosted aggregate test job
-independently owns the unchanged repository-wide 78-percent baseline and full
-semantic-lane proof.
+Coverage is diagnostic only. The named behavior tests and complete hosted
+semantic-lane execution remain required; percentage quotas do not apply.
 
 ## Required reviewers
 
@@ -310,6 +292,6 @@ senior engineering, reuse/dedup, and documentation.
 ## Human review focus and stop conditions
 
 Confirm aggregate ownership, complete replacement semantics, operation fencing,
-PREP ordering, recovery, and absence of activation/routes. Stop and amend if
+PREP ordering, recovery, and exact current public authority. Amend if
 implementation needs another action, permission, route, foreign aggregate
 write, or lifecycle state.

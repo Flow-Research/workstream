@@ -7,8 +7,17 @@ from decimal import Decimal
 from uuid import UUID
 
 from sqlalchemy import (
-    CheckConstraint, DateTime, ForeignKey, ForeignKeyConstraint,
-    Index, Integer, Numeric, String, UniqueConstraint, Uuid, text,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    ForeignKeyConstraint,
+    Index,
+    Integer,
+    Numeric,
+    String,
+    UniqueConstraint,
+    Uuid,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -18,7 +27,10 @@ from app.db.base import Base
 class ContributionPolicy(Base):
     __tablename__ = "contribution_policies"
     __table_args__ = (
-        CheckConstraint("(get_byte(uuid_send(id), 6) >> 4) = 7 and (get_byte(uuid_send(id), 8) & 192) = 128", name="id_uuid7"),
+        CheckConstraint(
+            "(get_byte(uuid_send(id), 6) >> 4) = 7 and (get_byte(uuid_send(id), 8) & 192) = 128",
+            name="id_uuid7",
+        ),
         UniqueConstraint("id", "project_id", name="uq_contribution_policy_ownership"),
         ForeignKeyConstraint(
             ["current_published_version_id", "id", "project_id"],
@@ -92,7 +104,16 @@ class ContributionPolicy(Base):
 class ContributionPolicyVersion(Base):
     __tablename__ = "contribution_policy_versions"
     __table_args__ = (
-        CheckConstraint("(get_byte(uuid_send(id), 6) >> 4) = 7 and (get_byte(uuid_send(id), 8) & 192) = 128", name="id_uuid7"),
+        CheckConstraint(
+            "(instrument_type is null and unit_code is null and adapter_binding_id is null) or "
+            "(instrument_type is not null and instrument_type in ('money','project_points') "
+            "and unit_code is not null and adapter_binding_id is not null)",
+            name="common_reward_header",
+        ),
+        CheckConstraint(
+            "(get_byte(uuid_send(id), 6) >> 4) = 7 and (get_byte(uuid_send(id), 8) & 192) = 128",
+            name="id_uuid7",
+        ),
         ForeignKeyConstraint(
             ["contribution_policy_id", "project_id"],
             ["contribution_policies.id", "contribution_policies.project_id"],
@@ -135,6 +156,9 @@ class ContributionPolicyVersion(Base):
         nullable=False,
     )
     version_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    instrument_type: Mapped[str | None] = mapped_column(String(32))
+    unit_code: Mapped[str | None] = mapped_column(String(32))
+    adapter_binding_id: Mapped[UUID | None] = mapped_column(Uuid())
     status: Mapped[str] = mapped_column(String(16), nullable=False, server_default=text("'draft'"))
     created_by: Mapped[str] = mapped_column(
         ForeignKey("actor_profiles.id", name="fk_contribution_policy_version_created_by"),
@@ -175,7 +199,10 @@ class ContributionPolicyVersion(Base):
 class ContributionRule(Base):
     __tablename__ = "contribution_rules"
     __table_args__ = (
-        CheckConstraint("(get_byte(uuid_send(id), 6) >> 4) = 7 and (get_byte(uuid_send(id), 8) & 192) = 128", name="id_uuid7"),
+        CheckConstraint(
+            "(get_byte(uuid_send(id), 6) >> 4) = 7 and (get_byte(uuid_send(id), 8) & 192) = 128",
+            name="id_uuid7",
+        ),
         ForeignKeyConstraint(
             ["contribution_policy_version_id", "project_id"],
             ["contribution_policy_versions.id", "contribution_policy_versions.project_id"],
@@ -217,69 +244,15 @@ class ContributionRule(Base):
     )
 
 
-class Iso4217CurrencyCode(Base):
-    """Migration-seeded immutable ISO 4217 List One alphabetic code."""
-
-    __tablename__ = "iso_4217_currency_codes"
-    __table_args__ = (CheckConstraint("code ~ '^[A-Z]{3}$'", name="code"),)
-
-    code: Mapped[str] = mapped_column(String(3), primary_key=True)
-
-
-class ProjectCompensationUnit(Base):
-    """Project-enabled money or project-scoped points unit identity."""
-
-    __tablename__ = "project_compensation_units"
-    __table_args__ = (
-        ForeignKeyConstraint(
-            ["iso_currency_code"],
-            ["iso_4217_currency_codes.code"],
-            name="fk_project_compensation_unit_iso_currency",
-        ),
-        CheckConstraint("instrument_type in ('money','project_points')", name="instrument_type"),
-        CheckConstraint("status in ('active','retired')", name="status"),
-        CheckConstraint(
-            "(instrument_type='money' and iso_currency_code is not null "
-            "and unit_code=iso_currency_code) or "
-            "(instrument_type='project_points' and iso_currency_code is null "
-            "and unit_code ~ '^[A-Za-z][A-Za-z0-9._:-]{0,31}$')",
-            name="unit_identity",
-        ),
-        CheckConstraint(
-            "(status='active' and retired_by is null and retired_at is null) or "
-            "(status='retired' and retired_by is not null and retired_at is not null)",
-            name="lifecycle_shape",
-        ),
-        CheckConstraint("retired_at is null or retired_at >= created_at", name="retirement_time"),
-    )
-
-    project_id: Mapped[str] = mapped_column(
-        ForeignKey("projects.id", name="fk_project_compensation_unit_project"),
-        primary_key=True,
-    )
-    instrument_type: Mapped[str] = mapped_column(String(32), primary_key=True)
-    unit_code: Mapped[str] = mapped_column(String(32), primary_key=True)
-    iso_currency_code: Mapped[str | None] = mapped_column(String(3))
-    status: Mapped[str] = mapped_column(String(16), nullable=False, server_default=text("'active'"))
-    created_by: Mapped[str] = mapped_column(
-        ForeignKey("actor_profiles.id", name="fk_project_compensation_unit_created_by"),
-        nullable=False,
-    )
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False, server_default=text("statement_timestamp()")
-    )
-    retired_by: Mapped[str | None] = mapped_column(
-        ForeignKey("actor_profiles.id", name="fk_project_compensation_unit_retired_by")
-    )
-    retired_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-
-
 class ContributionAwardDefinition(Base):
     """Exact compensation fact attached to one compensated contribution rule."""
 
     __tablename__ = "contribution_award_definitions"
     __table_args__ = (
-        CheckConstraint("(get_byte(uuid_send(id), 6) >> 4) = 7 and (get_byte(uuid_send(id), 8) & 192) = 128", name="id_uuid7"),
+        CheckConstraint(
+            "(get_byte(uuid_send(id), 6) >> 4) = 7 and (get_byte(uuid_send(id), 8) & 192) = 128",
+            name="id_uuid7",
+        ),
         ForeignKeyConstraint(
             [
                 "contribution_rule_id",
@@ -313,10 +286,15 @@ class ContributionAwardDefinition(Base):
             ],
             name="fk_contribution_award_definition_unit",
         ),
-        UniqueConstraint(
-            "contribution_rule_id",
-            "instrument_type",
-            name="uq_contribution_award_definition_instrument",
+        Index("uq_award_definition_size", "contribution_rule_id", "task_size",
+              unique=True, postgresql_where=text("task_size is not null")),
+        Index("uq_award_definition_fixed", "contribution_rule_id",
+              unique=True, postgresql_where=text("task_size is null")),
+        CheckConstraint(
+            "(contribution_type='accepted_submission' and task_size is not null "
+            "and task_size in ('small','medium','large')) or "
+            "(contribution_type='completed_review' and task_size is null)",
+            name="reward_definition_size",
         ),
         CheckConstraint(
             "contribution_type in ('accepted_submission','completed_review')",
@@ -339,6 +317,7 @@ class ContributionAwardDefinition(Base):
 
     id: Mapped[UUID] = mapped_column(Uuid(), primary_key=True)
     contribution_rule_id: Mapped[UUID] = mapped_column(Uuid(), nullable=False)
+    task_size: Mapped[str | None] = mapped_column(String(8))
     contribution_policy_version_id: Mapped[UUID] = mapped_column(Uuid(), nullable=False)
     project_id: Mapped[str] = mapped_column(
         ForeignKey("projects.id", name="fk_contribution_award_definition_project"),
@@ -356,7 +335,10 @@ class ContributionAwardDefinition(Base):
 class ContributionPolicyTransitionCustody(Base):
     __tablename__ = "contribution_policy_transition_custody"
     __table_args__ = (
-        CheckConstraint("(get_byte(uuid_send(id), 6) >> 4) = 7 and (get_byte(uuid_send(id), 8) & 192) = 128", name="id_uuid7"),
+        CheckConstraint(
+            "(get_byte(uuid_send(id), 6) >> 4) = 7 and (get_byte(uuid_send(id), 8) & 192) = 128",
+            name="id_uuid7",
+        ),
         UniqueConstraint("operation_id", name="uq_contribution_policy_custody_operation"),
         ForeignKeyConstraint(
             ["contribution_policy_id", "project_id"],
@@ -410,7 +392,10 @@ class ContributionPolicyLifecycleEvent(Base):
 
     __tablename__ = "contribution_policy_lifecycle_events"
     __table_args__ = (
-        CheckConstraint("(get_byte(uuid_send(id), 6) >> 4) = 7 and (get_byte(uuid_send(id), 8) & 192) = 128", name="id_uuid7"),
+        CheckConstraint(
+            "(get_byte(uuid_send(id), 6) >> 4) = 7 and (get_byte(uuid_send(id), 8) & 192) = 128",
+            name="id_uuid7",
+        ),
         ForeignKeyConstraint(
             ["contribution_policy_id", "project_id"],
             ["contribution_policies.id", "contribution_policies.project_id"],

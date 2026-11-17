@@ -20,7 +20,9 @@ async def validate_routing_replay(owner, issuance, action, caller_input, resourc
         or type(authority.context) is not ServiceAuthorizationContext
         or authority.action_id is not ROUTE
         or not fixed_service_resource_matches(
-            action, resource, authority.scope_project_id, None, None, None
+            action, resource, authority.scope_project_id, None, None, None,
+            actor_profile_id=authority.context.actor_profile_id,
+            identity_link_id=authority.context.identity_link_id,
         )
     ):
         raise PreparedAuthorizationHandleInvalid("invalid routing replay authority")

@@ -107,7 +107,25 @@ def test_task_operation_contracts_match_backend_openapi_when_configured() -> Non
         operation = openapi["paths"][path][method.lower()]
         assert operation["security"]
         assert operation["x-workstream-action-id"] == "project.guide_compilation.request"
-    assert len(all_operations - health_operations) == 132
+    # Original-bound Finance callbacks are service APIs, not task tools.
+    prefix = "/api/v1/compensation/awards/{award_id}"
+    fulfillment_operations = {
+        ("POST", f"{prefix}/fulfillment-reports"): "compensation.fulfillment.report",
+        ("GET", f"{prefix}/fulfillment-reports/{{external_event_id}}"): (
+            "compensation.fulfillment.source.read"
+        ),
+        ("GET", f"{prefix}/finance-evidence"): "compensation.fulfillment.source.read",
+        ("POST", f"{prefix}/fulfillment-exceptions"): "compensation.fulfillment.exception.report",
+    }
+    assert fulfillment_operations.keys() <= all_operations - health_operations
+    assert fulfillment_operations.keys().isdisjoint(
+        (method, path) for method, path, _ in TASK_OPERATIONS.values()
+    )
+    for (method, path), action in fulfillment_operations.items():
+        operation = openapi["paths"][path][method.lower()]
+        assert operation["security"]
+        assert operation["x-workstream-action-id"] == action
+    assert len(all_operations - health_operations) == 136
     for name, (method, path, _) in TASK_OPERATIONS.items():
         snapshot = json.loads((CONTRACTS / f"{name}.json").read_text(encoding="utf-8"))
         assert snapshot["source"]["openapi_version"] == openapi["openapi"]

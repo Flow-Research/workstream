@@ -80,10 +80,12 @@ Required concepts:
 A profile status is a guard, not a grant. Active humans receive only self
 profile capability until an administrative or exact-project grant exists.
 For a service, the profile is the stable local identity. Its immutable
-`service_identity` is either action-bearing with one closed typed service-action
-matrix row or target-only with no matrix row and no executable authority. The
-identity kind is never inferred from display data, token claims, issuer, or
-subject. Profile ID, service identity, and external credential binding remain
+`service_identity` selects its closed typed service-action matrix memberships.
+Availability separately controls executable actions: the compensation adapter's
+three active memberships require exact request-bound prepared authority and
+original-source custody. Binding-target eligibility
+is not an authority grant. The identity kind is never inferred from display data,
+token claims, issuer, or subject. Profile ID, service identity, and external credential binding remain
 separate concepts.
 
 ### ActorIdentityLink
@@ -270,6 +272,9 @@ compensation.policy.manage
 compensation.adapter_binding.manage
 compensation.award.read
 compensation.delivery.reconcile
+compensation.fulfillment.source.read
+compensation.fulfillment.report
+compensation.fulfillment.exception.report
 
 operations.status.read
 operations.timer.run
@@ -731,7 +736,7 @@ closed:
 | `workstream.task.post_submit_router` | active: `task.post_submit.route` |
 | `workstream.checker.pre_submit` | active: `checker.pre_submit.execute`, `checker.pre_submit.finalize` |
 | `workstream.checker.post_submit` | active: `checker.post_submit.execute`, `checker.post_submit.finalize`, `checker.model_call.grant`, `checker.model_call.prepare`, `checker.model_call.dispatch`, `checker.model_call.recover`, `checker.model_call.observe`, `checker.model_call.complete` |
-| `workstream.compensation.adapter` | target-only; no action membership |
+| `workstream.compensation.adapter` | active: `compensation.fulfillment.source.read`, `compensation.fulfillment.report`, `compensation.fulfillment.exception.report`; exact request principal and original binding/source required |
 
 The hidden 04B2 prepared resource first locks fixed-service authority using
 task, assignment, project, effective
@@ -748,7 +753,8 @@ than a separate generation counter.
 
 `workstream.project.setup` was the eighth fixed identity when AUTH-12B merged;
 02C expanded that registry to fourteen identities. The current registry has
-twenty-one identities, including the target-only compensation adapter, shared
+twenty-one identities, including the compensation adapter with three active,
+request-bound fulfillment memberships, shared
 outbox dispatcher, task assignment reconciler, pre/post-submit checkers,
 post-submit router and revision expirer. AUTH-12E activates
 `project.guide_sufficiency.run`, AUTH-12F3 activates policy derivation, and

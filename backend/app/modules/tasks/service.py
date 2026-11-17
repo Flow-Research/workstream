@@ -11,6 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import ValidationError
 
 from app.modules.tasks.api import TaskSubmissionContextFacts
+from app.modules.contributions.api.reward_selection import RewardSelectionFacts, RewardSelectionPort, RewardSelectionRequest
+from app.modules.contributions.api import ContributionPolicyUnavailable
 from app.modules.checkers.api.external_policy import (
     LockedExternalCheckerPolicies,
     LockedExternalPostSubmitPolicy,
@@ -71,6 +73,10 @@ LOCKED_CONTEXT_REQUIRED_FIELDS = (
     "locked_pre_submit_checker_bundle_hash",
 )
 
+
+# Unpaid selection permits a null definition; it still belongs in authority.
+LOCKED_CONTEXT_HASH_FIELDS = (*LOCKED_CONTEXT_REQUIRED_FIELDS, "task_size",
+                              "locked_submission_award_definition_id")
 
 class TaskServiceError(Exception):
     """Base error for task service failures mapped to API responses."""
@@ -141,15 +147,35 @@ class TaskService:
         session: AsyncSession,
         *,
         project_contexts: ProjectLockedPolicyContextPort,
+        rewards: RewardSelectionPort,
     ) -> None:
         """Create a service instance bound to one database session.
 
         Args:
             session: Async SQLAlchemy session for the current request.
         """
+        self._rewards = rewards
         self._project_contexts = project_contexts
         self._session = session
         self._repo = TaskRepository(session)
+
+    async def resolve_task_reward(self, task: WorkstreamTask, *, select: bool = False) -> RewardSelectionFacts:
+        """Resolve exact locked policy/size and validate or first record its definition."""
+        try:
+            # Screening stamps the context and status in one final flush.
+            with self._session.no_autoflush:
+                selection = await self._rewards.resolve_reward_selection(RewardSelectionRequest(
+                    project_id=UUID(task.project_id),
+                    policy_version_id=task.locked_contribution_policy_version_id,
+                    task_size=task.task_size,
+                ))
+        except (ContributionPolicyUnavailable, TypeError, ValueError) as exc:
+            raise TaskValidationError("task reward selection unavailable") from exc
+        if select:
+            task.locked_submission_award_definition_id = selection.award_definition_id
+        elif task.locked_submission_award_definition_id != selection.award_definition_id:
+            raise TaskValidationError("task reward selection changed")
+        return selection
 
     async def read_management_task_submission_requirements(
         self,

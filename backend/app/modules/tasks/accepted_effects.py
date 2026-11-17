@@ -166,6 +166,12 @@ class TaskAcceptedEffectsParticipant:
             or latest_submission.contributor_id != str(request.contributor_id)
             or latest_submission.contribution_policy_version_id
             != request.contribution_policy_version_id
+            or latest_submission.task_size != request.task_size
+            or latest_submission.contribution_award_definition_id != request.contribution_award_definition_id
+            or task.task_size != request.task_size
+            or task.locked_submission_award_definition_id != request.contribution_award_definition_id
+            or assignment.submitter_task_size != request.task_size
+            or assignment.submitter_award_definition_id != request.contribution_award_definition_id
             or latest_submission.artifact_content_id != str(request.content_id)
             or latest_submission.status != "submitted"
             or latest_submission.locked_review_policy_id

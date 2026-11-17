@@ -1,5 +1,11 @@
 """Dependency-safe public API for the CONTRIBUTIONS business module."""
 
+from app.modules.contributions.api.reward_selection import (
+    RewardSelectionFacts,
+    RewardSelectionPort,
+    RewardSelectionRequest,
+)
+
 from app.modules.contributions.api.compensation_units import (
     CompensationUnitAction,
     CompensationUnitCreateAuthorizationFacts,
@@ -33,10 +39,13 @@ from app.modules.contributions.api.policies import (
     ContributionType,
     DenyContributionPolicyAuthorization,
     PolicyAction,
-    PolicyDefinitionInput,
     PolicyDefinitionView,
     PolicyEventType,
     PolicyRuleInput,
+    AcceptedSubmissionPolicyRuleInput,
+    CompletedReviewPolicyRuleInput,
+    UnpaidPolicyRuleInput,
+    TaskSizeQuantities,
     PolicyRuleView,
 )
 
@@ -58,11 +67,15 @@ from app.modules.contributions.api.participation import (
 from app.modules.contributions.api.published_selection import (
     LockedCompensationAward,
     LockedCompensationTerms,
+    LockedCompensationSelection,
     LockedCompensationTermsPort,
     LockedContributionTerms,
 )
 
 __all__ = (
+    "RewardSelectionFacts",
+    "RewardSelectionPort",
+    "RewardSelectionRequest",
     "CompensationUnitAction",
     "CompensationUnitCreateAuthorizationFacts",
     "CompensationUnitInstrument",
@@ -85,6 +98,7 @@ __all__ = (
     "SubmitterParticipationResult",
     "LockedCompensationAward",
     "LockedCompensationTerms",
+    "LockedCompensationSelection",
     "LockedCompensationTermsPort",
     "LockedContributionTerms",
     "CompensationMode",
@@ -107,9 +121,12 @@ __all__ = (
     "ContributionType",
     "DenyContributionPolicyAuthorization",
     "PolicyAction",
-    "PolicyDefinitionInput",
     "PolicyDefinitionView",
     "PolicyEventType",
     "PolicyRuleInput",
+    "AcceptedSubmissionPolicyRuleInput",
+    "CompletedReviewPolicyRuleInput",
+    "UnpaidPolicyRuleInput",
+    "TaskSizeQuantities",
     "PolicyRuleView",
 )

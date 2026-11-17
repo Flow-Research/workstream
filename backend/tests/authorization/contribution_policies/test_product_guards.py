@@ -5,7 +5,7 @@ from uuid import uuid4
 
 import pytest
 
-from adapter_binding_test_support import Authorization as HistoricalBindingAuthorization
+from adapter_binding_test_support import Authorization as BindingAuthorization
 from app.db import session as db_session
 from app.modules.compensation.api import AdapterBindingSuspendRequest
 from app.modules.compensation.service import AdapterBindingService
@@ -24,7 +24,7 @@ async def test_real_authority_preserves_cp04_quantity_guards(admin_access, quant
     invalid = replace(
         valid,
         rules=(
-            replace(paid, definitions=(replace(paid.definitions[0], quantity=quantity),)),
+            paid.model_copy(update={"quantities": paid.quantities.model_copy(update={"small": quantity})}),
             review,
         ),
     )
@@ -54,16 +54,9 @@ async def test_real_authority_preserves_cp04_foreign_binding_guard(admin_access)
     draft = await target.execute("create_draft", target.request("create_draft"))
     _, foreign_binding = await foreign_project(target, with_binding=True)
     valid = target.request("update_draft", draft, compensated=True)
-    paid, review = valid.rules
     invalid = replace(
         valid,
-        rules=(
-            replace(
-                paid,
-                definitions=(replace(paid.definitions[0], adapter_binding_id=foreign_binding),),
-            ),
-            review,
-        ),
+        adapter_binding_id=foreign_binding,
     )
     before = await snapshot(target.project)
     with pytest.raises((ContributionPolicyConflict, ContributionPolicyUnavailable)):
@@ -87,7 +80,7 @@ async def test_real_authority_preserves_cp04_inactive_binding_publication_guard(
     async with db_session.get_session_factory()() as session, session.begin():
         # Seed a suspended binding through CP04's lifecycle fixture authority.
         # Only policy authorization is under test; its real AUTH adapter is unchanged.
-        auth = HistoricalBindingAuthorization()
+        auth = BindingAuthorization()
         auth.bind_session(session)
         await AdapterBindingService(session, mutation_authorization=auth).suspend(
             AdapterBindingSuspendRequest(

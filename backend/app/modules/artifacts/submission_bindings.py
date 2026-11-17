@@ -307,6 +307,9 @@ class SubmissionAdmissionConsumptionService:
             admission.actor_profile_id == str(context.contributor_id)
             and admission.project_id == str(references.project_id)
             and admission.task_id == str(context.task_id)
+            and admission.task_size == context.task_size
+            and admission.contribution_policy_version_id == context.submitter_contribution_policy_version_id
+            and admission.contribution_award_definition_id == context.contribution_award_definition_id
             and admission.assignment_id == str(context.assignment_id)
             and admission.predecessor_submission_id
             == (str(predecessor.submission_id) if predecessor is not None else None)

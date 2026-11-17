@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock, Mock
 import asyncpg  # type: ignore[import-not-found]
 import pytest  # type: ignore[import-not-found]
 
-from conftest import (
+from tests.conftest import (
     PROTECTED_TEST_TABLES,
     RESETTABLE_TEST_TABLES,
     TRUNCATE_GUARDED_TABLES,
@@ -33,11 +33,11 @@ def test_reset_batches_all_trigger_commands_in_one_transaction(
     transaction = AsyncMock()
     connection.transaction = Mock(return_value=transaction)
     tables = {name: f'"public"."{name}"' for name in RESETTABLE_TEST_TABLES}
-    monkeypatch.setattr("conftest.asyncpg.connect", AsyncMock(return_value=connection))
+    monkeypatch.setattr("tests.conftest.asyncpg.connect", AsyncMock(return_value=connection))
     custody = AsyncMock()
     schema = AsyncMock(return_value=tables)
-    monkeypatch.setattr("conftest._assert_owned_test_database", custody)
-    monkeypatch.setattr("conftest._assert_canonical_test_schema", schema)
+    monkeypatch.setattr("tests.conftest._assert_owned_test_database", custody)
+    monkeypatch.setattr("tests.conftest._assert_canonical_test_schema", schema)
 
     async def after_disable() -> None:
         transaction.__aenter__.assert_awaited_once()

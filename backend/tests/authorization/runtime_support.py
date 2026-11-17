@@ -176,10 +176,16 @@ def _guide_mutation_resources(project_id, guide_id, operation_id, digest):
     }
 
 
-def _planned_service_matrix_inputs(context, action_id, derive_inputs):
+def _service_matrix_inputs(context, action_id, derive_inputs):
     """Give each planned action valid input so the matrix reaches AUTH denial."""
     caller_input = PreparedAuthorizationInput(idempotency_key=new_record_id(), request_value={})
     scope = PreparedAuthorityScope(kind=PreparedAuthorityScopeKind.SYSTEM)
+    if action_id in {
+        ActionId.COMPENSATION_FULFILLMENT_REPORT,
+        ActionId.COMPENSATION_FULFILLMENT_EXCEPTION_REPORT,
+        ActionId.COMPENSATION_FULFILLMENT_SOURCE_READ,
+    }:
+        return _fulfillment_service_matrix_inputs(context, action_id)
     if action_id is ActionId.PROJECT_SUBMISSION_ARTIFACT_POLICY_DERIVE:
         caller_input, scope = derive_inputs()
     elif action_id is ActionId.PROJECT_GUIDE_COMPILATION_REQUEST_AUTOMATIC:
@@ -210,3 +216,45 @@ def _planned_service_matrix_inputs(context, action_id, derive_inputs):
             kind=PreparedAuthorityScopeKind.PROJECT, project_id=project_id,
         )
     return context, caller_input, scope
+
+
+class _ForbiddenMatrixActorLock:
+    """Matrix/availability rejection must not reach any actor storage lock."""
+
+    calls = 0
+
+    async def lock_request_actor(self, identity_link_id, actor_profile_id):
+        self.calls += 1
+        raise AssertionError("matrix rejection reached an actor lock")
+
+
+def _fulfillment_service_matrix_inputs(context, action_id):
+    from app.modules.authorization.domain.fulfillment_evidence import fulfillment_evidence_resource
+    from app.modules.compensation.api.fulfillment_evidence import (
+        FulfillmentReportAuthorityFacts, FulfillmentExceptionAuthorityFacts,
+        FulfillmentSourceReadAuthorityFacts,
+    )
+
+    context = context.model_copy(update={
+        "actor_profile_id": new_record_id(), "identity_link_id": new_record_id(),
+    })
+    common = dict(source_instance_id=new_record_id(), fulfillment_root_id=new_record_id(),
+        award_id=new_record_id(), project_id=new_record_id(), adapter_binding_id=new_record_id(),
+        binding_actor_id=context.actor_profile_id, reporter_actor_id=context.actor_profile_id,
+        reporter_identity_link_id=context.identity_link_id, admission_generation=1,
+        source_award_digest="sha256:" + "a" * 64, obligation_digest="sha256:" + "b" * 64)
+    event_id = new_record_id()
+    if action_id is ActionId.COMPENSATION_FULFILLMENT_REPORT:
+        facts = FulfillmentReportAuthorityFacts(**common, external_event_id=event_id,
+            report_digest="sha256:" + "c" * 64, recording_lifecycle_generation=1)
+    elif action_id is ActionId.COMPENSATION_FULFILLMENT_EXCEPTION_REPORT:
+        facts = FulfillmentExceptionAuthorityFacts(**common, exception_event_id=event_id,
+            original_fulfillment_event_id=new_record_id(), exception_digest="sha256:" + "d" * 64,
+            recording_lifecycle_generation=1)
+    else:
+        facts = FulfillmentSourceReadAuthorityFacts(**common, observed_lifecycle_generation=1)
+    resource = fulfillment_evidence_resource(facts)
+    operation_id = context.request_id if action_id is ActionId.COMPENSATION_FULFILLMENT_SOURCE_READ else event_id
+    return context, PreparedAuthorizationInput(idempotency_key=operation_id,
+        request_value=resource.model_dump(mode="json")), PreparedAuthorityScope(
+        kind=PreparedAuthorityScopeKind.PROJECT, project_id=facts.project_id)

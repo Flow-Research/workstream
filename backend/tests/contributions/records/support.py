@@ -13,12 +13,12 @@ from app.modules.contributions.records.schemas import ContributionRecordInput
 
 
 @asynccontextmanager
-async def reviewer_contribution_source(tmp_path, url, *, decision="accept", paid=False, **options):
+async def reviewer_contribution_source(tmp_path, url, *, decision="accept", paid=False, instrument="money", **options):
     """Persist a real Review only; reviewer contribution storage is a separate fact."""
     from tests.reviews.decision.support import review_source, finding, insert_review
 
     async with review_source(
-        tmp_path, url, contribution_awards=("money", "project_points") if paid else (), **options
+        tmp_path, url, contribution_awards=(instrument,) if paid else (), **options
     ) as h:
         h.review = h.review.model_copy(
             update={
@@ -65,7 +65,7 @@ async def authorized_submitter_source(
     awards = (
         tuple(contribution_awards)
         if contribution_awards is not None
-        else (("money", "project_points") if paid else ())
+        else (("money",) if paid else ())
     )
     async with authorized_routing_source(tmp_path, url, contribution_awards=awards, **options) as h:
         if retire_before_outcome:
@@ -108,10 +108,15 @@ async def insert_record(session, record, **changes):
 
 
 async def award_values(session, record):
-    definitions = (await session.scalars(select(ContributionAwardDefinition).where(
+    statement = select(ContributionAwardDefinition).where(
         ContributionAwardDefinition.contribution_policy_version_id == record.contribution_policy_version_id,
         ContributionAwardDefinition.contribution_type == record.contribution_type,
-    ).order_by(ContributionAwardDefinition.instrument_type))).all()
+    )
+    if record.contribution_type == "accepted_submission":
+        selected = await session.scalar(text("SELECT contribution_award_definition_id FROM public.submissions WHERE id=:id"),
+                                        {"id": record.submission_id})
+        statement = statement.where(ContributionAwardDefinition.id == selected)
+    definitions = (await session.scalars(statement.order_by(ContributionAwardDefinition.instrument_type))).all()
     return [dict(
         id=new_record_id(), project_id=record.project_id, contribution_record_id=record.id,
         contributor_id=record.contributor_id,
@@ -178,6 +183,9 @@ async def retire_policy_and_suspend_bindings(h):
             "SELECT DISTINCT adapter_binding_id FROM public.contribution_award_definitions "
             "WHERE contribution_policy_version_id=:id"
         ), {"id": prior.contribution_policy_version_id})).scalars().all()
+        before_states = dict((await session.execute(text(
+            "SELECT id,status FROM public.project_compensation_adapter_bindings WHERE project_id=:id"
+        ), {"id": project_id})).all())
     for binding in bindings:
         async with h.factory() as session, session.begin():
             service = AdapterBindingService(
@@ -198,12 +206,10 @@ async def retire_policy_and_suspend_bindings(h):
         assert await session.scalar(text(
             "SELECT status FROM public.contribution_policy_versions WHERE id=:id"
         ), {"id": prior.contribution_policy_version_id}) == "retired"
-        states = (
-            await session.scalars(
-                text(
-                    "SELECT status FROM public.project_compensation_adapter_bindings WHERE project_id=:id"
-                ),
-                {"id": project_id},
-            )
-        ).all()
-        assert len(states) == 2 and set(states) == {"suspended"}
+        states = dict((await session.execute(text(
+            "SELECT id,status FROM public.project_compensation_adapter_bindings WHERE project_id=:id"
+        ), {"id": project_id})).all())
+        assert states == {
+            binding_id: "suspended" if binding_id in bindings else status
+            for binding_id, status in before_states.items()
+        }

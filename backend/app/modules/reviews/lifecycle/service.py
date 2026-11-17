@@ -8,6 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.hashing import canonical_json_hash
 from app.core.identifiers import new_record_id
+from app.modules.compensation.api.awards import CompensationAwardConflict
+from app.modules.compensation.api.fulfillment import CompensationFulfillmentReadinessPort
 from app.modules.reviews.api.lifecycle import (
     JointLifecyclePhase, JointLifecycleUnavailable, LifecycleTransitionAuthorization,
     LifecycleTransitionCommand, LifecycleTransitionFacts, LifecycleTransitionReceipt,
@@ -18,11 +20,14 @@ from app.modules.reviews.lifecycle.models import JointLifecycleReleaseControl, J
 # The selected production completion handler is the reviewed automatic writer.
 # New effects still require this controller's authorized live generation.
 FIRST_CONTRIBUTION_MANIFEST_DIGEST = canonical_json_hash({
-    "participants": ["reviews.acceptance", "tasks.accepted_effects", "contributions.records"],
+    "participants": ["reviews.acceptance", "tasks.accepted_effects", "contributions.records",
+                     "compensation.awards", "compensation.fulfillment", "outbox.append"],
     "new_effects": "live_root_transaction",
     "replay": "current_generation_select_only",
     "live_readiness": "no_pre_authority_final_acceptances",
     "production_routing": "selected_post_submit_completion",
+    "fulfillment_source": "authorized_activation_anchor",
+    "fulfillment_scope": "accepted_submission",
     "unavailable": ["human_review", "fulfillment_admission", "payment_delivery"],
 })
 _EDGES = frozenset({
@@ -34,10 +39,12 @@ _EDGES = frozenset({
 class JointLifecycleController:
     """Flush-only REV owner; the shared fence precedes AUTH principal custody."""
 
-    def __init__(self, session: AsyncSession, *, authorization: LifecycleTransitionAuthorization):
+    def __init__(self, session: AsyncSession, *, authorization: LifecycleTransitionAuthorization,
+                 source_readiness: CompensationFulfillmentReadinessPort):
         self._session = session
         self._authorization = authorization
         self._fence = PostgresJointLifecycleMutationFence(session)
+        self._source_readiness = source_readiness
 
     async def transition(self, command: LifecycleTransitionCommand) -> LifecycleTransitionReceipt:
         """Commit control, history and exact AUTH together, or let the caller roll back."""
@@ -79,19 +86,35 @@ class JointLifecycleController:
             )
             if checked.target_phase == JointLifecyclePhase.LIVE and retained_acceptance:
                 raise JointLifecycleUnavailable("pre-authority acceptance blocks lifecycle readiness")
+            control = await self._session.get(
+                JointLifecycleReleaseControl, current.singleton_id, populate_existing=True,
+            )
+            source_instance_id = control.fulfillment_source_instance_id
+            if checked.target_phase == JointLifecyclePhase.LIVE:
+                try:
+                    configured_source = await self._source_readiness.require_source_ready()
+                except CompensationAwardConflict as exc:
+                    raise JointLifecycleUnavailable("fulfillment source configuration unavailable") from exc
+                if source_instance_id is not None and source_instance_id != configured_source:
+                    raise JointLifecycleUnavailable("fulfillment source configuration differs")
+                source_instance_id = configured_source
+            observations = {
+                "singleton_id": str(current.singleton_id),
+                "generation": current.generation, "phase": current.phase.value,
+                "retained_pre_authority_acceptance": retained_acceptance,
+                "manifest": FIRST_CONTRIBUTION_MANIFEST_DIGEST,
+            }
+            if source_instance_id is not None:
+                observations["fulfillment_source_instance_id"] = str(source_instance_id)
             facts = LifecycleTransitionFacts(
                 command=checked,
-                observations_digest=canonical_json_hash({
-                    "singleton_id": str(current.singleton_id),
-                    "generation": current.generation, "phase": current.phase.value,
-                    "retained_pre_authority_acceptance": retained_acceptance,
-                    "manifest": FIRST_CONTRIBUTION_MANIFEST_DIGEST,
-                }),
+                observations_digest=canonical_json_hash(observations),
             )
             receipt = await authority.consume_new(facts)
             row = JointLifecycleTransition(
                 id=new_record_id(), operation_id=checked.operation_id,
                 singleton_id=current.singleton_id, generation=current.generation + 1,
+                fulfillment_source_instance_id=source_instance_id,
                 previous_phase=current.phase.value, phase=checked.target_phase.value,
                 facts_json=facts.model_dump(mode="json"),
                 resource_context_digest=receipt.resource_context_digest,
@@ -103,6 +126,7 @@ class JointLifecycleController:
                 JointLifecycleReleaseControl, current.singleton_id, populate_existing=True,
             )
             control.phase, control.generation, control.transition_id = row.phase, row.generation, row.id
+            control.fulfillment_source_instance_id = source_instance_id
             await self._session.flush()
             return _receipt(row)
 

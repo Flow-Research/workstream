@@ -620,8 +620,8 @@ writer/participant described below.
 [CON-07](../.commitrail/initiatives/WS-CON-001/WS-CON-001-07.md) delivers the
 hidden source-neutral submitter participant and complete frozen award-set port.
 After acquiring the supplied canonical REV fence through a CON-owned Protocol,
-it stages or exactly replays one accepted-submission contribution and zero, one
-or two awards inside the caller's existing root transaction. Exact source
+it stages or exactly replays one accepted-submission contribution and zero or
+one exact size-selected award inside the caller's existing root transaction. Exact source
 replay returns the original row IDs. Compensated replay requires the original
 correlation UUID; unpaid replay retains no correlation. It does not write
 FinalAcceptance, change TASK, evaluate AUTH, publish a source, fulfill an award
@@ -746,10 +746,13 @@ Extract foundations from existing owner work, not a new initiative:
    fabricating allows.
    REV-12A4A supplies authorized transitions and atomic writer/stop composition
    on this fence before the first contribution path. Applicable award facts remain atomic. Actual
-   CON fulfillment roots own immutable ordinal allocation before fulfillment
-   admission is enabled; no award or outbox row substitutes for a root. Payment
-   obligation storage and its root/cutoff proof are not prerequisites of a
-   manifest that keeps fulfillment admission, dispatch and callbacks unavailable.
+   COMP now stages immutable root/ordinal and selector-only outbox custody with
+   each accepted-submission award under the held REV fence. The current manifest names those internal
+   participants and keeps Finance admission, dispatch and callbacks unavailable.
+   First LIVE durably anchors the configured source UUID through the existing
+   control, transition observation and AUTH custody. Other configurations are
+   denied even before the first root. Finance obligation,
+   callback and cutoff/drain proof remain required before fulfillment activation.
 4. ARCH-04E2-B delivers mandatory actual source receipts, database-enforced
    complete outcomes and shared audit/outbox in one caller transaction. False
    acquires the existing REV fence before TASK and later AUTH; true acquires no
@@ -818,10 +821,11 @@ The target CON boundary exposes two operation-specific flush-only inputs:
 - delivered submitter input only after accept creates FinalAcceptance and applies
   accepted task effects, containing immutable scalar FinalAcceptance,
   TaskAssignment, submitter, assignment-frozen ContributionPolicyVersion,
-  stabilized artifact, correlation and expected-generation facts. It carries no
-  authorization decision or receipt-shaped authority value. Before production
-  consumption, the enclosing REV participant input must separately require the
-  exact AUTH decision-event receipt; this absence is not an optional authority path.
+  stabilized artifact, correlation and expected-generation facts. REV additionally
+  forwards the original authorization-decision and routing-manifest IDs through
+  CON into COMP root custody. They are provenance checked against the actual
+  stored source; scalar IDs never replace current authorization or the held
+  canonical transaction fence.
 
 Database constraints keep the source shapes mutually exclusive and enforce one
 `completed_review` per Review and one `accepted_submission` per
@@ -829,7 +833,11 @@ FinalAcceptance. Explicitly unpaid rules create no CompensationAward. Payable
 money or project-points rules create immutable awards in the canonical
 transaction as defined by CON.
 
-External points/payment delivery occurs after commit through the shared outbox
+Each current compensated accepted contribution stages its exact COMP root and
+initial outbox event in that same transaction; missing custody rolls back all
+participants. Unpaid outcomes stage neither. The new event has no registered
+financial handler. External points/payment delivery remains future work and
+occurs after commit through the shared outbox
 and adapter boundary. Delivery failure cannot roll back or change Review,
 FinalAcceptance, ContributionRecord, CompensationAward, or task acceptance.
 Reputation policy and reputation-event implementation are deferred; the review
@@ -1211,13 +1219,16 @@ The resource still binds singleton, expected generation, phases, operation,
 reviewed manifest and observation digests, deadline and reason. No SQL bootstrap,
 new action, permissive default generation or second availability flag is allowed.
 
-The first-contribution manifest covers its enabled TASK admission/routing and
-shared acceptance/CON contribution and conditional award writers. Payment
-obligation admission, dispatch and callbacks remain unavailable; their absence
-must be checked against actual composition, not represented by fake zero drain
-counts. Paid and unpaid contribution policies retain their full atomic award
-semantics. Neither payment delivery nor its obligation/root/ordinal substrate
-is a prerequisite of this bounded manifest.
+The current first-contribution manifest covers enabled TASK admission/routing,
+shared acceptance/CON contribution, selected submitter awards, COMP roots/ordinals
+and initial outbox custody. Its first authorized LIVE transition durably anchors
+the source UUID in existing REV control/history and exact AUTH observation; later
+phases retain that identity. Payment obligation admission, dispatch and callbacks
+remain unavailable; their absence must be checked against actual composition,
+not represented by fake zero drain counts. Paid and unpaid policies retain their
+atomic award semantics, and existing fixed reviewer storage/export remains
+supported without activating human review. Finance delivery and cutoff/drain
+qualification remain separate; internal root/ordinal custody is current.
 
 The initial controller implementation is
 [REV-12A4A](../.commitrail/initiatives/WS-REV-001/WS-REV-001-12A4A.md).
@@ -1225,7 +1236,8 @@ It extends the same Operator action, singleton and fence;
 it does not grant routing or acceptance authority. Every enabled writer must
 appear in its reviewed manifest. Server-derived observations are checked under
 the canonical lock. Unsupported surfaces and unlisted writers deny. Human
-queues/leases/decisions and fulfillment remain unavailable. Retained mechanical
+queues/leases/decisions and Finance admission/delivery/callback execution remain
+unavailable. Retained mechanical
 acceptance facts cannot establish missing originating AUTH receipts.
 
 For atomic participants, the shared transaction fence waits for earlier writers;

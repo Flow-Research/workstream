@@ -41,7 +41,7 @@ def test_public_policy_contract():
     listing = schema["paths"][ROOT]
     assert set(listing) == {"get"} and listing["get"]["x-workstream-action-id"] == "contribution.policy.list"
     models = schema["components"]["schemas"]
-    for name in ("PolicyCreateInput", "PolicyUpdateInput", "PolicyDecisionInput", "PolicyRuleInput", "PolicyDefinitionInput"):
+    for name in ("PolicyCreateInput", "PolicyUpdateInput", "PolicyDecisionInput", "UnpaidPolicyRuleInput", "AcceptedSubmissionPolicyRuleInput", "CompletedReviewPolicyRuleInput", "TaskSizeQuantities"):
         assert models[name]["additionalProperties"] is False
     assert set(schema["paths"]) == {ROOT + suffix for suffix in (
         "", "/current", "/{policy_id}", *(r[1] for r in ROUTES),

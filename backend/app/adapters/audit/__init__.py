@@ -84,25 +84,6 @@ class _TaskTransitionAudit:
             },
         ))
 
-    async def record_revision_exhaustion(self, facts) -> None:
-        """Bind retained-source exhaustion to its own consumed recovery authority."""
-        await self._participant.add_event(LifecycleAuditEventInput(
-            event_id=facts.event_id, entity_type=LifecycleAuditEntityType.TASK,
-            entity_id=facts.task_id, event_type=LifecycleAuditEventType.TASK_REVISION_EXHAUSTED,
-            actor_id=facts.actor_profile_id, reason=LifecycleAuditReason.STATE_CHANGED,
-            from_status="needs_revision", to_status="ready",
-            authorization_resource_digest=facts.authority.resource_context_digest,
-            references={
-                LifecycleAuditReferenceKind.PROJECT: facts.project_id,
-                LifecycleAuditReferenceKind.TASK: facts.task_id,
-                LifecycleAuditReferenceKind.ASSIGNMENT: facts.assignment_id,
-                LifecycleAuditReferenceKind.SUBMISSION: facts.submission_id,
-                LifecycleAuditReferenceKind.ROUTING_MANIFEST: facts.routing_manifest_id,
-                LifecycleAuditReferenceKind.REVISION_EXHAUSTION: facts.exhaustion_receipt_id,
-                LifecycleAuditReferenceKind.AUTHORIZATION_DECISION: facts.authority.decision_id,
-                LifecycleAuditReferenceKind.OUTBOX_EVENT: facts.outbox_event_id,
-            },
-        ))
 
 
 def task_transition_audit(session: AsyncSession) -> TaskTransitionAuditPort:
@@ -336,7 +317,7 @@ class _TaskRoutingAudit:
                 from_status="evaluation_pending",
                 to_status=(
                     "ready"
-                    if source.exhaustion is not None and not source.recovered_exhaustion
+                    if source.exhaustion is not None
                     else "needs_revision"
                     if s.routing_recommendation == "needs_revision"
                     else "review_pending"

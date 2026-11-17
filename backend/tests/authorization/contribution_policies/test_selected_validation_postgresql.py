@@ -1,6 +1,7 @@
 """Exact policy selection and caller custody through real CON/AUTH PostgreSQL owners."""
 
 from dataclasses import replace
+from decimal import Decimal
 from uuid import uuid4
 
 import pytest
@@ -158,7 +159,8 @@ async def test_preloaded_graph_is_refreshed_after_draft_edit_and_publication(
         definition = await session.scalar(
             select(ContributionAwardDefinition).where(
                 ContributionAwardDefinition.contribution_policy_version_id
-                == draft.contribution_policy_version_id
+                == draft.contribution_policy_version_id,
+                ContributionAwardDefinition.task_size == "small",
             )
         )
         rule = await session.scalar(
@@ -168,7 +170,7 @@ async def test_preloaded_graph_is_refreshed_after_draft_edit_and_publication(
                 ContributionRule.contribution_type == "completed_review",
             )
         )
-        assert definition.quantity == 2 and rule.compensation_mode == "unpaid"
+        assert definition.quantity == Decimal("2.125000000000000001") and rule.compensation_mode == "unpaid"
         async with db_session.get_session_factory()() as concurrent, concurrent.begin():
             if changed_row == "definition":
                 await concurrent.execute(
@@ -198,7 +200,7 @@ async def test_preloaded_graph_is_refreshed_after_draft_edit_and_publication(
                 await concurrent.flush()
             await target.service(concurrent).publish(target.request("publish", draft))
         expected = await validate(request)
-        assert definition.quantity == 2 and rule.compensation_mode == "unpaid"
+        assert definition.quantity == Decimal("2.125000000000000001") and rule.compensation_mode == "unpaid"
         result = await contribution_policy_validation_port(session).validate_contribution_policy(
             request
         )

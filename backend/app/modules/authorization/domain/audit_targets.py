@@ -3,6 +3,7 @@
 from uuid import UUID
 
 from app.modules.authorization.catalogue import ActionId
+from app.modules.authorization.domain.fulfillment_evidence import FulfillmentEvidenceResourceContext
 from app.modules.authorization.domain.lifecycle import ReviewLifecycleActivationContract
 from app.modules.authorization.domain.post_submit_routing import PostSubmitRoutingResourceContext
 from app.modules.authorization.domain.post_submit import PostSubmitResourceContext
@@ -32,13 +33,13 @@ def _checker_retry_read_target(resource):
     )
 
 
-def _post_submit_delivery_target(resource):
+def _operational_evidence_target(resource):
     from app.modules.authorization.domain.post_submit_deliveries import (
         PostSubmitDeliveryReadResourceContext,
         PostSubmitDeliveryResourceContext,
     )
 
-    if type(resource) not in {
+    if not isinstance(resource, FulfillmentEvidenceResourceContext) and type(resource) not in {
         PostSubmitDeliveryReadResourceContext,
         PostSubmitDeliveryResourceContext,
     }:
@@ -148,7 +149,7 @@ def project_authority_audit_target(
         return project_id, "checker_run", str(resource.resource_id), "project", project_id
     if type(resource) is CheckerRetrySourceReadResourceContext:
         return _checker_retry_read_target(resource)
-    if target := _post_submit_delivery_target(resource) or _compensation_unit_target(resource) or _model_administration_target(resource):
+    if target := _operational_evidence_target(resource) or _compensation_unit_target(resource) or _model_administration_target(resource):
         return target
     if action_id in SUBMISSION_POLICY_MUTATIONS and isinstance(
         resource, ProjectSubmissionArtifactPolicyMutationResourceContext,

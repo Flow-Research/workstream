@@ -83,7 +83,9 @@ def _bound_response(name: str) -> dict[str, Any]:
         return {"items": [], "next_cursor": None}
     if name == "preparation_get":
         return {"task_id": TASK_ID, "preparation_id": PREPARATION_ID}
-    if name in {"task_get", "task_submission_requirements_get"}:
+    if name == "task_get":
+        return {"task_id": TASK_ID, "task_size": "small", "compensation": {"task_size": "small"}}
+    if name == "task_submission_requirements_get":
         return {"task_id": TASK_ID}
     if name in {"task_screen", "task_release"}:
         return {"id": TASK_ID}
@@ -93,7 +95,9 @@ def _bound_response(name: str) -> dict[str, Any]:
             "assignment": {"task_id": TASK_ID},
         }
     if name == "task_work_context_get":
-        return {"task": {"task_id": TASK_ID}}
+        return {"task": {
+            "task_id": TASK_ID, "task_size": "small", "compensation": {"task_size": "small"},
+        }}
     if name == "task_guide_document_content_get":
         return {
             "media_type": "text/markdown",
@@ -123,6 +127,39 @@ def _catalogue(client: TestClient) -> list[dict[str, Any]]:
     )
     assert response.status_code == 200
     return response.json()["result"]["tools"]
+
+
+@pytest.mark.parametrize("name", ["task_get", "task_work_context_get"])
+@pytest.mark.asyncio
+async def test_contributor_detail_rejects_size_substitution(
+    monkeypatch: pytest.MonkeyPatch, name: str,
+) -> None:
+    """A valid size from a different tier must not describe the locked terms."""
+    returned: dict[str, Any] = {}
+
+    async def request(_: WorkstreamGateway, *args: Any, **kwargs: Any) -> GatewayResult:
+        return GatewayResult(data=returned)
+
+    monkeypatch.setattr(WorkstreamGateway, "_request", request)
+    async with httpx.AsyncClient(base_url="http://workstream.test") as client:
+        gateway = WorkstreamGateway(Settings(api_url="http://127.0.0.1:8000"), client)
+        for size in ("small", "medium", "large", "missing", None, "Small"):
+            returned.clear()
+            returned.update(_bound_response(name))
+            task = returned["task"] if name == "task_work_context_get" else returned
+            if size == "missing":
+                task.pop("task_size")
+            else:
+                task["task_size"] = size
+            result = await gateway.task_execution_operation(
+                name, "Bearer caller-token", _arguments(name), "request-correlation",
+            )
+            if size == "small":
+                assert result.failure is None
+            else:
+                assert result.data is None
+                assert result.failure is not None
+                assert result.failure.error == "invalid_api_response"
 
 
 def test_task_execution_catalogue_is_exact_closed_and_does_not_dispatch(
