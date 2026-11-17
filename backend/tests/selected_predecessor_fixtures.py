@@ -1,5 +1,7 @@
 """Selected PRE replacement evidence fixtures; no alternate execution owner."""
 
+from app.adapters.artifacts import selected_pre_submit_source_contracts
+
 from dataclasses import replace
 from io import BytesIO
 from uuid import UUID
@@ -75,7 +77,7 @@ async def _assert_default_failure(h, request, failure, before, code: str) -> Non
                 )
             )
         ).one()
-        terminal = SelectedPreSubmitTerminalFacts.from_canonical_body(run.terminal_json)
+        terminal = SelectedPreSubmitTerminalFacts.from_canonical_body(run.terminal_json, source_contracts=selected_pre_submit_source_contracts())
         reservation = terminal.lease.reservation
         assert run.status == terminal.outcome == "completed"
         assert run.eligible is False and terminal.execution == failure.facts
@@ -113,7 +115,7 @@ async def _queued_selected_body(h, admission_id, *, cause=None) -> dict:
             {"id": admission_id},
         )
     assert body is not None and body["status"] == "completed" and body["eligible"] is True
-    facts = SelectedPreSubmitReservationFacts.from_canonical_body(body["request_json"])
+    facts = SelectedPreSubmitReservationFacts.from_canonical_body(body["request_json"], source_contracts=selected_pre_submit_source_contracts())
     lineage = facts.admission_lineage
     assert lineage is not None
     key = new_record_id()

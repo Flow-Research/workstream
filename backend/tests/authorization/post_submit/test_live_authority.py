@@ -61,7 +61,7 @@ async def test_materialization_rejects_substituted_live_lease_before_io(
                    "expires_at": facts.lease.expires_at + timedelta(microseconds=1)}[field]
         substituted = facts.model_copy(update={"lease": facts.lease.model_copy(update={field: changed})})
         before = await snapshot(h)
-        consumer = Consumer(h.files)
+        consumer = Consumer(h.files, facts)
         with pytest.raises(PostSubmissionMaterializationUnavailable):
             await h.service.materialize(substituted, consumer)
         assert await snapshot(h) == before
@@ -88,7 +88,7 @@ async def test_materialization_rejects_mixed_valid_stored_lineage_before_io(
             # Well-typed internally consistent selectors mix two genuine stored
             # lineages; they do not match either committed current execution.
             before = await snapshot(h)
-            consumer = Consumer(h.files)
+            consumer = Consumer(h.files, facts)
             with pytest.raises(PostSubmissionMaterializationUnavailable):
                 await h.service.materialize(mixed, consumer)
             assert await snapshot(h) == before
@@ -157,7 +157,7 @@ async def test_execution_identity_substitution_denies_before_material_access(tmp
             })
             mixed = ExecuteFacts(request=request, lease=facts.lease.model_copy(update={"reservation": reservation}))
             before = await snapshot(h)
-            consumer = Consumer(h.files)
+            consumer = Consumer(h.files, facts)
             with pytest.raises(PostSubmissionMaterializationUnavailable):
                 await h.service.materialize(mixed, consumer)
             assert await snapshot(h) == before

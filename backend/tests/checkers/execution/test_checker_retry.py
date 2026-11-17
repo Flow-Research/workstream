@@ -113,7 +113,7 @@ async def _failed_source(
     ) as h:
         port = _worker_port(h, monkeypatch)
 
-        def missing(_store, _reference):
+        def missing(_store, _reference, **kwargs):
             raise ArtifactObjectMissingError("controlled verified object loss")
 
         try:
@@ -121,7 +121,7 @@ async def _failed_source(
             with monkeypatch.context() as patch:
                 patch.setattr(
                     LocalStorageAdapter if provider == "local" else S3CompatibleArtifactStore,
-                    "open", missing,
+                    "open_source", missing,
                 )
                 initial = await delivery.delivery.deliver(
                     h.created.evaluation_event_id, h.request.project_id, "retry-source",
@@ -130,6 +130,10 @@ async def _failed_source(
             saved = await state(h)
             assert saved["run"]["status"] == "infrastructure_failed"
             assert json.loads(saved["run"]["result_json"])["infrastructure_failure_code"] == "material_unavailable"
+            async with h.factory() as session:
+                assert await session.scalar(select(func.count()).select_from(OutboxEvent).where(
+                    OutboxEvent.event_type == "SubmissionFinalizationRequested",
+                )) == 1
             yield h, delivery
         finally:
             internal_workers.shutdown_artifact_internal_runtime()
@@ -413,7 +417,7 @@ async def test_retry_sql_rejects_unreceipted_terminal_supersession(
         async with h.factory() as session:
             assert await session.scalar(select(func.count()).select_from(CheckerRun)) == 1
             assert await session.scalar(select(func.count()).select_from(CheckerRetryReceipt)) == 0
-            assert await session.scalar(select(func.count()).select_from(OutboxEvent)) == 1
+            assert await session.scalar(select(func.count()).select_from(OutboxEvent)) == 2
 
 
 async def test_retry_sql_rejects_crossed_receipt_with_real_authority_participants(
@@ -463,7 +467,7 @@ async def test_retry_sql_rejects_crossed_receipt_with_real_authority_participant
             assert fence.current_run_id == str(command.source_run_id)
             assert await session.scalar(select(func.count()).select_from(CheckerRun)) == 1
             assert await session.scalar(select(func.count()).select_from(CheckerRetryReceipt)) == 0
-            assert await session.scalar(select(func.count()).select_from(OutboxEvent)) == 1
+            assert await session.scalar(select(func.count()).select_from(OutboxEvent)) == 2
         async with h.factory.begin() as session:
             valid = await checker_retry_service(session, operator).retry(command)
         assert valid.successor.generation == 2
@@ -589,7 +593,7 @@ async def test_retry_sql_rejects_outbox_payload_with_false_digest(
                 async with h.factory.begin() as session:
                     await checker_retry_service(session, operator).retry(command)
         async with h.factory() as session:
-            assert await session.scalar(select(func.count()).select_from(OutboxEvent)) == 1
+            assert await session.scalar(select(func.count()).select_from(OutboxEvent)) == 2
             assert await session.scalar(select(func.count()).select_from(CheckerRun)) == 1
             assert await session.scalar(select(func.count()).select_from(CheckerRetryReceipt)) == 0
         async with h.factory.begin() as session:
@@ -608,7 +612,7 @@ async def test_retry_without_operator_grant_denies_without_effects(
         async with h.factory() as session:
             assert await session.scalar(select(func.count()).select_from(CheckerRun)) == 1
             assert await session.scalar(select(func.count()).select_from(CheckerRetryReceipt)) == 0
-            assert await session.scalar(select(func.count()).select_from(OutboxEvent)) == 1
+            assert await session.scalar(select(func.count()).select_from(OutboxEvent)) == 2
             assert await session.scalar(select(func.count()).select_from(
                 AuditEvent
             ).where(AuditEvent.action_id == ActionId.OPERATIONS_CHECKER_RETRY.value)) == 0
@@ -627,7 +631,7 @@ async def test_retry_caller_rollback_removes_whole_successor(
         async with h.factory() as session:
             assert await session.scalar(select(func.count()).select_from(CheckerRun)) == 1
             assert await session.scalar(select(func.count()).select_from(CheckerRetryReceipt)) == 0
-            assert await session.scalar(select(func.count()).select_from(OutboxEvent)) == 1
+            assert await session.scalar(select(func.count()).select_from(OutboxEvent)) == 2
             assert await session.get(CheckerRun, str(staged.successor.run_id)) is None
             assert await session.get(AuditEvent, str(staged.authorization_decision_id)) is None
 
@@ -668,7 +672,7 @@ async def test_retry_audit_failure_removes_whole_successor(
                 ))).one() == (1, True)
                 assert await session.scalar(select(func.count()).select_from(CheckerRun)) == 1
                 assert await session.scalar(select(func.count()).select_from(CheckerRetryReceipt)) == 0
-                assert await session.scalar(select(func.count()).select_from(OutboxEvent)) == 1
+                assert await session.scalar(select(func.count()).select_from(OutboxEvent)) == 2
                 fence = await session.get(CheckerSubmissionFence, str(h.request.submission_id))
                 assert fence.current_run_id == str(h.created.evaluation_attempt_id)
                 assert await session.scalar(select(func.count()).select_from(
@@ -714,7 +718,7 @@ async def test_retry_real_outbox_conflict_rolls_back_successor(
             assert fence.current_run_id == str(command.source_run_id)
             assert await session.scalar(select(func.count()).select_from(CheckerRun)) == 1
             assert await session.scalar(select(func.count()).select_from(CheckerRetryReceipt)) == 0
-            assert await session.scalar(select(func.count()).select_from(OutboxEvent)) == 2
+            assert await session.scalar(select(func.count()).select_from(OutboxEvent)) == 3
             assert await session.scalar(select(func.count()).select_from(
                 AuditEvent
             ).where(AuditEvent.action_id == ActionId.OPERATIONS_CHECKER_RETRY.value)) == 0
@@ -741,7 +745,7 @@ async def test_retry_known_missing_object_dispatches_new_generation(
             assert receipt.source_result_digest == source.result_digest
             assert receipt.successor_request_digest == successor.request_digest
             assert await session.scalar(select(func.count()).select_from(CheckerRetryReceipt)) == 1
-            assert await session.scalar(select(func.count()).select_from(OutboxEvent)) == 2
+            assert await session.scalar(select(func.count()).select_from(OutboxEvent)) == 3
             authorization = await session.get(AuditEvent, str(created.authorization_decision_id))
             assert authorization.action_id == ActionId.OPERATIONS_CHECKER_RETRY.value
             assert authorization.project_id == str(h.request.project_id)
@@ -821,7 +825,7 @@ async def test_retry_response_loss_and_later_generation_replay(
         assert set(before[1]) == {
             str(command.source_run_id), str(created.successor.run_id), str(later.attempt_id),
         }
-        assert tuple(map(len, before[2:])) == (1, 3, 1, 1)
+        assert tuple(map(len, before[2:])) == (1, 4, 1, 1)
         async with h.factory.begin() as session:
             historical_replay = await checker_retry_service(session, operator).retry(command)
         assert historical_replay == created
@@ -833,7 +837,7 @@ async def test_retry_response_loss_and_later_generation_replay(
             assert successor.status == "completed"
             assert await session.get(CheckerRun, str(later.attempt_id)) is not None
             assert await session.scalar(select(func.count()).select_from(CheckerRetryReceipt)) == 1
-            assert await session.scalar(select(func.count()).select_from(OutboxEvent)) == 3
+            assert await session.scalar(select(func.count()).select_from(OutboxEvent)) == 4
 
 
 async def test_retry_replays_after_real_auto_acceptance_but_new_key_denies(
@@ -984,13 +988,13 @@ async def test_independent_sessions_wait_for_task_and_commit_one_retry(
     async with material_fixture(tmp_path, isolated_database_env) as h:
         port = _worker_port(h, monkeypatch)
 
-        def missing(_store, _reference):
+        def missing(_store, _reference, **kwargs):
             raise ArtifactObjectMissingError("controlled verified object loss")
 
         try:
             delivery = await delivery_fixture(h, materialization=port)
             with monkeypatch.context() as patch:
-                patch.setattr(LocalStorageAdapter, "open", missing)
+                patch.setattr(LocalStorageAdapter, "open_source", missing)
                 initial = await delivery.delivery.deliver(
                     h.created.evaluation_event_id, h.request.project_id, "concurrent-source",
                 )
@@ -1072,7 +1076,7 @@ async def test_independent_sessions_wait_for_task_and_commit_one_retry(
                 assert sum(isinstance(result, CheckerExecutionUnavailable) for result in outcomes) == 1
             async with h.factory() as session:
                 assert await session.scalar(select(func.count()).select_from(CheckerRetryReceipt)) == 1
-                assert await session.scalar(select(func.count()).select_from(OutboxEvent)) == 2
+                assert await session.scalar(select(func.count()).select_from(OutboxEvent)) == 3
                 assert await session.scalar(select(func.count()).select_from(AuditEvent).where(
                     AuditEvent.action_id == ActionId.OPERATIONS_CHECKER_RETRY.value,
                 )) == 1

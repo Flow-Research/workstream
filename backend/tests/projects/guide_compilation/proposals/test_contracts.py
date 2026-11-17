@@ -48,10 +48,13 @@ def test_blocked_target_rejects_each_independently_populated_policy_field(field)
     ],
 )
 def test_replacement_requires_both_prior_identity_fields(field, value):
+    from tests.checkers.external.test_policy import _entry, _attachment
+    pre = _attachment(_entry("project.pre", "pre_submit"), "intake")
+    post = _attachment(_entry("project.post", "post_submit"), "quality")
     with pytest.raises(ValidationError, match="complete or absent"):
         GuideProposalApproval(
             target=GuideProposalTarget(**target_values()),
-            pre_submit_attachments=(), post_submit_attachments=(),
+            pre_submit_attachments=(pre,), post_submit_attachments=(post,),
             idempotency_key=uuid4(), **{field: value}
         )
 

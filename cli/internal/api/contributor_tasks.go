@@ -45,11 +45,12 @@ type ReadyTaskPage struct {
 // ContributorTaskDetail excludes management-only source and actor metadata.
 type ContributorTaskDetail struct {
 	TaskSummary
-	Description           string             `json:"description"`
-	AcceptanceCriteria    *string            `json:"acceptance_criteria"`
-	RejectionCriteria     *string            `json:"rejection_criteria"`
-	Compensation          CompensationTerms  `json:"compensation"`
-	LastAssignmentOutcome *AssignmentOutcome `json:"last_assignment_outcome,omitempty"`
+	Description                string                      `json:"description"`
+	AcceptanceCriteria         *string                     `json:"acceptance_criteria"`
+	RejectionCriteria          *string                     `json:"rejection_criteria"`
+	Compensation               CompensationTerms           `json:"compensation"`
+	LastAssignmentOutcome      *AssignmentOutcome          `json:"last_assignment_outcome,omitempty"`
+	PendingSubmissionOperation *PendingSubmissionOperation `json:"pending_submission_operation"`
 }
 
 var exactQuantity = regexp.MustCompile(`^(0|[1-9][0-9]*)(\.[0-9]+)?$`)
@@ -141,9 +142,9 @@ func (c *Client) ContributorTask(ctx context.Context, selector string) (Result[C
 	var value ContributorTaskDetail
 	err = decodeTaskFields(raw, &value,
 		[]string{"task_id", "project_id", "title", "description", "status", "created_at", "updated_at"},
-		[]string{"skill_tags", "compensation"})
+		[]string{"skill_tags", "compensation", "pending_submission_operation"})
 	returned, valid := uuidIdentity(value.TaskID)
-	if err != nil || !valid || returned != selected || !validTask(value.TaskSummary, value.ProjectID) || !ValidCompensation(value.Compensation) {
+	if err != nil || !valid || returned != selected || !validTask(value.TaskSummary, value.ProjectID) || !ValidCompensation(value.Compensation) || !validPendingSubmission(value.PendingSubmissionOperation) {
 		return result, &Failure{Code: "invalid_api_response"}
 	}
 	return Result[ContributorTaskDetail]{Raw: raw, Value: value}, nil

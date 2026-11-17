@@ -54,11 +54,20 @@ async def test_dispatch_and_bound_submission_remain_immutable(tmp_path, isolated
             assert await session.scalar(text("SELECT public.submission_dispatch_valid(d) FROM public.submission_dispatches d WHERE submission_id=:id"), {"id": h.created.submission_id}) is True
 
 
-async def test_unrelated_allow_cannot_substitute_for_creation_allow_at_commit(tmp_path, isolated_database_env, monkeypatch):
-    from sqlalchemy import select
-    from app.modules.authorization.submission_creation_authorization import PreparedSubmissionCreationAuthorization
-    from app.modules.tasks.models import AuditEvent
-    original = PreparedSubmissionCreationAuthorization.consume
+async def test_unrelated_allow_cannot_substitute_for_acceptance_allow_at_commit(tmp_path, isolated_database_env, monkeypatch):
+    """T4 rejects a real unrelated allow and leaves no accepted handoff or T5 writes."""
+    from uuid import UUID
+    from sqlalchemy import func, select
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+    from app.modules.authorization.submission_intake import SubmissionIntakeAuthorization
+    from app.modules.artifacts.intake.repository import IntakeCustodyConflict
+    from app.modules.artifacts.intake.models import SubmissionIntakeOperation, SubmissionSourceCharge
+    from app.modules.artifacts.models import SubmissionBundleAdmission, SubmissionBindingReceipt
+    from app.modules.checkers.models import CheckerRun
+    from app.modules.outbox.models import OutboxEvent
+    from app.modules.tasks.models import AuditEvent, Submission, SubmissionDispatch, WorkstreamTask
+
+    original = SubmissionIntakeAuthorization.consume_acceptance
     substituted = []
 
     async def wrong_receipt(self, handle, facts):
@@ -68,14 +77,34 @@ async def test_unrelated_allow_cannot_substitute_for_creation_allow_at_commit(tm
             AuditEvent.action_id.not_in(("submission.create", "artifact.submission.binding.create")),
         ).order_by(AuditEvent.id).limit(1))
         assert unrelated is not None and unrelated != str(real)
-        from uuid import UUID
         substituted.append((real, UUID(unrelated)))
         return UUID(unrelated)
 
-    monkeypatch.setattr(PreparedSubmissionCreationAuthorization, "consume", wrong_receipt)
-    # The event and dispatch are both built from the substituted value. IDs,
-    # digests, FK targets and all other participants remain valid and complete.
-    with pytest.raises(IntegrityError, match="submission dispatch custody mismatch"):
+    monkeypatch.setattr(SubmissionIntakeAuthorization, "consume_acceptance", wrong_receipt)
+    # The complete accepted receipt and event use the unrelated existing allow.
+    # No selector is nonexistent; only the authority provenance is wrong.
+    with pytest.raises(IntakeCustodyConflict, match="intake_acceptance_conflict") as denied:
         async with material_fixture(tmp_path, isolated_database_env):
-            pytest.fail("an unrelated allow was accepted as creation authority")
+            pytest.fail("an unrelated allow was accepted as submission authority")
     assert len(substituted) == 1
+    assert isinstance(denied.value.__cause__, IntegrityError)
+    assert "accepted authority mismatch" in str(denied.value.__cause__)
+    engine = create_async_engine(isolated_database_env)
+    try:
+        async with async_sessionmaker(engine)() as session:
+            operation = (await session.execute(select(SubmissionIntakeOperation))).scalar_one()
+            assert operation.state == "failed"
+            assert operation.acceptance_decision_id is None
+            assert operation.acceptance_receipt is None
+            assert operation.finalization_event_id is None
+            charge = await session.get(SubmissionSourceCharge, operation.id)
+            assert charge.state == "sealed" and charge.accounted_bytes > 0
+            task = await session.get(WorkstreamTask, operation.task_id)
+            assert task.status == "in_progress" and task.active_submission_operation_id is None
+            for model in (Submission, SubmissionDispatch, SubmissionBundleAdmission,
+                          SubmissionBindingReceipt, CheckerRun, OutboxEvent):
+                assert await session.scalar(select(func.count()).select_from(model)) == 0
+            assert await session.get(AuditEvent, str(substituted[0][0])) is None
+            assert await session.get(AuditEvent, str(substituted[0][1])) is not None
+    finally:
+        await engine.dispose()

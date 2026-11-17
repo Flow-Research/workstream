@@ -1,5 +1,6 @@
 """Complete approved guide and real CON publication, with controlled hidden authority."""
 
+from tests.checkers.external.support import post_registry_spec
 from app.modules.projects.api.guide_activation_context import GuidePolicySelection
 
 from contextlib import asynccontextmanager
@@ -167,7 +168,7 @@ async def readiness_read(factory, project_id, guide_id):
 @asynccontextmanager
 async def activation_case(
     url, *, human_review_required=True, compensated=False, contribution_awards=(),
-    post_submit_registry_spec=None, compilation_outcome=None, configuration=None,
+    post_submit_registry_spec=post_registry_spec(), compilation_outcome=None, configuration=None,
 ):
     from .source_fixtures import source_case
 

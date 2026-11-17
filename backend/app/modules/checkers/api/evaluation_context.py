@@ -1,6 +1,7 @@
 """Image-safe revision facts selected by an approved POST configuration."""
 
 import json
+from app.modules.checkers.api.post_material_custody import PostSubmitArtifactCustody
 from typing import Annotated, Literal, Self
 
 from pydantic import Field, model_validator
@@ -118,7 +119,7 @@ class PostSubmitEvaluationContext(CheckerValue):
         return self
 
 
-class PostSubmitPredecessorCustody(PostSubmitEvaluationPredecessor):
+class PostSubmitPredecessorCustody(PostSubmitEvaluationPredecessor, PostSubmitArtifactCustody):
     """Verified prior ART custody retained with the exact input authority receipt."""
 
     admission_id: ResourceId
@@ -126,9 +127,6 @@ class PostSubmitPredecessorCustody(PostSubmitEvaluationPredecessor):
     content_id: ResourceId
     replica_id: ResourceId
     evidence_id: ResourceId
-    verification_receipt_id: ResourceId
-    verification_job_id: ResourceId
-    verification_generation: VersionNumber
     namespace_fingerprint: Sha256
     semantic_manifest_id: ResourceId
 

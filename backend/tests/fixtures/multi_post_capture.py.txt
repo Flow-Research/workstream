@@ -1,0 +1,73 @@
+
+
+@pytest.mark.parametrize("roles", [
+    ("predecessor_findings",),
+    ("predecessor_submission_archive",),
+    ("predecessor_findings", "predecessor_submission_archive"),
+])
+async def test_capture_retained_multi_post(tmp_path, isolated_database_env, monkeypatch, roles):
+    """Observe accepted old custody, then require the unchanged journey to pass."""
+    import asyncpg
+    import base64
+    from dataclasses import asdict
+    from pathlib import Path
+    from scripts.run_isolated_tests import _minio_client
+
+    real_executor = live_executor
+    captured = {}
+
+    def observe(h, **options):
+        executor = real_executor(h, **options)
+
+        class ObservedExecutor:
+            async def evaluate_post_submission(self, request):
+                if not captured:
+                    connection = await asyncpg.connect(isolated_database_env.replace("+asyncpg", ""))
+                    try:
+                        tables = {}
+                        for table in await connection.fetch("SELECT tablename FROM pg_tables WHERE schemaname='public' ORDER BY tablename"):
+                            name = table["tablename"]
+                            quoted = '"' + name.replace('"', '""') + '"'
+                            rows = await connection.fetch(f"SELECT to_jsonb(r)::text AS value FROM public.{quoted} r ORDER BY to_jsonb(r)::text")
+                            if rows:
+                                tables[name] = [json.loads(row["value"]) for row in rows]
+                    finally:
+                        await connection.close()
+                    objects = []
+                    async with _minio_client(h.settings.artifact_s3_endpoint_url) as client:
+                        listed = await client.list_objects_v2(
+                            Bucket=h.settings.artifact_s3_bucket, Prefix=h.settings.artifact_s3_private_prefix + "/")
+                        assert not listed.get("IsTruncated")
+                        for entry in listed.get("Contents", []):
+                            obj = await client.get_object(Bucket=h.settings.artifact_s3_bucket, Key=entry["Key"])
+                            async with obj["Body"] as body:
+                                data = await body.read()
+                            objects.append({"key": entry["Key"], "body": base64.b64encode(data).decode(),
+                                            "metadata": obj["Metadata"], "content_type": obj["ContentType"],
+                                            "etag": obj["ETag"]})
+                    assert len(objects) >= 2
+                    captured.update({
+                        "revision": "0068_issuer_profile_email",
+                        "source_commit": "94334ccf4085c26c7bfaa054465fc05cfbdad1fc",
+                        "tables": tables,
+                        "seed": {
+                            "roles": roles, "request": request.model_dump(mode="json"),
+                            "first_result": h.result.model_dump(mode="json"),
+                            "first_submission_id": str(h.created.submission_id),
+                            "revision_preparation_id": str(h.revision_preparation_id),
+                            "namespace": asdict(h.namespace),
+                            "bucket": h.settings.artifact_s3_bucket,
+                            "private_prefix": h.settings.artifact_s3_private_prefix,
+                            "objects": objects,
+                        },
+                    })
+                return await executor.evaluate_post_submission(request)
+        return ObservedExecutor()
+
+    monkeypatch.setitem(globals(), "live_executor", observe)
+    await test_revision_reads_exact_previous_material_with_per_binding_visibility(
+        tmp_path, isolated_database_env, monkeypatch, roles,
+    )
+    assert captured
+    label = "-".join(roles)
+    Path(f"/tmp/submission-multipost-{label}.json").write_text(json.dumps(captured, sort_keys=True, separators=(",", ":")))

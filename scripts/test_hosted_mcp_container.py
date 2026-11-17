@@ -141,6 +141,7 @@ def main() -> None:
         def prove_calls(generation: str) -> None:
             tools = rpc("tools/list", {})["tools"]
             assert len(tools) == len({tool["name"] for tool in tools}) == 132
+            assert "workstream_submission_operation_get" in {tool["name"] for tool in tools}
             params = {"name": "workstream_profile_get", "arguments": {}}
             for caller in ("alice", "bob"):
                 result = rpc("tools/call", params, "fixture-" + caller)

@@ -1,6 +1,7 @@
 """Normalized external-checker contracts; values never grant execution authority."""
 
 from __future__ import annotations
+from app.modules.checkers.api.post_material_custody import PostSubmitArtifactCustody
 
 import json
 import hashlib
@@ -362,11 +363,14 @@ def external_checker_registration_request_digest(
 
 
 class PreSubmitExternalCheckerMaterial(ExternalCheckerValue):
-    """Verified prepared bytes that exist before a Submission or ART binding."""
+    """Guest-verified source and tree bound to one PRE execution fence."""
 
     phase: Literal["pre_submit"] = "pre_submit"
     role: Identifier
-    prepared_generation_id: UUID = Field(strict=True)
+    operation_id: UUID = Field(strict=True)
+    source_sha256: Sha256
+    lease_id: UUID = Field(strict=True)
+    lease_generation: Annotated[StrictInt, Field(ge=1)]
     attempt_id: UUID = Field(strict=True)
     attempt_request_digest: Sha256
     archive_sha256: Sha256
@@ -377,7 +381,7 @@ class PreSubmitExternalCheckerMaterial(ExternalCheckerValue):
     ]
 
 
-class PostSubmitExternalCheckerMaterial(ExternalCheckerValue):
+class PostSubmitExternalCheckerMaterial(PostSubmitArtifactCustody, ExternalCheckerValue):
     """Verified native Submission and ART ancestry selected for POST execution."""
 
     phase: Literal["post_submit"] = "post_submit"
@@ -393,9 +397,6 @@ class PostSubmitExternalCheckerMaterial(ExternalCheckerValue):
         StrictStr, Field(min_length=1, max_length=255, pattern=r"^[^\s/]+/[^\s/]+$")
     ]
     evidence_id: UUID = Field(strict=True)
-    verification_receipt_id: UUID = Field(strict=True)
-    verification_job_id: UUID = Field(strict=True)
-    verification_generation: Annotated[StrictInt, Field(ge=1)]
     namespace_fingerprint: Sha256
     semantic_manifest_sha256: Sha256
 
@@ -407,13 +408,16 @@ ExternalCheckerMaterial = Annotated[
 
 
 class PreSubmitExternalCheckerIdentity(ExternalCheckerValue):
-    """Existing pre-submit preparation and attempt identity; no Submission exists."""
+    """Sealed source operation and committed PRE lease; no Submission exists."""
 
     phase: Literal["pre_submit"] = "pre_submit"
     project_id: UUID = Field(strict=True)
     task_id: UUID = Field(strict=True)
     assignment_id: UUID = Field(strict=True)
-    prepared_generation_id: UUID = Field(strict=True)
+    operation_id: UUID = Field(strict=True)
+    source_sha256: Sha256
+    lease_id: UUID = Field(strict=True)
+    lease_generation: Annotated[StrictInt, Field(ge=1)]
     attempt_id: UUID = Field(strict=True)
     attempt_request_digest: Sha256
     effective_plan_sha256: Sha256
@@ -469,16 +473,22 @@ class ExternalCheckerExecutionRequest(ExternalCheckerValue):
         if self.identity.phase == "pre_submit":
             for material in self.materials:
                 if not isinstance(material, PreSubmitExternalCheckerMaterial) or (
-                    material.prepared_generation_id,
+                    material.operation_id,
+                    material.source_sha256,
+                    material.lease_id,
+                    material.lease_generation,
                     material.attempt_id,
                     material.attempt_request_digest,
                 ) != (
-                    self.identity.prepared_generation_id,
+                    self.identity.operation_id,
+                    self.identity.source_sha256,
+                    self.identity.lease_id,
+                    self.identity.lease_generation,
                     self.identity.attempt_id,
                     self.identity.attempt_request_digest,
                 ):
                     raise ExternalCheckerContractError(
-                        "external checker prepared material identity mismatch"
+                        "external checker source material identity mismatch"
                     )
         if self.configuration_sha256 != external_checker_json_hash(self.configuration):
             raise ExternalCheckerContractError("external checker configuration digest mismatch")
@@ -616,12 +626,22 @@ class ExternalCheckerExecutionResult(ExternalCheckerValue):
             request.identity.phase,
         ):
             raise ExternalCheckerContractError("external checker result request mismatch")
+        result.validate_registry(request.registry)
+
+    def validate_registry(self, registry: ExternalCheckerRegistryEntry) -> None:
+        """Check selected registry identity, output schema and canonical byte limit."""
+        result = ExternalCheckerExecutionResult.model_validate(self)
+        registry = ExternalCheckerRegistryEntry.model_validate(registry)
+        if (result.registry_entry_id, result.registry_entry_digest, result.phase) != (
+            registry.registry_entry_id, registry.entry_digest, registry.phase,
+        ):
+            raise ExternalCheckerContractError("external checker result registry mismatch")
         if result.outcome == "completed":
-            request.registry.output_schema.validate_instance(
+            registry.output_schema.validate_instance(
                 result.model_dump(mode="json", exclude={"result_digest"})
             )
         if len(_canonical_bytes(result.model_dump(mode="json"))) > (
-            request.registry.resources.maximum_output_bytes
+            registry.resources.maximum_output_bytes
         ):
             raise ExternalCheckerContractError("external checker result exceeds registry limit")
 

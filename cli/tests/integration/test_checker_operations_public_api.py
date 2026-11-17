@@ -56,6 +56,7 @@ async def test_operator_registry_and_exact_terminal_retry_through_real_api(
     operator_grant = await signed.grant(admin_access.admin, admin_access.target)
     outsider = await signed.actor("cli-checker-outsider")
     payload = registry_spec().model_dump(mode="json")
+    payload["capability_version"] = "v1.2.4"
     input_file = tmp_path / "checker.json"
     input_file.write_text(json.dumps(payload, ensure_ascii=False))
     key = str(uuid4())
@@ -152,7 +153,7 @@ async def test_operator_registry_and_exact_terminal_retry_through_real_api(
             )
 
             numeric_payload = registry_spec().model_dump(mode="json")
-            numeric_payload["capability_version"] = "v1.2.4"
+            numeric_payload["capability_version"] = "v1.2.5"
             document = numeric_payload["configuration_schema"]["document"]
             document["examples"] = [9007199254740993, -0.0, 1e20]
             numeric_payload["configuration_schema"]["schema_sha256"] = (
@@ -285,7 +286,7 @@ async def test_operator_registry_and_exact_terminal_retry_through_real_api(
                             ExternalCheckerRegistryEntryRecord
                         )
                     )
-                    == 2
+                    == 4  # Two locked fixture images and two CLI registrations.
                 )
 
             revoked = await signed.revoke(admin_access.admin, operator_grant)

@@ -20,7 +20,7 @@ async def test_review_package_audit_requires_catalogue_manager_permission(
     action = ActionId.PROJECT_GUIDE_COMPILATION_REVIEW_PACKAGE_READ
     permission = ACTION_BY_ID[action].permission_id.value
     assert permission == "project.guide.manage"
-    async with proposal_case(clean_postgres_database) as (_, factory, command, actor, grant):
+    async with proposal_case(clean_postgres_database) as (values, factory, command, actor, grant):
         package = await read_package(factory, command, actor, grant)
         receipt = await approve(
             factory,
@@ -29,7 +29,7 @@ async def test_review_package_audit_requires_catalogue_manager_permission(
             grant,
             GuideProposalApproval(
                 target=package.target,
-                pre_submit_attachments=(), post_submit_attachments=(),
+                pre_submit_attachments=values["pre_submit_attachments"], post_submit_attachments=values["post_submit_attachments"],
                 idempotency_key=uuid4(),
             ),
         )

@@ -96,7 +96,8 @@ async def test_valid_foreign_lineage_mixes_deny_before_material_access(tmp_path,
             assert first.created.admission_id != second.created.admission_id
             # Each untouched stored lineage must pass through real materialization.
             for own in (first, second):
-                value = await own.service.materialize(await material_execution(own), Consumer(own.files))
+                execution = await material_execution(own)
+                value = await own.service.materialize(execution, Consumer(own.files, execution))
                 assert value.submission_id == own.created.submission_id
                 own.store.opens.clear()
             def forbidden(*args, **kwargs):

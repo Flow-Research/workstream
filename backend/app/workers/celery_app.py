@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from celery import Celery
 from kombu import Queue
-from app.workers.outbox_topology import OUTBOX_DELIVERY_TASK, OUTBOX_QUEUE
+from app.workers.outbox_topology import (
+    OUTBOX_DELIVERY_TASK, OUTBOX_QUEUE, FINALIZATION_DELIVERY_TASK, FINALIZATION_QUEUE,
+    is_finalization_worker_process,
+)
 from app.workers.project_setup_topology import (
     CELERY_VISIBILITY_TIMEOUT_SECONDS,
     PROJECT_GUIDE_CONSUMER_MARKER,
@@ -39,6 +42,7 @@ GUIDE_SETUP_CONTINUATION_SCAN_SCHEDULE = "guide-setup-continuation-scan"
 OBSERVED_TASK_NAMES = frozenset(
     {
         OUTBOX_DELIVERY_TASK,
+        FINALIZATION_DELIVERY_TASK,
         "workstream.outbox.scan_pending",
         "workstream.tasks.scan_retained_revisions",
         "workstream.project_setup.derive_post_policy",
@@ -58,6 +62,10 @@ OBSERVED_TASK_NAMES = frozenset(
 @worker_process_init.connect
 def initialize_artifact_runtime_for_process(**_kwargs: object) -> None:
     """Claim and initialize the artifact provider once per Celery child."""
+    if is_finalization_worker_process():
+        # Finalized replay needs retained SQL facts only. Unfinished finalization
+        # leases/initializes the same provider through _WorkerSourceObservation.
+        return
     run_async_task(initialize_artifact_internal_runtime)
 
 
@@ -121,8 +129,9 @@ def create_celery_app() -> Celery:
         ],
     )
     celery_app.conf.update(
-        task_queues=(Queue("celery"), Queue(OUTBOX_QUEUE)),
-        task_routes={OUTBOX_DELIVERY_TASK: {"queue": OUTBOX_QUEUE}},
+        task_queues=(Queue("celery"), Queue(OUTBOX_QUEUE), Queue(FINALIZATION_QUEUE)),
+        task_routes={OUTBOX_DELIVERY_TASK: {"queue": OUTBOX_QUEUE},
+                     FINALIZATION_DELIVERY_TASK: {"queue": FINALIZATION_QUEUE}},
         accept_content=["json"],
         result_serializer="json",
         task_always_eager=settings.celery_task_always_eager,

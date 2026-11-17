@@ -11,11 +11,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.identifiers import new_record_id
 from app.modules.checkers.api.execution import (
-    COMPLETION_EVENT,
     ExecutionAuthorityPort,
     FinalizationAuthorityPort,
     CheckerExecutionUnavailable,
-    EvaluationCompletion,
     ExecuteEvidence,
     ExecuteFacts,
     ExecutionLease,
@@ -39,7 +37,6 @@ from app.modules.checkers.api.external_policy import (
     selected_post_submit_execution_budget_ms,
 )
 from app.modules.checkers.api.selected_post_submit import (
-    SelectedPostSubmitCurrentResultReference,
     SelectedPostSubmissionEvaluationRequest,
     SelectedPostSubmitInfrastructureUnavailable,
     make_selected_post_submit_result,
@@ -55,14 +52,13 @@ from app.modules.checkers.execution_repository import (
     reservation,
     stored_result,
 )
-from app.modules.checkers.execution_results import classify_result
+from app.modules.checkers.execution_results import classify_result, evaluation_completion_event
 from app.modules.checkers.api.materialization import (
     PostSubmissionMaterializationPort,
     PostSubmissionMaterializationFailure,
 )
 from app.modules.outbox.api import OutboxAppendPort
 from app.modules.checkers.api.execution import ReviewModePort
-from app.modules.outbox.api import OutboxAppendInput
 
 def _lease(run):
     """Recover the exact persisted lease, including its database expiry."""
@@ -361,35 +357,11 @@ class PostSubmissionExecutor:
                 completed_at = await repo.now()
                 await repo.write_members(run, result)
                 if result.outcome == "completed":
-                    reference = SelectedPostSubmitCurrentResultReference(
-                        **result.model_dump(
-                            include=set(SelectedPostSubmitCurrentResultReference.model_fields)
-                            - {"schema_version"}
-                        )
-                    )
-                    reference.validate_result(result)
-                    event = EvaluationCompletion(
-                        project_id=request.project_id,
-                        task_id=request.task_id,
-                        submission_id=request.submission_id,
-                        reference=reference,
-                        routing_recommendation=classification.routing,
-                        output_binding_ids=(),
+                    appended = await self._outbox(session).append(evaluation_completion_event(
+                        request, result, attempt_id=UUID(run.id),
                         execute_evidence_id=UUID(run.execute_evidence_id),
-                        finalize_evidence_id=evidence_id,
-                    )
-                    appended = await self._outbox(session).append(
-                        OutboxAppendInput(
-                            event_type=COMPLETION_EVENT,
-                            event_version=1,
-                            aggregate_type="checker_run",
-                            aggregate_id=UUID(run.id),
-                            project_id=request.project_id,
-                            correlation_id=str(request.evaluation_request_id),
-                            idempotency_key="checker-completed:" + run.id,
-                            payload=event.model_dump(mode="json"),
-                        )
-                    )
+                        finalize_evidence_id=evidence_id, routing_recommendation=classification.routing,
+                    ))
                     run.completion_event_id = appended.event_id
                 run.result_json = canonical_checker_bytes(
                     result, exclude={"result_digest"}

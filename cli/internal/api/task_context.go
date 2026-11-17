@@ -144,8 +144,8 @@ func (c *Client) WorkContext(ctx context.Context, selector string) (Result[WorkC
 	}
 	if err := decodeTaskFields(fields["task"], &value.Task,
 		[]string{"task_id", "project_id", "title", "description", "status", "created_at", "updated_at"},
-		[]string{"skill_tags", "compensation"}); err != nil || !sameUUID(value.Task.TaskID, selector) ||
-		!validTask(value.Task.TaskSummary, value.Project.ID) || !ValidCompensation(value.Task.Compensation) {
+		[]string{"skill_tags", "compensation", "pending_submission_operation"}); err != nil || !sameUUID(value.Task.TaskID, selector) ||
+		!validTask(value.Task.TaskSummary, value.Project.ID) || !ValidCompensation(value.Task.Compensation) || !validPendingSubmission(value.Task.PendingSubmissionOperation) {
 		return result, &Failure{Code: "invalid_api_response"}
 	}
 	if _, err := contextObject(fields["project"], &value.Project, []string{"id", "name", "slug"}, nil); err != nil {

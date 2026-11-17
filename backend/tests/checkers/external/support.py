@@ -114,7 +114,8 @@ def execution_identity(phase: str = "pre_submit"):
     if phase == "pre_submit":
         return PreSubmitExternalCheckerIdentity(
             **common,
-            prepared_generation_id=uuid4(),
+            operation_id=uuid4(), source_sha256=SHA,
+            lease_id=uuid4(), lease_generation=1,
             attempt_id=uuid4(),
             attempt_request_digest=SHA,
             effective_plan_sha256=SHA,
@@ -139,7 +140,8 @@ def execution_material(identity):
     if identity.phase == "pre_submit":
         return PreSubmitExternalCheckerMaterial(
             role="submission_archive",
-            prepared_generation_id=identity.prepared_generation_id,
+            operation_id=identity.operation_id, source_sha256=identity.source_sha256,
+            lease_id=identity.lease_id, lease_generation=identity.lease_generation,
             attempt_id=identity.attempt_id,
             attempt_request_digest=identity.attempt_request_digest,
             archive_sha256=SHA,

@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+from app.modules.artifacts.selected_pre_submit_source_contracts import ArtifactPreSubmitSourceContracts
+
 from collections.abc import Callable
 from contextlib import AbstractAsyncContextManager, AsyncExitStack
 import asyncio
 from dataclasses import dataclass, field, replace
-import re
 from uuid import UUID
 from app.core.hashing import canonical_json_hash
 from app.interfaces.trusted_submission_intake import TrustedSubmissionIntakeAdapter
@@ -61,9 +62,11 @@ from app.modules.artifacts.submission_authorization import (
     SubmissionBundlePreparationAuthorization,
 )
 from app.modules.artifacts.submission_custody import SubmissionBundlePreparedCustody
+from app.modules.artifacts.api.submission_manifest import (
+    build_submission_manifest,
+)
 from app.modules.artifacts.submission_manifest import (
     SubmissionCanonicalPredecessor,
-    build_submission_manifest,
 )
 from app.modules.artifacts.submission_materialization import (
     PreparedBundleMaterializationRequest,
@@ -98,7 +101,7 @@ from app.modules.projects.api import (
     ProjectLockedPolicyContextUnavailable,
 )
 from app.modules.projects.api.policy_lineage import RevisionPolicySemantics
-from app.modules.tasks.api.submission_context import require_revision_capacity
+from app.modules.tasks.api.submission_context import require_revision_capacity, require_revision_acknowledgement
 from app.modules.tasks.api import (
     TaskRetainedSubmissionParentsRequest,
     TaskSubmissionContextFacts,
@@ -124,32 +127,10 @@ def require_revision_preparation_acknowledgement(
     request: SubmissionBundlePreparationRequest,
 ) -> None:
     """Compare the contributor's explicit acknowledgement after fresh authority."""
-    supplied_id = request.revision_preparation_id
-    supplied_sha256 = request.revision_preparation_sha256
-    if task.predecessor is None:
-        if supplied_id is not None or supplied_sha256 is not None:
-            raise SubmissionBundlePreparationRejected("revision_acknowledgement_invalid")
-        return
-    context = task.revision_context
-    if context is None:
-        raise SubmissionBundlePreparationRejected("revision_context_changed")
-    if supplied_id is None and supplied_sha256 is None:
-        raise SubmissionBundlePreparationRejected("revision_acknowledgement_required")
-    if not isinstance(supplied_id, str) or not isinstance(supplied_sha256, str):
-        raise SubmissionBundlePreparationRejected("revision_acknowledgement_invalid")
     try:
-        acknowledged_id = UUID(supplied_id)
-    except ValueError as exc:
-        raise SubmissionBundlePreparationRejected("revision_acknowledgement_invalid") from exc
-    if re.fullmatch(r"sha256:[0-9a-f]{64}", supplied_sha256) is None:
-        raise SubmissionBundlePreparationRejected("revision_acknowledgement_invalid")
-    if (
-        context.source_submission_id != task.predecessor.submission_id
-        or context.source_routing_manifest_id != task.checker_remediation_manifest_id
-        or acknowledged_id != context.preparation_id
-        or supplied_sha256 != context.preparation_sha256
-    ):
-        raise SubmissionBundlePreparationRejected("revision_context_changed")
+        require_revision_acknowledgement(task, request.revision_preparation_id, request.revision_preparation_sha256)
+    except TaskSubmissionContextUnavailable as exc:
+        raise SubmissionBundlePreparationRejected(exc.code) from exc
 
 
 @dataclass(frozen=True, slots=True)
@@ -358,7 +339,8 @@ class SubmissionBundleAdmissionPublisher:
             raise RuntimeError("submission verification TASK composition is unavailable")
         try:
             selected = SelectedPreSubmitReservationFacts.from_canonical_body(
-                row.selected_request_json
+                row.selected_request_json,
+                source_contracts=ArtifactPreSubmitSourceContracts(),
             )
         except (TypeError, ValueError) as exc:
             raise SubmissionBundleAdmissionPublicationError(
@@ -416,7 +398,8 @@ class SubmissionBundleAdmissionPublisher:
             raise SubmissionBundleAdmissionPublicationError("external PRE durable intent is unavailable")
         try:
             selected = SelectedPreSubmitReservationFacts.from_canonical_body(
-                intent.selected_request_json
+                intent.selected_request_json,
+                source_contracts=ArtifactPreSubmitSourceContracts(),
             )
         except (TypeError, ValueError) as exc:
             raise SubmissionBundleAdmissionPublicationError(

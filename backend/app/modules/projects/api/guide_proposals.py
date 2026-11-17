@@ -75,8 +75,8 @@ class GuideProposalApprovalInput(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
     target: GuideProposalTarget
-    pre_submit_attachments: tuple[ExternalCheckerImageAttachment, ...] = Field(max_length=200)
-    post_submit_attachments: tuple[ExternalCheckerImageAttachment, ...] = Field(max_length=200)
+    pre_submit_attachments: tuple[ExternalCheckerImageAttachment, ...] = Field(min_length=1, max_length=1)
+    post_submit_attachments: tuple[ExternalCheckerImageAttachment, ...] = Field(min_length=1, max_length=1)
     acknowledged_warning_hashes: tuple[Digest, ...] = Field(default=(), max_length=200)
     expected_previous_approval_operation_id: UUID | None = None
     expected_previous_approval_output_digest: Digest | None = None

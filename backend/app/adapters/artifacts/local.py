@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator, AsyncIterator
 from contextlib import contextmanager
 import errno
 import fcntl
@@ -16,12 +16,19 @@ import stat
 from typing import Any, Iterator
 from uuid import uuid4
 
+from app.adapters.artifacts.local_submission_source import LocalSubmissionSource
+from app.modules.artifacts.api.submission_intake import (
+    SealedSubmissionSource, SubmissionSourceCompletion, SubmissionSourceUpload,
+    SubmissionSourceUploadIntent, SubmissionSourcePart,
+)
+
 from app.core.cancellation import (
     await_cancellation_resistant,
     run_blocking_cancellation_resistant,
 )
 from app.core.file_locks import acquire_exclusive_file_lock
 from app.interfaces.artifacts import (
+    SealedSourceObservation,
     ARTIFACT_STORE_CAPABILITY_KEY,
     ArtifactByteRange,
     ArtifactConfigurationError,
@@ -210,6 +217,69 @@ class LocalStorageAdapter:
     def __del__(self) -> None:
         """Best-effort descriptor cleanup."""
         self.close()
+
+    async def _source_io(self, operation: Any, *args: Any) -> Any:
+        try:
+            return await self._run_io(operation, *args)
+        except ArtifactStoreError:
+            raise
+        except FileNotFoundError:
+            raise ArtifactObjectMissingError("submission source is missing") from None
+        except (OSError, ValueError):
+            raise ArtifactStoreUnavailableError("local submission source operation failed") from None
+
+    async def begin_source_upload(self, intent: SubmissionSourceUploadIntent, *,
+                                  operation_evidence: ArtifactProviderOperationEvidence | None = None) -> SubmissionSourceUpload:
+        return await self._source_io(LocalSubmissionSource(self).begin, intent)
+
+    async def upload_source_part(self, upload: SubmissionSourceUpload, number: int,
+                                 data: bytes, *, operation_evidence: ArtifactProviderOperationEvidence | None = None) -> SubmissionSourcePart:
+        return await self._source_io(LocalSubmissionSource(self).part, upload, number, data)
+
+    async def complete_source_upload(self, completion: SubmissionSourceCompletion, *,
+                                     operation_evidence: ArtifactProviderOperationEvidence | None = None) -> SealedSubmissionSource:
+        return await self._source_io(LocalSubmissionSource(self).complete, completion)
+
+    async def observe_sealed_source(self, source: SealedSubmissionSource, *,
+                                    operation_evidence: ArtifactProviderOperationEvidence | None = None) -> SealedSourceObservation | None:
+        return await self._source_io(LocalSubmissionSource(self).observe_sealed, source)
+
+    async def observe_source_upload(self, completion: SubmissionSourceCompletion, *,
+                                    operation_evidence: ArtifactProviderOperationEvidence | None = None) -> SealedSubmissionSource | None:
+        return await self._source_io(LocalSubmissionSource(self).observe, completion)
+
+    async def discover_source_uploads(self, intent: SubmissionSourceUploadIntent, *,
+                                      operation_evidence: ArtifactProviderOperationEvidence | None = None) -> tuple[SubmissionSourceUpload, ...]:
+        return await self._source_io(LocalSubmissionSource(self).discover, intent)
+
+    async def request_source_abort(self, upload: SubmissionSourceUpload, *,
+                                   operation_evidence: ArtifactProviderOperationEvidence | None = None) -> None:
+        await self._source_io(LocalSubmissionSource(self).abort, upload)
+
+    async def source_upload_parts_absent(self, upload: SubmissionSourceUpload, *,
+                                        operation_evidence: ArtifactProviderOperationEvidence | None = None) -> bool:
+        return await self._source_io(LocalSubmissionSource(self).parts_absent, upload)
+
+    def open_source(self, source: SealedSubmissionSource, *, operation_evidence: ArtifactProviderOperationEvidence | None = None, maximum_chunk_bytes: int = 64 * 1024) -> AsyncGenerator[bytes, None]:
+        if type(maximum_chunk_bytes) is not int or not 1 <= maximum_chunk_bytes <= 64 * 1024:
+            raise ValueError("source read chunk bound is invalid")
+        source = SealedSubmissionSource.model_validate(source)
+        helper = LocalSubmissionSource(self)
+        helper.location(source.location)
+
+        async def iterate() -> AsyncIterator[bytes]:
+            position = 0
+            digest = hashlib.sha256()
+            while position < source.raw_byte_count:
+                chunk = await self._source_io(helper.chunk, source, position, maximum_chunk_bytes)
+                if not chunk:
+                    raise ArtifactIntegrityError("submission source was truncated")
+                position += len(chunk)
+                digest.update(chunk)
+                yield chunk
+            if "sha256:" + digest.hexdigest() != source.raw_sha256:
+                raise ArtifactIntegrityError("submission source digest mismatch")
+        return iterate()
 
     async def put(
         self,
@@ -623,8 +693,10 @@ class LocalStorageAdapter:
     def _validate_object_entries(self, objects_fd: int) -> set[tuple[int, int]]:
         """Require only canonical immutable objects and recoverable hard links."""
         object_entries = set(os.listdir(objects_fd))
-        if not object_entries.issubset({"sha256"}):
+        if not object_entries.issubset({"sha256", "submission-source"}):
             raise ArtifactConfigurationError("local artifact layout is incompatible")
+        if "submission-source" in object_entries:
+            LocalSubmissionSource(self).validate_layout(objects_fd)
         if "sha256" not in object_entries:
             return set()
         sha256_fd = self._open_existing_directory(objects_fd, "sha256")

@@ -79,6 +79,9 @@ func addTaskReads(project *cobra.Command, client func() (*api.Client, error), ou
 			if err := writeAssignmentOutcome(stdout, t.LastAssignmentOutcome); err != nil {
 				return err
 			}
+			if err := writePendingSubmission(stdout, t.PendingSubmissionOperation); err != nil {
+				return err
+			}
 			if t.RevisionContext != nil {
 				if err := writeTaskContextFields(stdout, []contextField{{"Revision context", t.RevisionContext}}); err != nil {
 					return err

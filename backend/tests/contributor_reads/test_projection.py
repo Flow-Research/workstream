@@ -1,5 +1,7 @@
 """A Submitter reads their own claim, attempt, preparation and totals through public routes."""
 
+from app.adapters.artifacts import selected_pre_submit_source_contracts
+
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from types import SimpleNamespace
@@ -146,7 +148,7 @@ def _execution(eligible):
         workstream_default=WorkstreamDefaultCheckerResult(
             behavior_sha256=WORKSTREAM_DEFAULT_BEHAVIOR_SHA256, eligible=eligible, checks=checks, warnings=(),
         ),
-    )
+     source_contracts=selected_pre_submit_source_contracts())
 
 
 _ADMISSION, _SUBMISSION = uuid4(), uuid4()

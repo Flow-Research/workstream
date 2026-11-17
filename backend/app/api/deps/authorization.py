@@ -188,6 +188,8 @@ async def get_task_commands(
     from app.adapters.auth import task_authorization
     from app.adapters.tasks import task_commands
     from app.modules.tasks.api import TaskAuthorityDenied
+    from app.adapters.artifacts import PendingSubmissionReader
+    from app.modules.tasks.api.pending_submission import PendingSubmissionOperationUnavailable
 
     request_id, correlation_id = (UUID(value) for value in request_ids(request))
     context = _authorization_context(resolved, request_id, correlation_id)
@@ -202,6 +204,7 @@ async def get_task_commands(
             authorization=authority,
             audit=task_transition_audit(session),
             actor_profile_id=context.actor_profile_id,
+            pending_submissions=PendingSubmissionReader(session, context),
         )
     except TaskAuthorityDenied as exc:
         await session.rollback()
@@ -225,7 +228,7 @@ async def get_task_commands(
             error_code="permission_not_granted",
             error_message="Task authority denied",
         ) from exc
-    except (AuthorizationEvidenceUnavailable, SQLAlchemyError) as exc:
+    except (AuthorizationEvidenceUnavailable, SQLAlchemyError, PendingSubmissionOperationUnavailable) as exc:
         await session.rollback()
         raise StructuredHTTPException(
             status_code=503,

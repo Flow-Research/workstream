@@ -11,27 +11,18 @@ from app.modules.outbox.api import HandlerOutcome
 from app.modules.tasks.api import TaskSubmissionContextRequest
 from tests.authorization.post_submit_routing.support import provision_router
 from tests.checkers.external.support import post_registry_spec
-from tests.checkers.execution.support import ControlledSelectedExecution
 from app.modules.checkers.models import CheckerRun
 from tests.checkers.execution.test_checker_retry import _command, _failed_source, _operator_for
 from tests.tasks.evaluation_delivery.support import outcome
 from tests.tasks.post_submit_routing.outcome_support import invoked_completion
 from tests.tasks.post_submit_routing.support import revision_archive, source_values
-from tests.tasks.submission_dispatch.test_replacement_creation import (
-    _create,
-    _creation_request,
-    _ready_replacement,
-)
+from app.modules.artifacts.api.submission_intake import SubmissionIntakeMetadata
+from tests.post_submit_materialization_helpers import create_source_submission
 
 
 async def test_retry_replays_after_real_later_submission_without_reopening_old_source(
     tmp_path, isolated_database_env, monkeypatch,
 ):
-    selected_execution = ControlledSelectedExecution(verdict="failed")
-    monkeypatch.setattr(
-        "app.adapters.checkers.configured_external_checker_execution",
-        lambda _settings: selected_execution,
-    )
     async with _failed_source(
         tmp_path,
         isolated_database_env,
@@ -39,6 +30,10 @@ async def test_retry_replays_after_real_later_submission_without_reopening_old_s
         post_submit_registry_spec=post_registry_spec(),
     ) as (h, delivery):
         from app.adapters.artifacts.local import LocalStorageAdapter
+
+        selected_execution = delivery.selected
+        assert selected_execution.requests == []
+        selected_execution.verdict = "failed"
 
         operator = await _operator_for(h)
         command = _command(h, operator)
@@ -91,8 +86,19 @@ async def test_retry_replays_after_real_later_submission_without_reopening_old_s
             assert current.revision_context is not None
             h.revision_preparation_id = current.revision_context.preparation_id
             h.revision_preparation_sha256 = current.revision_context.preparation_sha256
-        prepared, admission_id = await _ready_replacement(h, revision_archive(h.data))
-        later = await _create(h, _creation_request(h, prepared, admission_id))
+        metadata = SubmissionIntakeMetadata(
+            task_id=h.request.task_id, assignment_id=h.request.assignment_id,
+            predecessor_submission_id=h.created.submission_id,
+            revision_preparation_id=current.revision_context.preparation_id,
+            revision_preparation_sha256=current.revision_context.preparation_sha256,
+            summary=h.creation_request.summary,
+            contributor_attestation=h.creation_request.contributor_attestation,
+        )
+        later = await create_source_submission(
+            h.factory, h.actor_context, h.store.wrapped, h.namespace, h.settings,
+            metadata, revision_archive(h.data),
+        )
+        assert later.submission_version == 2
 
         async def retained_state():
             async with h.factory() as session:
@@ -129,11 +135,12 @@ async def test_retry_replays_after_real_later_submission_without_reopening_old_s
         assert before[-1]["status"] == "evaluation_pending"
         provider_opens = len(h.store.opens)
 
-        def forbidden_open(_store, _reference):
+        def forbidden_open(*args, **kwargs):
             pytest.fail("historical retry replay touched artifact bytes")
 
         with monkeypatch.context() as patch:
-            patch.setattr(LocalStorageAdapter, "open", forbidden_open)
+            for method in ("open", "open_source", "observe_sealed_source"):
+                patch.setattr(LocalStorageAdapter, method, forbidden_open)
             async with h.factory.begin() as session:
                 replay = await checker_retry_service(session, operator).retry(command)
         assert replay == created
@@ -145,7 +152,8 @@ async def test_retry_replays_after_real_later_submission_without_reopening_old_s
             "request_id": other_key, "correlation_id": other_key,
         })
         with monkeypatch.context() as patch:
-            patch.setattr(LocalStorageAdapter, "open", forbidden_open)
+            for method in ("open", "open_source", "observe_sealed_source"):
+                patch.setattr(LocalStorageAdapter, method, forbidden_open)
             # A new key must pass current TASK ownership; the later Submission
             # makes the old source fail the shared latest-Submission guard.
             with pytest.raises(

@@ -32,10 +32,12 @@ from app.modules.artifacts.api.submission_archive import (
     SubmissionArchiveInspectionResult,
     SubmissionArchiveLimits,
 )
-from app.modules.artifacts.submission_manifest import (
-    SubmissionChangeGateResult,
+from app.modules.artifacts.api.submission_manifest import (
     SubmissionManifest,
     build_submission_manifest,
+)
+from app.modules.artifacts.submission_manifest import (
+    SubmissionChangeGateResult,
 )
 from app.modules.checkers.api.pre_submit_material import (
     ALLOWED_PRE_SUBMIT_STORAGE_SCHEMES,

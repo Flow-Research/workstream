@@ -18,6 +18,8 @@ import zlib
 
 from app.core.zip_safety import zip_directory_layout
 from app.modules.artifacts.api.submission_archive import (
+    normalize_submission_archive_path,
+    validate_submission_archive_inventory,
     SubmissionArchiveEntry,
     SubmissionArchiveEntryType,
     SubmissionArchiveFailureCode,
@@ -29,38 +31,6 @@ from app.modules.artifacts.api.submission_archive import (
 
 _READ_BYTES = 1024 * 1024
 _ProjectionResult = TypeVar("_ProjectionResult")
-
-
-def normalize_submission_archive_path(
-    path: str, *, maximum_path_bytes: int, maximum_path_depth: int,
-) -> str:
-    """Apply the same path rules to inspected and recovered manifest entries."""
-    parts = path.split("/")
-    normalized = unicodedata.normalize("NFC", path)
-    if (
-        not path or "\\" in path or path.startswith("/")
-        or any(ord(character) < 32 or ord(character) == 127 for character in path)
-        or any(part in {"", ".", ".."} or part.endswith((" ", ".")) for part in parts)
-        or ":" in parts[0] or len(parts) > maximum_path_depth
-        or max(len(path.encode("utf-8")), len(normalized.encode("utf-8"))) > maximum_path_bytes
-    ):
-        raise SubmissionArchiveRejectedError(SubmissionArchiveFailureCode.UNSAFE_ENTRY)
-    return normalized
-
-
-def validate_submission_archive_inventory(entries: tuple[SubmissionArchiveEntry, ...]) -> None:
-    """Require one unambiguous path per entry and exact directory ancestry."""
-    kinds = {entry.normalized_path: entry.entry_type for entry in entries}
-    folded_paths: set[str] = set()
-    for entry in entries:
-        folded = unicodedata.normalize("NFC", entry.normalized_path).casefold()
-        if folded in folded_paths:
-            raise SubmissionArchiveRejectedError(SubmissionArchiveFailureCode.COLLISION)
-        folded_paths.add(folded)
-        parts = entry.normalized_path.split("/")
-        for depth in range(1, len(parts)):
-            if kinds.get("/".join(parts[:depth])) is not SubmissionArchiveEntryType.DIRECTORY:
-                raise SubmissionArchiveRejectedError(SubmissionArchiveFailureCode.COLLISION)
 
 
 def _read_projected_file(

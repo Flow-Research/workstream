@@ -1,6 +1,9 @@
 """Exact project resource audit selectors, without raw product facts."""
 
 from uuid import UUID
+from app.modules.authorization.api.submission_finalization import SubmissionFinalizationResourceContext
+from app.modules.authorization.api.submission_cleanup import SubmissionSourceCleanupResourceContext
+from app.modules.authorization.domain.submission_intake import IntakeReservationResourceContext, IntakeReservationPreflightResourceContext, IntakeAcceptanceResourceContext
 
 from app.modules.authorization.catalogue import ActionId
 from app.modules.authorization.domain.lifecycle import ReviewLifecycleActivationContract
@@ -18,7 +21,7 @@ from app.modules.authorization.domain.action_groups import (
 from app.modules.authorization.domain.project_create import ProjectCreateResourceContext
 from app.modules.authorization.domain.task_authority import TaskAuthorityResourceContext, TaskImportBatchResourceContext
 from app.modules.authorization.domain.task_queues import QueueReadResourceContext
-from app.modules.authorization.domain.submission_history import HistoryReadResourceContext
+from app.modules.authorization.domain.submission_history import HistoryReadResourceContext, OperationReadResourceContext
 
 
 def _checker_retry_read_target(resource):
@@ -75,6 +78,25 @@ def _model_administration_target(resource):
         return None
     project_id = str(resource.project_id)
     return project_id, "project", project_id, "project", project_id
+
+
+def _submission_operation_target(resource):
+    from app.modules.authorization.domain.submission_recovery import SubmissionRecoveryResourceContext
+    if type(resource) is SubmissionRecoveryResourceContext:
+        return (str(resource.scope_project_id), "submission_operation", str(resource.resource_id),
+                "submission_operation", str(resource.resource_id))
+    if type(resource) in {IntakeAcceptanceResourceContext, SubmissionFinalizationResourceContext, SubmissionSourceCleanupResourceContext}:
+        project_id = str(getattr(resource, "scope_project_id", None) or resource.project_id)
+        return project_id, "submission_operation", str(resource.operation_id), "project", project_id
+    if type(resource) in {IntakeReservationResourceContext, IntakeReservationPreflightResourceContext, OperationReadResourceContext}:
+        return (str(resource.scope_project_id), "submission_operation", str(resource.resource_id),
+                "submission_operation", str(resource.resource_id))
+    return None
+
+
+def _special_authority_target(resource):
+    return (_submission_operation_target(resource) or _post_submit_delivery_target(resource)
+            or _compensation_unit_target(resource) or _model_administration_target(resource))
 
 
 def project_authority_audit_target(
@@ -148,7 +170,7 @@ def project_authority_audit_target(
         return project_id, "checker_run", str(resource.resource_id), "project", project_id
     if type(resource) is CheckerRetrySourceReadResourceContext:
         return _checker_retry_read_target(resource)
-    if target := _post_submit_delivery_target(resource) or _compensation_unit_target(resource) or _model_administration_target(resource):
+    if target := _special_authority_target(resource):
         return target
     if action_id in SUBMISSION_POLICY_MUTATIONS and isinstance(
         resource, ProjectSubmissionArtifactPolicyMutationResourceContext,

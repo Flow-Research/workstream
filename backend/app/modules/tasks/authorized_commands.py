@@ -42,6 +42,9 @@ from app.modules.tasks.models import TaskAssignment, TaskCommandReceipt, Workstr
 from app.modules.tasks.api.submission_context import TaskSubmissionContextUnavailable
 from app.modules.tasks.command_replay import TaskCommandReplay, TaskReplayConflict
 from app.modules.tasks.repository import TaskRepository
+from app.modules.tasks.api.pending_submission import (
+    PendingSubmissionOperationReadPort, PendingSubmissionOperationUnavailable,
+)
 from app.modules.tasks.revision.models import TaskRevisionPreparation
 from app.modules.tasks.revision.expiry_event import revision_preparation_event
 from app.modules.outbox.api import OutboxAppendPort
@@ -141,6 +144,7 @@ class AuthorizedTaskCommands:
         guide_documents: TaskGuideDocumentsPort,
         compensation_terms: LockedCompensationTermsPort | None = None,
         outbox: OutboxAppendPort | None = None,
+        pending_submissions: PendingSubmissionOperationReadPort | None = None,
     ) -> None:
         self._session = session
         self._authorization = authorization
@@ -150,6 +154,7 @@ class AuthorizedTaskCommands:
         self._contexts = contexts
         self._guide_documents = guide_documents
         self._outbox = outbox
+        self._pending_submissions = pending_submissions
         self._replay = TaskCommandReplay(session)
         self._transition_context_owner = object()
 
@@ -871,6 +876,14 @@ class AuthorizedTaskCommands:
                 raise TaskValidationError("task audit evidence is invalid") from None
         return response
 
+    async def _with_pending_submission(self, task, detail, *, visible):
+        if not visible or task.active_submission_operation_id is None:
+            return detail
+        if self._pending_submissions is None:
+            raise PendingSubmissionOperationUnavailable("pending submission reader is unavailable")
+        pending = await self._pending_submissions.read(UUID(task.id), UUID(task.active_submission_operation_id))
+        return replace(detail, pending_submission_operation=pending)
+
     async def _read_task_projection(self, task_id: UUID, operation: TaskAuthorityOperation, project_id: UUID | None = None):
         """Consume exact authority and serialize detached facts before committing evidence."""
         if not isinstance(task_id, UUID) or (
@@ -888,7 +901,7 @@ class AuthorizedTaskCommands:
             TaskAuthorityOperation.AUDIT_LOCKED_CONTEXT: AuditTaskLockedContext,
         }[operation]
         async with self._session.begin():
-            task, _, _ = await self._locked_task(task_id, operation, project_id=project_id)
+            task, assignment, _ = await self._locked_task(task_id, operation, project_id=project_id)
             exact_project = UUID(task.project_id)
             if operation is TaskAuthorityOperation.READ:
                 response = await self._repo.read_contributor_task_detail(
@@ -908,6 +921,11 @@ class AuthorizedTaskCommands:
                     response = response_type(**self._contexts._locked_context_reference_values(task))
             if response is None:
                 raise TaskNotFound("task not found")
+            if operation in {TaskAuthorityOperation.READ, TaskAuthorityOperation.MANAGEMENT_READ}:
+                own = assignment is not None and assignment.contributor_id == str(self._actor_id) and task.assigned_to == str(self._actor_id)
+                response = await self._with_pending_submission(
+                    task, response, visible=operation is TaskAuthorityOperation.MANAGEMENT_READ or own,
+                )
             adapter = TypeAdapter(response_type)
             response = adapter.validate_json(adapter.dump_json(response, warnings="error"))
         return response
@@ -930,6 +948,7 @@ class AuthorizedTaskCommands:
                 and task.assigned_to == str(self._actor_id)
             )
             actions = ()
+            detail = await self._with_pending_submission(task, detail, visible=own_assignment)
             if task.status == "ready" and assignment is None and task.assigned_to is None:
                 actions = ("claim",)
             selection = context.facts.activation_receipt.command
@@ -985,6 +1004,7 @@ class AuthorizedTaskCommands:
             detail = await self._repo.read_management_task_detail(ManagementTaskDetailRequest(project_id, task_id))
             if detail is None:
                 raise TaskNotFound("task not found")
+            detail = await self._with_pending_submission(task, detail, visible=True)
             selection = context.facts.activation_receipt.command
             response = ManagementTaskWorkContext(
                 task=detail, project=context.facts.project, guide=context.facts.guide,

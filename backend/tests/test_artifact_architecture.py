@@ -91,7 +91,9 @@ RETIRED_CONTRIBUTOR_INTAKE_NAMES = {
     "lock_upload_session",
     "_contributor_facts",
 }
-PROVIDER_METHODS = {"put", "observe_put_result", "open", "head"}
+PROVIDER_METHODS = {"put", "observe_put_result", "open", "head", "begin_source_upload",
+                    "upload_source_part", "complete_source_upload", "open_source",
+                    "observe_source_upload", "observe_sealed_source", "discover_source_uploads", "request_source_abort", "source_upload_parts_absent"}
 CONCRETE_ADAPTER_MODULES = {
     "app.adapters.artifacts.local",
     "app.adapters.artifacts.s3_compatible",
@@ -254,12 +256,17 @@ def test_only_artifact_custody_services_own_provider_execution() -> None:
             node.name: node
             for node in tree.body
             if isinstance(node, ast.ClassDef)
-            and node.name in {
+            and (node.name in {
                 "ArtifactStorageOrchestrator",
                 "CheckerArtifactOutputService",
                 "ScopedGuideDocumentGrant",
                 "PostSubmissionMaterializer",
-            }
+            } or (node.name == "ForegroundSourceUpload"
+                  and path == APP_ROOT / "modules/artifacts/intake/foreground_upload.py")
+                or (node.name == "_PreSubmitSourceGrant"
+                    and path == APP_ROOT / "modules/artifacts/selected_pre_submit_execution.py")
+                or (node.name == "AcceptedSubmissionFinalization"
+                    and path == APP_ROOT / "modules/artifacts/intake/finalization.py"))
         }
         for node in ast.walk(tree):
             if (
@@ -284,10 +291,13 @@ def test_only_artifact_custody_services_own_provider_execution() -> None:
                     in {
                         "CheckerArtifactOutputService",
                         "ScopedGuideDocumentGrant",
-                        "PostSubmissionMaterializer",
                     }
                     and node.func.attr != "open"
-                ):
+                ) or (owner.name == "ForegroundSourceUpload" and node.func.attr not in {
+                    "begin_source_upload", "complete_source_upload", "observe_source_upload",
+                }) or (owner.name == "_PreSubmitSourceGrant" and node.func.attr != "open_source"
+                ) or (owner.name == "PostSubmissionMaterializer" and node.func.attr not in {"open", "open_source"}
+                ) or (owner.name == "AcceptedSubmissionFinalization" and node.func.attr != "observe_sealed_source"):
                     violations.append(f"{path.relative_to(BACKEND_ROOT)} calls {node.func.attr}")
     assert violations == []
 
@@ -451,20 +461,18 @@ def test_composition_proof_rejects_aliased_factories_and_concrete_runtimes(
 
 
 def test_s3_adapter_exposes_only_required_immutable_object_operations() -> None:
-    """Keep list, delete, copy, ACL, and multipart behavior out of the provider."""
-    allowed = {"get_object", "head_object", "put_object"}
+    """Permit multipart only at typed source methods; preserve unrelated objects."""
+    allowed = {"get_object", "head_object", "put_object", "get_bucket_versioning",
+               "create_multipart_upload", "upload_part", "complete_multipart_upload",
+               "list_multipart_uploads", "abort_multipart_upload", "list_parts"}
     forbidden = {
-        "abort_multipart_upload",
-        "complete_multipart_upload",
         "copy_object",
-        "create_multipart_upload",
         "delete_object",
         "delete_objects",
         "list_buckets",
         "list_objects",
         "list_objects_v2",
         "put_object_acl",
-        "upload_part",
         "upload_part_copy",
     }
     called = {
@@ -477,6 +485,31 @@ def test_s3_adapter_exposes_only_required_immutable_object_operations() -> None:
     }
     assert called & forbidden == set()
     assert called & allowed == allowed
+    source_methods = {
+        "begin_source_upload": {"get_bucket_versioning", "create_multipart_upload"},
+        "upload_source_part": {"upload_part"},
+        "complete_source_upload": {"complete_multipart_upload", "head_object"},
+        "open_source": {"get_object"},
+        "observe_source_upload": {"head_object"},
+        "observe_sealed_source": {"head_object"},
+        "discover_source_uploads": {"list_multipart_uploads"},
+        "request_source_abort": {"abort_multipart_upload"},
+        "source_upload_parts_absent": {"list_parts"},
+    }
+    source_only = {"get_bucket_versioning", "create_multipart_upload", "upload_part",
+                   "complete_multipart_upload", "list_multipart_uploads", "abort_multipart_upload", "list_parts"}
+    store = next(node for node in _tree(S3_ADAPTER_MODULE).body
+                 if isinstance(node, ast.ClassDef) and node.name == "S3CompatibleArtifactStore")
+    for method in store.body:
+        if not isinstance(method, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        calls = {node.func.attr for node in ast.walk(method)
+                 if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                 and isinstance(node.func.value, ast.Name) and node.func.value.id == "client"}
+        if method.name in source_methods:
+            assert calls == source_methods[method.name]
+        else:
+            assert not calls & source_only
 
 
 def test_provider_methods_stay_inside_artifact_orchestration_and_adapters() -> None:
@@ -792,11 +825,9 @@ def _assert_checker_custody_consumers(
             "app/adapters/artifacts/__init__.py",
             "app/modules/artifacts/post_submit_materialization.py",
             "app/modules/artifacts/post_submit_selection.py",
-            "app/modules/artifacts/selected_pre_submit_admission.py",
             "app/modules/artifacts/submission_materialization.py",
             "app/modules/checkers/default_checker.py",
             "app/modules/checkers/execution.py",
-            "app/modules/checkers/selected_pre_submit_execution.py",
         },
     }
     actual = {module: set() for module in expected}

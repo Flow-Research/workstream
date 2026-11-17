@@ -1,5 +1,5 @@
 {
-  "canonical_sha256": "848b53dfc7e18cee10df67bac79612aefe2e4dd0c217b110e50980dd12b804c9",
+  "canonical_sha256": "cc365a001eaee9329e36ac6beb4d632abc4c809543a05fa3c4349e1c14024e50",
   "components": {
     "schemas": {
       "ActorProfileAdminResponse": {
@@ -217,6 +217,7 @@
           "workstream.artifact.verifier",
           "workstream.artifact.put_resolver",
           "workstream.artifact.scheduler",
+          "workstream.artifact.source_cleanup",
           "workstream.artifact.binding",
           "workstream.artifact.guide_reader",
           "workstream.artifact.materializer",

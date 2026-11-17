@@ -255,23 +255,23 @@ def test_artifact_adapter_composes_submission_command_from_owner_ports(
     artifact_adapters.project_locked_policy_context_port.assert_called_once_with(session)
 
 
-def test_submission_bundle_preparation_is_public_binary_contract() -> None:
+def test_submission_is_public_binary_contract() -> None:
     from fastapi import FastAPI
 
     app = create_app()
     route = next(
         route
         for route in submission_router.routes
-        if getattr(route, "name", None) == "prepare_submission_bundle"
+        if getattr(route, "name", None) == "submit_source"
     )
     assert route.include_in_schema is True
-    mounted = app.url_path_for("prepare_submission_bundle", task_id=str(new_record_id()))
+    mounted = app.url_path_for("submit_source", task_id=str(new_record_id()))
     assert str(mounted).startswith("/api/v1/tasks/")
-    assert str(mounted).endswith("/submission-bundle-preparations")
+    assert str(mounted).endswith("/submissions")
     assert route.methods == {"POST"}
     schema_app = FastAPI()
     schema_app.include_router(submission_router, prefix="/api/v1")
-    operation = schema_app.openapi()["paths"]["/api/v1/tasks/{task_id}/submission-bundle-preparations"]["post"]
+    operation = schema_app.openapi()["paths"]["/api/v1/tasks/{task_id}/submissions"]["post"]
     assert operation["requestBody"]["content"]["application/zip"]["schema"] == {
         "type": "string", "format": "binary",
     }

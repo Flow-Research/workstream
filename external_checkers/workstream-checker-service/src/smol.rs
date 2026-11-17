@@ -34,7 +34,10 @@ pub(crate) mod trial;
 mod trial_io;
 pub(super) use intake::{serve as serve_intake, IntakeConfig};
 mod io;
+mod pre;
 pub(super) use io::{ProjectCallbacks, ProjectMaterials};
+pub(super) use pre::admission::Config as PreConfig;
+pub(super) use pre::serve as serve_pre;
 
 #[derive(Clone, Copy)]
 struct Resources {
@@ -93,9 +96,12 @@ struct Lease {
     runtime: SmolConfig,
     #[serde(default)]
     private_home_root: Option<PathBuf>,
+    #[serde(default)]
+    pre: Option<pre::Invocation>,
 }
 struct Machine {
     lease: Lease,
+    journal: pre::Journal,
     guardian: Child,
     keeper: Option<std::process::ChildStdin>,
     consumed: bool,
@@ -318,18 +324,45 @@ pub(super) fn validate(config: &ServiceConfig) -> Result<(), String> {
     Ok(())
 }
 pub(super) fn inspect_image(image: &CacheEntry) -> Result<(), String> {
+    image_configuration(image).map(|_| ())
+}
+fn image_configuration(image: &CacheEntry) -> Result<Value, String> {
     let source = image.smol.as_ref().ok_or("Smol image missing")?;
-    hash_file(&source.image_config, &image.config_image_id)?;
-    let value: Value =
-        serde_json::from_slice(&read_bounded_file(&source.image_config, MAX_REQUEST_BYTES)?)
-            .map_err(|_| "image configuration invalid")?;
+    if !source.image_config.is_absolute() || !valid_digest(&image.config_image_id) {
+        return Err("image configuration identity invalid".into());
+    }
+    let mut file = OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC | libc::O_NONBLOCK)
+        .open(&source.image_config)
+        .map_err(|_| "image configuration unavailable")?;
+    let metadata = file
+        .metadata()
+        .map_err(|_| "image configuration unavailable")?;
+    if !metadata.is_file()
+        || metadata.mode() & 0o022 != 0
+        || metadata.len() > MAX_REQUEST_BYTES as u64
+    {
+        return Err("image configuration custody invalid".into());
+    }
+    let mut bytes = Vec::new();
+    Read::by_ref(&mut file)
+        .take(MAX_REQUEST_BYTES as u64 + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|_| "image configuration unavailable")?;
+    if bytes.len() > MAX_REQUEST_BYTES
+        || format!("sha256:{:x}", Sha256::digest(&bytes)) != image.config_image_id
+    {
+        return Err("image configuration identity differs".into());
+    }
+    let value: Value = serde_json::from_slice(&bytes).map_err(|_| "image configuration invalid")?;
     if value["os"].as_str() != Some(&image.operating_system)
         || value["architecture"].as_str() != Some(&image.architecture)
     {
         return Err("image platform differs".into());
     }
     image_command(&value)?;
-    Ok(())
+    Ok(value)
 }
 fn image_command(value: &Value) -> Result<Vec<String>, String> {
     let mut command = Vec::new();
@@ -436,13 +469,14 @@ fn collect(
     maximum: usize,
     client: Option<&UnixStream>,
 ) -> Result<BoundedCommandOutput, String> {
-    collect_bounded_command(child, deadline, maximum, client, None).map_err(|error| {
-        match error.as_str() {
-            "process deadline exceeded" => "deadline_exceeded".into(),
-            "process output unbounded" => "invalid_output".into(),
-            _ => "implementation_unavailable".into(),
-        }
-    })
+    collect_bounded_command(child, deadline, maximum, client, None).map_err(command_failure)
+}
+fn command_failure(error: String) -> String {
+    match error.as_str() {
+        "process deadline exceeded" => "deadline_exceeded".into(),
+        "process output unbounded" => "invalid_output".into(),
+        _ => "implementation_unavailable".into(),
+    }
 }
 fn control(
     s: &SmolConfig,
@@ -511,6 +545,10 @@ impl Lease {
                     && root != &self.root
                     && self.runtime.home == self.private_home_path()
             })
+            && self
+                .pre
+                .as_ref()
+                .is_none_or(|invocation| self.private_home_root.is_none() && invocation.valid())
     }
     fn inventory(&self, deadline: Instant) -> Result<bool, String> {
         let output = control(
@@ -544,14 +582,27 @@ impl Lease {
         }
         Ok(false)
     }
-    fn verify_network_disabled(&self, deadline: Instant) -> Result<(), String> {
-        let output = control(
-            &self.runtime,
-            &["machine", "ls", "--json"],
-            None,
+    fn verify_network_disabled(
+        &self,
+        deadline: Instant,
+        client: &UnixStream,
+        connected: fn(&UnixStream) -> bool,
+    ) -> Result<(), String> {
+        if Instant::now() >= deadline {
+            return Err("deadline_exceeded".into());
+        }
+        let child = command(&self.runtime, &["machine", "ls", "--json"], None)?
+            .spawn()
+            .map_err(|_| "runtime launch unavailable")?;
+        let output = collect_bounded_command_with_connection(
+            child,
             deadline,
+            CONTROL_OUTPUT,
+            Some(client),
             None,
-        )?;
+            connected,
+        )
+        .map_err(command_failure)?;
         if !output.status.success() {
             return Err("runtime inventory unavailable".into());
         }
@@ -654,7 +705,7 @@ impl Machine {
         resources: Resources,
         deadline: Instant,
     ) -> Result<Self, ExecutionFailure> {
-        Self::create_inner(config, resources, deadline, None)
+        Self::create_inner(config, resources, deadline, None, None)
     }
 
     pub(super) fn create_child(
@@ -680,6 +731,7 @@ impl Machine {
             resources,
             deadline,
             Some(child_home_root.to_owned()),
+            None,
         )
     }
 
@@ -688,7 +740,16 @@ impl Machine {
         resources: Resources,
         deadline: Instant,
         private_home_root: Option<PathBuf>,
+        pre: Option<pre::Invocation>,
     ) -> Result<Self, ExecutionFailure> {
+        if pre.as_ref().is_some_and(|invocation| !invocation.valid())
+            || (pre.is_some() && private_home_root.is_some())
+        {
+            return Err(ExecutionFailure::ordinary(
+                "implementation_unavailable",
+                false,
+            ));
+        }
         let mut s = settings(config)
             .map_err(|_| ExecutionFailure::ordinary("implementation_unavailable", false))?
             .clone();
@@ -745,6 +806,7 @@ impl Machine {
             root,
             runtime: s,
             private_home_root,
+            pre,
         };
         let bytes = match serde_json::to_vec(&lease) {
             Ok(bytes) => bytes,
@@ -786,6 +848,8 @@ impl Machine {
         File::open(&lease.root)
             .and_then(|f| f.sync_all())
             .map_err(|_| ExecutionFailure::unsettled(false))?;
+        let journal =
+            pre::Journal::capture(&file, &bytes).map_err(|_| ExecutionFailure::unsettled(false))?;
         // Persist ownership before any runtime resource is created. The guardian
         // is a distinct exec with its own lifetime and only this lease's custody.
         let mut guardian =
@@ -820,6 +884,7 @@ impl Machine {
         }
         let mut machine = Self {
             lease,
+            journal,
             guardian,
             keeper,
             consumed: false,
@@ -861,6 +926,24 @@ impl Machine {
         client: &UnixStream,
         deadline: Instant,
     ) -> Result<(), String> {
+        self.prepare_with_connection(
+            cache,
+            resources,
+            overlay_gib,
+            client,
+            deadline,
+            client_is_connected,
+        )
+    }
+    fn prepare_with_connection(
+        &self,
+        cache: &CacheEntry,
+        resources: Resources,
+        overlay_gib: Option<u64>,
+        client: &UnixStream,
+        deadline: Instant,
+        connected: fn(&UnixStream) -> bool,
+    ) -> Result<(), String> {
         let lease = &self.lease;
         let s = &lease.runtime;
         let group = lease.cgroup();
@@ -891,30 +974,43 @@ impl Machine {
         if let Some(value) = overlay.as_deref() {
             args.extend(["--overlay", value]);
         }
-        checked(s, &args, Some(&group), deadline, Some(client))?;
+        let checked = |args: &[&str]| -> Result<(), String> {
+            if Instant::now() >= deadline {
+                return Err("deadline_exceeded".into());
+            }
+            if !connected(client) {
+                return Err("implementation_unavailable".into());
+            }
+            let child = command(s, args, Some(&group))?
+                .spawn()
+                .map_err(|_| "runtime launch unavailable")?;
+            let output = collect_bounded_command_with_connection(
+                child,
+                deadline,
+                CONTROL_OUTPUT,
+                Some(client),
+                None,
+                connected,
+            )
+            .map_err(command_failure)?;
+            if output.status.success() {
+                Ok(())
+            } else {
+                Err("runtime command failed".into())
+            }
+        };
+        checked(&args)?;
         // Closed argv omits network enablers; verify exact-owner state before start.
-        lease.verify_network_disabled(deadline)?;
-        checked(
-            s,
-            &["machine", "start", "--name", &lease.name, "--no-workload"],
-            Some(&group),
-            deadline,
-            Some(client),
-        )?;
-        checked(
-            s,
-            &[
-                "machine",
-                "cp",
-                "--mode",
-                "0555",
-                s.guest_binary.to_str().ok_or("guest path invalid")?,
-                &format!("{}:/.workstream-guest", lease.name),
-            ],
-            Some(&group),
-            deadline,
-            Some(client),
-        )
+        lease.verify_network_disabled(deadline, client, connected)?;
+        checked(&["machine", "start", "--name", &lease.name, "--no-workload"])?;
+        checked(&[
+            "machine",
+            "cp",
+            "--mode",
+            "0555",
+            s.guest_binary.to_str().ok_or("guest path invalid")?,
+            &format!("{}:/.workstream-guest", lease.name),
+        ])
     }
     fn run(
         &mut self,
@@ -942,10 +1038,7 @@ impl Machine {
                     .map_err(|_| "material_unavailable")?,
             );
         }
-        let source = cache.smol.as_ref().ok_or("Smol image missing")?;
-        let value: Value =
-            serde_json::from_slice(&read_bounded_file(&source.image_config, MAX_REQUEST_BYTES)?)
-                .map_err(|_| "image configuration invalid")?;
+        let value = image_configuration(cache)?;
         let environment = match value["config"]["Env"].as_array() {
             Some(items) => items
                 .iter()
@@ -1023,12 +1116,12 @@ impl Machine {
         Ok(ExecutedChecker { value })
     }
     fn close(&mut self) -> Result<(), String> {
+        self.close_until(Instant::now() + CLEANUP_TIMEOUT + SOCKET_IO_TIMEOUT)
+    }
+    fn close_until(&mut self, deadline: Instant) -> Result<(), String> {
         // EOF transfers cleanup to the guardian; wait for durable absence.
         drop(self.keeper.take());
-        let status = reap_child(
-            &mut self.guardian,
-            Instant::now() + CLEANUP_TIMEOUT + SOCKET_IO_TIMEOUT,
-        )?;
+        let status = reap_child(&mut self.guardian, deadline)?;
         if status.success() && !self.lease.path().exists() && !self.lease.cgroup().exists() {
             Ok(())
         } else {

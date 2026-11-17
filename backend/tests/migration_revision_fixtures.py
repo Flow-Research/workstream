@@ -45,6 +45,7 @@ _REVISION_ARCHIVE_SHA256 = "40b4c2bde917e6c8907da7d5462f6876a268952c449997af1ea9
 _REVISION_ARCHIVE_SCHEMA = "workstream.historical_revision_rows.v1"
 _REVISION_ARCHIVE_SOURCE = "6fa9a9b557fa3ae22c16af67bca25dc868f67b38"
 _OWNER_READ_PROJECTION_COLUMNS = (
+    ("workstream_tasks", "active_submission_operation_id", "uuid"),
     ("actor_identity_links", "email_observed_issued_at", "bigint"),
     ("project_guide_compilation_attempts", "result_schema_version", "varchar(100)"),
     ("project_guide_compilations", "result_schema_version", "varchar(100)"),

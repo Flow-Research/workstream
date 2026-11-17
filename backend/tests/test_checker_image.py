@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from pathlib import Path
+import stat
 import sys
 import time
 
@@ -42,7 +44,10 @@ def project(tmp_path: Path) -> Path:
         "resources": {
             "cpu_millis": 500,
             "memory_bytes": 134217728,
-            "deadline_ms": 1000,
+            # Receipt fsync uses the real filesystem even with fake Docker.
+            # Deadline refusal is exercised separately with injected timeout
+            # and real bounded child-process tests, not host disk latency.
+            "deadline_ms": 30000,
             "maximum_output_bytes": 32768,
         },
         "samples": [
@@ -226,6 +231,70 @@ def test_dry_run_validates_both_phases_without_any_aws(project, transport, tmp_p
         item["verdict"] for item in json.loads((output / "receipt.json").read_text())["samples"]
     ] == ["passed", "failed"]
     assert sorted(p.name for p in output.iterdir()) == ["receipt.json"]
+    assert json.loads((output / "receipt.json").read_text())["sample_cleanup"]["state"] == "confirmed"
+
+
+def test_late_create_keeps_durable_obligation_after_empty_cleanup_observation(
+    project, transport, tmp_path, monkeypatch,
+):
+    """An empty LIST cannot settle a daemon create whose acknowledgement was lost."""
+    docker, aws_calls = transport
+    output = tmp_path / "release"
+    original = docker.response
+    late_containers = []
+    owned_name = None
+
+    def response(*args, **kwargs):
+        nonlocal owned_name
+        if args[0] == "create":
+            owned_name = args[args.index("--name") + 1]
+            persisted = json.loads((output / "receipt.json").read_text())
+            assert persisted["sample_cleanup"] == {
+                "container_name": owned_name, "image_id": IMAGE, "state": "create_pending",
+            }
+            raise ImageError("create sample container: deadline exceeded")
+        if args[:2] == ("container", "ls"):
+            # Daemon finishes only after the cleanup query captured absence.
+            late_containers.append(owned_name)
+            return b""
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(docker, "response", response)
+    assert cli.main([
+        str(project), "--publish", "--account-id", "123456789012", "--out", str(output),
+    ]) == 1
+    receipt = json.loads((output / "receipt.json").read_text())
+    assert receipt["status"] == "failed"
+    assert receipt["sample_cleanup"]["state"] == "create_pending"
+    assert late_containers == [receipt["sample_cleanup"]["container_name"]]
+    assert not aws_calls
+    assert not any(args[0] == "start" for args, _ in docker.calls)
+    assert not (output / "registry.json").exists()
+
+
+@pytest.mark.parametrize("boundary", ["output_creation", "receipt_publication"])
+def test_directory_sync_failure_prevents_container_creation(
+    project, transport, tmp_path, monkeypatch, boundary,
+):
+    """Both the output ancestry and renamed receipt must survive before create."""
+    output = tmp_path / "new-parent" / "release"
+    original = os.fsync
+    rejected = []
+
+    def fsync(descriptor):
+        if stat.S_ISDIR(os.fstat(descriptor).st_mode):
+            published = (output / "receipt.json").exists()
+            if (boundary == "receipt_publication") == published:
+                rejected.append(boundary)
+                raise OSError("injected directory sync failure")
+        return original(descriptor)
+
+    monkeypatch.setattr(cli.os, "fsync", fsync)
+    assert cli.main([str(project), "--out", str(output)]) == 1
+    assert rejected
+    docker, aws_calls = transport
+    assert not any(args[0] == "create" for args, _ in docker.calls)
+    assert not aws_calls
 
 
 def test_publish_verifies_exact_image_and_rechecks_digest_before_outputs(
@@ -271,6 +340,8 @@ def test_failed_sample_or_cleanup_prevents_all_aws_calls(project, transport, tmp
     assert not aws_calls
     assert any(c[0:2] == ("rm", "--force") for c, _ in docker.calls)
     assert not (output / "registry.json").exists()
+    cleanup = json.loads((output / "receipt.json").read_text())["sample_cleanup"]
+    assert cleanup["state"] == ("removal_pending" if failure == "cleanup" else "confirmed")
 
 
 @pytest.mark.parametrize("failure", ["push", "digest_branch"])

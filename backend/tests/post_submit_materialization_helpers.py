@@ -1,5 +1,6 @@
-"""Real verified admission/Submission fixtures and controlled post-submit authority."""
+"""Real source intake/OUTBOX finalization fixtures and controlled POST authority."""
 
+from tests.checkers.external.support import pre_registry_spec, post_registry_spec
 from tests.trusted_intake_fixtures import LocalIntakeAdapter
 
 from contextlib import asynccontextmanager
@@ -12,14 +13,12 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.adapters.artifacts import create_artifact_store_bootstrap, post_submission_materialization
 from app.adapters.tasks import submitted_bundle_port
-from app.api.deps.authorization import compose_hidden_submission_creation_command
 from app.core.identifiers import new_record_id
 from app.interfaces.artifacts import (
     ArtifactByteRange,
     ArtifactProviderOperationEvidence,
     ArtifactStoreNamespaceClaim,
 )
-from app.modules.artifacts.api import SubmissionBundlePreparationRequest
 from app.modules.artifacts.models import SubmissionBundleAdmission
 from app.modules.artifacts.preparation import ArtifactPreparationService, ArtifactScratchManager
 from app.modules.artifacts.service import artifact_storage_namespace_spec
@@ -29,15 +28,20 @@ from app.modules.artifacts.api.submission_archive import (
 from app.modules.artifacts.submission_archive import (
     SubmissionArchiveInspector,
 )
-from app.modules.artifacts.submission_manifest import build_submission_manifest
-from app.modules.authorization.api import ActorIdentityFacts, ActorKind
+from app.modules.artifacts.api.submission_manifest import (
+    build_submission_manifest,
+)
 from app.modules.tasks.api import SubmissionCreationRequest
+from app.modules.tasks.models import SubmissionDispatch
+from app.modules.actors.api import ServiceIdentity
+from app.modules.artifacts.api.submission_intake import SubmissionIntakeMetadata
+from tests.retained_material_fixtures import _foreground, finalize_retained_intake
+from tests.artifacts.test_submission_pre_source import _source_runtime
 from app.modules.tasks.api.submitted_bundle import SubmittedBundleRequest
 from tests.artifact_store_helpers import artifact_admission_limit_settings
 from tests.selected_policy_fixtures import approved_selected_policy_fixture
 from tests.submission_preparation_auth_helpers import install_submitter_grant
 from tests.tasks.lineage_fixtures import seed_started_task_for_artifact_test
-from tests.tasks.submission_lineage_support import _seed_services, _verified_admission
 from tests.test_artifact_admission import _settings, _context, _seed_human_actor
 from tests.test_checker_materialization import _limits
 from tests.archive_fixtures import byte_source as _bytes, submission_archive as _archive
@@ -63,6 +67,11 @@ class CountedStore:
         )
 
 
+    def open_source(self, source, **kwargs):
+        self.opens.append(source.location.object_ref)
+        return self.wrapped.open_source(source, **kwargs)
+
+
 def archive_with_modes(evidence_path, project_id):
     """Build a valid packet with independently known executable/plain members."""
     data = _archive(evidence_path=evidence_path)
@@ -84,7 +93,9 @@ async def provision_material_services(factory, *, artifacts, checker):
     from tests.checkers.execution.support import provision_post_submit_service
 
     if artifacts:
-        await _seed_services(factory)
+        for identity in (ServiceIdentity.ARTIFACT_MATERIALIZER, ServiceIdentity.ARTIFACT_BINDING,
+                         ServiceIdentity.CHECKER_PRE_SUBMIT, ServiceIdentity.OUTBOX_DISPATCHER):
+            await provision_post_submit_service(factory, identity)
     if checker:
         await provision_post_submit_service(factory)
 
@@ -101,14 +112,12 @@ def _archive_facts(data):
     return inspector, manifest, files, digest
 
 
-async def _write_current_submission(factory, context, request):
-    async with factory() as session:
-        return await compose_hidden_submission_creation_command(
-            session,
-            context,
-            request_id=new_record_id(),
-            correlation_id=new_record_id(),
-        ).create(request)
+async def _submit_current_source(factory, context, command, metadata, data):
+    return await command.submit(
+        metadata, _bytes(data), actor_id=context.actor_profile_id,
+        identity_link_id=context.identity_link_id, idempotency_key=new_record_id(),
+        declared_raw_bytes=len(data),
+    )
 
 
 async def _read_current_request(session, facts, created, data):
@@ -129,7 +138,7 @@ async def material_fixture(tmp_path, database_url, **options):
     async with _material_fixture(
         tmp_path,
         database_url,
-        write_submission=_write_current_submission,
+        submit_source=_submit_current_source,
         read_request=_read_current_request,
         **options,
     ) as material:
@@ -142,7 +151,7 @@ def _material_storage(tmp_path, provider, storage_settings, scratch_limits, post
     elif provider == "minio":
         from tests.test_s3_artifact_store import minio_settings
 
-        settings = minio_settings(private_prefix=f"material/{new_record_id()}").model_copy(
+        settings = minio_settings(private_prefix=f"material/{new_record_id()}", buffer_bytes=65536).model_copy(
             update={
                 **artifact_admission_limit_settings(1024 * 1024),
                 "artifact_scratch_root": tmp_path / "intake-scratch",
@@ -173,6 +182,23 @@ def _material_storage(tmp_path, provider, storage_settings, scratch_limits, post
     return settings, bootstrap, namespace, store, scratch, manager
 
 
+async def create_source_submission(factory, context, store, namespace, settings, metadata, data,
+                                   *, submit_source=_submit_current_source):
+    """Commit exact archive bytes through foreground acceptance and durable T5."""
+    runtime_root = settings.artifact_scratch_root.parent / f"source-pre-{new_record_id()}"
+    runtime_root.mkdir(parents=True)
+    runtime, errors = _source_runtime(data, runtime_root, "completed")
+    command = _foreground(factory, context, namespace, store, runtime)
+    receipt = await submit_source(factory, context, command, metadata, data)
+    assert not errors, "\n".join(errors)
+    intake = SimpleNamespace(operation_id=UUID(receipt["operation_id"]), store=store,
+                             namespace=namespace, settings=settings)
+    submission_id = await finalize_retained_intake(factory, intake)
+    async with factory() as session:
+        dispatch = await session.get(SubmissionDispatch, submission_id)
+        return dispatch.result()
+
+
 async def _create_material_submission(
     factory,
     engine,
@@ -181,7 +207,7 @@ async def _create_material_submission(
     store,
     namespace,
     settings,
-    write_submission,
+    submit_source,
     *,
     provision_services,
     provision_checker,
@@ -203,35 +229,20 @@ async def _create_material_submission(
         await seed_started_task_for_artifact_test(connection, params)
         await install_submitter_grant(connection, params)
     data = archive_with_modes(policy["evidence_path"], plan.lineage.project_id)
-    preparation_request = SubmissionBundlePreparationRequest(
-        actor=ActorIdentityFacts(
-            context.actor_profile_id, context.identity_link_id, ActorKind.HUMAN
-        ),
-        request_id=context.request_id,
-        correlation_id=context.correlation_id,
-        task_id=task_id,
-        assignment_id=assignment_id,
-        predecessor_submission_id=None,
-        idempotency_key=new_record_id(),
+    metadata = SubmissionIntakeMetadata(
+        task_id=task_id, assignment_id=assignment_id,
         summary="Completed the required project work and included evidence.",
         contributor_attestation="I confirm no confidential client data, credentials, or copied source material is included in this submission; rights_confirmed. "
         + " ".join(policy["attestation_terms"]),
-        media_type="application/zip",
-        byte_source=_bytes(data),
     )
-    admission_id = await _verified_admission(
-        factory, store, namespace, settings, context, preparation_request
-    )
+    created = await create_source_submission(factory, context, store, namespace, settings, metadata, data,
+                                             submit_source=submit_source)
+    admission_id = created.admission_id
     creation_request = SubmissionCreationRequest(
-        task_id=task_id,
-        assignment_id=assignment_id,
-        contributor_id=context.actor_profile_id,
-        predecessor_submission_id=None,
-        admission_id=admission_id,
-        summary=preparation_request.summary,
-        contributor_attestation=preparation_request.contributor_attestation,
+        task_id=task_id, assignment_id=assignment_id, contributor_id=context.actor_profile_id,
+        predecessor_submission_id=None, admission_id=admission_id,
+        summary=metadata.summary, contributor_attestation=metadata.contributor_attestation,
     )
-    created = await write_submission(factory, context, creation_request)
     return context, task_id, data, admission_id, creation_request, created
 
 
@@ -240,7 +251,7 @@ async def _material_fixture(
     tmp_path,
     database_url,
     *,
-    write_submission,
+    submit_source,
     read_request,
     provider="local",
     scratch_limits=None,
@@ -250,8 +261,8 @@ async def _material_fixture(
     contribution_awards=(),
     human_review_required=True,
     max_revision_rounds=2,
-    pre_submit_registry_spec=None,
-    post_submit_registry_spec=None,
+    pre_submit_registry_spec=pre_registry_spec(),
+    post_submit_registry_spec=post_registry_spec(),
     post_submit_configuration_setup=None,
     post_submit_configurations_setup=None,
     post_submit_specification=None,
@@ -263,6 +274,11 @@ async def _material_fixture(
     settings, bootstrap, namespace, store, scratch, manager = _material_storage(
         tmp_path, provider, storage_settings, scratch_limits, post_scratch_root)
     try:
+        if namespace.provider_profile == "minio-v1":
+            async with store._client() as client:
+                await client.put_bucket_versioning(
+                    Bucket=settings.artifact_s3_bucket, VersioningConfiguration={"Status": "Enabled"},
+                )
         plan, policy = await approved_selected_policy_fixture(
             factory,
             namespace,
@@ -284,7 +300,7 @@ async def _material_fixture(
             store,
             namespace,
             settings,
-            write_submission,
+            submit_source,
             provision_services=provision_services,
             provision_checker=provision_checker,
         )

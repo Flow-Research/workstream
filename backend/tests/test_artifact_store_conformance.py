@@ -32,6 +32,7 @@ class ArtifactStoreConformanceTests:
     """Reusable v2 vectors for LocalStorage and later provider adapters."""
 
     expected_identity: ExternalServiceAdapterIdentity
+    expected_source_operations: frozenset[str] = frozenset()
 
     def make_store(self, root: Path) -> ArtifactStore:
         """Construct the provider under test."""
@@ -46,7 +47,7 @@ class ArtifactStoreConformanceTests:
 
     @pytest.mark.asyncio
     async def test_identity_and_exact_public_surface(self, tmp_path: Path) -> None:
-        """Expose only shared identity and the four ArtifactStore v2 operations."""
+        """Expose only generic immutable operations and the implemented source port."""
         store = self.make_store(tmp_path / "store")
         try:
             assert store.identity == self.expected_identity
@@ -55,7 +56,7 @@ class ArtifactStoreConformanceTests:
                 for name in dir(store)
                 if not name.startswith("_") and name not in {"close"}
             }
-            assert public == {"head", "identity", "observe_put_result", "open", "put"}
+            assert public == {"head", "identity", "observe_put_result", "open", "put"} | self.expected_source_operations
             for removed in (
                 "store",
                 "recover_committed_store",
@@ -214,6 +215,11 @@ class ArtifactStoreConformanceTests:
 
 class TestLocalArtifactStoreConformance(ArtifactStoreConformanceTests):
     """Run the shared v2 contract against LocalStorage."""
+
+    expected_source_operations = frozenset({
+        "begin_source_upload", "upload_source_part", "complete_source_upload",
+        "open_source", "observe_source_upload", "observe_sealed_source", "discover_source_uploads", "request_source_abort", "source_upload_parts_absent",
+    })
 
     expected_identity = ExternalServiceAdapterIdentity("artifact_store", "local")
 
@@ -387,10 +393,14 @@ def test_namespace_startup_values_are_closed_and_immutable() -> None:
 
 
 def test_artifact_store_protocol_declares_only_v2_operations() -> None:
-    """Prevent v1 operation or receipt methods from returning to the port."""
+    """Keep the port closed to explicit generic and operation-owned source methods."""
     methods = {
         name
         for name, value in inspect.getmembers(ArtifactStore)
         if not name.startswith("_") and (inspect.isfunction(value) or isinstance(value, property))
     }
-    assert methods == {"head", "identity", "observe_put_result", "open", "put"}
+    assert methods == {
+        "head", "identity", "observe_put_result", "open", "put",
+        "begin_source_upload", "upload_source_part", "complete_source_upload",
+        "open_source", "observe_source_upload", "observe_sealed_source", "discover_source_uploads", "request_source_abort", "source_upload_parts_absent",
+    }

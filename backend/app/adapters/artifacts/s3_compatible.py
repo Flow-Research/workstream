@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterator, Callable, Mapping
+from collections.abc import AsyncGenerator, AsyncIterator, Callable, Mapping
 from contextlib import asynccontextmanager
 import datetime
 import hashlib
@@ -59,6 +59,7 @@ from app.core.s3_validation import (
     is_canonical_s3_region,
 )
 from app.interfaces.artifacts import (
+    SealedSourceObservation,
     ARTIFACT_STORE_CAPABILITY_KEY,
     ArtifactByteRange,
     ArtifactConfigurationError,
@@ -68,8 +69,10 @@ from app.interfaces.artifacts import (
     ArtifactObjectHead,
     ArtifactObjectMissingError,
     ArtifactOperationConflictError,
+    ArtifactPreconditionFailedError,
     ArtifactProviderActivationGuard,
     ArtifactProviderOperationEvidence,
+    ArtifactProviderLiveProofRequiredError,
     ArtifactPutObservation,
     ArtifactPutResult,
     ArtifactRangeInvalidError,
@@ -84,6 +87,14 @@ from app.interfaces.artifacts import (
 from app.interfaces.external_services import ExternalServiceAdapterIdentity
 from app.modules.artifacts.preparation import HARD_MAXIMUM_ARTIFACT_BYTES
 from app.modules.artifacts.sources import ArtifactCommitment, CommittedArtifactSource
+from app.modules.artifacts.api.submission_intake import (
+    SealedSubmissionSource,
+    SubmissionSourceCompletion,
+    SubmissionSourceLocation,
+    SubmissionSourcePart,
+    SubmissionSourceUpload,
+    SubmissionSourceUploadIntent,
+)
 
 
 _IDENTITY = ExternalServiceAdapterIdentity(ARTIFACT_STORE_CAPABILITY_KEY, "s3_compatible")
@@ -553,6 +564,306 @@ class S3CompatibleArtifactStore:
         """Invalidate this configured adapter; clients are operation-scoped."""
         self._initialized = False
         self._session = None
+
+    def _source_key(self, location: SubmissionSourceLocation) -> str:
+        """Accept only this claimed namespace and the operation-derived ZIP key."""
+        self._require_initialized()
+        location = SubmissionSourceLocation.model_validate(location)
+        if (
+            location.namespace_fingerprint != self._expected_namespace_fingerprint()
+            or location.provider_profile != self._namespace_identity.provider_profile
+        ):
+            raise ArtifactOperationConflictError("submission source namespace mismatch")
+        # Existing AWS activation qualifies SHA-object put/read only. Extend its
+        # live-proof contract before allowing the new version/multipart surface.
+        if self._provider_profile == "aws_s3":
+            raise ArtifactProviderLiveProofRequiredError(
+                "submission source capability requires provider qualification"
+            )
+        return f"{self._private_prefix}/{location.object_ref}"
+
+    @asynccontextmanager
+    async def _source_client(
+        self, location: SubmissionSourceLocation,
+        evidence: ArtifactProviderOperationEvidence,
+        deadline: datetime.datetime | None = None,
+    ) -> AsyncIterator[Any]:
+        """Bound a source request and suppress provider details on every failure."""
+        self._source_key(location)
+        budget = self._operation_total_timeout_seconds
+        if deadline is not None:
+            budget = min(budget, (deadline - datetime.datetime.now(datetime.UTC)).total_seconds())
+        if budget <= 0:
+            raise ArtifactStoreUnavailableError("submission upload deadline expired")
+        try:
+            async with asyncio.timeout(budget):
+                await self._require_activation_for_sdk_call(evidence)
+                async with self._client() as client:
+                    await self._require_activation_for_sdk_call(evidence)
+                    yield client
+        except ClientError as error:
+            status = _provider_http_status(error)
+            code = _provider_error_code(error)
+            if status in {409, 412} and code in _PRECONDITION_ERROR_CODES:
+                raise ArtifactPreconditionFailedError("submission source creation conflicted") from None
+            if status == 404 and code in _MISSING_ERROR_CODES | {"NoSuchVersion", "NoSuchUpload"}:
+                raise ArtifactObjectMissingError("submission source is missing") from None
+            raise ArtifactStoreUnavailableError("submission source provider operation failed") from None
+        except ArtifactStoreError:
+            raise
+        except (TimeoutError, BotoCoreError, OSError):
+            raise ArtifactStoreUnavailableError("submission source provider operation failed") from None
+
+    async def begin_source_upload(
+        self, intent: SubmissionSourceUploadIntent, *,
+        operation_evidence: ArtifactProviderOperationEvidence | None = None,
+    ) -> SubmissionSourceUpload:
+        """Return a handle without sending bytes; caller must durably record it."""
+        intent = SubmissionSourceUploadIntent.model_validate(intent)
+        evidence = operation_evidence or ArtifactProviderOperationEvidence()
+        async with self._source_client(intent.location, evidence, intent.upload_deadline_at) as client:
+            versioning = await client.get_bucket_versioning(Bucket=self._bucket)
+            if versioning.get("Status") != "Enabled":
+                raise ArtifactConfigurationError("submission source requires bucket versioning")
+            await self._require_activation_for_sdk_call(evidence)
+            response = await client.create_multipart_upload(
+                Bucket=self._bucket, Key=self._source_key(intent.location),
+                ContentType="application/zip",
+                Metadata={"operation-id": str(intent.location.operation_id),
+                          "upload-fence": str(intent.upload_fence)},
+            )
+        handle = response.get("UploadId")
+        if not isinstance(handle, str) or not 1 <= len(handle) <= 2048:
+            raise ArtifactIntegrityError("submission upload handle is invalid")
+        return SubmissionSourceUpload(intent=intent, provider_upload_id=handle)
+
+    async def upload_source_part(
+        self, upload: SubmissionSourceUpload, number: int, data: bytes, *,
+        operation_evidence: ArtifactProviderOperationEvidence | None = None,
+    ) -> SubmissionSourcePart:
+        """Transmit one bounded part, without collecting or retrying the archive."""
+        upload = SubmissionSourceUpload.model_validate(upload)
+        intent = upload.intent
+        if (
+            type(number) is not int or not 1 <= number <= 100
+            or type(data) is not bytes or not 1 <= len(data) <= intent.part_bytes
+            or (number - 1) * intent.part_bytes + len(data) > intent.maximum_raw_bytes
+            or (intent.declared_raw_bytes is not None
+                and (number - 1) * intent.part_bytes + len(data) > intent.declared_raw_bytes)
+        ):
+            raise ArtifactInputMismatchError("submission part violates upload bounds")
+        evidence = operation_evidence or ArtifactProviderOperationEvidence()
+        async with self._source_client(intent.location, evidence, intent.upload_deadline_at) as client:
+            response = await client.upload_part(
+                Bucket=self._bucket, Key=self._source_key(intent.location),
+                UploadId=upload.provider_upload_id, PartNumber=number,
+                Body=data, ContentLength=len(data),
+            )
+        etag = response.get("ETag")
+        if not isinstance(etag, str) or not 1 <= len(etag) <= 1024:
+            raise ArtifactIntegrityError("submission part receipt is invalid")
+        return SubmissionSourcePart(number=number, byte_count=len(data), provider_etag=etag)
+
+    async def discover_source_uploads(
+        self, intent: SubmissionSourceUploadIntent, *,
+        operation_evidence: ArtifactProviderOperationEvidence | None = None,
+    ) -> tuple[SubmissionSourceUpload, ...]:
+        """Reconcile lost initiation only within this operation's exact owned key.
+
+        A valid operation initiates once. Refuse an anomalous unbounded backlog,
+        rather than reporting partial enumeration as confirmed absence.
+        """
+        intent = SubmissionSourceUploadIntent.model_validate(intent)
+        evidence = operation_evidence or ArtifactProviderOperationEvidence()
+        key = self._source_key(intent.location)
+        async with self._source_client(intent.location, evidence) as client:
+            response = await client.list_multipart_uploads(
+                Bucket=self._bucket, Prefix=key, MaxUploads=100,
+            )
+        if response.get("IsTruncated") is not False:
+            raise ArtifactStoreUnavailableError("submission upload enumeration is incomplete")
+        rows = response.get("Uploads", [])
+        if not isinstance(rows, list) or len(rows) > 100:
+            raise ArtifactIntegrityError("submission upload enumeration is invalid")
+        handles = []
+        for row in rows:
+            if not isinstance(row, dict) or row.get("Key") != key:
+                raise ArtifactIntegrityError("submission upload enumeration escaped its key")
+            handle = row.get("UploadId")
+            if not isinstance(handle, str) or not 1 <= len(handle) <= 2048 or handle in handles:
+                raise ArtifactIntegrityError("submission upload enumeration has invalid handles")
+            handles.append(handle)
+        return tuple(SubmissionSourceUpload(intent=intent, provider_upload_id=handle) for handle in handles)
+
+    async def request_source_abort(
+        self, upload: SubmissionSourceUpload, *,
+        operation_evidence: ArtifactProviderOperationEvidence | None = None,
+    ) -> None:
+        """Abort this handle; owner retains charges while late writes are possible."""
+        upload = SubmissionSourceUpload.model_validate(upload)
+        evidence = operation_evidence or ArtifactProviderOperationEvidence()
+        try:
+            async with self._source_client(upload.intent.location, evidence) as client:
+                await client.abort_multipart_upload(
+                    Bucket=self._bucket, Key=self._source_key(upload.intent.location),
+                    UploadId=upload.provider_upload_id,
+                )
+        except ArtifactObjectMissingError:
+            return
+
+    async def source_upload_parts_absent(
+        self, upload: SubmissionSourceUpload, *,
+        operation_evidence: ArtifactProviderOperationEvidence | None = None,
+    ) -> bool:
+        """Only exact NoSuchUpload confirms absence; an empty live handle cannot."""
+        upload = SubmissionSourceUpload.model_validate(upload)
+        evidence = operation_evidence or ArtifactProviderOperationEvidence()
+        async with self._source_client(upload.intent.location, evidence) as client:
+            try:
+                await client.list_parts(
+                    Bucket=self._bucket, Key=self._source_key(upload.intent.location),
+                    UploadId=upload.provider_upload_id, MaxParts=1,
+                )
+            except ClientError as error:
+                if _provider_http_status(error) == 404 and _provider_error_code(error) == "NoSuchUpload":
+                    return True
+                raise
+        return False
+
+    async def complete_source_upload(
+        self, completion: SubmissionSourceCompletion, *,
+        operation_evidence: ArtifactProviderOperationEvidence | None = None,
+    ) -> SealedSubmissionSource:
+        """Create only; uncertain outcomes retain their upload and EOF ownership."""
+        completion = SubmissionSourceCompletion.model_validate(completion)
+        upload = completion.upload
+        intent = upload.intent
+        evidence = operation_evidence or ArtifactProviderOperationEvidence()
+        async with self._source_client(intent.location, evidence, intent.upload_deadline_at) as client:
+            response = await client.complete_multipart_upload(
+                Bucket=self._bucket, Key=self._source_key(intent.location),
+                UploadId=upload.provider_upload_id, IfNoneMatch="*",
+                MultipartUpload={"Parts": [
+                    {"PartNumber": part.number, "ETag": part.provider_etag}
+                    for part in completion.parts
+                ]},
+            )
+        # botocore parses the full response, including embedded errors on HTTP200.
+        generation = response.get("VersionId")
+        if not isinstance(generation, str) or generation == "null" or not 1 <= len(generation) <= 2048:
+            raise ArtifactIntegrityError("submission completion lacks an immutable version")
+        source = SealedSubmissionSource(
+            location=intent.location, provider_generation=generation,
+            raw_sha256=completion.raw_sha256, raw_byte_count=completion.raw_byte_count,
+            sealed_upload_fence=intent.upload_fence,
+        )
+        async with self._source_client(intent.location, evidence, intent.upload_deadline_at) as client:
+            observed = await client.head_object(
+                Bucket=self._bucket, Key=self._source_key(intent.location), VersionId=generation,
+            )
+        self._check_source_response(source, observed)
+        return source
+
+    @staticmethod
+    def _check_source_response(source: SealedSubmissionSource, response: Mapping[str, Any]) -> None:
+        """Bind a response to exact generation, count and upload provenance."""
+        if (
+            response.get("VersionId") != source.provider_generation
+            or type(response.get("ContentLength")) is not int
+            or response["ContentLength"] != source.raw_byte_count
+            or response.get("ContentType") != "application/zip"
+            or response.get("Metadata") != {
+                "operation-id": str(source.location.operation_id),
+                "upload-fence": str(source.sealed_upload_fence),
+            }
+        ):
+            raise ArtifactIntegrityError("submission source response violates custody")
+
+    async def observe_sealed_source(
+        self, source: SealedSubmissionSource, *,
+        operation_evidence: ArtifactProviderOperationEvidence | None = None,
+    ) -> SealedSourceObservation | None:
+        """Observe only the retained version; metadata does not reprove its hash."""
+        source = SealedSubmissionSource.model_validate(source)
+        evidence = operation_evidence or ArtifactProviderOperationEvidence()
+        try:
+            async with self._source_client(source.location, evidence) as client:
+                response = await client.head_object(
+                    Bucket=self._bucket, Key=self._source_key(source.location),
+                    VersionId=source.provider_generation,
+                )
+        except ArtifactObjectMissingError:
+            return None
+        self._check_source_response(source, response)
+        return SealedSourceObservation(
+            source.location, response["VersionId"], response["ContentLength"],
+            source.sealed_upload_fence,
+        )
+
+    async def observe_source_upload(
+        self, completion: SubmissionSourceCompletion, *,
+        operation_evidence: ArtifactProviderOperationEvidence | None = None,
+    ) -> SealedSubmissionSource | None:
+        """Recover an uncertain completion only by reading its exact version."""
+        completion = SubmissionSourceCompletion.model_validate(completion)
+        intent = completion.upload.intent
+        evidence = operation_evidence or ArtifactProviderOperationEvidence()
+        try:
+            async with self._source_client(intent.location, evidence) as client:
+                response = await client.head_object(
+                    Bucket=self._bucket, Key=self._source_key(intent.location),
+                )
+        except ArtifactObjectMissingError:
+            return None
+        generation = response.get("VersionId")
+        if not isinstance(generation, str) or generation == "null" or not 1 <= len(generation) <= 2048:
+            raise ArtifactIntegrityError("submission observation lacks an immutable version")
+        source = SealedSubmissionSource(
+            location=intent.location, provider_generation=generation,
+            raw_sha256=completion.raw_sha256, raw_byte_count=completion.raw_byte_count,
+            sealed_upload_fence=intent.upload_fence,
+        )
+        self._check_source_response(source, response)
+        # HEAD/ETag alone never establish trusted raw identity after uncertainty.
+        async for _ in self.open_source(source, operation_evidence=evidence):
+            pass
+        return source
+
+    def open_source(
+        self, source: SealedSubmissionSource, *,
+        operation_evidence: ArtifactProviderOperationEvidence | None = None,
+        maximum_chunk_bytes: int = 64 * 1024,
+    ) -> AsyncGenerator[bytes, None]:
+        """Read one immutable version; verify the original ZIP at stream exhaustion."""
+        if type(maximum_chunk_bytes) is not int or not 1 <= maximum_chunk_bytes <= 64 * 1024:
+            raise ValueError("source read chunk bound is invalid")
+        source = SealedSubmissionSource.model_validate(source)
+        self._source_key(source.location)
+        evidence = operation_evidence or ArtifactProviderOperationEvidence()
+
+        async def iterate() -> AsyncIterator[bytes]:
+            digest = hashlib.sha256()
+            observed = 0
+            async with self._source_client(source.location, evidence) as client:
+                response = await client.get_object(
+                    Bucket=self._bucket, Key=self._source_key(source.location),
+                    VersionId=source.provider_generation,
+                )
+                async with response["Body"] as body:
+                    self._check_source_response(source, response)
+                    while True:
+                        chunk = await body.read(min(self._buffer_bytes, maximum_chunk_bytes, source.raw_byte_count - observed + 1))
+                        if not chunk:
+                            break
+                        if type(chunk) is not bytes or observed + len(chunk) > source.raw_byte_count:
+                            raise ArtifactIntegrityError("submission source exceeded exact size")
+                        observed += len(chunk)
+                        digest.update(chunk)
+                        yield chunk
+            if observed != source.raw_byte_count or f"sha256:{digest.hexdigest()}" != source.raw_sha256:
+                raise ArtifactIntegrityError("submission source violates raw identity")
+
+        return iterate()
 
     async def put(
         self,

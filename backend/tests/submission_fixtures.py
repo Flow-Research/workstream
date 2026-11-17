@@ -1,14 +1,13 @@
 """Stored upstream prerequisites for checker/review-owner tests.
 
-These fixtures use ART preparation, verification and consumption owners with
-a scripted provider, then seed retained Submission projections with locked
+These fixtures use current raw-ZIP intake and durable OUTBOX finalization with
+a scripted provider, preserving private retained packet projections with locked
 lineage. CHECKERS reads these bytes with real phase authority and controlled
 external-image outcomes; this is not a deployment/provider conformance proof.
 """
 
-from uuid import UUID
 from types import SimpleNamespace
-from tests.retained_material_fixtures import retained_admission
+from tests.retained_material_fixtures import retained_intake, finalize_retained_intake
 
 from sqlalchemy import select
 
@@ -23,7 +22,7 @@ from datetime import UTC, datetime
 async def seed_retained_submission(
     task_id: str, payload: dict, *, predecessor_id: str | None = None,
 ) -> str:
-    """Seed a retained locked packet with guards enabled; not an intake proof."""
+    """Create retained packet history through source intake and durable finalization."""
     # Historical private evidence is fixture input, not a public intake DTO.
     packet = SimpleNamespace(**payload)
     async with db_session.get_session_factory()() as session:
@@ -44,62 +43,27 @@ async def seed_retained_submission(
         assert link is not None and link.status == "active"
         session.expunge_all()
         await session.rollback()
-        # Detached selectors remain fixture inputs; real preparation rechecks them.
-        admission_id = await retained_admission(
-            db_session.get_session_factory(), task, assignment, link, packet, predecessor_id,
+    intake = await retained_intake(
+        db_session.get_session_factory(), task, assignment, link, packet, predecessor_id,
+    )
+    # Only historical packet fields are fixture input; T5 owns all custody writes.
+    from unittest.mock import patch
+
+    def retained_packet(**values):
+        identifier = values["submission_id"]
+        return build_submission(
+            **values, package_uri=packet.package_uri, package_hash=packet.package_hash,
+            artifact_hash_manifest=packet.artifact_hash_manifest,
+            evidence_items=[EvidenceItem(
+                id=str(new_record_id()), submission_id=identifier, type=item["type"],
+                label=item["label"], uri=item.get("uri"), hash=item.get("hash"),
+                size_bytes=item.get("size_bytes"), metadata_json=item.get("metadata", {}),
+                locked_at=datetime.now(UTC),
+            ) for item in packet.evidence_items],
         )
-        # Retained history includes private packet fields absent from public
-        # intake. Seed those fixture-only values before the real atomic writer
-        # seals the row; all ownership, authority and dispatch guards stay enabled.
-        from unittest.mock import patch
-        from app.api.deps.authorization import compose_hidden_submission_creation_command
-        from app.modules.tasks.api import SubmissionCreationRequest
-        from app.modules.actors.api.service_identities import ServiceIdentity
-        from app.modules.actors.models import ActorProfile
-        from tests.test_artifact_admission import _context
-        service = await session.scalar(select(ActorProfile).where(
-            ActorProfile.service_identity == ServiceIdentity.ARTIFACT_BINDING.value,
-        ))
-        if service is None:
-            service_id = str(new_record_id())
-            session.add(ActorProfile(
-                id=service_id, actor_kind="service", status="active",
-                provisioning_method="manual_service_provisioning",
-                service_identity=ServiceIdentity.ARTIFACT_BINDING.value,
-                created_by="retained-history-fixture",
-            ))
-            session.add(ActorIdentityLink(
-                id=str(new_record_id()), actor_profile_id=service_id,
-                issuer="flow-test", subject=service_id, subject_kind="service",
-                status="active", linked_by="retained-history-fixture",
-            ))
-        await session.commit()
 
-        def retained_packet(**values):
-            identifier = values["submission_id"]
-            return build_submission(
-                **values, package_uri=packet.package_uri, package_hash=packet.package_hash,
-                artifact_hash_manifest=packet.artifact_hash_manifest,
-                evidence_items=[EvidenceItem(
-                    id=str(new_record_id()), submission_id=identifier, type=item["type"],
-                    label=item["label"], uri=item.get("uri"), hash=item.get("hash"),
-                    size_bytes=item.get("size_bytes"), metadata_json=item.get("metadata", {}),
-                    locked_at=datetime.now(UTC),
-                ) for item in packet.evidence_items],
-            )
-
-        with patch("app.modules.tasks.submission_composition.build_submission", retained_packet):
-            created = await compose_hidden_submission_creation_command(
-                session, _context(actor_profile_id=UUID(task.assigned_to), identity_link_id=UUID(link.id)),
-                request_id=new_record_id(), correlation_id=new_record_id(),
-            ).create(SubmissionCreationRequest(
-                admission_id=UUID(admission_id), task_id=UUID(task_id),
-                assignment_id=UUID(assignment.id), contributor_id=UUID(task.assigned_to),
-                predecessor_submission_id=UUID(predecessor_id) if predecessor_id else None,
-                summary=packet.summary, contributor_attestation=packet.worker_attestation,
-            ))
-        submission_id = str(created.submission_id)
-    return submission_id
+    with patch("app.modules.tasks.submission_composition.build_submission", retained_packet):
+        return await finalize_retained_intake(db_session.get_session_factory(), intake)
 
 
 async def seed_retained_checker_run(submission_id: str, *, verdict="passed", state="completed", generation=1) -> str:

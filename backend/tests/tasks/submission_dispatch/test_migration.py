@@ -38,6 +38,7 @@ async def test_upgrade_preserves_retained_owners_without_backfill(tmp_path, isol
                 await asyncio.to_thread(command.upgrade, _config(), current_schema_revision())
                 after = await snapshot()
                 added_columns = {
+                    "workstream_tasks": {"active_submission_operation_id"},
                     "outbox_events": {"not_before_at"},
                     "submissions": {
                         "selected_post_submit_policy_sha256", "selected_post_submit_policy_body",

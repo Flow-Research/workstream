@@ -55,9 +55,10 @@ def policy_case(method="model", *, registry_declared=True, selected=SELECTED):
 @pytest.mark.asyncio
 @pytest.mark.parametrize("method", ["model", "trial"])
 async def test_human_attachment_accepts_exact_declared_revision_context(method):
+    pre = _entry("acme.intake", "pre_submit")
     entry, attachment, project_id, profiles = policy_case(method)
     _, post = await compile_external_checker_policies(
-        _request(post=(attachment,)), _Registry((entry,)),
+        _request(pre=(_attachment(pre, "intake"),), post=(attachment,)), _Registry((pre, entry)),
         project_id=project_id, profiles=profiles,
     )
     assert post.entries[0].configuration[ROLES] == SELECTED
@@ -66,6 +67,7 @@ async def test_human_attachment_accepts_exact_declared_revision_context(method):
 @pytest.mark.asyncio
 @pytest.mark.parametrize("fault", ["incomplete", "unsupported_registry", "invalid_roles"])
 async def test_approval_denies_false_context_selection(fault):
+    pre = _entry("acme.intake", "pre_submit")
     entry, attachment, project_id, profiles = policy_case(
         registry_declared=fault != "unsupported_registry",
         selected=None if fault == "incomplete" else ["unknown"] if fault == "invalid_roles" else SELECTED,
@@ -76,13 +78,14 @@ async def test_approval_denies_false_context_selection(fault):
         })
     with pytest.raises(ValueError, match="evaluation context"):
         await compile_external_checker_policies(
-            _request(post=(attachment,)), _Registry((entry,)),
+            _request(pre=(_attachment(pre, "intake"),), post=(attachment,)), _Registry((pre, entry)),
             project_id=project_id, profiles=profiles,
         )
 
 
 @pytest.mark.asyncio
 async def test_approval_checks_actual_registry_before_any_policy_write(monkeypatch):
+    pre = _entry("acme.intake", "pre_submit")
     entry, attachment, project_id, profiles = policy_case(registry_declared=False)
 
     class NoWrites:
@@ -101,10 +104,13 @@ async def test_approval_checks_actual_registry_before_any_policy_write(monkeypat
     locked = SimpleNamespace(view=SimpleNamespace(policy=SimpleNamespace(policy_body={})))
     command = SimpleNamespace(
         target=SimpleNamespace(project_id=project_id),
-        pre_submit_attachments=(), post_submit_attachments=(attachment,),
+        pre_submit_attachments=(_attachment(pre, "intake"),), post_submit_attachments=(attachment,),
     )
+    registry = _Registry((pre, entry))
     with pytest.raises(GuideProposalError) as exc:
         await _compile_approval(
-            NoWrites(), locked, command, new_record_id(), _Registry((entry,)), profiles,
+            NoWrites(), locked, command, new_record_id(), registry, profiles,
         )
     assert exc.value.code == "approval_blocked"
+    assert registry.calls == [(pre.registry_entry_id, pre.entry_digest),
+                              (entry.registry_entry_id, entry.entry_digest)]

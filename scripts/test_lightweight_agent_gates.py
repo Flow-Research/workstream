@@ -352,6 +352,20 @@ class LightweightAgentGateTests(unittest.TestCase):
         failures = scan_authorization_text("docs/new-guide.md", "Call /v1/tasks.")
         self.assertIn("docs/new-guide.md:1: NON_CANONICAL_API_PREFIX", failures)
 
+    def test_submission_storage_examples_do_not_exempt_public_routes_or_human_roles(self):
+        path = "docs/spec_submission_execution.md"
+        key = "submission-source/v1/<operation_uuid>/bundle.zip"
+        for candidate_path, line, rejected in (
+            (path, key, False), ("docs/other.md", key, True),
+            (path, "POST /v1/tasks", True), (path, key + " POST /v1/tasks", True),
+            (path, "/v1/submission-source", True),
+            (path, "`backend/app/workers/artifacts.py`; task delivery", False),
+            (path, "`backend/app/workers/artifacts.py`; the worker submits a task", True),
+            (path, "A worker submits work", True),
+        ):
+            with self.subTest(path=candidate_path, line=line):
+                self.assertEqual(bool(scan_authorization_text(candidate_path, line)), rejected)
+
     def test_stale_authorization_allows_exact_compose_worker_service(self) -> None:
         commands = (
             "docker compose --profile backend exec -T worker "
@@ -631,7 +645,7 @@ class LightweightAgentGateTests(unittest.TestCase):
         cache_env = 'echo "UV_CACHE_DIR=${RUNNER_TEMP}/backend-uv-cache" >> "${GITHUB_ENV}"'
         job_blocks = (
             (
-                workflow.split("\n  auth-boundary-preflight:\n", 1)[1].split("\n  lanes:\n", 1)[0],
+                workflow.split("\n  auth-boundary-preflight:\n", 1)[1].split("\n  external-checker-runtime:\n", 1)[0],
                 "uv sync --frozen --extra agents --extra dev",
             ),
             (
@@ -654,10 +668,16 @@ class LightweightAgentGateTests(unittest.TestCase):
             self.assertLess(job.index("Restore exact backend uv downloads"), job.index(cache_env))
             self.assertLess(job.index(cache_env), job.index(tool_install))
             self.assertLess(job.index(tool_install), job.index(frozen_install))
-        self.assertEqual(workflow.count(tool_install), 3)
-        self.assertEqual(workflow.count(lock_check), 3)
+        runtime_job = workflow.split("\n  external-checker-runtime:\n", 1)[1].split("\n  lanes:\n", 1)[0]
+        self.assertEqual(runtime_job.count(tool_install), 1)
+        self.assertEqual(runtime_job.count(lock_check), 1)
+        self.assertEqual(runtime_job.count("uv sync --frozen --extra agents --extra dev"), 1)
+        self.assertLess(runtime_job.index(tool_install), runtime_job.index(lock_check))
+        self.assertLess(runtime_job.index(lock_check), runtime_job.index("uv sync --frozen"))
+        self.assertEqual(workflow.count(tool_install), 4)
+        self.assertEqual(workflow.count(lock_check), 4)
         self.assertEqual(
-            workflow.count("uv sync --frozen --extra agents --extra dev"), 2
+            workflow.count("uv sync --frozen --extra agents --extra dev"), 3
         )
         self.assertEqual(
             workflow.count(
@@ -671,21 +691,23 @@ class LightweightAgentGateTests(unittest.TestCase):
         self.assertNotIn("runner.", root_env)
         uv_save = workflow.split(
             "      - name: Save verified backend uv downloads to trusted cache\n", 1
-        )[1].split("\n  lanes:\n", 1)[0]
+        )[1].split("\n  external-checker-runtime:\n", 1)[0]
         self.assertIn(
             "if: github.event_name == 'push' && github.ref == 'refs/heads/main' "
             "&& steps.uv-cache.outputs.cache-hit != 'true'",
             uv_save,
         )
         preflight = workflow.split("\n  auth-boundary-preflight:\n", 1)[1].split(
-            "\n  lanes:\n", 1
+            "\n  external-checker-runtime:\n", 1
         )[0]
         self.assertLess(
             preflight.index("      - name: Validate module, AUTH, and test boundaries"),
             preflight.index("      - name: Save verified backend uv downloads to trusted cache"),
         )
         self.assertNotIn("restore-keys:", workflow)
-        self.assertNotIn(".venv", workflow)
+        for step in workflow.split("\n      - "):
+            if "uses: actions/cache/" in step:
+                self.assertNotIn(".venv", step)
 
     def test_backend_python_commands_stay_in_the_frozen_uv_environment(self) -> None:
         workflow = Path(".github/workflows/backend.yml").read_text(encoding="utf-8")

@@ -107,6 +107,12 @@ def test_task_operation_contracts_match_backend_openapi_when_configured() -> Non
         operation = openapi["paths"][path][method.lower()]
         assert operation["security"]
         assert operation["x-workstream-action-id"] == "project.guide_compilation.request"
+    progress_path = "/api/v1/tasks/{task_id}/submission-operations"
+    assert ("GET", progress_path) in all_operations - health_operations
+    progress = openapi["paths"][progress_path]["get"]
+    assert progress["security"]
+    assert progress["x-workstream-action-id"] == "task.submission_operation.read"
+    assert progress["x-workstream-management-action-id"] == "project.task.submission_operation.read"
     assert len(all_operations - health_operations) == 132
     for name, (method, path, _) in TASK_OPERATIONS.items():
         snapshot = json.loads((CONTRACTS / f"{name}.json").read_text(encoding="utf-8"))

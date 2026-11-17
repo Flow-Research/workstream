@@ -271,6 +271,44 @@ jobs:
       - name: Verify trial qualification evidence guards
         run: python3 external_checkers/workstream-checker-service/tests/test_qualify_smol_script.py -v
 
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.12"
+
+      - name: Install frozen backend dependencies for the PRE dialogue proof
+        working-directory: backend
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install "uv==0.10.7"
+          test "$(uv --version)" = "uv 0.10.7"
+          uv lock --check
+          uv sync --frozen --extra agents --extra dev
+
+      - name: Verify the live Python and Rust PRE dialogue
+        working-directory: external_checkers
+        shell: bash
+        env:
+          WORKSTREAM_PRE_WORKER_PYTHON: ${{ github.workspace }}/backend/.venv/bin/python
+          PRE_DIALOGUE_TEST_NAME: pre::bootstrap::dialogue_proof::live_python_worker_dialogue
+        run: |
+          set -euo pipefail
+          proof=(cargo test --locked -p workstream-checker-guest --bin workstream-checker-guest --features pre-dialogue-proof "${PRE_DIALOGUE_TEST_NAME}")
+          "${proof[@]}" -- --list --exact > "${RUNNER_TEMP}/pre-dialogue-selection.txt"
+          python - <<'PYPROOF'
+          import os
+          from pathlib import Path
+          selected = Path(os.environ["RUNNER_TEMP"], "pre-dialogue-selection.txt").read_text().splitlines()
+          assert [line for line in selected if line.endswith(": test")] == [os.environ["PRE_DIALOGUE_TEST_NAME"] + ": test"]
+          PYPROOF
+          "${proof[@]}" -- --exact --test-threads=1 | tee "${RUNNER_TEMP}/pre-dialogue-result.txt"
+          python - <<'PYPROOF'
+          import os
+          from pathlib import Path
+          summaries = [line for line in Path(os.environ["RUNNER_TEMP"], "pre-dialogue-result.txt").read_text().splitlines() if line.startswith("test result:")]
+          assert len(summaries) == 1 and summaries[0].startswith("test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured;")
+          PYPROOF
+
   lanes:
     needs: [scope, minio-image]
     if: >-

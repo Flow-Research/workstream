@@ -339,6 +339,17 @@ class ReservedEvaluation(CheckerValue):
     reservation: EvaluationReservation
 
 
+class EvaluationProgress(CheckerValue):
+    """Current owner evidence for one retained Submission, not a public outcome."""
+
+    current: ReservedEvaluation
+    status: Literal["queued", "running", "completed", "infrastructure_failed"]
+    live_worker_lease: bool
+    retry_event_id: ResourceId | None
+    completion_event_id: ResourceId | None
+    delivery_event_json: str | None
+
+
 class ExecutionLease(CheckerValue):
     """Database-timed generation granting temporary use of one reserved attempt."""
 
@@ -572,6 +583,13 @@ class EvaluationCoordinationPort(Protocol):
         submission_id: ResourceId, request_id: ResourceId,
     ) -> ReservedEvaluation:
         """Read scoped retained custody without reserving or advancing a fence."""
+        ...
+
+    async def read_current_progress(
+        self, *, project_id: ResourceId, task_id: ResourceId,
+        submission_id: ResourceId, original_request_id: ResourceId,
+    ) -> EvaluationProgress:
+        """Observe exact current attempt under caller-owned TASK-first custody."""
         ...
 
     async def read_retry_delivery(

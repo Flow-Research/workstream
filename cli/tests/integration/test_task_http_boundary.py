@@ -28,6 +28,7 @@ SUMMARY = {
     "updated_at": "2026-10-02T00:00:00Z",
 }
 DETAIL = SUMMARY | {
+    "pending_submission_operation": None,
     "description": "Instructions\n\x1b[32m",
     "acceptance_criteria": "Accurate",
     "rejection_criteria": "Missing",
@@ -129,6 +130,7 @@ def test_manager_task_reads_preserve_fields_and_wire(cli):
                 "description",
                 "source_type",
                 "created_by",
+                "pending_submission_operation",
             }
         }
         for value in (

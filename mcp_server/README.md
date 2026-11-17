@@ -68,9 +68,9 @@ An independently installed adapter exposing 132 tools under the caller's authori
   projections plus deliberate operator retry, reconciliation and registration.
 - Nine operator-artifact tools cover readiness, bindings, replicas, receipts,
   verification/recovery, admission usage and audit events.
-- Seventeen task-execution tools cover bounded preparation ZIPs, contributor and
+- Seventeen task-execution tools cover bounded submission ZIPs, contributor and
   manager task context, screen/release/claim, guide-document reads and
-  admission-backed submission creation/history.
+  submission acceptance and immutable history.
 - Twenty-three project, task-management, import, audit, service-actor and model
   operations complete the current public product catalogue. Task-import source
   content uses an 8 MiB exact-byte boundary; health routes remain operational
@@ -204,6 +204,11 @@ review-mode inheritance, immutable lineage, stale/malformed preconditions,
 authorization and replay. Selector recovery, approval and activation remain
 outside these two guide-policy tools.
 
+Guide proposal approval requires exactly one registered PRE image and exactly
+one registered POST image, with explicit configuration for each. Missing, empty
+or multiple selections are rejected before the adapter sends an HTTP request.
+Workstream validates the selected immutable identities and approval authority.
+
 Workspace reads accept only their documented UUID selectors, filters, bounded
 page size and opaque cursor. Contribution export is JSON-only in MCP; the
 adapter sets `format=json` and does not expose CSV bytes as structured tool
@@ -220,12 +225,17 @@ Task execution uses separate contributor and manager read tools so the adapter
 never chooses an authority path on the caller's behalf. Screen, release and claim
 require typed UUID idempotency keys. Claim atomically assigns and starts a ready
 task through one request, returning `in_progress` and the started assignment.
-Submission creation consumes caller-supplied admission and assignment
-identifiers and stays unkeyed because that is the current backend contract.
-Preparation accepts a bounded Base64 ZIP, decodes it once and forwards the
+Submission creation accepts a bounded Base64 ZIP, decodes it once and forwards the
 caller's typed assignment/key and optional submission or revision fields as the
-fixed backend headers. Revision preparation ID and digest must be supplied
-together. Workstream owns ZIP validation, pre-submit checks, replay and all task
+fixed backend headers. The raw-ZIP POST returns a `202` acceptance snapshot with
+an operation ID; formal Submission creation and evaluation continue durably.
+Use `workstream_submission_operation_get` with `task_id` and exactly one of
+`operation_id` or `idempotency_key` for one authorized progress read. Keys are
+actor-scoped; management reads can select an operation ID. The tool preserves
+nullable fields, PRE feedback and server next-action advice without resubmitting
+or polling. Current task status is context, not the historical operation outcome.
+Revision preparation ID and digest are both required with a predecessor and
+forbidden for initial submission. Workstream owns ZIP validation, pre-submit checks, replay and all task
 state changes. A checker rejection is a normal safe tool failure; an unverified
 mutation success remains uncertain and is never retried automatically.
 

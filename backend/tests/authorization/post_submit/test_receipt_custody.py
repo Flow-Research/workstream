@@ -103,7 +103,8 @@ async def test_execute_receipt_substitution_rejected(tmp_path, isolated_database
                 async with h.factory() as session:
                     borrowed = UUID((await session.get(CheckerRun, str(foreign.reservation.attempt_id))).execute_evidence_id)
         elif substitution == "material_read":
-            await h.service.materialize(ExecuteFacts(request=h.request, lease=lease), Consumer(h.files))
+            execution = ExecuteFacts(request=h.request, lease=lease)
+            await h.service.materialize(execution, Consumer(h.files, execution))
             async with h.factory() as session:
                 borrowed = UUID(await session.scalar(select(AuditEvent.id).where(
                     AuditEvent.action_id == "artifact.post_submit.checker_input.materialize",

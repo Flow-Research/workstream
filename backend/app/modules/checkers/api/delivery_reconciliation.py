@@ -364,3 +364,17 @@ class PostSubmitDeliveryAuthorizationPort(Protocol):
     def close(self, handle: object) -> None: ...
 
     async def restage_denial(self, error: PostSubmitDeliveryAuthorityDenied) -> bool: ...
+
+
+def post_submit_reconciliation_event_json(
+    project_id: UUID, payload: PostSubmitDeliveryChildPayload,
+) -> str:
+    """Immutable child envelope shared by publication and read-only observation."""
+    return json.dumps({
+        "event_type": POST_SUBMIT_DELIVERY_RECONCILIATION_EVENT, "event_version": 1,
+        "aggregate_type": "outbox_delivery", "aggregate_id": str(payload.original_event_id),
+        "project_id": str(project_id), "correlation_id": str(payload.reconciliation_request_id),
+        "causation_event_id": str(payload.original_event_id),
+        "idempotency_key": "post-submit-reconcile:" + str(payload.original_event_id),
+        "payload": payload.model_dump(mode="json"),
+    }, sort_keys=True, separators=(",", ":"))

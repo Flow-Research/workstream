@@ -65,12 +65,13 @@ def test_ordinary_images_do_not_acquire_or_require_trial_privileges():
 
 @pytest.mark.asyncio
 async def test_human_post_attachment_locks_declared_trial_configuration():
+    pre = _entry("acme.intake", "pre_submit")
     values = _configuration()
     entry = _entry(
         "project.runtime_evidence", "post_submit", _binding({}).registry.configuration_schema,
     )
     _, post = await compile_external_checker_policies(
-        _request(post=(_attachment(entry, "runtime_evidence", values),)),
-        _Registry((entry,)),
+        _request(pre=(_attachment(pre, "intake"),), post=(_attachment(entry, "runtime_evidence", values),)),
+        _Registry((pre, entry)),
     )
     assert post.entries[0].configuration == values

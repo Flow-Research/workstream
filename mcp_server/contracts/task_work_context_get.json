@@ -1,5 +1,5 @@
 {
-  "canonical_sha256": "71a41267cce48ef486d90bae34850659edcde9455a75ffd971fcdcb928f43f95",
+  "canonical_sha256": "9f69f02d8981989465c20891d3c9676c1e09d437ea99c6fbe7860cd071e1c941",
   "components": {
     "schemas": {
       "ApiError": {
@@ -354,6 +354,16 @@
               }
             ]
           },
+          "pending_submission_operation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PendingSubmissionOperation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "project_id": {
             "format": "uuid",
             "title": "Project Id",
@@ -599,6 +609,31 @@
           "detail",
           "error"
         ],
+        "type": "object"
+      },
+      "PendingSubmissionOperation": {
+        "properties": {
+          "operation_id": {
+            "format": "uuid",
+            "title": "Operation Id",
+            "type": "string"
+          },
+          "processing_stage": {
+            "enum": [
+              "receiving",
+              "pre_checking",
+              "finalization_pending",
+              "operationally_stalled"
+            ],
+            "title": "Processing Stage",
+            "type": "string"
+          }
+        },
+        "required": [
+          "operation_id",
+          "processing_stage"
+        ],
+        "title": "PendingSubmissionOperation",
         "type": "object"
       },
       "ProjectDisplayFacts": {

@@ -60,16 +60,19 @@ async def test_delivery_closed_during_io_cannot_publish_terminal(tmp_path, isola
         d = await delivery_fixture(h)
         envelope = await invoked(h, d)
         entered, release = asyncio.Event(), asyncio.Event()
-        original = h.store.open
+        original = h.store.open_source
 
-        async def paused(reference):
-            source = original(reference)
-            entered.set()
-            await release.wait()
-            async for chunk in source:
-                yield chunk
+        async def paused(reference, **kwargs):
+            source = original(reference, **kwargs)
+            try:
+                entered.set()
+                await release.wait()
+                async for chunk in source:
+                    yield chunk
+            finally:
+                await source.aclose()
 
-        monkeypatch.setattr(h.store, "open", paused)
+        monkeypatch.setattr(h.store, "open_source", paused)
         operation = asyncio.create_task(d.handler(envelope))
         try:
             await asyncio.wait_for(entered.wait(), 20)
@@ -104,16 +107,19 @@ async def test_cancellation_after_execute_preserves_unknown(tmp_path, isolated_d
         d = await delivery_fixture(h)
         envelope = await invoked(h, d)
         entered = asyncio.Event()
-        original = h.store.open
+        original = h.store.open_source
 
-        async def paused(reference):
-            source = original(reference)
-            entered.set()
-            await asyncio.Event().wait()
-            async for chunk in source:
-                yield chunk
+        async def paused(reference, **kwargs):
+            source = original(reference, **kwargs)
+            try:
+                entered.set()
+                await asyncio.Event().wait()
+                async for chunk in source:
+                    yield chunk
+            finally:
+                await source.aclose()
 
-        monkeypatch.setattr(h.store, "open", paused)
+        monkeypatch.setattr(h.store, "open_source", paused)
         operation = asyncio.create_task(d.handler(envelope))
         try:
             await asyncio.wait_for(entered.wait(), 20)

@@ -5,20 +5,20 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
-	"math/big"
 	"mime"
 	"net/http"
 	"net/url"
 	"os"
 	"regexp"
 	"strings"
+	"time"
 )
 
 // MaxSubmissionZipBytes bounds the compressed submission ZIP, independently of guide uploads.
 // Project limits may enforce a smaller allowance.
 const MaxSubmissionZipBytes = 500 * 1024 * 1024
 
-// SubmissionPacket is shared unchanged between explicit preparation and creation.
+// SubmissionPacket is the exact metadata for one source submission.
 // ART's current public header boundary requires ASCII; no client normalization.
 type SubmissionPacket struct {
 	Assignment  string  `json:"assignment_id"`
@@ -27,7 +27,7 @@ type SubmissionPacket struct {
 	Attestation *string `json:"contributor_attestation,omitempty"`
 }
 
-// RevisionAcknowledgement is preparation-only; it is not part of Submission JSON.
+// RevisionAcknowledgement binds the current governed revision context.
 type RevisionAcknowledgement struct {
 	PreparationID     string
 	PreparationSHA256 string
@@ -35,19 +35,16 @@ type RevisionAcknowledgement struct {
 
 var revisionPreparationDigest = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 
-type PreparationReceipt struct {
-	PutAttemptID string            `json:"put_attempt_id"`
-	AdmissionID  *string           `json:"admission_id"`
-	Status       string            `json:"submission_bundle_preparation_status"`
-	Replayed     bool              `json:"replayed"`
-	Feedback     []json.RawMessage `json:"pre_submission_results,omitempty"`
-}
-
 type SubmissionReceipt struct {
-	SubmissionID        string   `json:"submission_id"`
-	Version             *big.Int `json:"submission_version"`
-	AdmissionID         string   `json:"admission_id"`
-	EvaluationRequestID string   `json:"evaluation_request_id"`
+	OperationID     string            `json:"operation_id"`
+	TaskID          string            `json:"task_id"`
+	AssignmentID    string            `json:"assignment_id"`
+	Status          string            `json:"status"`
+	AcceptedAt      string            `json:"accepted_at"`
+	TaskStatus      string            `json:"task_status_at_acceptance"`
+	ProcessingStage string            `json:"processing_stage_at_acceptance"`
+	Replayed        bool              `json:"replayed"`
+	Feedback        []json.RawMessage `json:"pre_submission_results,omitempty"`
 }
 
 func submissionSelector(value string) bool { return len(value) <= 100 && validUUID(value) }
@@ -66,36 +63,33 @@ func (p SubmissionPacket) validate(task string) error {
 		}
 		for _, value := range []byte(*text) {
 			if value < 32 || value > 126 {
-				return errors.New("packet text must be printable ASCII for the public preparation API")
+				return errors.New("packet text must be printable ASCII for the public submission API")
 			}
 		}
 	}
 	return nil
 }
 
-func submissionFailure(err error, preparation bool) error {
+func submissionFailure(err error) error {
 	var failure *Failure
 	if errors.As(err, &failure) && failure.OutcomeUnknown {
-		failure.RecoveryHint = "Submission outcome unknown; inspect task submissions; replay only the same task, assignment, admission and packet"
-		if preparation {
-			failure.RecoveryHint = "preparation outcome unknown; explicitly replay only the same task, assignment, ZIP bytes, packet, revision acknowledgement and idempotency key; no Submission was requested by this command"
-		}
+		failure.RecoveryHint = "Observe the submission operation using the same actor and idempotency key, or explicitly replay the same task, assignment, ZIP bytes, packet and revision acknowledgement; do not create a new key while the outcome is unknown"
 	}
 	return err
 }
 
-// PrepareSubmission streams one regular ZIP once. A receipt is not a Submission.
-func (c *Client) PrepareSubmission(ctx context.Context, task, key string, packet SubmissionPacket, acknowledgement *RevisionAcknowledgement, source *os.File) (Result[PreparationReceipt], error) {
-	var result Result[PreparationReceipt]
+// SubmitSubmission streams one regular ZIP once and returns its committed acceptance snapshot.
+func (c *Client) SubmitSubmission(ctx context.Context, task, key string, packet SubmissionPacket, acknowledgement *RevisionAcknowledgement, source *os.File) (Result[SubmissionReceipt], error) {
+	var result Result[SubmissionReceipt]
 	if err := packet.validate(task); err != nil {
 		return result, err
 	}
 	if !submissionSelector(key) || source == nil {
-		return result, errors.New("preparation requires a caller UUID key and a regular ZIP file")
+		return result, errors.New("submission requires a caller UUID key and a regular ZIP file")
 	}
 	if packet.Predecessor == nil {
 		if acknowledgement != nil {
-			return result, errors.New("initial preparation cannot acknowledge a revision")
+			return result, errors.New("initial submission cannot acknowledge a revision")
 		}
 	} else if acknowledgement == nil || !submissionSelector(acknowledgement.PreparationID) ||
 		!revisionPreparationDigest.MatchString(acknowledgement.PreparationSHA256) {
@@ -123,16 +117,16 @@ func (c *Client) PrepareSubmission(ctx context.Context, task, key string, packet
 		headers.Set("X-Revision-Preparation-Sha256", acknowledgement.PreparationSHA256)
 	}
 	response, err := c.openBodyRequest(ctx, c.guideHTTP, http.MethodPost,
-		"/api/v1/tasks/"+url.PathEscape(task)+"/submission-bundle-preparations", "",
+		"/api/v1/tasks/"+url.PathEscape(task)+"/submissions", "",
 		io.NewSectionReader(source, 0, initial.Size()), initial.Size(), key, "application/json", "application/zip", headers)
 	if err != nil {
-		return result, submissionFailure(err, true)
+		return result, submissionFailure(err)
 	}
 	defer response.Body.Close()
 	raw, err := io.ReadAll(io.LimitReader(response.Body, maxSubmissionReadBytes+1))
 	invalid := &Failure{Code: "invalid_api_response", Status: response.StatusCode, OutcomeUnknown: true}
 	if err != nil || len(raw) > maxSubmissionReadBytes {
-		return result, submissionFailure(invalid, true)
+		return result, submissionFailure(invalid)
 	}
 	if response.StatusCode != http.StatusAccepted {
 		failure := c.responseFailure(http.MethodPost, response, raw)
@@ -140,71 +134,32 @@ func (c *Client) PrepareSubmission(ctx context.Context, task, key string, packet
 			var typed *Failure
 			if errors.As(failure, &typed) && typed.Code == "pre_submission_checker_failed" {
 				if typed.OutcomeUnknown || !c.safeMutationResponse(raw) {
-					return result, submissionFailure(invalid, true)
+					return result, submissionFailure(invalid)
 				}
 				details, err := preparationFeedback(raw)
 				if err != nil {
-					return result, submissionFailure(invalid, true)
+					return result, submissionFailure(invalid)
 				}
 				typed.Details = details
 			}
 		}
-		return result, submissionFailure(failure, true)
+		return result, submissionFailure(failure)
 	}
 	kind, _, typeErr := mime.ParseMediaType(response.Header.Get("Content-Type"))
-	var value PreparationReceipt
-	fields, decodeErr := contextObject(raw, &value, []string{"put_attempt_id", "submission_bundle_preparation_status", "replayed", "pre_submission_results"}, nil)
-	if typeErr != nil || kind != "application/json" || decodeErr != nil || !requiredNullable(fields, "admission_id") ||
-		!validUUID(value.PutAttemptID) || !c.safeMutationResponse(raw) ||
-		value.Feedback == nil || !validPreSubmissionResults(value.Feedback, true) ||
+	var value SubmissionReceipt
+	_, decodeErr := contextObject(raw, &value, []string{"operation_id", "task_id", "assignment_id", "status", "accepted_at", "task_status_at_acceptance", "processing_stage_at_acceptance", "replayed", "pre_submission_results"}, nil)
+	_, acceptedErr := time.Parse(time.RFC3339Nano, value.AcceptedAt)
+	if typeErr != nil || kind != "application/json" || decodeErr != nil || acceptedErr != nil ||
+		!validUUID(value.OperationID) || !sameUUID(value.TaskID, task) || !sameUUID(value.AssignmentID, packet.Assignment) ||
+		value.Status != "accepted" || value.TaskStatus != "evaluation_pending" || value.ProcessingStage != "finalization_pending" ||
+		!c.safeMutationResponse(raw) || value.Feedback == nil || !validPreSubmissionResults(value.Feedback, true) ||
 		(response.Header.Get("Content-Encoding") != "" && response.Header.Get("Content-Encoding") != "identity") {
-		return result, submissionFailure(invalid, true)
-	}
-	switch value.Status {
-	case "ready":
-		if value.AdmissionID == nil || !validUUID(*value.AdmissionID) {
-			return result, submissionFailure(invalid, true)
-		}
-	case "prepared", "put_in_flight", "object_confirmed", "stored_pending_verification", "observed_confirmed",
-		"acknowledgement_unknown", "provider_unavailable", "conflict", "integrity_mismatch", "missing", "absent_replay_required", "stale":
-		if value.AdmissionID != nil {
-			return result, submissionFailure(invalid, true)
-		}
-	default:
-		return result, submissionFailure(invalid, true)
+		return result, submissionFailure(invalid)
 	}
 	finalHash, hashErr := uploadSourceHash(source, initial.Size())
 	final, statErr := source.Stat()
 	if hashErr != nil || statErr != nil || final.Size() != initial.Size() || !final.ModTime().Equal(initial.ModTime()) || finalHash != expected {
-		return result, submissionFailure(&Failure{Code: "submission_source_changed", OutcomeUnknown: true}, true)
-	}
-	return Result[PreparationReceipt]{Raw: raw, Value: value}, nil
-}
-
-func (c *Client) CreateSubmission(ctx context.Context, task, admission string, packet SubmissionPacket) (Result[SubmissionReceipt], error) {
-	var result Result[SubmissionReceipt]
-	if err := packet.validate(task); err != nil {
-		return result, err
-	}
-	if !submissionSelector(admission) {
-		return result, errors.New("admission must be a UUID")
-	}
-	body, err := json.Marshal(struct {
-		SubmissionPacket
-		Admission string `json:"admission_id"`
-	}{packet, admission})
-	if err != nil {
-		return result, err
-	}
-	raw, err := c.requestWithKey(ctx, http.MethodPost, "/api/v1/tasks/"+url.PathEscape(task)+"/submissions", "", body, "", http.StatusCreated)
-	if err != nil {
-		return result, submissionFailure(err, false)
-	}
-	var value SubmissionReceipt
-	_, err = contextObject(raw, &value, []string{"submission_id", "submission_version", "admission_id", "evaluation_request_id"}, nil)
-	if err != nil || !validUUID(value.SubmissionID) || value.Version == nil || value.Version.Sign() <= 0 ||
-		!sameUUID(value.AdmissionID, admission) || !validUUID(value.EvaluationRequestID) || !c.safeMutationResponse(raw) {
-		return result, submissionFailure(&Failure{Code: "invalid_api_response", OutcomeUnknown: true}, false)
+		return result, submissionFailure(&Failure{Code: "submission_source_changed", OutcomeUnknown: true})
 	}
 	return Result[SubmissionReceipt]{Raw: raw, Value: value}, nil
 }

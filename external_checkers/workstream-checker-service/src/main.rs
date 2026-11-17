@@ -44,7 +44,6 @@ use workstream_checker_sdk::{
 };
 
 const PROTOCOL: &str = "external_checker_service.v1";
-const PRE_GRANT_PROTOCOL: &str = "workstream.external_checker_material_grant.v1";
 const POST_GRANT_PROTOCOL: &str = "workstream.external_checker_material_grant.v2";
 const CURRENT_ARCHIVE_ROLE: &str = "submission_archive";
 const PREDECESSOR_ARCHIVE_ROLE: &str = "predecessor_submission_archive";
@@ -83,6 +82,8 @@ struct ServiceConfig {
     smol: Option<smol::SmolConfig>,
     #[serde(default)]
     trusted_intake: Option<smol::IntakeConfig>,
+    #[serde(default)]
+    pre: Option<smol::PreConfig>,
     runtime: String,
     isolation_mode: String,
     operating_system: String,
@@ -166,18 +167,6 @@ struct GrantReference {
     binding_digest: String,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
-struct GrantManifest {
-    protocol_version: String,
-    grant_id: String,
-    request_digest: String,
-    #[serde(flatten)]
-    identity: GrantIdentity,
-    directories: Vec<String>,
-    files: Vec<GrantFile>,
-    binding_digest: String,
-}
-
 struct VerifiedGrant {
     binding_digest: String,
     input: PathBuf,
@@ -189,20 +178,6 @@ struct VerifiedGrant {
 #[derive(Debug, PartialEq)]
 struct ExecutedChecker {
     value: Value,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(tag = "phase", deny_unknown_fields)]
-enum GrantIdentity {
-    #[serde(rename = "pre_submit")]
-    PreSubmit {
-        prepared_generation_id: String,
-        attempt_id: String,
-        attempt_request_digest: String,
-        archive_sha256: String,
-        archive_byte_count: u64,
-        semantic_manifest_sha256: String,
-    },
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -906,6 +881,15 @@ fn serve_connection(
     if let Ok(bytes) = &frame {
         if serde_json::from_slice::<Value>(bytes)
             .ok()
+            .is_some_and(|value| value["operation"] == "execute_pre")
+        {
+            return match smol::serve_pre(config, stream, bytes) {
+                Err(error) if error == UNSETTLED_RESOURCE_ERROR => Err(error),
+                _ => Ok(()),
+            };
+        }
+        if serde_json::from_slice::<Value>(bytes)
+            .ok()
             .and_then(|v| v["protocol_version"].as_str().map(str::to_owned))
             .as_deref()
             == Some("trusted_submission_intake.v1")
@@ -1324,11 +1308,29 @@ fn stop_command_group(child: &mut Child, deadline: Instant) -> Result<ExitStatus
 }
 
 fn collect_bounded_command(
+    child: Child,
+    deadline: Instant,
+    maximum_output: usize,
+    client: Option<&UnixStream>,
+    cleanup: Option<&mut EmergencyCleanupBudget>,
+) -> Result<BoundedCommandOutput, String> {
+    collect_bounded_command_with_connection(
+        child,
+        deadline,
+        maximum_output,
+        client,
+        cleanup,
+        client_is_connected,
+    )
+}
+
+fn collect_bounded_command_with_connection(
     mut child: Child,
     deadline: Instant,
     maximum_output: usize,
     client: Option<&UnixStream>,
     mut cleanup: Option<&mut EmergencyCleanupBudget>,
+    connected: fn(&UnixStream) -> bool,
 ) -> Result<BoundedCommandOutput, String> {
     let mut stdout = match child.stdout.take() {
         Some(stdout) => stdout,
@@ -1351,7 +1353,7 @@ fn collect_bounded_command(
     let mut stdout_bytes = Vec::new();
     let mut stderr_bytes = Vec::new();
     loop {
-        if client.is_some_and(|stream| !client_is_connected(stream)) {
+        if client.is_some_and(|stream| !connected(stream)) {
             let _ = stop_command_group(&mut child, command_cleanup_deadline(&mut cleanup));
             return Err("client disconnected".into());
         }
@@ -1463,91 +1465,12 @@ fn verify_grant(
         return Err("grant binding differs".into());
     }
     match value.get("protocol_version").and_then(Value::as_str) {
-        Some(PRE_GRANT_PROTOCOL) => {
-            let manifest: GrantManifest =
-                serde_json::from_value(value).map_err(|_| "grant manifest invalid")?;
-            if manifest.grant_id != reference.grant_id
-                || manifest.request_digest != request.request_digest
-                || manifest.binding_digest != reference.binding_digest
-                || !grant_matches_request(&manifest, request)
-            {
-                return Err("grant binding differs".into());
-            }
-            let input = grant_root.join("workspace");
-            let observed = inspect_workspace(&input, config.sandbox_uid, config.sandbox_gid)?;
-            if observed.files != manifest.files || observed.directories != manifest.directories {
-                return Err("grant material differs".into());
-            }
-            Ok(VerifiedGrant {
-                binding_digest: reference.binding_digest.clone(),
-                input,
-                input_inventory: observed,
-                predecessor: None,
-                predecessor_inventory: None,
-            })
-        }
         Some(POST_GRANT_PROTOCOL) => {
             let manifest: PostGrantManifest =
                 serde_json::from_value(value).map_err(|_| "grant manifest invalid")?;
             verify_post_grant(config, request, reference, &grant_root, &manifest)
         }
         _ => Err("grant protocol invalid".into()),
-    }
-}
-
-fn grant_matches_request(manifest: &GrantManifest, request: &ValidatedRequest) -> bool {
-    let Some(identity) = request.value.get("identity").and_then(Value::as_object) else {
-        return false;
-    };
-    let Some(materials) = request.value.get("materials").and_then(Value::as_array) else {
-        return false;
-    };
-    let Some(archive) = materials.iter().find_map(|item| {
-        let object = item.as_object()?;
-        (object.get("phase")?.as_str()? == request.phase
-            && object.get("role")?.as_str()? == "submission_archive")
-            .then_some(object)
-    }) else {
-        return false;
-    };
-    let semantic_manifest_sha256 = semantic_manifest_hash(manifest).ok();
-    match &manifest.identity {
-        GrantIdentity::PreSubmit {
-            prepared_generation_id,
-            attempt_id,
-            attempt_request_digest,
-            archive_sha256,
-            archive_byte_count,
-            semantic_manifest_sha256: expected_manifest,
-        } => {
-            request.phase == "pre_submit"
-                && identity
-                    .get("prepared_generation_id")
-                    .and_then(Value::as_str)
-                    == Some(prepared_generation_id)
-                && identity.get("attempt_id").and_then(Value::as_str) == Some(attempt_id)
-                && identity
-                    .get("attempt_request_digest")
-                    .and_then(Value::as_str)
-                    == Some(attempt_request_digest)
-                && archive
-                    .get("prepared_generation_id")
-                    .and_then(Value::as_str)
-                    == Some(prepared_generation_id)
-                && archive.get("attempt_id").and_then(Value::as_str) == Some(attempt_id)
-                && archive
-                    .get("attempt_request_digest")
-                    .and_then(Value::as_str)
-                    == Some(attempt_request_digest)
-                && archive.get("archive_sha256").and_then(Value::as_str) == Some(archive_sha256)
-                && archive.get("archive_byte_count").and_then(Value::as_u64)
-                    == Some(*archive_byte_count)
-                && archive
-                    .get("semantic_manifest_sha256")
-                    .and_then(Value::as_str)
-                    == Some(expected_manifest)
-                && semantic_manifest_sha256.as_deref() == Some(expected_manifest)
-        }
     }
 }
 
@@ -1695,33 +1618,9 @@ fn validate_post_grant_material(item: &PostGrantMaterial) -> Result<&str, String
         .material
         .as_object()
         .ok_or("POST grant material invalid")?;
-    let expected: std::collections::BTreeSet<_> = [
-        "phase",
-        "role",
-        "submission_id",
-        "submission_version",
-        "binding_id",
-        "content_id",
-        "replica_id",
-        "content_sha256",
-        "byte_count",
-        "media_type",
-        "evidence_id",
-        "verification_receipt_id",
-        "verification_job_id",
-        "verification_generation",
-        "namespace_fingerprint",
-        "semantic_manifest_sha256",
-    ]
-    .into_iter()
-    .collect();
-    if material
-        .keys()
-        .map(String::as_str)
-        .collect::<std::collections::BTreeSet<_>>()
-        != expected
-        || material.get("phase").and_then(Value::as_str) != Some("post_submit")
-    {
+    workstream_checker_sdk::validate_post_material_custody(material)
+        .map_err(|_| "POST grant material custody invalid")?;
+    if material.get("phase").and_then(Value::as_str) != Some("post_submit") {
         return Err("POST grant material invalid".into());
     }
     let role = material
@@ -1730,10 +1629,6 @@ fn validate_post_grant_material(item: &PostGrantMaterial) -> Result<&str, String
         .ok_or("POST grant material role invalid")?;
     if !matches!(role, CURRENT_ARCHIVE_ROLE | PREDECESSOR_ARCHIVE_ROLE)
         || material.get("submission_version").and_then(Value::as_u64) == Some(0)
-        || material
-            .get("verification_generation")
-            .and_then(Value::as_u64)
-            == Some(0)
         || !material
             .get("byte_count")
             .and_then(Value::as_u64)
@@ -1751,8 +1646,6 @@ fn validate_post_grant_material(item: &PostGrantMaterial) -> Result<&str, String
         "content_id",
         "replica_id",
         "evidence_id",
-        "verification_receipt_id",
-        "verification_job_id",
     ] {
         if !material
             .get(field)
@@ -1827,10 +1720,6 @@ fn verify_materials_root<'a>(
         return Err("POST grant material roots differ".into());
     }
     Ok(())
-}
-
-fn semantic_manifest_hash(manifest: &GrantManifest) -> Result<String, String> {
-    semantic_manifest_hash_parts(&manifest.directories, &manifest.files)
 }
 
 fn semantic_manifest_hash_parts(
@@ -3166,6 +3055,7 @@ mod tests {
         let config = ServiceConfig {
             smol: None,
             trusted_intake: None,
+            pre: None,
             smol_admission: None,
             container_owner: Some(
                 load_container_owner(&File::open(&socket_root).unwrap()).unwrap(),
@@ -3336,76 +3226,48 @@ mod tests {
         fs::remove_dir_all(root).unwrap();
     }
 
-    fn pre_submit_envelope_with_grant(config: &ServiceConfig) -> Value {
-        let grant_id = "extract_0123456789abcdef0123456789abcdef";
+    fn post_config() -> (PathBuf, ServiceConfig) {
+        let (root, mut config) = test_config();
+        let request = parse_request(include_bytes!("../../fixtures/post_request.json")).unwrap();
+        config.cache[0].platform_manifest_digest = request.image_digest;
+        (root, config)
+    }
+
+    fn post_submit_envelope_with_grant(config: &ServiceConfig) -> Value {
         let mut request: Value =
-            serde_json::from_slice(include_bytes!("../../fixtures/request.json")).unwrap();
-        let mut manifest = GrantManifest {
-            protocol_version: PRE_GRANT_PROTOCOL.into(),
-            grant_id: grant_id.into(),
-            request_digest: String::new(),
-            identity: GrantIdentity::PreSubmit {
-                prepared_generation_id: request["identity"]["prepared_generation_id"]
-                    .as_str()
-                    .unwrap()
-                    .into(),
-                attempt_id: request["identity"]["attempt_id"].as_str().unwrap().into(),
-                attempt_request_digest: request["identity"]["attempt_request_digest"]
-                    .as_str()
-                    .unwrap()
-                    .into(),
-                archive_sha256: request["materials"][0]["archive_sha256"]
-                    .as_str()
-                    .unwrap()
-                    .into(),
-                archive_byte_count: request["materials"][0]["archive_byte_count"]
-                    .as_u64()
-                    .unwrap(),
-                semantic_manifest_sha256: String::new(),
-            },
-            directories: Vec::new(),
-            files: Vec::new(),
-            binding_digest: format!("sha256:{}", "0".repeat(64)),
+            serde_json::from_slice(include_bytes!("../../fixtures/post_request.json")).unwrap();
+        request["materials"][0]["semantic_manifest_sha256"] =
+            Value::String(semantic_manifest_hash_parts(&[], &[]).unwrap());
+        let mut body = request.as_object().unwrap().clone();
+        body.remove("request_digest");
+        request["request_digest"] = Value::String(canonical_hash(&Value::Object(body)).unwrap());
+        let validated = parse_request(&serde_json::to_vec(&request).unwrap()).unwrap();
+        let mut manifest = PostGrantManifest {
+            protocol_version: POST_GRANT_PROTOCOL.into(),
+            grant_id: "extract_0123456789abcdef0123456789abcdef".into(),
+            request_digest: validated.request_digest,
+            phase: "post_submit".into(),
+            identity: request["identity"].clone(),
+            evaluation_context_sha256: None,
+            materials: vec![PostGrantMaterial {
+                material: request["materials"][0].clone(),
+                directories: Vec::new(),
+                files: Vec::new(),
+            }],
+            visible_roles: vec![CURRENT_ARCHIVE_ROLE.into()],
+            binding_digest: String::new(),
         };
-        let semantic = semantic_manifest_hash(&manifest).unwrap();
-        let GrantIdentity::PreSubmit {
-            semantic_manifest_sha256,
-            ..
-        } = &mut manifest.identity;
-        *semantic_manifest_sha256 = semantic.clone();
-        request["materials"][0]["semantic_manifest_sha256"] = Value::String(semantic);
-        let mut request_body = request.as_object().unwrap().clone();
-        request_body.remove("request_digest");
-        let request_digest = canonical_hash(&Value::Object(request_body)).unwrap();
-        request["request_digest"] = Value::String(request_digest.clone());
-        manifest.request_digest = request_digest;
-
-        let mut manifest_value = serde_json::to_value(&manifest).unwrap();
-        manifest_value
-            .as_object_mut()
-            .unwrap()
-            .remove("binding_digest");
-        manifest.binding_digest = canonical_hash(&manifest_value).unwrap();
-
-        let grants = config.material_root.join("workspaces");
-        let grant_root = grants.join(grant_id);
-        let workspace = grant_root.join("workspace");
-        fs::create_dir(&grants).unwrap();
-        fs::create_dir(&grant_root).unwrap();
-        fs::create_dir(&workspace).unwrap();
-        fs::set_permissions(&grant_root, fs::Permissions::from_mode(0o700)).unwrap();
-        fs::set_permissions(&workspace, fs::Permissions::from_mode(0o500)).unwrap();
-        let manifest_path = grant_root.join(".external-checker-grant.json");
-        fs::write(&manifest_path, serde_json::to_vec(&manifest).unwrap()).unwrap();
-        fs::set_permissions(&manifest_path, fs::Permissions::from_mode(0o400)).unwrap();
-
+        let mut body = serde_json::to_value(&manifest).unwrap();
+        body.as_object_mut().unwrap().remove("binding_digest");
+        manifest.binding_digest = canonical_hash(&body).unwrap();
+        let reference = publish_post_grant(config, &manifest);
         serde_json::json!({
             "protocol_version": PROTOCOL,
             "operation": "execute",
             "request": request,
             "grant": {
-                "grant_id": grant_id,
-                "binding_digest": manifest.binding_digest,
+                "grant_id": reference.grant_id,
+                "binding_digest": reference.binding_digest,
             },
             "model_grant": null,
         })
@@ -3976,8 +3838,8 @@ exit 2
 
     #[test]
     fn execute_wire_requires_an_exact_model_grant_member() {
-        let (root, config) = test_config();
-        let envelope = pre_submit_envelope_with_grant(&config);
+        let (root, config) = post_config();
+        let envelope = post_submit_envelope_with_grant(&config);
         assert!(serde_json::from_value::<ExecuteEnvelope>(envelope.clone()).is_ok());
 
         let mut missing = envelope.clone();
@@ -3993,17 +3855,19 @@ exit 2
         assert!(serde_json::from_value::<ExecuteEnvelope>(extended).is_err());
         let workspace = config
             .material_root
-            .join("workspaces/extract_0123456789abcdef0123456789abcdef/workspace");
+            .join("workspaces/extract_0123456789abcdef0123456789abcdef/materials");
         fs::set_permissions(workspace, fs::Permissions::from_mode(0o700)).unwrap();
         fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
     fn model_grants_are_rejected_outside_the_bound_post_request() {
-        let (root, mut config) = test_config();
+        let (root, mut config) = post_config();
         config.model_proxy_socket = Some(PathBuf::from("/unused/private/proxy.sock"));
         config.model_relay_root = Some(PathBuf::from("/unused/private/relay"));
-        let mut envelope = pre_submit_envelope_with_grant(&config);
+        let mut envelope = post_submit_envelope_with_grant(&config);
+        envelope["request"] =
+            serde_json::from_slice(include_bytes!("../../fixtures/request.json")).unwrap();
         envelope["model_grant"] = serde_json::json!({
             "grant_id": format!("model_{}", "1".repeat(32)),
             "binding_digest": envelope["request"]["request_digest"],
@@ -4016,7 +3880,7 @@ exit 2
 
         let workspace = config
             .material_root
-            .join("workspaces/extract_0123456789abcdef0123456789abcdef/workspace");
+            .join("workspaces/extract_0123456789abcdef0123456789abcdef/materials");
         fs::set_permissions(workspace, fs::Permissions::from_mode(0o700)).unwrap();
         fs::remove_dir_all(root).unwrap();
     }
@@ -4085,8 +3949,8 @@ exit 2
 
     #[test]
     fn checker_output_cannot_request_another_execution() {
-        let (root, config) = test_config();
-        let envelope = pre_submit_envelope_with_grant(&config);
+        let (root, config) = post_config();
+        let envelope = post_submit_envelope_with_grant(&config);
         let request = parse_request(&serde_json::to_vec(&envelope["request"]).unwrap()).unwrap();
         let cache = &config.cache[0];
         fs::write(
@@ -4136,7 +4000,7 @@ exit 2
                 .material_root
                 .join("workspaces")
                 .join(envelope["grant"]["grant_id"].as_str().unwrap())
-                .join("workspace"),
+                .join("materials"),
             fs::Permissions::from_mode(0o700),
         )
         .unwrap();
@@ -4178,7 +4042,7 @@ exit 2
 
     #[test]
     fn unresolved_cleanup_closes_the_listener_loop_without_admitting_the_next_connection() {
-        let (root, config) = test_config();
+        let (root, config) = post_config();
         let retained = root.join("retained-container");
         let second_admitted = root.join("second-admitted");
         let cache = &config.cache[0];
@@ -4207,7 +4071,7 @@ exit 2
         )
         .unwrap();
         fs::set_permissions(&config.docker_binary, fs::Permissions::from_mode(0o700)).unwrap();
-        let execute = serde_json::to_vec(&pre_submit_envelope_with_grant(&config)).unwrap();
+        let execute = serde_json::to_vec(&post_submit_envelope_with_grant(&config)).unwrap();
         let health = serde_json::to_vec(
             &serde_json::json!({"protocol_version": PROTOCOL, "operation": "health"}),
         )
@@ -4242,7 +4106,7 @@ exit 2
         fs::remove_file(listener_path).unwrap();
         let workspace = config
             .material_root
-            .join("workspaces/extract_0123456789abcdef0123456789abcdef/workspace");
+            .join("workspaces/extract_0123456789abcdef0123456789abcdef/materials");
         fs::set_permissions(workspace, fs::Permissions::from_mode(0o700)).unwrap();
         fs::remove_dir_all(root).unwrap();
 
@@ -4669,70 +4533,40 @@ exit 2
     }
 
     #[test]
-    fn grant_lineage_matches_the_normalized_pre_submit_request() {
-        let mut request = parse_request(include_bytes!("../../fixtures/request.json")).unwrap();
-        let mut manifest = GrantManifest {
-            protocol_version: PRE_GRANT_PROTOCOL.into(),
-            grant_id: "extract_0123456789abcdef0123456789abcdef".into(),
-            request_digest: request.request_digest.clone(),
-            identity: GrantIdentity::PreSubmit {
-                prepared_generation_id: request.value["identity"]["prepared_generation_id"]
-                    .as_str()
-                    .unwrap()
-                    .into(),
-                attempt_id: request.value["identity"]["attempt_id"]
-                    .as_str()
-                    .unwrap()
-                    .into(),
-                attempt_request_digest: request.value["identity"]["attempt_request_digest"]
-                    .as_str()
-                    .unwrap()
-                    .into(),
-                archive_sha256: request.value["materials"][0]["archive_sha256"]
-                    .as_str()
-                    .unwrap()
-                    .into(),
-                archive_byte_count: request.value["materials"][0]["archive_byte_count"]
-                    .as_u64()
-                    .unwrap(),
-                semantic_manifest_sha256: String::new(),
-            },
-            directories: Vec::new(),
-            files: Vec::new(),
-            binding_digest: format!("sha256:{}", "9".repeat(64)),
+    fn prepared_pre_grants_are_refused_even_with_a_valid_binding() {
+        let (root, config) = test_config();
+        let request = parse_request(include_bytes!("../../fixtures/request.json")).unwrap();
+        let mut value = serde_json::json!({
+            "protocol_version": "workstream.external_checker_material_grant.v1",
+            "grant_id": "extract_0123456789abcdef0123456789abcdef",
+            "request_digest": request.request_digest,
+            "phase": "pre_submit",
+            "prepared_generation_id": "00000000-0000-4000-8000-000000000001",
+            "attempt_id": request.value["identity"]["attempt_id"],
+            "attempt_request_digest": request.value["identity"]["attempt_request_digest"],
+            "archive_sha256": format!("sha256:{}", "a".repeat(64)),
+            "archive_byte_count": 0,
+            "semantic_manifest_sha256": semantic_manifest_hash_parts(&[], &[]).unwrap(),
+            "directories": [], "files": []
+        });
+        let binding = canonical_hash(&value).unwrap();
+        value["binding_digest"] = Value::String(binding.clone());
+        let grant_id = value["grant_id"].as_str().unwrap().to_owned();
+        let grant_root = config.material_root.join("workspaces").join(&grant_id);
+        fs::create_dir_all(&grant_root).unwrap();
+        fs::set_permissions(&grant_root, fs::Permissions::from_mode(0o700)).unwrap();
+        let path = grant_root.join(".external-checker-grant.json");
+        fs::write(&path, serde_json::to_vec(&value).unwrap()).unwrap();
+        fs::set_permissions(path, fs::Permissions::from_mode(0o400)).unwrap();
+        let reference = GrantReference {
+            grant_id,
+            binding_digest: binding,
         };
-        let semantic = semantic_manifest_hash(&manifest).unwrap();
-        let GrantIdentity::PreSubmit {
-            semantic_manifest_sha256,
-            ..
-        } = &mut manifest.identity;
-        *semantic_manifest_sha256 = semantic;
-        request.value["materials"][0]["semantic_manifest_sha256"] =
-            Value::String(semantic_manifest_sha256.clone());
-        assert!(grant_matches_request(&manifest, &request));
-        for field in 0..6 {
-            let original = manifest.identity.clone();
-            let GrantIdentity::PreSubmit {
-                prepared_generation_id,
-                attempt_id,
-                attempt_request_digest,
-                archive_sha256,
-                archive_byte_count,
-                semantic_manifest_sha256,
-            } = &mut manifest.identity;
-            match field {
-                0 => *prepared_generation_id = "00000000-0000-4000-8000-000000000000".into(),
-                1 => *attempt_id = "00000000-0000-4000-8000-000000000000".into(),
-                2 => *attempt_request_digest = format!("sha256:{}", "8".repeat(64)),
-                3 => *archive_sha256 = format!("sha256:{}", "8".repeat(64)),
-                4 => *archive_byte_count += 1,
-                _ => *semantic_manifest_sha256 = format!("sha256:{}", "8".repeat(64)),
-            }
-            assert!(!grant_matches_request(&manifest, &request));
-            manifest.identity = original;
-        }
-        request.phase = "post_submit".into();
-        assert!(!grant_matches_request(&manifest, &request));
+        assert_eq!(
+            verify_grant(&config, &request, &reference).err(),
+            Some("grant protocol invalid".into())
+        );
+        fs::remove_dir_all(root).unwrap();
     }
 
     fn post_grant_fixture(
@@ -4868,6 +4702,47 @@ exit 2
     }
 
     #[test]
+    fn post_grant_source_custody_rejects_mixed_or_missing_evidence() {
+        let (_, mut manifest) = post_grant_fixture(false, false, false);
+        let item = &mut manifest.materials[0];
+        let material = item.material.as_object_mut().unwrap();
+        for key in [
+            "verification_receipt_id",
+            "verification_job_id",
+            "verification_generation",
+        ] {
+            material.remove(key);
+        }
+        material.insert(
+            "source_operation_id".into(),
+            Value::String("018f6f49-66b8-7d2a-bf4d-0e2eeaa00001".into()),
+        );
+        material.insert(
+            "accepted_source_sha256".into(),
+            Value::String(format!("sha256:{}", "a".repeat(64))),
+        );
+        material.insert(
+            "acceptance_receipt_sha256".into(),
+            Value::String(format!("sha256:{}", "b".repeat(64))),
+        );
+        assert_eq!(
+            validate_post_grant_material(item).unwrap(),
+            CURRENT_ARCHIVE_ROLE
+        );
+        item.material["verification_generation"] = Value::from(1);
+        assert!(validate_post_grant_material(item).is_err());
+        item.material
+            .as_object_mut()
+            .unwrap()
+            .remove("verification_generation");
+        item.material
+            .as_object_mut()
+            .unwrap()
+            .remove("accepted_source_sha256");
+        assert!(validate_post_grant_material(item).is_err());
+    }
+
+    #[test]
     fn post_grant_v2_binds_context_roles_and_all_aggregate_inventories() {
         let (root, config) = test_config();
         let (request, manifest) = post_grant_fixture(true, false, false);
@@ -4941,9 +4816,6 @@ exit 2
         let mut extra = serde_json::to_value(&visible_manifest).unwrap();
         extra["unexpected"] = Value::Bool(true);
         assert!(serde_json::from_value::<PostGrantManifest>(extra).is_err());
-        let mut legacy_shape = serde_json::to_value(&visible_manifest).unwrap();
-        legacy_shape["protocol_version"] = Value::String(PRE_GRANT_PROTOCOL.into());
-        assert!(serde_json::from_value::<GrantManifest>(legacy_shape).is_err());
         let mut unknown_role = visible_manifest.materials[1].clone();
         unknown_role.material["role"] = Value::String("foreign_archive".into());
         assert!(validate_post_grant_material(&unknown_role).is_err());

@@ -2,6 +2,7 @@
 
 import json
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from sqlalchemy import select, func
 
@@ -18,6 +19,7 @@ from app.modules.outbox.models import OutboxEvent
 from app.modules.outbox.registry import HandlerRegistry
 from app.modules.tasks.models import AuditEvent
 from tests.outbox.conftest import Harness
+from tests.checkers.execution.support import ControlledSelectedExecution
 
 
 async def delivery_fixture(h, *, options=None, materialization=None):
@@ -38,16 +40,21 @@ async def delivery_fixture(h, *, options=None, materialization=None):
                 subject=ServiceIdentity.OUTBOX_DISPATCHER.value, subject_kind="service",
                 status="active", linked_by="workstream:system:bootstrap",
             ))
-    handler = evaluation_request_handler(
-        sessions=h.factory,
-        materialization=h.service if materialization is None else materialization,
-    )
+    selected = ControlledSelectedExecution()
+    # The constructor captures this port; the patch never spans delivery or
+    # changes the independent production registry's external configuration.
+    with patch("app.adapters.checkers.configured_post_submit_external_execution",
+               lambda settings, *, sessions: selected):
+        handler = evaluation_request_handler(
+            sessions=h.factory,
+            materialization=h.service if materialization is None else materialization,
+        )
     delivery = outbox_delivery(
         h.factory, authorization_factory=outbox_dispatch_authorization,
         registry=HandlerRegistry([(REQUEST_EVENT, 1, handler)]),
         options=options or DeliveryOptions(),
     )
-    return SimpleNamespace(handler=handler, delivery=delivery)
+    return SimpleNamespace(handler=handler, delivery=delivery, selected=selected)
 
 
 async def invoked(h, d):

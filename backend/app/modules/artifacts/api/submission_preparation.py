@@ -6,13 +6,14 @@ from collections.abc import AsyncIterable
 from dataclasses import dataclass
 from enum import StrEnum
 from datetime import datetime
-from typing import Any, Literal, Protocol
+from typing import TYPE_CHECKING, Any, Literal, Protocol
 from uuid import UUID
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
 from app.modules.authorization.api import ActorIdentityFacts
-from app.modules.checkers.api.selected_pre_submit import SelectedPreSubmitExecutionFacts
+if TYPE_CHECKING:
+    from app.modules.checkers.api.selected_pre_submit import SelectedPreSubmitExecutionFacts
 
 
 class SubmissionBundlePreparationRejected(RuntimeError):
@@ -26,6 +27,8 @@ class SubmissionBundlePreparationCheckFailed(SubmissionBundlePreparationRejected
         self,
         facts: SelectedPreSubmitExecutionFacts,
     ) -> None:
+        from app.modules.checkers.api.selected_pre_submit import SelectedPreSubmitExecutionFacts
+
         if type(facts) is not SelectedPreSubmitExecutionFacts:
             raise TypeError("pre-submission feedback facts are invalid")
         if facts.eligible is not False:

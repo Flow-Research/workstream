@@ -101,6 +101,7 @@ def test_checker_delivery_and_routing_preparation_partition_every_node_once() ->
         "tests/checkers/external/test_public_api.py",
         "tests/checkers/external/test_registry.py",
         "tests/checkers/external/test_runtime.py",
+        "tests/checkers/external/test_pre_invocation.py",
         "tests/checkers/external/test_policy.py",
         "tests/checkers/external/test_selected_post_submit.py",
         "tests/checkers/external/test_forge_locator.py",
@@ -128,6 +129,8 @@ def test_checker_delivery_and_routing_preparation_partition_every_node_once() ->
         "tests/checkers/execution/test_delivery_reconciliation_custody.py",
         "tests/checkers/execution/test_delivery_reconciliation_public.py",
         "tests/test_post_submit_materialization.py",
+        "tests/artifacts/test_post_source_cleanup.py",
+        "tests/artifacts/test_post_source_manifest.py",
         "tests/test_post_submit_selection.py",
         "tests/test_checker_output_custody.py",
         "tests/test_checker_output_storage.py",
@@ -317,16 +320,16 @@ def test_semantic_family_membership_has_an_independent_fingerprint() -> None:
     """A catalogue-internal move across semantic families must fail this contract."""
     expected = {
         "shared": (
-            268,
-            "9ff668cabce1f8017f8784bd1233bed7aae0b892cf6aa9da82b3249a06cd819b",
+            278,
+            "76a24837591d210de2d08cd6fd0443693cd2cb6057bb1a2c093b7540f9378797",
         ),
         "project": (
-            255,
-            "8e8f8155a5e3929613fb81e5b6bc8d5ac858aa2578dab559b8f403de6298d87a",
+            258,
+            "d1c3c2852afa36476206c00129dcd8b63a10b187b0ad8634e6f894a20cd4deed",
         ),
         "task": (
-            94,
-            "49ae5e1b0b26ee4b71fd117e0502802a1e1439850628f1ed0d65130c38c0c4d9",
+            96,
+            "dfd8a2c63b43d85422eaf9f98fe30ef9a044a492a7e8270261de9c2b491a0eb3",
         ),
     }
     actual = {
@@ -394,9 +397,9 @@ def test_project_lane_ownership_has_an_independent_fingerprint() -> None:
         )
         + "\n"
     )
-    assert len(catalogue.PROJECT_PARTITIONED_MODULES) == 255
+    assert len(catalogue.PROJECT_PARTITIONED_MODULES) == 258
     assert hashlib.sha256(canonical.encode()).hexdigest() == (
-        "3782b6f2df688f48755b50db0295f9660d9960ec7c58e1c1e3659f874f27f909"
+        "f2581105d16fe388d824b0e50b017aa10f97ba7cbf5df27a8121d5591d2be96d"
     )
 
 

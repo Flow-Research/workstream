@@ -263,6 +263,7 @@ def task_commands(
     audit: TaskTransitionAuditPort,
     actor_profile_id: UUID,
     settings: Settings,
+    pending_submissions=None,
 ) -> AuthorizedTaskCommands:
     """Compose TASK commands without exposing private product imports to delivery."""
     from app.adapters.artifacts import task_guide_documents_port
@@ -278,6 +279,7 @@ def task_commands(
         guide_documents=task_guide_documents_port(session, settings),
         compensation_terms=locked_compensation_terms_port(session),
         outbox=outbox_append(session),
+        pending_submissions=pending_submissions,
     )
 
 
@@ -335,6 +337,7 @@ class _ArtifactAdmissionAdapter:
                 submission_version=request.submission_version,
                 task_context=request.task_context,
                 packet_sha256=request.packet.sha256,
+                accepted_operation_id=request.accepted_operation_id,
             )
         )
         if (
@@ -713,4 +716,23 @@ def project_work_reader(session: AsyncSession):
     return ProjectWorkReader(
         session, compensation_terms=locked_compensation_terms_port(session),
         finding_counts=checker_history_repository(session),
+    )
+
+
+def intake_task_custody_port(session):
+    """Compose TASK-first active intake pointer custody for ART participation."""
+    from app.modules.tasks.intake_custody import IntakeTaskCustody
+
+    return IntakeTaskCustody(session, task_submission_context_port(session))
+
+
+def accepted_submission_creation_service(session, *, settings, admissions):
+    """Compose accepted continuation with the existing sole Submission writer."""
+    from app.adapters.checkers import evaluation_coordinator
+    from app.adapters.outbox import outbox_append
+    return TaskSubmissionCreationService(
+        session, contexts=task_service(session, settings=settings),
+        submission_contexts=task_submission_context_port(session), authorization=None,
+        admissions=_ArtifactAdmissionAdapter(admissions), evaluations=evaluation_coordinator(session),
+        events=outbox_append(session),
     )

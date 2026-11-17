@@ -25,7 +25,8 @@ async def test_real_audit_insert_failure_rolls_back(tmp_path, isolated_database_
                   else "checker.post_submit." + phase)
         before = await snapshot(h)
         opened = len(h.store.opens)
-        consumer = Consumer(h.files)
+        consumer = (Consumer(h.files, ExecuteFacts(request=h.request, lease=lease))
+                    if phase == "materialize" else None)
         async with h.factory() as session, session.begin():
             await session.execute(text("CREATE SEQUENCE test_post_submit_audit_attempt"))
             await session.execute(text("""CREATE FUNCTION test_post_submit_audit_failure() RETURNS trigger
@@ -51,7 +52,7 @@ async def test_real_audit_insert_failure_rolls_back(tmp_path, isolated_database_
                 await invoke()
             assert await snapshot(h) == before
             assert len(h.store.opens) == opened
-            assert consumer.calls == 0 and not h.preparation._active
+            assert (consumer is None or consumer.calls == 0) and not h.preparation._active
             assert list((h.scratch / "workspaces").iterdir()) == []
             async with h.factory() as session:
                 # Sequence effects survive rollback: the real INSERT trigger ran.

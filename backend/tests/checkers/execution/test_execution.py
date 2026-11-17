@@ -49,17 +49,23 @@ async def test_verified_material_execution_and_replay(
     async with material_fixture(tmp_path, isolated_database_env, provider=provider) as h:
         reservation = await reserve(h)
         receipts = []
+        material_errors = []
         materialize = h.service.materialize
 
         async def observe_receipt(*args, **kwargs):
-            value = await materialize(*args, **kwargs)
+            try:
+                value = await materialize(*args, **kwargs)
+            except Exception:
+                import traceback
+                material_errors.append(traceback.format_exc())
+                raise
             receipts.append(value.input_materialization_evidence_id)
             return value
 
         monkeypatch.setattr(h.service, "materialize", observe_receipt)
         executor = live_executor(h)
         result = await executor.evaluate_post_submission(h.request)
-        assert result.outcome == "completed"
+        assert result.outcome == "completed", "\n".join(material_errors) or result
         assert (
             result.attempt_id == reservation.attempt_id
             and result.result_id == reservation.result_id
@@ -107,7 +113,7 @@ async def test_verified_material_execution_and_replay(
             assert tuple(row.checker_name for row in rows) == tuple(
                 m.requirement_id for m in result.execution.external_members
             )
-            assert len(rows) == len(h.request.policy.entries) == 0
+            assert len(rows) == len(h.request.policy.entries) == 1
             event = await session.scalar(
                 select(OutboxEvent).where(OutboxEvent.event_type == COMPLETION_EVENT)
             )
@@ -316,15 +322,21 @@ async def test_finalization_outbox_failure_rolls_back(tmp_path, isolated_databas
 async def test_unreadable_stored_bytes_terminalize_and_replay(
     tmp_path, isolated_database_env, monkeypatch, damage
 ):
-    from tests.test_local_artifact_store import object_path
+    from app.modules.artifacts.models import SubmissionBundleAdmission
 
     async with material_fixture(
         tmp_path, isolated_database_env, post_submit_registry_spec=post_registry_spec(),
     ) as h:
         assert len(h.request.policy.entries) == 1
         reservation = await reserve(h)
-        digest = h.request.content_sha256
-        path = object_path(h.settings.artifact_local_root, f"sha256/{digest[7:9]}/{digest[9:]}")
+        async with h.factory() as session:
+            admission = await session.get(SubmissionBundleAdmission, str(h.created.admission_id))
+            assert admission.source_operation_id is not None
+            events_before = dict((await session.execute(select(OutboxEvent.event_id, OutboxEvent.event_type))).all())
+        assert sorted(events_before.values()) == ["PostSubmissionEvaluationRequested", "SubmissionFinalizationRequested"]
+        assert events_before[h.created.evaluation_event_id] == "PostSubmissionEvaluationRequested"
+        path = (h.settings.artifact_local_root / "objects" / "submission-source" / "v1"
+                / admission.source_operation_id / "bundle.zip")
         assert path.read_bytes() == h.data
         if damage == "missing":
             path.unlink()
@@ -377,9 +389,7 @@ async def test_unreadable_stored_bytes_terminalize_and_replay(
             assert run.finalize_evidence_id is not None
             assert run.routing_recommendation == "not_evaluated"
             assert await session.scalar(select(func.count()).select_from(CheckerResult)) == 0
-            assert list(await session.scalars(select(OutboxEvent.event_id))) == [
-                h.created.evaluation_event_id
-            ]
+            assert dict((await session.execute(select(OutboxEvent.event_id, OutboxEvent.event_type))).all()) == events_before
             with pytest.raises(CheckerExecutionUnavailable, match="current_result"):
                 await evaluation_coordinator(session).read_current_result(h.request)
 
@@ -397,6 +407,10 @@ async def test_nonrecordable_material_failure_leaves_attempt_recoverable(
 
     async with material_fixture(tmp_path, isolated_database_env) as h:
         reservation = await reserve(h)
+        async with h.factory() as session:
+            events_before = dict((await session.execute(select(OutboxEvent.event_id, OutboxEvent.event_type))).all())
+        assert sorted(events_before.values()) == ["PostSubmissionEvaluationRequested", "SubmissionFinalizationRequested"]
+        assert events_before[h.created.evaluation_event_id] == "PostSubmissionEvaluationRequested"
         executor = live_executor(h)
         if failure == "authority":
             await service_link_state(h.factory, ServiceIdentity.ARTIFACT_MATERIALIZER, active=False)
@@ -447,6 +461,4 @@ async def test_nonrecordable_material_failure_leaves_attempt_recoverable(
             assert run.status == "running" and run.result_json is None
             assert run.finalize_evidence_id is None and run.completion_event_id is None
             assert await session.scalar(select(func.count()).select_from(CheckerResult)) == 0
-            assert list(await session.scalars(select(OutboxEvent.event_id))) == [
-                h.created.evaluation_event_id
-            ]
+            assert dict((await session.execute(select(OutboxEvent.event_id, OutboxEvent.event_type))).all()) == events_before

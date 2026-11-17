@@ -21,15 +21,15 @@ ASSIGNMENT_ID = "019a2a00-0000-7000-8000-000000000703"
 PREPARATION_ID = "019a2a00-0000-7000-8000-000000000704"
 DOCUMENT_ID = "019a2a00-0000-7000-8000-000000000705"
 SUBMISSION_ID = "019a2a00-0000-7000-8000-000000000706"
-ADMISSION_ID = "019a2a00-0000-7000-8000-000000000707"
 KEY = "019a2a00-0000-7000-8000-000000000708"
-PUT_ATTEMPT_ID = "019a2a00-0000-7000-8000-000000000709"
+OPERATION_ID = "019a2a00-0000-7000-8000-000000000709"
 Adapter = tuple[TestClient, list[httpx.Request], dict[str, Any]]
 
 
 def _arguments(name: str) -> dict[str, Any]:
     values: dict[str, dict[str, Any]] = {
-        "preparation_create": {
+        "submission_operation_get": {"task_id": TASK_ID, "operation_id": OPERATION_ID},
+        "submission_create": {
             "task_id": TASK_ID,
             "assignment_id": ASSIGNMENT_ID,
             "zip_base64": base64.b64encode(b"PK\x03\x04fixture").decode(),
@@ -48,10 +48,6 @@ def _arguments(name: str) -> dict[str, Any]:
         "task_guide_document_content_get": {
             "task_id": TASK_ID,
             "document_id": DOCUMENT_ID,
-        },
-        "submission_create": {
-            "task_id": TASK_ID,
-            "body": {"admission_id": ADMISSION_ID, "assignment_id": ASSIGNMENT_ID},
         },
         "task_submissions_list": {"task_id": TASK_ID, "limit": 25},
         "submission_get": {"submission_id": SUBMISSION_ID},
@@ -77,8 +73,6 @@ def _arguments(name: str) -> dict[str, Any]:
 
 
 def _bound_response(name: str) -> dict[str, Any]:
-    if name == "preparation_create":
-        return {"put_attempt_id": PUT_ATTEMPT_ID}
     if name in {"preparations_list", "task_submissions_list", "management_task_submissions_list"}:
         return {"items": [], "next_cursor": None}
     if name == "preparation_get":
@@ -101,8 +95,10 @@ def _bound_response(name: str) -> dict[str, Any]:
             "byte_count": 1,
             "sha256": "sha256:" + "0" * 64,
         }
+    if name == "submission_operation_get":
+        return {"task_id": TASK_ID, "operation_id": OPERATION_ID, "idempotency_key": KEY}
     if name == "submission_create":
-        return {"admission_id": ADMISSION_ID}
+        return {"task_id": TASK_ID, "assignment_id": ASSIGNMENT_ID}
     if name in {"submission_get", "management_submission_get"}:
         return {"id": SUBMISSION_ID}
     if name == "management_task_work_context_get":
@@ -113,6 +109,20 @@ def _bound_response(name: str) -> dict[str, Any]:
     if name == "management_task_submission_requirements_get":
         return {"project_id": PROJECT_ID, "task_id": TASK_ID}
     raise AssertionError(name)
+
+
+def _acceptance() -> dict[str, Any]:
+    return {
+        "operation_id": OPERATION_ID,
+        "task_id": TASK_ID,
+        "assignment_id": ASSIGNMENT_ID,
+        "status": "accepted",
+        "accepted_at": "2026-11-16T12:00:00Z",
+        "task_status_at_acceptance": "evaluation_pending",
+        "processing_stage_at_acceptance": "finalization_pending",
+        "replayed": False,
+        "pre_submission_results": [],
+    }
 
 
 def _catalogue(client: TestClient) -> list[dict[str, Any]]:
@@ -141,6 +151,7 @@ def test_task_execution_catalogue_is_exact_closed_and_does_not_dispatch(
         ).validate(_arguments(name))
         assert tool["inputSchema"]["additionalProperties"] is False
         assert tool["annotations"]["readOnlyHint"] is False
+    assert "workstream_preparation_create" not in catalogue
     assert received == []
 
 
@@ -160,7 +171,7 @@ async def test_every_json_operation_forwards_only_its_fixed_request(
 
     monkeypatch.setattr(WorkstreamGateway, "_request", request)
     arguments = _arguments(name)
-    upload = b"PK\x03\x04fixture" if name == "preparation_create" else None
+    upload = b"PK\x03\x04fixture" if name == "submission_create" else None
     async with httpx.AsyncClient(base_url="http://workstream.test") as client:
         result = await WorkstreamGateway(
             Settings(api_url="http://127.0.0.1:8000"), client
@@ -254,19 +265,13 @@ async def test_assigned_guide_document_uses_only_the_fixed_binary_read(
     }
 
 
-def test_preparation_upload_decodes_once_and_forwards_only_reviewed_headers(
+def test_submission_upload_decodes_once_and_forwards_only_reviewed_headers(
     adapter: Adapter,
 ) -> None:
     client, received, upstream = adapter
     content = b"PK\x03\x04fixture"
     upstream["status"] = 202
-    upstream["json"] = {
-        "put_attempt_id": PUT_ATTEMPT_ID,
-        "admission_id": None,
-        "submission_bundle_preparation_status": "put_in_flight",
-        "replayed": False,
-        "pre_submission_results": [],
-    }
+    upstream["json"] = _acceptance()
     response = client.post(
         "/mcp",
         headers={
@@ -279,8 +284,8 @@ def test_preparation_upload_decodes_once_and_forwards_only_reviewed_headers(
             "id": 1,
             "method": "tools/call",
             "params": {
-                "name": "workstream_preparation_create",
-                "arguments": _arguments("preparation_create"),
+                "name": "workstream_submission_create",
+                "arguments": _arguments("submission_create"),
             },
         },
     )
@@ -295,8 +300,8 @@ def test_preparation_upload_decodes_once_and_forwards_only_reviewed_headers(
     assert request.headers["x-contributor-attestation"] == "reviewed"
 
 
-def test_preparation_bundle_contract_fits_inside_mcp_ingress() -> None:
-    schema = TASK_EXECUTION_INPUT_SCHEMAS["preparation_create"]
+def test_submission_bundle_contract_fits_inside_mcp_ingress() -> None:
+    schema = TASK_EXECUTION_INPUT_SCHEMAS["submission_create"]
     assert schema["properties"]["zip_base64"]["maxLength"] == (
         SUBMISSION_BUNDLE_MAX_BASE64_CHARS
     )
@@ -306,11 +311,11 @@ def test_preparation_bundle_contract_fits_inside_mcp_ingress() -> None:
 
 
 @pytest.mark.parametrize("field", ["summary", "contributor_attestation"])
-def test_preparation_header_text_rejects_trailing_newline_before_dispatch(
+def test_submission_header_text_rejects_trailing_newline_before_dispatch(
     adapter: Adapter, field: str
 ) -> None:
     client, received, _ = adapter
-    arguments = {**_arguments("preparation_create"), field: "ready\n"}
+    arguments = {**_arguments("submission_create"), field: "ready\n"}
     response = client.post(
         "/mcp",
         headers={
@@ -322,7 +327,7 @@ def test_preparation_header_text_rejects_trailing_newline_before_dispatch(
             "id": 1,
             "method": "tools/call",
             "params": {
-                "name": "workstream_preparation_create",
+                "name": "workstream_submission_create",
                 "arguments": arguments,
             },
         },
@@ -337,7 +342,7 @@ def test_preparation_header_text_rejects_trailing_newline_before_dispatch(
 def test_incomplete_revision_preparation_selector_never_dispatches(adapter: Adapter) -> None:
     client, received, _ = adapter
     arguments = {
-        **_arguments("preparation_create"),
+        **_arguments("submission_create"),
         "revision_preparation_id": PREPARATION_ID,
     }
     response = client.post(
@@ -351,7 +356,7 @@ def test_incomplete_revision_preparation_selector_never_dispatches(adapter: Adap
             "id": 1,
             "method": "tools/call",
             "params": {
-                "name": "workstream_preparation_create",
+                "name": "workstream_submission_create",
                 "arguments": arguments,
             },
         },
@@ -385,8 +390,8 @@ def test_pre_submit_checker_failure_is_a_safe_tool_outcome(adapter: Adapter) -> 
             "id": 1,
             "method": "tools/call",
             "params": {
-                "name": "workstream_preparation_create",
-                "arguments": _arguments("preparation_create"),
+                "name": "workstream_submission_create",
+                "arguments": _arguments("submission_create"),
             },
         },
     )
@@ -414,3 +419,163 @@ async def test_substituted_mutation_response_fails_uncertain(
 
     assert result.failure is not None
     assert result.failure.error == "workstream_execution_uncertain"
+
+
+@pytest.mark.parametrize("change", [
+    {"task_id": PROJECT_ID},
+    {"assignment_id": PROJECT_ID},
+    {"operation_id": "not-a-uuid"},
+    {"accepted_at": "not-a-timestamp"},
+    {"status": "completed"},
+    {"processing_stage_at_acceptance": "post_pending"},
+    {"replayed": None},
+    {"submission_id": SUBMISSION_ID},
+])
+def test_submission_acceptance_refuses_substitution_and_invalid_snapshots(
+    adapter: Adapter, change: dict[str, Any]
+) -> None:
+    client, received, upstream = adapter
+    upstream["status"] = 202
+    upstream["json"] = _acceptance() | change
+    response = client.post(
+        "/mcp",
+        headers={"authorization": "Bearer fixture-token",
+                 "accept": "application/json, text/event-stream"},
+        json={"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+              "params": {"name": "workstream_submission_create",
+                         "arguments": _arguments("submission_create")}},
+    )
+    result = response.json()["result"]
+    assert result["isError"] is True
+    assert result["structuredContent"]["error"] == "workstream_execution_uncertain"
+    assert len(received) == 1
+
+
+@pytest.mark.parametrize("fields", [
+    {"predecessor_submission_id": SUBMISSION_ID},
+    {"revision_preparation_id": PREPARATION_ID,
+     "revision_preparation_sha256": "sha256:" + "a" * 64},
+])
+def test_submission_revision_requires_predecessor_and_both_acknowledgements(
+    fields: dict[str, Any],
+) -> None:
+    validator = Draft202012Validator(
+        TASK_EXECUTION_INPUT_SCHEMAS["submission_create"], format_checker=FormatChecker()
+    )
+    assert not validator.is_valid(_arguments("submission_create") | fields)
+    assert validator.is_valid(_arguments("submission_create") | {
+        "predecessor_submission_id": SUBMISSION_ID,
+        "revision_preparation_id": PREPARATION_ID,
+        "revision_preparation_sha256": "sha256:" + "a" * 64,
+    })
+
+
+def _operation_progress() -> dict[str, Any]:
+    return {
+        "operation_id": OPERATION_ID,
+        "task_id": TASK_ID,
+        "assignment_id": ASSIGNMENT_ID,
+        "idempotency_key": KEY,
+        "operation_state": "finalization_pending",
+        "processing_stage": "finalization_pending",
+        "accepted_at": "2026-11-16T12:00:00Z",
+        "task_status_at_acceptance": "evaluation_pending",
+        "current_task_status": None,
+        "submission_id": None,
+        "submission_version": None,
+        "evaluation_request_id": None,
+        "pre_submission_results": [],
+        "failure_code": None,
+        "operationally_stalled": False,
+        "next_action": "wait",
+    }
+
+
+@pytest.mark.parametrize(
+    "selector,value", [("operation_id", OPERATION_ID), ("idempotency_key", KEY)]
+)
+def test_operation_progress_uses_one_get_and_binds_selector(
+    adapter: Adapter, selector, value
+) -> None:
+    client, received, upstream = adapter
+    upstream["json"] = _operation_progress()
+    arguments = {"task_id": TASK_ID, selector: value}
+
+    def read():
+        return client.post(
+            "/mcp",
+            headers={
+                "authorization": "Bearer fixture-token",
+                "accept": "application/json, text/event-stream",
+            },
+            json={
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "tools/call",
+                "params": {"name": "workstream_submission_operation_get", "arguments": arguments},
+            },
+        ).json()["result"]
+
+    assert read()["isError"] is False
+    assert len(received) == 1
+    assert received[0].method == "GET"
+    assert received[0].url.path == f"/api/v1/tasks/{TASK_ID}/submission-operations"
+    assert dict(received[0].url.params) == {selector: value}
+    assert "idempotency-key" not in received[0].headers
+    upstream["json"][selector] = ASSIGNMENT_ID
+    assert read()["isError"] is True
+
+
+@pytest.mark.parametrize(
+    "selectors",
+    [
+        {},
+        {"operation_id": OPERATION_ID, "idempotency_key": KEY},
+        {"operation_id": "bad"},
+        {"idempotency_key": KEY, "actor_id": ASSIGNMENT_ID},
+    ],
+)
+def test_operation_progress_invalid_selectors_never_dispatch(adapter: Adapter, selectors) -> None:
+    client, received, _ = adapter
+    response = client.post(
+        "/mcp",
+        headers={"authorization": "Bearer fixture-token",
+                 "accept": "application/json, text/event-stream"},
+        json={
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {
+                "name": "workstream_submission_operation_get",
+                "arguments": {"task_id": TASK_ID, **selectors},
+            },
+        },
+    )
+    assert response.json()["result"]["isError"] is True
+    assert received == []
+
+
+@pytest.mark.parametrize(
+    "change", ["foreign_task", "private_field", "missing_nullable", "unknown_stage"]
+)
+def test_operation_progress_rejects_unbound_or_noncontract_response(
+    adapter: Adapter, change
+) -> None:
+    client, received, upstream = adapter
+    progress = _operation_progress()
+    if change == "foreign_task":
+        progress["task_id"] = ASSIGNMENT_ID
+    elif change == "private_field":
+        progress["provider_key"] = "private"
+    elif change == "missing_nullable":
+        del progress["evaluation_request_id"]
+    else:
+        progress["processing_stage"] = "invented"
+    upstream["json"] = progress
+    response = client.post("/mcp", headers={"authorization": "Bearer fixture-token",
+                 "accept": "application/json, text/event-stream"},
+        json={"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {
+            "name": "workstream_submission_operation_get",
+            "arguments": {"task_id": TASK_ID, "operation_id": OPERATION_ID}}})
+    assert response.json()["result"]["isError"] is True
+    assert len(received) == 1

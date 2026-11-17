@@ -21,8 +21,8 @@ from test_public_self_service import (
 )
 from test_submission_public_api import socket_api
 from tui_terminal_support import Terminal
-from app.api.deps.authorization import compose_hidden_submission_creation_command
-from app.core.identifiers import new_record_id
+from app.modules.artifacts.api.submission_intake import SubmissionIntakeMetadata
+from tests.post_submit_materialization_helpers import create_source_submission
 from app.modules.authorization.models import ProjectRoleGrant
 from app.modules.checkers.models import CheckerRun
 from app.modules.contributions.records.models import ContributionRecord
@@ -43,7 +43,7 @@ from tests.authorization.task_reads.support import create_task
 from tests.conftest import (
     pagination_cursor_hmac_secret as pagination_cursor_hmac_secret,
 )
-from tests.tasks.test_submission_lineage import _prepared_packet
+from tests.tasks.test_submission_lineage import _submission_task
 
 signed_access = pytest_asyncio.fixture(_signed_access.__wrapped__)
 admin_access = pytest_asyncio.fixture(_admin_access.__wrapped__)
@@ -55,7 +55,7 @@ async def test_tui_real_signed_owner_positive_reads_then_fresh_grant_revocation(
     tmp_path, auth_database_env, admin_access
 ):
     signed = admin_access.signed
-    async with _prepared_packet(auth_database_env, tmp_path) as h:
+    async with _submission_task(auth_database_env, tmp_path) as h:
         # Bind the actual stored identity link, not intake_client's actor override.
         subject = f"human-{h.context.actor_profile_id}"
         owner = SignedActor(
@@ -70,13 +70,20 @@ async def test_tui_real_signed_owner_positive_reads_then_fresh_grant_revocation(
         profile = await client.get("/api/v1/actors/me", headers=owner.headers)
         assert profile.status_code == 200, profile.text
         assert profile.json()["actor_profile_id"] == str(owner.id)
-        async with h.factory() as session:
-            receipt = await compose_hidden_submission_creation_command(
-                session,
-                h.context,
-                request_id=new_record_id(),
-                correlation_id=new_record_id(),
-            ).create(h.creation)
+        receipt = await create_source_submission(
+            h.factory,
+            h.context,
+            h.store,
+            h.namespace,
+            h.settings,
+            SubmissionIntakeMetadata(
+                task_id=h.task_id,
+                assignment_id=h.assignment_id,
+                summary="Completed the required project work.",
+                contributor_attestation=" ".join(h.policy["attestation_terms"]),
+            ),
+            h.archive_bytes,
+        )
         submission_id = str(receipt.submission_id)
         access = SimpleNamespace(signed=signed)
         ready_id = await create_task(access, h.project_id, owner)
@@ -227,7 +234,7 @@ async def test_tui_real_signed_claim_starts_work_replay_then_fresh_revocation(
     tmp_path, auth_database_env, admin_access
 ):
     signed = admin_access.signed
-    async with _prepared_packet(auth_database_env, tmp_path) as h:
+    async with _submission_task(auth_database_env, tmp_path) as h:
         subject = f"human-{h.context.actor_profile_id}"
         owner = SignedActor(
             h.context.actor_profile_id,

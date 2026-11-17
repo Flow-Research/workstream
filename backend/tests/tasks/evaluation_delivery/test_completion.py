@@ -287,6 +287,7 @@ async def test_production_registry_delivers_request_then_completion_exactly_once
 ):
     """Production registration must consume its own emitted completion event."""
     from app.adapters import artifacts as artifact_adapters
+    from tests.checkers.execution.support import ControlledSelectedExecution
 
     awards = () if human else ("money", "project_points")
     async with material_fixture(
@@ -305,14 +306,14 @@ async def test_production_registry_delivers_request_then_completion_exactly_once
             assert accepted.rowcount == 1
         await provision_router(h.factory)
         await delivery_fixture(h)
-        # An empty locked POST policy completes without constructing or
-        # contacting the external service. Actual image execution is covered
-        # by the production Rust/MinIO probe.
-        settings = h.settings.model_copy(update={
-            "external_checker_service_socket": None,
-            "external_checker_material_root": None,
-        })
-        monkeypatch.setattr("app.core.config.get_settings", lambda: settings)
+        # Keep the selected POST image and real execution owner; control only
+        # the external port. This proves delivery/acceptance, not native isolation.
+        selected = ControlledSelectedExecution()
+        monkeypatch.setattr("app.core.config.get_settings", lambda: h.settings)
+        monkeypatch.setattr(
+            "app.adapters.checkers.configured_post_submit_external_execution",
+            lambda settings, *, sessions: selected,
+        )
         monkeypatch.setattr(
             artifact_adapters,
             "worker_post_submission_materialization",
@@ -333,7 +334,9 @@ async def test_production_registry_delivers_request_then_completion_exactly_once
         assert outcome(request_receipt)["delivery_state"] == "acknowledged", outcome(request_receipt)
         completed = await state(h)
         assert completed["run"]["status"] == "completed"
-        assert completed["members"] == 0
+        assert completed["members"] == 1
+        assert len(selected.requests) == 1
+        assert selected.requests[0].identity.phase == "post_submit"
         completion_event_id = completed["run"]["completion_event_id"]
         assert completion_event_id is not None
 

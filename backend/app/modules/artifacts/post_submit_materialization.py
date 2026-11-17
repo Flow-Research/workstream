@@ -1,7 +1,7 @@
 """Verified post-submit input through the sole bounded artifact scratch owner."""
 
 import asyncio
-from collections.abc import Callable
+from collections.abc import AsyncGenerator, Callable
 from contextlib import AsyncExitStack, contextmanager
 from dataclasses import dataclass
 
@@ -66,7 +66,9 @@ from app.modules.artifacts.api.submission_archive import (
 from app.modules.artifacts.submission_archive import (
     exported_submission_tree,
 )
-from app.modules.artifacts.submission_manifest import build_submission_manifest
+from app.modules.artifacts.api.submission_manifest import (
+    build_submission_manifest,
+)
 from app.modules.checkers.api.evaluation_contract import (
     PostSubmissionExecutionResult,
     validate_execution_result,
@@ -105,6 +107,21 @@ from app.modules.checkers.api.revision_feedback import RevisionFeedbackPort, Rev
 from app.modules.checkers.api.selected_post_submit import SelectedPostSubmitCurrentResultReference
 
 
+async def _close_source_stream(stream: AsyncGenerator[bytes, None]) -> None:
+    """Drain provider cleanup before a failed or cancelled materialization returns."""
+    closing = asyncio.ensure_future(stream.aclose())
+    try:
+        await asyncio.shield(closing)
+    except asyncio.CancelledError:
+        try:
+            await await_cancellation_resistant(closing)
+        except BaseException as error:
+            raise ArtifactScratchIntegrityError("source stream cleanup is unconfirmed") from error
+        raise
+    except Exception as error:
+        raise ArtifactScratchIntegrityError("source stream cleanup is unconfirmed") from error
+
+
 def _external_material(facts, media_type, role):
     """Project verified custody without provider coordinates or file paths."""
     material = facts.material
@@ -122,6 +139,9 @@ def _external_material(facts, media_type, role):
         verification_receipt_id=facts.verification_receipt_id,
         verification_job_id=facts.verification_job_id,
         verification_generation=facts.verification_generation,
+        source_operation_id=facts.source_operation_id,
+        accepted_source_sha256=facts.accepted_source_sha256,
+        acceptance_receipt_sha256=facts.acceptance_receipt_sha256,
         namespace_fingerprint=facts.namespace_fingerprint,
         semantic_manifest_sha256=material.semantic_manifest_sha256,
     )
@@ -519,6 +539,9 @@ class PostSubmissionMaterializer:
             verification_receipt_id=selected.verification_receipt_id,
             verification_job_id=selected.verification_job_id,
             verification_generation=selected.verification_generation,
+            source_operation_id=selected.sealed_source.location.operation_id if selected.sealed_source else None,
+            accepted_source_sha256=selected.accepted_source_sha256,
+            acceptance_receipt_sha256=selected.acceptance_receipt_sha256,
             namespace_fingerprint=selected.namespace_fingerprint,
             semantic_manifest_id=selected.semantic_manifest_id,
         )
@@ -694,11 +717,16 @@ class PostSubmissionMaterializer:
                 inspections, intakes, media_types = {}, {}, {}
                 expanded_bytes, entries = 0, 0
                 for role, selection in selections.items():
+                    if selection.sealed_source:
+                        stream = self._store.open_source(selection.sealed_source)
+                        intake_cleanup.push_async_callback(_close_source_stream, stream)
+                    else:
+                        stream = self._store.open(selection.provider_object_ref)
                     prepared, intake = await intake_cleanup.enter_async_context(
                         prepared_trusted_intake(
                             self._intake,
                             self._preparation.prepare(
-                                self._store.open(selection.provider_object_ref),
+                                stream,
                                 media_type=selection.media_type,
                                 expected_sha256=selection.sha256,
                                 expected_size=selection.byte_count,

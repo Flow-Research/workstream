@@ -7,7 +7,7 @@ administrative actor, identity-link and grant inspection and explicit writes,
 active-guide/intake-policy inspection,
 contributor work discovery, claim, locked guide documents and governing
 context/intake requirements, explicit batch import/screen/release, Finance
-policy management, explicit ZIP preparation/submission, checker findings,
+policy management, single-request ZIP submission and operation progress, checker findings,
 system-Operator checker registration, terminal recovery and uncertain-delivery reconciliation, and
 contribution-evidence exports and exact Audit Authority task reads:
 
@@ -200,8 +200,8 @@ the [terminal presentation contract](../docs/design/cli-terminal-experience.md).
 | `workstream operations delivery list PROJECT_ID [--limit N] [--cursor TOKEN]` | `GET /api/v1/operations/projects/PROJECT_ID/post-submit-deliveries` |
 | `workstream operations delivery reconcile PROJECT_ID EVENT_ID --reason TEXT --idempotency-key UUID` | `POST /api/v1/operations/projects/PROJECT_ID/post-submit-deliveries/EVENT_ID/reconcile` |
 | `workstream task ready PROJECT_ID` | `GET /api/v1/projects/PROJECT_ID/tasks/ready` |
-| `workstream task prepare TASK_ID --assignment UUID --file ZIP --idempotency-key UUID` (revision: add predecessor and exact preparation ID/SHA-256) | `POST /api/v1/tasks/TASK_ID/submission-bundle-preparations` |
-| `workstream task submit TASK_ID --assignment UUID --admission UUID` | `POST /api/v1/tasks/TASK_ID/submissions` |
+| `workstream task submit TASK_ID --assignment UUID --file ZIP --idempotency-key UUID` | `POST /api/v1/tasks/TASK_ID/submissions` |
+| `workstream task submission-operation TASK_ID --operation-id UUID` (or `--idempotency-key UUID`) | `GET /api/v1/tasks/TASK_ID/submission-operations` |
 | `workstream task submissions TASK_ID [--limit N] [--cursor TOKEN]` | `GET /api/v1/tasks/TASK_ID/submissions` |
 | `workstream submission show SUBMISSION_ID` | `GET /api/v1/submissions/SUBMISSION_ID` |
 | `workstream submission findings SUBMISSION_ID [--limit N] [--cursor TOKEN]` | `GET /api/v1/submissions/SUBMISSION_ID/checker-runs` |
@@ -946,15 +946,16 @@ workstream project guide proposal PROJECT_ID GUIDE_ID COMPILATION_ID -o json > p
 jq '{target: .target, pre_submit_attachments: [], post_submit_attachments: [], acknowledged_warning_hashes: []}' proposal.json > approval.json
 # Read the findings. Edit approval.json to acknowledge only the exact displayed
 # warning_hashes you deliberately accept; the backend requires the complete order.
-# Add each selected registered image to the appropriate attachments array.
+# Add exactly one selected registered PRE image and one POST image.
 # Each attachment needs requirement_id, registry_entry_id,
-# registry_entry_digest and configuration. Empty arrays select no images.
+# registry_entry_digest and configuration. Empty or multiple selections are rejected.
 workstream project guide approve-pre PROJECT_ID GUIDE_ID COMPILATION_ID --input approval.json --idempotency-key APPROVAL_UUID -o json
 ```
 
 `--input` is a regular UTF-8 JSON file of at most 1 MiB containing the public
 `GuideProposalApprovalInput`, not the entire display package. It requires
-`target`, `pre_submit_attachments` and `post_submit_attachments`. Each attachment
+`target`, `pre_submit_attachments` and `post_submit_attachments`. Each phase must
+contain exactly one image attachment. Each attachment
 uses a human-authored requirement ID, the exact registry entry ID and digest,
 and a configuration object. Omitted `acknowledged_warning_hashes` means an empty list, never
 automatic acknowledgment. When replacing an earlier approval, supply both
@@ -1090,58 +1091,60 @@ including stored foreign-project concealment. Canonical retained prerequisites
 and Celery publication to an in-memory test broker do not prove distributed
 delivery, worker completion, live setup inference or deployed Flow behavior.
 
-## Prepare, submit and inspect contributor work
+## Submit and inspect contributor work
 
 ```sh
-workstream task prepare TASK_ID --assignment ASSIGNMENT_ID --file work.zip \
+workstream task submit TASK_ID --assignment ASSIGNMENT_ID --file work.zip \
   --idempotency-key CALLER_UUID --summary 'Completed work' --attestation 'My attestation'
-# If still pending, wait for server verification and explicitly repeat the same
-# preparation command, key, file bytes and packet. There is no polling GET.
-workstream task submit TASK_ID --assignment ASSIGNMENT_ID --admission READY_ADMISSION_ID \
-  --summary 'Completed work' --attestation 'My attestation'
+# Inspect once using the returned operation ID, or your original caller key.
+workstream task submission-operation TASK_ID --operation-id OPERATION_ID
+workstream task submission-operation TASK_ID --idempotency-key CALLER_UUID
 # For a checker-requested revision, inspect the current task context first.
 workstream task context TASK_ID --output json
-workstream task prepare TASK_ID --assignment ASSIGNMENT_ID --file revision.zip \
+workstream task submit TASK_ID --assignment ASSIGNMENT_ID --file revision.zip \
   --predecessor SOURCE_SUBMISSION_ID --revision-preparation-id PREPARATION_ID \
   --revision-preparation-sha256 "$PREPARATION_SHA256" \
   --idempotency-key REVISION_KEY --summary 'Revised work'
-workstream task submit TASK_ID --assignment ASSIGNMENT_ID --admission READY_REVISION_ADMISSION_ID \
-  --predecessor SOURCE_SUBMISSION_ID --summary 'Revised work'
 workstream task submissions TASK_ID --limit 25
 workstream submission show SUBMISSION_ID
 workstream submission findings SUBMISSION_ID --limit 25
 workstream submission findings SUBMISSION_ID --run CHECKER_RUN_ID
 ```
 
-Preparation streams one nonempty regular ZIP (at most 500MiB compressed,
-524,288,000 bytes) to the public authenticated API. Server project limits can be
-smaller. It never creates a
-Submission, automatically retries or polls. A `ready` receipt supplies the
-admission for the separate submit command. Other statuses must not be interpreted
-as readiness. Before confirming a successful upload, the CLI checks file size,
-modification time and SHA-256 again; a changed source reports an uncertain outcome.
+Submit streams one nonempty regular ZIP, at most 500MiB compressed
+(524,288,000 bytes), through one authenticated request. Server project limits can
+be smaller. Inline PRE returns actionable findings or durable acceptance with an
+operation ID. Formal Submission creation and POST evaluation continue durably;
+acceptance of intake is not a governed acceptance of the work. The CLI ends after
+printing the response and never automatically resubmits or polls.
 
-Both commands accept optional `--summary`, `--attestation` and `--predecessor`.
-Revision preparation additionally requires the exact `revision_context.preparation_id`
-and `revision_context.preparation_sha256` from the authorized task context as
+`task submission-operation` performs one read using exactly one selector. A key
+lookup is scoped to the current actor; managers can use an authorized operation
+ID. Nullable Submission/evaluation IDs remain null before finalization. The
+operation's processing stage, PRE feedback and next-action advice come from the
+server; current task status is contextual and may differ from a historical outcome.
+
+Submit accepts optional `--summary`, `--attestation` and `--predecessor`.
+Revisions require the exact `revision_context.preparation_id` and
+`revision_context.preparation_sha256` from authorized task context as
 `--revision-preparation-id` and `--revision-preparation-sha256`. Both flags are
-forbidden for initial preparation and are sent as preparation headers only; they
-are not part of the Submission JSON. Keep the pair unchanged for explicit
-preparation replay. A fresh server check rejects a stale pair after a rebase,
-deadline or source change; the CLI never selects a replacement automatically.
-Use the same packet for preparation, creation and explicit replay. The current
-preparation API transports text in headers: printable ASCII only, at most 64KiB
-per text field, with no leading/trailing whitespace. Unsupported text is rejected
-before dispatch, not rewritten. Omitted or explicitly empty text is supported;
-the server supplies warning-only defaults where applicable. The API owns all
-policy checks, predecessor/currentness rules and authorization.
+forbidden for initial submission. These acknowledge the governed revision context;
+they do not request a separate bundle preparation. A fresh server check rejects a
+stale pair after a rebase, deadline or source change. The CLI never chooses a
+replacement automatically.
 
-Submission creation is keyed by the exact admission and packet; there is no
-additional client-generated creation key. A lost or malformed write response
-exits 1 with `outcome_unknown: true`, empty stdout and a text-mode recovery hint.
-Inspect task history and explicitly replay only unchanged inputs. Do not generate
-a new preparation key simply because a response was lost. Each replay requires
-fresh server authority, including after a CLI restart.
+Packet text uses headers: printable ASCII only, at most 64KiB per field, without
+leading/trailing whitespace. Unsupported text is rejected before dispatch, not
+rewritten. Omitted or empty text is supported, with warning-only defaults where
+applicable. The API owns policy, predecessor/currentness and authorization checks.
+Before confirming upload success, the CLI rechecks file size, modification time
+and SHA-256; a changed source reports an uncertain outcome.
+
+A lost or malformed write response exits 1 with `outcome_unknown: true`, empty
+stdout and a text-mode recovery hint. Inspect progress with the original actor
+and key. Any explicit replay must preserve task, assignment, key, ZIP bytes,
+packet and revision acknowledgement. Do not create a new key while the outcome
+is unknown. Every read or replay requires fresh server authority.
 
 Blocked pre-submission intake prints the validated contributor findings in error
 `details`; it creates no Submission. Infrastructure failures are not quality
@@ -1174,10 +1177,11 @@ eligible may claim a new assignment at round 0, including a previous claimant;
 there is no contributor-count limit. Human decision integration remains #554.
 
 
-The native process test uses real HTTP, PostgreSQL and local ART custody, with
-approved-policy/assignment prerequisites arranged by fixtures. It drives the real
-independent verifier directly; it does not certify distributed scheduling, S3 or
-the complete public guide-setup journey owned by PILOT #552.
+Built-process HTTP tests cover submission and progress response handling. Backend
+source-custody tests separately exercise PostgreSQL, PRE, finalization and POST
+routing. The older CLI real-API fixtures still require migration to the source-bound
+PRE path; these checks do not yet prove the complete CLI-to-worker journey,
+distributed scheduling, hosted S3 or public guide setup.
 
 ## Inspect an exact derived post-submission policy
 
@@ -1795,7 +1799,7 @@ browsing receives an empty document list. Task examples are never included.
 For a task awaiting revision, the optional `revision_context` gives the current
 preparation ID and digest, source Submission, deadline, eligibility disposition
 and bounded change summary. It may be absent or null on other tasks. Use its
-exact preparation pair for a revision ZIP preparation; the read does not reserve
+exact preparation pair for a revision ZIP submission; the read does not reserve
 or authorize later intake.
 Hints are observations, not authority
 or a claimability guarantee. The CLI never recomputes them or automatically
@@ -1805,7 +1809,7 @@ Requirements expose the task's locked guide and intake rules: packet fields,
 artifact/evidence requirements, forbidden patterns, attestation, hash/manifest
 requirements, storage-reference restrictions, size/entry limits and packaging.
 They are not a current-guide lookup, a checker verdict or permission to upload.
-These reads do not invoke the separate `task prepare`/`task submit` commands. Described
+These reads do not invoke `task submit`. Described
 paths and storage references are displayed only, never read, downloaded or executed.
 
 ### Read the assigned guide
@@ -1823,7 +1827,7 @@ latest guide or drafts. A successor activation alone never changes its documents
 Checker-requested revision preparation can atomically rebase the complete task
 and assignment context for the next attempt. Inspect `task context` for its
 frozen change summary and acknowledge the exact preparation pair when running
-`task prepare`; this guide download does not initiate a rebase. Covered-manager
+`task submit`; this guide download does not initiate a rebase. Covered-manager
 repair is a separate backend operation with no CLI command. Genuine human
 Review revision integration remains #554 work.
 

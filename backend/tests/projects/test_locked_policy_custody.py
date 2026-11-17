@@ -143,6 +143,12 @@ async def test_context_read_does_not_allow_activated_proposal_mutations(clean_po
             guide_id=target.guide_id,
             compilation_id=target.compilation_id,
         )
+        from app.modules.projects.guide_compilation.models import ProjectGuideProposalApproval
+        async with factory() as session:
+            original = await session.get(
+                ProjectGuideProposalApproval, receipt.command.target.upstream.operation_id,
+            )
+            choices = GuideProposalApproval.model_validate_json(json.dumps(original.request_json))
         for status in ("active", "superseded"):
             async with factory() as session, session.begin():
                 assert (
@@ -161,8 +167,8 @@ async def test_context_read_does_not_allow_activated_proposal_mutations(clean_po
                     grant,
                     GuideProposalApproval(
                         target=target,
-                        pre_submit_attachments=(),
-                        post_submit_attachments=(),
+                        pre_submit_attachments=choices.pre_submit_attachments,
+                        post_submit_attachments=choices.post_submit_attachments,
                         idempotency_key=uuid4(),
                         acknowledged_warning_hashes=receipt.command.target.upstream.acknowledged_warning_hashes,
                     ),

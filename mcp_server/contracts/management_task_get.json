@@ -1,5 +1,5 @@
 {
-  "canonical_sha256": "f8c0684b499f49b53428332dbfb28038bb2dd3c0a4f2495ecb6868307ec760e3",
+  "canonical_sha256": "f82719a1566923d782b112b980104e5c471483fdd5951e9686fd73556a7b7d2e",
   "components": {
     "schemas": {
       "ApiError": {
@@ -352,6 +352,16 @@
               }
             ]
           },
+          "pending_submission_operation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PendingSubmissionOperation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "project_id": {
             "format": "uuid",
             "title": "Project Id",
@@ -465,6 +475,31 @@
           "assigned_to"
         ],
         "title": "ManagementTaskDetail",
+        "type": "object"
+      },
+      "PendingSubmissionOperation": {
+        "properties": {
+          "operation_id": {
+            "format": "uuid",
+            "title": "Operation Id",
+            "type": "string"
+          },
+          "processing_stage": {
+            "enum": [
+              "receiving",
+              "pre_checking",
+              "finalization_pending",
+              "operationally_stalled"
+            ],
+            "title": "Processing Stage",
+            "type": "string"
+          }
+        },
+        "required": [
+          "operation_id",
+          "processing_stage"
+        ],
+        "title": "PendingSubmissionOperation",
         "type": "object"
       },
       "RevisionContextChange": {
