@@ -655,13 +655,11 @@ async def test_expiry_allows_new_assignment_initial_at_next_global_version(
     tmp_path, isolated_database_env, monkeypatch,
 ):
     """The same eligible contributor can claim again with a fresh round zero."""
-    from app.modules.artifacts.api import SubmissionBundlePreparationRequest
-    from app.modules.authorization.api import ActorIdentityFacts, ActorKind
+    from types import SimpleNamespace
+    from app.modules.tasks.models import SubmissionDispatch
     from app.modules.tasks.revision.models import TaskRevisionPreparation
-    from app.modules.tasks.schemas import AdmissionBackedSubmissionResponse
-    from tests.archive_fixtures import byte_source
+    from tests.retained_material_fixtures import finalize_retained_intake
     from tests.tasks.submission_dispatch.test_revision_expiry import expire_retained_revision
-    from tests.tasks.submission_lineage_support import _verified_admission
 
     async with remediation_source(tmp_path, isolated_database_env) as h:
         old_submission_id = h.created.submission_id
@@ -687,29 +685,25 @@ async def test_expiry_allows_new_assignment_initial_at_next_global_version(
             assert new_assignment_id != old_assignment_id
             assert claim.json()["task"]["status"] == "in_progress"
 
-            preparation = SubmissionBundlePreparationRequest(
-                actor=ActorIdentityFacts(
-                    h.actor_context.actor_profile_id,
-                    h.actor_context.identity_link_id,
-                    ActorKind.HUMAN,
-                ),
-                request_id=new_record_id(), correlation_id=new_record_id(),
-                task_id=h.request.task_id, assignment_id=new_assignment_id,
-                predecessor_submission_id=None, idempotency_key=new_record_id(),
-                summary=h.creation_request.summary,
-                contributor_attestation=h.creation_request.contributor_attestation,
-                media_type="application/zip", byte_source=byte_source(h.data),
-            )
-            admission_id = await _verified_admission(
-                h.factory, h.store, h.namespace, h.settings,
-                h.actor_context, preparation,
-            )
+            settings, errors, calls = await _revision_http_runtime(h, client, tmp_path, monkeypatch, h.data)
+            headers = {
+                "Content-Type": "application/zip",
+                "Idempotency-Key": str(new_record_id()),
+                "X-Task-Assignment-Id": str(new_assignment_id),
+                "X-Submission-Summary": h.creation_request.summary,
+                "X-Contributor-Attestation": h.creation_request.contributor_attestation,
+            }
             route = f"/api/v1/tasks/{h.request.task_id}/submissions"
-            created = await client.post(route, json=_payload(preparation, admission_id))
-            assert created.status_code == 201, created.text
-            assert created.json()["submission_version"] == 2
-            replay = await client.post(route, json=_payload(preparation, admission_id))
-            assert replay.status_code == 201 and replay.json() == created.json()
+            created = await client.post(route, headers=headers, content=h.data)
+            assert created.status_code == 202, created.text
+            assert len(calls) == 1 and not errors, errors
+            submission_id = await finalize_retained_intake(h.factory, SimpleNamespace(
+                operation_id=UUID(created.json()["operation_id"]), store=h.store.wrapped,
+                namespace=h.namespace, settings=settings))
+            replay = await client.post(route, headers=headers, content=h.data)
+            assert replay.status_code == 202, replay.text
+            assert replay.json() == dict(created.json(), replayed=True)
+            assert len(calls) == 1
 
         async with h.factory() as session:
             submissions = (await session.scalars(select(Submission).where(
@@ -721,13 +715,15 @@ async def test_expiry_allows_new_assignment_initial_at_next_global_version(
                 (2, str(new_assignment_id), None),
             ]
             assert submissions[0].id == str(old_submission_id)
-            assert submissions[1].id == created.json()["submission_id"]
+            assert submissions[1].id == str(submission_id)
             assert await session.scalar(text(
                 "SELECT public.submission_dispatch_valid(d) FROM public.submission_dispatches d "
                 "WHERE d.submission_id=:id"
             ), {"id": submissions[1].id}) is True
 
-        h.created = AdmissionBackedSubmissionResponse.model_validate(created.json())
+        async with h.factory() as session:
+            h.created = (await session.get(SubmissionDispatch, submission_id)).result()
+            assert h.created.submission_version == 2
         await _fail_current_submission(h)
         async with h.factory() as session:
             fresh = await session.get(TaskRevisionPreparation, h.revision_preparation_id)

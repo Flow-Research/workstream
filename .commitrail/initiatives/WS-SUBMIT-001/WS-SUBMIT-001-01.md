@@ -7042,3 +7042,30 @@ control passes after shared runtime extraction. Ruff/structure/record/whitespace
 pass. Scoped QA/security inspection found no actionable gap. Shared modified
 content over0c801dc84, not independent or clean-commit rerun. Remaining capacity/
 recovery consumers, producer retirement and full specification qualification open.
+
+Reclaimed-assignment public source scope: migrate only
+ test_expiry_allows_new_assignment_initial_at_next_global_version in
+backend/tests/tasks/submission_dispatch/test_revision_capacity.py from obsolete
+prepared admission/JSON creation to raw ZIP acceptance and real OUTBOX T5.
+Preserve genuine expiry delivery with lost ACK, public reclaim, global version2
+with no predecessor, new assignment round1 policy window and old-event replay
+isolation. Require exact accepted replay and one PRE. Existing retained-expiry
+fixture stays unchanged; this is not historical migration qualification.
+Allowed files are this record and that test module; no production/SQL policy,
+shared expiry helper or historical fixture changes. Lifecycle proof risk requires
+QA/test-delta/security review. Verify the isolated PG journey, cleanup, Ruff,
+structural/record/whitespace gates. Human review focus: assignment lineage and
+old-expiry replay cannot affect the new assignment or reset its window.
+
+Reclaim source v1 terminal0:1passed78.24s/schema0084/allcleanuptrue
+(/tmp/submission-reclaim-source-v1.json/.log). First launch from repository root
+failed module discovery before executing tests; corrected backend launch above.
+Finalblob e316d39842e02fa76053667e5f8406ffa077eade. Exact accepted replay performs
+no second PRE; real finalization creates globalv2/newassignment/no predecessor.
+Actual checker failure opens fresh round1; recovered old lost-ACK expiry leaves
+new window, task, assignment and expiration count unchanged. Ruff/structure/
+record/whitespace pass; scoped QA/security inspection found no actionable gap.
+Evidence is shared modified-content execution over25fb117f9, not independent or
+clean-commit rerun. Existing synthetic retained-expiry setup is unchanged and
+not historical migration proof. Fetched main has0 missing commits. Old producer
+retirement, deployment/provider qualification and full specification remain open.
