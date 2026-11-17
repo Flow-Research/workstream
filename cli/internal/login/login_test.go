@@ -35,6 +35,8 @@ type fixture struct {
 	subject      string
 	duplicateKey bool
 	keyUse       string
+	metadata     map[string]any
+	tokenCalls   int
 }
 
 func newFixture(t *testing.T) *fixture {
@@ -49,7 +51,11 @@ func newFixture(t *testing.T) *fixture {
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Path {
 		case "/realms/flow/.well-known/openid-configuration":
-			json.NewEncoder(w).Encode(map[string]any{"issuer": f.issuer, "authorization_endpoint": f.issuer + "/protocol/openid-connect/auth", "token_endpoint": f.issuer + "/protocol/openid-connect/token", "jwks_uri": f.issuer + "/protocol/openid-connect/certs", "id_token_signing_alg_values_supported": []string{"RS256"}})
+			metadata := map[string]any{"issuer": f.issuer, "authorization_endpoint": f.issuer + "/protocol/openid-connect/auth", "token_endpoint": f.issuer + "/protocol/openid-connect/token", "jwks_uri": f.issuer + "/protocol/openid-connect/certs", "id_token_signing_alg_values_supported": []string{"RS256"}, "code_challenge_methods_supported": []string{"S256"}}
+			for k, v := range f.metadata {
+				metadata[k] = v
+			}
+			json.NewEncoder(w).Encode(metadata)
 		case "/realms/flow/protocol/openid-connect/certs":
 			enc := base64.RawURLEncoding.EncodeToString
 			entry := map[string]any{"kty": "RSA", "kid": "test", "alg": "RS256", "use": f.keyUse, "n": enc(f.key.N.Bytes()), "e": enc(big.NewInt(int64(f.key.E)).Bytes())}
@@ -59,6 +65,7 @@ func newFixture(t *testing.T) *fixture {
 			}
 			json.NewEncoder(w).Encode(map[string]any{"keys": keys})
 		case "/realms/flow/protocol/openid-connect/token":
+			f.tokenCalls++
 			r.ParseForm()
 			if r.Form.Get("grant_type") == "refresh_token" {
 				f.refreshes++
@@ -340,6 +347,27 @@ func TestRejectMatchingButInvalidSigningKey(t *testing.T) {
 			_, err = f.client.verify(context.Background(), p, &oauth2.Token{AccessToken: f.signed(nil), RefreshToken: "refresh", TokenType: "Bearer"}, "participant")
 			if err == nil || err.Error() != "identity signing key is invalid" {
 				t.Fatalf("expected key rejection: %v", err)
+			}
+		})
+	}
+}
+
+func TestDiscoveryCannotRedirectCredentials(t *testing.T) {
+	for _, field := range []string{"issuer", "authorization_endpoint", "token_endpoint", "jwks_uri", "code_challenge_methods_supported"} {
+		t.Run(field, func(t *testing.T) {
+			f := newFixture(t)
+			f.metadata = map[string]any{field: "https://foreign.example/endpoint"}
+			if field == "code_challenge_methods_supported" {
+				f.metadata[field] = []string{"plain"}
+			}
+			s := f.save(t, true)
+			launched := false
+			err := f.client.Login(context.Background(), s, f.issuer, DefaultAPI, io.Discard, func(string) error { launched = true; return nil })
+			if err == nil || launched || f.tokenCalls != 0 {
+				t.Fatal("untrusted discovery reached browser or token endpoint")
+			}
+			if _, _, err = f.client.Credential(context.Background(), s, ""); err == nil || f.tokenCalls != 0 {
+				t.Fatal("untrusted discovery reached refresh endpoint")
 			}
 		})
 	}

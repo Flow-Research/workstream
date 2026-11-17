@@ -33,8 +33,8 @@ cannot be sent to a different `WORKSTREAM_API_URL`.
 
 ## Interactive contributor workspace
 
-Run `workstream tui` in an interactive terminal using the same
-`WORKSTREAM_API_URL` and `WORKSTREAM_TOKEN` environment as explicit commands.
+Run `workstream tui` in an interactive terminal after `workstream login`, or using
+the same explicit `WORKSTREAM_API_URL` and `WORKSTREAM_TOKEN` environment as other commands.
 `workstream tui --plain` uses ASCII, no application colors and no alternate
 screen; a nonempty `NO_COLOR` also disables application colors. Interactive
 cursor controls remain necessary. For redirected input/output or automation,

@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -75,10 +76,14 @@ func (c *Client) provider(ctx context.Context, value string) (*oidc.Provider, *o
 		return nil, nil, errors.New("cannot read trusted identity discovery")
 	}
 	var metadata struct {
-		JWKS string `json:"jwks_uri"`
+		JWKS    string   `json:"jwks_uri"`
+		Methods []string `json:"code_challenge_methods_supported"`
 	}
 	if p.Claims(&metadata) != nil || metadata.JWKS != value+"/protocol/openid-connect/certs" || p.Endpoint().AuthURL != value+"/protocol/openid-connect/auth" || p.Endpoint().TokenURL != value+"/protocol/openid-connect/token" {
 		return nil, nil, errors.New("identity discovery endpoints do not match the trusted issuer")
+	}
+	if !slices.Contains(metadata.Methods, "S256") {
+		return nil, nil, errors.New("identity provider does not advertise S256 PKCE")
 	}
 	endpoint := p.Endpoint()
 	endpoint.AuthStyle = oauth2.AuthStyleInParams

@@ -58,3 +58,14 @@ login paths. Browser proof invokes the built binary and keeps forced password
 change, renewal and provider-session logout assertions. The hosted Linux CLI
 already completed browser PKCE, OS-keyring storage, exact-email `whoami`, explicit
 token output and logout; Swagger hosted qualification remains to be completed.
+
+The replacement real-provider/browser fixture passed with the built native CLI:
+forced first-password change, browser code/PKCE, signed API identity, near-expiry
+renewal, local logout and absence of its provider session. Its first run reached
+logout but the test's final admin read used an expired operator token; renewing
+that test credential fixed the proof without changing product behavior. Go package
+checks and login race tests passed; the Windows binary cross-build passed, which
+is not Windows credential-store runtime qualification. Hosted Linux runtime proof
+uses the real Secret Service. Measured hosted access/refresh strings were 1,046
+and 844 bytes; platform credential-store limits still apply and failures are
+reported without plaintext fallback.
