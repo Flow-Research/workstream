@@ -664,13 +664,26 @@ def test_openapi_documents_request_error_and_response_context() -> None:
         operation = schema["paths"][path][method.lower()]
         assert operation["x-workstream-action-id"] == action
         assert operation["security"]
-    assert len(route_inventory) == 134
-    retained_routes = sorted(set(route_inventory) - proposal_routes - post_policy_routes - queue_routes - new_manager_reads - guide_read - contribution_reads.keys() - public_entry_actions.keys() - registry_actions.keys() - recovery_actions.keys() - model_actions.keys())
-    retained_protected = sorted(set(protected_inventory) - proposal_routes - post_policy_routes - queue_routes - new_manager_reads - guide_read - contribution_reads.keys() - public_entry_actions.keys() - registry_actions.keys() - recovery_actions.keys() - model_actions.keys())
+    fulfillment_prefix = "/api/v1/compensation/awards/{award_id}"
+    fulfillment_actions = {
+        f"POST {fulfillment_prefix}/fulfillment-reports": "compensation.fulfillment.report",
+        f"GET {fulfillment_prefix}/fulfillment-reports/{{external_event_id}}": "compensation.fulfillment.source.read",
+        f"GET {fulfillment_prefix}/finance-evidence": "compensation.fulfillment.source.read",
+        f"POST {fulfillment_prefix}/fulfillment-exceptions": "compensation.fulfillment.exception.report",
+    }
+    for route, action in fulfillment_actions.items():
+        assert route in protected_inventory
+        method, path = route.split(" ", 1)
+        operation = schema["paths"][path][method.lower()]
+        assert operation["x-workstream-action-id"] == action
+        assert operation["security"]
+    assert len(route_inventory) == 138
+    retained_routes = sorted(set(route_inventory) - proposal_routes - post_policy_routes - queue_routes - new_manager_reads - guide_read - contribution_reads.keys() - public_entry_actions.keys() - registry_actions.keys() - recovery_actions.keys() - model_actions.keys() - fulfillment_actions.keys())
+    retained_protected = sorted(set(protected_inventory) - proposal_routes - post_policy_routes - queue_routes - new_manager_reads - guide_read - contribution_reads.keys() - public_entry_actions.keys() - registry_actions.keys() - recovery_actions.keys() - model_actions.keys() - fulfillment_actions.keys())
     assert sha256("\n".join(retained_routes).encode()).hexdigest() == (
         "9a495b21b504f27997a26c233e7dc4b814133038a063376b760147118bd44b7e"
     )
-    assert len(protected_inventory) == 132
+    assert len(protected_inventory) == 136
     assert sha256("\n".join(retained_protected).encode()).hexdigest() == (
         "8aa0828260680a7bccdb055ebb3f21fcd06d4e37a808b4a0a37dcbf77ffa0732"
     )
@@ -709,6 +722,7 @@ def test_openapi_documents_request_error_and_response_context() -> None:
         **registry_actions,
         **recovery_actions,
         **model_actions,
+        **fulfillment_actions,
         **batch_actions,
         "GET /api/v1/tasks/{task_id}/submissions": "task.submission.list",
         "GET /api/v1/submissions/{submission_id}": "submission.read",

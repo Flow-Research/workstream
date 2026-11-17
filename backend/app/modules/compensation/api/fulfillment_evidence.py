@@ -37,28 +37,34 @@ FulfillmentFailureCode = Literal[
 
 
 def _evidence_time(value):
+    """Validate wire timestamp spelling before parsing; retain typed datetime inputs."""
     return canonical_utc_timestamp(value) if isinstance(value, str) else value
 
 
 def _evidence_time_json(value: datetime) -> str:
+    """Serialize evidence timestamps as UTC with exactly six fractional digits."""
     return value.astimezone(UTC).isoformat(timespec="microseconds").replace("+00:00", "Z")
 
 
 def _wire_bytes(value) -> bytes:
+    """Encode a JSON object for the closed financial decoder, refusing nonfinite values."""
     if not isinstance(value, dict):
         raise ValueError("financial evidence body must be an object")
     return json.dumps(value, allow_nan=False).encode("utf-8")
 
 
 def _obligation_body(value):
+    """Validate a detached obligation with the canonical financial contract decoder."""
     return decode_obligation(_wire_bytes(value))
 
 
 def _report_body(value):
+    """Validate report shape without inventing an obligation or receiver timestamp."""
     return parse_fulfillment_report(_wire_bytes(value))
 
 
 def _exception_body(value):
+    """Validate incident shape before contextual parent and obligation checks."""
     return parse_fulfillment_exception(_wire_bytes(value))
 
 
@@ -97,6 +103,7 @@ class FulfillmentEvidenceUnavailable(RuntimeError):
 
 
 class _EvidenceValue(BaseModel):
+    """Reject extra fields and revalidate immutable evidence instances at typed boundaries."""
     model_config = ConfigDict(extra="forbid", frozen=True, strict=True, revalidate_instances="always")
 
 
@@ -192,6 +199,7 @@ class FulfillmentEvidenceAuthorizationPort(Protocol):
 
 
 class FulfillmentReportAcknowledgement(_EvidenceValue):
+    """Identify the immutable report and distinguish exact replay from a new append."""
     receipt_id: UUID7
     award_id: UUID7
     fulfillment_root_id: UUID7
@@ -201,6 +209,7 @@ class FulfillmentReportAcknowledgement(_EvidenceValue):
 
 
 class FulfillmentExceptionAcknowledgement(_EvidenceValue):
+    """Identify the linked immutable incident and its exact replay outcome."""
     exception_id: UUID7
     award_id: UUID7
     fulfillment_root_id: UUID7
@@ -233,6 +242,7 @@ class FulfillmentRecordedReport(_EvidenceValue):
 
     @model_validator(mode="after")
     def require_exact_recorded_report(self):
+        """Bind the retained report body and digest to its replay acknowledgement."""
         ack, body = self.acknowledgement, self.report_body
         if (not ack.replay or canonical_json_hash(body) != ack.report_digest
                 or any(body[key] != str(getattr(ack, key)) for key in (
@@ -253,6 +263,7 @@ class FulfillmentRecordedException(_EvidenceValue):
 
     @model_validator(mode="after")
     def require_exact_recorded_exception(self):
+        """Bind the retained incident body and digest to its replay acknowledgement."""
         ack, body = self.acknowledgement, self.exception_body
         if (not ack.replay or canonical_json_hash(body) != ack.exception_digest
                 or any(body[key] != str(getattr(ack, key)) for key in (
@@ -276,12 +287,14 @@ class FulfillmentSourceEvidence(_EvidenceValue):
     @field_validator("contract_version", mode="before")
     @classmethod
     def require_integer_version(cls, value):
+        """Reject boolean and coerced contract versions before literal validation."""
         if type(value) is not int or value != 1:
             raise ValueError("contract version must be integer one")
         return value
 
     @model_validator(mode="after")
     def require_source_and_receipt_consistency(self):
+        """Reconcile source, parent, ordinal and status facts against canonical evidence."""
         if str(self.source_instance_id) != self.obligation["source_instance_id"]:
             raise ValueError("source instance differs")
         latest, fulfilled, exception = self.latest_receipt, self.fulfilled_receipt, self.latest_exception

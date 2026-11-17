@@ -2812,8 +2812,10 @@ def test_fulfillment_root_partition_additions_are_exact():
 
 
 def test_fulfillment_evidence_partition_additions_are_exact():
-    """Receipt registration admits only the six current targets and retains every owner."""
+    """Receipt registration admits only the eight current targets and retains every owner."""
     targets = {
+        "backend/app/api/routes/compensation_fulfillment.py",
+        "backend/app/api/deps/compensation_fulfillment.py",
         "backend/app/modules/authorization/domain/fulfillment_evidence.py",
         "backend/app/modules/authorization/fulfillment_evidence_authorization.py",
         "backend/app/modules/authorization/prepared_fulfillment_replay.py",

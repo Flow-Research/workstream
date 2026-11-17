@@ -2521,3 +2521,47 @@ restored, and re-run the ordinary app RR refusal with its RC gate untouched.
 These test-only native writers acquire genuine current REV/PREP authority;
 this is direct-SQL proof, not a newly reachable public operation or authority
 inferred from captured IDs. Existing scope/risk/review constraints remain.
+
+
+### Hosted receipt consumer inventory repair
+
+The a4 hosted run exposed stale independent consumers after the four service
+routes and three AUTH actions were activated: setup/audit active inventories,
+whole-API counts and retained-route fingerprints, MCP non-task route inventory,
+and the exact ownership-target test. Repair these existing test files and the
+current fulfillment route/dependency/DTO docstrings only, alongside this record.
+Keep literal closed sets, pre-existing retained-route fingerprints, all negative
+ownership probes, task contracts, workflow commands and thresholds unchanged.
+Risk remains L0 for the full change; this bounded repair changes no runtime
+policy, permission, persistence or financial operation. Acceptance is focused
+consumer passes with configured real OpenAPI and existing documentation gate.
+QA/test_delta/ci_integrity/docs review applies; human focus is preventing an
+inventory refresh from hiding unrelated activation or route drift.
+
+
+### Bounded receipt qualification evidence
+
+Four clean sources passed serial isolated PostgreSQL 16/MinIO runs, each on
+schema0073 with owned database, role and bucket cleanup complete:
+
+- 81e15935ab3c5d47024366d4bf75ffd3e15084bc: both mixed report/exception arrival
+  orders,2 passed in134.75s; actual REV waits and cross-table1/2/3 ordinals.
+- 1aadaa0b7f1aae651f14cc49fa4a11a1ca79c07a: callback/revocation arrival orders
+  and the three-party lifecycle race,3 passed in126.68s; one callback fence,
+  no cycle, canonical denial and reporting after public reactivation.
+- 531e67043a35ce52375b52adea916a761ec0fdad: native independent refusals,
+  deferred closure, RR/SERIALIZABLE and rollback-contained body-guard mutation,
+  5 passed in314.48s. Closure is forced with SET CONSTRAINTS inside the root;
+  the direct-SQL test writer bypasses the app writer, never genuine AUTH/PREP.
+- cfb92867e3c4b32494a26cb3426cf6cbf709235b: actual post-wait receiver-clock
+  assignment and rollback-contained RR collision discriminator,2 passed in73.57s.
+  The peer uses ordinary RC; the app RC gate remains intact. Invalid receipt,
+  allow and changed function are rolled back, and the installed guard restored.
+
+These are twelve specific native cases, not full-suite, delivery-worker,
+provider or whole-Finance readiness. Lead-owned execution argv/cwd, terminal
+codes, runner cleanup metadata and SHA256-bound logs remain local artifacts;
+they are not runner-generated execution receipts. The affected roadmap summary,
+scoreboard, dependency map and remaining-gate narrative describe this intended
+bounded outcome while retaining unimplemented Finance and final-head proof.
+The combined record stays Planned for the full requested implementation.

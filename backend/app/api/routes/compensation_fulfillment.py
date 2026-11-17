@@ -40,6 +40,7 @@ _KEY_PARAMETER = {"name": "Idempotency-Key", "in": "header", "required": True,
             "description": "Closed JSON report; actual streamed body must be at most 65536 bytes.",
             "content": {"application/json": {"schema": fulfillment_report_schema()}}}})
 async def report(award_id: FulfillmentPathId, key: EventKey, request: Request, owner: Owner):
+    """Record or replay an original-bound report, validating its response before commit."""
     body = await fulfillment_body(request)
     try:
         value = parse_fulfillment_report(body)
@@ -53,6 +54,7 @@ async def report(award_id: FulfillmentPathId, key: EventKey, request: Request, o
 @router.get("/fulfillment-reports/{external_event_id}", response_model=FulfillmentRecordedReport,
     openapi_extra={"x-workstream-action-id": "compensation.fulfillment.source.read"})
 async def lookup(award_id: FulfillmentPathId, external_event_id: FulfillmentPathId, request: Request, owner: Owner):
+    """Read one authorized event; an authorized miss commits its read evidence."""
     result = await owner.service.lookup(award_id, external_event_id)
     if result is None:
         return await owner.finish(ApiErrorResponse.model_validate(error_payload(request,
@@ -65,6 +67,7 @@ async def lookup(award_id: FulfillmentPathId, external_event_id: FulfillmentPath
 @router.get("/finance-evidence", response_model=FulfillmentSourceEvidence,
     openapi_extra={"x-workstream-action-id": "compensation.fulfillment.source.read"})
 async def source_evidence(award_id: FulfillmentPathId, owner: Owner):
+    """Return the bounded obligation and evidence under fresh service authority."""
     result = await owner.service.source_evidence(award_id)
     return await owner.finish(result, FulfillmentSourceEvidence, award_id=award_id)
 
@@ -77,6 +80,7 @@ async def source_evidence(award_id: FulfillmentPathId, owner: Owner):
             "description": "Closed JSON exception; actual streamed body must be at most 65536 bytes.",
             "content": {"application/json": {"schema": fulfillment_exception_schema()}}}})
 async def exception(award_id: FulfillmentPathId, key: EventKey, request: Request, owner: Owner):
+    """Append or replay a linked incident without changing earned award facts."""
     body = await fulfillment_body(request)
     try:
         value = parse_fulfillment_exception(body)

@@ -30,6 +30,7 @@ from app.schemas.auth import AuthVerificationResult
 
 
 def fulfillment_http_error(status: int) -> StructuredHTTPException:
+    """Build the concealed or retryable fulfillment error for the HTTP boundary."""
     code = {404: "fulfillment_evidence_not_found", 413: "fulfillment_body_too_large",
             422: "invalid_fulfillment_evidence", 503: "fulfillment_evidence_unavailable"}[status]
     return StructuredHTTPException(status_code=status, detail=code, error_code=code,
@@ -43,6 +44,7 @@ def canonical_fulfillment_uuid(value: str) -> str:
 
 
 def require_fulfillment_key(request: Request) -> UUID:
+    """Require one canonical UUIDv7 event header before owner operations."""
     values = request.headers.getlist("Idempotency-Key")
     try:
         value = values[0] if len(values) == 1 else ""
@@ -63,6 +65,7 @@ async def fulfillment_body(request: Request) -> bytes:
 
 @dataclass(frozen=True)
 class FulfillmentEvidenceRequest:
+    """Own the request transaction and validate detached response bytes before commit."""
     session: AsyncSession
     service: object
     source_instance_id: UUID

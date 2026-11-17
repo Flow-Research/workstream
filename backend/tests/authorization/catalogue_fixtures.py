@@ -584,6 +584,9 @@ expected = {
 
 
 AUDIT_ALLOWED_ACTION_VALUES = {
+    "compensation.fulfillment.report",
+    "compensation.fulfillment.exception.report",
+    "compensation.fulfillment.source.read",
     "project.catalogue.list",
     "checker.model_call.prepare",
     "checker.model_call.dispatch",
