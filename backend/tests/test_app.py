@@ -100,15 +100,22 @@ async def test_swagger_uses_pinned_integrity_checked_assets() -> None:
     assert "persistAuthorization: false" in response.text
 
 
-async def test_swagger_browser_oauth_preserves_bearer_api_authority(monkeypatch) -> None:
+async def test_swagger_browser_oauth_preserves_bearer_api_authority() -> None:
     from app.core.config import Settings
-    monkeypatch.setattr("app.main.prepare_auth_verifier", lambda settings: (None, True))
-    settings = Settings(auth_provider="flow", flow_auth_issuer="https://identity.example.test/realms/flow")
+    settings = Settings(
+        auth_provider="flow", flow_auth_local_hmac_secret=None,
+        token_issuer="https://identity.example.test/realms/flow",
+        token_jwks_url="https://identity.example.test/realms/flow/protocol/openid-connect/certs",
+        token_audience="workstream-api", token_algorithms="RS256",
+        token_introspection_mode="disabled",
+        token_introspection_disabled_reason="Short-lived test credentials",
+    )
     app = create_app(settings)
+    assert app.state.auth_configuration_valid
     schema = app.openapi()
     oauth = schema["components"]["securitySchemes"]["FlowIdentity"]["flows"]["authorizationCode"]
-    assert oauth["authorizationUrl"] == settings.flow_auth_issuer + "/protocol/openid-connect/auth"
-    assert oauth["tokenUrl"] == settings.flow_auth_issuer + "/protocol/openid-connect/token"
+    assert oauth["authorizationUrl"] == settings.token_issuer + "/protocol/openid-connect/auth"
+    assert oauth["tokenUrl"] == settings.token_issuer + "/protocol/openid-connect/token"
     assert set(oauth["scopes"]) == {"openid", "workstream:access", "workstream-api-audience"}
     protected = schema["paths"]["/api/v1/actors/me"]["get"]["security"]
     assert {"HTTPBearer": []} in protected

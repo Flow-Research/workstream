@@ -295,7 +295,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/docs", include_in_schema=False, response_class=HTMLResponse)
     async def swagger_docs() -> HTMLResponse:
         """Serve bearer and browser OAuth documentation with integrity-checked assets."""
-        oauth = settings.auth_provider == "flow" and app.state.auth_configuration_valid
+        oauth = browser_oauth_enabled
         oauth_init = "ui.initOAuth({clientId: \"workstream-swagger\", usePkceWithAuthorizationCodeGrant: true, scopes: \"openid workstream:access workstream-api-audience\"});" if oauth else ""
         # Fixed release and SRI: a changed CDN response must not execute with tokens.
         return HTMLResponse("""<!DOCTYPE html>
@@ -328,7 +328,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.add_exception_handler(Exception, unhandled_exception_handler)
     app.include_router(api_router)
     install_api_control_openapi(app)
-    if settings.auth_provider == "flow" and app.state.auth_configuration_valid:
+    browser_oauth_enabled = bool(
+        settings.auth_provider == "flow"
+        and app.state.auth_configuration_valid
+        and settings.token_issuer
+        and not settings.flow_auth_local_hmac_secret
+    )
+    if browser_oauth_enabled:
+        assert settings.token_issuer is not None
+        oauth_issuer = settings.token_issuer.rstrip("/")
         original_openapi = app.openapi
 
         def browser_oauth_openapi() -> dict[str, Any]:
@@ -337,8 +345,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             schemes["FlowIdentity"] = {
                 "type": "oauth2",
                 "flows": {"authorizationCode": {
-                    "authorizationUrl": settings.flow_auth_issuer + "/protocol/openid-connect/auth",
-                    "tokenUrl": settings.flow_auth_issuer + "/protocol/openid-connect/token",
+                    "authorizationUrl": oauth_issuer + "/protocol/openid-connect/auth",
+                    "tokenUrl": oauth_issuer + "/protocol/openid-connect/token",
                     "scopes": {"openid": "Sign in", "workstream:access": "Access Workstream under your assigned permissions", "workstream-api-audience": "Workstream API credential"},
                 }},
             }
