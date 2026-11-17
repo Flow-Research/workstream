@@ -6814,3 +6814,34 @@ QA/security inspection found no actionable issue and confirmed unchanged control
 ASTs. Verdict is limited to wrong-action/provenance substitution; no exhaustive
 authority or provider qualification and no independent rerun/mutation is claimed.
 Ruff, structural validator, Commitrail and whitespace checks passed.
+
+Retained replay test migration scope: replace test_replay.py's obsolete hidden
+creation command with composed TASK read_finalized for retained generation,
+foreign receipt selectors and unavailable/invalid SQL custody. Old request-field
+mutations map to T1 metadata/actor controls and SQL independent foreign-member
+validation, not invented fields on the new internal read. Move actor suspension
+checks to configured contributor operation read and binding-service suspension to
+the actual PreparedSubmissionFinalizationAuthorization gate. This latter component
+check is not an end-to-end outbox replay claim; existing lost-ack outbox proof owns
+that composition. Preserve valid controls, exact persisted event identities, no
+creation participant entry and no repair. Old individual Python-owner missing-read
+mocks are obsolete: current TASK reads one SQL-valid dispatch; actual SQL member
+substitution/immutability proofs remain in test_storage.py (3pass previous scope).
+QA/security review required for coverage mapping and precise evidence limitations.
+
+Replay migration v1 terminal0:4passed203.03s, complete database/MinIO cleanup
+(/tmp/submission-retained-replay-v1.json/.log). QA-REPLAY001 confirms human denial
+must assert code submission_unavailable, not any SubmissionIntakeFailure (which
+also includes infrastructure errors). Add that exact code assertion; retain real
+suspension and positive controls. No other scoped finding. Rerun changed security
+case on final bytes; other three tests are unchanged. One Pydantic serialization
+warning from the existing generation2 fixture is not suppressed or claimed fixed.
+
+Final replay security v2 terminal0:1passed32.20s, all cleanup complete
+(/tmp/submission-retained-replay-security-v2.json/.log). QA-REPLAY001 closed by exact
+submission_unavailable refusal with positive controls. Final test blob
+1953d6286901b2061831447125cfc48af114dc8d; the other three v1 tests remain unchanged.
+Scoped QA/security inspection found no remaining issues. Evidence is shared
+executions on frozen modified bytes over b388401ba, not an independent rerun or
+clean postcommit execution. Broader old-command removal and final qualification
+remain open. Same draft PR708 only.
