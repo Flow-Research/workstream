@@ -2500,3 +2500,24 @@ RR/SERIALIZABLE rejection must be tested after genuine preparation while the
 ordinary app RC gate remains unchanged. The remaining approved RR collision
 and post-wait receiver-clock probes follow this same actual authority fixture;
 no second storage, policy or production bypass is introduced.
+
+### Receiver clock and stale-snapshot discriminators
+
+Complete the two remaining approved native discriminators in the same direct-
+SQL module and fixture. The clock probe holds the actual immutable root row
+from an independent session, consumes real request authority, observes insertion
+blocked on that holder, and checks the returned native receiver time against a
+real database observation before release. Caller time/ordinal inputs must be
+overwritten. Exact skew predicates use that actual returned receiver value;
+there is no clock-function override.
+
+For the RR mutation, pin the actual root snapshot before a peer's committed
+exception, remove only the native RC guard inside the RR caller transaction,
+and observe its REV wait behind the real peer. The peer keeps the original
+committed function and ordinary API writer. The mutant may expose a duplicate
+ordinal inside its own uncommitted receipt, but must roll back receipt, allow
+and DDL. Read the peer ordinal independently, verify the original function is
+restored, and re-run the ordinary app RR refusal with its RC gate untouched.
+These test-only native writers acquire genuine current REV/PREP authority;
+this is direct-SQL proof, not a newly reachable public operation or authority
+inferred from captured IDs. Existing scope/risk/review constraints remain.

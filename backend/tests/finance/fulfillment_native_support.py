@@ -16,6 +16,7 @@ from app.modules.compensation.fulfillment.models import (
     CompensationFulfillmentException, CompensationFulfillmentReceipt, CompensationFulfillmentRoot,
 )
 from app.modules.compensation.models import ProjectCompensationAdapterBinding
+from app.modules.compensation.fulfillment.evidence_service import _report_ack
 
 
 async def native_source(owner, award_id):
@@ -69,3 +70,9 @@ async def insert_native(owner, values, *, exception):
     return (await owner._session.execute(insert(table).values(**values).returning(
         table.c.id, table.c.evidence_ordinal, table.c.received_at,
     ))).one()
+
+
+async def native_report_ack(owner, stored):
+    row = await owner._session.get(CompensationFulfillmentReceipt, stored.id)
+    assert row is not None
+    return _report_ack(row, replay=False)

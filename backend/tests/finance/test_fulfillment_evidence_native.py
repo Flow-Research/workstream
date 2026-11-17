@@ -1,5 +1,7 @@
 """Independent installed guards with real request authority and direct SQL."""
 
+import asyncio
+from datetime import timedelta
 import json
 from uuid import UUID
 
@@ -11,14 +13,17 @@ from sqlalchemy.pool import NullPool
 
 from app.core.hashing import canonical_json_hash
 from app.core.identifiers import new_record_id
+from fastapi import Request
 from app.db.errors import integrity_constraint_name
 from app.db.session import get_db_session
 from app.modules.compensation.api.fulfillment_evidence import FulfillmentEvidenceUnavailable
 from app.modules.compensation.fulfillment.evidence_service import FulfillmentEvidenceService
 from tests.finance.fulfillment_native_support import (
-    insert_native, native_authority, native_custody, native_source,
+    insert_native, native_authority, native_custody, native_report_ack, native_source,
 )
+from tests.auth_concurrency_support import wait_for_named_database_lock
 from tests.finance.test_fulfillment_evidence_public_api import evidence_rows, report_for
+from tests.reviews.lifecycle.test_fence import observe_advisory_wait
 
 
 def incident_for(report):
@@ -223,3 +228,147 @@ async def test_native_body_guard_removal_exposes_partial_report_only_until_rollb
             "CAST(:body AS jsonb),CAST(:obligation AS jsonb),:received_at)"),
             {"body": json.dumps(body), "obligation": json.dumps(source.obligation),
              "received_at": admitted[0].received_at}) is False
+
+
+async def test_native_clock_is_assigned_after_wait_and_bounds_use_it(fulfillment_api_source, isolated_database_env, monkeypatch):
+    source = fulfillment_api_source
+    body = report_for(source.obligation)
+    name, stored_rows = f"native-clock-{new_record_id().hex}", []
+    async def probe(owner, award, event, raw):
+        value = json.loads(raw)
+        located = await native_source(owner, award)
+        async with native_custody(owner, located) as custody:
+            async with native_authority(owner, custody, value, canonical_json_hash(value), exception=False) as row:
+                await owner._session.execute(text("SELECT set_config('application_name',:name,true)"), {"name": name})
+                stored = await insert_native(owner, row, exception=False)
+                stored_rows.append(stored)
+                return await native_report_ack(owner, stored)
+    async with source.factory() as blocker:
+        await blocker.execute(text("SELECT id FROM compensation_fulfillment_roots WHERE id=:id FOR UPDATE"),
+            {"id": UUID(source.obligation["fulfillment_root_id"])})
+        holder = await blocker.scalar(text("SELECT pg_backend_pid()"))
+        with monkeypatch.context() as patch:
+            patch.setattr(FulfillmentEvidenceService, "report", probe)
+            pending = asyncio.create_task(source.client.post(
+                f"/api/v1/compensation/awards/{body['award_id']}/fulfillment-reports", json=body,
+                headers=source.headers | {"Idempotency-Key": body["external_event_id"]}))
+            try:
+                await asyncio.wait_for(wait_for_named_database_lock(isolated_database_env, name,
+                    expected_blocker_pid=holder), 30)
+                assert not pending.done()
+                async with source.factory() as observer:
+                    before_release = await observer.scalar(text("SELECT clock_timestamp()"))
+                await blocker.rollback()
+                response = await asyncio.wait_for(pending, 30)
+            finally:
+                await blocker.rollback()
+                if not pending.done():
+                    pending.cancel()
+                await asyncio.gather(pending, return_exceptions=True)
+    assert response.status_code == 201 and len(stored_rows) == 1, response.text
+    received = stored_rows[0].received_at
+    assert received >= before_release and received.year != 2000
+    assert stored_rows[0].evidence_ordinal == 1
+    async with source.factory() as session:
+        for delta, expected in ((timedelta(seconds=300), True),
+                                (timedelta(seconds=300, microseconds=1), False)):
+            boundary = body | {"reported_at": (received + delta).isoformat(timespec="microseconds").replace("+00:00", "Z")}
+            assert await session.scalar(text("SELECT public.compensation_fulfillment_report_valid("
+                "CAST(:body AS jsonb),CAST(:obligation AS jsonb),:received_at)"),
+                {"body": json.dumps(boundary), "obligation": json.dumps(source.obligation),
+                 "received_at": received}) is expected
+    before_replay = await evidence_rows(source)
+    replay = await source.client.post(
+        f"/api/v1/compensation/awards/{body['award_id']}/fulfillment-reports", json=body,
+        headers=source.headers | {"Idempotency-Key": body["external_event_id"]})
+    assert replay.status_code == 200 and replay.json() == response.json() | {"replay": True}, replay.text
+    assert await evidence_rows(source) == before_replay
+
+
+async def test_rr_native_guard_removal_exposes_cross_table_collision(fulfillment_api_source, isolated_database_env, monkeypatch):
+    source = fulfillment_api_source
+    fulfilled = report_for(source.obligation)
+    prefix = f"/api/v1/compensation/awards/{fulfilled['award_id']}"
+    seeded = await source.client.post(prefix + "/fulfillment-reports", json=fulfilled,
+        headers=source.headers | {"Idempotency-Key": fulfilled["external_event_id"]})
+    assert seeded.status_code == 201, seeded.text
+    failure = report_for(source.obligation) | {"reported_status": "failed", "fulfilled_quantity": None,
+        "fulfilled_at": None, "external_reference": None, "failure_code": "PROVIDER_TIMEOUT"}
+    incident = incident_for(fulfilled)
+    signature = "public.guard_compensation_fulfillment_evidence()"
+    async with source.factory() as session:
+        original = await session.scalar(text("SELECT pg_get_functiondef(CAST(:name AS regprocedure))"), {"name": signature})
+    start = original.index(" IF current_setting('transaction_isolation')")
+    end = original.index(" PERFORM pg_catalog.pg_export_snapshot();", start)
+    assert original[start:end].count("fulfillment_evidence_read_committed") == 1
+    mutated = original[:start] + original[end:]
+    assert "fulfillment_evidence_read_committed" not in mutated
+    pinned, peer_held, release = asyncio.Event(), asyncio.Event(), asyncio.Event()
+    rr_pid, collided, failures = asyncio.get_running_loop().create_future(), [], []
+    original_flush, app_rc_guard = FulfillmentEvidenceService._flush_evidence, FulfillmentEvidenceService._require_transaction
+    async def peer_flush(owner):
+        await original_flush(owner)
+        peer_held.set()
+        await release.wait()
+    async def probe(owner, award, event, raw):
+        try:
+            value = json.loads(raw)
+            located = await native_source(owner, award)  # Pin RR before the peer append.
+            rr_pid.set_result(await owner._session.scalar(text("SELECT pg_backend_pid()")))
+            await owner._session.execute(text(mutated))
+            pinned.set()
+            await peer_held.wait()
+            async with native_custody(owner, located) as custody:
+                async with native_authority(owner, custody, value, canonical_json_hash(value), exception=False) as row:
+                    collided.append(await insert_native(owner, row, exception=False))
+                    raise FulfillmentEvidenceUnavailable("rollback stale-snapshot guard mutation")
+        except FulfillmentEvidenceUnavailable:
+            raise
+        except Exception as exc:
+            failures.append(exc)
+            raise
+    engine = create_async_engine(isolated_database_env, poolclass=NullPool, isolation_level="REPEATABLE READ")
+    app, tasks = source.client._transport.app, []
+    async def sessions(request: Request):
+        factory = (lambda: AsyncSession(engine, expire_on_commit=False)) if request.headers.get("X-Proof-Isolation") == "rr" else source.factory
+        async with factory() as session:
+            yield session
+    app.dependency_overrides[get_db_session] = sessions
+    try:
+        with monkeypatch.context() as patch:
+            patch.setattr(FulfillmentEvidenceService, "report", probe)
+            patch.setattr(FulfillmentEvidenceService, "_flush_evidence", peer_flush)
+            try:
+                tasks.append(asyncio.create_task(source.client.post(prefix + "/fulfillment-reports", json=failure,
+                    headers=source.headers | {"Idempotency-Key": failure["external_event_id"], "X-Proof-Isolation": "rr"})))
+                await asyncio.wait_for(pinned.wait(), 30)
+                tasks.append(asyncio.create_task(source.client.post(prefix + "/fulfillment-exceptions", json=incident,
+                    headers=source.headers | {"Idempotency-Key": incident["exception_event_id"]})))
+                await asyncio.wait_for(peer_held.wait(), 30)
+                await observe_advisory_wait(source.factory, await rr_pid, tasks[0])
+                release.set()
+                results = await asyncio.wait_for(asyncio.gather(*tasks), 30)
+            finally:
+                release.set()
+                for task in tasks:
+                    if not task.done():
+                        task.cancel()
+                await asyncio.gather(*tasks, return_exceptions=True)
+                if failures:
+                    raise failures[0]
+        assert results[0].status_code == 503 and results[1].status_code == 201, [r.text for r in results]
+        receipts, exceptions, decisions = await evidence_rows(source)
+        assert len(receipts) == len(exceptions) == len(collided) == 1
+        # This read uses an independent committed RC connection, never RR's snapshot.
+        assert collided[0].evidence_ordinal == exceptions[0]["evidence_ordinal"] == 2
+        assert len(decisions) == 2  # Original success and peer; mutant allow rolled back.
+        assert FulfillmentEvidenceService._require_transaction is app_rc_guard
+        ordinary = await source.client.post(prefix + "/fulfillment-reports", json=failure,
+            headers=source.headers | {"Idempotency-Key": failure["external_event_id"], "X-Proof-Isolation": "rr"})
+        assert ordinary.status_code == 503, ordinary.text
+        assert await evidence_rows(source) == (receipts, exceptions, decisions)
+        async with source.factory() as session:
+            assert await session.scalar(text("SELECT pg_get_functiondef(CAST(:name AS regprocedure))"), {"name": signature}) == original
+    finally:
+        app.dependency_overrides.pop(get_db_session)
+        await engine.dispose()
