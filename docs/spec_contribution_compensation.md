@@ -444,15 +444,20 @@ REV capability, and native INSERT checks the anchored UUID. No per-request
 deployment identity is generated.
 
 The event contains selectors and digests only and stays unregistered for delivery
-in this step. Finance HTTP admission, public receipt/exception callbacks and source/status
-reads, execution and cutoff/drain qualification remain unfinished. See the
+in this step. COMP exposes authenticated report, exact-event lookup, bounded
+source-evidence and exception APIs. Finance HTTP admission, durable delivery,
+execution, product-status reads and cutoff/drain qualification remain unfinished. See the
 [implementation record](../.commitrail/changes/finance-rewards-fulfillment.md).
 
 ### CompensationFulfillmentReceipt
 
-Current internal storage and unactivated commands implement the receipt shape;
-public callback/source routes and complete native authority/concurrency proof
-remain unfinished. This foundation grants no payment or delivery authority.
+Current immutable storage and four original-bound service APIs implement
+report, exact-event lookup, source evidence and linked exception recording.
+Three active request-bound actions enforce exact service actor/link authority.
+Bounded signed PostgreSQL proof covers replay, response-loss recovery, rollback,
+concurrency, revocation, native closure/immutability and receiver-clock guards.
+Final-head/full-suite and durable delivery qualification remain unfinished;
+these evidence operations grant no payment or delivery authority.
 
 Canonical stored fields:
 
@@ -852,8 +857,10 @@ AUTH alone owns:
 ACTORS owns and publicly exposes the closed ActorProfile `ServiceIdentity`
 vocabulary. AUTH consumes that vocabulary for controlled provisioning and owns
 which identities have registered service-action memberships and which actions
-are executable. The compensation adapter has exactly three planned fulfillment
-memberships; binding-target eligibility grants no executable authority.
+are executable. The compensation adapter has exactly three active fulfillment
+memberships: report, exception report and source read (also used by exact-event
+lookup). Each operation requires request-bound prepared AUTH; binding-target
+eligibility alone grants no executable authority.
 
 CON owns canonical resource loading, product guards, hidden behavior, and
 feature tests. Neither subsystem imports the other's repositories or mutates

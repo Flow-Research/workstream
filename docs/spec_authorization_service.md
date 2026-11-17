@@ -753,8 +753,8 @@ than a separate generation counter.
 
 `workstream.project.setup` was the eighth fixed identity when AUTH-12B merged;
 02C expanded that registry to fourteen identities. The current registry has
-twenty-one identities, including the compensation adapter with three planned
-fulfillment memberships, shared
+twenty-one identities, including the compensation adapter with three active,
+request-bound fulfillment memberships, shared
 outbox dispatcher, task assignment reconciler, pre/post-submit checkers,
 post-submit router and revision expirer. AUTH-12E activates
 `project.guide_sufficiency.run`, AUTH-12F3 activates policy derivation, and

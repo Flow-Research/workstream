@@ -8,9 +8,12 @@ Finance routes or execute transfers or point credits.
 
 Workstream retains acceptance, contribution records, awards and fulfillment
 receipts. Finance will own payees, arrangements, conversion, plans and execution.
-COMP has internal receipt/exception storage, request-bound authority scaffolding
-and unactivated report commands; callback/source routes and complete native
-operation proof remain pending. Both financial handoff directions use
+COMP exposes four authenticated original-bound evidence APIs: report,
+exact-event lookup, bounded source evidence and linked exception report. Three
+active request-bound AUTH actions protect them. Bounded signed PostgreSQL proof
+covers replay, rollback, concurrency, revocation and native guards; Finance
+admission, durable delivery, execution and cutoff/drain qualification remain
+unfinished. Both financial handoff directions use
 authenticated HTTP after local commit.
 Sharing host infrastructure grants no cross-owner write authority.
 

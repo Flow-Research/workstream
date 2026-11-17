@@ -200,11 +200,12 @@ participant gates. The controller refuses retained pre-authority acceptance
 facts before entering live. ARCH-04E3-B's reviewed manifest describes selected
 production routing; payment delivery remains unavailable, and
 selected automatic awards, original-source roots/ordinals and selector-only
-outbox custody commit atomically under an activation-anchored source UUID. Finance obligation, callback and cutoff/drain
-execution remain required before external fulfillment activation. Internal
-receipt/exception storage, rebuilt status and request-bound AUTH scaffolding are
-present; callback/source routes remain unexposed and their actions unavailable
-pending complete native custody and operation proof.
+outbox custody commit atomically under an activation-anchored source UUID.
+Four original-bound COMP evidence APIs and three request-bound AUTH actions are
+active, with bounded signed native replay, rollback, concurrency, revocation and
+guard proof. Finance obligation admission, durable callback delivery, execution
+and cutoff/drain qualification remain required before external fulfillment
+activation; final-head/full-suite and whole-journey proof remain unfinished.
 
 The setting is configurable through the existing authorized policy writer;
 creation defaults true and omitted replacements inherit the predecessor.

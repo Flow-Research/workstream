@@ -2565,3 +2565,23 @@ they are not runner-generated execution receipts. The affected roadmap summary,
 scoreboard, dependency map and remaining-gate narrative describe this intended
 bounded outcome while retaining unimplemented Finance and final-head proof.
 The combined record stays Planned for the full requested implementation.
+
+
+### Current activation documentation reconciliation
+
+DOC-RECEIPT-SNAPSHOT-001 identified stale present-tense descriptions outside the
+updated summary: Finance README, roadmap authority narrative, compensation and
+authorization specifications, and engineering activation custody. Extend the
+existing documentation repair scope to those exact current sources. Reconcile
+four active original-bound COMP service APIs and three active request-bound
+AUTH actions, retaining the unfinished Finance admission, durable delivery,
+provider execution, cutoff/drain and final-head qualification boundaries.
+Historical registration facts stay historical. No executable code, schema,
+authority or delivery activation changes in this documentation repair.
+
+The bounded native/test repair has independent QA/test_delta/ci_integrity and
+security/architecture/reuse review at88721c03d; the twelve executed native cases
+retain their four exact intermediate source identities. Their proof does not
+establish a combined final-head run or full Finance readiness. Documentation
+reconciliation addresses the one current-source contradiction identified by
+those reviews; the full combined change remains Planned.
