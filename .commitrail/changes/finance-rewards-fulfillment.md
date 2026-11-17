@@ -2585,3 +2585,86 @@ retain their four exact intermediate source identities. Their proof does not
 establish a combined final-head run or full Finance readiness. Documentation
 reconciliation addresses the one current-source contradiction identified by
 those reviews; the full combined change remains Planned.
+
+
+### Next runtime boundary: exact OUTBOX partition and family custody
+
+
+This is a proposed next implementation slice of the same full Finance change,
+not a new initiative or PR. No implementation has begun. Spec18.2 expressly
+requires registry-scoped expired recovery and family drain before Finance
+handlers can activate; current source confirms the gap.
+
+Allowed production: backend/app/modules/outbox/api.py, delivery.py,
+delivery_repository.py, exact adapter root app/adapters/outbox/__init__.py.
+Allowed proof: existing backend/tests/outbox/test_drain_postgresql.py,
+test_recovery_postgresql.py, test_delivery_postgresql.py and test_contracts.py;
+focused new test module only if existing cohesive owner becomes unwieldy;
+existing lane registration/independent fingerprints only if adding a module.
+Related docs: docs/workstream_reference.md shared dispatcher section, roadmap affected claims,
+and existing combined Finance record; workstream_finance_exec.md18.2 remains normative. No Finance provider/credit handler activation, worker profile, schema,
+authority catalogue, timeout, lease, retry-budget, private cross-owner import,
+new outbox engine or compatibility path.
+
+Risk L0 context / focused architecture-security and QA-test_delta-CI-docs review.
+Human focus: no cross-registry mutation through scan or supplied selectors;
+family observation cannot mistake unsupported/exhausted/missing custody for
+readiness, and existing project-scoped all-event-family diagnostic behavior is retained.
+
+Plan:
+1. candidates applies exact immutable registry keys to both due work and expired
+claims. Empty registry discovers nothing. Replace the obsolete positive test
+that deliberately recovered a removed handler's claim with refusal/no-effects
+proof and a registered-owner recovery control.
+2. recover refuses foreign keys before finalization. finalize refuses foreign
+keys before preparing/consuming its outcome; _finalize rechecks exact membership
+under actual event locks before any authority consume or event/attempt write.
+Existing claim/invoke guards already require exact registry keys; preserve
+those, immutable outcome replay and matching current claim/generation. No global
+fallback registry/default handler.
+3. Add public typed delivery and family-drain ports; existing delivery methods
+keep their current semantics except the explicit registry refusals. The family
+observer is session-bound to the caller's existing root transaction so REV can
+observe under its held fence. Its adapter root binds immutable support keys from
+the same HandlerRegistry object used to compose delivery; request callers never
+supply support versions. Require an active non-nested caller root; never open,
+commit or roll back a separate transaction. Reuse the existing repository's one
+SQL aggregate with exact project and selected family names. A focused bound
+observer may retain session/support keys and delegate the shared aggregate;
+this closes current-transaction/support custody, not another delivery engine.
+Family selection is a nonempty unique tuple of at most100 exact names obeying
+HandlerRegistry's existing ASCII grammar. Validate before SQL, sort normalized
+names and echo them in a typed family observation. Match names exactly, never
+prefixes or registered versions. Within those names unsupported counts every
+exact unregistered(type,version), including terminal rows. Include terminal
+unsupported-version proof. Keep OutboxDelivery.drain(project_id) as the existing
+project-scoped all-event-family diagnostic with its existing unsupported-count
+meaning. Do not add Finance-specific SQL or private COMP imports to OUTBOX.
+4. Native two-registry proof covers scan, deliver, recover, finalize and an
+independently supplied otherwise valid foreign receipt through _finalize, so an
+outer guard cannot mask the locked internal guard. Run both uninvoked-expired
+and invoked-expired custody. Assert event rows, attempt rows, handler calls and
+AUTH consumption remain unchanged for the foreign registry; then original
+registered owner recovers with existing unknown-effect semantics. Cover pending/
+due, unsupported versions and completed finalization replay too. The existing
+harness wraps actual canonical AUTH/PREP, not permissive decisions.
+Family proof excludes foreign projects and names, includes all selected versions,
+terminal unsupported versions, unknown and exhausted custody. Missing-custody
+proof must be feasible with native deferred guards intact: in one caller root,
+stage an otherwise valid claimed event without its attempt; call the bound
+observer before deferred commit, require DeliveryPersistenceError, roll back,
+and show normal guard/observation remains. Never disable or weaken native guards.
+Actual SQL failure remains an error, never empty. Preserve existing project-
+scoped diagnostic snapshot/failure tests. Real PostgreSQL proves SQL/custody.
+
+Acceptance: exact owner partition applies uniformly to every entry path; one
+nonlocking family SQL snapshot in the caller root counts blockers without
+financial/private payload;
+pre-fix regression fails on the demonstrated partition defect; current owner
+controls pass. Run focused pure/structure checks, then one serialized isolated
+native run on a frozen source and required focused reviews. This prerequisite
+alone does not establish Finance admission, dispatch or drain-controller readiness.
+
+Plan correction custody: PLAN-OUTBOX-001 through005 are incorporated above.
+No runtime evidence is claimed. Public observers are query capabilities only;
+family/support facts confer no AUTH or lifecycle transition permission.
