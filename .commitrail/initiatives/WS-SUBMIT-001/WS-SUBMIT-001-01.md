@@ -7069,3 +7069,27 @@ Evidence is shared modified-content execution over25fb117f9, not independent or
 clean-commit rerun. Existing synthetic retained-expiry setup is unchanged and
 not historical migration proof. Fetched main has0 missing commits. Old producer
 retirement, deployment/provider qualification and full specification remain open.
+
+PM recovered-revision source scope: migrate only
+ test_pm_recovers_retained_source_and_repairs_without_resetting_window in
+backend/tests/tasks/submission_dispatch/test_revision_capacity.py to raw ZIP202
+and real OUTBOX T5; remove now-unused old preparation/payload imports from this
+module. Preserve root PM recovery/replay, child rebase/exact parent/stale refusal,
+original deadline/limit, post-finalization blocked replay and immutable parent
+lineage. Require exact source manifest/v2 and one PRE. Allowed files: this record
+and test module. No production, shared helper, historical fixture, policy or
+SQL guard changes. Existing synthetic retained setup does not qualify historical
+migration. QA/test-delta/security review and isolated changed journey plus PM
+superseded-source negative control; Ruff/structure/record/diff gates required.
+Human focus: recovered permission must not reset policy windows or old evidence.
+
+PM source v1 terminal0:2passed151.59s/schema0084/allcleanuptrue
+(/tmp/submission-pm-source-v1.json/.log). Frozenblob
+716aa0b9c5c610cbb550479a522f706d96ade335. Recovery/rebase retains original
+window, exact source and parent lineage through real T5; superseded-source
+negative control passes. Existing Pydantic fixture serialization warning remains.
+Ruff/structure/record/whitespace pass; scoped reviewer inspection no actionable
+finding. Shared modified-content execution overe2ee4ada1, not independent or
+clean-commit rerun. Synthetic retained setup unchanged, no historical migration
+qualification. One old preparation endpoint test remains in this module; full
+producer retirement/provider/specification readiness remain open.

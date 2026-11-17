@@ -19,9 +19,9 @@ from tests.tasks.post_submit_routing.outcome_support import invoked_completion
 from tests.tasks.post_submit_routing.remediation_support import remediation_source
 from tests.tasks.post_submit_routing.support import revision_archive
 from tests.tasks.submission_dispatch.test_replacement_creation import (
-    _creation_snapshot, _ready_replacement,
+    _creation_snapshot,
 )
-from tests.tasks.test_public_submission_intake import _client, _payload
+from tests.tasks.test_public_submission_intake import _client
 from tests.test_submission_predecessor_custody import _fixture_revision_context
 
 
@@ -449,6 +449,9 @@ async def test_pm_recovers_retained_source_and_repairs_without_resetting_window(
     tmp_path, isolated_database_env, monkeypatch,
 ):
     """Explicit PM recovery and later rebase keep the original failure's window."""
+    from types import SimpleNamespace
+    from app.modules.tasks.models import SubmissionDispatch
+    from tests.retained_material_fixtures import finalize_retained_intake
     from app.modules.tasks.revision.models import TaskRevisionPreparation
     from tests.tasks.post_submit_routing.support import activate_successor_guide
 
@@ -495,9 +498,20 @@ async def test_pm_recovers_retained_source_and_repairs_without_resetting_window(
             assert stale.status_code == 409, stale.text
             h.revision_preparation_id = UUID(child["preparation_id"])
             h.revision_preparation_sha256 = child["preparation_sha256"]
-            prepared, admission = await _ready_replacement(h, revision_archive(h.data))
-            created = await client.post(f"/api/v1/tasks/{h.request.task_id}/submissions", json=_payload(prepared, admission))
-            assert created.status_code == 201, created.text
+            data = revision_archive(h.data)
+            settings, errors, calls = await _revision_http_runtime(h, client, tmp_path, monkeypatch, data)
+            created = await client.post(
+                f"/api/v1/tasks/{h.request.task_id}/submissions",
+                headers=_revision_upload_headers(h), content=data)
+            assert created.status_code == 202, created.text
+            assert len(calls) == 1 and not errors, errors
+            submission_id = await finalize_retained_intake(h.factory, SimpleNamespace(
+                operation_id=UUID(created.json()["operation_id"]), store=h.store.wrapped,
+                namespace=h.namespace, settings=settings))
+            async with h.factory() as session:
+                dispatch = await session.get(SubmissionDispatch, submission_id)
+                assert dispatch.submission_version == 2
+                assert dispatch.checker_remediation_manifest_id == source_id
             replay = await client.post(route, json=child_payload, headers={"Idempotency-Key": child_key})
             assert replay.status_code == 200, replay.text
             assert replay.json()["preparation_id"] == child["preparation_id"]
