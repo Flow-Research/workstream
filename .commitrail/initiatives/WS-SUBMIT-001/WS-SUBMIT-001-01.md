@@ -6946,3 +6946,34 @@ unchanged from v1 three-pass run. Six shared-helper consumer modules collect
 ASTs restored unchanged; broader old-path dependencies remain. Ruff/structure/
 record/whitespace checks passed. Evidence is shared execution of modified content
 over559617e9f, not clean-commit execution or independent rerun. Full goal open.
+
+Checker retry history migration scope: replace test_checker_retry_history_replay's
+old ready-admission/hidden-create helpers with current source T1/PRE/T4/OUTBOX T5
+for the later revision. Preserve real prior failed execution, authorized retry,
+selected checker completion and governed needs_revision cause. Keep exact durable
+state snapshot for same-key historical replay and refusal of new-key old-source
+retry after a later Submission. Extend provider traps from old open() to current
+open_source()/observe_sealed_source() without changing retry production code.
+This removes one indirect shared-helper consumer; QA/security review and focused
+isolated PostgreSQL test required, not full history/provider qualification.
+
+History v1 failed43.07s before later-submission creation at unchanged selected
+execution request count (0). QA-HISTORY001 diagnosis: delivery_fixture captures its
+own ControlledSelectedExecution through configured_post_submit_external_execution;
+the test's older lower-factory monkeypatch observes an unused port. Use explicit
+returned delivery.selected, assert it was not invoked by the initial missing-source
+failure, set its verdict to failed before retry, and retain all actual execution/
+completion/needs_revision assertions. No product runtime or routing policy change.
+No downstream history qualification was reached in the failed run.
+
+History v2 terminal0:1passed44.57s/schema0084/allcleanuptrue
+(/tmp/submission-checker-history-current-v2.json/.log). Finalblob
+e0c7018e5e77bbc182c42db1b2be9a8c90a714a7. QA-HISTORY001 resolved: actual captured
+checker port executes once and produces governed remediation; later accepted
+revision finalizes through real OUTBOX/T5 before historical replay assertions.
+All22 original Assert ASTs retained; new empty-port/v2 controls added. Same-key
+receipt/full retained-state equality and new-key refusal pass with old/current
+source-read traps. QA/security inspection has no remaining finding. Existing
+Pydantic fixture warning retained. Shared modified-content execution overf9d1b2529,
+not independent or clean-commit rerun; no provider/native runtime qualification.
+This removes one old shared-helper consumer; full retirement remains open.
