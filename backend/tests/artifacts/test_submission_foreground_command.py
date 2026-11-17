@@ -25,7 +25,9 @@ async def configure_source_http(factory, client, tmp_path, monkeypatch, payload,
     from tests.checkers.execution.support import provision_post_submit_service
     from tests.checkers.external.test_selected_pre_submit_coordination import _source_reservation
     from tests.test_artifact_admission import _settings
-    runtime, errors = _source_runtime(payload, tmp_path, outcome, project_findings=project_findings)
+    runtime_root = tmp_path / f"source-http-{new_record_id()}"
+    runtime_root.mkdir()
+    runtime, errors = _source_runtime(payload, runtime_root, outcome, project_findings=project_findings)
     calls, original = [], runtime.execute_pre
     async def execute(lease, grant):
         calls.append(lease.reservation.attempt_id)

@@ -6977,3 +6977,46 @@ source-read traps. QA/security inspection has no remaining finding. Existing
 Pydantic fixture warning retained. Shared modified-content execution overf9d1b2529,
 not independent or clean-commit rerun; no provider/native runtime qualification.
 This removes one old shared-helper consumer; full retirement remains open.
+
+Two-revision public cap proof scope: migrate test_two_revisions_then_public_and_sql_refusal
+in test_revision_capacity.py from old preparation+JSON admission to raw ZIP202
+acceptance and real finalization OUTBOX. Retain two governed checker failure rounds,
+unchanged policy window duration, terminal exhaustion, historical accepted replay,
+and rawSQL excess/invalid-version refusal with exact lineage. Configure the existing
+controlled PRE transport on the already-claimed16MiB test namespace. Require one
+PRE per accepted revision, exact source-backed finalized dispatch, and no additional
+intake on exhausted-assignment refusal. Other capacity tests/shared helpers remain
+unchanged and unqualified by this run. QA/security review and targeted PG/public
+journey required; no real guest/provider or final specification qualification claim.
+
+Public cap v1 failed105.62s during the rawZIP revision loop with response500
+(sanitized middleware), before cap refusal assertions. Teardown also logged an async connection
+cross-loop close error; do not assume it is the request's cause. Use an untracked
+test-only diagnostic plugin to rethrow the active sanitized middleware exception;
+no production disclosure change or qualification from that diagnostic run.
+Structural validator also found test function130lines vs120limit. Extract exact
+raw-ZIP header construction into a cohesive local helper; leave policy/ledger
+unchanged and rerun validator. Both are open until discriminating evidence arrives.
+
+Diagnostic v2 failed94.49s: actual request cause is FileExistsError for pre-tree.
+Repeated configure_source_http calls share its test-runtime scratch root; second
+PRE collides even though durable namespace should remain identical. Expand bounded
+scope to that helper: allocate unique runtime-only scratch subdirectory per
+configuration while _settings(tmp_path) retains the same durable namespace/profile.
+No product storage/configuration change. Prior first-revision attribution corrected;
+teardown loop-close logs are not this cause. Remove redundant saved-header/response
+initialization (the fixed two-round loop assigns both) to stay within120lines.
+Run normal cap journey and existing one-revision public control without diagnostic
+plugin; rerun structural validator with no policy/ledger relaxation.
+
+Normal cap/control v3 terminal0:2passed128.15s/schema0084/allcleanuptrue
+(/tmp/submission-public-revision-cap-v3.json/.log), without diagnostic plugin.
+Two accepted source revisions finalize, exact window/terminal exhaustion and
+fresh-intake refusal/historical replay pass, with unchanged SQL excess/invalid
+version attacks. Existing one-revision public control also passes after runtime
+scratch isolation. Structural validator now passes with policy/ledger unchanged;
+Ruff/record/whitespace pass. Final blobs: capacity114921339529fe0d5542d4b37f5148faa9fb828e,
+foreground96751781c3aeffb398b4bdf677539ba0101835e8. Scoped QA/security reports no
+remaining actionable finding. Shared modified-content execution over11e7c36c7,
+not independent or clean-commit rerun. Other capacity cases and full old-producer/
+provider/specification qualification remain open; same single draft PR708.
