@@ -29,6 +29,8 @@ PR716 delivered native CLI, Swagger and dedicated issuer password grants.
 - `scripts/check_stale_artifact_contracts.py` and its focused asset regression: recognize binary image assets without exempting source/configuration text.
 - `docs/roadmap_status.md`, affected onboarding docs, this record.
 
+- `mcp_server/tests/test_oauth_provider.py`: repair collection-time expiration values exposed by slow CI; retain all denial assertions.
+
 ### Not allowed
 
 - Workstream-owned login/passwords, project/admin grants on signup, Garden primary
