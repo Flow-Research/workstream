@@ -187,6 +187,10 @@ class IdentityProviderTests(unittest.TestCase):
             "attributes": {"workstream_subject_kind": ["human"]},
             "credentials": [{"type": "password", "value": temporary, "temporary": True}],
         }, token=self.operator)
+        users = self.probe.request("/admin/realms/flow/users?username=direct-participant&exact=true",
+                                   token=self.operator)
+        self.assertEqual(len(users), 1)
+        user_id = users[0]["id"]
         endpoint = "/realms/flow/protocol/openid-connect/token"
         def grant(value):
             return self.probe.request(endpoint, {
@@ -194,12 +198,14 @@ class IdentityProviderTests(unittest.TestCase):
                 "username": email, "password": value,
                 "scope": "openid workstream:access workstream-api-audience",
             }, form=True)
-        with self.assertRaises(ProviderRejected):
+        with self.assertRaises(ProviderRejected) as denied:
             grant(temporary)
+        self.assertEqual(denied.exception.status, 400)
         self.probe.login("workstream-cli-login", "workstream-api-audience", email,
                          temporary, new_password=password)
-        with self.assertRaises(ProviderRejected):
+        with self.assertRaises(ProviderRejected) as denied:
             grant("incorrect-password")
+        self.assertEqual(denied.exception.status, 401)
         tokens = grant(password)
         keys = self.probe.request("/realms/flow/protocol/openid-connect/certs")["keys"]
         def verified(token):
@@ -207,6 +213,7 @@ class IdentityProviderTests(unittest.TestCase):
             claims = jwt.decode(token, jwt.PyJWK.from_dict(key).key,
                 algorithms=["RS256"], audience="workstream-api", issuer=self.origin + "/realms/flow")
             self.assertIn(claims["aud"], ("workstream-api", ["workstream-api"]))
+            self.assertEqual(claims["sub"], user_id)
             self.assertEqual(claims["azp"], "workstream-api-login")
             self.assertEqual(claims["subject_kind"], "human")
             self.assertEqual(claims["email"], email)
@@ -218,16 +225,18 @@ class IdentityProviderTests(unittest.TestCase):
             "client_id": "workstream-api-login", "refresh_token": tokens["refresh_token"]}, form=True)
         self.assertEqual(verified(renewed["access_token"])["sub"], initial["sub"])
         self.assertNotEqual(renewed["refresh_token"], tokens["refresh_token"])
-        with self.assertRaises(ProviderRejected):
+        with self.assertRaises(ProviderRejected) as denied:
             self.probe.request(endpoint, {"grant_type": "refresh_token",
                 "client_id": "workstream-api-login", "refresh_token": tokens["refresh_token"]}, form=True)
+        self.assertEqual(denied.exception.status, 400)
         # A fresh grant is used for logout: reuse denial can revoke the prior session.
         final = grant(password)
         self.probe.request("/realms/flow/protocol/openid-connect/logout", {
             "client_id": "workstream-api-login", "refresh_token": final["refresh_token"]}, form=True)
-        with self.assertRaises(ProviderRejected):
+        with self.assertRaises(ProviderRejected) as denied:
             self.probe.request(endpoint, {"grant_type": "refresh_token",
                 "client_id": "workstream-api-login", "refresh_token": final["refresh_token"]}, form=True)
+        self.assertEqual(denied.exception.status, 400)
 
     def test_provider_denies_marker_tampering_exchange_widening_and_closed_sessions(self):
         password = secrets.token_urlsafe(24)

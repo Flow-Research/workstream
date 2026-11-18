@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"io"
 	"math/big"
+	mathrand "math/rand"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -441,9 +442,48 @@ func TestFailedNewLoginPreservesExistingSession(t *testing.T) {
 func TestCompressedSessionExpansionIsBounded(t *testing.T) {
 	var packed bytes.Buffer
 	writer := zlib.NewWriter(&packed)
-	writer.Write([]byte(strings.Repeat("x", 65537)))
+	data, err := json.Marshal(&Session{Token: &oauth2.Token{AccessToken: strings.Repeat("x", 65537)}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	writer.Write(data)
 	writer.Close()
 	if _, err := decodeSession(base64.RawStdEncoding.EncodeToString(packed.Bytes())); err == nil {
 		t.Fatal("oversized expanded credential accepted")
+	}
+}
+
+func TestEncodedSessionCannotReplacePriorCredential(t *testing.T) {
+	f := newFixture(t)
+	store := f.save(t, false)
+	before, _ := keyring.Get(secretService, secretAccount)
+	random := mathrand.New(mathrand.NewSource(42))
+	alphabet := "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!#$%()*+,-./:;=?@[]^_`{|}~"
+	token := make([]byte, 65000)
+	for i := range token {
+		token[i] = alphabet[random.Intn(len(alphabet))]
+	}
+	session := &Session{Token: &oauth2.Token{RefreshToken: string(token)}}
+	data, err := json.Marshal(session)
+	if err != nil || len(data) > 65536 {
+		t.Fatal("fixture exceeds JSON bound")
+	}
+	var packed bytes.Buffer
+	writer := zlib.NewWriter(&packed)
+	if _, err := writer.Write(data); err != nil {
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if len(base64.RawStdEncoding.EncodeToString(packed.Bytes())) <= 65536 {
+		t.Fatal("fixture does not exceed encoded bound")
+	}
+	if err := store.save(session); err == nil {
+		t.Fatal("unreadable encoded session saved")
+	}
+	after, _ := keyring.Get(secretService, secretAccount)
+	if before != after {
+		t.Fatal("failed save replaced prior credential")
 	}
 }

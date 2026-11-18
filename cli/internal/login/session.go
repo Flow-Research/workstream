@@ -113,7 +113,11 @@ func encodeSession(session *Session) (string, error) {
 	if err = writer.Close(); err != nil {
 		return "", errors.New("cannot encode login session")
 	}
-	return base64.RawStdEncoding.EncodeToString(packed.Bytes()), nil
+	encoded := base64.RawStdEncoding.EncodeToString(packed.Bytes())
+	if len(encoded) > 65536 {
+		return "", errors.New("cannot encode login session")
+	}
+	return encoded, nil
 }
 
 func (s Store) save(session *Session) error {
