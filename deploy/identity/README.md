@@ -199,9 +199,9 @@ To close that refresh session, POST the client ID and refresh token to
 
 A temporary password, incomplete required action, wrong password or disabled
 account does not produce a token. Login does not grant project or administrator
-permissions. This client issues API credentials, not MCP credentials. Later
-self-service signup will use the same endpoint after account setup; this release
-supports invited accounts and, after email delivery is configured and proven, verified self-registration.
+permissions. This client issues API credentials, not MCP credentials. Invited accounts and
+verified self-registered accounts use the same endpoint after account setup.
+Public registration remains disabled until email delivery is configured and proven.
 
 ### CLI
 
@@ -297,8 +297,8 @@ isolated D-Bus session with an unlocked test Secret Service. It covers the
 native CLI login, initial password change, consent and renewal without
 using a personal browser profile.
 `scripts/test_public_ingress.py` separately exercises the pinned Caddy routes.
-Hosted cutover and actual Garden qualification remain separate required evidence
-before this change can be reported ready.
+These local proofs do not establish a hosted cutover or an actual Garden session.
+Qualify those deployment boundaries separately before claiming they work live.
 
 
 ## Flow branding and self-service signup

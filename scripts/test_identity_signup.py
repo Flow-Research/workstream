@@ -13,7 +13,7 @@ import shutil
 import subprocess
 import time
 import unittest
-from urllib.parse import urlencode, urlsplit
+from urllib.parse import parse_qs, urlencode, urlsplit
 
 import jwt
 from playwright.sync_api import sync_playwright
@@ -89,6 +89,11 @@ class IdentitySignupTests(IdentityProviderTests):
             stage = "registration"
             try:
                 page = browser.new_page()
+                callbacks = []
+                def capture_callback(route):
+                    callbacks.append(parse_qs(urlsplit(route.request.url).query))
+                    route.fulfill(status=200, body="Fixture callback received")
+                page.route("http://127.0.0.1:17843/callback*", capture_callback)
                 page.goto(authorization)
                 self.assertIn("Flow", page.title())
                 self.assertEqual(page.locator("#kc-header-wrapper").evaluate(
@@ -103,9 +108,10 @@ class IdentitySignupTests(IdentityProviderTests):
                 page.screenshot(path=str(self.root / "flow-login-mobile.png"), full_page=True)
                 page.set_viewport_size({"width": 1280, "height": 900})
                 page.get_by_role("link", name="Register", exact=True).click()
+                page.locator("#email").wait_for(state="visible")
                 for selector, value in (("#firstName", "Self"), ("#lastName", "Participant"),
                                         ("#email", email), ("#password", password), ("#password-confirm", password)):
-                    if page.locator(selector).count():
+                    if selector in ("#email", "#firstName", "#lastName") or page.locator(selector).count():
                         page.locator(selector).fill(value)
                 # Submitted privilege-like attributes must not become trusted identity.
                 page.locator("form").first.evaluate("form => { for (const name of ['workstream_subject_kind', 'user.attributes.workstream_subject_kind']) { const field=document.createElement('input'); field.type='hidden'; field.name=name; field.value='service'; form.appendChild(field); } }")
@@ -120,15 +126,18 @@ class IdentitySignupTests(IdentityProviderTests):
                 # Start a clean registration after the deliberately rejected tampering.
                 page.goto(authorization)
                 page.get_by_role("link", name="Register", exact=True).click()
+                page.locator("#email").wait_for(state="visible")
                 for selector, value in (("#firstName", "Self"), ("#lastName", "Participant"),
                                         ("#email", email), ("#password", password), ("#password-confirm", password)):
-                    if page.locator(selector).count():
+                    if selector in ("#email", "#firstName", "#lastName") or page.locator(selector).count():
                         page.locator(selector).fill(value)
                 page.locator('button[type="submit"], input[type="submit"]').first.click()
                 stage = "verification-mail"
                 print(json.dumps({"stage": "submitted", "path": urlsplit(page.url).path,
                     "alerts": [text.replace(password, "[redacted]") for text in page.locator(".pf-v5-c-alert__title, .kc-feedback-text").all_text_contents()]}), flush=True)
                 verification = mail_link()
+                self.assertEqual(callbacks, [], "Unverified registration reached the OAuth callback")
+                self.assertNotIn("code", parse_qs(urlsplit(page.url).query))
                 with self.assertRaises(ProviderRejected) as denied:
                     grant(password)
                 self.assertEqual(denied.exception.status, 400)
@@ -158,6 +167,20 @@ class IdentitySignupTests(IdentityProviderTests):
                 self.assertEqual(users[0]["attributes"]["workstream_subject_kind"], ["human"])
                 self.assertNotIn("realm_access", claims)
                 self.assertNotIn("resource_access", claims)
+                stage = "new-account-client-scopes"
+                for client_id, audience_scope, audience in (
+                    ("workstream-cli-login", "workstream-api-audience", "workstream-api"),
+                    ("workstream-mcp-proof", "workstream-mcp-audience", "workstream-mcp"),
+                ):
+                    client_tokens = self.probe.login(client_id, audience_scope, email, password,
+                        scopes="workstream:access " + audience_scope)
+                    client_key = next(k for k in keys if k["kid"] == jwt.get_unverified_header(client_tokens["access_token"])["kid"])
+                    client_claims = jwt.decode(client_tokens["access_token"], jwt.PyJWK.from_dict(client_key).key,
+                        algorithms=["RS256"], audience=audience, issuer=self.origin + "/realms/flow")
+                    self.assertEqual(client_claims["sub"], users[0]["id"])
+                    self.assertEqual(client_claims["subject_kind"], "human")
+                    self.assertNotIn("realm_access", client_claims)
+                    self.assertNotIn("resource_access", client_claims)
                 stage = "password-recovery"
                 # A new browser context tests recovery without the registration session.
                 page = browser.new_page()
@@ -202,6 +225,7 @@ class IdentitySignupTests(IdentityProviderTests):
                     page.locator('button[type="submit"], input[type="submit"]').first.click()
                 page.wait_for_load_state("domcontentloaded")
                 self.assertTrue(mailbox.empty())
+                self.assertRegex(page.locator("body").inner_text(), r"(?i)(failed to send|error.*send|could not send|unable to send)")
                 self.assertIn("access_token", grant(replacement))
                 self.assertNotIn(replacement, page.locator("body").inner_text())
                 self.assertEqual(page.locator("#password-new").count(), 0)

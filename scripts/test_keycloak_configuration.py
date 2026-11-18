@@ -5,6 +5,10 @@ import importlib.util
 import json
 from pathlib import Path
 import unittest
+import tempfile
+from unittest.mock import patch
+
+from scripts import check_stale_artifact_contracts as artifact_scan
 
 PATH = Path(__file__).resolve().parents[1] / "deploy/identity/realm_config.py"
 spec = importlib.util.spec_from_file_location("identity_realm_config", PATH)
@@ -14,6 +18,24 @@ spec.loader.exec_module(config)
 
 
 class KeycloakConfigurationTests(unittest.TestCase):
+    def test_theme_images_do_not_bypass_runtime_text_scan(self):
+        assets = PATH.parent / "themes/flow/login/resources/img"
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            files = []
+            for name in ("flow-logo.png", "favicon.ico"):
+                target = root / name
+                target.write_bytes((assets / name).read_bytes())
+                files.append(target)
+            with patch.object(artifact_scan, "discover_paths", return_value=files):
+                self.assertEqual(artifact_scan.scan(root), [])
+            for name, data in (("runtime.py", files[0].read_bytes()), ("corrupt.png", b"\xffinvalid")):
+                target = root / name
+                target.write_bytes(data)
+                with patch.object(artifact_scan, "discover_paths", return_value=[target]):
+                    self.assertEqual(artifact_scan.scan(root),
+                        [f"{name}:0: UNREADABLE_ACTIVE_TEXT (UnicodeDecodeError)"])
+
     def test_self_service_activation_requires_provider_and_secure_email(self):
         existing = {"realm": "flow", "eventsListeners": ["jboss-logging"],
                     "smtpServer": {"host": "smtp.example.test", "from": "identity@example.test", "starttls": "true"}}

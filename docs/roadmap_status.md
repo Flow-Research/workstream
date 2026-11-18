@@ -773,7 +773,8 @@ cannot be reused as post-submission review-gate evidence. See the
 - Workstream verifies external Flow identity tokens but owns no login,
   password, or primary authentication session.
 - The [Keycloak provider](../deploy/identity/README.md) replaces the Rust demo
-  issuer with stock browser code/PKCE login and administrator-provisioned accounts.
+  issuer with stock browser code/PKCE login, administrator-provisioned accounts
+  and conditional verified self-registration.
   A temporary password must be changed before issuing participant credentials.
   Invited-only deployments do not require SMTP. The Flow-branded self-service
   flow adds email verification and password recovery; public registration stays

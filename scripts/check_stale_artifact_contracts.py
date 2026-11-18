@@ -605,7 +605,14 @@ def scan(root: Path = ROOT, phase: str | None = None) -> list[str]:
     failures: list[str] = []
     for path in discover_paths(root):
         try:
-            text = path.read_text(encoding="utf-8")
+            content = path.read_bytes()
+            # Static image assets are not runtime text. Require both their image
+            # suffix and file signature; unreadable source/configuration still fails.
+            if (path.suffix.lower() == ".png" and content.startswith(b"\x89PNG\r\n\x1a\n")) or (
+                path.suffix.lower() == ".ico" and content.startswith(b"\x00\x00\x01\x00")
+            ):
+                continue
+            text = content.decode("utf-8")
         except (OSError, UnicodeDecodeError) as exc:
             relative_path = path.relative_to(root).as_posix()
             failures.append(f"{relative_path}:0: UNREADABLE_ACTIVE_TEXT ({type(exc).__name__})")

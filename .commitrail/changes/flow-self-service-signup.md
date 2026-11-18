@@ -26,6 +26,7 @@ PR716 delivered native CLI, Swagger and dedicated issuer password grants.
 - `deploy/hosted/**`: only identity email configuration and operator instructions.
 - `scripts/*identity*`, `scripts/test_keycloak_configuration.py`, identity test
   fixtures, `.github/requirements/identity-browser.*` and `.github/workflows/identity.yml`: real provider/browser/email proofs.
+- `scripts/check_stale_artifact_contracts.py` and its focused asset regression: recognize binary image assets without exempting source/configuration text.
 - `docs/roadmap_status.md`, affected onboarding docs, this record.
 
 ### Not allowed
