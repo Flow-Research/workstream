@@ -779,6 +779,16 @@ cannot be reused as post-submission review-gate evidence. See the
   required. The hosted provider has its own database role, authenticated HTTPS administrator
   console on the identity hostname, pinned image and bounded resources. Its regular container holds no
   bootstrap credential.
+- Direct API users can exchange email/password at Flow Identity using the
+  dedicated `workstream-api-login` client after issuer-required browser actions.
+  It issues only API credentials, preserves brute-force protection and does not
+  grant Workstream roles. Public signup remains deferred; the token flow does
+  not depend on invitation state.
+- The native CLI uses browser login and the OS credential store for API credentials;
+  `auth token` explicitly exports a bearer. Swagger offers code/PKCE Authorize
+  through its exact callback. These client paths preserve existing API authority
+  checks and do not introduce Workstream password handling. See the
+  [onboarding contract](../deploy/identity/README.md#participant-cli-and-direct-api-access).
 - MCP verifies its resource-scoped token and exchanges it for a short-lived API
   token for the same user; an API-only bearer is rejected by MCP. Real local
   provider proof covers password change, login, exchange, renewal/reuse denial,

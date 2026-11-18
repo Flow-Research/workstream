@@ -122,11 +122,11 @@ explicitly only to human accounts; a user cannot assign the marker themselves.
 4. Open **Credentials → Set password**, choose a unique initial password and
    leave **Temporary** enabled. Confirm **Update Password** is required.
 5. Transfer the username and temporary password privately. No invitation email
-   is sent. They connect Workstream in Garden or run the terminal login helper
+   is sent. They connect Workstream in Garden or run `workstream login`
    below, then replace the password on the Flow Identity page before receiving
    usable access credentials.
 
-Keep public registration and participant direct password grants disabled.
+Keep public registration disabled for this phase. Direct password grants are enabled only on the dedicated `workstream-api-login` client; CLI, Swagger, Garden and MCP clients retain their separate browser/exchange flows.
 Creating an identity grants no Workstream admission or project role. An existing
 Workstream Access Administrator must admit the participant and arrange the
 required project grants through Workstream's APIs. Keycloak administration is
@@ -159,70 +159,105 @@ The confidential MCP client exchanges an MCP token into a short-lived API token
 for the same subject. Its secret is mounted only into MCP through
 `WORKSTREAM_MCP_EXCHANGE_SECRET_FILE`; it is not a backend or browser credential.
 
-## Participant terminal login
+## Participant CLI and direct API access
 
-Run the helper on the computer where you will open the browser, not on the
-hosted server. Run its locked PyJWT/cryptography environment with `uv`; it listens temporarily on
-`127.0.0.1:17843`. Password entry and the mandatory initial password change happen
-on Keycloak's HTTPS page. The helper never asks for or saves a password.
+Flow Identity issues API credentials as well as MCP credentials. A participant
+uses the same invited email/password for both, and completes a mandatory initial
+password change on Flow Identity's HTTPS page. Workstream does not accept passwords
+or implement a separate login endpoint.
 
-By default credentials stay in memory. Launch the existing CLI without a saved
-credential file:
+### Curl: email/password to API token
 
-```sh
-uv run --locked --script scripts/identity_login.py --exec workstream whoami
-```
+First sign in through Flow Identity in your browser and finish any required
+password change. After that, POST your email/password to the **issuer**, not to
+Workstream. The dedicated public client is `workstream-api-login`; it needs no
+client secret. For Bash, these commands avoid putting the password into shell
+history or curl's process arguments:
 
-This child receives the verified API token and the trusted
-`https://workstream.flowresearch.tech` origin, overriding inherited token/URL
-values. No shell is involved. For an explicit saved login:
-
-```sh
-install -d -m 700 "$HOME/.local/share/workstream"
-uv run --locked --script scripts/identity_login.py \
-  --output "$HOME/.local/share/workstream/credentials.json"
-```
-
-The file is mode `0600` and contains access/refresh credentials. Do not share it
-or store it in a repository. Signed RS256 issuer, audience, subject, scope and
-lifetime checks run before publishing credentials or launching the CLI. The
-helper refuses to overwrite an existing login. Renew that file with:
-
-```sh
-uv run --locked --script scripts/identity_login.py --refresh \
-  --output "$HOME/.local/share/workstream/credentials.json"
-```
-
-Publication, refresh and logout share a persistent private sibling `.lock` file.
-A concurrent operation fails before reading or rotating credentials; retry only
-after the first operation finishes. Do not remove the lock file during use.
-To revoke the saved refresh credential and remove the local file:
-
-```sh
-uv run --locked --script scripts/identity_login.py --logout \
-  --output "$HOME/.local/share/workstream/credentials.json"
-```
-
-This does not end browser SSO or immediately invalidate already issued API
-access tokens. If remote revocation cannot be confirmed, the helper still removes
-the local credential and reports a nonzero result with that limitation. If the
-refresh session has expired or was revoked, remove only that private credential
-file and sign in again. For a deployment with another identity host,
-pass its exact `--issuer https://IDENTITY_HOST/realms/flow` on both commands.
-Discovery must match that issuer and the expected endpoints; redirects and
-ambient proxies are not used for credential requests.
-
-The existing CLI takes an API bearer through its secret environment input:
-
-```sh
+```bash
 set +x
-WORKSTREAM_API_URL=https://workstream.flowresearch.tech \
-WORKSTREAM_TOKEN="$(python3 -c 'import json,pathlib; print(json.loads((pathlib.Path.home()/".local/share/workstream/credentials.json").read_text())["access_token"])')" \
-  workstream whoami
+read -r -p 'Email: ' FLOW_EMAIL
+read -r -s -p 'Password: ' FLOW_PASSWORD
+printf '\n'
+printf '%s' "$FLOW_PASSWORD" | curl --fail-with-body --silent --show-error \
+  'https://identity.flowresearch.tech/realms/flow/protocol/openid-connect/token' \
+  --data-urlencode 'grant_type=password' \
+  --data-urlencode 'client_id=workstream-api-login' \
+  --data-urlencode "username=$FLOW_EMAIL" \
+  --data-urlencode 'password@-' \
+  --data-urlencode 'scope=openid workstream:access workstream-api-audience'
+unset FLOW_PASSWORD
 ```
 
-This does not grant Workstream admission or project authority. Garden/MCP uses
-its own resource-scoped browser flow; do not copy this API-only token into MCP.
+The response contains `access_token`, `expires_in`, and `refresh_token`. Keep the
+response private. Send the access token to Workstream as `Authorization: Bearer
+<access_token>`; it lasts up to five minutes. To renew, POST `grant_type=refresh_token`,
+`client_id=workstream-api-login`, and the current `refresh_token` to the same token
+endpoint. Store the replacement refresh token; the old one cannot be reused.
+To close that refresh session, POST the client ID and refresh token to
+`https://identity.flowresearch.tech/realms/flow/protocol/openid-connect/logout`.
+
+A temporary password, incomplete required action, wrong password or disabled
+account does not produce a token. Login does not grant project or administrator
+permissions. This client issues API credentials, not MCP credentials. Later
+self-service signup will use the same endpoint after account setup; this release
+still uses administrator invitations and does not enable public registration.
+
+### CLI
+
+Install the Workstream binary, then run:
+
+```sh
+workstream login
+workstream whoami
+```
+
+`login` opens Flow Identity in your browser and uses authorization code with PKCE.
+Run it on the computer running that browser; the callback temporarily listens on
+`127.0.0.1:17843`. It stores verified access/refresh credentials in your operating
+system credential store (macOS Keychain, Windows Credential Manager, or Linux
+Secret Service). Unlock that store first. There is no plaintext credential fallback.
+Ordinary commands renew the saved session when needed and never print its tokens.
+An uncertain refresh requires a fresh login rather than repeating the old refresh.
+
+For an explicit API bearer token:
+
+```sh
+workstream auth token
+```
+
+This command deliberately prints a secret. Do not paste its output into chat,
+logs or source control. API requests use `Authorization: Bearer <access token>`.
+Use `workstream logout` to remove the local login and close its refresh session.
+Already-issued access tokens remain valid until expiry; logout does not end the
+browser's Flow Identity SSO session.
+
+For another deployment use `workstream login --issuer
+https://IDENTITY_HOST/realms/flow --api-url https://API_HOST`. Saved credentials are
+bound to that exact API origin. An explicit `WORKSTREAM_TOKEN` remains supported
+for automation; it takes precedence over saved login. `WORKSTREAM_API_URL` selects
+its destination and defaults to the official Workstream API when omitted.
+
+### Direct API, without the CLI
+
+Open `https://workstream.flowresearch.tech/docs`, choose **Authorize**, select
+**FlowIdentity**, and sign in with your Flow Identity email/password. Swagger
+performs the code/PKCE exchange and attaches the API bearer to **Try it out**
+requests. Tokens are not persisted across page reloads. The OAuth callback is
+`https://workstream.flowresearch.tech/docs/oauth2-redirect`.
+
+A browser application calling the API uses the standard OAuth authorization-code
+flow with PKCE. Its operator must register its own public client and exact callback
+in the Flow realm, using the API audience scope. Request `openid`,
+`workstream:access`, and `workstream-api-audience`; exchange the returned code at
+the issuer's token endpoint with its original verifier. Use the returned
+`access_token` as the API bearer and the refresh credential only at the issuer.
+Do not reuse the Swagger callback for a different client, send passwords to
+Workstream, or copy an API-only token into MCP.
+
+Login creates or resolves the Workstream actor; it does not grant admission,
+project roles, or administrative authority. Keycloak administration and
+Workstream Access Administrator grants are separate.
 
 ## First Workstream Access Administrator
 
@@ -256,8 +291,10 @@ change, the production MCP adapter, the unchanged backend verifier, audience
 denial, refresh rotation, restart and database privilege isolation. It is an HTTP
 protocol/form test, not proof of a rendered browser UI or actual Garden session.
 `scripts/test_identity_browser.py` also runs real Chrome with the browser sandbox
-and TLS verification enabled, using an isolated trust store. It covers the
-participant login helper, initial password change, consent and renewal without
+and TLS verification enabled, using an isolated trust store. Build the CLI first,
+set `WORKSTREAM_TEST_CLI` to its absolute path, and run the browser test inside an
+isolated D-Bus session with an unlocked test Secret Service. It covers the
+native CLI login, initial password change, consent and renewal without
 using a personal browser profile.
 `scripts/test_public_ingress.py` separately exercises the pinned Caddy routes.
 Hosted cutover and actual Garden qualification remain separate required evidence

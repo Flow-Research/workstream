@@ -54,8 +54,10 @@ only after the public path passes; retain the separate upstream TLS certificate.
    a temporary password with `UPDATE_PASSWORD`. Transfer it privately.
 2. The participant signs in through Keycloak's browser page and replaces the
    temporary password. The application never receives or stores their password.
-3. Direct API/CLI clients complete authorization code with S256 PKCE for
-   `workstream-api`. Keep access and refresh tokens out of URLs, process arguments,
+3. CLI/browser clients complete authorization code with S256 PKCE for
+   `workstream-api`. Curl users may instead POST email/password to the issuer
+   using the dedicated `workstream-api-login` client after the initial browser
+   password change; see the [direct token commands](../identity/README.md#curl-emailpassword-to-api-token). Keep access and refresh tokens out of URLs, process arguments,
    logs and shell history.
 4. Garden uses its registered OAuth client and exact callback to obtain a token
    for `https://HOST/mcp`. MCP exchanges that token into a bounded API token for
@@ -63,10 +65,14 @@ only after the public path passes; retain the separate upstream TLS certificate.
    Both paths still require current Workstream admission and appropriate grants.
 
 Swagger is available at `https://HOST/docs` and loads its schema from
-`https://HOST/openapi.json`. These are public API documentation, not login or
-authorization endpoints. Obtain a normal Workstream access token through the
-issuer flow above and use Swagger's **Authorize** button for protected calls;
-Keycloak administration tokens do not grant Workstream access.
+`https://HOST/openapi.json`. Choose **Authorize → FlowIdentity** to sign in on
+Flow Identity and return through the exact `/docs/oauth2-redirect` callback.
+Swagger uses authorization code with PKCE and does not persist credentials across
+page reloads. Its public `workstream-swagger` client must register that exact HTTPS
+callback and API web origin. The existing bearer option also accepts an API token
+from another registered OAuth client. CLI users run `workstream login` directly;
+no repository helper is required. Keycloak administration tokens do not grant
+Workstream access. Workstream still owns no password or primary-login endpoint.
 The API routes remain under `/api/*`. Other documentation/debug paths are not
 exposed by this profile. MCP retains its exact upstream Host validation, request bounds and
 browser-Origin rejection. Caddy accepts the configured public virtual host and

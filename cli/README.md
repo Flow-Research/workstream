@@ -14,10 +14,27 @@ contribution-evidence exports and exact Audit Authority task reads:
 Separate commands record human guide sufficiency diagnostics and warning
 acknowledgements; neither approves policy nor activates a guide.
 
+## Sign in
+
+Run `workstream login`. Your browser opens Flow Identity, where you enter your
+invited email and password and change a temporary password if required. Then run
+`workstream whoami` or any authorized command. No repository login helper is needed.
+
+The CLI stores credentials in the operating system credential store and refreshes
+them when needed. Linux requires an unlocked Secret Service; macOS uses Keychain
+and Windows uses Credential Manager. No plaintext fallback is provided. Run
+`workstream logout` to remove the login and close its refresh session.
+
+`workstream auth token` explicitly prints a current API bearer token for your own
+API client. Treat that output as a secret. API-only users can instead use the
+[Swagger Authorize flow and OAuth instructions](../deploy/identity/README.md#participant-cli-and-direct-api-access).
+An explicit `WORKSTREAM_TOKEN` overrides saved login for automation. A saved login
+cannot be sent to a different `WORKSTREAM_API_URL`.
+
 ## Interactive contributor workspace
 
-Run `workstream tui` in an interactive terminal using the same
-`WORKSTREAM_API_URL` and `WORKSTREAM_TOKEN` environment as explicit commands.
+Run `workstream tui` in an interactive terminal after `workstream login`, or using
+the same explicit `WORKSTREAM_API_URL` and `WORKSTREAM_TOKEN` environment as other commands.
 `workstream tui --plain` uses ASCII, no application colors and no alternate
 screen; a nonempty `NO_COLOR` also disables application colors. Interactive
 cursor controls remain necessary. For redirected input/output or automation,

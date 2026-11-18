@@ -8,9 +8,10 @@ on:
       - 'mcp_server/workstream_mcp/oauth.py'
       - 'mcp_server/workstream_mcp/adapters/keycloak.py'
       - 'scripts/identity_protocol_probe.py'
-      - 'scripts/identity_login.py'
-      - 'scripts/identity_login.py.lock'
-      - 'scripts/test_identity_login.py'
+      - 'cli/**'
+      - 'scripts/test_identity_browser.py'
+      - 'scripts/identity_browser_runner.py'
+      - 'scripts/test_identity_browser_runner.py'
       - 'scripts/test_identity_provider.py'
       - 'scripts/test_keycloak_configuration.py'
       - 'scripts/test_identity_bootstrap.py'
@@ -55,19 +56,23 @@ jobs:
           python -m pip install 'uv==0.10.7'
           uv lock --check
           uv sync --frozen --extra dev
-      - name: Verify participant helper in its frozen script environment
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16
+        with:
+          go-version-file: cli/go.mod
+          cache-dependency-path: cli/go.sum
+      - name: Verify native participant login
+        working-directory: cli
         shell: bash
         run: |
           set -euo pipefail
-          uv export --locked --script scripts/identity_login.py --format requirements-txt > "$RUNNER_TEMP/identity-helper.txt"
-          uv venv "$RUNNER_TEMP/identity-helper"
-          uv pip sync --python "$RUNNER_TEMP/identity-helper/bin/python" --require-hashes "$RUNNER_TEMP/identity-helper.txt"
-          "$RUNNER_TEMP/identity-helper/bin/python" -m unittest scripts.test_identity_login -q
-          uv run --locked --script scripts/identity_login.py --help
+          go mod verify
+          go test -mod=readonly ./internal/login ./internal/command
+          go build -mod=readonly -o "$RUNNER_TEMP/workstream" ./cmd/workstream
+          "$RUNNER_TEMP/workstream" login --help
       - name: Build pinned Keycloak identity image
         run: docker build --file deploy/identity/Dockerfile --tag workstream-keycloak:test .
       - name: Verify configuration and deployment boundaries
-        run: backend/.venv/bin/python -m unittest scripts.test_keycloak_configuration scripts.test_identity_bootstrap scripts.test_hosted_release_config scripts.test_hosted_local_data_initialization.HostedLocalDataInitializationTests -q
+        run: backend/.venv/bin/python -m unittest scripts.test_keycloak_configuration scripts.test_identity_browser_runner scripts.test_identity_bootstrap scripts.test_hosted_release_config scripts.test_hosted_local_data_initialization.HostedLocalDataInitializationTests -q
       - name: Prove real provider login, exchange, renewal and restart
         env:
           PYTHONPATH: .:backend:mcp_server

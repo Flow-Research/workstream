@@ -84,6 +84,25 @@ def browser_client(client_id: str, callback: str, audience_scope: str) -> dict:
     return result
 
 
+def swagger_client(api_origin: str = "https://workstream.flowresearch.tech") -> dict:
+    """Register the API documentation browser with one exact callback and origin."""
+    parsed = urlsplit(api_origin)
+    if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password or parsed.path not in ("", "/") or parsed.query or parsed.fragment:
+        raise ValueError("Swagger requires an exact HTTPS API origin")
+    origin = api_origin.rstrip("/")
+    client = browser_client("workstream-swagger", origin + "/docs/oauth2-redirect", "workstream-api-audience")
+    client["webOrigins"] = [origin]
+    return client
+
+
+def direct_api_client() -> dict:
+    """Allow human password grants at the issuer after required actions finish."""
+    client = restricted_client("workstream-api-login")
+    client.update(publicClient=True, directAccessGrantsEnabled=True,
+                  optionalClientScopes=[ACCESS_SCOPE, "workstream-api-audience"])
+    return client
+
+
 def exchange_policy() -> tuple[dict, dict]:
     """Select only the administratively marked requester and enforce source claims."""
     profile = {
@@ -164,7 +183,7 @@ def realm() -> dict:
         "clients": [
             browser_client("workstream-cli-login", "http://127.0.0.1:17843/callback", "workstream-api-audience"),
             browser_client("workstream-mcp-proof", "http://127.0.0.1:17844/callback", "workstream-mcp-audience"),
-            exchange, api,
+            swagger_client(), direct_api_client(), exchange, api,
         ],
         "clientProfiles": profiles, "clientPolicies": policies,
     }

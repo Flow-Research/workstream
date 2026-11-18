@@ -14,10 +14,10 @@ spec.loader.exec_module(config)
 
 
 class KeycloakConfigurationTests(unittest.TestCase):
-    def test_human_credentials_require_browser_pkce(self):
+    def test_password_grant_is_confined_to_direct_api_client(self):
         clients = {c["clientId"]: c for c in config.realm()["clients"]}
         for client in clients.values():
-            self.assertFalse(client["directAccessGrantsEnabled"])
+            self.assertEqual(client["directAccessGrantsEnabled"], client["clientId"] == "workstream-api-login")
             self.assertFalse(client["serviceAccountsEnabled"])
             self.assertFalse(client["implicitFlowEnabled"])
             self.assertFalse(client["fullScopeAllowed"])
@@ -29,6 +29,31 @@ class KeycloakConfigurationTests(unittest.TestCase):
             self.assertEqual(client["attributes"]["pkce.code.challenge.method"], "S256")
             self.assertEqual(len(client["redirectUris"]), 1)
             self.assertNotIn("*", client["redirectUris"][0])
+
+    def test_direct_api_client_has_no_mcp_or_machine_authority(self):
+        client = config.direct_api_client()
+        self.assertTrue(client["publicClient"])
+        self.assertTrue(client["directAccessGrantsEnabled"])
+        self.assertFalse(client["consentRequired"])
+        self.assertFalse(client["standardFlowEnabled"])
+        self.assertEqual(client["redirectUris"], [])
+        self.assertEqual(client["webOrigins"], [])
+        self.assertEqual(client["optionalClientScopes"], ["workstream:access", "workstream-api-audience"])
+        self.assertEqual(client["attributes"]["standard.token.exchange.enabled"], "false")
+        self.assertEqual(client["attributes"]["access.token.lifespan"], "300")
+        self.assertTrue(config.realm()["bruteForceProtected"])
+
+    def test_swagger_has_exact_callback_origin_and_api_scope_only(self):
+        client = config.swagger_client("https://api.example.test")
+        self.assertEqual(client["redirectUris"], ["https://api.example.test/docs/oauth2-redirect"])
+        self.assertEqual(client["webOrigins"], ["https://api.example.test"])
+        self.assertEqual(client["optionalClientScopes"], ["workstream:access", "workstream-api-audience"])
+        self.assertEqual(client["attributes"]["pkce.code.challenge.method"], "S256")
+        self.assertTrue(client["publicClient"])
+        self.assertFalse(client["directAccessGrantsEnabled"])
+        for origin in ("http://api.example.test", "https://user@api.example.test", "https://api.example.test/other", "https://api.example.test?x=1"):
+            with self.subTest(origin=origin), self.assertRaises(ValueError):
+                config.swagger_client(origin)
 
     def test_exchange_cannot_issue_refresh_or_extend_source(self):
         exchange = next(c for c in config.realm()["clients"] if c["clientId"] == "workstream-mcp")
