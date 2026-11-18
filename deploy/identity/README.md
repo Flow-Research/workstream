@@ -320,6 +320,11 @@ registration and denial proofs because this SPI can change between releases. Reg
 creates an unverified identity row; it grants neither usable Workstream credentials
 before email verification nor Workstream project/administrator permissions after it.
 
+Password recovery uses the same neutral response for unknown accounts and mail
+failures. Flow guidance tells participants to check spam, retry later or contact
+their administrator; it does not reveal whether an account exists. A failed send
+does not change the existing password. Operators must inspect delivery failures.
+
 ### Configure and prove email delivery
 
 1. Deploy the pinned identity image containing the themes and registration

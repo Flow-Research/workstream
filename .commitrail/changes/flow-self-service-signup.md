@@ -57,7 +57,7 @@ Preserve invited users and existing issuer/sub/audience/token-exchange contracts
 - [ ] Verified accounts use existing CLI/API/MCP scopes, with no Workstream grants.
 - [ ] Browser login, signup, required password change, verify/reset and consent
   screens show Flow branding, work on mobile and retain accessible labels.
-- [ ] SMTP outage produces actionable safe behavior without credential disclosure.
+- [ ] SMTP outage preserves credentials and shows non-enumerating retry/support guidance.
 - [ ] Existing invited-account login/renewal/exchange proofs remain passing.
 - [ ] Deployment instructions cover SMTP, theme updates and existing realm updates
   without reset; production signup remains disabled until delivery is proven.

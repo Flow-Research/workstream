@@ -47,7 +47,7 @@ class IdentitySignupTests(IdentityProviderTests):
         profile = self.probe.request("/admin/realms/flow/users/profile", token=self.operator)
         patch = realm_config.self_service_settings(
             {**current, "smtpServer": {**smtp, "starttls": "true"}}, server, profile)
-        self.probe.request("/admin/realms/flow", {**patch, "smtpServer": smtp},
+        self.probe.request("/admin/realms/flow", {**patch, "smtpServer": smtp, "actionTokenGeneratedByUserLifespan": 300},
                            token=self.operator, method="PUT")
         home = self.root / ("signup-browser-" + secrets.token_hex(4))
         database = home / ".pki/nssdb"
@@ -225,7 +225,7 @@ class IdentitySignupTests(IdentityProviderTests):
                     page.locator('button[type="submit"], input[type="submit"]').first.click()
                 page.wait_for_load_state("domcontentloaded")
                 self.assertTrue(mailbox.empty())
-                self.assertRegex(page.locator("body").inner_text(), r"(?i)(failed to send|error.*send|could not send|unable to send)")
+                self.assertIn("If no email arrives, retry later or contact your Flow administrator.", page.locator("body").inner_text())
                 self.assertIn("access_token", grant(replacement))
                 self.assertNotIn(replacement, page.locator("body").inner_text())
                 self.assertEqual(page.locator("#password-new").count(), 0)
