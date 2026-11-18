@@ -205,7 +205,7 @@ class IdentityProviderTests(unittest.TestCase):
                          temporary, new_password=password)
         with self.assertRaises(ProviderRejected) as denied:
             grant("incorrect-password")
-        self.assertEqual(denied.exception.status, 401)
+        self.assertEqual(denied.exception.status, 400)
         tokens = grant(password)
         keys = self.probe.request("/realms/flow/protocol/openid-connect/certs")["keys"]
         def verified(token):
