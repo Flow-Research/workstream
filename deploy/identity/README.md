@@ -91,6 +91,9 @@ Render the sanitized initial realm with:
 python3 deploy/identity/realm_config.py --output /private/operator/flow-realm.json
 ```
 
+After import, complete [account-console configuration](#account-page-after-login)
+without replacing either built-in account client.
+
 The output contains no users, passwords, client secrets or signing keys. Import
 it into a fresh provider through authenticated administration; do not overwrite an
 existing realm as a reconciliation shortcut. The `human_profile()` operation
@@ -126,7 +129,7 @@ explicitly only to human accounts; a user cannot assign the marker themselves.
    below, then replace the password on the Flow Identity page before receiving
    usable access credentials.
 
-Keep public registration disabled for this phase. Direct password grants are enabled only on the dedicated `workstream-api-login` client; CLI, Swagger, Garden and MCP clients retain their separate browser/exchange flows.
+Public registration starts disabled until the self-service activation procedure below is completed. Direct password grants are enabled only on the dedicated `workstream-api-login` client; CLI, Swagger, Garden and MCP clients retain their separate browser/exchange flows.
 Creating an identity grants no Workstream admission or project role. An existing
 Workstream Access Administrator must admit the participant and arrange the
 required project grants through Workstream's APIs. Keycloak administration is
@@ -199,9 +202,9 @@ To close that refresh session, POST the client ID and refresh token to
 
 A temporary password, incomplete required action, wrong password or disabled
 account does not produce a token. Login does not grant project or administrator
-permissions. This client issues API credentials, not MCP credentials. Later
-self-service signup will use the same endpoint after account setup; this release
-still uses administrator invitations and does not enable public registration.
+permissions. This client issues API credentials, not MCP credentials. Invited accounts and
+verified self-registered accounts use the same endpoint after account setup.
+Public registration remains disabled until email delivery is configured and proven.
 
 ### CLI
 
@@ -297,5 +300,133 @@ isolated D-Bus session with an unlocked test Secret Service. It covers the
 native CLI login, initial password change, consent and renewal without
 using a personal browser profile.
 `scripts/test_public_ingress.py` separately exercises the pinned Caddy routes.
-Hosted cutover and actual Garden qualification remain separate required evidence
-before this change can be reported ready.
+These local proofs do not establish a hosted cutover or an actual Garden session.
+Qualify those deployment boundaries separately before claiming they work live.
+
+
+## Flow branding and self-service signup
+
+The identity image contains the `flow` login and email themes. The login theme
+inherits Keycloak's maintained `keycloak.v2` forms and changes presentation only;
+registration, login, verification, password change, recovery and consent retain
+provider security behavior. Theme assets are served locally by the issuer, without
+third-party fonts or scripts. Changes to bundled assets require rebuilding and
+pinning the identity image. Select **flow → Realm settings → Themes** and set the
+login and email themes to **flow** for an existing realm; do not re-import it.
+
+A small `flow-human-registration` event listener assigns `human` to successful
+self-registration in the Flow realm. It reads no submitted marker and handles no
+administrative account creation. Keep `workstream_subject_kind` administrator-only.
+Existing participants and service identities are not rewritten. The listener is compiled
+against the exact pinned Keycloak jars; a provider-version upgrade must rerun the
+registration and denial proofs because this SPI can change between releases. Registration
+creates an unverified identity row; it grants neither usable Workstream credentials
+before email verification nor Workstream project/administrator permissions after it.
+
+Password recovery uses the same neutral response for unknown accounts and mail
+failures. Flow guidance tells participants to check spam, retry later or contact
+their administrator; it does not reveal whether an account exists. A failed send
+does not change the existing password. Operators must inspect delivery failures.
+
+### Configure and prove email delivery
+
+1. Deploy the pinned identity image containing the themes and registration
+   provider. Keep public signup disabled during setup.
+2. In **flow → Realm settings → Email**, configure the organization's SMTP host,
+   port, sender address/name, TLS and authentication. Enter the SMTP password only
+   in authenticated administration; never commit it or send it in chat. Use an
+   approved sender domain with the delivery provider's required DNS configuration.
+3. Send a test message and confirm receipt in a mailbox you control. A successful
+   TCP connection or the console accepting settings is not delivery proof.
+4. Inventory existing users whose email is unverified. Enabling verification also
+   requires those invited users to verify their addresses on their next login.
+   Do not bulk-mark addresses verified to avoid that step. Existing bearer tokens
+   remain valid until their expiry, and active sessions are not silently revoked
+   by this configuration patch. For a cutover requiring everyone to reverify
+   immediately, explicitly end the affected sessions and allow existing access
+   tokens to expire before declaring that cutover complete.
+5. Export the existing Flow realm and server information through authenticated
+   `GET /admin/realms/flow`, `GET /admin/serverinfo` and
+   `GET /admin/realms/flow/users/profile` to private files. The realm
+   export can contain SMTP credentials; keep it private and delete it after use.
+6. Render the bounded activation patch:
+
+   ```sh
+   python3 deploy/identity/realm_config.py \
+     --self-service-realm-input /private/operator/flow-current.json \
+     --server-info-input /private/operator/server-info.json \
+     --self-service-profile-input /private/operator/flow-profile.json \
+     --output /private/operator/flow-signup-patch.json
+   ```
+
+7. Apply the patch with authenticated `PUT /admin/realms/flow`. It enables signup,
+   verified email, email-as-username and password recovery, and binds the required
+   listener while preserving other listeners. It contains no SMTP password or users.
+   The renderer rejects missing SMTP/TLS, a missing provider, or user-editable/missing
+   human-marker profile configuration. Delivery must still
+   be confirmed by the operator before applying it.
+8. Test a new account through the public browser: create account, receive and use
+   verification email, complete login, then exercise password recovery. Confirm
+   unverified direct token requests deny, and the new user has no Workstream grants.
+
+Users verify their email and choose their own password through Keycloak’s
+registration flow (the current provider defaults to email-first); invited users keep the
+required temporary-password replacement. The login, CLI, Swagger, direct token
+and Garden MCP interfaces do not change. Email delivery failures must leave the
+account unverified; never bypass verification to recover from SMTP outages.
+Disable **User registration** to stop new enrollment without deleting existing
+accounts or changing their Workstream permissions.
+
+### Account page after login
+
+Complete this configuration after initial realm import and for existing realms before
+opening self-service signup. Keycloak creates the built-in `account` and
+`account-console` clients; do not import replacements or change user role grants.
+The explicit Flow scope list needs an account-console configuration so
+`https://identity.flowresearch.tech/realms/flow/account/` can display personal information.
+
+Using authenticated administration:
+
+1. Resolve the single client using
+   `GET /admin/realms/flow/clients?clientId=account-console`, then export its full
+   `GET /admin/realms/flow/clients/{id}` representation to a private file.
+   Render its bounded mapper patch:
+
+   ```sh
+   python3 deploy/identity/realm_config.py \
+     --account-console-input /private/operator/account-console.json \
+     --output /private/operator/account-console-patch.json
+   ```
+
+2. Apply that patch with `PUT /admin/realms/flow/clients/{id}`. It supplies only
+   an `account` audience and the existing account-client role claims in access
+   tokens, plus given name, family name and username in the console ID token
+   for its signed-in menu. It preserves
+   the client's ID, restricted scope mappings, S256 PKCE and account-only redirects.
+3. Resolve `basic` from `GET /admin/realms/flow/client-scopes` and attach it using
+   `PUT /admin/realms/flow/clients/{id}/default-client-scopes/{basic-scope-id}`.
+   A client update alone does **not** attach this scope. Read the client's
+   `default-client-scopes` endpoint back and confirm only `basic` is assigned;
+   its `optional-client-scopes` must be empty. Investigate unexpected assignments
+   before enabling signup; never attach Workstream or administrator scopes here.
+4. Select **flow** as the realm Account theme (included in the pinned identity
+   image). It inherits the provider account UI and adds Flow assets without
+   replacing its application. Start a fresh account-page login and confirm
+   **Personal info** loads, the Flow logo appears and the menu shows your name. Existing
+   browser tokens do not gain the new claims until renewed. Account-page tokens
+   are for the account service only; obtain a Workstream token through the
+   documented API, CLI or MCP client instead.
+
+To change your password after login, open **Account security → Signing in**,
+then choose **Update** beside **Password**. On narrow windows, open the menu at
+the top left to reveal navigation. The provider may ask for your current password
+before accepting the new one. **Personal info** edits name fields; it is not the
+password screen. **Sign out** is in your named account menu.
+
+### Local qualification
+
+`scripts/test_identity_signup.py` uses real isolated Keycloak/PostgreSQL, Chrome
+and SMTP capture bound only to the owned Docker network. Synthetic verification
+and reset emails never leave that fixture. This proves provider behavior, not
+production email delivery. The existing provider/browser tests continue covering
+invited login, API-only tokens, scoped exchange, refresh and logout.

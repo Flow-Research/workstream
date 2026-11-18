@@ -5,6 +5,10 @@ import importlib.util
 import json
 from pathlib import Path
 import unittest
+import tempfile
+from unittest.mock import patch
+
+from scripts import check_stale_artifact_contracts as artifact_scan
 
 PATH = Path(__file__).resolve().parents[1] / "deploy/identity/realm_config.py"
 spec = importlib.util.spec_from_file_location("identity_realm_config", PATH)
@@ -14,6 +18,86 @@ spec.loader.exec_module(config)
 
 
 class KeycloakConfigurationTests(unittest.TestCase):
+    def test_theme_images_do_not_bypass_runtime_text_scan(self):
+        assets = PATH.parent / "themes/flow/login/resources/img"
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            files = []
+            for name in ("flow-logo.png", "favicon.ico"):
+                target = root / name
+                target.write_bytes((assets / name).read_bytes())
+                files.append(target)
+            with patch.object(artifact_scan, "discover_paths", return_value=files):
+                self.assertEqual(artifact_scan.scan(root), [])
+            for name, data in (("runtime.py", files[0].read_bytes()), ("corrupt.png", b"\xffinvalid")):
+                target = root / name
+                target.write_bytes(data)
+                with patch.object(artifact_scan, "discover_paths", return_value=[target]):
+                    self.assertEqual(artifact_scan.scan(root),
+                        [f"{name}:0: UNREADABLE_ACTIVE_TEXT (UnicodeDecodeError)"])
+
+    def test_account_console_is_account_only_and_preserves_builtin_boundaries(self):
+        existing = {"clientId": "account-console", "publicClient": True,
+                    "standardFlowEnabled": True, "fullScopeAllowed": False,
+                    "directAccessGrantsEnabled": False,
+                    "attributes": {"pkce.code.challenge.method": "S256"},
+                    "redirectUris": ["/realms/flow/account/*"]}
+        result = config.account_console_settings(existing)
+        self.assertEqual(set(result), {"protocolMappers"})
+        names = result["protocolMappers"][:3]
+        self.assertEqual([m["config"]["claim.name"] for m in names],
+                         ["given_name", "family_name", "preferred_username"])
+        for mapper in names:
+            self.assertEqual(mapper["config"]["id.token.claim"], "true")
+            for claim in ("access.token.claim", "userinfo.token.claim", "introspection.token.claim"):
+                self.assertEqual(mapper["config"][claim], "false")
+        audience, roles = result["protocolMappers"][3:]
+        self.assertEqual(audience["config"]["included.client.audience"], "account")
+        self.assertEqual(roles["config"]["usermodel.clientRoleMapping.clientId"], "account")
+        self.assertEqual(roles["config"]["claim.name"], "resource_access.account.roles")
+        self.assertNotIn("account-console", [c["clientId"] for c in config.realm()["clients"]])
+        for change in ({"clientId": "workstream-mcp"}, {"fullScopeAllowed": True},
+                       {"directAccessGrantsEnabled": True}, {"redirectUris": ["*"]},
+                       {"attributes": {"pkce.code.challenge.method": "plain"}}):
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                config.account_console_settings({**existing, **change})
+
+    def test_self_service_activation_requires_provider_and_secure_email(self):
+        existing = {"realm": "flow", "eventsListeners": ["jboss-logging"],
+                    "smtpServer": {"host": "smtp.example.test", "from": "identity@example.test", "starttls": "true"}}
+        server = {"providers": {"eventsListener": {"providers": {"flow-human-registration": {}}}}}
+        profile = {"attributes": [{"name": "workstream_subject_kind", "permissions": {"view": ["admin"], "edit": ["admin"]}}]}
+        patch = config.self_service_settings(existing, server, profile)
+        self.assertTrue(patch["registrationAllowed"])
+        self.assertTrue(patch["verifyEmail"])
+        self.assertTrue(patch["resetPasswordAllowed"])
+        self.assertTrue(patch["registrationEmailAsUsername"])
+        self.assertFalse(patch["duplicateEmailsAllowed"])
+        self.assertEqual(patch["eventsListeners"], ["jboss-logging", "flow-human-registration"])
+        self.assertNotIn("smtpServer", patch)
+        self.assertEqual(existing["eventsListeners"], ["jboss-logging"])
+        for realm, info in ((existing, {}), ({**existing, "realm": "master"}, server),
+                            ({**existing, "smtpServer": {}}, server),
+                            ({**existing, "smtpServer": {**existing["smtpServer"], "starttls": "false"}}, server)):
+            with self.subTest(realm=realm.get("realm")), self.assertRaises(ValueError):
+                config.self_service_settings(realm, info, profile)
+
+    def test_signup_activation_rejects_user_editable_or_missing_marker(self):
+        realm = {"realm": "flow", "smtpServer": {"host": "smtp.example.test", "from": "identity@example.test", "ssl": "true"}}
+        server = {"providers": {"eventsListener": {"providers": {"flow-human-registration": {}}}}}
+        for profile in ({"attributes": []}, {"attributes": [{"name": "workstream_subject_kind",
+                           "permissions": {"view": ["admin"], "edit": ["admin", "user"]}}]}):
+            with self.assertRaises(ValueError):
+                config.self_service_settings(realm, server, profile)
+
+    def test_fresh_realm_has_branding_and_listener_but_signup_stays_closed(self):
+        realm = config.realm()
+        self.assertEqual(realm["loginTheme"], "flow")
+        self.assertEqual(realm["emailTheme"], "flow")
+        self.assertEqual(realm["accountTheme"], "flow")
+        self.assertIn("flow-human-registration", realm["eventsListeners"])
+        self.assertFalse(realm["registrationAllowed"])
+
     def test_password_grant_is_confined_to_direct_api_client(self):
         clients = {c["clientId"]: c for c in config.realm()["clients"]}
         for client in clients.values():

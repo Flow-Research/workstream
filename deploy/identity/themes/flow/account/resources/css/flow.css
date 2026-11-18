@@ -1,0 +1,3 @@
+/* Preserve the provider's masthead/control contrast; brand only the logo tile. */
+.pf-v5-c-masthead__brand { background: #f3f7fa; border-radius: 0.25rem; padding: 0.25rem; }
+.pf-v5-c-masthead__brand img { width: 3rem; height: 3rem; object-fit: contain; }
