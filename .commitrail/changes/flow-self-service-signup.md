@@ -95,3 +95,14 @@ rejection controls, responsive screenshots, links and applicable CI.
 - Current-source reconciliation: based on main a2154e8a4 (merged PR716).
 - Next usable boundary: live public signup after SMTP delivery is configured/proven.
 - Remaining risks: each deployment must prove its SMTP sender and delivery; enabling verification affects existing unverified accounts. Provider upgrades require repeating the registration and denial proofs.
+
+### Signed-in account usability
+
+Extend the same account-console correction with Flow branding inherited from
+Keycloak v3, without copying its application or templates. Map only given name,
+family name and preferred username into the console's ID token for its account
+menu; keep account-only audience/role restrictions and API/MCP denial proofs.
+Exercise the sidebar's Signing in password update, prove the old password denies
+and the replacement succeeds, and check named header and Flow logo in the real
+browser. Document the password navigation and collapsed menu. No user permission
+changes or Workstream password endpoints.

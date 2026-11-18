@@ -44,7 +44,14 @@ class KeycloakConfigurationTests(unittest.TestCase):
                     "redirectUris": ["/realms/flow/account/*"]}
         result = config.account_console_settings(existing)
         self.assertEqual(set(result), {"protocolMappers"})
-        audience, roles = result["protocolMappers"]
+        names = result["protocolMappers"][:3]
+        self.assertEqual([m["config"]["claim.name"] for m in names],
+                         ["given_name", "family_name", "preferred_username"])
+        for mapper in names:
+            self.assertEqual(mapper["config"]["id.token.claim"], "true")
+            for claim in ("access.token.claim", "userinfo.token.claim", "introspection.token.claim"):
+                self.assertEqual(mapper["config"][claim], "false")
+        audience, roles = result["protocolMappers"][3:]
         self.assertEqual(audience["config"]["included.client.audience"], "account")
         self.assertEqual(roles["config"]["usermodel.clientRoleMapping.clientId"], "account")
         self.assertEqual(roles["config"]["claim.name"], "resource_access.account.roles")
@@ -87,6 +94,7 @@ class KeycloakConfigurationTests(unittest.TestCase):
         realm = config.realm()
         self.assertEqual(realm["loginTheme"], "flow")
         self.assertEqual(realm["emailTheme"], "flow")
+        self.assertEqual(realm["accountTheme"], "flow")
         self.assertIn("flow-human-registration", realm["eventsListeners"])
         self.assertFalse(realm["registrationAllowed"])
 

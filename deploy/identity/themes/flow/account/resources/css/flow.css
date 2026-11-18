@@ -1,0 +1,4 @@
+/* Inherit the provider account UI; keep Flow assets readable on its masthead. */
+.pf-v5-c-masthead { background: #f3f7fa; color: #152a38; }
+.pf-v5-c-masthead__brand img { width: 3rem; height: 3rem; object-fit: contain; }
+.pf-v5-c-masthead .pf-v5-c-menu-toggle { color: #152a38; }

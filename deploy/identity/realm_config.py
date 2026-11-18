@@ -153,7 +153,7 @@ def realm() -> dict:
     profiles, policies = exchange_policy()
     return {
         "realm": "flow", "displayName": "Flow Identity", "enabled": True,
-        "loginTheme": "flow", "emailTheme": "flow",
+        "loginTheme": "flow", "emailTheme": "flow", "accountTheme": "flow",
         "eventsListeners": ["jboss-logging", "flow-human-registration"],
         "sslRequired": "all", "registrationAllowed": False,
         "loginWithEmailAllowed": True, "duplicateEmailsAllowed": False,
@@ -213,7 +213,7 @@ def self_service_settings(existing: dict, server_info: dict, profile: dict) -> d
     return {
         "registrationAllowed": True, "registrationEmailAsUsername": True,
         "resetPasswordAllowed": True, "verifyEmail": True,
-        "loginTheme": "flow", "emailTheme": "flow", "eventsListeners": listeners,
+        "loginTheme": "flow", "emailTheme": "flow", "accountTheme": "flow", "eventsListeners": listeners,
         "duplicateEmailsAllowed": False, "loginWithEmailAllowed": True,
     }
 
@@ -230,6 +230,12 @@ def account_console_settings(existing: dict) -> dict:
         raise ValueError("Inspect the built-in account-console boundary before reconciliation")
     return {
         "protocolMappers": [
+            *[claim_mapper("account-console-" + claim, "oidc-usermodel-property-mapper", {
+                "user.attribute": attribute, "claim.name": claim, "jsonType.label": "String",
+                "access.token.claim": "false", "id.token.claim": "true",
+                "userinfo.token.claim": "false", "introspection.token.claim": "false",
+            }) for attribute, claim in (("firstName", "given_name"),
+                ("lastName", "family_name"), ("username", "preferred_username"))],
             audience_mapper("account-console-audience", client="account"),
             claim_mapper("account-console-roles", "oidc-usermodel-client-role-mapper", {
                 "usermodel.clientRoleMapping.clientId": "account",

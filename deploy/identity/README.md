@@ -399,7 +399,9 @@ Using authenticated administration:
    ```
 
 2. Apply that patch with `PUT /admin/realms/flow/clients/{id}`. It supplies only
-   an `account` audience and the existing account-client role claims. It preserves
+   an `account` audience and the existing account-client role claims in access
+   tokens, plus given name, family name and username in the console ID token
+   for its signed-in menu. It preserves
    the client's ID, restricted scope mappings, S256 PKCE and account-only redirects.
 3. Resolve `basic` from `GET /admin/realms/flow/client-scopes` and attach it using
    `PUT /admin/realms/flow/clients/{id}/default-client-scopes/{basic-scope-id}`.
@@ -407,10 +409,19 @@ Using authenticated administration:
    `default-client-scopes` endpoint back and confirm only `basic` is assigned;
    its `optional-client-scopes` must be empty. Investigate unexpected assignments
    before enabling signup; never attach Workstream or administrator scopes here.
-4. Start a fresh account-page login and confirm **Personal info** loads. Existing
+4. Select **flow** as the realm Account theme (included in the pinned identity
+   image). It inherits the provider account UI and adds Flow assets without
+   replacing its application. Start a fresh account-page login and confirm
+   **Personal info** loads, the Flow logo appears and the menu shows your name. Existing
    browser tokens do not gain the new claims until renewed. Account-page tokens
    are for the account service only; obtain a Workstream token through the
    documented API, CLI or MCP client instead.
+
+To change your password after login, open **Account security → Signing in**,
+then choose **Update** beside **Password**. On narrow windows, open the menu at
+the top left to reveal navigation. The provider may ask for your current password
+before accepting the new one. **Personal info** edits name fields; it is not the
+password screen. **Sign out** is in your named account menu.
 
 ### Local qualification
 

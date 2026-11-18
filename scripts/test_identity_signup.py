@@ -206,6 +206,12 @@ class IdentitySignupTests(IdentityProviderTests):
                     self.assertEqual(after_console[field], console[field])
                 stage = "account-console-repaired"
                 account_tokens = []
+                account_id_tokens = []
+                def account_response(response):
+                    if response.url == self.origin + endpoint and response.status == 200:
+                        value = response.json().get("id_token")
+                        if value:
+                            account_id_tokens.append(value)
                 def account_request(request):
                     if request.url.startswith(self.origin + "/realms/flow/account/"):
                         bearer = request.headers.get("authorization", "")
@@ -213,11 +219,25 @@ class IdentitySignupTests(IdentityProviderTests):
                             account_tokens.append(bearer[7:])
                 account_page = browser.new_page()
                 account_page.on("request", account_request)
+                account_page.on("response", account_response)
                 account_page.goto(self.origin + "/realms/flow/account/")
                 account_page.locator("#username").fill(email)
                 account_page.locator("#password").fill(password)
                 account_page.locator("#kc-login").click()
                 account_page.get_by_role("heading", name="Personal info", exact=True).wait_for()
+                self.assertEqual(account_page.title(), "Flow Identity")
+                self.assertEqual(account_page.get_by_test_id("options-toggle").inner_text(), "Self Participant")
+                logo = account_page.locator('[data-testid="page-header"] img').first
+                self.assertTrue(logo.get_attribute("src").endswith("/img/flow-logo.png"))
+                self.assertTrue(logo.evaluate("image => image.complete && image.naturalWidth > 0"))
+                self.assertTrue(account_id_tokens)
+                id_claims = jwt.decode(account_id_tokens[-1], jwt.PyJWK.from_dict(next(
+                    k for k in keys if k["kid"] == jwt.get_unverified_header(account_id_tokens[-1])["kid"])).key,
+                    algorithms=["RS256"], audience="account-console", issuer=self.origin + "/realms/flow")
+                self.assertEqual(id_claims["given_name"], "Self")
+                self.assertEqual(id_claims["family_name"], "Participant")
+                self.assertEqual(id_claims["preferred_username"], email)
+                self.assertNotIn("resource_access", id_claims)
                 self.assertTrue(account_tokens)
                 console_token = account_tokens[-1]
                 console_key = next(k for k in keys if k["kid"] == jwt.get_unverified_header(console_token)["kid"])
@@ -229,7 +249,27 @@ class IdentitySignupTests(IdentityProviderTests):
                 self.assertIn("manage-account", console_claims["resource_access"]["account"]["roles"])
                 self.assertNotIn("realm_access", console_claims)
                 self.assertNotIn("subject_kind", console_claims)
+                for claim in ("given_name", "family_name", "preferred_username"):
+                    self.assertNotIn(claim, console_claims)
                 account_page.screenshot(path=str(self.root / "flow-account-proof.png"), full_page=True)
+                stage = "account-password-update"
+                account_page.get_by_test_id("accountSecurity").click()
+                account_page.get_by_role("link", name="Signing in", exact=True).click()
+                account_page.get_by_test_id("password/credential-list").locator('[data-testrole="update"]').click()
+                # Stock application-initiated password action may require reauthentication.
+                account_page.locator("#password-new, #password").first.wait_for()
+                if account_page.locator("#password").count():
+                    account_page.locator("#password").fill(password)
+                    account_page.locator("#kc-login").click()
+                changed_password = secrets.token_urlsafe(24)
+                account_page.locator("#password-new").fill(changed_password)
+                account_page.locator("#password-confirm").fill(changed_password)
+                account_page.locator('button[type="submit"], input[type="submit"]').first.click()
+                account_page.get_by_role("heading", name="Signing in", exact=True).wait_for()
+                with self.assertRaises(ProviderRejected):
+                    grant(password)
+                self.assertIn("access_token", grant(changed_password))
+                password = changed_password
                 stage = "new-account-client-scopes"
                 for client_id, audience_scope, audience in (
                     ("workstream-cli-login", "workstream-api-audience", "workstream-api"),
