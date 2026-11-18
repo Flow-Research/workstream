@@ -218,6 +218,28 @@ def self_service_settings(existing: dict, server_info: dict, profile: dict) -> d
     }
 
 
+def account_console_settings(existing: dict) -> dict:
+    """Render built-in console mappers; attach basic via the client-scope endpoint."""
+    if (existing.get("clientId") != "account-console"
+            or not existing.get("publicClient")
+            or not existing.get("standardFlowEnabled")
+            or existing.get("fullScopeAllowed")
+            or existing.get("directAccessGrantsEnabled")
+            or existing.get("attributes", {}).get("pkce.code.challenge.method") != "S256"
+            or existing.get("redirectUris") != ["/realms/flow/account/*"]):
+        raise ValueError("Inspect the built-in account-console boundary before reconciliation")
+    return {
+        "protocolMappers": [
+            audience_mapper("account-console-audience", client="account"),
+            claim_mapper("account-console-roles", "oidc-usermodel-client-role-mapper", {
+                "usermodel.clientRoleMapping.clientId": "account",
+                "claim.name": "resource_access.account.roles",
+                "jsonType.label": "String", "multivalued": "true",
+            }),
+        ],
+    }
+
+
 def human_profile(existing: dict) -> dict:
     """Preserve stock profile fields while restricting the human marker to admins."""
     result = json.loads(json.dumps(existing))
@@ -260,6 +282,8 @@ def main() -> None:
                         help="Render a Garden client with this exact HTTPS callback")
     source.add_argument("--self-service-realm-input", type=Path,
                         help="Render an activation patch from an existing realm after SMTP delivery proof")
+    source.add_argument("--account-console-input", type=Path,
+                        help="Render a bounded patch for the exported built-in account-console client")
     parser.add_argument("--server-info-input", type=Path)
     parser.add_argument("--self-service-profile-input", type=Path)
     parser.add_argument("--garden-client-id")
@@ -274,6 +298,8 @@ def main() -> None:
             json.loads(args.server_info_input.read_text(encoding="utf-8")),
             json.loads(args.self_service_profile_input.read_text(encoding="utf-8")),
         )
+    elif args.account_console_input:
+        desired = account_console_settings(json.loads(args.account_console_input.read_text(encoding="utf-8")))
     elif args.profile_input:
         desired = human_profile(json.loads(args.profile_input.read_text(encoding="utf-8")))
     elif args.garden_callback:

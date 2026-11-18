@@ -1,6 +1,8 @@
 """Real browser signup and recovery with fixture-only SMTP capture and real Keycloak."""
 from __future__ import annotations
 
+import asyncio
+from functools import partial
 import base64
 from email import policy
 from email.parser import BytesParser
@@ -15,7 +17,13 @@ import time
 import unittest
 from urllib.parse import parse_qs, urlencode, urlsplit
 
+import httpx
 import jwt
+from app.adapters.auth.flow import FlowAuthVerifier
+from app.core.config import Settings
+from app.interfaces.auth import AuthVerificationError
+from workstream_mcp.adapters.keycloak import KeycloakCredentials
+from workstream_mcp.oauth import InvalidCredential, OAuthSettings
 from playwright.sync_api import sync_playwright
 
 from deploy.identity import realm_config
@@ -167,6 +175,61 @@ class IdentitySignupTests(IdentityProviderTests):
                 self.assertEqual(users[0]["attributes"]["workstream_subject_kind"], ["human"])
                 self.assertNotIn("realm_access", claims)
                 self.assertNotIn("resource_access", claims)
+                stage = "account-console-regression"
+                console = self.probe.request("/admin/realms/flow/clients?clientId=account-console", token=self.operator)[0]
+                console_path = "/admin/realms/flow/clients/" + console["id"]
+                mappings = self.probe.request(console_path + "/scope-mappings", token=self.operator)
+                basic = next(scope for scope in self.probe.request(
+                    "/admin/realms/flow/client-scopes", token=self.operator) if scope["name"] == "basic")
+                basic_path = console_path + "/default-client-scopes/" + basic["id"]
+                self.probe.request(basic_path, token=self.operator, method="DELETE")
+                # Reproduce the missing stock scopes rather than only checking the repair.
+                self.probe.request(console_path, {"protocolMappers": []},
+                                   token=self.operator, method="PUT")
+                broken = browser.new_page()
+                broken.goto(self.origin + "/realms/flow/account/")
+                broken.locator("#username").fill(email)
+                broken.locator("#password").fill(password)
+                broken.locator("#kc-login").click()
+                broken.get_by_text("Something went wrong", exact=True).wait_for()
+                broken.close()
+                self.setUp()
+                self.probe.request(console_path, realm_config.account_console_settings(console),
+                                   token=self.operator, method="PUT")
+                # Client PUT updates mappers, but scope assignment has its own endpoint.
+                self.probe.request(basic_path, token=self.operator, method="PUT")
+                self.assertEqual([scope["name"] for scope in self.probe.request(
+                    console_path + "/default-client-scopes", token=self.operator)], ["basic"])
+                self.assertEqual(self.probe.request(console_path + "/scope-mappings", token=self.operator), mappings)
+                after_console = self.probe.request(console_path, token=self.operator)
+                for field in ("id", "fullScopeAllowed", "redirectUris", "attributes"):
+                    self.assertEqual(after_console[field], console[field])
+                stage = "account-console-repaired"
+                account_tokens = []
+                def account_request(request):
+                    if request.url.startswith(self.origin + "/realms/flow/account/"):
+                        bearer = request.headers.get("authorization", "")
+                        if bearer.startswith("Bearer "):
+                            account_tokens.append(bearer[7:])
+                account_page = browser.new_page()
+                account_page.on("request", account_request)
+                account_page.goto(self.origin + "/realms/flow/account/")
+                account_page.locator("#username").fill(email)
+                account_page.locator("#password").fill(password)
+                account_page.locator("#kc-login").click()
+                account_page.get_by_role("heading", name="Personal info", exact=True).wait_for()
+                self.assertTrue(account_tokens)
+                console_token = account_tokens[-1]
+                console_key = next(k for k in keys if k["kid"] == jwt.get_unverified_header(console_token)["kid"])
+                console_claims = jwt.decode(console_token, jwt.PyJWK.from_dict(console_key).key,
+                    algorithms=["RS256"], audience="account", issuer=self.origin + "/realms/flow")
+                self.assertEqual(console_claims["sub"], users[0]["id"])
+                self.assertIn(console_claims["aud"], ("account", ["account"]))
+                self.assertEqual(set(console_claims["resource_access"]), {"account"})
+                self.assertIn("manage-account", console_claims["resource_access"]["account"]["roles"])
+                self.assertNotIn("realm_access", console_claims)
+                self.assertNotIn("subject_kind", console_claims)
+                account_page.screenshot(path=str(self.root / "flow-account-proof.png"), full_page=True)
                 stage = "new-account-client-scopes"
                 for client_id, audience_scope, audience in (
                     ("workstream-cli-login", "workstream-api-audience", "workstream-api"),
@@ -235,6 +298,24 @@ class IdentitySignupTests(IdentityProviderTests):
                 raise RuntimeError("Signup qualification failed at " + stage + ": " + type(error).__name__) from None
             finally:
                 browser.close()
+
+        async def deny_account_credentials():
+            self.assertGreater(console_claims["exp"], time.time(), "Denial must not rely on expiry")
+            settings = Settings(_env_file=None, environment="test", auth_provider="flow",
+                flow_auth_local_hmac_secret=None, token_issuer=self.origin + "/realms/flow",
+                token_audience="workstream-api", token_algorithms="RS256",
+                token_jwks_url=self.origin + "/realms/flow/protocol/openid-connect/certs",
+                token_clock_skew_seconds=0, token_introspection_mode="disabled",
+                token_introspection_disabled_reason="Account audience isolation proof")
+            verifier = FlowAuthVerifier(settings, jwks_client_factory=partial(httpx.AsyncClient, verify=self.context))
+            with self.assertRaises(AuthVerificationError):
+                await verifier.verify(console_token)
+            async with httpx.AsyncClient(verify=self.context, trust_env=False, timeout=10) as http:
+                provider = KeycloakCredentials(OAuthSettings(self.origin + "/realms/flow",
+                    realm_config.MCP_RESOURCE, self.root / "unused"), http, "unused-denied-before-exchange")
+                with self.assertRaises(InvalidCredential):
+                    await provider.verify(console_token)
+        asyncio.run(deny_account_credentials())
 
 
 if __name__ == "__main__":

@@ -50,6 +50,18 @@ administratively. An unverified account row may exist, but browser/direct API cr
 as an editable form field. Pinned Keycloak26.8.2 source shows profile defaults are filtered by field edit permissions; making the marker writable would break custody. Use a minimal Flow-realm REGISTER event listener in the provider transaction to assign human only to successful self-registration. Do not handle admin-create events or alter existing accounts. Compile against the exact provider jars with a pinned JDK21 build stage, adding no runtime framework.
 Preserve invited users and existing issuer/sub/audience/token-exchange contracts.
 
+### Account-console correction
+
+The hosted signup completes, but the provider account console has no token scopes
+because the explicit realm scope import omits stock defaults. Complete the same
+signup journey by configuring only the stock `account-console` client with the
+basic subject scope and account-only role/audience mappers. Keep its existing
+account-role scope mappings, PKCE and account-path redirects; never add Workstream
+API/MCP audiences, realm-administrator roles or broad full-scope access. Let Keycloak create both built-in account clients during realm import, then
+reconcile the existing `account-console` using the same bounded helper for new
+and hosted realms; never import a duplicate or recreate the `account` client. Prove the real account page loads after signup and its tokens cannot enter
+Workstream API/MCP. Assign `basic` through the dedicated default-client-scope endpoint; client PUT only updates the mapper representation. Existing users and permissions remain unchanged.
+
 ## Acceptance criteria
 
 - [ ] Browser signup completes only after email verification; supplied marker or
@@ -82,4 +94,4 @@ rejection controls, responsive screenshots, links and applicable CI.
 
 - Current-source reconciliation: based on main a2154e8a4 (merged PR716).
 - Next usable boundary: live public signup after SMTP delivery is configured/proven.
-- Remaining risks: production SMTP delivery is not supplied/proven yet; the user supplied the Flow logo.
+- Remaining risks: each deployment must prove its SMTP sender and delivery; enabling verification affects existing unverified accounts. Provider upgrades require repeating the registration and denial proofs.

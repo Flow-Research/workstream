@@ -36,6 +36,25 @@ class KeycloakConfigurationTests(unittest.TestCase):
                     self.assertEqual(artifact_scan.scan(root),
                         [f"{name}:0: UNREADABLE_ACTIVE_TEXT (UnicodeDecodeError)"])
 
+    def test_account_console_is_account_only_and_preserves_builtin_boundaries(self):
+        existing = {"clientId": "account-console", "publicClient": True,
+                    "standardFlowEnabled": True, "fullScopeAllowed": False,
+                    "directAccessGrantsEnabled": False,
+                    "attributes": {"pkce.code.challenge.method": "S256"},
+                    "redirectUris": ["/realms/flow/account/*"]}
+        result = config.account_console_settings(existing)
+        self.assertEqual(set(result), {"protocolMappers"})
+        audience, roles = result["protocolMappers"]
+        self.assertEqual(audience["config"]["included.client.audience"], "account")
+        self.assertEqual(roles["config"]["usermodel.clientRoleMapping.clientId"], "account")
+        self.assertEqual(roles["config"]["claim.name"], "resource_access.account.roles")
+        self.assertNotIn("account-console", [c["clientId"] for c in config.realm()["clients"]])
+        for change in ({"clientId": "workstream-mcp"}, {"fullScopeAllowed": True},
+                       {"directAccessGrantsEnabled": True}, {"redirectUris": ["*"]},
+                       {"attributes": {"pkce.code.challenge.method": "plain"}}):
+            with self.subTest(change=change), self.assertRaises(ValueError):
+                config.account_console_settings({**existing, **change})
+
     def test_self_service_activation_requires_provider_and_secure_email(self):
         existing = {"realm": "flow", "eventsListeners": ["jboss-logging"],
                     "smtpServer": {"host": "smtp.example.test", "from": "identity@example.test", "starttls": "true"}}

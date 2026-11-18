@@ -91,6 +91,9 @@ Render the sanitized initial realm with:
 python3 deploy/identity/realm_config.py --output /private/operator/flow-realm.json
 ```
 
+After import, complete [account-console configuration](#account-page-after-login)
+without replacing either built-in account client.
+
 The output contains no users, passwords, client secrets or signing keys. Import
 it into a fresh provider through authenticated administration; do not overwrite an
 existing realm as a reconciliation shortcut. The `human_profile()` operation
@@ -373,6 +376,41 @@ and Garden MCP interfaces do not change. Email delivery failures must leave the
 account unverified; never bypass verification to recover from SMTP outages.
 Disable **User registration** to stop new enrollment without deleting existing
 accounts or changing their Workstream permissions.
+
+### Account page after login
+
+Complete this configuration after initial realm import and for existing realms before
+opening self-service signup. Keycloak creates the built-in `account` and
+`account-console` clients; do not import replacements or change user role grants.
+The explicit Flow scope list needs an account-console configuration so
+`https://identity.flowresearch.tech/realms/flow/account/` can display personal information.
+
+Using authenticated administration:
+
+1. Resolve the single client using
+   `GET /admin/realms/flow/clients?clientId=account-console`, then export its full
+   `GET /admin/realms/flow/clients/{id}` representation to a private file.
+   Render its bounded mapper patch:
+
+   ```sh
+   python3 deploy/identity/realm_config.py \
+     --account-console-input /private/operator/account-console.json \
+     --output /private/operator/account-console-patch.json
+   ```
+
+2. Apply that patch with `PUT /admin/realms/flow/clients/{id}`. It supplies only
+   an `account` audience and the existing account-client role claims. It preserves
+   the client's ID, restricted scope mappings, S256 PKCE and account-only redirects.
+3. Resolve `basic` from `GET /admin/realms/flow/client-scopes` and attach it using
+   `PUT /admin/realms/flow/clients/{id}/default-client-scopes/{basic-scope-id}`.
+   A client update alone does **not** attach this scope. Read the client's
+   `default-client-scopes` endpoint back and confirm only `basic` is assigned;
+   its `optional-client-scopes` must be empty. Investigate unexpected assignments
+   before enabling signup; never attach Workstream or administrator scopes here.
+4. Start a fresh account-page login and confirm **Personal info** loads. Existing
+   browser tokens do not gain the new claims until renewed. Account-page tokens
+   are for the account service only; obtain a Workstream token through the
+   documented API, CLI or MCP client instead.
 
 ### Local qualification
 

@@ -777,7 +777,8 @@ cannot be reused as post-submission review-gate evidence. See the
   and conditional verified self-registration.
   A temporary password must be changed before issuing participant credentials.
   Invited-only deployments do not require SMTP. The Flow-branded self-service
-  flow adds email verification and password recovery; public registration stays
+  flow adds email verification, password recovery and an account-only personal
+  information page; its account tokens cannot authenticate to Workstream. Public registration stays
   disabled until the operator configures and proves SMTP delivery. Existing
   unverified invited accounts must verify through email when that mode is enabled. The hosted provider has its own database role, authenticated HTTPS administrator
   console on the identity hostname, pinned image and bounded resources. Its regular container holds no

@@ -130,6 +130,13 @@ class IdentityProviderTests(unittest.TestCase):
             "password": cls.admin_password,
         }, form=True)["access_token"]
         cls.probe.request("/admin/realms", realm_config.realm(), token=cls.operator)
+        console = cls.probe.request("/admin/realms/flow/clients?clientId=account-console", token=cls.operator)[0]
+        cls.probe.request("/admin/realms/flow/clients/" + console["id"],
+                          realm_config.account_console_settings(console), token=cls.operator, method="PUT")
+        basic = next(scope for scope in cls.probe.request(
+            "/admin/realms/flow/client-scopes", token=cls.operator) if scope["name"] == "basic")
+        cls.probe.request("/admin/realms/flow/clients/" + console["id"]
+                          + "/default-client-scopes/" + basic["id"], token=cls.operator, method="PUT")
         profile = cls.probe.request("/admin/realms/flow/users/profile", token=cls.operator)
         cls.probe.request("/admin/realms/flow/users/profile", realm_config.human_profile(profile),
                           token=cls.operator, method="PUT")
