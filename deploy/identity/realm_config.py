@@ -153,6 +153,8 @@ def realm() -> dict:
     profiles, policies = exchange_policy()
     return {
         "realm": "flow", "displayName": "Flow Identity", "enabled": True,
+        "loginTheme": "flow", "emailTheme": "flow",
+        "eventsListeners": ["jboss-logging", "flow-human-registration"],
         "sslRequired": "all", "registrationAllowed": False,
         "loginWithEmailAllowed": True, "duplicateEmailsAllowed": False,
         "rememberMe": False, "resetPasswordAllowed": False, "verifyEmail": False,
@@ -186,6 +188,29 @@ def realm() -> dict:
             swagger_client(), direct_api_client(), exchange, api,
         ],
         "clientProfiles": profiles, "clientPolicies": policies,
+    }
+
+
+def self_service_settings(existing: dict, server_info: dict) -> dict:
+    """Render an existing-realm activation patch after operator email-delivery proof."""
+    if existing.get("realm") != "flow":
+        raise ValueError("Self-service configuration belongs only to the Flow realm")
+    providers = server_info.get("providers", {}).get("eventsListener", {}).get("providers", {})
+    if "flow-human-registration" not in providers:
+        raise ValueError("Deploy the Flow registration provider before enabling signup")
+    smtp = existing.get("smtpServer", {})
+    if not smtp.get("host") or not smtp.get("from"):
+        raise ValueError("Configure and prove SMTP delivery before enabling signup")
+    if smtp.get("ssl") != "true" and smtp.get("starttls") != "true":
+        raise ValueError("Production email delivery requires TLS")
+    listeners = list(existing.get("eventsListeners", []))
+    if "flow-human-registration" not in listeners:
+        listeners.append("flow-human-registration")
+    return {
+        "registrationAllowed": True, "registrationEmailAsUsername": True,
+        "resetPasswordAllowed": True, "verifyEmail": True,
+        "loginTheme": "flow", "emailTheme": "flow", "eventsListeners": listeners,
+        "duplicateEmailsAllowed": False, "loginWithEmailAllowed": True,
     }
 
 
@@ -229,11 +254,21 @@ def main() -> None:
                         help="Render a restricted profile from an exported stock user profile")
     source.add_argument("--garden-callback",
                         help="Render a Garden client with this exact HTTPS callback")
+    source.add_argument("--self-service-realm-input", type=Path,
+                        help="Render an activation patch from an existing realm after SMTP delivery proof")
+    parser.add_argument("--server-info-input", type=Path)
     parser.add_argument("--garden-client-id")
     args = parser.parse_args()
     if bool(args.garden_callback) != bool(args.garden_client_id):
         parser.error("Garden callback and client ID must be provided together")
-    if args.profile_input:
+    if bool(args.self_service_realm_input) != bool(args.server_info_input):
+        parser.error("Self-service activation requires both realm and server-info input")
+    if args.self_service_realm_input:
+        desired = self_service_settings(
+            json.loads(args.self_service_realm_input.read_text(encoding="utf-8")),
+            json.loads(args.server_info_input.read_text(encoding="utf-8")),
+        )
+    elif args.profile_input:
         desired = human_profile(json.loads(args.profile_input.read_text(encoding="utf-8")))
     elif args.garden_callback:
         desired = garden_client(args.garden_client_id, args.garden_callback)

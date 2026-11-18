@@ -1,0 +1,44 @@
+/* Keep upstream form semantics and responsive layout; brand presentation only. */
+:root {
+  --keycloak-logo-url: none;
+  --keycloak-bg-logo-url: none;
+  --keycloak-card-top-color: #086b92;
+  --pf-v5-global--primary-color--100: #086b92;
+  --pf-v5-global--primary-color--200: #064e6b;
+  --pf-v5-global--link--Color: #086b92;
+}
+.pf-v5-c-login {
+  background: #f3f7fa;
+  color: #152a38;
+}
+#kc-header-wrapper {
+  color: #152a38;
+  font-size: 2rem;
+  font-weight: 650;
+  letter-spacing: -0.04em;
+  text-transform: none;
+}
+.pf-v5-c-login__main {
+  border-radius: 0.75rem;
+  overflow: hidden;
+  box-shadow: 0 0.75rem 2.5rem rgb(21 42 56 / 9%);
+}
+.pf-v5-c-login__main-header { border-top-width: 3px; }
+.pf-v5-c-login__main-header h1 { font-weight: 600; }
+a:focus-visible, button:focus-visible, input:focus-visible {
+  outline: 3px solid #087aa3;
+  outline-offset: 3px;
+}
+@media (max-width: 600px) {
+  #kc-header-wrapper { font-size: 1.65rem; padding: 1.25rem 0; }
+  .pf-v5-c-login__main { border-radius: 0; }
+}
+
+#kc-header-wrapper::before {
+  content: "";
+  display: block;
+  width: 5rem;
+  height: 5rem;
+  margin: 0 auto 0.25rem;
+  background: url('../img/flow-logo.png') center / contain no-repeat;
+}

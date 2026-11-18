@@ -775,15 +775,18 @@ cannot be reused as post-submission review-gate evidence. See the
 - The [Keycloak provider](../deploy/identity/README.md) replaces the Rust demo
   issuer with stock browser code/PKCE login and administrator-provisioned accounts.
   A temporary password must be changed before issuing participant credentials.
-  Email remains an unverified identifier; SMTP and public registration are not
-  required. The hosted provider has its own database role, authenticated HTTPS administrator
+  Invited-only deployments do not require SMTP. The Flow-branded self-service
+  flow adds email verification and password recovery; public registration stays
+  disabled until the operator configures and proves SMTP delivery. Existing
+  unverified invited accounts must verify through email when that mode is enabled. The hosted provider has its own database role, authenticated HTTPS administrator
   console on the identity hostname, pinned image and bounded resources. Its regular container holds no
   bootstrap credential.
 - Direct API users can exchange email/password at Flow Identity using the
   dedicated `workstream-api-login` client after issuer-required browser actions.
   It issues only API credentials, preserves brute-force protection and does not
-  grant Workstream roles. Public signup remains deferred; the token flow does
-  not depend on invitation state.
+  grant Workstream roles. The token flow does not depend on invitation state. Verified
+  self-registration assigns human identity inside Flow Identity and never grants
+  Workstream roles; see the [signup contract](../.commitrail/changes/flow-self-service-signup.md).
 - The native CLI uses browser login and the OS credential store for API credentials;
   `auth token` explicitly exports a bearer. Swagger offers code/PKCE Authorize
   through its exact callback. These client paths preserve existing API authority

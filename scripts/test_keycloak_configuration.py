@@ -14,6 +14,32 @@ spec.loader.exec_module(config)
 
 
 class KeycloakConfigurationTests(unittest.TestCase):
+    def test_self_service_activation_requires_provider_and_secure_email(self):
+        existing = {"realm": "flow", "eventsListeners": ["jboss-logging"],
+                    "smtpServer": {"host": "smtp.example.test", "from": "identity@example.test", "starttls": "true"}}
+        server = {"providers": {"eventsListener": {"providers": {"flow-human-registration": {}}}}}
+        patch = config.self_service_settings(existing, server)
+        self.assertTrue(patch["registrationAllowed"])
+        self.assertTrue(patch["verifyEmail"])
+        self.assertTrue(patch["resetPasswordAllowed"])
+        self.assertTrue(patch["registrationEmailAsUsername"])
+        self.assertFalse(patch["duplicateEmailsAllowed"])
+        self.assertEqual(patch["eventsListeners"], ["jboss-logging", "flow-human-registration"])
+        self.assertNotIn("smtpServer", patch)
+        self.assertEqual(existing["eventsListeners"], ["jboss-logging"])
+        for realm, info in ((existing, {}), ({**existing, "realm": "master"}, server),
+                            ({**existing, "smtpServer": {}}, server),
+                            ({**existing, "smtpServer": {**existing["smtpServer"], "starttls": "false"}}, server)):
+            with self.subTest(realm=realm.get("realm")), self.assertRaises(ValueError):
+                config.self_service_settings(realm, info)
+
+    def test_fresh_realm_has_branding_and_listener_but_signup_stays_closed(self):
+        realm = config.realm()
+        self.assertEqual(realm["loginTheme"], "flow")
+        self.assertEqual(realm["emailTheme"], "flow")
+        self.assertIn("flow-human-registration", realm["eventsListeners"])
+        self.assertFalse(realm["registrationAllowed"])
+
     def test_password_grant_is_confined_to_direct_api_client(self):
         clients = {c["clientId"]: c for c in config.realm()["clients"]}
         for client in clients.values():
