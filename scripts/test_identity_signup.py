@@ -227,8 +227,12 @@ class IdentitySignupTests(IdentityProviderTests):
                 account_page.get_by_role("heading", name="Personal info", exact=True).wait_for()
                 self.assertEqual(account_page.title(), "Flow Identity")
                 self.assertEqual(account_page.get_by_test_id("options-toggle").inner_text(), "Self Participant")
+                # Retain the stock dark-masthead/light-label contrast.
+                self.assertEqual(account_page.get_by_test_id("options-toggle").evaluate(
+                    "element => getComputedStyle(element).color"), "rgb(255, 255, 255)")
                 logo = account_page.locator('[data-testid="page-header"] img').first
                 self.assertTrue(logo.get_attribute("src").endswith("/img/flow-logo.png"))
+                self.assertEqual(logo.locator("..").get_attribute("href"), "/realms/flow/account/")
                 self.assertTrue(logo.evaluate("image => image.complete && image.naturalWidth > 0"))
                 self.assertTrue(account_id_tokens)
                 id_claims = jwt.decode(account_id_tokens[-1], jwt.PyJWK.from_dict(next(

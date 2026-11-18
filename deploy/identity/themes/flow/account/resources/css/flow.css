@@ -1,4 +1,3 @@
-/* Inherit the provider account UI; keep Flow assets readable on its masthead. */
-.pf-v5-c-masthead { background: #f3f7fa; color: #152a38; }
+/* Preserve the provider's masthead/control contrast; brand only the logo tile. */
+.pf-v5-c-masthead__brand { background: #f3f7fa; border-radius: 0.25rem; padding: 0.25rem; }
 .pf-v5-c-masthead__brand img { width: 3rem; height: 3rem; object-fit: contain; }
-.pf-v5-c-masthead .pf-v5-c-menu-toggle { color: #152a38; }
