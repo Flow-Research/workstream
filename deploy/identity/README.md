@@ -338,7 +338,8 @@ before email verification nor Workstream project/administrator permissions after
    immediately, explicitly end the affected sessions and allow existing access
    tokens to expire before declaring that cutover complete.
 5. Export the existing Flow realm and server information through authenticated
-   `GET /admin/realms/flow` and `GET /admin/serverinfo` to private files. The realm
+   `GET /admin/realms/flow`, `GET /admin/serverinfo` and
+   `GET /admin/realms/flow/users/profile` to private files. The realm
    export can contain SMTP credentials; keep it private and delete it after use.
 6. Render the bounded activation patch:
 
@@ -346,19 +347,22 @@ before email verification nor Workstream project/administrator permissions after
    python3 deploy/identity/realm_config.py \
      --self-service-realm-input /private/operator/flow-current.json \
      --server-info-input /private/operator/server-info.json \
+     --self-service-profile-input /private/operator/flow-profile.json \
      --output /private/operator/flow-signup-patch.json
    ```
 
 7. Apply the patch with authenticated `PUT /admin/realms/flow`. It enables signup,
    verified email, email-as-username and password recovery, and binds the required
    listener while preserving other listeners. It contains no SMTP password or users.
-   The renderer rejects missing SMTP/TLS or a missing provider. Delivery must still
+   The renderer rejects missing SMTP/TLS, a missing provider, or user-editable/missing
+   human-marker profile configuration. Delivery must still
    be confirmed by the operator before applying it.
 8. Test a new account through the public browser: create account, receive and use
    verification email, complete login, then exercise password recovery. Confirm
    unverified direct token requests deny, and the new user has no Workstream grants.
 
-Users choose their own password during registration; invited users keep the
+Users verify their email and choose their own password through Keycloak’s
+registration flow (the current provider defaults to email-first); invited users keep the
 required temporary-password replacement. The login, CLI, Swagger, direct token
 and Garden MCP interfaces do not change. Email delivery failures must leave the
 account unverified; never bypass verification to recover from SMTP outages.

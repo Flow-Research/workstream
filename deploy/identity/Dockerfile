@@ -6,6 +6,8 @@ FROM eclipse-temurin:21-jdk@sha256:db5cc6341a1d7bc40cdb51e1f0d9824f3bb2cc8107d29
 COPY --from=upstream /opt/keycloak/lib/lib/main/ /provider-libs/
 COPY deploy/identity/provider/ /src/
 RUN mkdir /classes && javac --release 21 -cp '/provider-libs/*' -d /classes /src/src/tech/flowresearch/identity/*.java \
+    && mkdir /test-classes && javac --release 21 -cp '/provider-libs/*:/classes' -d /test-classes /src/test/tech/flowresearch/identity/*.java \
+    && java -cp '/provider-libs/*:/classes:/test-classes' tech.flowresearch.identity.HumanRegistrationProof \
     && jar --create --file /flow-registration.jar -C /classes . -C /src/resources .
 
 FROM upstream AS builder

@@ -18,7 +18,8 @@ class KeycloakConfigurationTests(unittest.TestCase):
         existing = {"realm": "flow", "eventsListeners": ["jboss-logging"],
                     "smtpServer": {"host": "smtp.example.test", "from": "identity@example.test", "starttls": "true"}}
         server = {"providers": {"eventsListener": {"providers": {"flow-human-registration": {}}}}}
-        patch = config.self_service_settings(existing, server)
+        profile = {"attributes": [{"name": "workstream_subject_kind", "permissions": {"view": ["admin"], "edit": ["admin"]}}]}
+        patch = config.self_service_settings(existing, server, profile)
         self.assertTrue(patch["registrationAllowed"])
         self.assertTrue(patch["verifyEmail"])
         self.assertTrue(patch["resetPasswordAllowed"])
@@ -31,7 +32,15 @@ class KeycloakConfigurationTests(unittest.TestCase):
                             ({**existing, "smtpServer": {}}, server),
                             ({**existing, "smtpServer": {**existing["smtpServer"], "starttls": "false"}}, server)):
             with self.subTest(realm=realm.get("realm")), self.assertRaises(ValueError):
-                config.self_service_settings(realm, info)
+                config.self_service_settings(realm, info, profile)
+
+    def test_signup_activation_rejects_user_editable_or_missing_marker(self):
+        realm = {"realm": "flow", "smtpServer": {"host": "smtp.example.test", "from": "identity@example.test", "ssl": "true"}}
+        server = {"providers": {"eventsListener": {"providers": {"flow-human-registration": {}}}}}
+        for profile in ({"attributes": []}, {"attributes": [{"name": "workstream_subject_kind",
+                           "permissions": {"view": ["admin"], "edit": ["admin", "user"]}}]}):
+            with self.assertRaises(ValueError):
+                config.self_service_settings(realm, server, profile)
 
     def test_fresh_realm_has_branding_and_listener_but_signup_stays_closed(self):
         realm = config.realm()

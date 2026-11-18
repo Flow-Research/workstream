@@ -11,6 +11,7 @@ import re
 import secrets
 import shutil
 import subprocess
+import time
 import unittest
 from urllib.parse import urlencode, urlsplit
 
@@ -18,24 +19,34 @@ import jwt
 from playwright.sync_api import sync_playwright
 
 from deploy.identity import realm_config
-from scripts.identity_mail_fixture import Mailbox
+from scripts.identity_mail_fixture import FileMessages
 from scripts.identity_protocol_probe import ProviderRejected
 from scripts.test_identity_provider import IdentityProviderTests
 
 
 class IdentitySignupTests(IdentityProviderTests):
     def test_verified_signup_and_password_recovery(self):
-        gateway = json.loads(self.docker("network", "inspect", self.name))[0]["IPAM"]["Config"][0]["Gateway"]
-        mailbox = Mailbox(gateway)
-        self.addCleanup(mailbox.close)
-        smtp = {"host": gateway, "port": str(mailbox.server_address[1]),
+        mail_root = self.root / ("mail-" + secrets.token_hex(4))
+        mail_root.mkdir(mode=0o700)
+        mail_name = self.name + "-mail-" + secrets.token_hex(4)
+        self.addCleanup(self.docker, "rm", "-f", mail_name)
+        self.docker("run", "-d", "--name", mail_name, "--network", self.name,
+            "--user", f"{os.getuid()}:{os.getgid()}", "--read-only", "--cap-drop", "ALL",
+            "--security-opt", "no-new-privileges", "--memory", "64m", "--cpus", "0.25",
+            "--pids-limit", "32", "--mount", f"type=bind,src={mail_root},dst=/mail",
+            "--mount", f"type=bind,src={os.path.abspath('scripts/identity_mail_fixture.py')},dst=/fixture.py,readonly",
+            "python@sha256:935c3c5b12357a7e10caa9c1e6ca5692344d97cf229832ef584be2cec9fc03df",
+            "python", "/fixture.py")
+        mailbox = FileMessages(mail_root)
+        smtp = {"host": mail_name, "port": "1025",
                 "from": "identity@example.invalid", "fromDisplayName": "Flow Identity",
                 "ssl": "false", "starttls": "false", "auth": "false"}
         # Plain SMTP is restricted to this owned fixture network, never deployment config.
         current = self.probe.request("/admin/realms/flow", token=self.operator)
         server = self.probe.request("/admin/serverinfo", token=self.operator)
+        profile = self.probe.request("/admin/realms/flow/users/profile", token=self.operator)
         patch = realm_config.self_service_settings(
-            {**current, "smtpServer": {**smtp, "starttls": "true"}}, server)
+            {**current, "smtpServer": {**smtp, "starttls": "true"}}, server, profile)
         self.probe.request("/admin/realms/flow", {**patch, "smtpServer": smtp},
                            token=self.operator, method="PUT")
         home = self.root / ("signup-browser-" + secrets.token_hex(4))
@@ -57,7 +68,7 @@ class IdentitySignupTests(IdentityProviderTests):
                 "scope": "openid workstream:access workstream-api-audience"}, form=True)
 
         def mail_link():
-            message = BytesParser(policy=policy.default).parsebytes(mailbox.messages.get(timeout=20))
+            message = BytesParser(policy=policy.default).parsebytes(mailbox.get(timeout=20))
             self.assertEqual(message["To"], email)
             self.assertIn("Flow", message["Subject"])
             content = message.get_body(preferencelist=("plain",)).get_content()
@@ -80,6 +91,17 @@ class IdentitySignupTests(IdentityProviderTests):
                 page = browser.new_page()
                 page.goto(authorization)
                 self.assertIn("Flow", page.title())
+                self.assertEqual(page.locator("#kc-header-wrapper").evaluate(
+                    "element => getComputedStyle(element).color"), "rgb(21, 42, 56)")
+                logo = page.locator("#kc-header-wrapper").evaluate(
+                    "element => getComputedStyle(element, '::before').backgroundImage")
+                self.assertIn("flow-logo.png", logo)
+                page.screenshot(path=str(self.root / "flow-login-desktop.png"), full_page=True)
+                page.set_viewport_size({"width": 390, "height": 844})
+                self.assertTrue(page.evaluate(
+                    "document.documentElement.scrollWidth <= window.innerWidth"))
+                page.screenshot(path=str(self.root / "flow-login-mobile.png"), full_page=True)
+                page.set_viewport_size({"width": 1280, "height": 900})
                 page.get_by_role("link", name="Register", exact=True).click()
                 for selector, value in (("#firstName", "Self"), ("#lastName", "Participant"),
                                         ("#email", email), ("#password", password), ("#password-confirm", password)):
@@ -87,8 +109,22 @@ class IdentitySignupTests(IdentityProviderTests):
                         page.locator(selector).fill(value)
                 # Submitted privilege-like attributes must not become trusted identity.
                 page.locator("form").first.evaluate("form => { for (const name of ['workstream_subject_kind', 'user.attributes.workstream_subject_kind']) { const field=document.createElement('input'); field.type='hidden'; field.name=name; field.value='service'; form.appendChild(field); } }")
+                with page.expect_response(lambda response: response.request.method == "POST" and "/login-actions/" in response.url):
+                    page.locator('button[type="submit"], input[type="submit"]').first.click()
+                page.wait_for_load_state("domcontentloaded")
+                page.screenshot(path=str(self.root / "flow-signup-preview.png"), full_page=True)
+                self.setUp()
+                rejected_users = self.probe.request("/admin/realms/flow/users?username=" + email + "&exact=true", token=self.operator)
+                self.assertEqual(rejected_users, [])
+                self.assertTrue(mailbox.empty())
+                # Start a clean registration after the deliberately rejected tampering.
+                page.goto(authorization)
+                page.get_by_role("link", name="Register", exact=True).click()
+                for selector, value in (("#firstName", "Self"), ("#lastName", "Participant"),
+                                        ("#email", email), ("#password", password), ("#password-confirm", password)):
+                    if page.locator(selector).count():
+                        page.locator(selector).fill(value)
                 page.locator('button[type="submit"], input[type="submit"]').first.click()
-                page.wait_for_selector("#kc-page-title")
                 stage = "verification-mail"
                 print(json.dumps({"stage": "submitted", "path": urlsplit(page.url).path,
                     "alerts": [text.replace(password, "[redacted]") for text in page.locator(".pf-v5-c-alert__title, .kc-feedback-text").all_text_contents()]}), flush=True)
@@ -142,6 +178,33 @@ class IdentitySignupTests(IdentityProviderTests):
                 page.goto(reset)
                 self.assertEqual(page.locator("#password-new").count(), 0)
                 self.assertIn("access_token", grant(replacement))
+                stage = "expired-reset"
+                self.setUp()
+                self.probe.request("/admin/realms/flow", {"actionTokenGeneratedByUserLifespan": 1},
+                                   token=self.operator, method="PUT")
+                page = browser.new_page()
+                page.goto(authorization)
+                page.get_by_role("link", name="Forgot Password?", exact=False).click()
+                page.locator("#username").fill(email)
+                page.locator('button[type="submit"], input[type="submit"]').first.click()
+                expired = mail_link()
+                time.sleep(2)
+                page.goto(expired)
+                self.assertEqual(page.locator("#password-new").count(), 0)
+                self.assertIn("access_token", grant(replacement))
+                stage = "mail-outage"
+                (mail_root / "unavailable").touch()
+                page = browser.new_page()
+                page.goto(authorization)
+                page.get_by_role("link", name="Forgot Password?", exact=False).click()
+                page.locator("#username").fill(email)
+                with page.expect_response(lambda response: response.request.method == "POST" and "/login-actions/" in response.url):
+                    page.locator('button[type="submit"], input[type="submit"]').first.click()
+                page.wait_for_load_state("domcontentloaded")
+                self.assertTrue(mailbox.empty())
+                self.assertIn("access_token", grant(replacement))
+                self.assertNotIn(replacement, page.locator("body").inner_text())
+                self.assertEqual(page.locator("#password-new").count(), 0)
                 page.screenshot(path=str(self.root / "flow-recovery-proof.png"), full_page=True)
             except Exception as error:
                 # Browser exceptions can include entered passwords and link tokens.

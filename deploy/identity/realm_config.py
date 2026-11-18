@@ -191,13 +191,17 @@ def realm() -> dict:
     }
 
 
-def self_service_settings(existing: dict, server_info: dict) -> dict:
+def self_service_settings(existing: dict, server_info: dict, profile: dict) -> dict:
     """Render an existing-realm activation patch after operator email-delivery proof."""
     if existing.get("realm") != "flow":
         raise ValueError("Self-service configuration belongs only to the Flow realm")
     providers = server_info.get("providers", {}).get("eventsListener", {}).get("providers", {})
     if "flow-human-registration" not in providers:
         raise ValueError("Deploy the Flow registration provider before enabling signup")
+    marker = next((item for item in profile.get("attributes", [])
+                   if item.get("name") == "workstream_subject_kind"), None)
+    if marker is None or marker.get("permissions") != {"view": ["admin"], "edit": ["admin"]}:
+        raise ValueError("Restore the administrator-only human identity profile before signup")
     smtp = existing.get("smtpServer", {})
     if not smtp.get("host") or not smtp.get("from"):
         raise ValueError("Configure and prove SMTP delivery before enabling signup")
@@ -257,16 +261,18 @@ def main() -> None:
     source.add_argument("--self-service-realm-input", type=Path,
                         help="Render an activation patch from an existing realm after SMTP delivery proof")
     parser.add_argument("--server-info-input", type=Path)
+    parser.add_argument("--self-service-profile-input", type=Path)
     parser.add_argument("--garden-client-id")
     args = parser.parse_args()
     if bool(args.garden_callback) != bool(args.garden_client_id):
         parser.error("Garden callback and client ID must be provided together")
-    if bool(args.self_service_realm_input) != bool(args.server_info_input):
-        parser.error("Self-service activation requires both realm and server-info input")
+    if len({bool(args.self_service_realm_input), bool(args.server_info_input), bool(args.self_service_profile_input)}) != 1:
+        parser.error("Self-service activation requires realm, server-info and user-profile input")
     if args.self_service_realm_input:
         desired = self_service_settings(
             json.loads(args.self_service_realm_input.read_text(encoding="utf-8")),
             json.loads(args.server_info_input.read_text(encoding="utf-8")),
+            json.loads(args.self_service_profile_input.read_text(encoding="utf-8")),
         )
     elif args.profile_input:
         desired = human_profile(json.loads(args.profile_input.read_text(encoding="utf-8")))

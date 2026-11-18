@@ -21,16 +21,21 @@ public final class HumanRegistrationListener implements EventListenerProvider {
         if (event.getType() != EventType.REGISTER || event.getError() != null) {
             return;
         }
-        RealmModel realm = session.realms().getRealm(event.getRealmId());
-        if (realm == null || !"flow".equals(realm.getName())) {
-            return;
-        }
-        UserModel user = session.users().getUserById(realm, event.getUserId());
-        if (user == null || user.getServiceAccountClientLink() != null) {
+        try {
+            RealmModel realm = session.realms().getRealm(event.getRealmId());
+            if (realm == null || !"flow".equals(realm.getName())) {
+                return;
+            }
+            UserModel user = session.users().getUserById(realm, event.getUserId());
+            if (user == null || user.getServiceAccountClientLink() != null) {
+                throw new IllegalStateException("Flow registration requires a participant account");
+            }
+            user.setSingleAttribute("workstream_subject_kind", "human");
+        } catch (RuntimeException | Error failure) {
+            // EventBuilder logs listener failures; rollback must be explicit.
             session.getTransactionManager().setRollbackOnly();
-            throw new IllegalStateException("Flow registration requires a participant account");
+            throw failure;
         }
-        user.setSingleAttribute("workstream_subject_kind", "human");
     }
 
     @Override

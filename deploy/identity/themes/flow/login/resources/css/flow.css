@@ -12,7 +12,8 @@
   color: #152a38;
 }
 #kc-header-wrapper {
-  color: #152a38;
+  /* Upstream declares its dark-background header color important. */
+  color: #152a38 !important;
   font-size: 2rem;
   font-weight: 650;
   letter-spacing: -0.04em;
