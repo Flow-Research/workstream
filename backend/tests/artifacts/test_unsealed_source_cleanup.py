@@ -2,6 +2,7 @@
 import os
 import time
 import json
+from datetime import UTC, datetime
 from uuid import UUID
 
 import pytest
@@ -29,7 +30,7 @@ async def unfinished(intake, phase, *, old_bytes=True):
             if phase != "no_intent":
                 intent = await repository(session).prepare_upload(
                     operation, lease, 1, part_bytes=5 * 1024**2, idle_timeout_seconds=20.0)
-        if intent is not None:
+        if intent is not None and phase != "intent_only":
             upload = await store.begin_source_upload(intent)
             if phase != "begin_unknown":
                 async with intake.factory.begin() as session:
@@ -55,7 +56,7 @@ async def unfinished(intake, phase, *, old_bytes=True):
         store.close()
 
 
-@pytest.mark.parametrize("phase", ["no_intent", "begin_unknown", "handle", "partial", "eof"])
+@pytest.mark.parametrize("phase", ["no_intent", "intent_only", "begin_unknown", "handle", "partial", "eof"])
 async def test_unsealed_cleanup_releases_reserved_bytes_without_a_seal(intake, phase):
     operation, intent, upload, completion, _, path = await unfinished(intake, phase)
     result = await composition.sweep_submission_sources(intake.factory, settings_for(intake))
@@ -73,10 +74,16 @@ async def test_unsealed_cleanup_releases_reserved_bytes_without_a_seal(intake, p
     if intent is not None:
         store = initialize_local_store(root=intake.durable_root)
         try:
+            assert intent.upload_deadline_at > datetime.now(UTC)
+            if phase == "intent_only":
+                assert not (path.parent / "upload.json").exists()
+                marker = json.loads((path.parent / "aborted.json").read_text())
+                assert marker == {"cleanup_source": target}
             with pytest.raises(ArtifactPreconditionFailedError):
                 await store.begin_source_upload(intent)
-            with pytest.raises(ArtifactPreconditionFailedError):
-                await store.upload_source_part(upload, 1, b"late")
+            if upload is not None:
+                with pytest.raises(ArtifactPreconditionFailedError):
+                    await store.upload_source_part(upload, 1, b"late")
             if completion is not None:
                 with pytest.raises(ArtifactPreconditionFailedError):
                     await store.complete_source_upload(completion)

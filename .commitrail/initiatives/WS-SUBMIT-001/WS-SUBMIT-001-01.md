@@ -8047,3 +8047,23 @@ clock reads made its five-minute lease exceed the maximum by microseconds.
 Use the same statement timestamp for both endpoints, preserving the production
 bound. The direct source-substitution probe now uses a well-formed alternative
 SHA-256 identity, so its negative assertion cannot rely on malformed input.
+
+Retained-migration replay passed in 177.84s
+(`/tmp/submission-unsealed-migration-v2.log/.json`), and the well-formed source
+substitution replay passed in 46.31s
+(`/tmp/submission-unsealed-substitution-v2.log/.json`). Both receipts report
+schema0088 and complete isolated cleanup. Scoped reviews at clean `e6844b38c`
+found no production defect, but QA-UNSEALED-001 identified a distinct omitted
+case: a committed initiation intent before provider begin. QA's independent
+real-Local probe showed that omitting only abort-tombstone publication permits
+late begin despite reported settlement
+(`/tmp/submission-unsealed-intent-only-qa-probe.json`). Extend the existing phase
+matrix with `intent_only`, require charge release without a seal, inspect the
+exact tombstone and absence of upload.json, and require late begin refusal while
+the original upload deadline is still valid. Architecture/security agreed this
+must discriminate tombstone protection from expiry. No production change is
+needed for the finding; the focused test closes its missing regression proof.
+
+The intent-only case passed in 21.11s
+(`/tmp/submission-unsealed-intent-only-v1.log/.json`, schema0088, complete
+isolated cleanup). Scoped Ruff and whitespace checks passed on the repair.
