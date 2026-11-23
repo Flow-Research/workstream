@@ -7198,3 +7198,62 @@ fixture assertion change. Scoped reviewer found no weakening or owner mismatch.
 Shared modified-content execution overa326bec95, not independent/cleancommit
 rerun or full policy-duration/native-provider qualification. Old expiry-race
 creation consumers and full A01-A35/C01-C07 goal remain open.
+
+Expiry-wins T4 race scope: migrate only
+ test_due_expiry_and_ready_final_submission_wait_for_task_lock in
+backend/tests/tasks/submission_dispatch/test_revision_expiry.py. Complete real
+rawZIP PRE then pause before T4; cross original PG deadline and queue expiry
+before T4 on real TASK lock, observing both database waits. Preserve expiry
+receipt, rejected predecessor/released assignment/taskready/no economic effects.
+Replace obsolete ready-admission assertion with failed intake/no acceptance or
+finalization event and retained sealed charge. Compare product snapshot after
+PRE so legitimate PRE evidence is not mistaken for new product creation.
+Allowed files: testmodule and this record; add cohesive test-only outcome helper.
+No production/clock/SQL guard changes, no historical migration claim. Required
+QA/security/testdelta inspection, isolated race, Ruff/structural/record/diff gates.
+Existing creation-boundary tests/shared helpers remain until separately migrated.
+
+Expiry T4 race v1 failed173.81s beforelockrace: reused15second creation-stage
+observer expired while newrequest still performs upload/PRE. Initial attempt to
+add timeout selector had failed wrongcwd before run; v1executed unchanged helper.
+Add optional test-observation timeout(default15 preserved), select60 for full
+foreground journey only; no product/policy/lease/window changes. QA-EXPIRY001
+requires sealed/exactpositive sourcecharge; QA-EXPIRY002 compares finalization
+and POST eventrows against afterPREbaseline. Independent reviewer counterprobes
+showed releasedcharge/orphanfinalization would evade v1assertions; batch both
+repairs before v2. No production failure inferred from these oracle gaps.
+
+Expiry T4 race v2 failed220.58s with actual23514 'intake task custody mismatch'
+at expirycommit, allcleanuptrue: expiry tries to release assignment/TASK while
+live prechecking source still owns locked context. Expand scope to
+backend/app/modules/tasks/revision/expiry.py: after authorized/fenced/current
+source checks, return explicit safe RETRY while TASK has an active source owner.
+Foreground T4 still fails original expired deadline and its own finish clears
+pointer; same expiry event redelivers and releases once. Accepted pending task
+remains stale ACK, not expiry eligible. No ART imports, forced terminalization,
+lease theft, SQL relaxation or new capability. Architecture/security review
+required alongside QA. Test asserts first explicit retry/no expiration/economic
+facts, then waits actual next_attempt_at and delivers sameevent for exacteffect.
+Current race plus accepted-afterdeadline/coverage control verify both branches.
+
+Architecture review confirms safe guard placement after authority/fence/currentness
+and before expiration writes. Important open liveness gap: default OUTBOX5attempts
+with5/10/20/40second backoff may exhaust before a long foreground PRE hard deadline
+(up to4h) and its reaper. Explicit same-event test redelivery proves ordering, not
+production eventual expiry. C05/recovery envelope must be resolved for fullgoal;
+no readiness claim or invented deployment defaults. v3 initial root-cwd launch
+failed module discovery before tests; corrected backend launch uses same candidate.
+
+Expiry T4 race v3 terminal0:2passed276.06s/schema0084/allcleanuptrue
+(/tmp/submission-expiry-t4-race-v3.json/.log). Productblob
+39925240bf85b3db65329bb022706ff81742352b; testblob
+9ff0d893420e4a1c9f2f58ac780b3e42732ba417. Race proves real PRE, both TASK lock
+waits, known RETRY_REQUESTED (not unknown23514), originaldeadline refusal,
+foreground-owned pointer release, actual sameeventgeneration+1 redelivery,
+exactoneexpiration/sealedpositivecharge/noorphanT5orPOST. Accepted-afterdeadline
+coverage control also passes. AUTH attempted-action decisions may persist on
+RETRY; no-product-expiry effect does not mean no audit. Ruff/structure/record/
+whitespace pass. Review QA-EXPIRY001/002 closed with independent assertion probes.
+Shared modified-content execution overa420f3e3c, not cleancommit/independent rerun.
+C05 finite retry-envelope liveness remains unresolved and blocks full readiness;
+no automatic eventual expiry, native provider or whole-spec qualification claim.

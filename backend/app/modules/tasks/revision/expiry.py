@@ -127,6 +127,10 @@ class TaskRevisionExpiryOperation:
                     or task.assigned_to != str(target.contributor_id)
                     or assignment.status != "active" or assignment.released_at is not None):
                 return HandlerOutcome.ACKNOWLEDGE
+            if task.active_submission_operation_id is not None:
+                # Foreground custody must drain through its owner. T4 still
+                # rechecks the original deadline before accepting this source.
+                return HandlerOutcome.RETRY
             return await self._record_expiration(
                 target=target, envelope=envelope, head=head, authority=authority,
                 facts=facts, task=task, assignment=assignment,

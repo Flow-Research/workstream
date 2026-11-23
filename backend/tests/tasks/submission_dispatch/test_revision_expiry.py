@@ -515,12 +515,12 @@ async def _ready_expiry_race_replacement(h):
         ) from exc
 
 
-async def _wait_for_staged_submission(staged, final_request):
+async def _wait_for_staged_submission(staged, final_request, *, timeout=15):
     """Retain an early real POST failure instead of hiding it behind a stage timeout."""
     observed = asyncio.create_task(staged.wait())
     try:
         done, _ = await asyncio.wait(
-            (observed, final_request), timeout=15, return_when=asyncio.FIRST_COMPLETED,
+            (observed, final_request), timeout=timeout, return_when=asyncio.FIRST_COMPLETED,
         )
         if final_request in done:
             response = final_request.result()
@@ -528,7 +528,7 @@ async def _wait_for_staged_submission(staged, final_request):
                 "final POST ended before staged creation: "
                 f"status={response.status_code}; body={response.text[:1200]}"
             )
-        assert observed in done, "actual final creation did not reach staging within 15 seconds"
+        assert observed in done, f"request did not reach the observed stage within {timeout} seconds"
     finally:
         observed.cancel()
         await asyncio.gather(observed, return_exceptions=True)
@@ -571,19 +571,92 @@ async def _assert_expired_creation_absent(h, source_id, admission_id, before):
         await no_economic_effects(session)
 
 
+async def _assert_expired_intake_absent(h, source_id, operation_id, before):
+    """Losing T4 keeps sealed-byte cleanup custody without creating product facts."""
+    from app.modules.artifacts.intake.models import SubmissionIntakeOperation, SubmissionSourceCharge
+    after = await _creation_snapshot(h)
+    assert after[:8] == before[:8]
+    assert [e for e in after[8] if e["event_type"] in {"PostSubmissionEvaluationRequested", "SubmissionFinalizationRequested"}] == [
+        e for e in before[8] if e["event_type"] in {"PostSubmissionEvaluationRequested", "SubmissionFinalizationRequested"}]
+    async with h.factory() as session:
+        operation = await session.get(SubmissionIntakeOperation, operation_id)
+        assert operation.state == "failed" and operation.acceptance_receipt is None
+        assert operation.finalization_event_id is None and operation.finalized_submission_id is None
+        charge = await session.get(SubmissionSourceCharge, operation_id)
+        assert charge is not None and charge.state == "sealed"
+        assert charge.accounted_bytes == operation.raw_byte_count > 0
+        assert await session.scalar(text(
+            "SELECT count(*) FROM public.task_revision_expirations WHERE routing_manifest_id=:source"
+        ), {"source": source_id}) == 1
+        assert (await session.execute(text(
+            "SELECT attempt_status,status_reason FROM public.submissions WHERE id=:id"
+        ), {"id": h.created.submission_id})).one() == ("rejected", "revision_deadline_expired")
+        assert (await session.execute(text(
+            "SELECT status,assigned_to,active_submission_operation_id FROM public.workstream_tasks WHERE id=:task"
+        ), {"task": h.request.task_id})).one() == ("ready", None, None)
+        assert await session.scalar(text(
+            "SELECT status FROM public.task_assignments WHERE id=:assignment"
+        ), {"assignment": h.request.assignment_id}) == "revision_expired"
+        await no_economic_effects(session)
+
+
+async def _redeliver_deferred_expiry(h, source_id, event_id, delivered):
+    """Active foreground drains before the same due expiry releases its assignment."""
+    assert delivered is not None
+    outcome = json.loads(delivered.outcome_json)
+    assert outcome["delivery_state"] == "retryable" and outcome["error_code"] == "RETRY_REQUESTED"
+    assert outcome["invocation_unknown"] is False
+    assert h.expiry_handler_outcome == HandlerOutcome.RETRY.value
+    assert getattr(h, "expiry_handler_error", None) is None
+    async with h.factory() as session:
+        assert await session.scalar(select(func.count(TaskRevisionExpiration.id))) == 0
+        assert await session.scalar(select(func.count(OutboxEvent.event_id)).where(
+            OutboxEvent.event_type == REVISION_EXPIRED_EVENT)) == 0
+        assert (await session.execute(text(
+            "SELECT status,active_submission_operation_id FROM public.workstream_tasks WHERE id=:id"
+        ), {"id": h.request.task_id})).one() == ("needs_revision", None)
+        assert await session.scalar(text(
+            "SELECT status FROM public.task_assignments WHERE id=:id"
+        ), {"id": h.request.assignment_id}) == "active"
+        await no_economic_effects(session)
+        event = await session.get(OutboxEvent, str(event_id))
+        assert event.idempotency_key == f"task.revision.expire:{source_id}"
+        delay = (event.next_attempt_at - await session.scalar(select(func.clock_timestamp()))).total_seconds()
+    await asyncio.sleep(max(0, delay) + 0.2)
+    retried = await h.expiry_delivery.deliver(event_id, h.request.project_id, "expiry-after-foreground-drain")
+    _assert_race_expiry_acknowledged(h, retried)
+    assert retried.claim.event_id == delivered.claim.event_id
+    assert retried.claim.claim_generation == delivered.claim.claim_generation + 1
+
+
 async def test_due_expiry_and_ready_final_submission_wait_for_task_lock(
     tmp_path, isolated_database_env, monkeypatch,
 ):
-    """Expiry wins TASK custody over an actual, independently verified final POST."""
+    """Expiry wins TASK custody after real PRE but before accepted handoff."""
+    from contextvars import ContextVar
+    from app.modules.artifacts.intake.foreground_admission import ForegroundIntakeAdmission
+    from tests.tasks.submission_dispatch.test_revision_capacity import (
+        _revision_http_runtime, _revision_upload_headers,
+    )
+    accepting = ContextVar("expiry_race_accepting", default=False)
+    pre_done, release = asyncio.Event(), asyncio.Event()
+    original_accept = ForegroundIntakeAdmission.accept
+    operations = []
+
+    async def pause_accept(admission, owner, *args, **kwargs):
+        operations.append(owner.operation_id)
+        pre_done.set()
+        await asyncio.wait_for(release.wait(), 90)
+        token = accepting.set(True)
+        try:
+            return await original_accept(admission, owner, *args, **kwargs)
+        finally:
+            accepting.reset(token)
     async with remediation_source(tmp_path, isolated_database_env) as h:
         source_id, _, event_id = await expire_retained_revision(
             h, monkeypatch=monkeypatch, isolated_database_env=isolated_database_env,
             deliver=False, window_seconds=60,
         )
-        prepared, admission_id = await _ready_expiry_race_replacement(h)
-        assert await _admission_status(h, admission_id) == "ready"
-        before = await _creation_snapshot(h)
-        await _wait_until_revision_due(h, event_id)
         expiry_name = f"expiry-final-race-{new_record_id().hex}"
         final_name = f"submission-final-race-{new_record_id().hex}"
         original_expiry_lock = TaskRepository.lock_project_task
@@ -596,7 +669,7 @@ async def test_due_expiry_and_ready_final_submission_wait_for_task_lock(
             return await original_expiry_lock(repository, *args, **kwargs)
 
         async def final_lock(repository, *args, **kwargs):
-            if kwargs.get("for_update"):
+            if accepting.get() and kwargs.get("for_update"):
                 await repository._session.execute(text(
                     "SELECT set_config('application_name',:name,true)"
                 ), {"name": final_name})
@@ -604,10 +677,20 @@ async def test_due_expiry_and_ready_final_submission_wait_for_task_lock(
 
         pending = []
         async with _client(h, monkeypatch, isolated_database_env) as client:
+            data = revision_archive(h.data)
+            _, errors, calls = await _revision_http_runtime(h, client, tmp_path, monkeypatch, data)
             with monkeypatch.context() as patch:
+                patch.setattr(ForegroundIntakeAdmission, "accept", pause_accept)
                 patch.setattr(TaskRepository, "lock_project_task", expiry_lock)
                 patch.setattr(TaskRepository, "get_task", final_lock)
                 try:
+                    pending.append(asyncio.create_task(client.post(
+                        f"/api/v1/tasks/{h.request.task_id}/submissions",
+                        headers=_revision_upload_headers(h), content=data)))
+                    await _wait_for_staged_submission(pre_done, pending[0], timeout=60)
+                    assert len(calls) == 1 and not errors, errors
+                    before = await _creation_snapshot(h)
+                    await _wait_until_revision_due(h, event_id)
                     async with h.factory() as holder, holder.begin():
                         await holder.execute(text(
                             "SELECT id FROM public.workstream_tasks WHERE id=:task FOR UPDATE"
@@ -618,23 +701,23 @@ async def test_due_expiry_and_ready_final_submission_wait_for_task_lock(
                         await asyncio.wait_for(wait_for_named_database_lock(
                             isolated_database_env, expiry_name,
                         ), 15)
-                        pending.append(asyncio.create_task(client.post(
-                            f"/api/v1/tasks/{h.request.task_id}/submissions",
-                            json=_payload(prepared, admission_id),
-                        )))
+                        release.set()
                         await asyncio.wait_for(wait_for_named_database_lock(
                             isolated_database_env, final_name,
                         ), 15)
                         assert all(not contender.done() for contender in pending)
-                    delivered, final = await asyncio.wait_for(asyncio.gather(*pending), 30)
+                    final, delivered = await asyncio.wait_for(asyncio.gather(*pending), 30)
                 finally:
+                    release.set()
                     for contender in pending:
                         if not contender.done():
                             contender.cancel()
                     await asyncio.gather(*pending, return_exceptions=True)
-        _assert_race_expiry_acknowledged(h, delivered)
-        assert final.status_code in {404, 409}, final.text
-        await _assert_expired_creation_absent(h, source_id, admission_id, before)
+        assert final.status_code == 409, final.text
+        assert final.json()["error"]["code"] == "revision_deadline_expired"
+        await _redeliver_deferred_expiry(h, source_id, event_id, delivered)
+        assert len(operations) == 1
+        await _assert_expired_intake_absent(h, source_id, operations[0], before)
 
 
 @pytest.mark.parametrize("commit_before_deadline", [True, False])
