@@ -1319,13 +1319,13 @@ async def test_source_cleanup_keeps_source_when_another_upload_is_unresolved(sou
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("completed", [False, True])
-async def test_unsealed_cleanup_observes_completion_without_premature_release(source_store, completed):
+@pytest.mark.parametrize("phase", ["unfinished", "completed", "completion_race", "lost_abort"])
+async def test_unsealed_cleanup_settles_known_upload_or_retains_completed_version(source_store, monkeypatch, phase):
     from app.adapters.artifacts.source_cleanup import S3SubmissionSourceCleanup
     from app.modules.artifacts.api.submission_cleanup import UnsealedSubmissionSource, UnsealedSourceCleanupInput
 
     completion = await source_completion(source_store, b"unrecorded-completion")
-    source = await source_store.complete_source_upload(completion) if completed else None
+    source = await source_store.complete_source_upload(completion) if phase == "completed" else None
     upload = completion.upload
     value = UnsealedSourceCleanupInput(
         source=UnsealedSubmissionSource(
@@ -1337,18 +1337,83 @@ async def test_unsealed_cleanup_observes_completion_without_premature_release(so
     # Real MinIO protocol behavior; production credential qualification is separate.
     cleanup_store = initialize_minio_store(private_prefix=source_store._private_prefix)
     try:
-        result = await S3SubmissionSourceCleanup(cleanup_store).remove_unsealed(value)
+        abort = cleanup_store.request_source_abort
+
+        async def interrupted_abort(target):
+            nonlocal source
+            if phase == "completion_race":
+                source = await source_store.complete_source_upload(completion)
+            await abort(target)
+            if phase == "lost_abort":
+                raise ArtifactStoreUnavailableError("abort acknowledgment lost")
+
+        monkeypatch.setattr(cleanup_store, "request_source_abort", interrupted_abort)
+        cleanup = S3SubmissionSourceCleanup(cleanup_store)
+        if phase == "lost_abort":
+            with pytest.raises(ArtifactStoreUnavailableError, match="acknowledgment lost"):
+                await cleanup.remove_unsealed(value)
+            monkeypatch.setattr(cleanup_store, "request_source_abort", abort)
+        result = await cleanup.remove_unsealed(value)
         assert result.source == value.source
-        assert result.object_absent is result.writes_settled is False
         assert result.observed_source == source
-        if completed:
+        if source is not None:
+            assert result.object_absent is result.writes_settled is False
             retained = await source_store.observe_sealed_source(source)
             assert retained is not None
             assert retained.provider_generation == source.provider_generation
         else:
-            assert result.parts_absent is True
+            assert result.object_absent is result.writes_settled is result.parts_absent is True
             assert await source_store.source_upload_parts_absent(upload) is True
+            assert await cleanup.remove_unsealed(value) == result
+            with pytest.raises(ArtifactObjectMissingError):
+                await source_store.upload_source_part(upload, 1, b"late")
+            with pytest.raises(ArtifactObjectMissingError):
+                await source_store.complete_source_upload(completion)
     finally:
+        cleanup_store.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("obligation", ["unknown_begin", "surviving_parts", "version", "delete_marker"])
+async def test_unsealed_cleanup_preserves_unresolved_obligations(source_store, monkeypatch, obligation):
+    from app.adapters.artifacts.source_cleanup import S3SubmissionSourceCleanup
+    from app.modules.artifacts.api.submission_cleanup import UnsealedSubmissionSource, UnsealedSourceCleanupInput
+
+    intent = source_intent(source_store)
+    upload = await source_store.begin_source_upload(intent)
+    if obligation != "unknown_begin":
+        await source_store.upload_source_part(upload, 1, b"unfinished")
+    value = UnsealedSourceCleanupInput(
+        source=UnsealedSubmissionSource(location=intent.location, upload_fence=intent.upload_fence,
+            provider_upload_id=None if obligation == "unknown_begin" else upload.provider_upload_id),
+        intent=intent, upload=None if obligation == "unknown_begin" else upload, completion=None,
+    )
+    cleanup_store = initialize_minio_store(private_prefix=source_store._private_prefix)
+    try:
+        if obligation == "surviving_parts":
+            async def acknowledged_without_settlement(_upload):
+                pass
+            monkeypatch.setattr(cleanup_store, "request_source_abort", acknowledged_without_settlement)
+        if obligation in {"version", "delete_marker"}:
+            # Admin fixture introduces an unexplained version/marker. Cleanup
+            # must preserve it, never manufacture a source identity to delete it.
+            async with source_store._client() as client:
+                key = source_store._source_key(intent.location)
+                await client.put_object(Bucket=MINIO_BUCKET, Key=key, Body=b"unexplained")
+                if obligation == "delete_marker":
+                    await client.delete_object(Bucket=MINIO_BUCKET, Key=key)
+        result = await S3SubmissionSourceCleanup(cleanup_store).remove_unsealed(value)
+        assert result.writes_settled is False
+        assert result.observed_source is None
+        if obligation == "surviving_parts":
+            assert result.parts_absent is False
+        if obligation in {"version", "delete_marker"}:
+            async with source_store._client() as client:
+                retained = await client.list_object_versions(Bucket=MINIO_BUCKET, Prefix=key)
+            assert len(retained["Versions"]) == 1
+            assert bool(retained.get("DeleteMarkers")) is (obligation == "delete_marker")
+    finally:
+        await source_store.request_source_abort(upload)
         cleanup_store.close()
 
 

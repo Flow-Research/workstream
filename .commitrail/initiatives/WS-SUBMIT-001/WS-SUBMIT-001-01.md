@@ -8121,3 +8121,53 @@ assertion (`/tmp/submission-source-sdk-retry-qa-probe.json`). Both clean review
 snapshots matched. Shared suite receipts identify the precommit worktree, not an
 exact-head launch. This closes the SDK duplicate-attempt defect only; existing
 unknown upload settlement and orphan reconciliation remain open.
+
+Known-handle remote settlement scope: reuse the existing cleanup claim and
+confirmation operation to release a recorded unfinished upload only after scoped
+abort, authoritative NoSuchUpload/parts absence, fresh handle discovery and
+absence of every object version/delete marker at its managed key. Re-observe
+committed EOF after abort so a racing completion becomes the existing durable
+exact-version observation, never deletion under a partial claim. Factor the
+existing sealed-cleanup version-absence check for both paths. Allowed files:
+source cleanup adapter and existing provider/owner tests plus record. Prohibited:
+new lifecycle/schema, broad deletion, release on abort acknowledgment alone,
+inferred settlement of missing-handle initiation, AWS qualification claims or
+changed retained-object policy. Acceptance: real MinIO known partial upload and
+lost-abort replay settle; racing completion, surviving parts/versions and unknown
+initiation remain protected; late part/complete against the aborted handle fail.
+Risk: storage reclamation; QA and architecture/security reviews required.
+
+The affected test scope includes `tests/artifacts/test_source_cleanup_minio.py`
+and its existing shared-foundation lane registration: use the current T1 owner,
+real PostgreSQL and MinIO, then the existing cleanup execution composition to
+prove lost-abort uncertainty retains the reservation and a confirmed replay
+releases it once without fabricating sealed custody. Provider-level phase cases
+cover completion-before-abort and completion-during-abort, not merely mocked
+absence booleans. Surviving parts, unexplained versions/delete markers and
+missing-handle initiation remain negative controls. Fresh `origin/main` is fully
+contained in the working branch; no integration merge was needed.
+
+Provider selection passed18 cases in95.55s (48 explicitly deselected,
+`/tmp/submission-known-upload-settlement-v1.log/.json`). The integrated charge
+probe initially failed before provider work because the existing MinIO fixture's
+claimed reopenable factory reused one bootstrap/adapter for two simultaneous
+clients. Repair that test helper to create a fresh bootstrap per invocation,
+retaining the exact same namespace, and include the existing pinned-version POST
+test in its rerun. No production bootstrap contract is weakened.
+
+CI on prior head also exposed stale vocabulary in the cleanup operations guide
+(`agent-gates`, run45215714126). Reconcile that affected guide with the current
+sealed/unsealed behavior and explicitly name Celery processes; do not exempt
+the text or weaken the documentation checker. These fixture and ordinary-doc
+repairs are within the affected cleanup integration, not a broader migration.
+
+The combined PostgreSQL/MinIO charge test and existing retained-version POST
+control passed2 cases in80.86s
+(`/tmp/submission-known-upload-charge-v2.log/.json`, schema0088, complete
+isolated cleanup). Lost abort acknowledgment left the1024-byte reservation and
+unconfirmed claim intact; exact replay released it to zero once without a seal
+or fabricated provider generation. Provider results18passed and this integrated
+pair are bounded proofs, not native AWS qualification. Ruff, structure,
+protected-module boundary, record/link, stale-authorization-doc and whitespace
+checks passed. The overview now distinguishes recorded-handle settlement from
+the still-open missing-handle and genuine-orphan paths.

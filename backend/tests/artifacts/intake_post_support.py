@@ -97,7 +97,9 @@ async def minio_source_fixture():
     settings = minio_settings(private_prefix=f"post-source/{new_record_id()}", buffer_bytes=65536)
     bootstrap = create_artifact_store_bootstrap(settings, activation_guard=None)
     namespace = artifact_storage_namespace_spec(settings, bootstrap)
+    bootstrap.close()
     def factory():
+        bootstrap = create_artifact_store_bootstrap(settings, activation_guard=None)
         return bootstrap.initialize_after_namespace_claim(ArtifactStoreNamespaceClaim(
             bootstrap.identity, bootstrap.namespace_identity, namespace.namespace_fingerprint))
     store = factory()

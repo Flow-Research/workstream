@@ -80,8 +80,11 @@ migration must not displace closing this integration.
 The current unsealed change extends that same cleanup owner: Local incomplete
 uploads can be reclaimed, and an observed late completion is retained until a
 fresh aged claim identifies its exact version. Focused Local/PostgreSQL and MinIO
-checks passed, as did the existing cleanup-owner suite. Remote partial-write
-settlement and genuine-orphan reconciliation remain open; do not treat this
+checks passed, as did the existing cleanup-owner suite. Recorded MinIO multipart
+handles now settle only after parts/handle/version absence; a real PostgreSQL
+lost-abort/replay case proves conservative charge retention then one release.
+Remote initiation without a recorded handle and genuine-orphan reconciliation
+remain open; do not treat this
 partial implementation as completion of order 1.
 
 ## Acceptance evidence still to close

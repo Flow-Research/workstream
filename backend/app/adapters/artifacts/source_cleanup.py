@@ -119,14 +119,19 @@ class S3SubmissionSourceCleanup:
         # Any additional generation or delete marker remains an operation-owned
         # reconciliation obligation. Removing our exact version cannot release
         # its charge while other bytes at the same managed key are unexplained.
-        async with self._store._source_client(source.location, ArtifactProviderOperationEvidence()) as client:
-            versions = await client.list_object_versions(
-                Bucket=self._store._bucket, Prefix=self._store._source_key(source.location), MaxKeys=1,
-            )
-        versions_absent = (versions.get("IsTruncated") is False
-                           and versions.get("Versions", []) == []
-                           and versions.get("DeleteMarkers", []) == [])
+        versions_absent = await self._versions_absent(source.location)
         return SubmissionSourceRemoval(source, absent, parts_absent and not handles and versions_absent, parts_absent)
+
+    async def _versions_absent(self, location):
+        """Only a complete empty version listing settles the managed key."""
+        from app.interfaces.artifacts import ArtifactProviderOperationEvidence
+        async with self._store._source_client(location, ArtifactProviderOperationEvidence()) as client:
+            versions = await client.list_object_versions(
+                Bucket=self._store._bucket, Prefix=self._store._source_key(location), MaxKeys=1,
+            )
+        return (versions.get("IsTruncated") is False
+                and versions.get("Versions", []) == []
+                and versions.get("DeleteMarkers", []) == [])
 
     async def remove_unsealed(self, value: UnsealedSourceCleanupInput):
         """Abort known scoped handles; retain charge until remote writes are settled."""
@@ -144,7 +149,14 @@ class S3SubmissionSourceCleanup:
         parts_absent = True
         for upload in handles:
             parts_absent = parts_absent and await self._store.source_upload_parts_absent(upload)
-        # Unknown begin retries and a racing completion are not settled by one
-        # LIST/abort response. Exact completed-version reconciliation follows
-        # through durable cleanup custody; never infer capacity release here.
-        return SubmissionSourceRemoval(value.source, False, False, parts_absent)
+        if value.upload is None or not parts_absent:
+            # Discovery cannot prove that an unacknowledged initiation has
+            # finished. Keep its charge, including when no handle was listed.
+            return SubmissionSourceRemoval(value.source, False, False, parts_absent)
+        if value.completion is not None:
+            completed = await self._store.observe_source_upload(value.completion)
+            if completed is not None:
+                return SubmissionSourceRemoval(value.source, False, False, parts_absent, completed)
+        remaining = await self._store.discover_source_uploads(value.intent)
+        absent = await self._versions_absent(value.source.location)
+        return SubmissionSourceRemoval(value.source, absent, not remaining and absent, parts_absent)
