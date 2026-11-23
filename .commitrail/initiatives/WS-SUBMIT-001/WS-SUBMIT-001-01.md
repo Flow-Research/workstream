@@ -7841,3 +7841,36 @@ ART imports in the worker adapter; moved candidate composition into the existing
 ART root and reused configured namespace composition. Startup validation now
 runs before fork, outside Celery's short child-init window, and disposes resources
 before return. A failed startup cannot mark the parent validated.
+
+Required reviews of clean1f9ddef55 found CLEANUP-WORKER-ISOLATION-01:
+exclusive queue selection does not reject foreign registered task names delivered
+to that queue. Accepted repair: use the existing Celery application's task
+execution boundary to reject every non-cleanup task in a validated cleanup child,
+before task code can initialize ordinary ART capabilities from cleanup settings.
+A Celery signal exception is insufficient because signal dispatch can suppress
+receiver errors. Add an actual registered-task trace negative and ordinary-worker
+positive; retain the existing queue and process guards. No second Celery app or
+submission workflow is introduced. Also clarify that successful confirmation
+observations include already-confirmed replay; concurrent sweeps may both observe
+confirmation, while the database proves exactly one charge release. The test
+must assert the durable single-release fact without assuming a particular race
+schedule.
+
+Shared cleanup verification closure: V2 passed five selected integration cases in
+148.86s, with one namespace fixture error; V3 passed the corrected namespace
+case in19.73s. Both isolated receipts report0087 and complete database/MinIO
+cleanup. The first boundary/topology run passed104 and failed the new private
+edge; the repaired repository boundary passed in28.35s. Structure, scoped Ruff,
+record and link checks passed before the review repair. These are modified-tree
+runs over884a, not a clean-head full-system or native-provider qualification.
+
+CLEANUP-WORKER-ISOLATION-01 regression executed through the registered
+resolve_put_attempt Celery task. Before repair, the cleanup-child negative failed
+with DID NOT RAISE RuntimeError while the ordinary-worker positive passed
+(/tmp/submission-cleanup-isolation-before.log). The existing application's task
+base now rejects foreign task names in before_start; this is a task execution
+hook, not a signal receiver. After repair all15 cleanup topology cases passed
+in7.82s (/tmp/submission-cleanup-isolation-after.log). The charge concurrency
+assertion now allows either one or two successful confirmation observations,
+while preserving its exact single durable claim and zero-charge checks.
+The source owner/provider semantics are unchanged by this repair.

@@ -268,7 +268,9 @@ celery -A app.workers.celery_app:celery_app worker --pool=prefork -Q workstream.
 ```
 
 Other worker processes must select their own queues explicitly. Mixed queues,
-eager execution, and other pools are rejected for cleanup. Startup checks the
+eager execution, and other pools are rejected for cleanup. The task execution
+boundary also rejects foreign registered task names delivered to this worker.
+Startup checks the
 persisted namespace, current cleanup-service authority and provider configuration
 before forking. Each sweep repeats current authority checks. The task has a
 fixed 360-second process hard limit; broker messages cannot extend it.

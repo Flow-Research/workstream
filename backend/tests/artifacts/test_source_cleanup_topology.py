@@ -86,3 +86,29 @@ def test_startup_failure_cannot_authorize_a_cleanup_child(monkeypatch):
     with pytest.raises(WorkerShutdown, match="startup validation failed"):
         topology.validate_source_cleanup_worker(worker())
     assert topology._validated_parent is None
+
+
+@pytest.mark.parametrize("cleanup_child", [True, False])
+def test_registered_foreign_task_cannot_use_cleanup_credentials(monkeypatch, cleanup_child):
+    from app.core.config import get_settings
+    from app.core.identifiers import new_record_id
+    monkeypatch.setenv("WORKSTREAM_CELERY_TASK_ALWAYS_EAGER", "true")
+    get_settings.cache_clear()
+    from app.workers import artifacts
+    calls = []
+    async def operation(kind, identifier):
+        calls.append((kind, identifier))
+    monkeypatch.setattr(artifacts, "run_artifact_internal_operation", operation)
+    monkeypatch.setattr(topology, "_validated_parent", os.getpid() if cleanup_child else None)
+    monkeypatch.setattr(topology.os, "getppid", os.getpid)
+    identifier = new_record_id()
+    try:
+        if cleanup_child:
+            with pytest.raises(RuntimeError, match="dedicated source cleanup"):
+                artifacts.resolve_put_attempt.apply(args=(str(identifier),), throw=True)
+            assert calls == []
+        else:
+            artifacts.resolve_put_attempt.apply(args=(str(identifier),), throw=True)
+            assert calls == [("put", identifier)]
+    finally:
+        get_settings.cache_clear()

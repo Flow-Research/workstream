@@ -45,7 +45,7 @@ async def validate_source_cleanup_startup():
 
 
 async def sweep_sealed_submission_sources(sessions, settings):
-    """One finite page; prior process loss leaves recoverable durable claims."""
+    """One finite page; confirmed counts include already-confirmed replay."""
     profile, namespace, namespace_claim = _configuration(settings)
     candidates, confirmed, timed_out, provider = (), 0, False, None
     try:

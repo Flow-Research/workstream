@@ -1,6 +1,7 @@
 """Keep deletion credentials and bounded reclamation on a dedicated worker."""
 import os
 
+from celery import Task
 from celery.concurrency import get_implementation
 from celery.concurrency.prefork import TaskPool
 from celery.exceptions import WorkerShutdown
@@ -56,3 +57,12 @@ def require_source_cleanup_worker(task):
             or message_limit is not None and (type(message_limit) is not int
                 or message_limit != SUBMISSION_SOURCE_CLEANUP_HARD_LIMIT_SECONDS)):
         raise RuntimeError("source cleanup requires its bounded hard time limit")
+
+
+class WorkerTaskBoundary(Task):
+    """Keep foreign registered tasks away from a cleanup child's credentials."""
+
+    def before_start(self, task_id, args, kwargs):
+        if is_source_cleanup_worker_process() and self.name != SOURCE_CLEANUP_TASK:
+            raise RuntimeError("dedicated source cleanup worker rejects foreign tasks")
+        return super().before_start(task_id, args, kwargs)

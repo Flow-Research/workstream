@@ -10,7 +10,7 @@ from app.workers.outbox_topology import (
 )
 from app.workers.source_cleanup_topology import (
     SOURCE_CLEANUP_QUEUE, SOURCE_CLEANUP_TASK, SOURCE_CLEANUP_SCHEDULE,
-    is_source_cleanup_worker_process,
+    is_source_cleanup_worker_process, WorkerTaskBoundary,
 )
 from app.modules.artifacts.api.submission_cleanup import (
     SUBMISSION_SOURCE_SWEEP_SECONDS, SubmissionSourceCleanupProfile,
@@ -131,6 +131,7 @@ def create_celery_app() -> Celery:
             )
     celery_app = Celery(
         "workstream",
+        task_cls=WorkerTaskBoundary,
         broker=broker_url,
         backend=settings.celery_result_backend_url,
         include=[
