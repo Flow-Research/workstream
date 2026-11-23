@@ -7116,3 +7116,17 @@ content execution over40baa0f15, not independent or clean-commit rerun. Existing
 synthetic retained setup does not qualify historical migrations. This removes
 last obsolete preparation endpoint from capacity module; expiry-race consumers,
 production retirement and full goal qualification remain open.
+
+Current-main integration scope: integrate origin/main a2154e8a4 (33 commits since
+previous base) into the same submission branch/PR. Preserve main's Keycloak/native
+login and shared external-services package relocation together with branch source
+custody/PRE contracts and submission tests. Merge preview identifies9conflicts in
+behavior ownership inventory/tests, MCP workflow/hosted tests, PRE interfaces/
+model adapter/selected execution, retained fixtures and trusted-intake tests.
+Allowed: merge incoming main changes and resolve overlapping files, regenerate
+owned inventory only through canonical tooling where necessary; this record.
+Prohibited: removing security checks, restoring obsolete PRE paths, losing source
+expiry/receipt fields or weakening CI to make merge pass. Review architecture,
+QA/security and CI affected intersections; verify syntax/imports, ownership/gates,
+focused merged contract tests then current submission public regression. Human
+review focus: preserve both current authentication and exact source execution.
