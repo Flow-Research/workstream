@@ -128,6 +128,23 @@ def exchange_policy() -> tuple[dict, dict]:
     return profile, policy
 
 
+def persistent_connection_settings() -> dict:
+    """Bound offline renewal without extending ordinary browser/API sessions."""
+    return {
+        "offlineSessionIdleTimeout": 30 * 24 * 60 * 60,
+        "offlineSessionMaxLifespanEnabled": True,
+        "offlineSessionMaxLifespan": 90 * 24 * 60 * 60,
+    }
+
+
+def offline_access_scope() -> dict:
+    """Request retained access explicitly; no additional product permissions."""
+    scope = client_scope("offline_access", [], include_in_token_scope=True,
+                         display_on_consent_screen=True)
+    scope["attributes"]["consent.screen.text"] = "Keep Workstream connected between visits"
+    return scope
+
+
 def realm() -> dict:
     """Return a credential-free initial realm; never import users or signing keys."""
     identity = client_scope(IDENTITY_SCOPE, [
@@ -164,6 +181,7 @@ def realm() -> dict:
         "passwordPolicy": "length(14)", "defaultSignatureAlgorithm": "RS256",
         "ssoSessionIdleTimeout": 1800, "ssoSessionMaxLifespan": 28800,
         "accessTokenLifespan": 300, "revokeRefreshToken": True, "refreshTokenMaxReuse": 0,
+        **persistent_connection_settings(),
         "defaultDefaultClientScopes": ["basic"], "defaultOptionalClientScopes": [],
         "clientScopes": [
             # Explicit scope imports replace the provider's stock scope list.
@@ -174,6 +192,7 @@ def realm() -> dict:
                     "jsonType.label": "long", "id.token.claim": "true",
                 }),
             ]),
+            offline_access_scope(),
             identity, client_scope(ACCESS_SCOPE, [], include_in_token_scope=True,
                                    display_on_consent_screen=True),
             client_scope("workstream-api-audience", [audience_mapper("api", client=API_AUDIENCE)]),
@@ -182,6 +201,7 @@ def realm() -> dict:
                 audience_mapper("mcp-resource", resource=MCP_RESOURCE),
             ], include_in_token_scope=True),
         ],
+        "scopeMappings": [{"clientScope": "offline_access", "roles": ["offline_access"]}],
         "clients": [
             browser_client("workstream-cli-login", "http://127.0.0.1:17843/callback", "workstream-api-audience"),
             browser_client("workstream-mcp-proof", "http://127.0.0.1:17844/callback", "workstream-mcp-audience"),
@@ -191,7 +211,7 @@ def realm() -> dict:
     }
 
 
-def self_service_settings(existing: dict, server_info: dict, profile: dict) -> dict:
+def self_service_settings(existing: dict, server_info: dict, profile: dict, required_actions: list[dict]) -> dict:
     """Render an existing-realm activation patch after operator email-delivery proof."""
     if existing.get("realm") != "flow":
         raise ValueError("Self-service configuration belongs only to the Flow realm")
@@ -202,6 +222,9 @@ def self_service_settings(existing: dict, server_info: dict, profile: dict) -> d
                    if item.get("name") == "workstream_subject_kind"), None)
     if marker is None or marker.get("permissions") != {"view": ["admin"], "edit": ["admin"]}:
         raise ValueError("Restore the administrator-only human identity profile before signup")
+    verification = next((action for action in required_actions if action.get("alias") == "VERIFY_EMAIL"), None)
+    if verification is None or verification.get("enabled") is not True:
+        raise ValueError("Enable the VERIFY_EMAIL required action before signup")
     smtp = existing.get("smtpServer", {})
     if not smtp.get("host") or not smtp.get("from"):
         raise ValueError("Configure and prove SMTP delivery before enabling signup")
@@ -274,7 +297,9 @@ def garden_client(client_id: str, callback: str) -> dict:
             or parsed.query or parsed.fragment or parsed.path != "/api/oauth/callback"
             or "*" in callback or not client_id.startswith("garden-")):
         raise ValueError("Garden registration requires its exact HTTPS callback and dedicated client ID")
-    return browser_client(client_id, callback, "workstream-mcp-audience")
+    client = browser_client(client_id, callback, "workstream-mcp-audience")
+    client["optionalClientScopes"].append("offline_access")
+    return client
 
 
 def main() -> None:
@@ -292,17 +317,19 @@ def main() -> None:
                         help="Render a bounded patch for the exported built-in account-console client")
     parser.add_argument("--server-info-input", type=Path)
     parser.add_argument("--self-service-profile-input", type=Path)
+    parser.add_argument("--required-actions-input", type=Path)
     parser.add_argument("--garden-client-id")
     args = parser.parse_args()
     if bool(args.garden_callback) != bool(args.garden_client_id):
         parser.error("Garden callback and client ID must be provided together")
-    if len({bool(args.self_service_realm_input), bool(args.server_info_input), bool(args.self_service_profile_input)}) != 1:
-        parser.error("Self-service activation requires realm, server-info and user-profile input")
+    if len({bool(args.self_service_realm_input), bool(args.server_info_input), bool(args.self_service_profile_input), bool(args.required_actions_input)}) != 1:
+        parser.error("Self-service activation requires realm, server-info, user-profile and required-actions input")
     if args.self_service_realm_input:
         desired = self_service_settings(
             json.loads(args.self_service_realm_input.read_text(encoding="utf-8")),
             json.loads(args.server_info_input.read_text(encoding="utf-8")),
             json.loads(args.self_service_profile_input.read_text(encoding="utf-8")),
+            json.loads(args.required_actions_input.read_text(encoding="utf-8")),
         )
     elif args.account_console_input:
         desired = account_console_settings(json.loads(args.account_console_input.read_text(encoding="utf-8")))

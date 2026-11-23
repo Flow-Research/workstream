@@ -77,7 +77,7 @@ public final class HumanRegistrationProof {
         } catch (IllegalStateException expected) {
             if (!failure || !rollback.get()) throw new AssertionError("Failure did not require rollback");
         }
-        if (writes != "human".equals(marker.get())) throw new AssertionError("Wrong identity mutation");
+        if (writes ? !"human".equals(marker.get()) : marker.get() != null) throw new AssertionError("Wrong identity mutation");
         if (!failure && rollback.get()) throw new AssertionError("Unexpected rollback");
         marker.set(null);
         listener.onEvent((AdminEvent) null, false);

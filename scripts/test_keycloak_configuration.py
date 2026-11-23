@@ -3,12 +3,18 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import sys
 from pathlib import Path
 import unittest
 import tempfile
 from unittest.mock import patch
 
-from scripts import check_stale_artifact_contracts as artifact_scan
+scan_spec = importlib.util.spec_from_file_location(
+    "check_stale_artifact_contracts", Path(__file__).with_name("check_stale_artifact_contracts.py"))
+assert scan_spec is not None and scan_spec.loader is not None
+artifact_scan = importlib.util.module_from_spec(scan_spec)
+sys.modules[scan_spec.name] = artifact_scan
+scan_spec.loader.exec_module(artifact_scan)
 
 PATH = Path(__file__).resolve().parents[1] / "deploy/identity/realm_config.py"
 spec = importlib.util.spec_from_file_location("identity_realm_config", PATH)
@@ -35,6 +41,41 @@ class KeycloakConfigurationTests(unittest.TestCase):
                 with patch.object(artifact_scan, "discover_paths", return_value=[target]):
                     self.assertEqual(artifact_scan.scan(root),
                         [f"{name}:0: UNREADABLE_ACTIVE_TEXT (UnicodeDecodeError)"])
+
+    def test_persistent_grant_is_bounded_and_only_assigned_to_garden(self):
+        realm = config.realm()
+        self.assertEqual(realm["offlineSessionIdleTimeout"], 2592000)
+        self.assertTrue(realm["offlineSessionMaxLifespanEnabled"])
+        self.assertEqual(realm["offlineSessionMaxLifespan"], 7776000)
+        self.assertEqual(realm["accessTokenLifespan"], 300)
+        self.assertTrue(realm["revokeRefreshToken"])
+        self.assertEqual(realm["refreshTokenMaxReuse"], 0)
+        for client in realm["clients"]:
+            self.assertNotIn("offline_access", client["defaultClientScopes"])
+            self.assertNotIn("offline_access", client["optionalClientScopes"])
+        garden = config.garden_client("garden-dev", "https://garden.example/api/oauth/callback")
+        self.assertIn("offline_access", garden["optionalClientScopes"])
+        self.assertFalse(garden["fullScopeAllowed"])
+        scope = next(item for item in realm["clientScopes"] if item["name"] == "offline_access")
+        self.assertEqual(scope["protocolMappers"], [])
+        self.assertEqual(scope["attributes"]["include.in.token.scope"], "true")
+        self.assertEqual(realm["scopeMappings"],
+                         [{"clientScope": "offline_access", "roles": ["offline_access"]}])
+
+    def test_runtime_scan_preserves_universal_newline_diagnostics(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            target = root / "compose.test.yml"
+            expected = None
+            for newline in ("\n", "\r\n", "\r"):
+                target.write_bytes(newline.join(("# configuration", "r2_bucket = 'bucket'", "")).encode())
+                with patch.object(artifact_scan, "discover_paths", return_value=[target]):
+                    diagnostics = artifact_scan.scan(root)
+                self.assertTrue(diagnostics)
+                self.assertTrue(all(":2:" in diagnostic for diagnostic in diagnostics))
+                if expected is None:
+                    expected = diagnostics
+                self.assertEqual(diagnostics, expected)
 
     def test_account_console_is_account_only_and_preserves_builtin_boundaries(self):
         existing = {"clientId": "account-console", "publicClient": True,
@@ -67,7 +108,11 @@ class KeycloakConfigurationTests(unittest.TestCase):
                     "smtpServer": {"host": "smtp.example.test", "from": "identity@example.test", "starttls": "true"}}
         server = {"providers": {"eventsListener": {"providers": {"flow-human-registration": {}}}}}
         profile = {"attributes": [{"name": "workstream_subject_kind", "permissions": {"view": ["admin"], "edit": ["admin"]}}]}
-        patch = config.self_service_settings(existing, server, profile)
+        patch = config.self_service_settings(existing, server, profile, [{"alias": "VERIFY_EMAIL", "enabled": True}])
+        for actions in ([], [{"alias": "VERIFY_EMAIL", "enabled": False}],
+                        [{"alias": "UPDATE_PASSWORD", "enabled": True}]):
+            with self.subTest(actions=actions), self.assertRaisesRegex(ValueError, "VERIFY_EMAIL"):
+                config.self_service_settings(existing, server, profile, actions)
         self.assertTrue(patch["registrationAllowed"])
         self.assertTrue(patch["verifyEmail"])
         self.assertTrue(patch["resetPasswordAllowed"])
@@ -80,7 +125,7 @@ class KeycloakConfigurationTests(unittest.TestCase):
                             ({**existing, "smtpServer": {}}, server),
                             ({**existing, "smtpServer": {**existing["smtpServer"], "starttls": "false"}}, server)):
             with self.subTest(realm=realm.get("realm")), self.assertRaises(ValueError):
-                config.self_service_settings(realm, info, profile)
+                config.self_service_settings(realm, info, profile, [{"alias": "VERIFY_EMAIL", "enabled": True}])
 
     def test_signup_activation_rejects_user_editable_or_missing_marker(self):
         realm = {"realm": "flow", "smtpServer": {"host": "smtp.example.test", "from": "identity@example.test", "ssl": "true"}}
@@ -88,7 +133,7 @@ class KeycloakConfigurationTests(unittest.TestCase):
         for profile in ({"attributes": []}, {"attributes": [{"name": "workstream_subject_kind",
                            "permissions": {"view": ["admin"], "edit": ["admin", "user"]}}]}):
             with self.assertRaises(ValueError):
-                config.self_service_settings(realm, server, profile)
+                config.self_service_settings(realm, server, profile, [{"alias": "VERIFY_EMAIL", "enabled": True}])
 
     def test_fresh_realm_has_branding_and_listener_but_signup_stays_closed(self):
         realm = config.realm()
@@ -186,7 +231,7 @@ class KeycloakConfigurationTests(unittest.TestCase):
 
     def test_garden_never_receives_api_audience_scope(self):
         client = config.garden_client("garden-workstream", "https://garden.example/api/oauth/callback")
-        self.assertEqual(client["optionalClientScopes"], ["workstream:access", "workstream-mcp-audience"])
+        self.assertEqual(client["optionalClientScopes"], ["workstream:access", "workstream-mcp-audience", "offline_access"])
         self.assertFalse(client["serviceAccountsEnabled"])
         for callback in ("http://garden.example/api/oauth/callback", "https://garden.example/*", "https://garden.example/api/oauth/callback?redirect=evil", "https://user:password@garden.example/api/oauth/callback"):
             with self.subTest(callback=callback), self.assertRaises(ValueError):
@@ -208,12 +253,12 @@ class KeycloakConfigurationTests(unittest.TestCase):
         self.assertEqual(
             [scope["name"] for scope in requested
              if scope["attributes"]["display.on.consent.screen"] == "true"],
-            ["workstream:access"],
+            ["workstream:access", "offline_access"],
         )
         self.assertEqual(
             [scope["name"] for scope in requested
              if scope["attributes"]["include.in.token.scope"] == "true"],
-            ["workstream:access", "workstream-mcp-audience"],
+            ["workstream:access", "workstream-mcp-audience", "offline_access"],
         )
 
     def test_import_defines_every_assigned_scope_including_subject(self):

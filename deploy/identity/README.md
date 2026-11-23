@@ -323,9 +323,10 @@ registration and denial proofs because this SPI can change between releases. Reg
 creates an unverified identity row; it grants neither usable Workstream credentials
 before email verification nor Workstream project/administrator permissions after it.
 
-Password recovery uses the same neutral response for unknown accounts and mail
-failures. Flow guidance tells participants to check spam, retry later or contact
-their administrator; it does not reveal whether an account exists. A failed send
+Password recovery uses the same neutral response text for unknown accounts and mail
+failures. This is not a timing-indistinguishability guarantee: eligible accounts
+can take longer because SMTP delivery is synchronous. Flow guidance tells participants to check spam, retry later or contact
+their administrator; the response text does not disclose account existence. A failed send
 does not change the existing password. Operators must inspect delivery failures.
 
 ### Configure and prove email delivery
@@ -336,7 +337,10 @@ does not change the existing password. Operators must inspect delivery failures.
    port, sender address/name, TLS and authentication. Enter the SMTP password only
    in authenticated administration; never commit it or send it in chat. Use an
    approved sender domain with the delivery provider's required DNS configuration.
-3. Send a test message and confirm receipt in a mailbox you control. A successful
+3. Set a controlled mailbox as the email address of the administrator signed in
+   to the console (including a named master-realm administrator). The SMTP test
+   sends to that administrator, not to a Flow participant selected elsewhere.
+   Send a test message and confirm receipt in that mailbox. A successful
    TCP connection or the console accepting settings is not delivery proof.
 4. Inventory existing users whose email is unverified. Enabling verification also
    requires those invited users to verify their addresses on their next login.
@@ -347,7 +351,8 @@ does not change the existing password. Operators must inspect delivery failures.
    tokens to expire before declaring that cutover complete.
 5. Export the existing Flow realm and server information through authenticated
    `GET /admin/realms/flow`, `GET /admin/serverinfo` and
-   `GET /admin/realms/flow/users/profile` to private files. The realm
+   `GET /admin/realms/flow/users/profile` and
+   `GET /admin/realms/flow/authentication/required-actions` to private files. The realm
    export can contain SMTP credentials; keep it private and delete it after use.
 6. Render the bounded activation patch:
 
@@ -356,13 +361,15 @@ does not change the existing password. Operators must inspect delivery failures.
      --self-service-realm-input /private/operator/flow-current.json \
      --server-info-input /private/operator/server-info.json \
      --self-service-profile-input /private/operator/flow-profile.json \
+     --required-actions-input /private/operator/required-actions.json \
      --output /private/operator/flow-signup-patch.json
    ```
 
 7. Apply the patch with authenticated `PUT /admin/realms/flow`. It enables signup,
    verified email, email-as-username and password recovery, and binds the required
    listener while preserving other listeners. It contains no SMTP password or users.
-   The renderer rejects missing SMTP/TLS, a missing provider, or user-editable/missing
+   The renderer rejects missing SMTP/TLS, a missing provider, a missing or disabled
+   `VERIFY_EMAIL` required action, or user-editable/missing
    human-marker profile configuration. Delivery must still
    be confirmed by the operator before applying it.
 8. Test a new account through the public browser: create account, receive and use
@@ -430,3 +437,42 @@ and SMTP capture bound only to the owned Docker network. Synthetic verification
 and reset emails never leave that fixture. This proves provider behavior, not
 production email delivery. The existing provider/browser tests continue covering
 invited login, API-only tokens, scoped exchange, refresh and logout.
+
+### Persistent Garden connections
+
+Garden's dedicated MCP browser clients may request `offline_access` in addition
+to the MCP access scopes. The offline grant has a **30-day idle limit** and a
+**90-day absolute maximum**. Access tokens remain five minutes, refresh-token
+rotation remains enabled with zero reuse, and ordinary browser sessions retain
+their separate limits. Activity renews the idle window, not the absolute one.
+An existing ordinary refresh grant does not become an offline grant when these
+settings change: reconnect once to authorize the new grant.
+
+For an existing realm, do not re-import it or rely on client JSON updates to
+change scope assignments. Use authenticated Admin API operations:
+
+1. Apply only `persistent_connection_settings()` from `realm_config.py` through
+   `PUT /admin/realms/flow`, then read back all three offline session fields.
+2. Inspect `GET /admin/realms/flow/client-scopes`. Reuse the existing named
+   `offline_access` scope if present, otherwise create `offline_access_scope()`
+   through `POST /admin/realms/flow/client-scopes`. Its scope must be included in
+   tokens; its consent text must describe retained access without claiming any
+   additional Workstream permissions.
+3. Verify the scope's realm-role mapping through
+   `/admin/realms/flow/client-scopes/{scope-id}/scope-mappings/realm` includes
+   the stock `offline_access` role. Verify that the realm's default role includes
+   that role; do not grant administrative or Workstream project roles.
+4. Attach the scope only to each approved Garden client's optional scopes using
+   `PUT /admin/realms/flow/clients/{client-id}/optional-client-scopes/{scope-id}`.
+   Read the optional scopes back. Updating the client representation alone does
+   not apply these assignments. Keep the scope out of realm-wide default/optional
+   defaults and out of direct API, CLI and proof-client assignments.
+5. Qualify a new Garden authorization, silent refresh with the same MCP audience,
+   refresh after its browser session ends, and explicit issuer revocation.
+   Existing API and non-Garden MCP login must still work without offline access.
+
+The credential owner must distinguish a saved connection from a renewable grant.
+A rejected grant requires reconnection; a transient provider outage requires a
+retry and must not be treated as consent revocation. Removing a connection must
+also revoke its retained grant before reporting successful disconnection. Never
+print refresh tokens in logs, browser output or support messages.

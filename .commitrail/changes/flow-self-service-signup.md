@@ -46,7 +46,7 @@ possible. Theme uses the user-supplied Flow wave logo, preserved unchanged, with
 Use local SMTP capture for deterministic real email-flow testing; production SMTP
 credentials remain private. Activation validates mail configuration and delivery
 before enabling public registration. No real participant email is marked verified
-administratively. An unverified account row may exist, but browser/direct API credentials must wait for verification. Inventory existing unverified invited accounts before activation and require genuine email verification. Activation must reject missing/unbound registration listener. Signup gets trusted human identity without exposing its marker
+administratively. An unverified account row may exist, but browser/direct API credentials must wait for verification. Inventory existing unverified invited accounts before activation and require genuine email verification. Activation must reject a missing registration provider and bind its listener in the same activation patch. Signup gets trusted human identity without exposing its marker
 as an editable form field. Pinned Keycloak26.8.2 source shows profile defaults are filtered by field edit permissions; making the marker writable would break custody. Use a minimal Flow-realm REGISTER event listener in the provider transaction to assign human only to successful self-registration. Do not handle admin-create events or alter existing accounts. Compile against the exact provider jars with a pinned JDK21 build stage, adding no runtime framework.
 Preserve invited users and existing issuer/sub/audience/token-exchange contracts.
 
@@ -93,7 +93,7 @@ rejection controls, responsive screenshots, links and applicable CI.
 ## Reconciliation
 
 - Current-source reconciliation: based on main a2154e8a4 (merged PR716).
-- Next usable boundary: live public signup after SMTP delivery is configured/proven.
+- Next usable boundary: qualify persistent Garden renewal and reconnection; hosted signup and recovery are enabled after real SMTP proof.
 - Remaining risks: each deployment must prove its SMTP sender and delivery; enabling verification affects existing unverified accounts. Provider upgrades require repeating the registration and denial proofs.
 
 ### Signed-in account usability
@@ -106,3 +106,26 @@ Exercise the sidebar's Signing in password update, prove the old password denies
 and the replacement succeeds, and check named header and Flow logo in the real
 browser. Document the password navigation and collapsed menu. No user permission
 changes or Workstream password endpoints.
+
+### Persistent Garden connection correction
+
+The user approved a 30-day offline idle timeout and a 90-day absolute maximum
+for Garden's personal MCP connection. Ordinary API access tokens remain short-lived;
+Garden stores and rotates the refresh credential through its existing Executor
+owner. Limit the offline grant to the registered Garden MCP browser clients;
+do not extend primary browser sessions or API password grants. Existing ordinary
+grants require one reauthorization to obtain the new grant. Revocation and
+connection removal must prevent further renewal. Garden must present a known
+unusable grant as requiring reconnection, not merely as a saved connection.
+
+Garden requests offline access through its dedicated client configuration; MCP
+resource discovery continues advertising only its resource-access scopes. Verify real refresh,
+audience preservation, revocation, and two-user isolation before claiming hosted
+completion. Garden's status/projection repair belongs in its own repository and
+must not change Garden's primary authentication or general chat-stream ordering.
+
+The focused plan review requires explicit existing-realm reconciliation through
+Admin API scope endpoints and issuer revocation before Garden disconnect succeeds.
+Prove revoking a credential after concurrent rotation invalidates its successor;
+retain retryable connection custody when the issuer is unavailable. Do not apply
+persistent hosted grants until these checks pass.

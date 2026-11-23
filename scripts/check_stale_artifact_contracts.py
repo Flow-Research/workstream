@@ -612,7 +612,7 @@ def scan(root: Path = ROOT, phase: str | None = None) -> list[str]:
                 path.suffix.lower() == ".ico" and content.startswith(b"\x00\x00\x01\x00")
             ):
                 continue
-            text = content.decode("utf-8")
+            text = content.decode("utf-8").replace("\r\n", "\n").replace("\r", "\n")
         except (OSError, UnicodeDecodeError) as exc:
             relative_path = path.relative_to(root).as_posix()
             failures.append(f"{relative_path}:0: UNREADABLE_ACTIVE_TEXT ({type(exc).__name__})")

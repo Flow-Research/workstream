@@ -7,6 +7,8 @@ import base64
 from email import policy
 from email.parser import BytesParser
 import hashlib
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from threading import Thread
 import json
 import os
 import re
@@ -21,7 +23,7 @@ import httpx
 import jwt
 from app.adapters.auth.flow import FlowAuthVerifier
 from app.core.config import Settings
-from app.interfaces.auth import AuthVerificationError
+from app.interfaces.auth import AuthVerificationError, AuthVerificationUnavailableError
 from workstream_mcp.adapters.keycloak import KeycloakCredentials
 from workstream_mcp.oauth import InvalidCredential, OAuthSettings
 from playwright.sync_api import sync_playwright
@@ -53,8 +55,17 @@ class IdentitySignupTests(IdentityProviderTests):
         current = self.probe.request("/admin/realms/flow", token=self.operator)
         server = self.probe.request("/admin/serverinfo", token=self.operator)
         profile = self.probe.request("/admin/realms/flow/users/profile", token=self.operator)
+        actions = self.probe.request("/admin/realms/flow/authentication/required-actions", token=self.operator)
+        verification_action = next(action for action in actions if action["alias"] == "VERIFY_EMAIL")
+        action_path = "/admin/realms/flow/authentication/required-actions/VERIFY_EMAIL"
+        self.probe.request(action_path, {**verification_action, "enabled": False}, token=self.operator, method="PUT")
+        disabled_actions = self.probe.request("/admin/realms/flow/authentication/required-actions", token=self.operator)
+        with self.assertRaisesRegex(ValueError, "VERIFY_EMAIL"):
+            realm_config.self_service_settings({**current, "smtpServer": {**smtp, "starttls": "true"}},
+                                              server, profile, disabled_actions)
+        self.probe.request(action_path, verification_action, token=self.operator, method="PUT")
         patch = realm_config.self_service_settings(
-            {**current, "smtpServer": {**smtp, "starttls": "true"}}, server, profile)
+            {**current, "smtpServer": {**smtp, "starttls": "true"}}, server, profile, actions)
         self.probe.request("/admin/realms/flow", {**patch, "smtpServer": smtp, "actionTokenGeneratedByUserLifespan": 300},
                            token=self.operator, method="PUT")
         home = self.root / ("signup-browser-" + secrets.token_hex(4))
@@ -70,14 +81,14 @@ class IdentitySignupTests(IdentityProviderTests):
         email, password = "self-signup-" + secrets.token_hex(4) + "@example.invalid", secrets.token_urlsafe(24)
         endpoint = "/realms/flow/protocol/openid-connect/token"
 
-        def grant(value):
+        def grant(value, username=None):
             return self.probe.request(endpoint, {"grant_type": "password", "client_id": "workstream-api-login",
-                "username": email, "password": value,
+                "username": email if username is None else username, "password": value,
                 "scope": "openid workstream:access workstream-api-audience"}, form=True)
 
-        def mail_link():
+        def mail_link(recipient=None):
             message = BytesParser(policy=policy.default).parsebytes(mailbox.get(timeout=20))
-            self.assertEqual(message["To"], email)
+            self.assertEqual(message["To"], email if recipient is None else recipient)
             self.assertIn("Flow", message["Subject"])
             content = message.get_body(preferencelist=("plain",)).get_content()
             links = re.findall(r'https://[^\s<>]+', content)
@@ -87,21 +98,40 @@ class IdentitySignupTests(IdentityProviderTests):
 
         verifier = secrets.token_urlsafe(48)
         challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode()
+        state = secrets.token_urlsafe(24)
         query = urlencode({"client_id": "workstream-cli-login", "redirect_uri": "http://127.0.0.1:17843/callback",
             "response_type": "code", "scope": "openid workstream:access workstream-api-audience",
-            "state": secrets.token_urlsafe(24), "code_challenge": challenge, "code_challenge_method": "S256"})
+            "state": state, "code_challenge": challenge, "code_challenge_method": "S256"})
         authorization = self.origin + "/realms/flow/protocol/openid-connect/auth?" + query
+        callbacks = []
+        class CallbackHandler(BaseHTTPRequestHandler):
+            def do_GET(self):
+                if urlsplit(self.path).path != "/callback":
+                    self.send_error(404)
+                    return
+                callbacks.append(parse_qs(urlsplit(self.path).query))
+                self.send_response(200)
+                self.send_header("Content-Type", "text/plain")
+                self.end_headers()
+                self.wfile.write(b"Fixture callback received")
+
+            def log_message(self, *_args):
+                pass  # Authorization codes must never enter test logs.
+
+        receiver = HTTPServer(("127.0.0.1", 17843), CallbackHandler)
+        thread = Thread(target=receiver.serve_forever, daemon=True)
+        thread.start()
+        def close_receiver():
+            receiver.shutdown()
+            receiver.server_close()
+            thread.join(timeout=5)
+        self.addCleanup(close_receiver)
         with sync_playwright() as playwright:
             browser = playwright.chromium.launch(executable_path=chrome, headless=True,
                 chromium_sandbox=True, env={**os.environ, "HOME": str(home)})
             stage = "registration"
             try:
                 page = browser.new_page()
-                callbacks = []
-                def capture_callback(route):
-                    callbacks.append(parse_qs(urlsplit(route.request.url).query))
-                    route.fulfill(status=200, body="Fixture callback received")
-                page.route("http://127.0.0.1:17843/callback*", capture_callback)
                 page.goto(authorization)
                 self.assertIn("Flow", page.title())
                 self.assertEqual(page.locator("#kc-header-wrapper").evaluate(
@@ -159,6 +189,26 @@ class IdentitySignupTests(IdentityProviderTests):
                     page.locator('#password-new').fill(password)
                     page.locator('#password-confirm').fill(password)
                     page.locator('button[type="submit"], input[type="submit"]').first.click()
+                stage = "registration-oauth-completion"
+                if page.locator('[name="accept"]').count():
+                    self.assertIn("workstream-cli-login", page.locator("body").inner_text())
+                    page.locator('[name="accept"]').click()
+                if not callbacks:
+                    back = page.get_by_role("link", name=re.compile("back to", re.I))
+                    if back.count():
+                        back.first.click()
+                    if page.locator('[name="accept"]').count():
+                        page.locator('[name="accept"]').click()
+                page.wait_for_url("http://127.0.0.1:17843/callback**", timeout=15000)
+                self.assertEqual(len(callbacks), 1, "Registration must finish its original authorization")
+                self.assertEqual(callbacks[0].get("state"), [state])
+                self.assertNotIn("error", callbacks[0])
+                code_tokens = self.probe.request(endpoint, {
+                    "grant_type": "authorization_code", "client_id": "workstream-cli-login",
+                    "redirect_uri": "http://127.0.0.1:17843/callback",
+                    "code_verifier": verifier, "code": callbacks[0]["code"][0],
+                }, form=True)
+                self.assertIn("access_token", code_tokens)
                 stage = "verified-grant"
                 tokens = grant(password)
                 keys = self.probe.request("/realms/flow/protocol/openid-connect/certs")["keys"]
@@ -175,6 +225,37 @@ class IdentitySignupTests(IdentityProviderTests):
                 self.assertEqual(users[0]["attributes"]["workstream_subject_kind"], ["human"])
                 self.assertNotIn("realm_access", claims)
                 self.assertNotIn("resource_access", claims)
+                stage = "known-password-email-verification"
+                known_email = "known-password-" + secrets.token_hex(4) + "@example.invalid"
+                known_password = secrets.token_urlsafe(24)
+                self.probe.request("/admin/realms/flow/users", {
+                    "username": known_email, "email": known_email, "enabled": True,
+                    "firstName": "Known", "lastName": "Participant", "emailVerified": False,
+                    "attributes": {"workstream_subject_kind": ["human"]},
+                    "credentials": [{"type": "password", "value": known_password, "temporary": False}],
+                }, token=self.operator, method="POST")
+                known_user = self.probe.request("/admin/realms/flow/users?username=" + known_email + "&exact=true",
+                                                token=self.operator)[0]
+                self.assertEqual(known_user.get("requiredActions", []), [])
+                with self.assertRaises(ProviderRejected) as denied:
+                    grant(known_password, known_email)
+                self.assertEqual(denied.exception.status, 400)
+                stage = "known-password-verification-mail"
+                self.probe.request("/admin/realms/flow/users/" + known_user["id"] + "/send-verify-email",
+                                   token=self.operator, method="PUT")
+                known_page = browser.new_page()
+                known_page.goto(mail_link(known_email))
+                proceed = known_page.get_by_role("link", name="Click here to proceed", exact=False)
+                if proceed.count():
+                    proceed.click()
+                confirm = known_page.locator('form button[type="submit"], form input[type="submit"]')
+                if confirm.count():
+                    confirm.first.click()
+                self.assertEqual(known_page.locator("#password-new").count(), 0)
+                stage = "known-password-verified-grant"
+                known_page.screenshot(path=str(self.root / "flow-known-verification.png"), full_page=True)
+                self.assertIn("access_token", grant(known_password, known_email))
+                known_page.close()
                 stage = "account-console-regression"
                 console = self.probe.request("/admin/realms/flow/clients?clientId=account-console", token=self.operator)[0]
                 console_path = "/admin/realms/flow/clients/" + console["id"]
@@ -305,7 +386,11 @@ class IdentitySignupTests(IdentityProviderTests):
                     grant(password)
                 self.assertEqual(denied.exception.status, 400)
                 self.assertIn("access_token", grant(replacement))
+                page = browser.new_page()
+                callback_count = len(callbacks)
                 page.goto(reset)
+                self.assertRegex(page.locator("body").inner_text(), r"(?i)(invalid|expired|already been used)")
+                self.assertEqual(len(callbacks), callback_count)
                 self.assertEqual(page.locator("#password-new").count(), 0)
                 self.assertIn("access_token", grant(replacement))
                 stage = "expired-reset"
@@ -319,7 +404,11 @@ class IdentitySignupTests(IdentityProviderTests):
                 page.locator('button[type="submit"], input[type="submit"]').first.click()
                 expired = mail_link()
                 time.sleep(2)
+                page = browser.new_page()
+                callback_count = len(callbacks)
                 page.goto(expired)
+                self.assertRegex(page.locator("body").inner_text(), r"(?i)(invalid|expired)")
+                self.assertEqual(len(callbacks), callback_count)
                 self.assertEqual(page.locator("#password-new").count(), 0)
                 self.assertIn("access_token", grant(replacement))
                 stage = "mail-outage"
@@ -331,6 +420,7 @@ class IdentitySignupTests(IdentityProviderTests):
                 with page.expect_response(lambda response: response.request.method == "POST" and "/login-actions/" in response.url):
                     page.locator('button[type="submit"], input[type="submit"]').first.click()
                 page.wait_for_load_state("domcontentloaded")
+                self.assertTrue((mail_root / "rejected-data").exists(), "SMTP must observe rejected DATA")
                 self.assertTrue(mailbox.empty())
                 self.assertIn("If no email arrives, retry later or contact your Flow administrator.", page.locator("body").inner_text())
                 self.assertIn("access_token", grant(replacement))
@@ -339,9 +429,13 @@ class IdentitySignupTests(IdentityProviderTests):
                 page.screenshot(path=str(self.root / "flow-recovery-proof.png"), full_page=True)
             except Exception as error:
                 # Browser exceptions can include entered passwords and link tokens.
+                page.screenshot(path=str(self.root / "flow-failure.png"), full_page=True)
+                print({"stage": stage, "callback_count": len(callbacks), "location": urlsplit(page.url)._replace(query="", fragment="").geturl()}, flush=True)
                 raise RuntimeError("Signup qualification failed at " + stage + ": " + type(error).__name__) from None
             finally:
                 browser.close()
+
+        fresh_api_token = grant(replacement)["access_token"]
 
         async def deny_account_credentials():
             self.assertGreater(console_claims["exp"], time.time(), "Denial must not rely on expiry")
@@ -352,8 +446,10 @@ class IdentitySignupTests(IdentityProviderTests):
                 token_clock_skew_seconds=0, token_introspection_mode="disabled",
                 token_introspection_disabled_reason="Account audience isolation proof")
             verifier = FlowAuthVerifier(settings, jwks_client_factory=partial(httpx.AsyncClient, verify=self.context))
-            with self.assertRaises(AuthVerificationError):
+            await verifier.verify(fresh_api_token)
+            with self.assertRaises(AuthVerificationError) as denied:
                 await verifier.verify(console_token)
+            self.assertNotIsInstance(denied.exception, AuthVerificationUnavailableError)
             async with httpx.AsyncClient(verify=self.context, trust_env=False, timeout=10) as http:
                 provider = KeycloakCredentials(OAuthSettings(self.origin + "/realms/flow",
                     realm_config.MCP_RESOURCE, self.root / "unused"), http, "unused-denied-before-exchange")

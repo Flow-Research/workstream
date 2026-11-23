@@ -779,11 +779,16 @@ cannot be reused as post-submission review-gate evidence. See the
   Invited-only deployments do not require SMTP. The Flow-branded self-service
   flow adds email verification, password recovery and an account-only personal
   information/password-management page with Flow branding; its account tokens
-  cannot authenticate to Workstream. Public registration stays
-  disabled until the operator configures and proves SMTP delivery. Existing
+  cannot authenticate to Workstream. Fresh deployments keep public registration
+  disabled until the operator configures and proves SMTP delivery. The hosted
+  Flow provider has completed real email delivery, signup verification and
+  password-recovery checks and has public registration enabled. Existing
   unverified invited accounts must verify through email when that mode is enabled. The hosted provider has its own database role, authenticated HTTPS administrator
   console on the identity hostname, pinned image and bounded resources. Its regular container holds no
-  bootstrap credential.
+  bootstrap credential. Dedicated Garden MCP registrations support a separate
+  offline grant with a 30-day idle limit and 90-day maximum. Hosted activation
+  requires Garden renewal and revocation qualification; it does not extend normal
+  API access-token lifetimes.
 - Direct API users can exchange email/password at Flow Identity using the
   dedicated `workstream-api-login` client after issuer-required browser actions.
   It issues only API credentials, preserves brute-force protection and does not

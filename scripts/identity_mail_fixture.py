@@ -17,6 +17,7 @@ class Mailbox(socketserver.ThreadingTCPServer):
     def __init__(self, gateway: str, port: int = 0, messages=None):
         self.messages = messages if messages is not None else queue.Queue(maxsize=30)
         self.available = True
+        self.rejected_data = 0
         super().__init__((gateway, port), _SMTP)
         self.worker = threading.Thread(target=self.serve_forever, daemon=True)
         self.worker.start()
@@ -42,6 +43,9 @@ class _SMTP(socketserver.StreamRequestHandler):
                 self.wfile.write(b"250 OK\r\n")
             elif verb == b"DATA":
                 if not self.server.available or not getattr(self.server.messages, "available", True):
+                    self.server.rejected_data += 1
+                    if isinstance(self.server.messages, FileMessages):
+                        (self.server.messages.directory / "rejected-data").touch(mode=0o600)
                     self.wfile.write(b"451 fixture temporarily unavailable\r\n")
                     continue
                 self.wfile.write(b"354 Send message\r\n")
