@@ -7093,3 +7093,26 @@ finding. Shared modified-content execution overe2ee4ada1, not independent or
 clean-commit rerun. Synthetic retained setup unchanged, no historical migration
 qualification. One old preparation endpoint test remains in this module; full
 producer retirement/provider/specification readiness remain open.
+
+Expired-window public refusal scope: replace the last obsolete preparation
+endpoint in test_revision_capacity.py with current raw ZIP submission. Preserve
+PM blocked recovery/replay, exact original anchor/deadline, exact409 expiry code,
+unchanged creation snapshot and needs_revision state. Configure controlled PRE
+and assert no invocation; malformed body ensures expiry precedes ZIP validation.
+Allowed files: this record and that test module. No production, historical
+fixture or SQL guard edits. Existing synthetic retained setup remains limited to
+runtime recovery, not historical migration proof. Lifecycle/authority test risk
+requires QA/test-delta/security inspection; run changed test plus live two-round
+cap control, Ruff/structure/record/diff gates. Human focus: timely refusal before
+PRE without extending the original revision window or creating product facts.
+
+Expired-window v1 terminal0:2passed191.42s/schema0084/allcleanuptrue
+(/tmp/submission-expired-window-v1.json/.log). Frozenblob
+7f7f4a94eda3e20918bc035104c8b1f15ef3f4ae reverified unchanged after user pause.
+Exact409 revision_deadline_expired precedes malformed ZIP validation with no PRE;
+all10 prior assertions retained. Two-round public cap control also passes.
+Ruff/structural/record/whitespace checks passed before pause. Shared modified
+content execution over40baa0f15, not independent or clean-commit rerun. Existing
+synthetic retained setup does not qualify historical migrations. This removes
+last obsolete preparation endpoint from capacity module; expiry-race consumers,
+production retirement and full goal qualification remain open.

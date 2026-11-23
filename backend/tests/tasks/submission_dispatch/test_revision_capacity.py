@@ -602,11 +602,14 @@ async def test_expired_retained_failure_recovers_without_a_new_window(
                 assert (row.requested_at, row.deadline_at) == (anchor, deadline)
             replay = await client.post(route, json=payload, headers=headers)
             assert replay.status_code == 200 and replay.json() == receipt
+            _, errors, calls = await _revision_http_runtime(h, client, tmp_path, monkeypatch, h.data)
             before = await _creation_snapshot(h)
             denied = await client.post(
-                f"/api/v1/tasks/{h.request.task_id}/submission-bundle-preparations",
+                f"/api/v1/tasks/{h.request.task_id}/submissions",
                 headers={
                     "Content-Type": "application/zip",
+                    "X-Submission-Summary": h.creation_request.summary,
+                    "X-Contributor-Attestation": h.creation_request.contributor_attestation,
                     "X-Task-Assignment-Id": str(h.request.assignment_id),
                     "X-Predecessor-Submission-Id": str(h.created.submission_id),
                     "Idempotency-Key": str(new_record_id()),
@@ -617,6 +620,7 @@ async def test_expired_retained_failure_recovers_without_a_new_window(
             assert denied.status_code == 409, denied.text
             assert denied.json()["error"]["code"] == "revision_deadline_expired"
             assert await _creation_snapshot(h) == before
+            assert calls == [] and not errors, errors
             async with h.factory() as session:
                 assert await session.scalar(text("SELECT status FROM public.workstream_tasks WHERE id=:id"), {"id": h.request.task_id}) == "needs_revision"
 
