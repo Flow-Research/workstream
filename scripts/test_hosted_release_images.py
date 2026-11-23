@@ -1,5 +1,6 @@
 """Counterexamples for the release-image evidence verifier."""
 
+import ast
 import copy
 import json
 from pathlib import Path
@@ -55,6 +56,21 @@ class ReleaseImageProofTests(unittest.TestCase):
                 changed = self.backend | {"source": proof.source_inventory(backend, shared)}
                 with self.assertRaisesRegex(ValueError, "source inventory differs"):
                     proof.verify_backend(changed, expected, self.packages, self.loader, "agents")
+
+    def test_release_workflow_selected_backend_tests_exist(self):
+        workflow = Path(".github/workflows/release-images.yml").read_text()
+        selections = re.findall(r"tests/[\w/]+\.py(?:::[\w]+)?", workflow)
+        self.assertTrue(selections)
+        for selection in selections:
+            filename, _, function = selection.partition("::")
+            path = Path("backend") / filename
+            self.assertTrue(path.is_file(), selection)
+            if function:
+                definitions = {
+                    node.name for node in ast.parse(path.read_text()).body
+                    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+                }
+                self.assertIn(function, definitions, selection)
 
     def test_release_workflow_builds_and_verifies_both_sdk_environments(self):
         workflow = Path(".github/workflows/release-images.yml").read_text(

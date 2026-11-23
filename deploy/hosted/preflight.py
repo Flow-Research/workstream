@@ -23,6 +23,7 @@ from urllib.parse import urlsplit
 
 
 COMPOSE_PATH = Path(__file__).with_name("compose.yml")
+NATIVE_CHECKER_COMPOSE_PATH = Path(__file__).with_name("compose.native-checker.yml")
 INFERENCE_COMPOSE_PATH = Path(__file__).with_name("compose.inference.yml")
 TRIAL_COMPOSE_PATH = Path(__file__).with_name("compose.trials.yml")
 TRIAL_MANIFEST_TARGET = Path("/etc/workstream/trial-authority.json")
@@ -60,6 +61,22 @@ INTAKE_DIGEST_KEYS = (
     "WORKSTREAM_ARTIFACT_INTAKE_IMAGE_DIGEST",
     "WORKSTREAM_ARTIFACT_INTAKE_CONFIG_DIGEST",
 )
+HOSTED_PROFILE_KEY = "WORKSTREAM_HOSTED_PROFILE"
+NATIVE_REQUIRED_KEYS = (
+    "WORKSTREAM_CHECKER_CONFIG_FILE",
+    "WORKSTREAM_CHECKER_SERVICE_BINARY_SHA256",
+    *INTAKE_DIGEST_KEYS,
+)
+NATIVE_ENVIRONMENT_KEYS = (
+    "WORKSTREAM_EXTERNAL_CHECKER_MATERIAL_ROOT",
+    "WORKSTREAM_EXTERNAL_CHECKER_SERVICE_SOCKET",
+    "WORKSTREAM_ARTIFACT_INTAKE_SERVICE_SOCKET",
+    *INTAKE_DIGEST_KEYS,
+)
+
+
+def local_checker_enabled(values: dict[str, str]) -> bool:
+    return values.get(HOSTED_PROFILE_KEY, "single-host") == "single-host"
 
 
 @dataclass(frozen=True)
@@ -280,7 +297,6 @@ REQUIRED_RELEASE_KEYS = (
     "COMPOSE_PROJECT_NAME",
     "WORKSTREAM_BACKEND_IMAGE",
     "WORKSTREAM_MODEL_PROXY_IMAGE",
-    "WORKSTREAM_CHECKER_SERVICE_BINARY_SHA256",
     "WORKSTREAM_MODEL_PROXY_ENABLED",
     "WORKSTREAM_RUNTIME_UID",
     "WORKSTREAM_RUNTIME_GID",
@@ -296,14 +312,14 @@ REQUIRED_RELEASE_KEYS = (
     "WORKSTREAM_ARTIFACT_S3_BUCKET",
     "WORKSTREAM_ARTIFACT_S3_PRIVATE_PREFIX",
     DIRECT_USER_CREDENTIAL_HOST_FILE_KEY,
-    "WORKSTREAM_CHECKER_CONFIG_FILE",
     *PROJECT_AGENT_CONFIGURATION_KEYS,
-    *INTAKE_DIGEST_KEYS,
     *AWS_S3_IDENTITY_KEYS,
     *TIMEOUT_KEYS,
     *BASE_SECRET_FILE_KEYS,
 )
 OPTIONAL_RELEASE_KEYS = (
+    HOSTED_PROFILE_KEY,
+    *NATIVE_REQUIRED_KEYS,
     *LOCAL_DATA_KEYS,
     "WORKSTREAM_MCP_IMAGE",
     *IDENTITY_KEYS,
@@ -471,6 +487,13 @@ def validate_environment(values: dict[str, str]) -> None:
         raise PreflightError(
             f"release environment contains an unsupported key: {unknown[0]}"
         )
+    if values.get(HOSTED_PROFILE_KEY, "single-host") not in {"single-host", "app"}:
+        raise PreflightError("unsupported hosted profile")
+    local_checker = local_checker_enabled(values)
+    if not local_checker and any(values.get(key) for key in (
+        *NATIVE_REQUIRED_KEYS, "WORKSTREAM_CHECKER_SERVICE_BINARY", *TRIAL_KEYS,
+    )):
+        raise PreflightError("app profile cannot configure a native checker or trial authority")
     if "WORKSTREAM_MCP_IMAGE" in values and not IMAGE_REFERENCE.fullmatch(values["WORKSTREAM_MCP_IMAGE"]):
         raise PreflightError("MCP image must be digest-qualified")
     validate_identity_environment(values)
@@ -498,11 +521,11 @@ def validate_environment(values: dict[str, str]) -> None:
             raise PreflightError("GitHub App key file must use a canonical absolute path")
     root = deployment_paths(values).root
     binary = checker_service_binary(values)
-    if values.get("WORKSTREAM_DEPLOYMENT_ROOT", str(root)) != str(root) or values.get(
-        "WORKSTREAM_CHECKER_SERVICE_BINARY", str(binary)
-    ) != str(binary):
+    if values.get("WORKSTREAM_DEPLOYMENT_ROOT", str(root)) != str(root) or (
+        local_checker and values.get("WORKSTREAM_CHECKER_SERVICE_BINARY", str(binary)) != str(binary)
+    ):
         raise PreflightError("deployment paths must use canonical spelling")
-    for path in (root, binary):
+    for path in (root, binary) if local_checker else (root,):
         if (
             not path.is_absolute()
             or path != path.resolve(strict=False)
@@ -510,7 +533,7 @@ def validate_environment(values: dict[str, str]) -> None:
             or len(path.parts) < 3
         ):
             raise PreflightError("deployment paths must be canonical absolute paths")
-    if root == binary or binary.is_relative_to(root) or root.is_relative_to(binary):
+    if local_checker and (root == binary or binary.is_relative_to(root) or root.is_relative_to(binary)):
         raise PreflightError("native service asset overlaps deployment data")
     for key in REQUIRED_RELEASE_KEYS:
         _required(values, key)
@@ -525,9 +548,11 @@ def validate_environment(values: dict[str, str]) -> None:
         "WORKSTREAM_RUNTIME_GID",
     ):
         _positive_id(values, key)
-    for key in (*INTAKE_DIGEST_KEYS, "WORKSTREAM_CHECKER_SERVICE_BINARY_SHA256"):
-        if not DIGEST.fullmatch(values[key]):
-            raise PreflightError(f"trusted intake requires a pinned digest: {key}")
+    if local_checker:
+        for key in NATIVE_REQUIRED_KEYS:
+            value = _required(values, key)
+            if key != "WORKSTREAM_CHECKER_CONFIG_FILE" and not DIGEST.fullmatch(value):
+                raise PreflightError(f"trusted intake requires a pinned digest: {key}")
     for key in FORBIDDEN_RELEASE_KEYS:
         if values.get(key):
             raise PreflightError(
@@ -1086,17 +1111,20 @@ def validate_private_host_inputs(
     gid = _positive_id(values, "WORKSTREAM_RUNTIME_GID")
     _private_metadata(paths.root, kind="directory", uid=uid, gid=gid, mode=0o700)
     _private_metadata(paths.scratch, kind="directory", uid=uid, gid=gid, mode=0o700)
-    _private_metadata(paths.socket_root, kind="directory", uid=uid, gid=gid, mode=0o700)
-    if require_node:
-        _validate_native_socket(paths.socket, uid, gid)
+    local_checker = local_checker_enabled(values)
+    if local_checker:
+        _private_metadata(paths.socket_root, kind="directory", uid=uid, gid=gid, mode=0o700)
+        if require_node:
+            _validate_native_socket(paths.socket, uid, gid)
     model_proxy_enabled = values["WORKSTREAM_MODEL_PROXY_ENABLED"] == "true"
     if model_proxy_enabled:
         _private_metadata(
             paths.model_root, kind="directory", uid=uid, gid=gid, mode=0o700
         )
-        _private_metadata(
-            paths.model_relays, kind="directory", uid=uid, gid=gid, mode=0o700
-        )
+        if local_checker:
+            _private_metadata(
+                paths.model_relays, kind="directory", uid=uid, gid=gid, mode=0o700
+            )
     _private_metadata(
         paths.guide_root,
         kind="directory",
@@ -1136,7 +1164,7 @@ def validate_private_host_inputs(
         ):
             raise PreflightError("model proxy socket has unsafe retained state")
     private_paths = [
-        Path(values["WORKSTREAM_CHECKER_CONFIG_FILE"]),
+        *((Path(values["WORKSTREAM_CHECKER_CONFIG_FILE"]),) if local_checker else ()),
         *((Path(values[TRIAL_KEYS[0]]),) if values.get(TRIAL_KEYS[0]) else ()),
         *(Path(values[key]) for key in _secret_file_keys(values)),
         Path(values[DIRECT_USER_CREDENTIAL_HOST_FILE_KEY]),
@@ -1146,12 +1174,14 @@ def validate_private_host_inputs(
     try:
         shared_roots = [
             paths.scratch.resolve(strict=True),
-            paths.socket_root.resolve(strict=True),
             paths.guide_root.resolve(strict=True),
         ]
+        if local_checker:
+            shared_roots.append(paths.socket_root.resolve(strict=True))
         if model_proxy_enabled:
             shared_roots.append(paths.model_root.resolve(strict=True))
-            shared_roots.append(paths.model_relays.resolve(strict=True))
+            if local_checker:
+                shared_roots.append(paths.model_relays.resolve(strict=True))
         resolved_paths = [path.resolve(strict=True) for path in private_paths]
     except (OSError, RuntimeError) as exc:
         raise PreflightError("private host input identity is unavailable") from exc
@@ -1205,6 +1235,8 @@ def _run_json(
 
 def _compose_file_arguments(values: dict[str, str]) -> list[str]:
     arguments = ["--file", str(COMPOSE_PATH)]
+    if local_checker_enabled(values):
+        arguments.extend(("--file", str(NATIVE_CHECKER_COMPOSE_PATH)))
     if values.get("WORKSTREAM_POSTGRES_IMAGE"):
         arguments.extend(("--file", str(LOCAL_DATA_COMPOSE_PATH)))
     if values.get("WORKSTREAM_MCP_IMAGE"):
@@ -1800,8 +1832,9 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
     }
     shared_backend_mounts = {
         str(paths.scratch): (str(paths.scratch), False),
-        str(paths.socket_root): (str(paths.socket_root), True),
     }
+    if local_checker_enabled(values):
+        shared_backend_mounts[str(paths.socket_root)] = (str(paths.socket_root), True)
     expected_mounts = {
         "api": shared_backend_mounts | direct_user_credential_mount,
         "worker": shared_backend_mounts
@@ -2030,6 +2063,7 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
                     "WORKSTREAM_GUIDE_DOCUMENT_PARSER_SOCKET",
                     "WORKSTREAM_CHECKER_MODEL_PROXY_SOCKET",
                     DIRECT_USER_CREDENTIAL_FILE_KEY,
+                    *NATIVE_ENVIRONMENT_KEYS,
                     *TRIAL_KEYS,
                     *GITHUB_APP_KEYS,
                 }
@@ -2050,10 +2084,7 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
         "WORKSTREAM_ARTIFACT_S3_ADDRESSING_STYLE": "virtual",
         DIRECT_USER_CREDENTIAL_FILE_KEY: str(DIRECT_USER_CREDENTIAL_TARGET),
         "WORKSTREAM_ARTIFACT_SCRATCH_ROOT": str(paths.scratch),
-        "WORKSTREAM_EXTERNAL_CHECKER_MATERIAL_ROOT": str(paths.scratch),
-        "WORKSTREAM_EXTERNAL_CHECKER_SERVICE_SOCKET": str(paths.socket),
-        "WORKSTREAM_ARTIFACT_INTAKE_SERVICE_SOCKET": str(paths.socket),
-        **{key: values[key] for key in INTAKE_DIGEST_KEYS},
+        HOSTED_PROFILE_KEY: values.get(HOSTED_PROFILE_KEY, "single-host"),
     }
     for key, value in exact.items():
         if str(environment.get(key, "")).lower() != value:
@@ -2080,6 +2111,18 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
                 )
     for name, service in services.items():
         environment = service.get("environment") or {}
+        expected_native = (
+            {
+                "WORKSTREAM_EXTERNAL_CHECKER_MATERIAL_ROOT": str(paths.scratch),
+                "WORKSTREAM_EXTERNAL_CHECKER_SERVICE_SOCKET": str(paths.socket),
+                "WORKSTREAM_ARTIFACT_INTAKE_SERVICE_SOCKET": str(paths.socket),
+                **{key: values[key] for key in INTAKE_DIGEST_KEYS},
+            }
+            if local_checker_enabled(values) and name in {"api", "worker"}
+            else {}
+        )
+        if {key: environment[key] for key in NATIVE_ENVIRONMENT_KEYS if key in environment} != expected_native:
+            raise PreflightError(f"rendered native checker environment is unsafe: {name}")
         expected_trial = (
             {
                 TRIAL_KEYS[0]: str(TRIAL_MANIFEST_TARGET),
@@ -2398,10 +2441,10 @@ def main() -> int:
     try:
         values = parse_environment(args.env_file)
         validate_environment(values)
-        checker_config = load_checker_config(
-            Path(values["WORKSTREAM_CHECKER_CONFIG_FILE"])
-        )
-        validate_checker_config(checker_config, values)
+        checker_config = None
+        if local_checker_enabled(values):
+            checker_config = load_checker_config(Path(values["WORKSTREAM_CHECKER_CONFIG_FILE"]))
+            validate_checker_config(checker_config, values)
         validate_compose(render_compose(args.env_file, values), values)
         if args.configuration_only:
             print(
@@ -2409,12 +2452,13 @@ def main() -> int:
             )
             return 0
         validate_private_host_inputs(values)
-        validate_smol_runtime(checker_config, values)
-        validate_trusted_intake(values)
+        if checker_config is not None:
+            validate_smol_runtime(checker_config, values)
+            validate_trusted_intake(values)
     except PreflightError as exc:
         print(f"hosted release preflight failed: {exc}", file=sys.stderr)
         return 1
-    print("hosted release configuration and native Smol prerequisites are valid")
+    print("hosted release configuration and selected host prerequisites are valid")
     return 0
 
 

@@ -143,6 +143,7 @@ class Settings(BaseSettings):
     )
     guide_document_parser_socket: Path = Path("/var/lib/workstream/guide-runtime/guide.sock")
     celery_broker_url: str | None = None
+    hosted_profile: Literal["single-host", "app"] = "single-host"
     celery_result_backend_url: str | None = None
     celery_task_always_eager: bool = False
     observability_log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
@@ -697,6 +698,15 @@ class Settings(BaseSettings):
             self.external_checker_service_socket,
             self.external_checker_material_root,
         )
+        if self.hosted_profile == "app" and any(value is not None for value in (
+            *external_values,
+            self.artifact_intake_service_socket,
+            self.artifact_intake_image_digest,
+            self.artifact_intake_config_digest,
+            self.checker_trial_authority_manifest_path,
+            self.checker_trial_authority_manifest_digest,
+        )):
+            raise ValueError("the hosted app profile cannot configure native checker execution")
         if any(value is not None for value in external_values):
             if any(value is None for value in external_values):
                 raise ValueError("external checker service settings must be complete")

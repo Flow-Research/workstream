@@ -8,10 +8,12 @@ from unittest.mock import AsyncMock, Mock
 from app.core.identifiers import new_record_id
 
 import pytest
+from httpx import ASGITransport, AsyncClient
 from starlette.requests import Request
 
 import app.adapters.artifacts as artifact_adapters
 from app.core.config import Settings
+from app.db.session import get_db_session
 from app.modules.artifacts.api import (
     SubmissionBundlePreparationRejected,
     SubmissionBundlePreparationRequest,
@@ -268,6 +270,50 @@ def test_submission_bundle_preparation_is_public_binary_contract() -> None:
                         if parameter["in"] == "header" and parameter["required"]}
     assert {"X-Task-Assignment-Id", "Idempotency-Key"} <= required_headers
     assert operation["responses"]["202"] and operation["responses"]["422"]
+
+
+@pytest.mark.asyncio
+async def test_app_profile_zip_preparation_is_retryable_without_reading_upload(tmp_path) -> None:
+    root = tmp_path / "objects"
+    root.mkdir(mode=0o700)
+    app = create_app(Settings(
+        _env_file=None,
+        **artifact_admission_limit_settings(),
+        environment="test",
+        hosted_profile="app",
+        artifact_store_backend="local",
+        artifact_local_root=root,
+        artifact_scratch_root=tmp_path / "scratch",
+        artifact_scratch_minimum_free_bytes=0,
+    ))
+    session = SimpleNamespace(rollback=AsyncMock(), begin=Mock())
+    authority = SimpleNamespace(preflight=AsyncMock(), close=Mock())
+    app.dependency_overrides.update({
+        get_db_session: lambda: session,
+        artifact_adapters.get_submission_bundle_preparation_actor: _actor,
+        artifact_adapters.get_artifact_internal_authority: object,
+        artifact_adapters.get_submission_bundle_preparation_authorization: lambda: authority,
+    })
+
+    async def upload():
+        pytest.fail("offline preparation consumed the uploaded body")
+        yield b"PK"
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+        response = await client.post(
+            f"/api/v1/tasks/{new_record_id()}/submission-bundle-preparations",
+            headers={
+                "Content-Type": "application/zip",
+                "X-Task-Assignment-Id": str(new_record_id()),
+                "Idempotency-Key": str(new_record_id()),
+            },
+            content=upload(),
+        )
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "service_unavailable"
+    assert response.json()["error"]["retryable"] is True
+    authority.preflight.assert_awaited_once()
+    session.begin.assert_not_called()
 
 
 def test_submission_packet_headers_reject_non_ascii() -> None:

@@ -8,9 +8,10 @@ from unittest.mock import AsyncMock
 from uuid import UUID
 
 import pytest
-from sqlalchemy import func, select, text
+from sqlalchemy import event, func, select, text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.orm import Session
 
 from app.interfaces.artifacts import (
     ArtifactConfigurationError,
@@ -22,6 +23,7 @@ from app.interfaces.artifacts import (
 )
 from app.modules.artifacts.models import (
     ArtifactAdmissionCharge,
+    ArtifactContent,
     ArtifactOperationReceipt,
     ArtifactPutAttempt,
     ArtifactPutAttemptCharge,
@@ -46,6 +48,157 @@ from tests.test_artifact_admission import (
     _settings,
     admission_database_env as admission_database_env,
 )
+
+
+async def test_database_failure_at_put_commit_rolls_back_terminal_effects(
+    admission_database_env: str,
+    tmp_path: Path,
+) -> None:
+    settings = _settings(tmp_path)
+    namespace = _namespace(settings)
+    bootstrap, store = _local_store(settings, namespace)
+    engine = create_async_engine(admission_database_env)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    policy_bundle = await create_standalone_unified_policy(factory, namespace)
+    try:
+        async with factory() as session:
+            relationships = await seed_checker_output_relationships(session, namespace, policy_bundle=policy_bundle)
+            async with minted_source(
+                tmp_path / "put-commit-failure", b'{"output":"put commit failure"}',
+                media_type="application/json",
+            ) as source:
+                _, _, _, admission = await _admit_checker_output(
+                    session, settings, namespace, source, relationships=relationships,
+                )
+                attempt_id = str(admission.attempt_id)
+                attempt = await session.get(ArtifactPutAttempt, attempt_id)
+                assert attempt is not None
+                provider_object_ref = attempt.canonical_target
+                persisted_models = (
+                    ArtifactContent, ArtifactReplica, ArtifactOperationReceipt, ArtifactVerificationJob,
+                )
+                before = {model: await _count(session, model) for model in persisted_models}
+                charge_state = (
+                    select(ArtifactAdmissionCharge.state, ArtifactAdmissionCharge.completed_at)
+                    .join(ArtifactPutAttemptCharge, ArtifactPutAttemptCharge.charge_id == ArtifactAdmissionCharge.id)
+                    .where(ArtifactPutAttemptCharge.attempt_id == attempt_id)
+                )
+                provisional = (await session.execute(charge_state)).all()
+                assert provisional and set(provisional) == {("provisional", None)}
+                await session.rollback()
+
+                @event.listens_for(session.sync_session, "before_commit")
+                def fail_terminal_commit(transaction: Session) -> None:
+                    transaction.flush()
+                    if transaction.scalar(select(ArtifactPutAttempt.status).where(
+                        ArtifactPutAttempt.id == attempt_id,
+                    )) != "object_confirmed":
+                        return
+                    for model, count in before.items():
+                        assert transaction.scalar(select(func.count()).select_from(model)) == count + 1
+                    completed = transaction.execute(charge_state).all()
+                    assert len(completed) == len(provisional)
+                    assert all(state == "completed" and at is not None for state, at in completed)
+                    transaction.execute(text("SELECT 1 / 0"))
+
+                orchestrator = ArtifactStorageOrchestrator(
+                    session, store, namespace, settings, _AllowArtifactAuthority(),
+                )
+                with pytest.raises(DBAPIError, match="division by zero"):
+                    await orchestrator.execute_committed_put(attempt_id=admission.attempt_id, source=source)
+
+            assert (await store.head(provider_object_ref)).exists
+        async with factory() as session:
+            attempt = await session.get(ArtifactPutAttempt, attempt_id)
+            assert attempt is not None
+            assert attempt.status == "put_in_flight"
+            assert attempt.executor_id is not None and attempt.lease_expires_at is not None
+            assert attempt.terminal_at is None and attempt.terminal_result_code is None
+            assert attempt.receipt_id is None and attempt.replica_id is None
+            assert {model: await _count(session, model) for model in persisted_models} == before
+            assert (await session.execute(charge_state)).all() == provisional
+    finally:
+        bootstrap.close()
+        await engine.dispose()
+
+
+@pytest.mark.parametrize("provider_outcome", ["missing", "integrity_mismatch"])
+async def test_database_failure_at_verification_commit_rolls_back_terminal_effects(
+    admission_database_env: str,
+    tmp_path: Path,
+    provider_outcome: str,
+) -> None:
+    settings = _settings(tmp_path)
+    namespace = _namespace(settings)
+    bootstrap, store = _local_store(settings, namespace)
+    engine = create_async_engine(admission_database_env)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    policy_bundle = await create_standalone_unified_policy(factory, namespace)
+    try:
+        async with factory() as session:
+            relationships = await seed_checker_output_relationships(session, namespace, policy_bundle=policy_bundle)
+            async with minted_source(
+                tmp_path / "verify-commit-failure", b'{"output":"verify commit failure"}',
+                media_type="application/json",
+            ) as source:
+                _, _, _, admission = await _admit_checker_output(
+                    session, settings, namespace, source, relationships=relationships,
+                )
+                orchestrator = ArtifactStorageOrchestrator(
+                    session, store, namespace, settings, _AllowArtifactAuthority(),
+                )
+                assert await orchestrator.execute_committed_put(
+                    attempt_id=admission.attempt_id, source=source,
+                ) == "stored_pending_verification"
+
+            job = await session.scalar(select(ArtifactVerificationJob).where(
+                ArtifactVerificationJob.originating_put_attempt_id == str(admission.attempt_id),
+            ))
+            assert job is not None
+            job_id = job.id
+            replica_state = select(
+                ArtifactReplica.verification_state, ArtifactReplica.availability_state,
+                ArtifactReplica.integrity_state, ArtifactReplica.last_reconciled_at,
+            ).where(ArtifactReplica.id == job.replica_id)
+            prior_replica = (await session.execute(replica_state)).one()
+            prior_receipt_count = await _count(session, ArtifactVerificationReceipt)
+            own_receipt = select(ArtifactVerificationReceipt.outcome).where(
+                ArtifactVerificationReceipt.verification_job_id == job_id,
+            )
+            assert await session.scalar(own_receipt) is None
+            await session.rollback()
+
+            @event.listens_for(session.sync_session, "before_commit")
+            def fail_terminal_commit(transaction: Session) -> None:
+                transaction.flush()
+                if transaction.scalar(select(ArtifactVerificationJob.status).where(
+                    ArtifactVerificationJob.id == job_id,
+                )) != provider_outcome:
+                    return
+                assert transaction.execute(replica_state).one().verification_state == provider_outcome
+                assert transaction.scalar(own_receipt) == provider_outcome
+                transaction.execute(text("SELECT 1 / 0"))
+
+            orchestrator._read_complete = (
+                AsyncMock(side_effect=ArtifactObjectMissingError("missing"))
+                if provider_outcome == "missing"
+                else AsyncMock(return_value=("sha256:" + "0" * 64, 1))
+            )
+            with pytest.raises(DBAPIError, match="division by zero"):
+                await orchestrator.verify_object(UUID(job_id))
+
+        async with factory() as session:
+            job = await session.get(ArtifactVerificationJob, job_id)
+            assert job is not None
+            assert job.status == "running" and job.attempt_count == 1
+            assert job.executor_id is not None and job.lease_expires_at is not None
+            assert job.terminal_at is None and job.terminal_result_code is None
+            assert (await session.execute(replica_state)).one() == prior_replica
+            assert await session.scalar(own_receipt) is None
+            assert await _count(session, ArtifactVerificationReceipt) == prior_receipt_count
+    finally:
+        bootstrap.close()
+        await engine.dispose()
 
 
 @pytest.mark.parametrize(

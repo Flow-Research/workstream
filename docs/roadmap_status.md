@@ -381,6 +381,12 @@ retained the same facts after host reboot and automatic service reconciliation.
 This is bounded operator-demo evidence, not a concurrency benchmark, all-tool
 coverage or public DNS/TLS qualification.
 
+The [app-only hosted profile](../deploy/hosted/README.md#app-host-without-kvm)
+can run core services and guide setup while checker execution is offline. ZIP
+preparation returns retryable unavailability, POST requests and reconciliation
+remain in PostgreSQL, and ordinary Celery delivery continues. Assembled split-host
+checker operation and live app-only deployment remain unqualified.
+
 The [independent MCP package](../mcp_server/README.md) implements 132
 self-service, administrative access, actor/identity-lifecycle, project-shell,
 project-participation, guide-metadata, draft-policy, contributor-workspace,

@@ -20,6 +20,8 @@ Native AWS configuration rejects static credentials. Runtime and proof evidence 
   ART storage orchestration, and artifact readiness reporting.
 - The proof-only models, operator commands, deployment scheduling and focused
   tests, plus one forward migration dropping only the two proof tables.
+- Release-image workflow selections and their contract tests, native backend
+  configuration example, and app-only hosted deployment integration.
 - Direct IAM-user credential loading and isolated AWS authentication, IAM
   policy generation, live deployment verification, and affected operator docs.
 
@@ -119,3 +121,17 @@ focused implementation evidence below.
 Obsolete tests exercised the removed certificate/activation mechanism. Mixed
 terminal/recovery tests retain their independent product assertions under the
 new storage path; no CI skip or coverage threshold was introduced.
+
+## Integration repair evidence
+
+The release-image workflow still selected removed activation-era tests. Replace
+those selectors with the current AWS settings rejection cases and the complete
+direct-user credential module; retain the image build/verification gates. A
+workflow contract checks that every explicitly selected backend test exists.
+The stale activation argument in the retained stale-put observation test is
+removed without changing its fencing assertions. The native backend example
+now documents only the dedicated credential file for this deployment path.
+
+App-only deployment integration retains direct-key mounts for API, worker and
+enabled model proxy while excluding them from Beat, MCP, parser and checker
+guests. Native checker custody stays exclusive to the single-host overlay.

@@ -166,6 +166,9 @@ async def test_revocation_between_phases_denies_without_rewriting_custody(delive
 )
 async def test_prepared_dispatch_binds_all_facts(delivery_harness, field):
     h = delivery_harness
+    # This test checks fact substitution, not lease expiry under CI load.
+    h.options = h.options.model_copy(update={"lease_seconds": 60})
+    h.delivery = h.build()
     claim = await h.claim()
     facts = phase_facts(claim, OutboxDispatchPhase.FINALIZE, "sha256:" + "a" * 64)
     value = getattr(facts, field)
