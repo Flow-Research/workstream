@@ -7980,3 +7980,70 @@ summary; full capability-ledger/export reconciliation remains in final delivery
 scope. The next implementation boundary is interrupted/unsealed and genuine
 orphan reconciliation using existing cleanup ownership, followed by the remaining
 writer retirement, remote execution and acceptance/configuration qualification.
+
+Unsealed implementation boundary: generalize the existing cleanup claim target
+with an explicit unsealed source value bound to operation location, initiation
+fence/handle and committed EOF identity. Preserve existing sealed target bytes
+and digest domain; no alias or second cleanup subsystem. Carry exact initiation,
+handle and completion facts through the same owner/claim/confirmation execution.
+Extend SQL target validation/audit digest and permit a reserved charge to become
+released only through the same confirmed cleanup tombstone. No-initiation cleanup
+uses locked durable absence of write permission. Local partial cleanup uses its
+existing operation lock plus an immutable abort tombstone; a discovered completed
+source is retained until exact-version custody and fresh age are recorded.
+Unknown remote begin/completion remains charged until provider settlement is
+proved. Scope includes existing cleanup API, owner/execution/capacity/model,
+provider adapters and their source primitives, worker/composition and callers,
+0088 migration/head/fingerprint plus focused Local/MinIO/PG retained-data controls.
+Do not mark all unsealed reconciliation complete while late completion or remote
+settlement is unresolved. Required reviews remain QA and architecture/security.
+
+Unsealed recovery verification on the uncommitted 0088 candidate: the initial
+observation run passed nine cases and failed its historical timestamp fixture
+because deferred PostgreSQL trigger events prevented restoring the guard. Flush
+constraints before restoring that guard, as the existing age fixture does; do
+not weaken production triggers. The exact late-completion replay then passed
+in 21.88s (`/tmp/submission-unsealed-v3.log/.json`, schema0088, isolated resources
+cleaned). It proves observation retains the ZIP and charge, invalidates the old
+target decision, and requires an aged fresh exact-version claim before removal.
+Add direct SQL substitution probes for operation/hash/fence and old-claim release.
+Rename the existing sweep to `sweep_submission_sources` with all callers updated;
+there is one sweep, not parallel sealed/unsealed workers. Replace the superseded
+test forbidding all terminal unsealed claims with recent-age denial and aged
+unsealed eligibility, retaining live-input and competing-claim protection.
+Scoped Ruff, module-boundary, structure, link and record checks passed before the
+combined rerun. Remote unsealed settlement, orphan reconciliation, retained-row
+migration proof and focused review remain required; these local results do not
+qualify them.
+
+The combined 0088 Local/PostgreSQL rerun passed all 11 cases in 204.10s
+(`/tmp/submission-unsealed-v4.log/.json`): five unfinished-upload phases, recent
+partial/completed retention, late-completion age and fresh-version authority,
+direct SQL source-substitution rejection, existing sealed-source/live-PRE cleanup,
+and stalled accepted-source protection. This run includes the sweep rename.
+The full existing cleanup-owner suite and two real-MinIO unsealed adapter cases
+are separate verification runs; do not infer their results from these 11 cases.
+
+The two MinIO adapter cases passed in 18.11s
+(`/tmp/submission-unsealed-minio-v1.log/.json`, schema0088, isolated cleanup
+complete): completed-but-unrecorded bytes are observed and preserved, while
+unfinished multipart abort confirms handle absence without falsely reporting
+complete write settlement. The Local/PostgreSQL combined-run receipt also
+confirms isolated cleanup complete. Native AWS and complete remote settlement
+remain unqualified.
+
+The complete existing cleanup-owner module passed all 28 cases in 554.87s
+(`/tmp/submission-cleanup-owner-v4.log/.json`, schema0088, isolated cleanup
+complete). This covers retained-source barriers, service revocation, decision
+substitution, competing claims, stale takeover, transaction rollback and charge
+release, including the updated terminal-unsealed age rule. Add a focused actual
+0087-to-0088 retained-row test: create outstanding and confirmed sealed claims
+using predecessor SQL guards and real authorization decisions, compare source,
+charge, upload, operation and audit facts across upgrade, then replay through
+the current owner. This uses no fabricated seal or disabled cleanup guard.
+
+The first retained-migration probe stopped in predecessor setup: two volatile
+clock reads made its five-minute lease exceed the maximum by microseconds.
+Use the same statement timestamp for both endpoints, preserving the production
+bound. The direct source-substitution probe now uses a well-formed alternative
+SHA-256 identity, so its negative assertion cannot rely on malformed input.

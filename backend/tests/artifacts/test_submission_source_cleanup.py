@@ -10,7 +10,7 @@ from sqlalchemy.exc import DBAPIError
 
 from app.adapters.tasks import intake_task_custody_port
 from app.core.identifiers import new_record_id
-from app.modules.artifacts.intake.cleanup import SealedSourceCleanup
+from app.modules.artifacts.intake.cleanup import SubmissionSourceCleanupOwner
 from app.modules.artifacts.intake.repository import IntakeCustodyConflict
 from tests.artifacts.test_submission_intake_custody import (
     SHA, reserve, record_eof, repository,
@@ -30,7 +30,7 @@ async def provision_cleanup_identity(intake):
 def owner(session):
     """Use the same TASK custody adapter as foreground and finalization."""
     from app.modules.artifacts.authorization import PreparedSubmissionSourceCleanupAuthorization
-    return SealedSourceCleanup(session, intake_task_custody_port(session),
+    return SubmissionSourceCleanupOwner(session, intake_task_custody_port(session),
         PreparedSubmissionSourceCleanupAuthorization(session, request_id=new_record_id(), correlation_id=new_record_id()))
 
 
@@ -156,11 +156,14 @@ async def test_cleanup_rejects_live_input_and_serializes_competing_claims(intake
             await owner(session).claim(operation, new_record_id(), lease_duration=timedelta(minutes=5))
     async with intake.factory.begin() as session:
         await repository(session).terminalize(operation, UUID(row.lease_id), 1, state="failed", failure_code="upload_failed")
-    # Unsealed terminal input cannot enter the sealed cleanup/release path.
-    await age_fixture(intake, operation)
+    # Terminal input is still protected until the minimum cleanup age.
     with pytest.raises(DBAPIError, match="cleanup is protected"):
         async with intake.factory.begin() as session:
             await owner(session).claim(operation, new_record_id(), lease_duration=timedelta(minutes=5))
+    await age_fixture(intake, operation)
+    async with intake.factory.begin() as session:
+        unsealed = await owner(session).claim(operation, new_record_id(), lease_duration=timedelta(minutes=5))
+        assert unsealed.source.kind == "unsealed"
     operation = await terminal_source(intake)
     await age_fixture(intake, operation)
 

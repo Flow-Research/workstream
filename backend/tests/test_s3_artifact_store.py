@@ -1275,6 +1275,40 @@ async def test_source_cleanup_keeps_source_when_another_upload_is_unresolved(sou
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("completed", [False, True])
+async def test_unsealed_cleanup_observes_completion_without_premature_release(source_store, completed):
+    from app.adapters.artifacts.source_cleanup import S3SubmissionSourceCleanup
+    from app.modules.artifacts.api.submission_cleanup import UnsealedSubmissionSource, UnsealedSourceCleanupInput
+
+    completion = await source_completion(source_store, b"unrecorded-completion")
+    source = await source_store.complete_source_upload(completion) if completed else None
+    upload = completion.upload
+    value = UnsealedSourceCleanupInput(
+        source=UnsealedSubmissionSource(
+            location=upload.intent.location, upload_fence=upload.intent.upload_fence,
+            provider_upload_id=upload.provider_upload_id,
+            raw_sha256=completion.raw_sha256, raw_byte_count=completion.raw_byte_count,
+        ), intent=upload.intent, upload=upload, completion=completion,
+    )
+    # Real MinIO protocol behavior; production credential qualification is separate.
+    cleanup_store = initialize_minio_store(private_prefix=source_store._private_prefix)
+    try:
+        result = await S3SubmissionSourceCleanup(cleanup_store).remove_unsealed(value)
+        assert result.source == value.source
+        assert result.object_absent is result.writes_settled is False
+        assert result.observed_source == source
+        if completed:
+            retained = await source_store.observe_sealed_source(source)
+            assert retained is not None
+            assert retained.provider_generation == source.provider_generation
+        else:
+            assert result.parts_absent is True
+            assert await source_store.source_upload_parts_absent(upload) is True
+    finally:
+        cleanup_store.close()
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("code,status,bucket_error", [
     ("NoSuchBucket", 404, None),
     ("AccessDenied", 403, None),

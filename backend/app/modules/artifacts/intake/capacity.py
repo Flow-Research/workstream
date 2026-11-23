@@ -90,7 +90,7 @@ class SubmissionSourceCapacity:
         charge = await self._session.scalar(select(SubmissionSourceCharge).where(
             SubmissionSourceCharge.operation_id == operation.id,
         ).with_for_update().execution_options(populate_existing=True))
-        if claim is None or claim.confirmed_at is None or charge is None or charge.state not in {"sealed", "released"}:
+        if claim is None or claim.confirmed_at is None or charge is None or charge.state not in {"reserved", "sealed", "released"}:
             raise SubmissionSourceCapacityConflict("source_cleanup_unconfirmed")
         charge.state, charge.accounted_bytes = "released", 0
         await self._session.flush()

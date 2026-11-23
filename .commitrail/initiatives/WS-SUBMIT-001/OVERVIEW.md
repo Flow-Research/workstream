@@ -49,6 +49,16 @@ durable delivery. Remove shared-host coupling and obsolete writers; do not grow
 parallel local/remote product workflows. A named paid provider needs its own
 qualification, not a redesign of submission ownership.
 
+Keep the implementation boundary concrete: Workstream owns intake, immutable
+source references, task state and acceptance; artifact storage owns durable ZIP
+bytes; the selected execution adapter owns remote session creation, execution,
+results and teardown. Runner scratch is disposable and never the sole retained
+copy. Carry the intake/attempt identity and exact source identity across the
+request and result so failures can be traced across services. Validate separation
+with the API and runner on different hosts and no shared filesystem. A provider
+change must not require a second submission lifecycle. These are implementation
+and verification requirements, not claims that remote transport is complete.
+
 ## Remaining work, in execution order
 
 | Order | Required outcome | Concrete finishing evidence |
@@ -66,6 +76,13 @@ qualification. Expired-foreground recovery passed scoped review at `81d69a207`,
 including blocked-task progress and after-lock service revocation. Unsealed/
 uncertain and genuine-orphan reconciliation remain unfinished. Further optional test
 migration must not displace closing this integration.
+
+The current unsealed change extends that same cleanup owner: Local incomplete
+uploads can be reclaimed, and an observed late completion is retained until a
+fresh aged claim identifies its exact version. Focused Local/PostgreSQL and MinIO
+checks passed, as did the existing cleanup-owner suite. Remote partial-write
+settlement and genuine-orphan reconciliation remain open; do not treat this
+partial implementation as completion of order 1.
 
 ## Acceptance evidence still to close
 

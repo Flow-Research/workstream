@@ -1050,13 +1050,13 @@ async def submission_source_cleanup_candidates(sessions, namespace, limit):
     """Discover candidates under the fixed service through ART ownership."""
     from app.adapters.tasks import intake_task_custody_port
     from app.modules.artifacts.authorization import PreparedSubmissionSourceCleanupAuthorization
-    from app.modules.artifacts.intake.cleanup import SealedSourceCleanup
+    from app.modules.artifacts.intake.cleanup import SubmissionSourceCleanupOwner
     from app.core.identifiers import new_record_id
     async with sessions.begin() as session:
         authority = PreparedSubmissionSourceCleanupAuthorization(
             session, request_id=new_record_id(), correlation_id=new_record_id())
         try:
-            return await SealedSourceCleanup(session, intake_task_custody_port(session), authority).candidates(
+            return await SubmissionSourceCleanupOwner(session, intake_task_custody_port(session), authority).candidates(
                 namespace, limit=limit)
         finally:
             authority.close()
@@ -1067,7 +1067,7 @@ async def abandon_expired_submission_foregrounds(sessions, namespace, limit, *, 
     import asyncio
     from app.adapters.tasks import intake_task_custody_port
     from app.modules.artifacts.authorization import PreparedSubmissionSourceCleanupAuthorization
-    from app.modules.artifacts.intake.cleanup import SealedSourceCleanup
+    from app.modules.artifacts.intake.cleanup import SubmissionSourceCleanupOwner
     from app.core.identifiers import new_record_id
     from contextlib import asynccontextmanager
 
@@ -1077,7 +1077,7 @@ async def abandon_expired_submission_foregrounds(sessions, namespace, limit, *, 
             authority = PreparedSubmissionSourceCleanupAuthorization(
                 session, request_id=new_record_id(), correlation_id=new_record_id())
             try:
-                yield SealedSourceCleanup(session, intake_task_custody_port(session), authority)
+                yield SubmissionSourceCleanupOwner(session, intake_task_custody_port(session), authority)
             finally:
                 authority.close()
 

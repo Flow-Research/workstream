@@ -1,4 +1,4 @@
-"""Bounded worker composition for audited, exact sealed-source reclamation."""
+"""Bounded worker composition for audited submission-source reclamation."""
 import asyncio
 from datetime import timedelta
 
@@ -45,14 +45,14 @@ async def validate_source_cleanup_startup():
         await engine.dispose()
 
 
-async def sweep_sealed_submission_sources(sessions, settings):
+async def sweep_submission_sources(sessions, settings):
     """One finite page; confirmed counts include already-confirmed replay."""
     profile, namespace, namespace_claim = _configuration(settings)
     candidates, confirmed, timed_out, provider, abandoned = (), 0, False, None, 0
     try:
         async with asyncio.timeout(profile.run_seconds):
             try:
-                # Reserve at least half the envelope for sealed sources even
+                # Reserve at least half the envelope for source cleanup even
                 # when expired foreground custody is blocked on a TASK lock.
                 async with asyncio.timeout(profile.run_seconds / 2):
                     abandoned = await abandon_expired_submission_foregrounds(
@@ -87,7 +87,7 @@ async def run_source_cleanup_sweep():
     """Own DB/provider resources for one Celery process invocation."""
     engine = create_async_engine(get_database_url(), pool_pre_ping=True)
     try:
-        return await sweep_sealed_submission_sources(
+        return await sweep_submission_sources(
             async_sessionmaker(engine, expire_on_commit=False), get_settings())
     finally:
         await engine.dispose()

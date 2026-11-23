@@ -1,4 +1,4 @@
-"""Authorized sealed-source cleanup custody; provider I/O stays outside this owner.
+"""Authorized submission-source cleanup custody; provider I/O stays outside this owner.
 
 The composition root must supply current authority and act only on a committed claim.
 This owner retains uncertain targets and releases charges only with both exact
@@ -10,8 +10,12 @@ from uuid import UUID
 
 from sqlalchemy import func, or_, select, text
 
-from app.modules.artifacts.api.submission_intake import SealedSubmissionSource, SubmissionSourceUpload
-from app.modules.artifacts.api.submission_cleanup import SubmissionSourceCleanupAuthorityFacts
+from app.modules.artifacts.api.submission_intake import (
+    SealedSubmissionSource, SubmissionSourceUpload, SubmissionSourceLocation, SubmissionSourceCompletion,
+)
+from app.modules.artifacts.api.submission_cleanup import (
+    SubmissionSourceCleanupAuthorityFacts, UnsealedSubmissionSource, UnsealedSourceCleanupInput, cleanup_target_sha256,
+)
 from app.modules.artifacts.intake.capacity import SubmissionSourceCapacity
 from app.modules.artifacts.intake.models import (
     SubmissionIntakeOperation, SubmissionSourceCharge, SubmissionSourceCleanupClaim, SubmissionSourceUploadReceipt,
@@ -24,27 +28,30 @@ MAXIMUM_CLEANUP_LEASE = timedelta(seconds=300)
 
 
 @dataclass(frozen=True, slots=True)
-class SealedSourceCleanupClaim:
+class SourceCleanupClaim:
     """Exact durable deletion target; a copied value grants no deletion authority."""
 
     claim_id: UUID
     generation: int
-    source: SealedSubmissionSource
+    source: SealedSubmissionSource | UnsealedSubmissionSource
     lease_expires_at: datetime
     confirmed: bool
+    observed_source: SealedSubmissionSource | None = None
 
 
-def _claim_value(row: SubmissionSourceCleanupClaim) -> SealedSourceCleanupClaim:
+def _claim_value(row: SubmissionSourceCleanupClaim) -> SourceCleanupClaim:
     """Recover typed source facts from persisted canonical JSON."""
     import json
-    return SealedSourceCleanupClaim(
+    return SourceCleanupClaim(
         UUID(row.claim_id), row.generation,
-        SealedSubmissionSource.model_validate_json(json.dumps(row.source)),
+        (UnsealedSubmissionSource if row.source.get("kind") == "unsealed" else SealedSubmissionSource)
+        .model_validate_json(json.dumps(row.source)),
         row.lease_expires_at, row.confirmed_at is not None,
+        SealedSubmissionSource.model_validate_json(json.dumps(row.observed_source)) if row.observed_source is not None else None,
     )
 
 
-class SealedSourceCleanup:
+class SubmissionSourceCleanupOwner:
     """Flush-only ownership: caller supplies current authority and root commits."""
 
     def __init__(self, session, tasks, authorization):
@@ -108,9 +115,9 @@ class SealedSourceCleanup:
             .where(operation.namespace_id == "primary",
                    operation.namespace_fingerprint == namespace.namespace_fingerprint,
                    operation.state.in_(("rejected", "failed", "abandoned", "cancelled")),
-                   operation.accepted_at.is_(None), operation.provider_generation.is_not(None),
-                   operation.sealed_at.is_not(None), operation.terminal_at <= now - timedelta(hours=2),
-                   operation.sealed_at <= now - timedelta(hours=2), charge.state == "sealed",
+                   operation.accepted_at.is_(None),
+                   func.greatest(operation.terminal_at, operation.sealed_at, claim.observed_at) <= now - timedelta(hours=2),
+                   charge.state.in_(("reserved", "sealed")),
                    claim.confirmed_at.is_(None),
                    or_(claim.operation_id.is_(None), claim.lease_expires_at <= now),
                    ~retained, ~admitted)
@@ -121,20 +128,37 @@ class SealedSourceCleanup:
         await self._authorization.authorize()
         operation = await self._intake._lock(operation_id)
         await self._authorization.revalidate()
-        await self._session.execute(text(
-            "SELECT public.require_sealed_source_cleanup(o) "
-            "FROM public.submission_intake_operations o WHERE id=:id"
-        ), {"id": operation.id})
         row = await self._session.scalar(select(SubmissionSourceCleanupClaim).where(
             SubmissionSourceCleanupClaim.operation_id == operation.id,
         ).with_for_update().execution_options(populate_existing=True))
+        now = await self._session.scalar(select(func.clock_timestamp()))
+        if row is not None and row.observed_at is not None and row.observed_at > now - timedelta(hours=2):
+            raise IntakeCustodyConflict("source_cleanup_recent_completion")
+        await self._session.execute(text(
+            "SELECT public.require_submission_source_cleanup(o) "
+            "FROM public.submission_intake_operations o WHERE id=:id"
+        ), {"id": operation.id})
         return operation, row
 
+    async def _target(self, operation):
+        if operation.sealed_at is not None:
+            return self._intake._sealed_source(operation)
+        receipt = await self._session.get(SubmissionSourceUploadReceipt, operation.id)
+        return UnsealedSubmissionSource(
+            location=SubmissionSourceLocation(operation_id=UUID(operation.id), namespace_id=operation.namespace_id,
+                namespace_fingerprint=operation.namespace_fingerprint, provider_profile=operation.provider_profile),
+            upload_fence=receipt.upload_fence if receipt is not None else None,
+            provider_upload_id=receipt.provider_upload_id if receipt is not None else None,
+            raw_sha256=operation.raw_sha256, raw_byte_count=operation.raw_byte_count,
+        )
+
     async def _decision(self, operation, claim_id, generation, phase):
-        source = self._intake._sealed_source(operation)
+        source = await self._target(operation)
+        row = await self._session.get(SubmissionSourceCleanupClaim, operation.id)
+        observed = _claim_value(row).observed_source if row is not None else None
         facts = SubmissionSourceCleanupAuthorityFacts(
             operation_id=UUID(operation.id), project_id=UUID(operation.project_id),
-            task_id=UUID(operation.task_id), source_sha256=source.source_sha256(),
+            task_id=UUID(operation.task_id), source_sha256=cleanup_target_sha256(source, observed),
             claim_id=claim_id, claim_generation=generation, phase=phase,
         )
         handle = await self._authorization.prepare(facts=facts, idempotency_key=facts.claim_id)
@@ -151,7 +175,7 @@ class SealedSourceCleanup:
         if valid is not True:
             raise IntakeCustodyConflict("source_cleanup_authority_unavailable")
 
-    async def claim(self, operation_id: UUID, claim_id: UUID, *, lease_duration: timedelta) -> SealedSourceCleanupClaim:
+    async def claim(self, operation_id: UUID, claim_id: UUID, *, lease_duration: timedelta) -> SourceCleanupClaim:
         """Claim only a stable eligible source; never resume foreground work."""
         if (type(claim_id) is not UUID or claim_id.version != 7
                 or type(lease_duration) is not timedelta
@@ -177,7 +201,7 @@ class SealedSourceCleanup:
         else:
             row = SubmissionSourceCleanupClaim(
                 operation_id=operation.id, claim_id=str(claim_id), generation=1,
-                source=self._intake._sealed_source(operation).model_dump(mode="json"),
+                source=(await self._target(operation)).model_dump(mode="json"),
                 claimed_at=now, lease_expires_at=now + lease_duration,
             )
             self._session.add(row)
@@ -186,14 +210,32 @@ class SealedSourceCleanup:
         await self._session.refresh(row)
         return _claim_value(row)
 
-    async def confirm(self, claim: SealedSourceCleanupClaim, *, object_absent: bool,
+    async def record_completion_observation(self, claim: SourceCleanupClaim, source: SealedSubmissionSource) -> None:
+        """Retain late completion without granting deletion under the old claim."""
+        source = SealedSubmissionSource.model_validate(source)
+        operation, row = await self._locked(claim.source.location.operation_id)
+        now = await self._session.scalar(select(func.clock_timestamp()))
+        if (not isinstance(claim.source, UnsealedSubmissionSource) or row is None
+                or row.claim_id != str(claim.claim_id) or row.generation != claim.generation
+                or row.confirmed_at is not None or row.lease_expires_at <= now
+                or row.source != claim.source.model_dump(mode="json") or row.observed_source is not None
+                or source.location != claim.source.location or source.raw_sha256 != operation.raw_sha256
+                or source.raw_byte_count != operation.raw_byte_count
+                or source.sealed_upload_fence != claim.source.upload_fence):
+            raise IntakeCustodyConflict("source_cleanup_observation_mismatch")
+        await self._require_claim_authority(operation.id)
+        row.observed_source, row.observed_at = source.model_dump(mode="json"), now
+        await self._session.flush()
+
+    async def confirm(self, claim: SourceCleanupClaim, *, object_absent: bool,
                       writes_settled: bool, parts_absent: bool) -> None:
         """Commit exact absence and charge release together, never on an ACK."""
         if object_absent is not True or writes_settled is not True or parts_absent is not True:
             raise IntakeCustodyConflict("source_cleanup_unresolved")
         operation, row = await self._locked(claim.source.location.operation_id)
         if (row is None or row.claim_id != str(claim.claim_id) or row.generation != claim.generation
-                or row.source != claim.source.model_dump(mode="json")):
+                or row.source != claim.source.model_dump(mode="json")
+                or row.observed_source != (claim.observed_source.model_dump(mode="json") if claim.observed_source is not None else None)):
             raise IntakeCustodyConflict("source_cleanup_stale")
         if row.confirmed_at is not None:
             return
@@ -206,7 +248,7 @@ class SealedSourceCleanup:
         await self._session.flush()
         await SubmissionSourceCapacity(self._session).release_confirmed(operation)
 
-    async def upload_for_claim(self, claim: SealedSourceCleanupClaim) -> SubmissionSourceUpload:
+    async def upload_for_claim(self, claim: SourceCleanupClaim) -> SubmissionSourceUpload | UnsealedSourceCleanupInput:
         """Recover the exact upload under the same live audited deletion claim."""
         operation, row = await self._locked(claim.source.location.operation_id)
         now = await self._session.scalar(select(func.clock_timestamp()))
@@ -216,6 +258,17 @@ class SealedSourceCleanup:
             raise IntakeCustodyConflict("source_cleanup_stale")
         await self._require_claim_authority(operation.id)
         receipt = await self._session.get(SubmissionSourceUploadReceipt, operation.id)
+        if isinstance(claim.source, UnsealedSubmissionSource):
+            intent = await self._intake._upload_intent(operation, receipt) if receipt is not None else None
+            upload = (SubmissionSourceUpload(intent=intent, provider_upload_id=receipt.provider_upload_id)
+                      if receipt is not None and receipt.provider_upload_id is not None else None)
+            completion = None
+            if receipt is not None and receipt.completion_parts is not None:
+                import json
+                completion = SubmissionSourceCompletion.model_validate_json(json.dumps({
+                    "upload": upload.model_dump(mode="json"), "raw_sha256": operation.raw_sha256,
+                    "raw_byte_count": operation.raw_byte_count, "parts": receipt.completion_parts}))
+            return UnsealedSourceCleanupInput(claim.source, intent, upload, completion)
         if receipt is None or receipt.provider_upload_id is None or receipt.completion_parts is None:
             raise IntakeCustodyConflict("source_cleanup_unresolved")
         return SubmissionSourceUpload(

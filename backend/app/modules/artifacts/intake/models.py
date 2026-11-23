@@ -59,7 +59,7 @@ class SubmissionIntakeOperation(Base):
         Index("uq_submission_intake_active_task", "task_id", unique=True, postgresql_where=text("state in ('receiving','pre_checking','finalization_pending')")),
         Index("ix_submission_intake_cleanup_candidates", "terminal_at", "id",
               postgresql_where=text("state in ('rejected','failed','abandoned','cancelled') "
-                                    "and accepted_at is null and sealed_at is not null")),
+                                    "and accepted_at is null")),
         Index("ix_submission_intake_expiry", "lease_expires_at", "id", postgresql_where=text("state in ('receiving','pre_checking')")),
     )
 
@@ -153,7 +153,7 @@ class SubmissionSourceCharge(Base):
         CheckConstraint("state in ('reserved','sealed','released')", name="charge_state"),
         CheckConstraint("(state='reserved' and accounted_bytes=reserved_bytes and sealed_at is null) "
                         "or (state='sealed' and sealed_at is not null and accounted_bytes>0) "
-                        "or (state='released' and sealed_at is not null and accounted_bytes=0)", name="charge_shape"),
+                        "or (state='released' and accounted_bytes=0)", name="charge_shape"),
     )
 
     operation_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), primary_key=True)
@@ -175,6 +175,8 @@ class SubmissionSourceCleanupClaim(Base):
                              name="fk_source_cleanup_operation"),
         CheckConstraint("generation>0 and lease_expires_at>claimed_at and lease_expires_at<=claimed_at+interval '300 seconds'", name="claim_bounds"),
         CheckConstraint("jsonb_typeof(source)='object'", name="source_shape"),
+        CheckConstraint("(observed_source is null and observed_at is null) or "
+                        "(jsonb_typeof(observed_source)='object' and observed_at is not null)", name="observed_shape"),
         CheckConstraint("(get_byte(uuid_send(claim_id),6)>>4)=7 and (get_byte(uuid_send(claim_id),8)&192)=128",
                         name="claim_uuid7"),
         Index("ix_source_cleanup_pending", "lease_expires_at", postgresql_where=text("confirmed_at is null")),
@@ -186,6 +188,8 @@ class SubmissionSourceCleanupClaim(Base):
     source: Mapped[dict] = mapped_column(JSONB)
     claimed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     lease_expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    observed_source: Mapped[dict | None] = mapped_column(JSONB(none_as_null=True))
+    observed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     claim_decision_id: Mapped[str | None] = mapped_column(Uuid(as_uuid=False))
     confirmation_decision_id: Mapped[str | None] = mapped_column(Uuid(as_uuid=False))

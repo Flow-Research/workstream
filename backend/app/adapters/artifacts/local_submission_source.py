@@ -352,6 +352,50 @@ class LocalSubmissionSource:
             # A missing metadata file is not proof the staging bytes are gone.
             return False
 
+    def delete_unsealed(self, value) -> bool:
+        """Drain Local writers and retain an abort tombstone before unlinking parts."""
+        from datetime import timedelta
+        from app.modules.artifacts.api.submission_cleanup import UnsealedSourceCleanupInput
+        if type(value) is not UnsealedSourceCleanupInput or value.intent is None:
+            raise ArtifactOperationConflictError("unsealed cleanup input is invalid")
+        with self.locked(value.source.location, create=True) as directory:
+            if self.exists(directory, "seal.json"):
+                # Completion may have won before its SQL receipt was recorded.
+                # Never delete this generation under a partial-upload claim.
+                return False
+            stored = None
+            if self.exists(directory, "upload.json"):
+                stored = SubmissionSourceUpload.model_validate_json(self.read(directory, "upload.json"))
+                if stored.intent != value.intent or (value.upload is not None and stored != value.upload):
+                    raise ArtifactOperationConflictError("unsealed cleanup upload differs")
+            elif value.upload is not None or self.exists(directory, "bundle.zip"):
+                raise ArtifactIntegrityError("unsealed cleanup provenance is missing")
+            marker = {"cleanup_source": value.source.model_dump(mode="json")}
+            if self.exists(directory, "aborted.json"):
+                existing = json.loads(self.read(directory, "aborted.json"))
+                if existing != marker and (stored is None or existing != {"provider_upload_id": stored.provider_upload_id}):
+                    raise ArtifactIntegrityError("unsealed cleanup tombstone differs")
+            else:
+                self.publish(directory, "aborted.json", marker)
+            try:
+                descriptor = os.open("bundle.zip", os.O_RDONLY | os.O_NOFOLLOW, dir_fd=directory)
+            except FileNotFoundError:
+                return True
+            try:
+                info = self.store._assert_private_regular(descriptor)
+                if stat.S_IMODE(info.st_mode) != 0o600:
+                    raise ArtifactIntegrityError("unsealed cleanup inode is not staging")
+                if datetime.fromtimestamp(info.st_mtime, UTC) > datetime.now(UTC) - timedelta(hours=2):
+                    return False
+                current = os.stat("bundle.zip", dir_fd=directory, follow_symlinks=False)
+                if (current.st_dev, current.st_ino) != (info.st_dev, info.st_ino):
+                    raise ArtifactIntegrityError("unsealed cleanup inode changed")
+                os.unlink("bundle.zip", dir_fd=directory)
+                os.fsync(directory)
+                return not self.exists(directory, "bundle.zip")
+            finally:
+                os.close(descriptor)
+
     def delete_sealed(self, source: SealedSubmissionSource, upload: SubmissionSourceUpload) -> None:
         """Private cleanup primitive; caller must hold committed cleanup authority.
 

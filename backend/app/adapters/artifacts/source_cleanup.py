@@ -1,7 +1,9 @@
 """Private deletion capabilities, kept off the upload/read ArtifactStore port."""
 from app.adapters.artifacts.local_submission_source import LocalSubmissionSource
 from workstream_external_services import ExternalServiceAdapterIdentity
-from app.modules.artifacts.api.submission_cleanup import SUBMISSION_SOURCE_CLEANUP_CAPABILITY, SubmissionSourceRemoval
+from app.modules.artifacts.api.submission_cleanup import (
+    SUBMISSION_SOURCE_CLEANUP_CAPABILITY, SubmissionSourceRemoval, UnsealedSourceCleanupInput,
+)
 
 
 class LocalSubmissionSourceCleanup:
@@ -29,6 +31,15 @@ class LocalSubmissionSourceCleanup:
         parts_absent = await self._store.source_upload_parts_absent(upload)
         absent = await self._store.observe_sealed_source(source) is None
         return SubmissionSourceRemoval(source, absent, True, parts_absent)
+
+    async def remove_unsealed(self, value: UnsealedSourceCleanupInput):
+        """Use the same operation lock and retained abort marker as Local writers."""
+        if value.completion is not None:
+            completed = await self._store.observe_source_upload(value.completion)
+            if completed is not None:
+                return SubmissionSourceRemoval(value.source, False, False, False, completed)
+        absent = await self._store._source_io(self._source.delete_unsealed, value)
+        return SubmissionSourceRemoval(value.source, absent, absent, absent)
 
 
 class S3SubmissionSourceCleanup:
@@ -116,3 +127,24 @@ class S3SubmissionSourceCleanup:
                            and versions.get("Versions", []) == []
                            and versions.get("DeleteMarkers", []) == [])
         return SubmissionSourceRemoval(source, absent, parts_absent and not handles and versions_absent, parts_absent)
+
+    async def remove_unsealed(self, value: UnsealedSourceCleanupInput):
+        """Abort known scoped handles; retain charge until remote writes are settled."""
+        if value.intent is None:
+            return SubmissionSourceRemoval(value.source, False, False, False)
+        if value.completion is not None:
+            completed = await self._store.observe_source_upload(value.completion)
+            if completed is not None:
+                return SubmissionSourceRemoval(value.source, False, False, False, completed)
+        handles = await self._store.discover_source_uploads(value.intent)
+        if value.upload is not None and value.upload not in handles:
+            handles = (*handles, value.upload)
+        for upload in handles:
+            await self._store.request_source_abort(upload)
+        parts_absent = True
+        for upload in handles:
+            parts_absent = parts_absent and await self._store.source_upload_parts_absent(upload)
+        # Unknown begin retries and a racing completion are not settled by one
+        # LIST/abort response. Exact completed-version reconciliation follows
+        # through durable cleanup custody; never infer capacity release here.
+        return SubmissionSourceRemoval(value.source, False, False, parts_absent)

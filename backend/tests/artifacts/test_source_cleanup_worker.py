@@ -67,14 +67,14 @@ async def state(intake):
 async def test_sweep_reclaims_real_source_once_and_leaves_live_pre_input(intake):
     operation, source = await sealed_local_source(intake)
     settings = settings_for(intake)
-    assert (await composition.sweep_sealed_submission_sources(intake.factory, settings))["candidates"] == 0
+    assert (await composition.sweep_submission_sources(intake.factory, settings))["candidates"] == 0
     await cleanup_fixtures.age_fixture(intake, operation, preserve_upload_deadline=True)
     live, protected = await sealed_local_source(intake, terminal=False)
-    result = await composition.sweep_sealed_submission_sources(intake.factory, settings)
+    result = await composition.sweep_submission_sources(intake.factory, settings)
     assert result == {"candidates": 1, "confirmed": 1, "deferred": 0, "timed_out": False, "abandoned": 0}
     after = await state(intake)
     for _ in range(2):
-        assert (await composition.sweep_sealed_submission_sources(intake.factory, settings))["candidates"] == 0
+        assert (await composition.sweep_submission_sources(intake.factory, settings))["candidates"] == 0
         assert await state(intake) == after
     store = initialize_local_store(root=intake.durable_root)
     try:
@@ -106,7 +106,7 @@ async def test_sweep_retains_uncertain_claim_then_recovers_under_new_generation(
     with monkeypatch.context() as patch:
         from app.adapters.artifacts.source_cleanup import LocalSubmissionSourceCleanup
         patch.setattr(LocalSubmissionSourceCleanup, "remove", uncertain_remove)
-        first = await composition.sweep_sealed_submission_sources(intake.factory, settings)
+        first = await composition.sweep_submission_sources(intake.factory, settings)
     assert first["deferred"] == 1 and first["confirmed"] == 0
     async with intake.factory() as session:
         assert await session.scalar(text("SELECT accounted_bytes FROM submission_source_charges WHERE operation_id=:id"),
@@ -115,7 +115,7 @@ async def test_sweep_retains_uncertain_claim_then_recovers_under_new_generation(
             "FROM submission_source_cleanup_claims WHERE operation_id=:id"), {"id": operation})
     assert remaining is not None, "uncertain removal must retain a committed cleanup claim"
     await asyncio.sleep(max(0, float(remaining)) + 0.05)
-    assert (await composition.sweep_sealed_submission_sources(intake.factory, settings))["confirmed"] == 1
+    assert (await composition.sweep_submission_sources(intake.factory, settings))["confirmed"] == 1
     async with intake.factory() as session:
         assert await session.scalar(text("SELECT generation FROM submission_source_cleanup_claims WHERE operation_id=:id"),
                                     {"id": operation}) == 2
@@ -140,14 +140,14 @@ async def test_sweep_denial_precedes_cleanup_provider_and_preserves_custody(inta
     from app.modules.artifacts.schemas import ArtifactAuthorityDeniedError
     from app.modules.authorization.runtime import AuthorizationDenied, PreparedAuthorizationUnsupported
     with pytest.raises((IntakeCustodyConflict, ArtifactAuthorityDeniedError, AuthorizationDenied, PreparedAuthorizationUnsupported)):
-        await composition.sweep_sealed_submission_sources(intake.factory, settings)
+        await composition.sweep_submission_sources(intake.factory, settings)
     assert await state(intake) == before
 
 
 async def test_concurrent_sweeps_release_charge_only_once(intake):
     operation, _ = await sealed_local_source(intake)
     await cleanup_fixtures.age_fixture(intake, operation, preserve_upload_deadline=True)
-    results = await asyncio.gather(*(composition.sweep_sealed_submission_sources(
+    results = await asyncio.gather(*(composition.sweep_submission_sources(
         intake.factory, settings_for(intake)) for _ in range(2)))
     # Both pages may discover the source before either confirms; the second
     # execution may then observe an already-confirmed claim.
@@ -170,13 +170,13 @@ async def test_sweep_fences_expired_foreground_without_releasing_source_charge(i
     def forbidden(**kwargs):
         pytest.fail("foreground abandonment constructed deletion capability")
     monkeypatch.setattr(composition, "create_submission_source_cleanup_provider", forbidden)
-    assert (await composition.sweep_sealed_submission_sources(intake.factory, settings))["abandoned"] == 0
+    assert (await composition.sweep_submission_sources(intake.factory, settings))["abandoned"] == 0
     async with intake.factory() as session:
         lease = await session.scalar(text("SELECT lease_id FROM submission_intake_operations WHERE id=:id"), {"id": operation})
         charged = await session.scalar(text("SELECT accounted_bytes FROM submission_source_charges WHERE operation_id=:id"),
                                        {"id": operation})
     await cleanup_fixtures.age_fixture(intake, operation, preserve_upload_deadline=True)
-    result = await composition.sweep_sealed_submission_sources(intake.factory, settings)
+    result = await composition.sweep_submission_sources(intake.factory, settings)
     assert result["abandoned"] == 1 and result["candidates"] == 0
     async with intake.factory() as session:
         row = (await session.execute(text("SELECT state,lease_generation,failure_code FROM submission_intake_operations WHERE id=:id"),
@@ -192,7 +192,7 @@ async def test_sweep_fences_expired_foreground_without_releasing_source_charge(i
     with pytest.raises(IntakeCustodyConflict, match="owner_stale"):
         async with intake.factory.begin() as session:
             await repository(session).heartbeat(operation, UUID(str(lease)), 1, lease_duration=timedelta(seconds=30))
-    assert (await composition.sweep_sealed_submission_sources(intake.factory, settings))["abandoned"] == 0
+    assert (await composition.sweep_submission_sources(intake.factory, settings))["abandoned"] == 0
     async with intake.factory() as session:
         assert str(await session.scalar(text("SELECT active_submission_operation_id FROM workstream_tasks WHERE id=:id"),
                                         {"id": intake.task})) == replacement_id
@@ -221,12 +221,12 @@ async def test_busy_expired_task_defers_then_recovers_on_next_sweep(intake):
     async with intake.factory.begin() as blocker:
         await blocker.execute(text("SELECT id FROM workstream_tasks WHERE id=:id FOR UPDATE"), {"id": other.task})
         async with asyncio.timeout(40):
-            result = await composition.sweep_sealed_submission_sources(intake.factory, bounded)
+            result = await composition.sweep_submission_sources(intake.factory, bounded)
         assert result["abandoned"] == 0 and result["timed_out"] is True
         assert result["confirmed"] == 1
         assert await blocker.scalar(text("SELECT state FROM submission_intake_operations WHERE id=:id"),
                                     {"id": operation}) == "receiving"
-    result = await composition.sweep_sealed_submission_sources(intake.factory, settings_for(intake))
+    result = await composition.sweep_submission_sources(intake.factory, settings_for(intake))
     assert result["abandoned"] == 1 and result["confirmed"] == 0
 
 
@@ -251,7 +251,7 @@ async def test_expired_recovery_rechecks_service_after_waiting_for_task(intake, 
     try:
         async with intake.factory.begin() as blocker:
             await blocker.execute(text("SELECT id FROM workstream_tasks WHERE id=:id FOR UPDATE"), {"id": intake.task})
-            recovery = asyncio.create_task(composition.sweep_sealed_submission_sources(intake.factory, settings_for(intake)))
+            recovery = asyncio.create_task(composition.sweep_submission_sources(intake.factory, settings_for(intake)))
             await asyncio.wait_for(authorized.wait(), timeout=10)
             await service_link_state(intake.factory, ServiceIdentity.ARTIFACT_SOURCE_CLEANUP, active=False)
             before = await state(intake)
