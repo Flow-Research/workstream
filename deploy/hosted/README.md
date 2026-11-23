@@ -21,6 +21,26 @@ model call. The [capability ledger](../../docs/roadmap_status.md) and
 record what has actually been exercised; neither makes this directory an
 automatic installer or qualifies another host.
 
+## App host without KVM
+
+Set `WORKSTREAM_HOSTED_PROFILE=app` and pin a backend image built from a release
+that includes this profile. Remove `WORKSTREAM_CHECKER_CONFIG_FILE`,
+`WORKSTREAM_CHECKER_SERVICE_BINARY`, `WORKSTREAM_CHECKER_SERVICE_BINARY_SHA256`,
+both `WORKSTREAM_ARTIFACT_INTAKE_*_DIGEST` values, and any trial-authority
+selectors from the release environment. Use the normal hosted preflight,
+migration, AWS proof and `compose.py ... resume` commands. The app profile
+requires the same database, broker, identity, parser, and provider setup as the
+single-host profile. It starts the configured setup model proxy before the
+ordinary worker. API and worker use local ART scratch for their other work.
+
+ZIP preparation through the API or MCP returns a retryable HTTP 503 while this
+profile is active. POST evaluation requests and reconciliation remain in
+PostgreSQL until checker delivery is available. Artifact verification, guide
+compilation, and ordinary OUTBOX delivery, including completed evaluation
+delivery, continue. The `single-host` profile, or an unset profile, keeps the
+native Smol readiness checks and processes all delivery types. Private ingress
+and worker attachment for a second checker host require separate qualification.
+
 ## Trust boundary
 
 The native node uses KVM and its delegated cpu/memory/pids cgroup, under the same

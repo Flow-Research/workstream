@@ -13,6 +13,7 @@ from uuid import UUID
 from preflight import (
     PreflightError,
     compose_environment,
+    local_checker_enabled,
     load_checker_config,
     parse_environment,
     render_compose,
@@ -39,8 +40,10 @@ def parse_args() -> argparse.Namespace:
 
 def resume_release(environment_path: Path, values: dict[str, str]) -> int:
     """Reconcile an installed release after reboot, without pulling or migrating."""
-    checker_config = load_checker_config(Path(values["WORKSTREAM_CHECKER_CONFIG_FILE"]))
-    validate_checker_config(checker_config, values)
+    checker_config = None
+    if local_checker_enabled(values):
+        checker_config = load_checker_config(Path(values["WORKSTREAM_CHECKER_CONFIG_FILE"]))
+        validate_checker_config(checker_config, values)
     validate_private_host_inputs(values, require_node=False)
     phases: list[list[str]] = []
     if values.get("WORKSTREAM_POSTGRES_IMAGE"):
@@ -54,6 +57,19 @@ def resume_release(environment_path: Path, values: dict[str, str]) -> int:
         result = run_compose(environment_path, values, phase, cached_images=True)
         if result:
             return result
+    if checker_config is not None:
+        result = resume_native_checker(checker_config, values)
+        if result:
+            return result
+    return run_compose(
+        environment_path, values,
+        ["up", "--detach", "--wait", "--wait-timeout", "120"],
+        cached_images=True,
+    )
+
+
+def resume_native_checker(checker_config, values: dict[str, str]) -> int:
+    """Start and qualify the local native service before releasing its clients."""
     try:
         for operation in ("reset-failed", "start"):
             result = subprocess.run(
@@ -75,11 +91,7 @@ def resume_release(environment_path: Path, values: dict[str, str]) -> int:
             if time.monotonic() >= deadline:
                 raise
             time.sleep(2)
-    return run_compose(
-        environment_path, values,
-        ["up", "--detach", "--wait", "--wait-timeout", "120"],
-        cached_images=True,
-    )
+    return 0
 
 
 def main() -> int:
@@ -121,17 +133,18 @@ def main() -> int:
         if proxy_bootstrap and values["WORKSTREAM_MODEL_PROXY_ENABLED"] != "true":
             raise PreflightError("model proxy bootstrap requires an enabled proxy")
         if launch or migration or points:
-            checker_config = load_checker_config(
-                Path(values["WORKSTREAM_CHECKER_CONFIG_FILE"])
-            )
-            validate_checker_config(checker_config, values)
+            checker_config = None
+            if local_checker_enabled(values):
+                checker_config = load_checker_config(Path(values["WORKSTREAM_CHECKER_CONFIG_FILE"]))
+                validate_checker_config(checker_config, values)
             if proxy_bootstrap or migration or proof_bootstrap or points:
                 # No API, worker or producer is released in these fixed stages.
                 validate_private_host_inputs(values, require_node=False)
             else:
                 validate_private_host_inputs(values)
-                validate_smol_runtime(checker_config, values)
-                validate_trusted_intake(values)
+                if checker_config is not None:
+                    validate_smol_runtime(checker_config, values)
+                    validate_trusted_intake(values)
         if args.compose_arguments and args.compose_arguments[0] == "proof":
             if (
                 len(args.compose_arguments) != 3

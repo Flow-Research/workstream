@@ -1,6 +1,7 @@
 name: ${COMPOSE_PROJECT_NAME:?set COMPOSE_PROJECT_NAME in the release environment file}
 
 x-backend-environment: &backend-environment
+  WORKSTREAM_HOSTED_PROFILE: ${WORKSTREAM_HOSTED_PROFILE:-single-host}
   WORKSTREAM_ARTIFACT_ADMISSION_DEPLOYMENT_MAXIMUM_BYTES: "4294967296"
   WORKSTREAM_ARTIFACT_ADMISSION_PRODUCER_MAXIMUM_BYTES: "268435456"
   WORKSTREAM_ARTIFACT_ADMISSION_PROJECT_MAXIMUM_BYTES: "1073741824"
@@ -37,17 +38,12 @@ x-backend-environment: &backend-environment
   WORKSTREAM_ARTIFACT_S3_WRITE_TIMEOUT_SECONDS: ${WORKSTREAM_ARTIFACT_S3_WRITE_TIMEOUT_SECONDS:?set the measured S3 write timeout}
   WORKSTREAM_ARTIFACT_SCRATCH_ROOT: ${WORKSTREAM_DEPLOYMENT_ROOT:-/var/lib/workstream}/scratch
   WORKSTREAM_ARTIFACT_PREPARATION_TOTAL_DEADLINE_SECONDS: ${WORKSTREAM_ARTIFACT_PREPARATION_TOTAL_DEADLINE_SECONDS:?set the artifact preparation deadline}
-  WORKSTREAM_ARTIFACT_INTAKE_SERVICE_SOCKET: ${WORKSTREAM_DEPLOYMENT_ROOT:-/var/lib/workstream}/checker-runtime/checker.sock
-  WORKSTREAM_ARTIFACT_INTAKE_IMAGE_DIGEST: ${WORKSTREAM_ARTIFACT_INTAKE_IMAGE_DIGEST:?set the pinned trusted intake image digest}
-  WORKSTREAM_ARTIFACT_INTAKE_CONFIG_DIGEST: ${WORKSTREAM_ARTIFACT_INTAKE_CONFIG_DIGEST:?set the pinned trusted intake config digest}
   WORKSTREAM_ARTIFACT_STORE_BACKEND: s3_compatible
   WORKSTREAM_ARTIFACT_COMPLETE_READ_DEADLINE_SECONDS: ${WORKSTREAM_ARTIFACT_COMPLETE_READ_DEADLINE_SECONDS:?set the measured complete-read deadline}
   WORKSTREAM_ARTIFACT_TERMINAL_PERSISTENCE_MARGIN_SECONDS: ${WORKSTREAM_ARTIFACT_TERMINAL_PERSISTENCE_MARGIN_SECONDS:?set the measured terminal persistence margin}
   WORKSTREAM_AUTH_PROVIDER: flow
   WORKSTREAM_DEBUG: "false"
   WORKSTREAM_ENVIRONMENT: production
-  WORKSTREAM_EXTERNAL_CHECKER_MATERIAL_ROOT: ${WORKSTREAM_DEPLOYMENT_ROOT:-/var/lib/workstream}/scratch
-  WORKSTREAM_EXTERNAL_CHECKER_SERVICE_SOCKET: ${WORKSTREAM_DEPLOYMENT_ROOT:-/var/lib/workstream}/checker-runtime/checker.sock
   WORKSTREAM_OBSERVABILITY_LOG_LEVEL: ${WORKSTREAM_OBSERVABILITY_LOG_LEVEL:-INFO}
   WORKSTREAM_OBSERVABILITY_OTLP_ENDPOINT: ${WORKSTREAM_OBSERVABILITY_OTLP_ENDPOINT:-}
   WORKSTREAM_OBSERVABILITY_TRACE_SAMPLE_RATIO: ${WORKSTREAM_OBSERVABILITY_TRACE_SAMPLE_RATIO:-0.1}
@@ -188,10 +184,6 @@ services:
         source: ${WORKSTREAM_DEPLOYMENT_ROOT:-/var/lib/workstream}/scratch
         target: ${WORKSTREAM_DEPLOYMENT_ROOT:-/var/lib/workstream}/scratch
       - type: bind
-        source: ${WORKSTREAM_DEPLOYMENT_ROOT:-/var/lib/workstream}/checker-runtime
-        target: ${WORKSTREAM_DEPLOYMENT_ROOT:-/var/lib/workstream}/checker-runtime
-        read_only: true
-      - type: bind
         source: ${WORKSTREAM_ARTIFACT_S3_ROLES_ANYWHERE_RUNTIME_CERTIFICATE_HOST_FILE:?set the private runtime certificate path}
         target: /run/workstream-roles-anywhere/certificate.pem
         read_only: true
@@ -243,10 +235,6 @@ services:
       - type: bind
         source: ${WORKSTREAM_DEPLOYMENT_ROOT:-/var/lib/workstream}/scratch
         target: ${WORKSTREAM_DEPLOYMENT_ROOT:-/var/lib/workstream}/scratch
-      - type: bind
-        source: ${WORKSTREAM_DEPLOYMENT_ROOT:-/var/lib/workstream}/checker-runtime
-        target: ${WORKSTREAM_DEPLOYMENT_ROOT:-/var/lib/workstream}/checker-runtime
-        read_only: true
       - type: bind
         source: ${WORKSTREAM_DEPLOYMENT_ROOT:-/var/lib/workstream}/guide-runtime
         target: ${WORKSTREAM_DEPLOYMENT_ROOT:-/var/lib/workstream}/guide-runtime

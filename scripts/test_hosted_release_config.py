@@ -122,6 +122,54 @@ class HostedReleaseConfigTests(unittest.TestCase):
             "WORKSTREAM_REDIS_CONFIG_FILE": str(self.root / "redis.conf"),
         }
 
+    def app_environment(self):
+        values = self.environment | {preflight.HOSTED_PROFILE_KEY: "app"}
+        for key in (*preflight.NATIVE_REQUIRED_KEYS, "WORKSTREAM_CHECKER_SERVICE_BINARY"):
+            values.pop(key)
+        self.environment_path.write_text(
+            "\n".join(f"{key}={value}" for key, value in values.items()) + "\n",
+            encoding="utf-8",
+        )
+        return values
+
+    def test_app_profile_keeps_inference_and_rejects_native_runtime_custody(self):
+        values = self.app_environment()
+        preflight.validate_environment(values)
+        rendered = preflight.render_compose(self.environment_path, values)
+        preflight.validate_compose(rendered, values)
+        services = rendered["services"]
+        self.assertIn("model-proxy", services)
+        self.assertIn("guide-document-parser", services["worker"]["depends_on"])
+        self.assertIn("model-proxy", services["worker"]["depends_on"])
+        paths = preflight.deployment_paths(values)
+        for role in ("api", "worker"):
+            self.assertFalse(set(preflight.NATIVE_ENVIRONMENT_KEYS) & services[role]["environment"].keys())
+            self.assertNotIn(str(paths.socket_root), preflight._service_mounts(services[role]))
+        services["worker"]["environment"]["WORKSTREAM_ARTIFACT_INTAKE_SERVICE_SOCKET"] = str(paths.socket)
+        with self.assertRaisesRegex(preflight.PreflightError, "native checker environment"):
+            preflight.validate_compose(rendered, values)
+        with self.assertRaisesRegex(preflight.PreflightError, "cannot configure a native checker"):
+            preflight.validate_environment(values | {"WORKSTREAM_CHECKER_CONFIG_FILE": str(self.checker_path)})
+        with self.assertRaisesRegex(preflight.PreflightError, "requires the trusted model proxy"):
+            preflight.validate_environment(values | {"WORKSTREAM_MODEL_PROXY_ENABLED": "false"})
+
+    def test_app_profile_starts_and_resumes_without_native_readiness(self):
+        values = self.app_environment()
+        self.checker_path.unlink()
+        with (
+            patch.object(compose, "validate_private_host_inputs") as private,
+            patch.object(compose, "validate_smol_runtime", side_effect=AssertionError("native runtime")),
+            patch.object(compose, "validate_trusted_intake", side_effect=AssertionError("native intake")),
+            patch.object(compose, "resume_native_checker", side_effect=AssertionError("native systemd")),
+            patch.object(compose, "run_compose", return_value=0) as run,
+        ):
+            result, error = self._compose_main("up", "--detach")
+            self.assertEqual((result, error), (0, ""))
+            private.assert_called_once_with(values)
+            self.assertEqual(compose.resume_release(self.environment_path, values), 0)
+        self.assertEqual(run.call_args_list[-2].args[2][-1], "model-proxy")
+        self.assertEqual(run.call_args_list[-1].args[2], ["up", "--detach", "--wait", "--wait-timeout", "120"])
+
     def test_local_data_shutdown_preserves_dependencies_until_consumers_stop(self):
         values = self.local_data_environment()
         with patch.object(preflight.subprocess, "run", return_value=subprocess.CompletedProcess([], 0)) as run:
