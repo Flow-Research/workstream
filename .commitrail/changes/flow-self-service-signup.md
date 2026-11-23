@@ -364,6 +364,11 @@ Relationship-conflict verification now supplies both empty observation values
 the completion operation expects and preserves the submission task contexts.
 Retained stale-claim and revision-error test callers use that same signature;
 their fencing, retry and error-propagation assertions remain unchanged.
+The migration preflight admits the new current head and its immediate predecessor,
+including repeat upgrades; historical-schema tests retain the two provider tables
+only when inspecting their actual predecessor schema. Local-provider lifecycle
+fixtures explicitly select no S3 credential mode, preserving their concurrency
+and shutdown assertions.
 Direct-user credential resolution runs outside the S3 pool deadline and within
 the existing identity and operation deadlines. A first upload with a six-second
 identity load succeeds under the ten-second identity budget and five-second S3
