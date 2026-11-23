@@ -7154,3 +7154,47 @@ without restart: no PG lock blockers, two finalized operations then third PRE
 confirmed forward progress. Required scoped architecture/security/CI reviews found
 no actionable issue. Ruff/record/whitespace pass. Full CI, hosted container/native
 provider qualification and remaining spec scenarios are still open.
+
+Late coverage/accepted deadline scope: migrate
+ test_late_coverage_return_inherits_the_expired_window_and_expires_once in
+backend/tests/tasks/submission_dispatch/test_revision_expiry.py to raw ZIP T4 and
+real OUTBOX T5. Wait across the actual original PG deadline after acceptance and
+before finalization to verify accepted custody survives it. Preserve zero-round
+coverage semantics, inherited anchor/deadline, stale first expiry no-effect and
+exact single second-source expiration/statuses/taskrelease. Add accepted-before/
+finalized-after deadline assertions and one PRE. Allowed files are that test and
+this record; no product/SQL/shared helper changes or historical qualification.
+Use existing controlled runtime and source finalizer, retain75second window unless
+measured evidence requires test scheduling allowance. Required QA/security/test
+review, isolated PG journey plus Ruff/structure/record/diff gates. Review focus:
+T4 owns deadline eligibility; T5 cannot invalidate accepted work after deadline.
+
+Late coverage v1 failed155.17s after actual T5: test assumed nonexistent
+Submission.created_at. Correct assertion uses owner-persisted intake.finalized_at
+and exact finalized_submission_id. Acceptance beat unchanged75second deadline;
+no timing allowance needed. Cleanuptrue. Teardown cross-loop log is secondary to
+explicit AttributeError. No product change or downstream expiry qualification
+from v1; rerun full targeted journey with the corrected owner timestamp.
+
+Late coverage v2 failed359.67s in unchanged completed_evidence fixture before
+entering changed journey: initial POST routing_recommendation mismatch; actual
+status/source were absent from assertion. Cleanuptrue. Host load was high, but
+no timeout root cause is established. Expand allowed test-only scope to
+backend/tests/checkers/execution/completion_fixture.py assertion diagnostics:
+retain exact comparison, report status/outcome_source/routing_recommendation on
+failure. No deadlines or policy changes. This distinguishes infrastructure or
+lease outcome from a policy-routing mismatch on next run; a pass alone will not
+claim v2 root cause resolved.
+
+Late coverage v3 terminal0:1passed261.72s/schema0084/allcleanuptrue
+(/tmp/submission-late-coverage-v3.json/.log). Testblob
+70b4abce4b885a32ebae091427fca139f0c65d1c; diagnosticfixtureblob
+2430d602328e062520eb7ce912d880f9f7aafd9c. Real acceptance precedes unchanged75s
+window, owner-recorded finalization follows it, inherited coverage round0/window
+and exactly one second-source expiration/status/task release pass. V2 initial
+fixture mismatch remains unexplained; successful v3 is not root-cause proof.
+Ruff/record/whitespace passed; structural v2 passed before diagnostic-only two-line
+fixture assertion change. Scoped reviewer found no weakening or owner mismatch.
+Shared modified-content execution overa326bec95, not independent/cleancommit
+rerun or full policy-duration/native-provider qualification. Old expiry-race
+creation consumers and full A01-A35/C01-C07 goal remain open.

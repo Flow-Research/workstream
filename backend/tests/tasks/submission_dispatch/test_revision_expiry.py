@@ -374,9 +374,11 @@ async def test_late_coverage_return_inherits_the_expired_window_and_expires_once
     Both coverage sources share one deadline: the superseded first source's
     expiry acknowledges without effect and only the second attempt is rejected.
     """
-    from app.modules.tasks.schemas import AdmissionBackedSubmissionResponse
+    from app.modules.tasks.models import SubmissionDispatch
+    from app.modules.artifacts.intake.models import SubmissionIntakeOperation
+    from tests.retained_material_fixtures import finalize_retained_intake
     from tests.tasks.submission_dispatch.test_revision_capacity import (
-        COVERAGE_GAP, _fail_current_submission,
+        COVERAGE_GAP, _fail_current_submission, _revision_http_runtime, _revision_upload_headers,
     )
 
     async with remediation_source(
@@ -388,17 +390,29 @@ async def test_late_coverage_return_inherits_the_expired_window_and_expires_once
             deliver=False, window_seconds=75,
         )
         async with _client(h, monkeypatch, isolated_database_env) as client:
-            prepared, admission = await _ready_replacement(h, revision_archive(h.data))
+            data = revision_archive(h.data)
+            settings, errors, calls = await _revision_http_runtime(h, client, tmp_path, monkeypatch, data)
             created = await client.post(
-                f"/api/v1/tasks/{h.request.task_id}/submissions", json=_payload(prepared, admission),
+                f"/api/v1/tasks/{h.request.task_id}/submissions",
+                headers=_revision_upload_headers(h), content=data,
             )
-            assert created.status_code == 201, created.text
-        h.created = AdmissionBackedSubmissionResponse.model_validate(created.json())
-        await _fail_current_submission(h, findings=COVERAGE_GAP, route=False)
+            assert created.status_code == 202, created.text
+            assert len(calls) == 1 and not errors, errors
         deadline = datetime.fromisoformat(first_window["deadline_at"])
+        assert datetime.fromisoformat(created.json()["accepted_at"].replace("Z", "+00:00")) < deadline
         async with h.factory() as session:
             remaining = (deadline - await session.scalar(select(func.clock_timestamp()))).total_seconds()
         await asyncio.sleep(max(0, remaining) + 0.5)
+        submission_id = await finalize_retained_intake(h.factory, SimpleNamespace(
+            operation_id=UUID(created.json()["operation_id"]), store=h.store.wrapped,
+            namespace=h.namespace, settings=settings))
+        async with h.factory() as session:
+            h.created = (await session.get(SubmissionDispatch, submission_id)).result()
+            assert h.created.submission_version == 2
+            operation = await session.get(SubmissionIntakeOperation, UUID(created.json()["operation_id"]))
+            assert operation.finalized_submission_id == str(submission_id)
+            assert operation.finalized_at >= deadline
+        await _fail_current_submission(h, findings=COVERAGE_GAP, route=False)
         second_source = await _fixture_revision_context(h)
         async with h.factory() as session:
             window = await session.get(TaskRevisionPreparation, h.revision_preparation_id)

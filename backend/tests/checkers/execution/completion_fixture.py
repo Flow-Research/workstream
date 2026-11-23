@@ -43,7 +43,9 @@ async def completed_evidence(
         ).evaluate_post_submission(h.request)
         async with h.factory() as session:
             h.run = await session.get(CheckerRun, str(h.result.attempt_id))
-            assert h.run.routing_recommendation == recommendation
+            assert h.run.routing_recommendation == recommendation, (
+                h.run.status, h.run.outcome_source, h.run.routing_recommendation,
+            )
             event = await session.scalar(select(OutboxEvent).where(
                 OutboxEvent.event_id == h.run.completion_event_id,
             ))
