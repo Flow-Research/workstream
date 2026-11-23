@@ -28,6 +28,7 @@ from app.modules.artifacts.intake.progress import SubmissionOperationReadService
 from app.modules.artifacts.selected_pre_submit_execution import SelectedPreSubmitExecutionService, SelectedPreSubmitSourceReads
 from app.modules.artifacts.service import artifact_storage_namespace_spec
 from app.modules.authorization.api.submission_intake import IntakeAuthorityDenied
+from app.modules.projects.api.locked_policy import ProjectLockedPolicyContextUnavailable
 from app.modules.checkers.api.source_contracts import source_contracts_context
 from app.modules.checkers.api.selected_pre_submit import (
     SelectedPreSubmitAuthorityUnavailable, SelectedPreSubmitInfrastructureUnavailable,
@@ -1142,7 +1143,7 @@ class ConfiguredSubmissionCommand:
             raise
         except (IntakeCommitUnknown, IntakeAuthorityDenied, IntakeCustodyConflict,
                 SubmissionSourceCapacityConflict, TaskSubmissionContextUnavailable,
-                ArtifactStoreError, ExternalServiceAdapterError, SQLAlchemyError, ValidationError,
+                ProjectLockedPolicyContextUnavailable, ArtifactStoreError, ExternalServiceAdapterError, SQLAlchemyError, ValidationError,
                 SelectedPreSubmitAuthorityUnavailable, SelectedPreSubmitInfrastructureUnavailable,
                 SelectedPreSubmitRequestConflict, SelectedPreSubmitUnavailable) as exc:
             failure = _submission_public_failure(exc)

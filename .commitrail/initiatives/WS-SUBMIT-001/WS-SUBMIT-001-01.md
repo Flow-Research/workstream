@@ -7690,3 +7690,48 @@ Scoped QA and ARCH/SEC inspection found no remaining actionable finding after
 V2; QA-LINEAGE001 resolved by exact direct ART exception oracle. Ruff, record
 and whitespace pass; structure validation passed, subsequent oracle correction
 only removed lines. Reviewed test blob30964b2a432124d548d430124743a0314cd73e72.
+
+Next bounded change migrates locked-policy refusal tests from hidden creation
+to public raw-ZIP T1. Allowed: backend/tests/authorization/task_authority/
+test_submission_policy.py and this record initially. Preserve detached corrupt
+effective/compiled policy, malformed TASK lock and crossed POST sidecar cases;
+assert exact owner error plus public envelope and no body/PRE/intake/charge/
+Submission writes. Retain SQL lock mutation guard and rollback, remove only
+unreachable creation after failing flush. No policy relaxation, schema or
+historical-data changes. Risk: authorization/custody proof cutover; QA and
+ARCH/SEC review, focused isolated PG module, Ruff/structure/record checks.
+Human focus: precise refusal must precede unrelated cardinality/provider errors.
+
+Policy HTTP V1 reproduced exact PROJECT custody refusal followed by generic500
+internal_error instead of existing503 submission_infrastructure_unavailable;
+3 SQL guards passed, first public case failed (205.10s), schema0086 and cleanup
+complete (/tmp/submission-policy-http-v1.log/.json). Expand allowed scope only
+to backend/app/adapters/artifacts/__init__.py: include the existing PROJECT
+owner exception in ConfiguredSubmissionCommand.submit translation. Preserve
+private diagnostics and all existing error semantics; no new public code.
+Rerun all7 cases and module/authorization boundaries. Structure scanner first
+exited139 without output; diagnostic rerun active, no pass claimed for first.
+
+Current product fix passed92 module/authorization boundaries in386.93s
+(/tmp/submission-policy-boundaries.log). Unchanged full structure checker
+passed under system Python3.12.3. UV Python3.12.13 crashed twice with139;
+faulthandler points to validate_assertion_maps call at line736. No checker or
+policy bypass/edit; /tmp/submission-policy-structure-v2.log retains crash and
+/tmp/submission-policy-structure-system.log is the successful system run.
+Scoped ARCH/SEC and QA code inspection found no actionable issue; integration
+closure remains subject to terminal V2 evidence. No provider qualification.
+
+Policy HTTP V2 passed all7 in289.97s; schema0086 and all database/MinIO cleanup
+complete (/tmp/submission-policy-http-v2.log/.json). Three SQL lock mutation
+guards and four public refusal cases preserve rollback and exact owner errors.
+PROJECT faults now yield existing503; malformed TASK context remains404.
+Forbidden body, no PRE, and full selected custody/audit/outbox snapshots pass.
+Evidence is shared precommit over168e5268f, not independent frozen-head or
+provider qualification. Product blob1474a120c3b8167034369496abef3153b1d30f03;
+test blobba939131bd87423af06ce32f268d9bce62c3e411. Full goal remains active.
+
+Remaining traced old writer dependencies are composition authorization tests,
+the isolated ART final-denial composition test, named old commit-race tests,
+and a real0047 cap-source fixture using replacement creation. Retire shared
+writer only with those contracts preserved, including historical-row proof;
+current create_accepted remains production T5. No new PR or merge request.
