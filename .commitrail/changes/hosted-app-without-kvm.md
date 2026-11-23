@@ -4,10 +4,14 @@
 - Durable disposition: Complete
 - Intended merge outcome: The permanent Workstream services can boot and process ordinary durable work while checker execution is offline.
 
-## Intent and current behavior
+## Intent
 
 Run the main API, MCP, Flow Identity, PostgreSQL, Redis, guide parser, and
-inference proxy on an app host without KVM. The current
+inference proxy on an app host without KVM.
+
+## Current behavior
+
+The current
 [hosted composition](../../deploy/hosted/README.md) checks for native Smol
 before running the API or worker. The shared [outbox scan](../../backend/app/workers/outbox.py)
 currently delivers checker requests through the same queue and PostgreSQL
@@ -39,7 +43,7 @@ contracts. Existing checker rows remain available for a later checker worker.
 Private second-node routing, model relay wiring, provisioning and cloud
 changes are outside this migration prerequisite.
 
-## Acceptance criteria and verification
+## Acceptance criteria
 
 - [x] App-only preflight and startup select the complete ordinary stack with
   no checker config, socket, image assets, or hardware. They enforce archive
@@ -53,6 +57,8 @@ changes are outside this migration prerequisite.
 - [x] The regular hosted profile still requires native prerequisites and
   the same dedicated model credentials, intake image, and active readiness.
 
+## Evidence
+
 | Claim | Evidence |
 |---|---|
 | Render, preflight and startup roles | 85 hosted configuration tests passed, using real Compose rendering and controlled startup dependencies. |
@@ -60,11 +66,14 @@ changes are outside this migration prerequisite.
 | Durable event filtering and wrong-role refusal | The repository's isolated PostgreSQL 16 runner passed the focused outbox test covering checker and completion events, due and expired states, and keyset selection. |
 | Static checks | Affected backend lint, stale wording, Markdown links and whitespace passed. |
 
-## Risk and review
+## Risk and review routing
 
 - Risk class: L1.
 - Required reviewers: architecture, security, QA, product/operations, documentation, test delta.
 - Human review focus: preserved AWS and identity startup gates, explicit
   offline response, inference availability, and retained checker delivery.
+
+## Reconciliation
+
 - Current-source reconciliation: verified against `a2154e8a`.
 - Next usable boundary: qualify private checker-host ingress and worker attachment to the same durable owners.
