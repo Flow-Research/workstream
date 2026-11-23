@@ -139,6 +139,7 @@ class TransactionalTaskRevisionExpiryHandler:
 
     async def __call__(self, envelope):
         from app.adapters.audit import task_revision_expiry_audit
+        from app.adapters.artifacts import submission_intake_revision_expiry_port
         from app.adapters.outbox import outbox_append, outbox_invocation_fence
         from app.modules.tasks.api.revision_expiry import TaskRevisionExpiryUnavailable
         from app.modules.tasks.revision.expiry import TaskRevisionExpiryOperation
@@ -150,7 +151,7 @@ class TransactionalTaskRevisionExpiryHandler:
                     fence=outbox_invocation_fence(session),
                     authorization=self._authorization(session),
                     audit=task_revision_expiry_audit(session),
-                    outbox=outbox_append(session),
+                    outbox=outbox_append(session), intake=submission_intake_revision_expiry_port(session),
                 ).expire(envelope)
             return outcome
         except TaskRevisionExpiryUnavailable:

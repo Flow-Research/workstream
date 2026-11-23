@@ -124,6 +124,10 @@ class ForegroundSubmissionCommand:
                     raise IntakeCommitUnknown("submission terminal outcome is unresolved") from None
             else:
                 if not finished and not isinstance(exc, asyncio.CancelledError):
+                    if await self._admission.revision_expired(
+                        owner, metadata, actor_id=actor_id, idempotency_key=idempotency_key,
+                    ):
+                        raise SubmissionIntakeFailure("revision_deadline_expired") from None
                     raise IntakeCommitUnknown("submission foreground ownership has changed") from None
             if isinstance(exc, SubmissionUploadTimeout):
                 raise SubmissionIntakeFailure(code) from None

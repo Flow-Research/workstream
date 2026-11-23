@@ -12,7 +12,7 @@ from app.modules.tasks.submission_attempts import record_attempt_outcome
 from app.modules.tasks.api.revision_expiry import (
     REVISION_EXPIRY_EVENT, TaskRevisionExpiryAuthorityFacts, TaskRevisionExpiryEvidence,
     TaskRevisionExpiryTarget, TaskRevisionExpiryUnavailable,
-    revision_expiry_resource_digest,
+    revision_expiry_resource_digest, TaskRevisionExpiryIntakePort,
 )
 from app.modules.tasks.models import Submission
 from app.modules.tasks.repository import TaskRepository
@@ -25,12 +25,12 @@ from app.modules.tasks.revision.models import TaskRevisionExpiration, TaskRevisi
 class TaskRevisionExpiryOperation:
     """Release the exact overdue assignment without changing its Submission."""
 
-    def __init__(self, session, *, observer, fence, authorization, audit, outbox):
+    def __init__(self, session, *, observer, fence, authorization, audit, outbox, intake: TaskRevisionExpiryIntakePort):
         """Use owner ports and the caller session for one atomic expiry effect."""
         self._session, self._repo = session, TaskRepository(session)
         self._observer, self._fence = observer, fence
         self._authorization, self._audit = authorization, audit
-        self._outbox = outbox
+        self._outbox, self._intake = outbox, intake
 
     async def expire(self, envelope: OutboxEventEnvelope) -> HandlerOutcome:
         """Revalidate TASK-first custody, then expire or replay the exact window."""
@@ -128,9 +128,7 @@ class TaskRevisionExpiryOperation:
                     or assignment.status != "active" or assignment.released_at is not None):
                 return HandlerOutcome.ACKNOWLEDGE
             if task.active_submission_operation_id is not None:
-                # Foreground custody must drain through its owner. T4 still
-                # rechecks the original deadline before accepting this source.
-                return HandlerOutcome.RETRY
+                await self._intake.expire_revision(UUID(task.active_submission_operation_id), target)
             return await self._record_expiration(
                 target=target, envelope=envelope, head=head, authority=authority,
                 facts=facts, task=task, assignment=assignment,

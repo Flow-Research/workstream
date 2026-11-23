@@ -315,6 +315,25 @@ class ForegroundIntakeAdmission:
             )
         return True
 
+    async def revision_expired(
+        self, owner: IntakeReservationOwner, metadata: SubmissionIntakeMetadata, *,
+        actor_id: UUID, idempotency_key: UUID,
+    ) -> bool:
+        """Resolve an expiry-fenced foreground owner under current read authority."""
+        async with self._root() as (session, authority):
+            repository = SubmissionIntakeRepository(session, self._tasks(session))
+            row = await repository._lock(owner.operation_id)
+            await authority.authorize_read(IntakeOperationReadFacts(
+                UUID(row.id), UUID(row.project_id), UUID(row.task_id), UUID(row.actor_profile_id)))
+            if (row.actor_profile_id != str(actor_id) or row.idempotency_key != str(idempotency_key)
+                    or row.metadata_sha256 != metadata.metadata_sha256()):
+                raise IntakeCustodyConflict("submission_idempotency_conflict")
+            expired = (row.state in {"cancelled", "abandoned"}
+                       and row.failure_code == "revision_deadline_expired"
+                       and row.lease_id == str(owner.lease_id)
+                       and row.lease_generation == owner.generation + 1)
+        return expired
+
     @staticmethod
     def _match_acceptance_command(row, request, terminal_digest, *, accepted):
         if (row.id != str(request.source.location.operation_id)
@@ -403,7 +422,7 @@ class ForegroundIntakeAdmission:
         self, metadata: SubmissionIntakeMetadata, *, actor_id: UUID, idempotency_key: UUID,
         operation_id: UUID, checkers: Callable[[AsyncSession], SelectedPreSubmitCoordinationPort],
     ) -> dict:
-        """Project retained failure after verified-byte replay and fresh read authority."""
+        """Project retained failure under fresh read authority after replay/terminal observation."""
         async with self._root() as (session, authority):
             repository = SubmissionIntakeRepository(session, self._tasks(session))
             row = await repository._lock(operation_id)
@@ -416,7 +435,7 @@ class ForegroundIntakeAdmission:
                 return await self._accepted_receipt(session, authority, row)
             if row.state in {"receiving", "pre_checking"}:
                 raise IntakeCustodyConflict("submission_operation_in_progress")
-            if row.raw_sha256 is None or row.raw_byte_count is None:
+            if (row.raw_sha256 is None or row.raw_byte_count is None) and row.failure_code != "revision_deadline_expired":
                 raise IntakeCustodyConflict("submission_operation_terminal")
             if row.state == "rejected" and row.failure_code == "pre_submission_checker_failed":
                 terminal = await checkers(session).read_source_terminal(source_operation_id=operation_id)
@@ -433,7 +452,7 @@ class ForegroundIntakeAdmission:
             else:
                 code = row.failure_code if row.failure_code in {
                     "submission_packet_invalid", "submission_archive_limit_exceeded",
-                    "submission_upload_timeout", "submission_infrastructure_unavailable",
+                    "submission_upload_timeout", "submission_infrastructure_unavailable", "revision_deadline_expired",
                 } else "submission_operation_terminal"
                 failure = SubmissionIntakeFailure(code)
         # Commit the current read authorization before returning QC feedback.
@@ -450,6 +469,8 @@ class ForegroundIntakeAdmission:
         metadata = SubmissionIntakeMetadata.model_validate(metadata)
         original = await self._read(metadata, actor_id, idempotency_key)
         if original.raw_sha256 is None or original.raw_byte_count is None:
+            if original.state in {"cancelled", "abandoned"} and original.failure_code == "revision_deadline_expired":
+                return original
             code = "submission_operation_in_progress" if original.state in {"receiving", "pre_checking"} else "submission_operation_terminal"
             raise IntakeCustodyConflict(code)
         raw = await hash_submission_replay(

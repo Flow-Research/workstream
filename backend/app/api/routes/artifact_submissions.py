@@ -88,7 +88,9 @@ async def submit_source(
             details = {"status": "failed", "eligible_to_submit": False, "results": exc.pre_submission_results or []}
         return error_response(
             request, status_code=_failure_status(exc.code), code=exc.code,
-            message="Submission unavailable" if exc.code == "submission_unavailable" else exc.code,
+            message=("Your assignment expired. Reclaim the task if it is still available."
+                     if exc.code == "revision_deadline_expired" else
+                     "Submission unavailable" if exc.code == "submission_unavailable" else exc.code),
             details=details, retryable=exc.code in {"submission_capacity_exceeded", "submission_infrastructure_unavailable", "submission_outcome_unknown"},
         )
     return SubmissionAcceptedResponse.model_validate(receipt)

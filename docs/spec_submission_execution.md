@@ -414,7 +414,9 @@ Cleanup state is orthogonal: `not_claimed`, `claimed`, `deleted`. It records a d
 - Existing historical `submitted` records may remain valid; the new path does not need to persist that intermediate state.
 - Assignment release/replacement/readiness operations must respect the active/pending operation guard. Absence of a Submission is not evidence that an accepted assignment may be recycled.
 
-No new contributor claim-expiry feature is introduced. Existing assignment/lifecycle operations must simply reject incompatible mutations while an operation owns the task.
+Existing revision expiry acts only on the current `needs_revision` task and its due revision window. Under the same task lock and authorized expiry transaction, it fences any receiving/PRE intake for that assignment, preserves source cleanup obligations, and returns the task to `ready`. Late foreground work cannot accept and reports `revision_deadline_expired`, with guidance to reclaim if available. An accepted `evaluation_pending` task is untouched and the expiry event is acknowledged. If later routing returns the task to `needs_revision`, that routing schedules its own expiry event; an inherited deadline already in the past makes the event immediately due.
+
+No new contributor claim-expiry feature is introduced. Other assignment/lifecycle operations must reject incompatible mutations while an operation owns the task.
 
 ## 8. Durable data and constraints
 

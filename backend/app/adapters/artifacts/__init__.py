@@ -936,6 +936,13 @@ def submission_bundle_preparation_reader(session: AsyncSession):
     return SubmissionBundlePreparationReader(session, runs=selected_pre_submit_run_reader(session))
 
 
+def submission_intake_revision_expiry_port(session):
+    """Bind ART invalidation to the authorized expiry's existing root transaction."""
+    from app.adapters.tasks import intake_task_custody_port
+    from app.modules.artifacts.intake.repository import SubmissionIntakeRepository
+    return SubmissionIntakeRepository(session, intake_task_custody_port(session))
+
+
 def submission_intake_pre_source_port(session):
     """Compose ART's locked source participation in the caller-owned T3 root."""
     from app.adapters.tasks import intake_task_custody_port

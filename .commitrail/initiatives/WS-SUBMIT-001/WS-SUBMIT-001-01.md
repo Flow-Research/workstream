@@ -7257,3 +7257,65 @@ whitespace pass. Review QA-EXPIRY001/002 closed with independent assertion probe
 Shared modified-content execution overa420f3e3c, not cleancommit/independent rerun.
 C05 finite retry-envelope liveness remains unresolved and blocks full readiness;
 no automatic eventual expiry, native provider or whole-spec qualification claim.
+
+User correction supersedes fb80e635e's foreground-deferral policy: expiry must
+ACK without release once TASK is evaluation_pending, but may expire a current
+needs_revision assignment even while upload/PRE is active. It must atomically
+invalidate that intake before ready/reclaim; late PRE cannot accept or affect a
+new assignment. Replace RETRY-behind-PRE rather than extend retry budgets. The
+C05 concern caused by that deferral is superseded for this race. Whether T4 may
+accept after clock deadline when T1 started earlier remains a pending user
+clarification; do not implement the assistant's proposed relaxation by assumption.
+
+Bounded correction scope: TASK expiry operation/API and composition adapter;
+ART-owned intake invalidation via a narrow injected port using current root
+transaction, exact task/assignment/actor/predecessor and consumed expiry authority;
+foreground terminal-error projection if needed; focused race/security tests and
+this record/current specification explanation. Preserve SQL ownership closure,
+generation fencing, source receipts/bytecharges and accepted work. No runtime
+wait inside expiry, storage deletion, cross-owner private model access, new
+service identity or relaxed authorization. Test both lock winners, receiving/PRE
+invalidation, late callback/refusal, exact reclaim isolation, rollback and sealed
+charge retention. Architecture/security and QA review required before closure;
+focused PG and structural/record/owner checks, then single PR708 commit. Human
+review focus: one atomic state winner and truthful reclaim guidance.
+
+Atomic expiry correction implements the existing TASK expiry root with an injected
+ART participant. It checks exact task/assignment/actor/predecessor and fences only
+receiving/PRE generations before clearing the task pointer; source charges remain.
+Foreground exception resolution uses fresh own-operation read authority and exact
+original lease/generation, actor/key/metadata. Receiving expiry with no committed
+EOF is a terminal observation without reading/resuming the body; sealed replay
+still checks hash/count. HTTP and operation-status reads preserve the expiry code.
+The current T4 deadline cutoff is unchanged. No new worker, timeout policy or
+contributor claim-expiry feature is added.
+
+Review QA-ATOMIC001/002 require reclaim-before-late-PRE and rollback with active
+intake; the added focused control exercises both with actual HTTP PRE, a committed
+expiry invocation, late injected failure, public reclaim and the old callback.
+The new assignment has no new active intake; this is assignment-isolation proof,
+not a claim to have exercised replacement of a newer non-null intake pointer.
+Architecture review found no authority/atomicity bypass. A lease crossing between
+clock samples can still cause the authoritative SQL guard to roll back expiry;
+normal delivery recovery retries it. No single-attempt availability claim or SQL
+relaxation is made. This corrects an already scoped capability, without changing
+roadmap delivery/readiness claims or qualifying providers/full-goal completion.
+
+Atomic correction proof: initial PRE race plus inherited late coverage control
+passed 2 tests in190.34s, schema0084, complete database/MinIO cleanup
+(/tmp/submission-expiry-atomic-v1.log/.json). The active-intake rollback and
+late-PRE-after-public-reclaim control passed1 in101.85s with complete cleanup
+(/tmp/submission-expiry-atomic-custody-v1.log/.json), including the operation-read
+expiry-code assertion. Its pytest child started12:10:29 after the final functional
+progress/test edits12:10:28; subsequent admission edit only clarified a docstring.
+Shared worktree evidence overfb80e635e, not clean-commit execution. QA design
+findings001/002 are covered by that executed control. Ruff, Commitrail, whitespace,
+test-structure and changed Markdown-link gates pass.
+
+Expanded atomic expiry run passed5 in346.38s/schema0084/all cleanup complete
+(/tmp/submission-expiry-atomic-v2.log/.json): receiving and PRE lock-race winners,
+same-key terminal replay, inherited expired-window routing, invalid service and
+committed-resource substitution, and late outbox/audit rollback. Separate custody
+control above proves active-intake rollback/reclaim isolation. Module/authorization
+boundary suite passed92 in101.54s. These are bounded shared local proofs; full-suite
+CI, provider qualification and remaining specification work are still required.

@@ -28,6 +28,7 @@ from app.modules.artifacts.intake.models import (
 from app.modules.artifacts.intake.capacity import SubmissionSourceCapacity
 from app.modules.artifacts.models import ArtifactStorageNamespace
 from app.modules.tasks.api.intake_custody import IntakeTaskCustodyPort
+from app.modules.tasks.api.revision_expiry import TaskRevisionExpiryTarget
 from app.modules.tasks.api.submission_context import TaskSubmissionContextRequest
 
 
@@ -261,6 +262,26 @@ class SubmissionIntakeRepository:
             raise IntakeCustodyConflict("intake_terminal_state_invalid")
         row = await self._owned(operation_id, lease_id, generation)
         await self._terminal(row, state, failure_code)
+
+    async def expire_revision(self, operation_id: UUID, target: TaskRevisionExpiryTarget) -> None:
+        """Participate only after TASK consumed expiry authority and fenced its event.
+
+        This primitive grants no authority. The composition root shares the
+        authorized TASK transaction; any mismatch rolls back the entire expiry.
+        """
+        target = TaskRevisionExpiryTarget.model_validate(target)
+        row = await self._lock(operation_id)
+        metadata = SubmissionIntakeMetadata.model_validate_json(json.dumps(row.command_metadata))
+        if (row.state not in {"receiving", "pre_checking"}
+                or row.eligible_task_status != "needs_revision"
+                or (row.project_id, row.task_id, row.assignment_id, row.actor_profile_id) != (
+                    str(target.project_id), str(target.task_id), str(target.assignment_id), str(target.contributor_id))
+                or metadata.predecessor_submission_id != target.source_submission_id):
+            raise IntakeCustodyConflict("revision_intake_expiry_mismatch")
+        await self._tasks.require_active(target.task_id, operation_id)
+        now = await self._session.scalar(select(func.clock_timestamp()))
+        state = "abandoned" if row.lease_expires_at <= now else "cancelled"
+        await self._terminal(row, state, "revision_deadline_expired")
 
     async def abandon_expired(self, operation_id: UUID) -> bool:
         """Recovery can end expired foreground custody, never resume or accept it."""
