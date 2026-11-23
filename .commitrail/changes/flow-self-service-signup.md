@@ -134,7 +134,7 @@ persistent hosted grants until these checks pass.
 
 Keep identity onboarding, the cheaper app-only hosted deployment, and removal
 of certificate/expiring-proof S3 dependencies in one delivery PR. The bounded
-hosting and storage contracts remain in their existing change records; they
+hosting and storage contracts remain in the bounded sections below; they
 are implementation scopes within this delivery, not separate merge gates.
 Preserve identity accounts, database state and public URLs during migration.
 Verify login/API/MCP and unavailable checker behavior before moving the Elastic
