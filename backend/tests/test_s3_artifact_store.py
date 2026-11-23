@@ -1035,6 +1035,50 @@ def source_intent(store, **updates):
     })
 
 
+@pytest.mark.asyncio
+async def test_source_begin_does_not_retry_an_uncertain_creation(monkeypatch):
+    """Exercise the real SDK retry stack against a retryable HTTP failure."""
+    from aiohttp import web
+
+    creations = []
+
+    async def respond(request):
+        if request.method == "GET" and "versioning" in request.query:
+            return web.Response(content_type="application/xml", text=
+                '<VersioningConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/">'
+                '<Status>Enabled</Status></VersioningConfiguration>')
+        assert request.method == "POST" and "uploads" in request.query
+        creations.append(request.path)
+        return web.Response(status=503, content_type="application/xml", text=
+            '<Error><Code>ServiceUnavailable</Code><Message>uncertain creation</Message></Error>')
+
+    application = web.Application()
+    application.router.add_route("*", "/{path:.*}", respond)
+    runner = web.AppRunner(application)
+    await runner.setup()
+    store = None
+    try:
+        await web.TCPSite(runner, "127.0.0.1", 0).start()
+        host, port = runner.addresses[0]
+        settings = minio_settings(private_prefix="retry-proof").model_copy(update={
+            "artifact_s3_endpoint_url": f"http://{host}:{port}",
+        })
+        monkeypatch.setenv("AWS_MAX_ATTEMPTS", "9")
+        bootstrap = create_artifact_store_bootstrap(settings, activation_guard=None)
+        namespace = bootstrap.namespace_identity
+        _, fingerprint = artifact_store_namespace_material(
+            backend="s3_compatible", adapter_identity=bootstrap.identity, namespace_identity=namespace)
+        store = bootstrap.initialize_after_namespace_claim(
+            ArtifactStoreNamespaceClaim(bootstrap.identity, namespace, fingerprint))
+        with pytest.raises(ArtifactStoreUnavailableError):
+            await store.begin_source_upload(source_intent(store))
+        assert len(creations) == 1, "an uncertain initiation must not create another upload handle"
+    finally:
+        if store is not None:
+            store.close()
+        await runner.cleanup()
+
+
 async def source_completion(store, payload, **intent_updates):
     """Send parts sequentially as the eventual durable owner must do."""
     upload = await store.begin_source_upload(source_intent(store, **intent_updates))

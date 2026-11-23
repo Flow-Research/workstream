@@ -505,7 +505,9 @@ class S3CompatibleArtifactStore:
             read_timeout=float(read_timeout_seconds),
             max_pool_connections=max_pool_connections,
             proxies={},
-            retries={"max_attempts": 1, "mode": "standard"},
+            # Durable owners observe uncertain outcomes before retrying. In
+            # particular, CreateMultipartUpload has no idempotency token.
+            retries={"total_max_attempts": 1, "mode": "standard"},
             request_checksum_calculation="when_required",
             response_checksum_validation="when_required",
             s3={

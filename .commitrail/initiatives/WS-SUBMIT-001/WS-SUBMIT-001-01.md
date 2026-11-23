@@ -8076,3 +8076,39 @@ Start/end review snapshots matched. Test receipts identify their precommit
 worktrees; clean commits were inspected, not falsely presented as exact-head
 suite reruns. Remote write settlement, orphan reconciliation, native AWS and the
 separate-runner integration remain open under the full goal.
+
+Remote settlement boundary: remove SDK-managed duplicate storage attempts before
+adding reconciliation authority. The data-plane S3 client currently configures
+`max_attempts=1`, which permits one retry after the original request. Multipart
+initiation is not idempotent, so this can create an unrecorded second handle.
+Use one total SDK attempt; existing durable owners retain their explicit
+observe/retry behavior. Scope: S3 adapter data-plane configuration, focused SDK
+wire-level failure tests and neighboring source/cleanup controls, plus this
+record. Do not change STS credential acquisition, widen deletion authority,
+fabricate settlement for retained ambiguous uploads, add a new retry workflow,
+or declare remote reconciliation complete. Acceptance: a retryable multipart
+start failure sends exactly one HTTP creation request and surfaces uncertainty;
+normal upload/observation and lost-ack cleanup controls remain valid. Risk:
+provider transport behavior; required review is QA and architecture/security.
+Human focus: distinguish eliminating new duplicate attempts from proving old
+uncertain writes settled. Botocore's official Config reference defines
+`total_max_attempts=1` as one request including the initial attempt.
+
+The real SDK/HTTP regression failed before repair in 6.57s: one
+`begin_source_upload` call sent two POST creation requests after a retryable503
+response (`/tmp/submission-source-sdk-retry-before.log/.json`). The endpoint
+supplies normal bucket-versioning metadata, so failure reaches actual multipart
+initiation. `AWS_MAX_ATTEMPTS=9` is set to verify the explicit adapter bound wins
+over environment retry policy. Change only the data-plane AioConfig to
+`total_max_attempts=1`; STS configuration remains unchanged. The
+[official Config reference](https://docs.aws.amazon.com/botocore/latest/reference/config.html)
+defines this distinction. This repair prevents new hidden retries; it does not
+retroactively settle a retained unknown handle or authorize charge release.
+
+After repair, the SDK HTTP regression and neighboring real-MinIO source,
+lost-begin/lost-completion, exact-version deletion/lost-delete acknowledgment,
+uncertain SHA-object put and unsealed observation controls passed:14 passed,
+46 explicitly deselected in33.51s
+(`/tmp/submission-source-sdk-retry-after.log/.json`). These selections exercise
+the changed data-plane retry behavior and preserve explicit recovery; they are
+not a whole-suite result. Ruff, structure and whitespace checks passed.
