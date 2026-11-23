@@ -8112,3 +8112,12 @@ uncertain SHA-object put and unsealed observation controls passed:14 passed,
 (`/tmp/submission-source-sdk-retry-after.log/.json`). These selections exercise
 the changed data-plane retry behavior and preserve explicit recovery; they are
 not a whole-suite result. Ruff, structure and whitespace checks passed.
+
+Clean `49e280d0542fa212745fc833c9157bd8e372818b` scoped review closure:
+architecture/security PASS and QA/test-delta PASS WITH LOW RISKS, no findings.
+QA independently replayed the exact wire test successfully and restored the old
+retry configuration in memory; that mutation failed the same request-count
+assertion (`/tmp/submission-source-sdk-retry-qa-probe.json`). Both clean review
+snapshots matched. Shared suite receipts identify the precommit worktree, not an
+exact-head launch. This closes the SDK duplicate-attempt defect only; existing
+unknown upload settlement and orphan reconciliation remain open.
