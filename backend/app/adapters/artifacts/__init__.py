@@ -936,8 +936,8 @@ def submission_bundle_preparation_reader(session: AsyncSession):
     return SubmissionBundlePreparationReader(session, runs=selected_pre_submit_run_reader(session))
 
 
-def submission_intake_revision_expiry_port(session):
-    """Bind ART invalidation to the authorized expiry's existing root transaction."""
+def submission_intake_assignment_release_port(session):
+    """Bind ART cancellation to the authorized TASK release transaction."""
     from app.adapters.tasks import intake_task_custody_port
     from app.modules.artifacts.intake.repository import SubmissionIntakeRepository
     return SubmissionIntakeRepository(session, intake_task_custody_port(session))

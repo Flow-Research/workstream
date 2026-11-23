@@ -185,6 +185,7 @@ class SubmissionOperationReadService:
             "submission_packet_invalid", "submission_archive_limit_exceeded", "submission_upload_timeout",
             "submission_infrastructure_unavailable", "pre_submission_checker_failed",
             "submission_foreground_expired", "submission_operation_cancelled", "revision_deadline_expired",
+            "submission_unavailable",
         }:
             code = "submission_operation_terminal"
         return SubmissionOperationResponse(

@@ -29,6 +29,7 @@ from app.modules.artifacts.intake.capacity import SubmissionSourceCapacity
 from app.modules.artifacts.models import ArtifactStorageNamespace
 from app.modules.tasks.api.intake_custody import IntakeTaskCustodyPort
 from app.modules.tasks.api.revision_expiry import TaskRevisionExpiryTarget
+from app.modules.tasks.api.assignment_invalidation import AssignmentInvalidationTarget
 from app.modules.tasks.api.submission_context import TaskSubmissionContextRequest
 
 
@@ -282,6 +283,22 @@ class SubmissionIntakeRepository:
         now = await self._session.scalar(select(func.clock_timestamp()))
         state = "abandoned" if row.lease_expires_at <= now else "cancelled"
         await self._terminal(row, state, "revision_deadline_expired")
+
+    async def cancel_assignment(self, operation_id: UUID, target: AssignmentInvalidationTarget) -> None:
+        """End exact initial intake inside the authorized TASK invalidation root."""
+        target = AssignmentInvalidationTarget.model_validate(target)
+        row = await self._lock(operation_id)
+        metadata = SubmissionIntakeMetadata.model_validate_json(json.dumps(row.command_metadata))
+        if (row.state not in {"receiving", "pre_checking"}
+                or row.eligible_task_status != "in_progress"
+                or (row.project_id, row.task_id, row.assignment_id, row.actor_profile_id) != (
+                    str(target.project_id), str(target.task_id), str(target.assignment_id), str(target.contributor_id))
+                or metadata.predecessor_submission_id is not None):
+            raise IntakeCustodyConflict("assignment_intake_cancellation_mismatch")
+        await self._tasks.require_active(target.task_id, operation_id)
+        now = await self._session.scalar(select(func.clock_timestamp()))
+        state = "abandoned" if row.lease_expires_at <= now else "cancelled"
+        await self._terminal(row, state, "submission_unavailable")
 
     async def abandon_expired(self, operation_id: UUID) -> bool:
         """Recovery can end expired foreground custody, never resume or accept it."""

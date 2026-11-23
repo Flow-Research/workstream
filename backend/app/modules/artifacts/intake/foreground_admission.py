@@ -317,11 +317,11 @@ class ForegroundIntakeAdmission:
             )
         return True
 
-    async def revision_expired(
+    async def assignment_release_failure(
         self, owner: IntakeReservationOwner, metadata: SubmissionIntakeMetadata, *,
         actor_id: UUID, idempotency_key: UUID,
-    ) -> bool:
-        """Resolve an expiry-fenced foreground owner under current read authority."""
+    ) -> str | None:
+        """Resolve a release-fenced foreground owner under current read authority."""
         async with self._root() as (session, authority):
             repository = SubmissionIntakeRepository(session, self._tasks(session))
             row = await repository._lock(owner.operation_id)
@@ -330,11 +330,12 @@ class ForegroundIntakeAdmission:
             if (row.actor_profile_id != str(actor_id) or row.idempotency_key != str(idempotency_key)
                     or row.metadata_sha256 != metadata.metadata_sha256()):
                 raise IntakeCustodyConflict("submission_idempotency_conflict")
-            expired = (row.state in {"cancelled", "abandoned"}
-                       and row.failure_code == "revision_deadline_expired"
+            released = (row.state in {"cancelled", "abandoned"}
+                       and row.failure_code in {"revision_deadline_expired", "submission_unavailable"}
                        and row.lease_id == str(owner.lease_id)
                        and row.lease_generation == owner.generation + 1)
-        return expired
+            code = row.failure_code if released else None
+        return code
 
     @staticmethod
     def _match_acceptance_command(row, request, terminal_digest, *, accepted):
@@ -437,7 +438,7 @@ class ForegroundIntakeAdmission:
                 return await self._accepted_receipt(session, authority, row)
             if row.state in {"receiving", "pre_checking"}:
                 raise IntakeCustodyConflict("submission_operation_in_progress")
-            if (row.raw_sha256 is None or row.raw_byte_count is None) and row.failure_code != "revision_deadline_expired":
+            if (row.raw_sha256 is None or row.raw_byte_count is None) and row.failure_code not in {"revision_deadline_expired", "submission_unavailable"}:
                 raise IntakeCustodyConflict("submission_operation_terminal")
             if row.state == "rejected" and row.failure_code == "pre_submission_checker_failed":
                 terminal = await checkers(session).read_source_terminal(source_operation_id=operation_id)
@@ -455,6 +456,7 @@ class ForegroundIntakeAdmission:
                 code = row.failure_code if row.failure_code in {
                     "submission_packet_invalid", "submission_archive_limit_exceeded",
                     "submission_upload_timeout", "submission_infrastructure_unavailable", "revision_deadline_expired",
+                    "submission_unavailable",
                 } else "submission_operation_terminal"
                 failure = SubmissionIntakeFailure(code)
         # Commit the current read authorization before returning QC feedback.
@@ -471,7 +473,7 @@ class ForegroundIntakeAdmission:
         metadata = SubmissionIntakeMetadata.model_validate(metadata)
         original = await self._read(metadata, actor_id, idempotency_key)
         if original.raw_sha256 is None or original.raw_byte_count is None:
-            if original.state in {"cancelled", "abandoned"} and original.failure_code == "revision_deadline_expired":
+            if original.state in {"cancelled", "abandoned"} and original.failure_code in {"revision_deadline_expired", "submission_unavailable"}:
                 return original
             code = "submission_operation_in_progress" if original.state in {"receiving", "pre_checking"} else "submission_operation_terminal"
             raise IntakeCustodyConflict(code)

@@ -7586,3 +7586,69 @@ This removes the post-upgrade hidden-create consumer from test_alembic; the
 before-upgrade cap fixture still needs its historical writer replacement.
 No capability/readiness claim changed; full cleanup/provider/CI and acceptance
 audit remain open under the same goal and draft PR708.
+
+Next bounded change migrates assignment-invalidation race proof from hidden
+creation to public source intake at T4. Both lock winners must preserve authority:
+accepted pending work cannot be released; invalidation-first cannot accept. Run
+real PRE before the race, observe exact TASK blocker PID, actual invalidation
+handler and actual T5 for accepted winner. Preserve assignment/audit uniqueness,
+source custody and no premature Submission. Allowed: test_assignment_invalidation_
+races.py, its sole-use prepare_submission helper in invalidation_support.py, and
+this record. Trace helper consumers before removing old preparation imports.
+No product or migration change assumed; expand only on reproduced defect. Risk
+is authority/workflow/concurrency; QA/test-delta and ARCH/SEC review required.
+Verification: both PG race cases, affected shared fixture tests as needed, Ruff,
+structure, record and whitespace. Human focus: exact acceptance cutover versus
+committed revocation cause, no authority bypass, same PR708 and full goal active.
+
+Race review found an invalid fixture hook: TASK context reads also use the
+repository method patched for the invalidation winner. Restrict that hook to
+the uniquely named invalidation coroutine; foreground and heartbeat locks stay
+unchanged. Stop V1 known-invalid child and let its runner clean up, then run V2.
+Strengthen refusal to exact404/submission_unavailable and no accepted/event facts;
+assert sealed bytes stay charged, and bind accepted response to observed intake.
+Baseline Ruff fixture-import shadowing is removed by importing the fixture module
+and exposing the same fixture objects, with no wrapper or changed fixture scope.
+
+V2 reproduced production gap: acceptance winner passed, invalidation winner
+failed its root commit with23514 `intake task custody mismatch` (1pass1fail
+152.41s). Expand allowed scope to TASK assignment-invalidation API/operation,
+TASK/ART composition, ART intake repository and foreground terminal/read mapping,
+and the direct-constructor test in test_assignment_invalidation.py. Add a required
+TASK-owned ART cancellation participant after exact consumed service authority
+and event fence, before release. Validate project/task/assignment/actor, initial
+in_progress status and unaccepted state; cancel/abandon by DB lease time, bump
+generation, clear pointer, preserve charge in the same root. Reuse existing
+submission_unavailable error and current-read authorization for late foreground
+and replay. Preserve revision expiry mapping. No migration or new authority.
+Add rollback after real intake terminalization before release, exact terminal
+code/generation and replay/no extra release assertions. Verify both lock winners,
+existing invalidation behavior and focused revision-expiry control.
+
+Rename ART composition to submission_intake_assignment_release_port for both
+existing expiry and invalidation participants; update traced expiry-security
+test consumer too, with no alias. Add it to allowed files. Expiry still calls
+its distinct expire_revision contract; only common terminal read now returns
+the exact stored release failure after matching owner/key/metadata/generation.
+
+QA requested one distinct receiving/no-raw control for the new known-failure
+replay branch. Add a real HTTP body gate after upload ownership, invalidate via
+existing handler, require404 without receipt or PRE/Submission, retain reserved
+bytes, and replay with a forbidden body. Own GET must preserve the known code.
+This covers the changed no-raw and progress allowlists separately from sealed
+PRE/T4 races. Existing V3 cases remain unchanged; execute added case separately.
+
+Final focused evidence: invalidation V3 passed4 in512.33s; receiving V1 passed1
+in100.17s. Both schema0086 receipts have complete database/MinIO cleanup
+(/tmp/submission-invalidation-race-v3.log/.json and
+/tmp/submission-invalidation-receiving-v1.log/.json). V3 proves both exact TASK
+lock winners, actual accepted T5, forced post-cancellation rollback, late known
+denial/sealed replay, original root/prior-receipt guard and revision-expiry
+rollback/late-PRE-after-reclaim. Added receiving case independently proves no-raw
+known denial, forbidden replay body, reserved charge and own progress code.
+92 module/authorization boundary checks passed in504.63s. Runtime was slower in
+the shared busy environment; all runs terminated normally, no timeout credited.
+Ruff/record/whitespace pass. Shared precommit proof overd627bfffc, not independent
+or clean-head execution. Test-only fixture alias cleanup preserves the same
+objects/scopes; it does not change the product evidence. Full goal qualification
+and remaining hidden/preparation consumers remain open, same draft PR708.

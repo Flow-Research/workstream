@@ -289,65 +289,22 @@ async def snapshot(s):
         return dict(task), [dict(row) for row in assignments], [dict(row) for row in events]
 
 
-async def prepare_submission(s, settings):
-    """Prepare real ZIP custody for the existing assignment before invalidation."""
-    from app.modules.artifacts.api import SubmissionBundlePreparationRequest
-    from app.modules.authorization.api import ActorIdentityFacts, ActorKind
+async def submission_packet(s):
+    """Build raw bytes and headers for the claimed task without preparing old custody."""
     from app.modules.projects.models import EffectiveProjectSubmissionArtifactPolicy
-    from app.modules.tasks.api import SubmissionCreationRequest
-    from tests.tasks.submission_lineage_support import _seed_services, _verified_admission
-    from tests.test_artifact_admission import _namespace, _local_store, _context
-    from tests.archive_fixtures import byte_source as _bytes, submission_archive as _archive
+    from tests.archive_fixtures import submission_archive
     from tests.test_tasks import complete_submission_payload
 
-    context = _context(
-        actor_profile_id=UUID(s.grant["actor_profile_id"]), identity_link_id=UUID(s.link_id)
-    )
-    namespace = _namespace(settings)
-    bootstrap, store = _local_store(settings, namespace)
-    try:
-        async with s.sessions() as session:
-            task = await session.get(WorkstreamTask, s.task["id"])
-            policy = await session.get(
-                EffectiveProjectSubmissionArtifactPolicy,
-                task.locked_effective_project_submission_artifact_policy_id,
-            )
-            body = policy.effective_policy
-            assert [item["path"] for item in body["required_artifacts"]] == ["answer.md"]
-            assert [item["key"] for item in body["required_evidence"]] == ["required-evidence-001"]
-        await _seed_services(s.sessions)
-        request = SubmissionBundlePreparationRequest(
-            actor=ActorIdentityFacts(
-                context.actor_profile_id, context.identity_link_id, ActorKind.HUMAN
-            ),
-            request_id=context.request_id,
-            correlation_id=context.correlation_id,
-            task_id=UUID(s.task["id"]),
-            assignment_id=UUID(s.assignment["id"]),
-            predecessor_submission_id=None,
-            idempotency_key=new_record_id(),
-            summary="Completed the required project work and included evidence.",
-            contributor_attestation=(
-                complete_submission_payload()["worker_attestation"]
-                + " "
-                + " ".join(body["attestation_terms"])
-            ),
-            media_type="application/zip",
-            byte_source=_bytes(
-                _archive(path="answer.md", evidence_path="evidence/required-evidence-001")
-            ),
-        )
-        admission_id = await _verified_admission(
-            s.sessions, store, namespace, settings, context, request
-        )
-        return context, SubmissionCreationRequest(
-            task_id=request.task_id,
-            assignment_id=request.assignment_id,
-            contributor_id=context.actor_profile_id,
-            predecessor_submission_id=None,
-            admission_id=admission_id,
-            summary=request.summary,
-            contributor_attestation=request.contributor_attestation,
-        )
-    finally:
-        bootstrap.close()
+    async with s.sessions() as session:
+        task = await session.get(WorkstreamTask, s.task["id"])
+        policy = await session.get(EffectiveProjectSubmissionArtifactPolicy,
+                                  task.locked_effective_project_submission_artifact_policy_id)
+        body = policy.effective_policy
+        assert [item["path"] for item in body["required_artifacts"]] == ["answer.md"]
+        assert [item["key"] for item in body["required_evidence"]] == ["required-evidence-001"]
+    return submission_archive(path="answer.md", evidence_path="evidence/required-evidence-001"), {
+        "Content-Type": "application/zip", "X-Task-Assignment-Id": s.assignment["id"],
+        "X-Submission-Summary": "Completed the required project work and included evidence.",
+        "X-Contributor-Attestation": complete_submission_payload()["worker_attestation"]
+            + " " + " ".join(body["attestation_terms"]),
+    }

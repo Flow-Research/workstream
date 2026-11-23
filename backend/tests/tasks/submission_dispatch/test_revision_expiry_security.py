@@ -8,7 +8,7 @@ from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.adapters.audit import task_revision_expiry_audit
-from app.adapters.artifacts import submission_intake_revision_expiry_port
+from app.adapters.artifacts import submission_intake_assignment_release_port
 from app.adapters.auth import revision_expiry_authorization
 from app.adapters.outbox import outbox_append, outbox_invocation_fence
 from app.adapters.tasks import task_revision_recovery
@@ -108,7 +108,7 @@ def _expiry_operation(h, session):
         fence=outbox_invocation_fence(session),
         authorization=revision_expiry_authorization(session),
         audit=task_revision_expiry_audit(session), outbox=outbox_append(session),
-        intake=submission_intake_revision_expiry_port(session),
+        intake=submission_intake_assignment_release_port(session),
     )
 
 
