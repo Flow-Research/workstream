@@ -2,14 +2,19 @@
 
 from __future__ import annotations
 
+import asyncio
 import importlib
+from functools import partial
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
+from uuid import UUID
 
 import pytest
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from app.adapters.artifacts import artifact_preparation_limits
 from app.core.config import ARTIFACT_DIRECT_USER_IDENTITY_TIMEOUT_SECONDS, Settings, get_settings
+from app.core.identifiers import new_record_id
 from app.interfaces.artifacts import ArtifactConfigurationError
 from app.main import create_app
 from tests.artifact_store_helpers import artifact_admission_limit_settings
@@ -165,8 +170,9 @@ async def test_missing_direct_user_key_refuses_api_startup_after_namespace_valid
     tmp_path: Path,
 ) -> None:
     import app.main as main_module
+    from app.adapters.artifacts import s3_compatible
 
-    settings = Settings(**(_aws_setting_values(tmp_path) | {
+    settings = Settings(_env_file=None, **(_aws_setting_values(tmp_path) | {
         "artifact_s3_credential_mode": "aws_access_key",
         "artifact_s3_aws_workload_identity_method": None,
         "artifact_s3_runtime_user_arn": "arn:aws:iam::123456789012:user/workstream-artifacts",
@@ -180,7 +186,11 @@ async def test_missing_direct_user_key_refuses_api_startup_after_namespace_valid
         events.append("namespace")
         return "claim"
 
-    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setattr(
+        s3_compatible,
+        "create_isolated_aws_credential_session",
+        partial(s3_compatible.create_isolated_aws_credential_session, environ={"HOME": str(tmp_path)}),
+    )
     monkeypatch.setattr(main_module, "build_auth_verifier", lambda _settings: None)
     monkeypatch.setattr(main_module, "create_artifact_store_bootstrap", lambda _settings: store)
     monkeypatch.setattr(main_module, "_validate_artifact_storage_namespace_at_startup", validate_namespace)
@@ -193,8 +203,82 @@ async def test_missing_direct_user_key_refuses_api_startup_after_namespace_valid
     assert events == ["namespace", "close"]
 
 
-async def _async_value(value: object) -> object:
-    return value
+def test_artifact_worker_uses_separate_database_engines_for_startup_and_operations(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """A process store reuses its provider while each task owns its database engine."""
+    from app.adapters.artifacts import internal_workers
+    from app.modules.artifacts.service import ArtifactStorageOrchestrator
+    from app.workers.async_runner import run_async_task
+
+    settings = _enabled_settings(tmp_path, _env_file=None)
+    store_events: list[str] = []
+    store = _Store(store_events)
+    created: dict[AsyncEngine, asyncio.AbstractEventLoop] = {}
+    used: list[AsyncEngine] = []
+    disposed: list[AsyncEngine] = []
+    resolved_attempts: list[UUID] = []
+    create_async_engine = internal_workers.create_async_engine
+    dispose_engine = AsyncEngine.dispose
+
+    def create_engine(url: str, *, pool_pre_ping: bool) -> AsyncEngine:
+        engine = create_async_engine(url, pool_pre_ping=pool_pre_ping)
+        created[engine] = asyncio.get_running_loop()
+        return engine
+
+    async def dispose(engine: AsyncEngine) -> None:
+        assert asyncio.get_running_loop() is created[engine]
+        await dispose_engine(engine)
+        disposed.append(engine)
+
+    def record_session(session: AsyncSession) -> None:
+        engine = session.bind
+        assert isinstance(engine, AsyncEngine)
+        assert asyncio.get_running_loop() is created[engine]
+        assert engine not in disposed
+        used.append(engine)
+
+    async def validate_namespace(
+        _bootstrap: _Store,
+        _settings: Settings,
+        sessions: async_sessionmaker[AsyncSession],
+    ) -> str:
+        async with sessions() as session:
+            record_session(session)
+        return "claim"
+
+    async def resolve_attempt(orchestrator: ArtifactStorageOrchestrator, attempt_id: UUID) -> str:
+        record_session(orchestrator._session)
+        resolved_attempts.append(attempt_id)
+        return "resolved"
+
+    monkeypatch.setattr(internal_workers, "get_settings", lambda: settings)
+    monkeypatch.setattr(internal_workers, "get_database_url", lambda: "postgresql+asyncpg://unused")
+    monkeypatch.setattr(internal_workers, "create_async_engine", create_engine)
+    monkeypatch.setattr(AsyncEngine, "dispose", dispose)
+    monkeypatch.setattr(internal_workers, "create_artifact_store_bootstrap", lambda _settings: store)
+    monkeypatch.setattr(internal_workers, "artifact_storage_namespace_spec", lambda *_: object())
+    monkeypatch.setattr(internal_workers, "validate_artifact_storage_namespace_at_startup", validate_namespace)
+    monkeypatch.setattr(ArtifactStorageOrchestrator, "resolve_put_attempt", resolve_attempt)
+    first_attempt, second_attempt = new_record_id(), new_record_id()
+
+    internal_workers.shutdown_artifact_internal_runtime()
+    try:
+        run_async_task(internal_workers.initialize_artifact_internal_runtime)
+        assert run_async_task(
+            lambda: internal_workers.run_artifact_internal_operation("put", first_attempt)
+        ) == "resolved"
+        assert run_async_task(
+            lambda: internal_workers.run_artifact_internal_operation("put", second_attempt)
+        ) == "resolved"
+    finally:
+        internal_workers.shutdown_artifact_internal_runtime()
+
+    assert len(created) == len(set(created.values())) == 3
+    assert used == disposed == list(created)
+    assert resolved_attempts == [first_attempt, second_attempt]
+    assert store_events == ["initialize", "close"]
 
 
 async def test_namespace_failure_is_fail_closed_and_skips_cleanup(

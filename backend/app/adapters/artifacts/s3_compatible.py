@@ -793,6 +793,9 @@ class S3CompatibleArtifactStore:
             if not isinstance(session, AioSession):
                 raise ArtifactConfigurationError("S3 credential session is invalid")
             self._session = session
+        # Credential resolution has its own provider deadline and remains inside
+        # the enclosing operation deadline; it is not S3 pool acquisition.
+        await self._session.get_credentials()
         async with asyncio.timeout(self._pool_timeout_seconds):
             context = self._session.create_client(
                 "s3",

@@ -804,7 +804,6 @@ class ArtifactStorageOrchestrator:
                 "conflict",
                 None,
                 None,
-                None,
                 submission_task_contexts=submission_task_contexts,
             )
         try:

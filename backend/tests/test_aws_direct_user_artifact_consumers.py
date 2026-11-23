@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+import asyncio
 import hashlib
 from pathlib import Path
 import re
@@ -11,7 +12,7 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 from aiobotocore.config import AioConfig
-from aiohttp import web
+from aiohttp import ClientSession, web
 import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
@@ -72,6 +73,8 @@ class _LoopbackS3:
         self.objects: dict[str, bytes] = {}
         self.requests: list[tuple[str, str, str]] = []
         self.identity_requests: list[str] = []
+        self.identity_entry_delay = 0.0
+        self.identity_response_delay = 0.0
         self._runner: web.AppRunner | None = None
         self.endpoint_url = ""
 
@@ -98,6 +101,7 @@ class _LoopbackS3:
             action = await request.post()
             assert action["Action"] == "GetCallerIdentity"
             self.identity_requests.append(access_key.group(1))
+            await asyncio.sleep(self.identity_response_delay)
             return web.Response(text=(
                 '<GetCallerIdentityResponse xmlns="https://sts.amazonaws.com/doc/2011-06-15/">'
                 '<GetCallerIdentityResult><Account>123456789012</Account>'
@@ -107,7 +111,9 @@ class _LoopbackS3:
         path = request.match_info["path"]
         self.requests.append((request.method, path, access_key.group(1)))
         if request.method == "PUT":
-            if request.headers.get("If-None-Match") == "*" and path in self.objects:
+            if request.headers.get("If-None-Match") != "*":
+                return web.Response(status=403)
+            if path in self.objects:
                 return web.Response(
                     status=412,
                     body=(
@@ -182,7 +188,7 @@ async def _direct_user_store(
         artifact_s3_connect_timeout_seconds=10,
         artifact_s3_read_timeout_seconds=30,
         artifact_s3_write_timeout_seconds=30,
-        artifact_s3_pool_timeout_seconds=10,
+        artifact_s3_pool_timeout_seconds=5,
         artifact_s3_operation_total_timeout_seconds=60,
     )
     assert settings.artifact_s3_endpoint_url is None
@@ -197,9 +203,15 @@ async def _direct_user_store(
         )
         original_create_client = session.create_client
 
+        @asynccontextmanager
+        async def sts_client(**kwargs: object):
+            await asyncio.sleep(endpoint.identity_entry_delay)
+            async with original_create_client("sts", endpoint_url=endpoint.endpoint_url, **kwargs) as client:
+                yield client
+
         def create_client(service_name: str, **kwargs: object):
             if service_name == "sts":
-                return original_create_client(service_name, endpoint_url=endpoint.endpoint_url, **kwargs)
+                return sts_client(**kwargs)
             assert service_name == "s3"
             assert kwargs["endpoint_url"] is None
             kwargs["endpoint_url"] = endpoint.endpoint_url
@@ -291,6 +303,48 @@ async def test_direct_user_signs_sealed_upload_and_exact_readback(
         ("HEAD", ACCESS_KEY_ID),
         ("GET", ACCESS_KEY_ID),
     ]
+
+
+@pytest.mark.asyncio
+async def test_loopback_rejects_unconditional_writes_and_preserves_existing_bytes(
+    loopback_s3: _LoopbackS3,
+) -> None:
+    url = loopback_s3.endpoint_url + "/bucket/object"
+    signed = {"Authorization": f"AWS4-HMAC-SHA256 Credential={ACCESS_KEY_ID}/test"}
+    async with ClientSession() as client:
+        for extra in ({}, {"If-None-Match": "wrong"}):
+            async with client.put(url, headers=signed | extra, data=b"invalid") as response:
+                assert response.status == 403
+            assert loopback_s3.objects == {}
+        conditional = signed | {"If-None-Match": "*"}
+        async with client.put(url, headers=conditional, data=b"original") as response:
+            assert response.status == 200
+        async with client.put(url, headers=conditional, data=b"replacement") as response:
+            assert response.status == 412
+    assert loopback_s3.objects == {"bucket/object": b"original"}
+
+
+@pytest.mark.asyncio
+async def test_first_upload_allows_identity_load_beyond_s3_pool_deadline(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    loopback_s3: _LoopbackS3,
+) -> None:
+    # Two seconds establishing STS plus four receiving its response stay inside
+    # the identity's 10-second bound and each 5-second network bound, but exceed
+    # the hosted S3 pool's 5-second bound. The first PUT must still be sent.
+    loopback_s3.identity_entry_delay = 2.0
+    loopback_s3.identity_response_delay = 4.0
+    manager, preparation = _preparation(tmp_path / "scratch")
+    try:
+        async with _direct_user_store(monkeypatch, tmp_path / "identity", loopback_s3) as case:
+            assert case.settings.artifact_s3_pool_timeout_seconds == 5
+            provider_ref = await _upload(case.store, preparation, SOURCE_BYTES)
+            assert b"".join([chunk async for chunk in case.store.open(provider_ref)]) == SOURCE_BYTES
+            assert loopback_s3.identity_requests == [ACCESS_KEY_ID]
+            assert [method for method, _, _ in loopback_s3.requests].count("PUT") == 1
+    finally:
+        manager.close()
 
 
 @pytest.mark.asyncio

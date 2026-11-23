@@ -29,8 +29,13 @@ def test_runtime_cannot_administer_or_delete_artifacts():
     assert denials["DenyArtifactDeletion"]["Action"] == [
         "s3:DeleteObject", "s3:DeleteObjectVersion"
     ]
-    assert denials["DenyUnconditionalPut"]["Condition"] == {
-        "Null": {"s3:if-none-match": "true"}
+    assert denials["DenyUnconditionalPut"] == {
+        "Sid": "DenyUnconditionalPut",
+        "Effect": "Deny",
+        "Principal": "*",
+        "Action": "s3:PutObject",
+        "Resource": "arn:aws:s3:::example-artifacts/*",
+        "Condition": {"Null": {"s3:if-none-match": "true"}},
     }
     assert denials["DenyForeignObjectAccess"]["Condition"] == {
         "ArnNotEquals": {

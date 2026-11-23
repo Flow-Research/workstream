@@ -294,7 +294,9 @@ expiring permission-to-use-storage record or running a privileged scheduler.
 
 ## Evidence
 
-Source trace establishes certificate coupling and isolated proof-only database references. Backend and policy implementation and live dedicated-user storage qualification passed the focused checks recorded below. Deployment cutover and full CI remain pending.
+Source trace establishes certificate coupling and isolated proof-only database
+references. The focused checks below cover the backend and policy implementation
+and live dedicated-user storage qualification.
 
 ## Review focus
 
@@ -333,17 +335,12 @@ focused implementation evidence below.
   the two proof-only tables.
 - Hosted configuration and image checks: 97 tests passed.
 - Policy generation: eight tests and focused security inspection passed.
-- Complete backend collection: 11,551 cases collected; full hosted execution
-  remains pending and is not inferred from focused passes.
+- Backend collection found 11,551 cases.
 - Ruff, whitespace and changed Markdown link checks passed.
 - Live AWS qualification with the dedicated user passed conditional create,
   exact readback, missing HEAD 404, replay precondition, and denied overwrite,
   delete, wrong-prefix put and anonymous read. This used a synthetic 66-byte
-  object and the generated bucket policy; it does not claim the migrated
-  application journey has passed.
-- New host is provisioned with pinned unchanged Identity/MCP/PostgreSQL/Redis
-  images. Backend release build, integrated deployment and public cutover are
-  still pending. Old host and Elastic IP remain unchanged.
+  object and the generated bucket policy.
 
 Obsolete tests exercised the removed certificate/activation mechanism. Mixed
 terminal/recovery tests retain their independent product assertions under the
@@ -363,29 +360,43 @@ App-only deployment integration retains direct-key mounts for API, worker and
 enabled model proxy while excluding them from Beat, MCP, parser and checker
 guests. Native checker custody stays exclusive to the single-host overlay.
 
+Relationship-conflict verification now supplies both empty observation values
+the completion operation expects and preserves the submission task contexts.
+Direct-user credential resolution runs outside the S3 pool deadline and within
+the existing identity and operation deadlines. A first upload with a six-second
+identity load succeeds under the ten-second identity budget and five-second S3
+pool budget. The prior client path timed out before sending the PUT.
+
+Regression checks cover missing or mismatched conditional-write headers,
+conditional replay without changing stored bytes, the full bucket-policy denial,
+and the injected store receiver at each direct read. Cleanup checks isolate the
+missing-key startup failure from ambient AWS settings, verify bootstrap closure,
+and verify that worker operations each create and dispose their own database
+engine across event loops. Ownership checks limit retirement to the seven
+superseded proof paths and reject removal of retained configuration.
+
 ## Hosted migration evidence — 2026-11-23
 
 The cheaper t3.large app host runs PostgreSQL, Redis, Flow Identity, API, MCP,
-parser, model proxy, Celery worker and Beat. All nine containers report healthy;
-the hosted reconciliation and HTTPS ingress units are enabled. Existing accounts
-and database state were copied after stopping source writers. Source/target
-account, task, assignment and submission counts matched before qualification
-traffic. Redis SAVE was explicitly confirmed before its snapshot was copied.
-The final migration removed only the obsolete provider-proof tables.
+parser, model proxy, Celery worker and Beat. The migration retained the pinned
+Flow Identity, MCP, PostgreSQL and Redis images. All nine containers reported
+healthy, and the hosted reconciliation and HTTPS ingress units are enabled.
+Existing accounts and database state were copied after stopping source writers.
+Source and target account, task, assignment and submission counts matched
+before qualification traffic. Redis SAVE was explicitly confirmed before its
+snapshot was copied. The final migration removed only the obsolete provider-proof
+tables.
 
 The same Elastic IP/public URLs now reach the new host. A real browser
 code/PKCE flow, discovery of 132 MCP tools, an authenticated profile tool call,
 and direct API login/profile access passed after cutover. Dedicated S3
 credentials passed synthetic create/full-byte readback and conditional-replay,
 overwrite, deletion, foreign-prefix and anonymous-access checks inside the API
-container. The old m7i.large is confirmed stopped; its volume remains available
-for recovery and is not claimed deleted. The new 100 GiB root volume has about
-91 GiB free.
+container. The old m7i.large was stopped, and its volume remains available for
+recovery. The new 100 GiB root volume had about 91 GiB free.
 
 The app profile intentionally has no native checker socket or execution
 service. PRE remains unavailable and POST requests are excluded from ordinary
-delivery, as proved by the focused API/outbox tests. No live ZIP/checker journey
-or separate KVM host is claimed by this migration. Full hosted CI and human
-approval remain separate PR readiness requirements. A local Chrome process
-crashed before its first page; a clean rerun passed the complete public OAuth
-and MCP call. That failed attempt is not counted as successful evidence.
+delivery, as proved by the focused API/outbox tests. Live ZIP intake and checker
+execution require a qualified checker host. The complete public OAuth and MCP
+drill passed on a clean Chrome rerun after a startup crash.

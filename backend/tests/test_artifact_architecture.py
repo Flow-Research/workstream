@@ -990,15 +990,33 @@ def test_guest_only_rule_inventory_rejects_host_fallback(adapter_composition_inv
         _assert_guest_only_rule_consumers((*adapter_composition_inventory, (injected, frozenset(imports), tuple(calls))))
 
 
-def test_direct_read_owners_use_the_shared_artifact_store_port() -> None:
-    root = Path(__file__).parents[1] / "app" / "modules" / "artifacts"
-    consumers = [
-        root / "guide_document_access.py",
-        root / "post_submit_materialization.py",
-        root / "task_guide_documents.py",
-        root / "task_import_sources.py",
-    ]
-    for path in consumers:
-        source = path.read_text(encoding="utf-8")
-        assert ".open(" in source
-        assert "s3_compatible" not in source
+def _opens_artifact_store(tree: ast.AST, receiver: str) -> bool:
+    return any(
+        isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "open"
+        and ast.unparse(node.func.value) == receiver
+        for node in ast.walk(tree)
+    )
+
+
+@pytest.mark.parametrize(
+    ("filename", "receiver"),
+    [
+        ("guide_document_access.py", "self._store"),
+        ("post_submit_materialization.py", "self._store"),
+        ("task_guide_documents.py", "store"),
+        ("task_import_sources.py", "runtime.store"),
+    ],
+)
+def test_direct_read_owners_use_the_shared_artifact_store_port(
+    filename: str, receiver: str
+) -> None:
+    path = APP_ROOT / "modules" / "artifacts" / filename
+    assert _opens_artifact_store(_tree(path), receiver)
+    assert "s3_compatible" not in path.read_text(encoding="utf-8")
+
+
+def test_direct_read_owner_check_rejects_unrelated_open() -> None:
+    tree = ast.parse("Path('artifact.zip').open('rb')")
+    assert not _opens_artifact_store(tree, "self._store")

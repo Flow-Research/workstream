@@ -2695,11 +2695,20 @@ def test_revision_ownership_does_not_allow_a_parallel_exhaustion_writer():
 
 def test_direct_aws_ownership_retires_only_the_exact_proof_targets():
     retained = "backend/app/core/config.py"
-    retired = ownership.AWS_ARTIFACT_PROOF_REMOVED_TARGETS
+    retired = {
+        "backend/app/adapters/artifacts/aws_live_proof.py",
+        "backend/app/adapters/artifacts/aws_roles_anywhere.py",
+        "backend/app/adapters/artifacts/aws_roles_anywhere_proof.py",
+        "backend/app/core/aws_roles_anywhere.py",
+        "backend/app/modules/artifacts/provider_activation.py",
+        "backend/scripts/aws_artifact_provider_proof.py",
+        "backend/scripts/aws_roles_anywhere_config.py",
+    }
     replacements = {
         "backend/app/adapters/artifacts/aws_direct_user.py",
         "backend/scripts/aws_direct_user_config.py",
     }
+    assert ownership.AWS_ARTIFACT_PROOF_REMOVED_TARGETS == retired
     assert ownership.AWS_DIRECT_USER_TARGETS == replacements
     trusted = _partition(sorted({retained, *retired}))
     current = _partition(sorted({retained, *replacements}))
@@ -2707,6 +2716,8 @@ def test_direct_aws_ownership_retires_only_the_exact_proof_targets():
 
     with pytest.raises(ownership.BehaviorOwnershipError, match="untrusted_partition_change"):
         ownership._validate_additive_partition_transition(_partition([retained]), trusted)
+    with pytest.raises(ownership.BehaviorOwnershipError, match="untrusted_partition_change"):
+        ownership._validate_additive_partition_transition(_partition(sorted(replacements)), trusted)
     with pytest.raises(ownership.BehaviorOwnershipError, match="untrusted_partition_change"):
         ownership._validate_additive_partition_transition(
             _partition(sorted({retained, *replacements, "backend/scripts/extra_aws_proof.py"})),
