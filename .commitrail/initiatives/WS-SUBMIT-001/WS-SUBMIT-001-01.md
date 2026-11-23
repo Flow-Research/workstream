@@ -7466,3 +7466,60 @@ substitution refusals. Ruff, test-structure, record and whitespace gates pass.
 Shared worktree proof overa29886861, not clean-commit/independent execution. Scope
 is test cutover, so roadmap capability/readiness claims do not change. Remaining
 old preparation/creation consumers and full qualification remain explicit work.
+
+Next bounded predecessor batch removes this module's last hidden creation-command
+consumers: foreign predecessor denial and replacement-versus-successor locking.
+Use public raw ZIP with a forbidden upload/body to prove foreign lineage rejects
+before ART effects, then valid T4/T5 for the retained foreign-cause SQL refusal.
+Move the lock race to a real staged T4 root: a successor evaluation of the old
+Submission must wait on TASK, then be refused once the new intake is accepted
+and pending T5; afterwards T5 must create one valid consumed dispatch. Preserve
+all original cross-task/assignment/actor/predecessor denials, exact blocker PID,
+old checker-fence/run/routing immutability and final counts. Allowed: this test
+module, an existing fixture helper if needed, and this record. No production or
+SQL changes assumed; diagnose any concrete reproduced gap before expanding scope.
+QA and architecture/security review required; both PG cases and static gates,
+same PR708. Shared old preparation helpers remain until their consumers migrate.
+
+Custody v1 passed foreign denial and failed the real post-T4 successor race
+(1pass1fail75.83s/schema0085/cleanup complete): the old-source reservation did
+not raise. This reproduces A13, not a test timeout. Expand scope to TASK's
+post_submit_routing/evaluation_guard.py and migration0086 with normal Alembic
+head/fingerprint integration. While TASK is evaluation_pending with an active
+intake pointer, a non-evaluation_pending latest attempt is historical and cannot
+start a new evaluation. Return False after exact scope validation to preserve
+stored replay. Receiving/PRE remains needs_revision and can still observe fence
+changes; T5 inserts its new evaluation_pending attempt before its own reservation.
+0049 requires that initial attempt state and forbids needs_revision resurrection.
+Mirror the predicate in the existing checker INSERT trigger under TASK lock; no
+cross-owner private read, new state, service authority or timeout. Add exact replay
+and forced-stale TASK reader SQL-denial controls, plus prior fence immutability.
+Existing staged T4/T5 race is the regression, with prior PRE stale-fence case as
+control. QA/architecture review must verify the initial T5 path stays allowed.
+
+0086 schema probe passed with complete database/MinIO cleanup. Reversing only
+the new function predicate restored the exact full 0085 catalog fingerprint;
+transaction rollback restored the measured 0086 fingerprint
+`b04738514ef38518dc476645c9a9b381d8d893387090b6f8479a1802cc61e3a9`.
+Evidence: /tmp/submission-0086-schema-parity.log/.json. Pin this measured catalog
+before the focused custody race, historical replay and PRE fence controls.
+
+Custody v2: 3 passed, 1 failed in 229.56s. The real successor race now refuses
+correctly and historical replay passes. The SQL negative control expected a raw
+IntegrityError, but the existing CHECKERS coordinator translates it to
+CheckerRequestConflict. Correct the test to inspect its retained exception
+context for the exact SQLSTATE/constraint; no production change. Rerun only this
+failed case; the other three controls passed on unchanged product/schema content.
+Module/authorization boundaries passed 92 checks; test-structure and Ruff pass.
+
+Custody v3 passed the corrected race case in 45.03s on schema0086 with complete
+database/MinIO cleanup (/tmp/submission-predecessor-custody-v3.log/.json). It proves
+TASK lock serialization, old-source successor refusal, exact historical replay,
+named SQL refusal under a stale application reader, unchanged predecessor facts
+and real T5 success. The other three unchanged controls passed in v2; do not
+describe all four as rerun after the assertion repair. The existing synthetic
+next_request Pydantic warning remains visible. Shared precommit worktree proof
+over9b9467653, not an independent or clean-commit execution. QA and ARCH/SEC
+inspected the exception translation assertion and found no weakening. This is
+A13 handoff protection only; full acceptance/provider/CI qualification remains
+open, with the same single draft PR708 and no merge-readiness claim.

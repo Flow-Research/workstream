@@ -18,7 +18,6 @@ from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError, IntegrityError
 from starlette.requests import Request
 
-from app.api.deps.authorization import compose_hidden_submission_creation_command
 from app.adapters.checkers import evaluation_coordinator
 from app.adapters.artifacts import get_submission_bundle_preparation_command
 from app.adapters.tasks import task_post_submit_outcome
@@ -45,13 +44,11 @@ from app.modules.artifacts.submission_admission import (
 )
 from app.modules.authorization.api import ActorIdentityFacts, ActorKind
 from app.modules.checkers.api.execution import CheckerExecutionUnavailable
-from app.modules.tasks.api import SubmissionCreationRequest
 from app.modules.tasks.api.submission_context import (
     TaskSubmissionContextRequest,
     TaskSubmissionContextUnavailable,
 )
 from app.modules.tasks.models import SubmissionDispatch
-from app.modules.tasks.submission_context import TaskSubmissionContextService
 from app.adapters.tasks import task_submission_context_port
 from tests.auth_concurrency_support import wait_for_named_database_lock
 from tests.artifact_store_helpers import artifact_byte_stream
@@ -836,16 +833,16 @@ async def test_dispatch_commit_requires_current_predecessor_checker_fence(
 
 
 async def test_foreign_predecessor_stops_at_task_context_before_art_effects(
-    tmp_path,
-    isolated_database_env,
-    monkeypatch,
+    tmp_path, isolated_database_env, monkeypatch,
 ):
-    provider_writes = _trace_provider_writes(monkeypatch)
+    from app.modules.artifacts.intake.foreground_upload import ForegroundSourceUpload
+    from tests.retained_material_fixtures import finalize_retained_intake
+    from tests.tasks.submission_dispatch.test_revision_capacity import _revision_http_runtime, _revision_upload_headers
+    from tests.tasks.test_public_submission_intake import _client
+
     async with remediation_source(tmp_path / "local", isolated_database_env) as local:
         async with remediation_source(
-            tmp_path / "foreign",
-            isolated_database_env,
-            provision_services=False,
+            tmp_path / "foreign", isolated_database_env, provision_services=False,
             storage_settings=local.settings,
         ) as foreign:
             await _assert_dispatch_valid(local)
@@ -853,86 +850,60 @@ async def test_foreign_predecessor_stops_at_task_context_before_art_effects(
             local_source = await _fixture_revision_context(local)
             foreign_source = await _fixture_revision_context(foreign)
             async with local.factory.begin() as session:
-                contexts = task_submission_context_port(session)
-                own = _context_request(local)
-                assert (await contexts.lock_submission_context(
-                    own
-                )).checker_remediation_manifest_id == local_source
+                contexts, own = task_submission_context_port(session), _context_request(local)
+                assert (await contexts.lock_submission_context(own)).checker_remediation_manifest_id == local_source
                 for field, value in (
-                    ("task_id", foreign.request.task_id),
-                    ("assignment_id", foreign.request.assignment_id),
+                    ("task_id", foreign.request.task_id), ("assignment_id", foreign.request.assignment_id),
                     ("contributor_id", foreign.actor_context.actor_profile_id),
                     ("predecessor_submission_id", foreign.created.submission_id),
                 ):
                     with pytest.raises(TaskSubmissionContextUnavailable):
                         await contexts.lock_submission_context(replace(own, **{field: value}))
-            provider_writes.clear()
-            baseline = await _snapshot(local)
-
-            async def forbidden_load(*_args, **_kwargs):
-                pytest.fail("foreign predecessor reached ART predecessor loading")
-
-            original_load = PreparedSubmissionBundlePreparationCommand._load_predecessor
-            monkeypatch.setattr(
-                PreparedSubmissionBundlePreparationCommand,
-                "_load_predecessor",
-                forbidden_load,
-            )
-            request = _replacement_request(
-                local,
-                revision_archive(local.data),
-                predecessor_id=foreign.created.submission_id,
-                idempotency_key=new_record_id(),
-            )
-            with pytest.raises(
-                SubmissionBundlePreparationRejected,
-                match="submission_bundle_preparation_context_changed",
-            ):
-                await _prepare(local, request)
-            assert await _snapshot(local) == baseline
-            assert provider_writes == []
-            monkeypatch.setattr(
-                PreparedSubmissionBundlePreparationCommand,
-                "_load_predecessor",
-                original_load,
-            )
-
-            changed_data = revision_archive(local.data)
-            admission_id = await _verified_admission(
-                local.factory, local.store, local.namespace, local.settings,
-                local.actor_context,
-                _replacement_request(
-                    local, changed_data, predecessor_id=local.created.submission_id,
-                    idempotency_key=new_record_id(),
-                ),
-            )
-            async with local.factory() as session:
-                created = await compose_hidden_submission_creation_command(
-                    session, local.actor_context, request_id=new_record_id(),
-                    correlation_id=new_record_id(),
-                ).create(SubmissionCreationRequest(
-                    task_id=local.request.task_id,
-                    assignment_id=local.request.assignment_id,
-                    contributor_id=local.actor_context.actor_profile_id,
-                    predecessor_submission_id=local.created.submission_id,
-                    admission_id=admission_id,
-                    summary=local.creation_request.summary,
-                    contributor_attestation=local.creation_request.contributor_attestation,
-                ))
+            writes = _trace_provider_writes(monkeypatch, operations=(
+                "begin_source_upload", "upload_source_part", "complete_source_upload", "put", "observe_put_result"))
+            data = revision_archive(local.data)
+            async with _client(local, monkeypatch, isolated_database_env) as client:
+                settings, errors, calls = await _revision_http_runtime(
+                    local, client, tmp_path / "local", monkeypatch, data)
+                baseline = await _snapshot(local)
+                async with local.factory() as session:
+                    intake_before = await session.scalar(text("SELECT count(*) FROM public.submission_intake_operations"))
+                async def forbidden_upload(*_args, **_kwargs):
+                    pytest.fail("foreign predecessor reached ART upload")
+                headers = _revision_upload_headers(local)
+                with monkeypatch.context() as guard:
+                    guard.setattr(ForegroundSourceUpload, "receive", forbidden_upload)
+                    refused = await client.post(
+                        f"/api/v1/tasks/{local.request.task_id}/submissions",
+                        headers=headers | {"X-Predecessor-Submission-Id": str(foreign.created.submission_id)},
+                        content=_forbidden_bytes())
+                assert refused.status_code == 409, refused.text
+                assert refused.json()["error"]["code"] == "task_submission_predecessor_changed"
+                assert await _snapshot(local) == baseline and writes == [] and calls == []
+                async with local.factory() as session:
+                    assert await session.scalar(text("SELECT count(*) FROM public.submission_intake_operations")) == intake_before
+                accepted = await client.post(
+                    f"/api/v1/tasks/{local.request.task_id}/submissions",
+                    headers=_revision_upload_headers(local), content=data)
+                assert accepted.status_code == 202, accepted.text
+                assert len(calls) == 1 and not errors, errors
+            submission_id = await finalize_retained_intake(local.factory, SimpleNamespace(
+                operation_id=UUID(accepted.json()["operation_id"]), store=local.store.wrapped,
+                namespace=local.namespace, settings=settings))
             async with local.factory() as session:
                 body = await session.scalar(text(
                     "SELECT to_jsonb(d) FROM public.submission_dispatches d WHERE submission_id=:id"
-                ), {"id": created.submission_id})
+                ), {"id": submission_id})
                 assert body["checker_remediation_manifest_id"] == str(local_source)
                 validate = text(
                     "SELECT public.submission_dispatch_valid("
-                    "pg_catalog.jsonb_populate_record(NULL::public.submission_dispatches, "
-                    "CAST(:body AS jsonb)))"
+                    "pg_catalog.jsonb_populate_record(NULL::public.submission_dispatches, CAST(:body AS jsonb)))"
                 )
                 assert await session.scalar(validate, {"body": json.dumps(body)}) is True
                 assert await session.scalar(validate, {"body": json.dumps(
                     body | {"checker_remediation_manifest_id": str(foreign_source)}
                 )}) is False
+                await no_economic_effects(session)
 
 
 @pytest.mark.parametrize("outcome", ["infrastructure_failed", "completed"])
@@ -1024,120 +995,129 @@ async def test_source_superseded_during_zip_read_stops_before_art_effects(
                 )
 
 
+async def _predecessor_fence_snapshot(h, source_id):
+    """Observe immutable predecessor routing and its current checker generation."""
+    async with h.factory() as session:
+        return (await session.execute(text("""
+            SELECT f.current_run_id,
+              (SELECT count(*) FROM public.checker_runs WHERE submission_id=:prior),
+              (SELECT to_jsonb(m) FROM public.task_post_submit_routing_manifests m WHERE m.id=:source)
+            FROM public.checker_submission_fences f WHERE f.submission_id=:prior
+        """), {"prior": h.created.submission_id, "source": source_id})).one()
+
+
+async def _assert_pending_handoff_checker_guard(h, prior_request, successor, monkeypatch):
+    """Exact historical replay remains read-only; a stale TASK guard cannot insert."""
+    from app.db.errors import integrity_constraint_name
+    from app.modules.checkers.api.execution import CheckerRequestConflict
+    from app.modules.tasks.post_submit_routing.evaluation_guard import TaskEvaluationGuard
+
+    replay = await reserve(h, prior_request)
+    assert replay.attempt_id == h.completion.reference.attempt_id
+    assert replay.result_id == h.completion.reference.result_id
+    original = TaskEvaluationGuard.lock_evaluation_scope
+    async def stale_guard(guard, request):
+        assert request == successor
+        assert await original(guard, request) is False
+        return True
+    with monkeypatch.context() as patch:
+        patch.setattr(TaskEvaluationGuard, "lock_evaluation_scope", stale_guard)
+        with pytest.raises(CheckerRequestConflict) as denied:
+            await reserve(h, successor)
+    database_error = denied.value.__context__
+    assert isinstance(database_error, IntegrityError)
+    assert database_error.orig.sqlstate == "23514"
+    assert integrity_constraint_name(database_error) == "ck_checker_pending_submission_current"
+
+
 async def test_replacement_holds_task_custody_against_successor_generation(
     tmp_path, isolated_database_env, monkeypatch,
 ):
+    from app.modules.artifacts.intake.foreground_admission import ForegroundIntakeAdmission
+    from app.modules.artifacts.intake.models import SubmissionIntakeOperation
+    from tests.retained_material_fixtures import finalize_retained_intake
+    from tests.tasks.submission_dispatch.test_revision_capacity import _revision_http_runtime, _revision_upload_headers
+    from tests.tasks.submission_dispatch.test_revision_expiry import _wait_for_staged_submission
+    from tests.tasks.test_public_submission_intake import _client
+
     async with remediation_source(tmp_path, isolated_database_env) as h:
         source_id = await _fixture_revision_context(h)
-        request = _replacement_request(
-            h, revision_archive(h.data), predecessor_id=h.created.submission_id,
-            idempotency_key=new_record_id(),
-        )
-        admission_id = await _verified_admission(
-            h.factory, h.store, h.namespace, h.settings, h.actor_context, request,
-        )
-        creation = SubmissionCreationRequest(
-            task_id=h.request.task_id, assignment_id=h.request.assignment_id,
-            contributor_id=h.actor_context.actor_profile_id,
-            predecessor_submission_id=h.created.submission_id,
-            admission_id=admission_id, summary=request.summary,
-            contributor_attestation=request.contributor_attestation,
-        )
+        prior_request = h.request
         successor = await next_request(h)
-        async with h.factory() as session:
-            prior = (await session.execute(text("""
-                SELECT f.current_run_id,
-                  (SELECT count(*) FROM public.checker_runs WHERE submission_id=:prior),
-                  (SELECT to_jsonb(m) FROM public.task_post_submit_routing_manifests m
-                   WHERE m.id=:source)
-                FROM public.checker_submission_fences f WHERE f.submission_id=:prior
-            """), {"prior": h.created.submission_id, "source": source_id})).one()
-
+        prior = await _predecessor_fence_snapshot(h, source_id)
         held, release = asyncio.Event(), asyncio.Event()
-        creator_pid: list[int] = []
-        original = TaskSubmissionContextService.lock_submission_context
+        creator_pid, operations = [], []
+        original = ForegroundIntakeAdmission._accept_new
 
-        async def pause_after_real_context(service, selected):
-            facts = await original(service, selected)
-            if service._session.info.get("replacement_race"):
-                assert facts.checker_remediation_manifest_id == source_id
-                creator_pid.append(await service._session.scalar(text("SELECT pg_backend_pid()")))
-                held.set()
-                await asyncio.wait_for(release.wait(), 30)
-            return facts
-
-        async def create_replacement():
-            async with h.factory() as session:
-                session.info["replacement_race"] = True
-                return await compose_hidden_submission_creation_command(
-                    session, h.actor_context, request_id=new_record_id(),
-                    correlation_id=new_record_id(),
-                ).create(creation)
+        async def pause_staged_acceptance(admission, session, authority, repository, row, owner, *args):
+            result = await original(admission, session, authority, repository, row, owner, *args)
+            await session.flush()
+            assert row.state == "finalization_pending"
+            creator_pid.append(await session.scalar(text("SELECT pg_backend_pid()")))
+            operations.append(owner.operation_id)
+            held.set()
+            await asyncio.wait_for(release.wait(), 30)
+            return result
 
         waiter_name = "replacement-successor-" + new_record_id().hex
-
         async def reserve_successor():
             async with h.factory() as session, session.begin():
-                await session.execute(text(
-                    "SELECT set_config('application_name',:name,true)"
-                ), {"name": waiter_name})
+                await session.execute(text("SELECT set_config('application_name',:name,true)"), {"name": waiter_name})
                 return await evaluation_coordinator(session).reserve_current_evaluation(successor)
 
-        with monkeypatch.context() as patch:
-            patch.setattr(TaskSubmissionContextService, "lock_submission_context", pause_after_real_context)
-            creator = asyncio.create_task(create_replacement())
-            waiter = None
-            try:
-                await asyncio.wait_for(held.wait(), 30)
-                waiter = asyncio.create_task(reserve_successor())
-                await asyncio.wait_for(wait_for_named_database_lock(
-                    isolated_database_env, waiter_name, expected_blocker_pid=creator_pid[0],
-                ), 15)
-                async with h.factory() as observer:
-                    waiting_query = await observer.scalar(text(
-                        "SELECT query FROM pg_stat_activity "
-                        "WHERE application_name=:name AND wait_event_type='Lock'"
-                    ), {"name": waiter_name})
-                assert waiting_query is not None and "workstream_tasks" in waiting_query
-                assert not waiter.done()
-                release.set()
-                created = await asyncio.wait_for(creator, 60)
-                with pytest.raises(
-                    CheckerExecutionUnavailable, match="checker_reservation_scope_unavailable",
-                ):
-                    await asyncio.wait_for(waiter, 30)
-            finally:
-                release.set()
-                for pending in (creator, waiter):
-                    if pending is not None and not pending.done():
-                        pending.cancel()
-                await asyncio.gather(
-                    *(pending for pending in (creator, waiter) if pending is not None),
-                    return_exceptions=True,
-                )
-
-        assert created.submission_version == 2
+        data = revision_archive(h.data)
+        async with _client(h, monkeypatch, isolated_database_env) as client:
+            settings, errors, calls = await _revision_http_runtime(h, client, tmp_path, monkeypatch, data)
+            with monkeypatch.context() as patch:
+                patch.setattr(ForegroundIntakeAdmission, "_accept_new", pause_staged_acceptance)
+                creator = asyncio.create_task(client.post(
+                    f"/api/v1/tasks/{h.request.task_id}/submissions",
+                    headers=_revision_upload_headers(h), content=data))
+                waiter = None
+                try:
+                    await _wait_for_staged_submission(held, creator, timeout=60)
+                    waiter = asyncio.create_task(reserve_successor())
+                    await asyncio.wait_for(wait_for_named_database_lock(
+                        isolated_database_env, waiter_name, expected_blocker_pid=creator_pid[0]), 15)
+                    async with h.factory() as observer:
+                        waiting_query = await observer.scalar(text(
+                            "SELECT query FROM pg_stat_activity WHERE application_name=:name AND wait_event_type='Lock'"
+                        ), {"name": waiter_name})
+                    assert waiting_query is not None and "workstream_tasks" in waiting_query
+                    assert not waiter.done()
+                    release.set()
+                    accepted = await asyncio.wait_for(creator, 60)
+                    assert accepted.status_code == 202, accepted.text
+                    with pytest.raises(CheckerExecutionUnavailable, match="checker_reservation_scope_unavailable"):
+                        await asyncio.wait_for(waiter, 30)
+                finally:
+                    release.set()
+                    for pending in (creator, waiter):
+                        if pending is not None and not pending.done():
+                            pending.cancel()
+                    await asyncio.gather(*(pending for pending in (creator, waiter) if pending is not None), return_exceptions=True)
+        assert len(calls) == 1 and not errors, errors
+        await _assert_pending_handoff_checker_guard(h, prior_request, successor, monkeypatch)
+        assert await _predecessor_fence_snapshot(h, source_id) == prior
         async with h.factory() as session:
-            after = (await session.execute(text("""
-                SELECT f.current_run_id,
-                  (SELECT count(*) FROM public.checker_runs WHERE submission_id=:prior),
-                  (SELECT to_jsonb(m) FROM public.task_post_submit_routing_manifests m
-                   WHERE m.id=:source)
-                FROM public.checker_submission_fences f WHERE f.submission_id=:prior
-            """), {"prior": h.created.submission_id, "source": source_id})).one()
-            assert after == prior
+            operation = await session.get(SubmissionIntakeOperation, operations[0])
+            assert operation.state == "finalization_pending" and operation.finalized_submission_id is None
             assert await session.scalar(text(
                 "SELECT count(*) FROM public.submissions WHERE task_id=:task"
-            ), {"task": h.request.task_id}) == 2
-            assert await session.scalar(text(
-                "SELECT count(*) FROM public.submission_dispatches WHERE task_id=:task"
-            ), {"task": h.request.task_id}) == 2
-            assert await session.scalar(text(
-                "SELECT public.submission_dispatch_valid(d) "
-                "FROM public.submission_dispatches d WHERE d.submission_id=:id"
-            ), {"id": created.submission_id}) is True
-            admission = await session.get(SubmissionBundleAdmission, str(admission_id))
+            ), {"task": h.request.task_id}) == 1
+        submission_id = await finalize_retained_intake(h.factory, SimpleNamespace(
+            operation_id=operations[0], store=h.store.wrapped, namespace=h.namespace, settings=settings))
+        async with h.factory() as session:
+            operation = await session.get(SubmissionIntakeOperation, operations[0])
+            admission = await session.get(SubmissionBundleAdmission, operation.finalized_admission_id)
             assert admission.status == "consumed"
+            for table in ("submissions", "submission_dispatches"):
+                assert await session.scalar(text(f"SELECT count(*) FROM public.{table} WHERE task_id=:task"),
+                                            {"task": h.request.task_id}) == 2
             assert await session.scalar(text(
-                "SELECT status FROM public.workstream_tasks WHERE id=:task"
-            ), {"task": h.request.task_id}) == "evaluation_pending"
+                "SELECT public.submission_dispatch_valid(d) FROM public.submission_dispatches d WHERE d.submission_id=:id"
+            ), {"id": submission_id}) is True
+            assert await session.scalar(text("SELECT status FROM public.workstream_tasks WHERE id=:task"),
+                                        {"task": h.request.task_id}) == "evaluation_pending"
+            await no_economic_effects(session)
+        assert await _predecessor_fence_snapshot(h, source_id) == prior
