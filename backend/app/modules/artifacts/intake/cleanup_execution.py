@@ -52,6 +52,12 @@ class SubmissionSourceCleanupExecution:
             observed = await self._provider.remove(claim.source, upload)
         if type(observed) is not SubmissionSourceRemoval or observed.source != expected:
             raise IntakeCustodyConflict("source_cleanup_observation_mismatch")
+        if observed.observed_upload_ids:
+            if observed.observed_source is not None or not isinstance(claim.source, UnsealedSubmissionSource):
+                raise IntakeCustodyConflict("source_cleanup_observation_mismatch")
+            async with self._root() as owner:
+                await owner.record_upload_observation(claim, observed.observed_upload_ids)
+            raise IntakeCustodyConflict("source_cleanup_upload_observed")
         if observed.observed_source is not None:
             if claim.observed_source is not None or not isinstance(claim.source, UnsealedSubmissionSource):
                 raise IntakeCustodyConflict("source_cleanup_observation_mismatch")

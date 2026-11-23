@@ -135,6 +135,9 @@ class S3SubmissionSourceCleanup:
 
     async def remove_unsealed(self, value: UnsealedSourceCleanupInput):
         """Abort known scoped handles; retain charge until remote writes are settled."""
+        from app.interfaces.artifacts import ArtifactOperationConflictError
+        from app.modules.artifacts.api.submission_intake import SubmissionSourceUpload
+
         if value.intent is None:
             return SubmissionSourceRemoval(value.source, False, False, False)
         if value.completion is not None:
@@ -142,21 +145,34 @@ class S3SubmissionSourceCleanup:
             if completed is not None:
                 return SubmissionSourceRemoval(value.source, False, False, False, completed)
         handles = await self._store.discover_source_uploads(value.intent)
-        if value.upload is not None and value.upload not in handles:
+        if value.upload is None:
+            discovered = tuple(sorted(set(value.observed_upload_ids) | {item.provider_upload_id for item in handles}))
+            if len(discovered) > 100:
+                raise ArtifactOperationConflictError("source cleanup upload inventory exceeded bound")
+            if discovered != value.observed_upload_ids:
+                return SubmissionSourceRemoval(value.source, False, False, False, observed_upload_ids=discovered)
+            if not discovered:
+                return SubmissionSourceRemoval(value.source, False, False, False)
+            handles = tuple(SubmissionSourceUpload(intent=value.intent, provider_upload_id=handle) for handle in discovered)
+        elif value.upload not in handles:
             handles = (*handles, value.upload)
         for upload in handles:
             await self._store.request_source_abort(upload)
         parts_absent = True
         for upload in handles:
             parts_absent = parts_absent and await self._store.source_upload_parts_absent(upload)
-        if value.upload is None or not parts_absent:
-            # Discovery cannot prove that an unacknowledged initiation has
-            # finished. Keep its charge, including when no handle was listed.
+        if not parts_absent:
             return SubmissionSourceRemoval(value.source, False, False, parts_absent)
         if value.completion is not None:
             completed = await self._store.observe_source_upload(value.completion)
             if completed is not None:
                 return SubmissionSourceRemoval(value.source, False, False, parts_absent, completed)
         remaining = await self._store.discover_source_uploads(value.intent)
+        if value.upload is None and remaining:
+            discovered = tuple(sorted(set(value.observed_upload_ids) | {item.provider_upload_id for item in remaining}))
+            if len(discovered) > 100:
+                raise ArtifactOperationConflictError("source cleanup upload inventory exceeded bound")
+            if discovered != value.observed_upload_ids:
+                return SubmissionSourceRemoval(value.source, False, False, parts_absent, observed_upload_ids=discovered)
         absent = await self._versions_absent(value.source.location)
         return SubmissionSourceRemoval(value.source, absent, not remaining and absent, parts_absent)

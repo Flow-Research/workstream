@@ -1374,19 +1374,21 @@ async def test_unsealed_cleanup_settles_known_upload_or_retains_completed_versio
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("obligation", ["unknown_begin", "surviving_parts", "version", "delete_marker"])
+@pytest.mark.parametrize("obligation", ["no_begin", "unknown_begin", "inventory_bound", "surviving_parts", "version", "delete_marker"])
 async def test_unsealed_cleanup_preserves_unresolved_obligations(source_store, monkeypatch, obligation):
     from app.adapters.artifacts.source_cleanup import S3SubmissionSourceCleanup
     from app.modules.artifacts.api.submission_cleanup import UnsealedSubmissionSource, UnsealedSourceCleanupInput
 
     intent = source_intent(source_store)
-    upload = await source_store.begin_source_upload(intent)
-    if obligation != "unknown_begin":
+    upload = None if obligation == "no_begin" else await source_store.begin_source_upload(intent)
+    missing_handle = obligation in {"no_begin", "unknown_begin", "inventory_bound"}
+    if not missing_handle:
         await source_store.upload_source_part(upload, 1, b"unfinished")
     value = UnsealedSourceCleanupInput(
         source=UnsealedSubmissionSource(location=intent.location, upload_fence=intent.upload_fence,
-            provider_upload_id=None if obligation == "unknown_begin" else upload.provider_upload_id),
-        intent=intent, upload=None if obligation == "unknown_begin" else upload, completion=None,
+            provider_upload_id=None if missing_handle else upload.provider_upload_id),
+        intent=intent, upload=None if missing_handle else upload, completion=None,
+        observed_upload_ids=tuple(f"retained-{number:03d}" for number in range(100)) if obligation == "inventory_bound" else (),
     )
     cleanup_store = initialize_minio_store(private_prefix=source_store._private_prefix)
     try:
@@ -1403,9 +1405,20 @@ async def test_unsealed_cleanup_preserves_unresolved_obligations(source_store, m
                 if obligation == "delete_marker":
                     await client.delete_object(Bucket=MINIO_BUCKET, Key=key)
                     await client.delete_object(Bucket=MINIO_BUCKET, Key=key, VersionId=seeded["VersionId"])
+        if obligation == "inventory_bound":
+            with pytest.raises(ArtifactOperationConflictError, match="inventory exceeded bound"):
+                await S3SubmissionSourceCleanup(cleanup_store).remove_unsealed(value)
+            assert await source_store.source_upload_parts_absent(upload) is False
+            return
         result = await S3SubmissionSourceCleanup(cleanup_store).remove_unsealed(value)
         assert result.writes_settled is False
         assert result.observed_source is None
+        if obligation == "no_begin":
+            assert result.observed_upload_ids == ()
+            assert result.object_absent is result.parts_absent is False
+        if obligation == "unknown_begin":
+            assert result.observed_upload_ids == (upload.provider_upload_id,)
+            assert await source_store.source_upload_parts_absent(upload) is False
         if obligation == "surviving_parts":
             assert result.parts_absent is False
         if obligation in {"version", "delete_marker"}:
@@ -1414,7 +1427,8 @@ async def test_unsealed_cleanup_preserves_unresolved_obligations(source_store, m
             assert len(retained.get("Versions", [])) == (0 if obligation == "delete_marker" else 1)
             assert len(retained.get("DeleteMarkers", [])) == (1 if obligation == "delete_marker" else 0)
     finally:
-        await source_store.request_source_abort(upload)
+        if upload is not None:
+            await source_store.request_source_abort(upload)
         cleanup_store.close()
 
 

@@ -310,6 +310,10 @@ fresh aged cleanup claim before deletion. An abort acknowledgment alone does not
 release storage charges. The S3 data-plane SDK makes one total attempt per call;
 durable owners control observation and retries.
 
-Uncertain remote initiation without a recorded handle and genuine orphan
-reconciliation remain unfinished requirements. Do not treat this schedule as
-proof that every abandoned byte is reclaimed.
+For remote initiation whose response was lost, discovered multipart IDs are
+saved on the existing cleanup claim before abort. A fresh authorization binds
+that retained set; newly discovered IDs invalidate the previous authorization.
+Retries check every retained handle even when discovery no longer lists it.
+Empty discovery cannot prove that an uncertain initiation never happened, so
+that case remains charged. Genuine orphan reconciliation remains unfinished.
+Do not treat this schedule as proof that every abandoned byte is reclaimed.

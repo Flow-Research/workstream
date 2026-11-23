@@ -1,5 +1,5 @@
 """Exact source cleanup selectors; values alone grant no deletion authority."""
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal, Protocol
 from uuid import UUID
 
@@ -63,8 +63,13 @@ class UnsealedSourceCleanupInput:
     intent: SubmissionSourceUploadIntent | None
     upload: SubmissionSourceUpload | None
     completion: SubmissionSourceCompletion | None
+    observed_upload_ids: tuple[str, ...] = field(default=(), repr=False)
 
     def __post_init__(self):
+        validate_observed_upload_ids(self.observed_upload_ids)
+        if self.observed_upload_ids and (self.intent is None or self.upload is not None
+                                        or self.source.provider_upload_id is not None):
+            raise ValueError("observed uploads require missing-handle custody")
         if self.source.upload_fence is None:
             if any(value is not None for value in (self.intent, self.upload, self.completion)):
                 raise ValueError("uninitiated cleanup has no provider input")
@@ -87,8 +92,24 @@ class UnsealedSourceCleanupInput:
             raise ValueError("unsealed cleanup EOF differs")
 
 
-def cleanup_target_sha256(source, observed_source=None) -> str:
+def validate_observed_upload_ids(values: tuple[str, ...]) -> None:
+    """Bound and canonicalize observation identity without granting authority."""
+    if (type(values) is not tuple or len(values) > 100
+            or any(type(value) is not str or not 1 <= len(value) <= 2048 for value in values)
+            or tuple(sorted(set(values))) != values):
+        raise ValueError("observed upload identities are invalid")
+
+
+def cleanup_target_sha256(source, observed_source=None, observed_upload_ids=()) -> str:
     """Bind a later exact version as well as its original unfinished obligation."""
+    validate_observed_upload_ids(observed_upload_ids)
+    if observed_upload_ids:
+        if observed_source is not None:
+            raise ValueError("upload and completion observations cannot be combined")
+        return canonical_json_hash({
+            "schema_version": "workstream.observed_submission_uploads_cleanup.v1",
+            "source": source.model_dump(mode="json"), "observed_upload_ids": list(observed_upload_ids),
+        })
     if observed_source is None:
         return source.source_sha256()
     return canonical_json_hash({
@@ -107,6 +128,7 @@ class SubmissionSourceRemoval:
     writes_settled: bool
     parts_absent: bool
     observed_source: SealedSubmissionSource | None = None
+    observed_upload_ids: tuple[str, ...] = field(default=(), repr=False)
 
 
 class SubmissionSourceCleanupProvider(ExternalServiceAdapter, Protocol):

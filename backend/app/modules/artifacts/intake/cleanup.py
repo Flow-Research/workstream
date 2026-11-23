@@ -4,7 +4,7 @@ The composition root must supply current authority and act only on a committed c
 This owner retains uncertain targets and releases charges only with both exact
 object absence and settled upload-part obligations supplied by that coordinator.
 """
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta
 from uuid import UUID
 
@@ -15,6 +15,7 @@ from app.modules.artifacts.api.submission_intake import (
 )
 from app.modules.artifacts.api.submission_cleanup import (
     SubmissionSourceCleanupAuthorityFacts, UnsealedSubmissionSource, UnsealedSourceCleanupInput, cleanup_target_sha256,
+    validate_observed_upload_ids,
 )
 from app.modules.artifacts.intake.capacity import SubmissionSourceCapacity
 from app.modules.artifacts.intake.models import (
@@ -37,6 +38,7 @@ class SourceCleanupClaim:
     lease_expires_at: datetime
     confirmed: bool
     observed_source: SealedSubmissionSource | None = None
+    observed_upload_ids: tuple[str, ...] = field(default=(), repr=False)
 
 
 def _claim_value(row: SubmissionSourceCleanupClaim) -> SourceCleanupClaim:
@@ -48,6 +50,7 @@ def _claim_value(row: SubmissionSourceCleanupClaim) -> SourceCleanupClaim:
         .model_validate_json(json.dumps(row.source)),
         row.lease_expires_at, row.confirmed_at is not None,
         SealedSubmissionSource.model_validate_json(json.dumps(row.observed_source)) if row.observed_source is not None else None,
+        tuple(row.observed_upload_ids or ()),
     )
 
 
@@ -158,7 +161,8 @@ class SubmissionSourceCleanupOwner:
         observed = _claim_value(row).observed_source if row is not None else None
         facts = SubmissionSourceCleanupAuthorityFacts(
             operation_id=UUID(operation.id), project_id=UUID(operation.project_id),
-            task_id=UUID(operation.task_id), source_sha256=cleanup_target_sha256(source, observed),
+            task_id=UUID(operation.task_id), source_sha256=cleanup_target_sha256(
+                source, observed, tuple(row.observed_upload_ids or ()) if row is not None else ()),
             claim_id=claim_id, claim_generation=generation, phase=phase,
         )
         handle = await self._authorization.prepare(facts=facts, idempotency_key=facts.claim_id)
@@ -235,6 +239,7 @@ class SubmissionSourceCleanupOwner:
         operation, row = await self._locked(claim.source.location.operation_id)
         if (row is None or row.claim_id != str(claim.claim_id) or row.generation != claim.generation
                 or row.source != claim.source.model_dump(mode="json")
+                or tuple(row.observed_upload_ids or ()) != claim.observed_upload_ids
                 or row.observed_source != (claim.observed_source.model_dump(mode="json") if claim.observed_source is not None else None)):
             raise IntakeCustodyConflict("source_cleanup_stale")
         if row.confirmed_at is not None:
@@ -254,6 +259,8 @@ class SubmissionSourceCleanupOwner:
         now = await self._session.scalar(select(func.clock_timestamp()))
         if (row is None or row.claim_id != str(claim.claim_id) or row.generation != claim.generation
                 or row.source != claim.source.model_dump(mode="json")
+                or tuple(row.observed_upload_ids or ()) != claim.observed_upload_ids
+                or row.observed_source != (claim.observed_source.model_dump(mode="json") if claim.observed_source else None)
                 or row.confirmed_at is not None or row.lease_expires_at <= now):
             raise IntakeCustodyConflict("source_cleanup_stale")
         await self._require_claim_authority(operation.id)
@@ -268,10 +275,28 @@ class SubmissionSourceCleanupOwner:
                 completion = SubmissionSourceCompletion.model_validate_json(json.dumps({
                     "upload": upload.model_dump(mode="json"), "raw_sha256": operation.raw_sha256,
                     "raw_byte_count": operation.raw_byte_count, "parts": receipt.completion_parts}))
-            return UnsealedSourceCleanupInput(claim.source, intent, upload, completion)
+            return UnsealedSourceCleanupInput(claim.source, intent, upload, completion, claim.observed_upload_ids)
         if receipt is None or receipt.provider_upload_id is None or receipt.completion_parts is None:
             raise IntakeCustodyConflict("source_cleanup_unresolved")
         return SubmissionSourceUpload(
             intent=await self._intake._upload_intent(operation, receipt),
             provider_upload_id=receipt.provider_upload_id,
         )
+
+    async def record_upload_observation(self, claim: SourceCleanupClaim, handles: tuple[str, ...]) -> None:
+        """Remember discovered handles; only a fresh exact claim may abort them."""
+        validate_observed_upload_ids(handles)
+        operation, row = await self._locked(claim.source.location.operation_id)
+        now = await self._session.scalar(select(func.clock_timestamp()))
+        if (not isinstance(claim.source, UnsealedSubmissionSource)
+                or claim.source.provider_upload_id is not None or claim.source.upload_fence is None
+                or claim.source.location.provider_profile not in {"minio-v1", "aws-s3-v1"}
+                or row is None or row.claim_id != str(claim.claim_id) or row.generation != claim.generation
+                or row.confirmed_at is not None or row.lease_expires_at <= now
+                or row.source != claim.source.model_dump(mode="json") or row.observed_source is not None
+                or tuple(row.observed_upload_ids or ()) != claim.observed_upload_ids
+                or not set(handles) > set(claim.observed_upload_ids)):
+            raise IntakeCustodyConflict("source_cleanup_observation_mismatch")
+        await self._require_claim_authority(operation.id)
+        row.observed_upload_ids = list(handles)
+        await self._session.flush()

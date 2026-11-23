@@ -8196,3 +8196,41 @@ in7.91s,0088, complete cleanup). Review snapshots match; production code remains
 the reviewed31f59daf4 change. Supplied suite receipts identify precommit
 worktrees rather than exact-head launches. Missing-handle initiation, genuine
 orphans, native AWS and full-goal qualification remain open.
+
+Missing-handle recovery boundary: persist a bounded, canonical set of discovered
+multipart handle IDs on the existing cleanup claim before aborting those handles.
+Bind that set into the next exact cleanup authorization; recording or enlarging
+the set invalidates the previous decision. Preserve original upload receipts and
+source identities. A lost abort response can then replay all recorded handles
+even when LIST no longer returns them. Empty discovery remains unresolved; do
+not infer that an unacknowledged begin never happened. Reuse the existing sweep,
+claim lease and confirmation/charge release, with no new submission state.
+Allowed scope: cleanup API/model/owner/execution/provider, migration0089 and
+head/fingerprint, focused Local/MinIO/PostgreSQL and retained-migration controls,
+lane selection and affected cleanup documentation. No broad inventory deletion,
+retained-data rewrite, new caller authority or native-AWS qualification claim.
+Acceptance: discovered handles are durably audited before abort; old or altered
+observations cannot authorize removal; lost-abort replay releases once after all
+known handles/versions settle; unresolved/no-handle discovery stays charged;
+existing sealed and observed-version claims survive upgrade unchanged. Risk:
+authorization and storage reclamation; QA and architecture/security review.
+
+0089 implementation evidence: focused real PostgreSQL/MinIO proofs passed for
+known/missing handle charge settlement (2 cases, 49.72s), observation growth
+before any abort (1 case, 68.96s), empty/unknown initiation controls (2 cases,
+18.77s), and the bounded inventory failure (1 case, 31.37s). Logs and isolated
+metadata are `/tmp/submission-observed-upload-v2`,
+`/tmp/submission-observed-upload-growth-v1`,
+`/tmp/submission-observed-upload-empty-v1`, and
+`/tmp/submission-observed-upload-bound-v1` (`.log/.json` each). Metadata confirms
+0089 and complete resource cleanup. These runs used an uncommitted candidate
+based on a46c317a2, not an exact committed-head launch.
+
+The actual 0088 predecessor upgrade passed in 179.95s
+(`/tmp/submission-observed-upload-migration-v1.log/.json`), preserving outstanding,
+confirmed and observed-version claims and their prior audit identities. This
+run covers the 0088 parameter; the 0087 parameter was not rerun for this change.
+The measured 0089 schema fingerprint is
+`fb82d1094faebbf8c2ae35a71987772af7cd2519944423b5ab91a6902e3c3580`.
+Scoped Ruff passed. Native AWS, genuine orphan reconciliation and full-system
+qualification are not established by these focused proofs.

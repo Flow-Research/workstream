@@ -59,6 +59,17 @@ with the API and runner on different hosts and no shared filesystem. A provider
 change must not require a second submission lifecycle. These are implementation
 and verification requirements, not claims that remote transport is complete.
 
+ZIP preservation means retaining the exact uploaded source in artifact storage
+and binding acceptance/results to that source; it does not require preserving a
+VM, runner disk, or a second durable ZIP per execution. Transfer or mount only
+what the selected execution capability needs into disposable scratch. Keep the
+failure cases concrete: interrupted upload, lost storage acknowledgement, and
+accepted input awaiting finalization. Extend existing custody and cleanup for
+those cases; do not introduce provider orchestration or extra lifecycle states
+solely to anticipate future sandbox vendors. Moving execution off the API host
+removes its virtualization dependency; the chosen runner/provider still must
+satisfy its own runtime requirements.
+
 ## Remaining work, in execution order
 
 | Order | Required outcome | Concrete finishing evidence |
@@ -83,9 +94,11 @@ fresh aged claim identifies its exact version. Focused Local/PostgreSQL and MinI
 checks passed, as did the existing cleanup-owner suite. Recorded MinIO multipart
 handles now settle only after parts/handle/version absence; a real PostgreSQL
 lost-abort/replay case proves conservative charge retention then one release.
-Remote initiation without a recorded handle and genuine-orphan reconciliation
-remain open; do not treat this
-partial implementation as completion of order 1.
+Remote initiation without a recorded handle now retains discovered IDs before
+abort and binds them to a fresh cleanup authorization. Focused PostgreSQL/MinIO
+checks cover growing observations and lost-abort replay. Empty ambiguous
+discovery remains charged; genuine-orphan reconciliation and operational crash
+drills remain open. This partial implementation does not complete order 1.
 
 ## Acceptance evidence still to close
 

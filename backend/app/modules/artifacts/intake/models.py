@@ -177,6 +177,9 @@ class SubmissionSourceCleanupClaim(Base):
         CheckConstraint("jsonb_typeof(source)='object'", name="source_shape"),
         CheckConstraint("(observed_source is null and observed_at is null) or "
                         "(jsonb_typeof(observed_source)='object' and observed_at is not null)", name="observed_shape"),
+        CheckConstraint("observed_upload_ids is null or (jsonb_typeof(observed_upload_ids)='array' "
+                        "and jsonb_array_length(observed_upload_ids) between 1 and 100 "
+                        "and observed_source is null)", name="observed_upload_shape"),
         CheckConstraint("(get_byte(uuid_send(claim_id),6)>>4)=7 and (get_byte(uuid_send(claim_id),8)&192)=128",
                         name="claim_uuid7"),
         Index("ix_source_cleanup_pending", "lease_expires_at", postgresql_where=text("confirmed_at is null")),
@@ -190,6 +193,7 @@ class SubmissionSourceCleanupClaim(Base):
     lease_expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     observed_source: Mapped[dict | None] = mapped_column(JSONB(none_as_null=True))
     observed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    observed_upload_ids: Mapped[list[str] | None] = mapped_column(JSONB(none_as_null=True))
     confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     claim_decision_id: Mapped[str | None] = mapped_column(Uuid(as_uuid=False))
     confirmation_decision_id: Mapped[str | None] = mapped_column(Uuid(as_uuid=False))
