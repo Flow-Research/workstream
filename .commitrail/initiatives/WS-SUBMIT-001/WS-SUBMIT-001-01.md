@@ -7966,3 +7966,17 @@ original task pointer. Logs: /tmp/submission-expired-starvation-before.log/.json
 schema0087 and completed cleanup. System-Python structure validation passed after
 the repair; Ruff, record/link and whitespace checks passed. No production denial
 was suppressed or broadened to satisfy the test. Clean review replay follows.
+
+Clean81d69a20745b1a8f6870c6b0af652d11e48520b8 review closure: scoped ARCH/SEC
+PASS and QA/test-delta PASS WITH LOW RISKS. Independent exact-case mutation
+removed only after-lock revalidation; the PostgreSQL revocation test failed on
+unchanged-state equality because abandonment incorrectly committed, even though
+later discovery still raised the expected authorization denial. Evidence:
+/tmp/submission-expired-qa-mutant.log/.json, expected1failure19.08s, schema0087,
+complete cleanup. Both scoped findings are closed. No unsealed/provider/full-goal
+qualification is claimed. Refresh this initiative overview and its INDEX.md
+navigation row to remove the obsolete no-production-caller/preparation-only
+summary; full capability-ledger/export reconciliation remains in final delivery
+scope. The next implementation boundary is interrupted/unsealed and genuine
+orphan reconciliation using existing cleanup ownership, followed by the remaining
+writer retirement, remote execution and acceptance/configuration qualification.

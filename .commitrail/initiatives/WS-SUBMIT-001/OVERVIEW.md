@@ -20,12 +20,12 @@ limits are in [the change record](WS-SUBMIT-001-01.md).
 - [x] Pending-revision protection prevents dispatch against the older Submission.
 - [x] Cleanup claim, retention barriers, exact-generation deletion and confirmed charge release owners.
 - [x] Production sealed-source sweep wiring: explicit profile, dedicated worker/task isolation, 12-hour schedule, indexed discovery and focused real-storage retry/retention proof.
+- [x] Expired receiving/PRE recovery through the sweep: current authority and task-lock recheck, old-owner fencing, exact pointer release, retained source charge and separate time for sealed cleanup.
 - [x] Historical cap fixture no longer depends on the old writer; capture, restore/recovery and neighboring upgrade controls passed.
 
 Recent focused evidence includes atomic invalidation (`8a854f7a6`), public
-ZIP/T5 lineage (`168e5268f`), and policy-error translation (`d31a45773`). The
-last change passed seven PostgreSQL cases and 92 boundary checks. These are
-bounded results, not full-head qualification.
+ZIP/T5 lineage (`168e5268f`), and policy-error translation (`d31a45773`). These and the cleanup/recovery runs recorded below are bounded results, not
+full-head qualification.
 
 ## Execution deployment decision
 
@@ -53,7 +53,7 @@ qualification, not a redesign of submission ownership.
 
 | Order | Required outcome | Concrete finishing evidence |
 | --- | --- | --- |
-| 1 | Finish expired-foreground, uncertain/unsealed and genuine-orphan reconciliation | Wire the existing expired-foreground owner; reconcile interrupted multipart and lost acknowledgements; retained/stalled sources survive; actual absence and settled writes release charges once; exercise worker loss/restart. |
+| 1 | Finish uncertain/unsealed and genuine-orphan reconciliation | Reconcile interrupted multipart and lost acknowledgements; retained/stalled sources survive; actual absence and settled writes release charges once; exercise worker loss/restart. |
 | 2 | Remove superseded preparation/submission writers and remaining consumers | Trace all remaining callers, preserve their distinct authority/history contracts, then delete obsolete implementation. Current T5 `create_accepted` remains. |
 | 3 | Complete separate-runner integration and runtime/provider/resource qualification | Authenticated remote execution replacing the current API-side Unix-socket coupling; actual Smol one-session/isolation proof on runner infrastructure; representative maxima, cold paths, concurrency and timing measurements; applicable AWS exact-version/uncertain multipart proof. Portable/MinIO evidence is insufficient for these claims. |
 | 4 | Execute final full-system verification and close the acceptance matrix | Full backend lanes, CLI/MCP contracts and CI at the final head; every A01–A35 row linked to an executed, scope-matching result. Fix actual failures without weakening requirements. |
@@ -62,8 +62,9 @@ qualification, not a redesign of submission ownership.
 The concrete next runtime gap is order 1. Sealed-source scheduling and task
 isolation passed scoped implementation review at `8928f3924`; focused integration
 cases passed across two runs. This is not deployed-provider or broker-crash
-qualification. `abandon_expired()` has no production caller; unsealed/uncertain
-and genuine-orphan reconciliation remain unfinished. Further optional test
+qualification. Expired-foreground recovery passed scoped review at `81d69a207`,
+including blocked-task progress and after-lock service revocation. Unsealed/
+uncertain and genuine-orphan reconciliation remain unfinished. Further optional test
 migration must not displace closing this integration.
 
 ## Acceptance evidence still to close
