@@ -65,7 +65,7 @@ expiring permission-to-use-storage record or running a privileged scheduler.
 
 ## Evidence
 
-Source trace establishes certificate coupling and isolated proof-only database references. Backend and policy implementation are underway; live verification remains pending.
+Source trace establishes certificate coupling and isolated proof-only database references. Backend and policy implementation and live dedicated-user storage qualification passed the focused checks recorded below. Deployment cutover and full CI remain pending.
 
 ## Review focus
 

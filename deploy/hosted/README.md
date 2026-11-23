@@ -422,7 +422,7 @@ The configuration-only check renders Compose and validates fixed topology,
 digest identities, Flow/AWS profile and the hosted checker selectors plus
 declared cache-identity shape needed by this topology. The application and
 checker startup owners validate their complete settings and config schemas,
-including the canonical AWS evidence fields described above. This check does not inspect host ownership, Docker, cache or any external
+including the canonical AWS credential settings described above. This check does not inspect host ownership, Docker, cache or any external
 service:
 
 ```sh

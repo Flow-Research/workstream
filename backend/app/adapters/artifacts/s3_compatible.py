@@ -1001,7 +1001,7 @@ def _s3_namespace_identity(
     private_prefix: str,
     addressing_style: str,
 ) -> ArtifactStoreNamespaceIdentity:
-    """Build the one namespace identity shared by bootstrap and live proof."""
+    """Build the one namespace identity used by provider construction and storage operations."""
     profile = "minio-v1" if provider_profile == "minio" else "aws-s3-v1"
     items = {
         "addressing_style": addressing_style,
