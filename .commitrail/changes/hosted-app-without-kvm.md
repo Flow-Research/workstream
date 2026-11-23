@@ -31,6 +31,10 @@ delivery owner as ordinary assignment, revision and completion effects.
   the exact checker request and reconciliation event types before candidate
   pagination, including expired claims, and enforce the same filter before
   claim or recovery. Retain ordinary and unsupported expired recovery.
+- Refresh the exact identifier-generation classifications for the changed outbox
+  syntax. The authority fact-substitution test uses a 60-second lease to isolate
+  its assertions from short-lease expiry under CI load; expiry tests retain their
+  existing explicit bounds and assertions.
 - Update the existing hosted release preflight test and relevant existing
   backend test owners. Document the app profile and its offline limits in
   `deploy/hosted/README.md` and reconcile the affected part of
