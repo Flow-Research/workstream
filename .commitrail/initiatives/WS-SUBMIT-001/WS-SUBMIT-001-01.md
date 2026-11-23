@@ -7652,3 +7652,41 @@ Ruff/record/whitespace pass. Shared precommit proof overd627bfffc, not independe
 or clean-head execution. Test-only fixture alias cleanup preserves the same
 objects/scopes; it does not change the product evidence. Full goal qualification
 and remaining hidden/preparation consumers remain open, same draft PR708.
+
+Next bounded lineage cutover replaces the remaining hidden-create consumer in
+backend/tests/tasks/test_submission_lineage.py. Public ZIP/PRE/T4 establishes the
+accepted packet; one real service claim/observation drives production T5 roots.
+Retain missing-admission substitution and both packet-field consumption refusals after staged
+Submission, both immediate packet SQL guard attacks after real finalization AUTH,
+full rollback, concurrent identical finalization, exact contribution/assignment/
+binding/content lineage, and all existing post-bind immutability attacks. Deliver
+the existing durable event after T5 to prove exact completed replay; this latter
+step is delivery replay, not initial T5-through-worker proof (covered elsewhere).
+Allowed: this test module and record; no product/schema changes assumed. Keep
+shared preparation helpers until traced consumers migrate. QA/test-delta and
+ARCH/SEC review for custody-test change; run focused PG case, Ruff/structure/
+record/whitespace. Human focus: preserve independent packet-guard and rollback
+oracles rather than replace them with happy-path assertions. Same PR708.
+
+Lineage V1 reached the real staged Submission/ART missing-admission guard but
+failed on the expected exception wrapper (52.59s; cleanup complete). The removed
+hidden transaction command alone translated ART failure to TASK failure; current
+T5 exposes SubmissionAdmissionConsumptionError directly to its durable owner.
+Assert that exact ART exception and unchanged code, retaining every snapshot
+rollback check. No product change. Later packet/concurrency checks were not
+executed by V1; V2 reruns the entire focused case. Refreshed main remainsa2154e8a4
+fully contained by this branch (HEAD..origin/main count0).
+
+Lineage V2 passed1 in41.93s; receipt records schema0086 and complete database/
+MinIO cleanup (/tmp/submission-lineage-t5-v2.log/.json). All three exact ART
+refusals, both independent immediate SQL packet guards and complete rollback
+snapshots passed, followed by concurrent identical T5, completed durable replay,
+exact source/assignment/contribution-policy lineage and bound-packet immutability.
+Proof uses controlled PRE and local store, direct production T5 and later worker
+replay; it is shared precommit evidence over8a854f7a6, not clean-head/provider
+qualification. No product/schema change; full goal remains active on draft PR708.
+
+Scoped QA and ARCH/SEC inspection found no remaining actionable finding after
+V2; QA-LINEAGE001 resolved by exact direct ART exception oracle. Ruff, record
+and whitespace pass; structure validation passed, subsequent oracle correction
+only removed lines. Reviewed test blob30964b2a432124d548d430124743a0314cd73e72.
