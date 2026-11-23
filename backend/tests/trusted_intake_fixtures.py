@@ -7,7 +7,7 @@ from io import BytesIO
 from pathlib import Path
 import tempfile
 
-from app.interfaces.external_services import ExternalServiceAdapterIdentity
+from workstream_external_services import ExternalServiceAdapterIdentity
 from app.interfaces.trusted_submission_intake import TrustedIntakeIdentity
 from app.modules.artifacts.api.submission_archive import SubmissionArchiveLimits
 from app.modules.artifacts.submission_archive import (

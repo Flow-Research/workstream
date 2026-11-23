@@ -28,7 +28,7 @@ from app.modules.checkers.api.external import (
     external_checker_json_hash,
     make_external_checker_execution_result,
 )
-from app.interfaces.external_services import (
+from workstream_external_services import (
     ExternalServiceConfigurationError,
     UnknownExternalServiceProviderError,
 )

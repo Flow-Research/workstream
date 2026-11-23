@@ -453,10 +453,6 @@
       "target": "backend/app/interfaces/external_checker_execution.py"
     },
     {
-      "group": "artifacts",
-      "target": "backend/app/interfaces/external_services.py"
-    },
-    {
       "group": "shared",
       "target": "backend/app/interfaces/forge_facts.py"
     },
@@ -2777,7 +2773,7 @@
       "target": "backend/scripts/validate_test_lane_evidence.py"
     }
   ],
-  "authority_digest": "69033945f9e74f3e3391cde0ac8e8f7c80a29ec88242a46d32f0482c651a92bf",
+  "authority_digest": "243abe36c015d6d06b7c114de7cb0c1d9104b69b75a4b3c059b114fab5b49880",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }

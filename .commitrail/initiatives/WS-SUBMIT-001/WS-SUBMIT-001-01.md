@@ -7130,3 +7130,27 @@ expiry/receipt fields or weakening CI to make merge pass. Review architecture,
 QA/security and CI affected intersections; verify syntax/imports, ownership/gates,
 focused merged contract tests then current submission public regression. Human
 review focus: preserve both current authentication and exact source execution.
+
+Integration resolutions preserve branch source PRE and incoming canonical shared
+external-services imports; nine additional branch-only import sites migrated.
+The old module and incoming package source are byte-identical; no compatibility
+module restored. MCP keeps incoming authenticated fixture and both catalogue
+assertions instead of the removed unauthenticated smoke. Combined partition
+retains both parents' targets except exact approved relocation; canonical digest
+recomputed, both ownership regression tests retained. Review inspection found no
+actionable architecture/security or CI/test-delta issue. Initial test collection
+failed because the existing venv lacked the new package and has no pip; installed
+via uv pip --python and reran:233passed151.31s in ownership/adapter/trusted-intake
+modules (/tmp/submission-main-contracts-v2.log). A pytest invocation of the hosted
+MCP executable collected0 tests and is not validation evidence. No hosted Docker
+runtime claim. Public PG source journey still pending; merge not yet qualified.
+
+Merged public source v1 terminal0:1passed477.66s/schema0084/allcleanuptrue
+(/tmp/submission-main-public-v1.json/.log). Actual two-revision cap journey passes
+raw ZIP/PRE/T4/OUTBOX T5, exhaustion refusal, retained replay and SQL controls on
+combined main/submission code. Metadata tree_sha f33a8440a is premerge HEAD;
+evidence executes staged merge content, not clean-commit rerun. Slow run inspected
+without restart: no PG lock blockers, two finalized operations then third PRE
+confirmed forward progress. Required scoped architecture/security/CI reviews found
+no actionable issue. Ruff/record/whitespace pass. Full CI, hosted container/native
+provider qualification and remaining spec scenarios are still open.

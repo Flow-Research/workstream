@@ -11,7 +11,7 @@ from app.core.cancellation import (
     await_cancellation_resistant,
     await_completion_preserving_cancellation,
 )
-from app.interfaces.external_services import ExternalServiceAdapterError
+from workstream_external_services import ExternalServiceAdapterError
 from app.interfaces.artifacts import ArtifactScratchIntegrityError
 from app.interfaces.trusted_submission_intake import (
     TrustedIntakePreparation,

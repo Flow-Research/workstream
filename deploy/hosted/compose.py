@@ -24,7 +24,7 @@ from preflight import (
     validate_trusted_intake,
     validate_environment,
     validate_private_host_inputs,
-    validate_demo_identity_host_inputs,
+    validate_identity_host_inputs,
     validate_local_data_host_inputs,
     run_proof_group,
 )
@@ -45,8 +45,8 @@ def resume_release(environment_path: Path, values: dict[str, str]) -> int:
     phases: list[list[str]] = []
     if values.get("WORKSTREAM_POSTGRES_IMAGE"):
         phases.append(["start", "local-data"])
-    if values.get("DEMO_IDENTITY_IMAGE"):
-        phases.append(["start", "demo-identity"])
+    if values.get("FLOW_IDENTITY_IMAGE"):
+        phases.append(["start", "identity"])
     if values["WORKSTREAM_MODEL_PROXY_ENABLED"] == "true":
         phases.append(["up", "--detach", "--no-deps", "--wait",
                        "--wait-timeout", "60", "model-proxy"])
@@ -95,12 +95,12 @@ def main() -> int:
                 raise PreflightError("local data bootstrap requires its overlay")
             validate_local_data_host_inputs(values)
             return run_compose(args.env_file, values, args.compose_arguments)
-        if args.compose_arguments == ["start", "demo-identity"]:
-            if not values.get("DEMO_IDENTITY_IMAGE"):
+        if args.compose_arguments == ["start", "identity"]:
+            if not values.get("FLOW_IDENTITY_IMAGE"):
                 raise PreflightError(
-                    "demo identity bootstrap requires the issuer overlay"
+                    "identity startup requires the Keycloak overlay"
                 )
-            validate_demo_identity_host_inputs(values)
+            validate_identity_host_inputs(values)
             return run_compose(args.env_file, values, args.compose_arguments)
         worker_start = args.compose_arguments == ["start", "worker"]
         launch = worker_start or (

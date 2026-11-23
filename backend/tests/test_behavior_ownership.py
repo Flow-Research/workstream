@@ -2812,3 +2812,17 @@ def test_submission_intake_partition_addition_is_exact_and_retains_existing_targ
     for targets in (additions, {retained, *additions, "backend/app/modules/artifacts/api/intake_override.py"}):
         with pytest.raises(ownership.BehaviorOwnershipError, match="untrusted_partition_change"):
             ownership._validate_additive_partition_transition(_partition(sorted(targets)), trusted)
+
+
+def test_partition_allows_only_the_shared_adapter_package_relocation() -> None:
+    retained = "backend/app/core/config.py"
+    removed = "backend/app/interfaces/external_services.py"
+    current = _partition([retained])
+    ownership._validate_additive_partition_transition(
+        current, _partition(sorted([retained, removed])),
+    )
+    with pytest.raises(ownership.BehaviorOwnershipError, match="untrusted_partition_change"):
+        ownership._validate_additive_partition_transition(
+            current,
+            _partition(sorted([retained, removed, "backend/app/interfaces/forge_facts.py"])),
+        )

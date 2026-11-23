@@ -37,7 +37,7 @@ from app.core.api_controls import RequestContextMiddleware
 from app.core.celery_observability import configure_celery_observability
 from app.core.config import Settings
 from app.core.observability import ObservabilityMiddleware, ObservabilityRuntime
-from app.interfaces.external_services import ExternalServiceConfigurationError
+from workstream_external_services import ExternalServiceConfigurationError
 from app.interfaces.observability import OTLP_HTTP_PROVIDER_KEY
 from observability_test_support import fake_export_adapter
 

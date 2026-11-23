@@ -13,7 +13,7 @@ from app.adapters.checkers import selected_pre_submit_checker_execution, selecte
 from app.adapters.outbox import outbox_append, finalized_unknown_deliveries
 from app.adapters.tasks import intake_task_custody_port, submission_history_repository
 from app.interfaces.artifacts import ArtifactInputMismatchError, ArtifactLimitExceededError, ArtifactStoreError
-from app.interfaces.external_services import ExternalServiceAdapterError
+from workstream_external_services import ExternalServiceAdapterError
 from app.modules.artifacts.api.submission_archive import MAXIMUM_SUBMISSION_ZIP_BYTES
 from app.modules.artifacts.api.submission_command import SubmissionExecutionProfile, SubmissionIntakeCommand, SubmissionOperationReader
 from app.modules.artifacts.api.submission_intake import SubmissionIntakeFailure
@@ -77,7 +77,7 @@ from app.interfaces.artifacts import (
     ArtifactStoreBootstrap,
     ArtifactStoreNamespaceClaim,
 )
-from app.interfaces.external_services import ExternalServiceAdapterFactory, ExternalServiceConfigurationError
+from workstream_external_services import ExternalServiceAdapterFactory, ExternalServiceConfigurationError
 from app.interfaces.trusted_submission_intake import TrustedSubmissionIntakeAdapter
 from app.adapters.artifacts.trusted_intake import CAPABILITY, PROVIDER, UnixSocketTrustedIntakeAdapter
 from app.modules.artifacts.preparation import (

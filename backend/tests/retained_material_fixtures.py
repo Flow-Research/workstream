@@ -24,7 +24,7 @@ from app.interfaces.artifacts import (
     ArtifactObjectHead, ArtifactObjectMissingError, ArtifactIntegrityError,
     ArtifactPutObservation, ArtifactPutResult, SealedSourceObservation, artifact_provider_object_ref,
 )
-from app.interfaces.external_services import ExternalServiceAdapterIdentity
+from workstream_external_services import ExternalServiceAdapterIdentity
 from app.modules.actors.api import ServiceIdentity
 from app.modules.artifacts.api.submission_intake import (
     SealedSubmissionSource, SubmissionIntakeMetadata, SubmissionSourceCapacityLimits,

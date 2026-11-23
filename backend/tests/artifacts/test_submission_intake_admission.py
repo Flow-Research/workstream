@@ -65,7 +65,7 @@ async def admission_intake(tmp_path, isolated_database_env, admin_access, reques
         namespace, source_store_factory = await minio_source_fixture()
     if getattr(request, "param", None) == "aws":
         from app.interfaces.artifacts import ArtifactStoreNamespaceIdentity, artifact_store_namespace_material
-        from app.interfaces.external_services import ExternalServiceAdapterIdentity
+        from workstream_external_services import ExternalServiceAdapterIdentity
         from app.modules.artifacts.service import ArtifactStorageNamespaceSpec
         identity = ArtifactStoreNamespaceIdentity("aws-s3-v1", (
             ("addressing_style", "virtual"), ("bucket", "intake-refusal-fixture"),

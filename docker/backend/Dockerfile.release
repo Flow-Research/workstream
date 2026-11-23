@@ -49,6 +49,7 @@ RUN install -d -m 0750 -o 10002 -g 10001 /var/lib/workstream/guide-runtime
 
 WORKDIR /workspace/backend
 
+COPY packages/external-services/ /workspace/packages/external-services/
 COPY backend/ ./
 COPY docker/backend/release-entrypoint.sh /usr/local/bin/workstream-release-entrypoint
 COPY --from=roles-anywhere-helper /aws_signing_helper /usr/local/bin/aws_signing_helper

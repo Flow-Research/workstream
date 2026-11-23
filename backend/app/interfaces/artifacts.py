@@ -10,7 +10,7 @@ from uuid import UUID
 
 from app.core.hashing import canonical_json_hash
 from app.core.s3_validation import validate_s3_namespace_descriptor
-from app.interfaces.external_services import (
+from workstream_external_services import (
     ExternalServiceAdapter,
     ExternalServiceAdapterIdentity,
 )

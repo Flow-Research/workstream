@@ -94,7 +94,10 @@ def _revision_response(*, current: bool = False) -> dict[str, Any]:
 def _catalogue(client: TestClient) -> dict[str, Any]:
     response = client.post(
         "/mcp",
-        headers={"accept": "application/json, text/event-stream"},
+        headers={
+            "accept": "application/json, text/event-stream",
+            "authorization": "Bearer fixture-token",
+        },
         json={"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}},
     )
     assert response.status_code == 200
@@ -147,7 +150,7 @@ def test_policy_mutations_forward_fixed_body_bearer_key_and_selector_unchanged(
     assert request.url.path == (
         f"/api/v1/projects/{PROJECT_ID}/guides/{GUIDE_ID}/{kind}-policy"
     )
-    assert request.headers["authorization"] == "Bearer project-manager"
+    assert request.headers["authorization"] == 'Bearer api-project-manager'
     assert request.headers["idempotency-key"] == KEY
     assert request.headers["if-match"] == arguments["if_match"]
     assert json.loads(request.content) == arguments["body"]

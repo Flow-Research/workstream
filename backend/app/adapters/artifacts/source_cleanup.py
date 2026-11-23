@@ -1,6 +1,6 @@
 """Private deletion capabilities, kept off the upload/read ArtifactStore port."""
 from app.adapters.artifacts.local_submission_source import LocalSubmissionSource
-from app.interfaces.external_services import ExternalServiceAdapterIdentity
+from workstream_external_services import ExternalServiceAdapterIdentity
 from app.modules.artifacts.api.submission_cleanup import SUBMISSION_SOURCE_CLEANUP_CAPABILITY, SubmissionSourceRemoval
 
 

@@ -16,7 +16,7 @@ from app.adapters.artifacts import post_submission_materialization
 from app.adapters.checkers import evaluation_coordinator
 from app.core.config import get_settings
 from app.interfaces.artifacts import ArtifactObjectMissingError
-from app.interfaces.external_services import ExternalServiceAdapterIdentity
+from workstream_external_services import ExternalServiceAdapterIdentity
 from app.modules.artifacts.api.submission_archive import SubmissionArchiveLimits
 from app.modules.artifacts.preparation import ArtifactPreparationService, ArtifactScratchManager, HARD_MAXIMUM_ARTIFACT_BYTES
 from app.modules.artifacts.service import ArtifactStorageNamespaceSpec

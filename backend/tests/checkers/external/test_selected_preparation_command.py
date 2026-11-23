@@ -280,7 +280,7 @@ async def test_upload_failure_does_not_allocate_intake_or_reserve_attempt(monkey
 @pytest.mark.asyncio
 async def test_failed_vm_preparation_closes_already_sealed_source(monkeypatch):
     from dataclasses import replace
-    from app.interfaces.external_services import ExternalServiceUnavailableError
+    from workstream_external_services import ExternalServiceUnavailableError
     from app.modules.artifacts.api import SubmissionBundlePreparationInfrastructureUnavailable
 
     actor, request, prepared, attempt_id = _request_case()

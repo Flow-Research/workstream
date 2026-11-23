@@ -10,7 +10,7 @@ from app.interfaces.external_checker_execution import (
     ExternalCheckerExecutionAdapter,
     ExternalPreSubmitSourceGrant,
 )
-from app.interfaces.external_services import (
+from workstream_external_services import (
     ExternalServiceProtocolError,
     ExternalServiceUnavailableError,
 )

@@ -102,7 +102,10 @@ def _grant(**overrides: Any) -> dict[str, Any]:
 def _catalogue(client: TestClient) -> dict[str, Any]:
     response = client.post(
         "/mcp",
-        headers={"accept": "application/json, text/event-stream"},
+        headers={
+            "accept": "application/json, text/event-stream",
+            "authorization": "Bearer fixture-token",
+        },
         json={"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}},
     )
     assert response.status_code == 200
@@ -175,7 +178,7 @@ def test_project_participation_reads_forward_fixed_requests(
     assert request.method == "GET"
     assert request.url.path == path
     assert request.url.query == query
-    assert request.headers["authorization"] == "Bearer project-manager"
+    assert request.headers["authorization"] == 'Bearer api-project-manager'
     assert "idempotency-key" not in request.headers
 
 
@@ -227,7 +230,7 @@ def test_project_grant_mutations_forward_body_and_key_unchanged(
     request = received[0]
     assert request.method == "POST"
     assert request.url.path == path
-    assert request.headers["authorization"] == "Bearer project-manager"
+    assert request.headers["authorization"] == 'Bearer api-project-manager'
     assert request.headers["idempotency-key"] == KEY
     assert json.loads(request.content) == arguments["body"]
 

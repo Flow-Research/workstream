@@ -31,7 +31,7 @@ from app.adapters.guide_document_tools.service import (
     _remove_owned_stale_socket,
 )
 import app.adapters.guide_document_tools.service as service_module
-from app.interfaces.external_services import (
+from workstream_external_services import (
     ExternalServiceAdapterIdentity,
     ExternalServiceProtocolError,
     ExternalServiceUnavailableError,

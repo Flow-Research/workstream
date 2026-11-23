@@ -12,6 +12,7 @@ import (
 	"unicode/utf16"
 
 	"github.com/Flow-Research/workstream/cli/internal/api"
+	"github.com/Flow-Research/workstream/cli/internal/login"
 	"github.com/spf13/cobra"
 )
 
@@ -47,13 +48,27 @@ func Run(args []string, stdout, stderr io.Writer, getenv environment, version st
 		if output != "text" && output != "json" {
 			return nil, commandError{"invalid_output", "--output must be text or json"}
 		}
-		value, err := api.New(getenv("WORKSTREAM_API_URL"), getenv("WORKSTREAM_TOKEN"))
+		origin, token := getenv("WORKSTREAM_API_URL"), getenv("WORKSTREAM_TOKEN")
+		if token == "" {
+			store, err := login.DefaultStore()
+			if err != nil {
+				return nil, commandError{"invalid_configuration", err.Error()}
+			}
+			origin, token, err = login.NewClient().Credential(root.Context(), store, origin)
+			if err != nil {
+				return nil, commandError{"invalid_configuration", err.Error()}
+			}
+		} else if origin == "" {
+			origin = login.DefaultAPI
+		}
+		value, err := api.New(origin, token)
 		if err != nil {
 			return nil, commandError{"invalid_configuration", err.Error()}
 		}
 		return value, nil
 	}
 
+	addLoginCommands(root, stdout, stderr, getenv)
 	root.AddCommand(&cobra.Command{
 		Use:   "whoami",
 		Short: "Show the caller's canonical actor profile",

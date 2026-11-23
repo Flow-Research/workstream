@@ -7,7 +7,7 @@ from collections.abc import AsyncGenerator
 import re
 from typing import Literal, Protocol
 
-from app.interfaces.external_services import ExternalServiceAdapter
+from workstream_external_services import ExternalServiceAdapter
 from app.modules.checkers.api.selected_pre_submit import (
     SelectedPreSubmitLeaseFacts, SelectedPreSubmitInvocationResult,
 )

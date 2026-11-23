@@ -72,16 +72,17 @@ class PublicIngressTest(unittest.TestCase):
                 thread.start()
             process = None
             try:
-                env = dict(os.environ, DEMO_IDENTITY_HOSTNAME='identity.example.test',
-                           DEMO_IDENTITY_UPSTREAM_CERT=str(cert),
+                env = dict(os.environ, FLOW_IDENTITY_HOSTNAME='identity.example.test',
+                           FLOW_IDENTITY_UPSTREAM_CERT=str(cert),
                            WORKSTREAM_PUBLIC_HOSTNAME='workstream.example.test',
                            WORKSTREAM_API_HOST_PORT='18027')
                 adapted = subprocess.run([binary, 'adapt', '--config',
                     str(ROOT / 'deploy/hosted/public.Caddyfile'), '--adapter', 'caddyfile'],
                     env=env, check=True, capture_output=True, text=True)
                 config = json.loads(adapted.stdout)
-                server = next(iter(config['apps']['http']['servers'].values()))
-                self.assertEqual(server['listen'], [':443'])
+                servers = list(config['apps']['http']['servers'].values())
+                server = next(item for item in servers if item['listen'] == [':443'])
+                self.assertEqual(len(servers), 1)
                 self.assertEqual(config['admin'], {'disabled': True})
                 # Only transport addresses/frontend TLS are changed for this fixture.
                 # Routing, host/header rules, body limits and upstream TLS stay intact.
@@ -93,10 +94,10 @@ class PublicIngressTest(unittest.TestCase):
                             limits.append(value['max_size'])
                         if value.get('handler') == 'reverse_proxy':
                             address = value['upstreams'][0]['dial']
-                            self.assertIn(address, ['127.0.0.1:8080', '127.0.0.1:8443',
+                            self.assertIn(address, ['127.0.0.1:8080', '127.0.0.1:18443',
                                                     '127.0.0.1:18027'])
                             seen.append(address)
-                            port = secure.server_port if address.endswith(':8443') else plain.server_port
+                            port = secure.server_port if address.endswith(':18443') else plain.server_port
                             value['upstreams'][0]['dial'] = f'127.0.0.1:{port}'
                         for child in value.values():
                             relocate(child)
@@ -105,9 +106,9 @@ class PublicIngressTest(unittest.TestCase):
                             relocate(child)
 
                 relocate(config)
-                self.assertCountEqual(seen, ['127.0.0.1:8443'] * 2 +
-                                      ['127.0.0.1:8080', '127.0.0.1:18027'])
-                self.assertCountEqual(limits, [4096, 96 * 1024**2, 500 * 1024**2])
+                self.assertCountEqual(seen, ['127.0.0.1:18443'] * 2 +
+                                      ['127.0.0.1:8080'] * 2 + ['127.0.0.1:18027'])
+                self.assertCountEqual(limits, [65536, 1024**2, 96 * 1024**2, 500 * 1024**2])
                 with socket.socket() as probe:
                     probe.bind(('127.0.0.1', 0))
                     port = probe.getsockname()[1]
@@ -142,22 +143,31 @@ class PublicIngressTest(unittest.TestCase):
                     finally:
                         connection.close()
 
-                self.assertEqual(request('identity.example.test', '/jwks.json')[0], 200)
-                self.assertEqual(request('identity.example.test', '/login', b'x' * 4097)[0], 413)
+                self.assertEqual(request('identity.example.test', '/realms/flow/protocol/openid-connect/certs')[0], 200)
+                self.assertEqual(request('identity.example.test', '/realms/flow/protocol/openid-connect/token', b'x' * 65537)[0], 413)
+                for target in ('/admin', '/admin/master/console/', '/admin/realms/flow/users',
+                               '/realms/master', '/realms/master/protocol/openid-connect/auth'):
+                    self.assertEqual(request('identity.example.test', target)[0], 200)
+                self.assertEqual(request('identity.example.test', '/admin/realms/flow/users', b'x' * 65537)[0], 200)
+                self.assertEqual(request('identity.example.test', '/admin/realms/flow/users', b'x' * (1024**2 + 1))[0], 413)
+                self.assertEqual(request('identity.example.test', '/realms/master/protocol/openid-connect/token', b'x' * 65537)[0], 413)
+                self.assertEqual(request('workstream.example.test', '/.well-known/oauth-protected-resource/mcp')[0], 200)
                 before = len(calls)
+                for target in ('/admin-other', '/realms/other', '/health/ready', '/metrics', '/realms/flow/clients-registrations/default', '/realms/master/clients-registrations/default', '/jwks.json', '/login'):
+                    self.assertEqual(request('identity.example.test', target)[0], 404)
                 self.assertEqual(request('identity.example.test', '/not-a-route')[0], 404)
                 self.assertEqual(request('foreign.example.test', '/api/v1/health')[0], 404)
                 self.assertEqual(request('workstream.example.test', '/admin/accounts', b'{}')[0], 404)
                 self.assertEqual(len(calls), before)
-                for target in ('/docs', '/openapi.json'):
+                for target in ('/docs', '/docs/oauth2-redirect', '/openapi.json'):
                     status, result = request('workstream.example.test', target)
                     self.assertEqual(status, 200)
                     self.assertEqual(json.loads(result)['path'], target)
                     self.assertEqual(calls[-1][0], target)
                 before = len(calls)
-                for target in ('/docs/', '/docs-extra', '/redoc', '/openapi.json-extra'):
+                for target in ('/docs/', '/docs-extra', '/docs/oauth2-redirect-extra', '/redoc', '/openapi.json-extra'):
                     self.assertEqual(request('workstream.example.test', target)[0], 404)
-                for target in ('/docs', '/openapi.json'):
+                for target in ('/docs', '/docs/oauth2-redirect', '/openapi.json'):
                     self.assertEqual(request('foreign.example.test', target)[0], 404)
                     self.assertEqual(request('identity.example.test', target)[0], 404)
                 self.assertEqual(len(calls), before)
@@ -172,6 +182,14 @@ class PublicIngressTest(unittest.TestCase):
                            'Forwarded': 'for=192.0.2.66;host=evil.invalid',
                            'X-Forwarded-Host': 'evil.invalid', 'X-Forwarded-Proto': 'http',
                            'Authorization': 'Bearer synthetic-test-only'}
+                for target in ('/admin/realms/flow/users', '/realms/master/protocol/openid-connect/token'):
+                    self.assertEqual(request('foreign.example.test', target)[0], 404)
+                    self.assertEqual(request('identity.example.test', target, b'{}', spoofed)[0], 200)
+                    identity_headers = {k.lower(): v for k, v in calls[-1][1].items()}
+                    self.assertEqual(identity_headers['x-forwarded-host'], 'identity.example.test')
+                    self.assertEqual(identity_headers['x-forwarded-port'], '443')
+                    self.assertNotIn('192.0.2.66', json.dumps(identity_headers))
+                    self.assertNotIn('evil.invalid', json.dumps(identity_headers))
                 self.assertEqual(request('workstream.example.test', '/mcp', b'{}', spoofed)[0], 200)
                 headers = {k.lower(): v for k, v in calls[-1][1].items()}
                 self.assertEqual(headers['host'], '127.0.0.1:8080')

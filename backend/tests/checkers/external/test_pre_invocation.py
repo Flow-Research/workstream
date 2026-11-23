@@ -216,7 +216,7 @@ def test_python_decodes_shared_production_rust_wire_fixture():
 @pytest.mark.parametrize("case", ["received_failure", "wrong_factory", "wrong_family", "cancelled"])
 async def test_managed_port_retains_receipt_and_enforces_selected_factory(lease, case):
     import asyncio
-    from app.interfaces.external_services import ExternalServiceAdapterIdentity
+    from workstream_external_services import ExternalServiceAdapterIdentity
     from app.modules.checkers.api.selected_pre_submit import SelectedPreSubmitInfrastructureUnavailable
     from app.modules.checkers.selected_pre_submit_execution import SelectedPreSubmitProcessor
 

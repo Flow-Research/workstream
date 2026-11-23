@@ -174,7 +174,10 @@ def _bound_response(name: str, upload: bytes | None = None) -> dict[str, Any]:
 def _catalogue(client: TestClient) -> dict[str, dict[str, Any]]:
     response = client.post(
         "/mcp",
-        headers={"accept": "application/json, text/event-stream"},
+        headers={
+            "accept": "application/json, text/event-stream",
+            "authorization": "Bearer fixture-token",
+        },
         json={"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}},
     )
     assert response.status_code == 200
@@ -275,7 +278,7 @@ def test_source_upload_decodes_once_and_forwards_exact_json_bytes(adapter: Adapt
     assert response.json()["result"]["isError"] is False
     assert received[0].content == content
     assert received[0].headers["content-type"] == "application/json"
-    assert received[0].headers["authorization"] == "Bearer fixture-token"
+    assert received[0].headers["authorization"] == 'Bearer api-fixture-token'
 
 
 def test_source_content_read_returns_only_bounded_integrity_projection(adapter: Adapter) -> None:

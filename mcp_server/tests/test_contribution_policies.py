@@ -101,7 +101,7 @@ def test_policy_create_forwards_body_and_typed_key_only(
     assert request.method == "POST"
     assert request.url.path == f"/api/v1/projects/{PROJECT_ID}/contribution-policies/drafts"
     assert request.headers["idempotency-key"] == KEY
-    assert request.headers["authorization"] == "Bearer finance-caller"
+    assert request.headers["authorization"] == 'Bearer api-finance-caller'
     assert json.loads(request.content) == {"name": "Core policy"}
 
 

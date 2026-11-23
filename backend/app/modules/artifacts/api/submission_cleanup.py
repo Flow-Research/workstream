@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from typing import Literal, Protocol
 from uuid import UUID
 
-from app.interfaces.external_services import ExternalServiceAdapter
+from workstream_external_services import ExternalServiceAdapter
 from app.modules.artifacts.api.submission_intake import SealedSubmissionSource, SubmissionSourceUpload
 
 SUBMISSION_SOURCE_CLEANUP_CAPABILITY = "submission_source_cleanup"

@@ -34,7 +34,7 @@ from app.interfaces.checker_model_provider import (
     CheckerModelUsage,
 )
 from app.interfaces.checker_model_proxy import ModelProxyRequest
-from app.interfaces.external_services import (
+from workstream_external_services import (
     ExternalServiceAdapterIdentity,
     ExternalServiceUnavailableError,
 )

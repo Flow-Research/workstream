@@ -12,7 +12,7 @@ from app.interfaces.external_checker_execution import (
     ExternalCheckerMaterialGrant,
     ExternalCheckerModelGrant,
 )
-from app.interfaces.external_services import ExternalServiceProtocolError
+from workstream_external_services import ExternalServiceProtocolError
 from app.modules.checkers.api.external import (
     external_checker_json_hash,
     make_external_checker_execution_request,

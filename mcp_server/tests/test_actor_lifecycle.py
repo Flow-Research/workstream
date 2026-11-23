@@ -55,7 +55,10 @@ def _receipt(name: str, *, resource_id: str | None = None) -> dict[str, Any]:
 def _catalogue(client: TestClient) -> dict[str, Any]:
     response = client.post(
         "/mcp",
-        headers={"accept": "application/json, text/event-stream"},
+        headers={
+            "accept": "application/json, text/event-stream",
+            "authorization": "Bearer fixture-token",
+        },
         json={"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}},
     )
     assert response.status_code == 200
@@ -133,7 +136,7 @@ def test_lifecycle_tools_forward_one_exact_fixed_request(
     assert request.method == "POST"
     assert request.url.path == path
     assert request.url.query == b""
-    assert request.headers["authorization"] == "Bearer admin-caller"
+    assert request.headers["authorization"] == 'Bearer api-admin-caller'
     assert request.headers["idempotency-key"] == KEY
     assert "if-match" not in request.headers
     assert json.loads(request.content) == arguments["body"]

@@ -423,7 +423,7 @@ async def _assert_stored_receipt(factory, run_id, terminal):
 def _source_runtime(payload, tmp_path, runtime_outcome, *, project_findings=()):
     """Real intake worker with an explicit simulated project reply or capacity failure."""
     from contextlib import aclosing
-    from app.interfaces.external_services import ExternalServiceAdapterIdentity
+    from workstream_external_services import ExternalServiceAdapterIdentity
     from app.modules.checkers.api.selected_pre_submit import (
         SelectedPreSubmitInfrastructureUnavailable, SelectedPreSubmitInvocationResult,
     )

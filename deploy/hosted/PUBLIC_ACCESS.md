@@ -3,13 +3,14 @@
 The API, MCP and external identity issuer remain bound to host loopback. The
 existing Caddy host service terminates trusted HTTPS for two DNS names and
 proxies only their intended paths. PostgreSQL, Redis and the checker socket
-remain private. This does not add browser sessions or MCP OAuth authorization.
+remain private. Keycloak supplies browser login; MCP validates resource-scoped
+OAuth tokens and exchanges them for API tokens under the same user identity.
 
 ## Prepare the deployment
 
 First complete the [hosted deployment](README.md) and configure the independent
-[identity issuer](../../experiments/demo_identity/README.md). Retain its account
-state and signing key. An issuer account is not Workstream admission or a project
+[identity provider](../identity/README.md). Retain its PostgreSQL account,
+configuration and signing state. An issuer account is not Workstream admission or a project
 grant. Email is an unverified login identifier; send initial credentials through
 a private channel, not email-service automation or source control.
 
@@ -18,13 +19,13 @@ stable public IP. Remove conflicting AAAA records unless IPv6 reaches the same
 service. Keep the root domain unchanged. Permit inbound TCP 80/443; keep SSH
 restricted to administrators and all application ports loopback-only.
 
-Use the existing [Caddy service](demo-identity-caddy.service) with
-[public.Caddyfile](public.Caddyfile), replacing its identity-only configuration.
+Use the existing [Caddy service](workstream-ingress.service) with
+[public.Caddyfile](public.Caddyfile), using the two public virtual hosts.
 Do not start a second listener on 443. In its root-owned environment file set:
 
 ```dotenv
-DEMO_IDENTITY_HOSTNAME=identity.example.org
-DEMO_IDENTITY_UPSTREAM_CERT=/etc/workstream-identity-ingress/upstream.cert.pem
+FLOW_IDENTITY_HOSTNAME=identity.example.org
+FLOW_IDENTITY_UPSTREAM_CERT=/etc/workstream-identity-ingress/upstream.cert.pem
 WORKSTREAM_PUBLIC_HOSTNAME=workstream.example.org
 WORKSTREAM_API_HOST_PORT=18027
 XDG_DATA_HOME=/var/lib/workstream-identity-ingress/data
@@ -32,7 +33,7 @@ XDG_CONFIG_HOME=/var/lib/workstream-identity-ingress/config
 ```
 
 Use the actual API port from the release configuration. The issuer stays on
-127.0.0.1:8443 and MCP on 127.0.0.1:8080. The upstream certificate file contains
+127.0.0.1:18443 and MCP on 127.0.0.1:8080. The upstream certificate file contains
 only the issuer's public certificate, with its correct DNS name; the ingress
 never receives the issuer signing key or account database. Preserve Caddy's
 private, writable certificate data directory. Validate the configuration using
@@ -48,34 +49,43 @@ only after the public path passes; retain the separate upstream TLS certificate.
 
 ## Participant workflow
 
-1. The issuer administrator logs in and uses the separate administration token
-   with `POST /admin/accounts` to set an initial participant password.
-2. First participant login returns a short-lived password-change credential,
-   not a Workstream access token. Use it with `POST /me/password`, supplying the
-   current password and a different new password.
-3. Log in again using the new password to obtain the Workstream access token.
-   Keep tokens/passwords out of URLs, process arguments, logs and shell history.
-4. Use the HTTPS API base or configure the CLI with that base and its supported
-   private credential input. Native MCP clients connect to `https://HOST/mcp`
-   with the participant bearer token. Product operations still require current
-   Workstream admission and appropriate grants.
+1. A named identity administrator uses Keycloak's authenticated HTTPS administration UI to
+   create the email account, set the administrator-only human marker, and assign
+   a temporary password with `UPDATE_PASSWORD`. Transfer it privately.
+2. The participant signs in through Keycloak's browser page and replaces the
+   temporary password. The application never receives or stores their password.
+3. CLI/browser clients complete authorization code with S256 PKCE for
+   `workstream-api`. Curl users may instead POST email/password to the issuer
+   using the dedicated `workstream-api-login` client after the initial browser
+   password change; see the [direct token commands](../identity/README.md#curl-emailpassword-to-api-token). Keep access and refresh tokens out of URLs, process arguments,
+   logs and shell history.
+4. Garden uses its registered OAuth client and exact callback to obtain a token
+   for `https://HOST/mcp`. MCP exchanges that token into a bounded API token for
+   the same person before each tool call. An API-only token is not an MCP token.
+   Both paths still require current Workstream admission and appropriate grants.
 
 Swagger is available at `https://HOST/docs` and loads its schema from
-`https://HOST/openapi.json`. These are public API documentation, not login or
-authorization endpoints. Obtain a normal Workstream access token through the
-issuer flow above and use Swagger's **Authorize** button for protected calls;
-initial password-change and administrator tokens do not grant Workstream access.
+`https://HOST/openapi.json`. Choose **Authorize → FlowIdentity** to sign in on
+Flow Identity and return through the exact `/docs/oauth2-redirect` callback.
+Swagger uses authorization code with PKCE and does not persist credentials across
+page reloads. Its public `workstream-swagger` client must register that exact HTTPS
+callback and API web origin. The existing bearer option also accepts an API token
+from another registered OAuth client. CLI users run `workstream login` directly;
+no repository helper is required. Keycloak administration tokens do not grant
+Workstream access. Workstream still owns no password or primary-login endpoint.
 The API routes remain under `/api/*`. Other documentation/debug paths are not
 exposed by this profile. MCP retains its exact upstream Host validation, request bounds and
 browser-Origin rejection. Caddy accepts the configured public virtual host and
 sets the fixed loopback MCP Host; it preserves Origin so browsers cannot bypass
-that rejection. Public tool discovery is metadata, not product authorization.
-The profile supports native bearer clients; it makes no claim that a particular
-OAuth-only connector can use it.
+that rejection. The protected-resource metadata endpoint is public; initialization and tool
+discovery require an MCP-scoped token. Product authority is checked separately
+for every operation. Actual Garden interoperability requires its registered
+client and live connection proof, not metadata discovery alone.
 
 ## Bounds and verification
 
-Identity JSON is capped at 4 KiB. Binary API bodies are streamed with a 500 MiB
+Realm login/token request bodies are capped at 64 KiB; HTTPS administration has
+a separate 1 MiB bound. Binary API bodies are streamed with a 500 MiB
 proxy ceiling; the owning API applies its per-operation policy limits. MCP uses
 its 96 MiB transport ceiling and stricter owner limits. The proxy applies finite
 read/header/write and upstream response deadlines without retrying mutations.

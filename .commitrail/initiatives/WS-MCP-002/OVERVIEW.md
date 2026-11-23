@@ -2,7 +2,7 @@
 
 - Disposition: Planned
 - Prepared by: OxVictor
-- Purpose: Contributor implementation guide with confirmed caller-token design
+- Purpose: Contributor implementation guide with resource-scoped OAuth credential design
 - Repository baseline reconciled: `a82f0d45e`
 - Pinned API handoff baseline: `6feef39834737eed106773fdaed6003561fd021a`
 - Delivered foundation: [One-tool profile foundation](WS-MCP-002-01.md), merged in PR #418.
@@ -64,7 +64,7 @@ I have also reviewed both complete Flow Identity designs. The architecture walkt
 
 The original planning mapping used `6feef398`, including merged PR #400 and its API drill handoff. Public guide proposal review, pre-submission approval, correction and manual dispatch were outside that fixed 29-operation census and the proposed 27 tools. Guide creation changes at that baseline are recorded below. Current one-tool evidence uses `723c88ff`; recheck each later binding against concurrent owner work rather than treating this historical census as a current full-catalogue certification.
 
-Closed contributor MCP PR #149 remains historical evidence, not an implementation baseline. The maintainer has now confirmed the caller-token design in section 5. Main risks are API contract drift, credential leakage, exposing hidden capabilities, unsafe mutation retries, and treating future agent support as available.
+Closed contributor MCP PR #149 remains historical evidence, not an implementation baseline. The current OAuth credential design in section 5 supersedes unchanged API-bearer forwarding. Main risks are API contract drift, credential leakage, exposing hidden capabilities, unsafe mutation retries, and treating future agent support as available.
 
 ## 3. First Release Scope
 
@@ -115,7 +115,7 @@ The package will have a few clear responsibilities:
 | Part | Responsibility |
 | --- | --- |
 | Server | Register tools and serve MCP requests using the official SDK |
-| Credential transport | Read the individual caller's bearer per request and forward it unchanged; Workstream verifies it |
+| Credential transport | Verify the individual MCP-scoped bearer and exchange it for a same-subject API bearer; Workstream independently verifies and authorizes it |
 | Tool contracts | Define accepted inputs, expected outputs, and fixed API mappings |
 | HTTP client | Manage connections, timeouts, declared headers, and bounded responses |
 | Error mapping | Return safe, accurate failures without leaking internal data |
@@ -131,33 +131,28 @@ real-process tests. This is Streamable HTTP, not the superseded HTTP+SSE transpo
 
 Flow Identity will remain responsible for issuing credentials. Workstream will remain responsible for deciding what the caller may do to a particular project or resource.
 
-### Confirmed caller-token flow in v0.1
+### Resource-scoped OAuth flow in v0.1
 
-The maintainer's decision is a thin REST adapter with custom request-level
-authentication. Each protected MCP invocation carries the caller's existing
-Flow-issued Workstream access token in `Authorization: Bearer <token>`.
-The adapter forwards that bearer unchanged to the fixed Workstream API operation.
-Workstream verifies the token, resolves the actor/link, and checks current
-authorization and lifecycle rules. The adapter never calls Flow Identity, obtains
-another token, verifies JWTs locally, or probes a second API to authenticate first.
+The [Keycloak replacement](../../changes/keycloak-mcp-oauth.md) supersedes
+unchanged API-token forwarding. Each protected MCP request supplies a token for
+this MCP resource. MCP verifies the signature, issuer, exact audience, lifetime,
+human marker and required scope. For each tool call it exchanges that source
+through the configured confidential client into a short-lived API token for the
+same subject. Exchange cannot extend the source lifetime or grant broader scope.
+Workstream independently verifies the resulting token and resolves current
+actor/link, authorization and lifecycle rules. It never trusts a token's realm
+roles as Workstream authority.
 
-Missing, duplicate or malformed Authorization headers can be rejected before API
-dispatch. A well-formed bearer with an invalid signature, issuer, audience or
-expiry is rejected by Workstream after dispatch; preserve that denial. Do not
-weaken Workstream's configured verifier to make forwarding succeed.
+Missing, duplicate, malformed or invalid credentials reject before API dispatch.
+Initialization and tool listing require a valid MCP-scoped token; only the
+protected-resource metadata and authentication challenge are public. Neither a
+connection nor a previous request establishes a shared user. No user-token cache,
+API-bearer passthrough or service-account substitution is permitted.
 
-The client supplies a fresh request header on every protected call. Connections,
-initialization and discovery never establish a shared authenticated identity.
-Static initialization and tool listing may expose only the fixed public catalogue,
-without product data or permission-dependent results. A later call must still
-supply its own bearer. No cached grant, profile or earlier token authorizes it.
-
-This deliberately does **not** implement the standard remote MCP OAuth
-authorization profile, whose token-passthrough restriction differs from this
-design. It supports clients explicitly configured to send the caller's API bearer;
-do not promise compatibility with clients requiring OAuth discovery. Separate
-container deployment does not change this trade-off or require a second identity
-system. A future standards-profile change would need its own explicit design.
+Garden requires an explicitly registered client and exact callback with code and
+S256 PKCE. Metadata and provider tests are not evidence of a working deployed
+Garden session; actual connection, renewal, denial and isolation remain required
+release proof.
 
 Tokens stay out of tool arguments, results, URLs, logs and traces. Use only a
 trusted configured Workstream destination, disable redirects and environment
@@ -312,7 +307,7 @@ For the 14 keyed mutations, retain the original key, normalized request semantic
 2. **This catalogue does not complete guide setup.** Creating a guide returns `awaiting_documents`; there is no upload tool among the 27. Upload/setup/findings and the four proposal APIs from PR #400 are outside the handed-off 29-operation census. Confirm that the first release deliberately stops at declarations and draft policy configuration, with uploads handled outside MCP. Adding that workflow requires an explicitly agreed scope change.
 3. **Policy omission and selector behavior matter.** Review input/output now includes `human_review_required` and response semantics metadata. Omission of the mode preserves a selected predecessor's setting; ordinary omitted optional fields use backend defaults. Do not fill defaults in the adapter. First creation uses the quoted `"no-current-policy"` selector. A later selector is the quoted policy ID, generation and hash without its `sha256:` prefix, joined by dots, as specified by the [policy owner](../../../backend/app/modules/projects/policy_mutation_service.py). Forward a caller-supplied selector unchanged. The 27 tools have no policy-read operation for recovering a lost/stale selector; confirm an outside-MCP recovery path or separately agree a read tool. Never use a write as discovery.
 4. **Refresh each selected schema, not just guide names.** Validation includes NUL rejection, qualification limits and revision-policy constraints. When implementing a binding, compare its operation and transitive schemas against `/openapi.json` from the exact pinned backend build. The historical 27-tool source mapping is complete, but full-catalogue running-schema capture and conformance have not been executed. The local self-profile proof in section 10 is separate evidence. Do not describe the original HTML JSON as the current schema.
-5. **Credential flow is settled in section 5.** Forward the individual caller's existing Workstream Flow bearer unchanged. No new audience, exchange, adapter-side verifier or administrator identity is introduced; Workstream retains its normal audience checks.
+5. **Credential flow follows section 5.** Verify the MCP audience and exchange into the API audience for the same user. Workstream retains its independent verifier and authority checks; no administrator identity is introduced.
 
 For implementation evidence, reuse [the drill setup](../../../docs/engineering/external-api-drill.md#run) and per-row assertions through an actual MCP client and independently running adapter. Keep health, local bootstrap and service-actor fixture provisioning outside the 27-tool count. Setup may need backend-only calls, but tools must dispatch only their agreed endpoint. Retain direct-API parity checks, state/audit checks, rejection-before-write assertions and same-key recovery. Existing historical backend runs are useful evidence, not proof that the new MCP path or live Flow deployment passes.
 
@@ -328,7 +323,7 @@ Every protected invocation follows this path:
 5. Validate arguments against the tool's closed input schema.
 6. Select the registry's fixed public API method and route under the configured base URL.
 7. Encode path and query selectors in their declared locations and serialize only the declared model under the typed `body` argument.
-8. Add only adapter-controlled headers: the unchanged request bearer, content type, required operation key and `If-Match`, and safe correlation identifiers. Arbitrary authorization, forwarding, host or destination headers are not tool inputs.
+8. Add only adapter-controlled headers: the verified exchanged API bearer, content type, required operation key and `If-Match`, and safe correlation identifiers. Arbitrary authorization, forwarding, host or destination headers are not tool inputs.
 9. Send one bounded HTTP attempt.
 10. Validate response status, content type, byte size, JSON shape and the declared success or error contract.
 11. Return the structured MCP result, preserving the API's meaning and excluding credentials and internal exceptions.
@@ -414,7 +409,7 @@ The maintainer's [clarification](https://github.com/Flow-Research/workstream/pul
 
 ## 9. Chunk Map and PR Boundaries
 
-The caller-token decision is settled. WS-MCP-002-01 delivered the independent
+The current credential boundary is defined in section 5; the following records preserve tool-delivery history. WS-MCP-002-01 delivered the independent
 profile-read foundation in PR #418. WS-MCP-002-02 delivers profile editing and
 exact-project authorization context. WS-MCP-002-03 adds six administrative reads,
 WS-MCP-002-04 adds two administrative grant mutations, and WS-MCP-002-05 adds
@@ -425,7 +420,7 @@ WS-MCP-002-08 adds guide declaration and draft-summary editing, bringing it to
 twenty-five.
 WS-MCP-002-09 adds draft review and revision policy selection, completing the
 twenty-seven-tool catalogue. Reconcile the assembled release proof with its
-live environment; do not reopen credential architecture.
+live environment and the replacement OAuth boundary.
 
 The original fixed 27-tool proposal was completed through row 09. The
 maintainer later requested broad public-API coverage in parallel, domain-based
@@ -455,7 +450,7 @@ Every binding chunk includes its route/body/query/header/status tests, public AP
 ### Binding-specific implementation prerequisites
 
 - **Catalogue and schemas:** for each chunk, capture only its selected operations and transitive schemas from `/openapi.json` of the pinned backend, with source SHA and explicit differences from the historical mapping. Review those differences in that implementation PR. The full product catalogue is assembled after row 13 and then receives release proof.
-- **Credential contract (settled):** use section 5 unchanged caller-token forwarding. No further resource registration, token exchange or owner credential decision is required for this design.
+- **Credential contract:** use section 5 resource-scoped validation and same-subject exchange. Register the actual Garden client and prove its deployed connection; tool contracts do not establish that interoperability.
 - **Workflow limits:** guide document upload uses only the declared fixed public
   route; setup completion remains backend-owned. Recovery of lost/stale policy
   selectors remains outside this catalogue. No automatic extra endpoint, hidden
@@ -493,7 +488,7 @@ API and explicitly allowed multiple larger PRs to proceed concurrently. Rows
 10 through 13 divide the 105 remaining product operations into four coherent
 batches; row 11 combines the adjacent guide/checker/artifact work after the
 maintainer requested larger parallel PRs. Both health routes are excluded because
-they are operational liveness, not user capabilities. Every batch preserves fixed routes, caller-token forwarding,
+they are operational liveness, not user capabilities. Every batch preserves fixed routes, request-local caller identity,
 selected OpenAPI contracts, no private imports and Workstream-owned authority.
 WS-MCP-002-12 adds the eighteen task execution and submission bindings, bringing
 the catalogue to 108. WS-MCP-002-13 adds the remaining twenty-four current

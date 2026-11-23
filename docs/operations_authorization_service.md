@@ -418,10 +418,10 @@ degrade to token-role authority.
 
 Bootstrap is a restricted local management operation. It grants Workstream
 Access Administrator authority to an already admitted actor; it does not create
-a login account. If using the [Rust demo identity issuer](../experiments/demo_identity/README.md#start-here),
-initialize its administrator separately, obtain a normal access token and call
-`GET /api/v1/actors/me` first. An identity `admin_token` cannot authorize
-Workstream API calls. See the [hosted sequence](../deploy/hosted/SINGLE_HOST.md#identity-storage-and-application-activation).
+a login account. If using the [Keycloak identity provider](../deploy/identity/README.md),
+initialize its administrator separately, complete browser code/PKCE login for
+the direct Workstream API audience, and call `GET /api/v1/actors/me` first.
+A Keycloak administration token cannot authorize Workstream API calls. See the [hosted sequence](../deploy/hosted/SINGLE_HOST.md#identity-storage-and-application-activation).
 
 Before execution:
 

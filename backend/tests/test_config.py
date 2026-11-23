@@ -37,7 +37,7 @@ from app.interfaces.artifacts import (
     ArtifactConfigurationError,
     ArtifactProviderLiveProofRequiredError,
 )
-from app.interfaces.external_services import (
+from workstream_external_services import (
     ExternalServiceConfigurationError,
     UnknownExternalServiceProviderError,
 )
@@ -1146,7 +1146,7 @@ def test_mutated_minio_settings_cannot_retain_credentials_in_constructor_error(
         access_key,
         traceback_module_prefixes=(
             "app.adapters.artifacts.s3_compatible",
-            "app.interfaces.external_services",
+            "workstream_external_services",
         ),
     )
     assert_secret_not_retained(
@@ -1154,7 +1154,7 @@ def test_mutated_minio_settings_cannot_retain_credentials_in_constructor_error(
         secret_key,
         traceback_module_prefixes=(
             "app.adapters.artifacts.s3_compatible",
-            "app.interfaces.external_services",
+            "workstream_external_services",
         ),
     )
 

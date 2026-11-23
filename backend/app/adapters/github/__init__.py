@@ -14,7 +14,7 @@ from app.adapters.github.app_facts import (
     load_github_app_private_key,
 )
 from app.core.config import Settings
-from app.interfaces.external_services import (
+from workstream_external_services import (
     ExternalServiceAdapterFactory,
     ExternalServiceAdapterIdentity,
     ExternalServiceConfigurationError,

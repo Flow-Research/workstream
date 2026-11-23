@@ -10,7 +10,9 @@ license = "AGPL-3.0-only"
 license-files = ["LICENSE"]
 requires-python = ">=3.12,<3.13"
 dependencies = [
+  "workstream-external-services==0.1.0",
   "httpx==0.28.1",
+  "PyJWT[crypto]==2.15.1",
   "jsonschema==4.25.1",
   "mcp==2.2.0",
   "rfc3339-validator==0.1.4",
@@ -189,3 +191,6 @@ select = ["E", "F", "I", "UP", "B", "ASYNC", "S"]
 python_version = "3.12"
 strict = true
 packages = ["workstream_mcp"]
+
+[tool.uv.sources]
+workstream-external-services = { path = "../packages/external-services" }

@@ -9,6 +9,7 @@ from uuid import uuid4
 
 import httpx2 as httpx
 import pytest
+from integration.oauth_fixture import IdentityFixture
 from test_profile_flow import (
     _bootstrap_access_administrator,
     _ready,
@@ -16,8 +17,6 @@ from test_profile_flow import (
     _stop,
     api_environment,
     find_free_port,
-    flow_settings,
-    issue_flow_token,
 )
 from test_projects import _mcp, _profile, _restart_mcp
 
@@ -43,21 +42,19 @@ def _guide_input(project_id: str, key: str) -> dict[str, object]:
 
 
 @pytest.mark.asyncio
-async def test_installed_mcp_preserves_guide_authority_declarations_and_replay() -> None:
+async def test_installed_mcp_preserves_guide_authority_declarations_and_replay(
+    identity: IdentityFixture,
+) -> None:
     env = api_environment()
     executable = os.environ.get("WORKSTREAM_MCP_EXECUTABLE") or shutil.which("workstream-mcp")
     assert executable, "install the workstream-mcp wheel before running integration tests"
-    issuer, audience, secret = flow_settings(env)
     run_id = uuid4().hex
     subjects = {
         "admin": "mcp-admin",
         "manager": f"mcp-guides-{run_id}-manager",
         "ordinary": f"mcp-guides-{run_id}-ordinary",
     }
-    tokens = {
-        name: issue_flow_token(subject, [], issuer=issuer, audience=audience, secret=secret)
-        for name, subject in subjects.items()
-    }
+    tokens = {name: identity.issue(subject) for name, subject in subjects.items()}
     api_port, mcp_port = find_free_port(), find_free_port()
     while api_port == mcp_port:
         mcp_port = find_free_port()
@@ -73,6 +70,7 @@ async def test_installed_mcp_preserves_guide_authority_declarations_and_replay()
             WORKSTREAM_MCP_PORT=str(mcp_port),
         )
         api, mcp, api_log, mcp_log = _start_processes(
+            identity=identity,
             api_port=api_port,
             api_env=env,
             mcp_port=mcp_port,
@@ -129,9 +127,7 @@ async def test_installed_mcp_preserves_guide_authority_declarations_and_replay()
                 )
 
                 create = _guide_input(project["id"], str(uuid4()))
-                guide = await _mcp(
-                    mcp_url, tokens["manager"], "workstream_guides_create", create
-                )
+                guide = await _mcp(mcp_url, tokens["manager"], "workstream_guides_create", create)
                 assert guide["project_id"] == project["id"]
                 assert guide["status"] == "draft"
                 assert guide["task_examples"] == [
@@ -142,8 +138,10 @@ async def test_installed_mcp_preserves_guide_authority_declarations_and_replay()
                     }
                 ]
                 assert guide["setup"]["status"] == "awaiting_documents"
-                assert [(item["label"], item["media_type"], item["order"])
-                        for item in guide["documents"]] == [
+                assert [
+                    (item["label"], item["media_type"], item["order"])
+                    for item in guide["documents"]
+                ] == [
                     ("Guide", "application/pdf", 0),
                     ("Rubric", "text/markdown", 1),
                 ]
@@ -152,9 +150,10 @@ async def test_installed_mcp_preserves_guide_authority_declarations_and_replay()
                 mcp_log.close()
                 mcp, restart_log = _restart_mcp(executable, scratch, mcp_env)
                 await _ready(mcp_url + "/mcp", mcp)
-                assert await _mcp(
-                    mcp_url, tokens["manager"], "workstream_guides_create", create
-                ) == guide
+                assert (
+                    await _mcp(mcp_url, tokens["manager"], "workstream_guides_create", create)
+                    == guide
+                )
                 await _mcp(
                     mcp_url,
                     tokens["manager"],
@@ -173,13 +172,12 @@ async def test_installed_mcp_preserves_guide_authority_declarations_and_replay()
                     "body": {"change_summary": "Updated installed MCP guide"},
                     "idempotency_key": str(uuid4()),
                 }
-                updated = await _mcp(
-                    mcp_url, tokens["manager"], "workstream_guides_update", update
-                )
+                updated = await _mcp(mcp_url, tokens["manager"], "workstream_guides_update", update)
                 assert updated["change_summary"] == "Updated installed MCP guide"
-                assert await _mcp(
-                    mcp_url, tokens["manager"], "workstream_guides_update", update
-                ) == updated
+                assert (
+                    await _mcp(mcp_url, tokens["manager"], "workstream_guides_update", update)
+                    == updated
+                )
                 cleared = await _mcp(
                     mcp_url,
                     tokens["manager"],

@@ -2,7 +2,7 @@
 
 from typing import Literal
 
-from app.interfaces.external_services import ExternalServiceUnavailableError
+from workstream_external_services import ExternalServiceUnavailableError
 from app.modules.model_usage.api import (
     ModelCallExecutionFacts,
     ModelCallUnavailable,

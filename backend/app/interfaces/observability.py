@@ -9,7 +9,7 @@ from typing import Protocol
 from opentelemetry.sdk.metrics.export import MetricReader
 from opentelemetry.sdk.trace.export import SpanExporter
 
-from app.interfaces.external_services import ExternalServiceAdapter
+from workstream_external_services import ExternalServiceAdapter
 
 
 OBSERVABILITY_EXPORT_CAPABILITY_KEY = "observability_export"

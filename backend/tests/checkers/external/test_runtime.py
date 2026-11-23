@@ -36,7 +36,7 @@ from app.interfaces.external_checker_execution import (
     ExternalCheckerMaterialGrant,
     ExternalCheckerServiceHealth,
 )
-from app.interfaces.external_services import (
+from workstream_external_services import (
     ExternalServiceUnavailableError,
     UnknownExternalServiceProviderError,
 )

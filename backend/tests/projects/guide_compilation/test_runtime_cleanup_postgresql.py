@@ -223,7 +223,7 @@ async def test_current_provider_selection_cannot_redirect_retained_cleanup(
 @pytest.mark.parametrize("fail", [False, True])
 async def test_cleanup_composition_uses_only_selected_typed_adapter(retained_history_case, fail):
     from app.adapters.projects import cleanup_project_guide_runtime_resources
-    from app.interfaces.external_services import (
+    from workstream_external_services import (
         ExternalServiceAdapterFactory,
         ExternalServiceAdapterIdentity,
     )
@@ -270,7 +270,7 @@ async def test_cleanup_composition_rejects_unregistered_retained_identity_withou
     retained_history_case,
 ):
     from app.adapters.projects import cleanup_project_guide_runtime_resources
-    from app.interfaces.external_services import ExternalServiceAdapterFactory
+    from workstream_external_services import ExternalServiceAdapterFactory
     from app.modules.projects.api.guide_documents import (
         GUIDE_RUNTIME_RESOURCE_CLEANUP_CAPABILITY_KEY,
         GuideRuntimeResourceCleanupAdapter,
@@ -301,7 +301,7 @@ async def test_cleanup_composition_rejects_wrong_adapter_identity_before_cleanup
     retained_history_case,
 ):
     from app.adapters.projects import cleanup_project_guide_runtime_resources
-    from app.interfaces.external_services import (
+    from workstream_external_services import (
         ExternalServiceAdapterFactory,
         ExternalServiceAdapterIdentity,
     )

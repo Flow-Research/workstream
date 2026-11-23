@@ -38,7 +38,7 @@ from app.interfaces.artifacts import (
     ArtifactStoreUnavailableError,
     artifact_store_namespace_material,
 )
-from app.interfaces.external_services import ExternalServiceAdapterIdentity
+from workstream_external_services import ExternalServiceAdapterIdentity
 from app.modules.artifacts.preparation import ArtifactPreparationService
 from app.modules.artifacts.sources import ArtifactCommitment
 from app.modules.artifacts.api.submission_intake import (
@@ -1313,7 +1313,7 @@ async def test_source_cleanup_uses_separate_restricted_principal(source_store):
     from dataclasses import replace
     import json
     from app.adapters.artifacts import create_submission_source_cleanup_provider
-    from app.interfaces.external_services import ExternalServiceConfigurationError
+    from workstream_external_services import ExternalServiceConfigurationError
 
     prefix = source_store._private_prefix
     bucket_resource = f"arn:aws:s3:::{MINIO_BUCKET}"
