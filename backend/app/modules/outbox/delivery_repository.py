@@ -116,7 +116,10 @@ class DeliveryRepository:
         """Bind one owner session."""
         self.session = session
 
-    async def candidates(self, registered, *, excluded, after: UUID | None, limit: int) -> DeliveryCandidatePage:
+    async def candidates(
+        self, registered, *, after: UUID | None, limit: int,
+        excluded: frozenset[tuple[str, int]] = frozenset(),
+    ) -> DeliveryCandidatePage:
         """Select due supported work and expired claims within this worker's scope."""
         e = OutboxEvent
         now = func.statement_timestamp()

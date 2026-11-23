@@ -384,7 +384,7 @@ coverage or public DNS/TLS qualification.
 The [app-only hosted profile](../deploy/hosted/README.md#app-host-without-kvm)
 can run core services and guide setup while checker execution is offline. ZIP
 preparation returns retryable unavailability, POST requests and reconciliation
-remain in PostgreSQL, and ordinary workers continue. Assembled split-host
+remain in PostgreSQL, and ordinary Celery delivery continues. Assembled split-host
 checker operation and live app-only deployment remain unqualified.
 
 The [independent MCP package](../mcp_server/README.md) implements 132

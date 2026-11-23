@@ -2,10 +2,11 @@
 
 This directory prepares the Workstream API, durable Celery worker, Beat,
 fixed guide-document parser and optional trusted model proxy on one dedicated
-Linux amd64 host. Project PRE/POST and trusted ZIP intake use the existing native
-Smol systemd node. Compose does not start a checker controller or grant access
-to its Docker socket. PostgreSQL and Redis are required and may run through the private
-[single-host backing-service overlay](SINGLE_HOST.md) or managed services.
+Linux amd64 host. The single-host profile uses the native Smol systemd node for
+project PRE/POST and trusted ZIP intake. Compose does not start a checker
+controller or grant access to its Docker socket. PostgreSQL and Redis are
+required. Use the [private backing-service overlay](SINGLE_HOST.md) or managed
+services.
 AWS S3, Flow identity and the optional OTLP collector retain their separate
 configuration and trust boundaries.
 
@@ -33,9 +34,10 @@ requires the same database, broker, identity, parser, and provider setup as the
 single-host profile. It starts the configured setup model proxy before the
 ordinary worker. API and worker use local ART scratch for their other work.
 
-ZIP preparation through the API or MCP returns a retryable HTTP 503 while this
-profile is active. POST evaluation requests and reconciliation remain in
-PostgreSQL until checker delivery is available. Artifact verification, guide
+While this profile is active, the API returns a retryable HTTP 503 for ZIP
+preparation. MCP reports the upstream error as a retryable tool failure. POST
+evaluation requests and reconciliation remain in PostgreSQL until checker
+delivery is available. Artifact verification, guide
 compilation, and ordinary OUTBOX delivery, including completed evaluation
 delivery, continue. The `single-host` profile, or an unset profile, keeps the
 native Smol readiness checks and processes all delivery types. Private ingress
@@ -43,15 +45,16 @@ and worker attachment for a second checker host require separate qualification.
 
 ## Trust boundary
 
-The native node uses KVM and its delegated cpu/memory/pids cgroup, under the same
-numeric UID/GID `10001:10001` as the ART grant issuer. It owns fresh VM execution,
+In the single-host profile, the native node uses KVM and its delegated
+cpu/memory/pids cgroup under the same numeric UID/GID `10001:10001` as the
+ART grant issuer. It owns fresh VM execution,
 exact leases and cleanup. Neither the node nor project images receive provider
 credentials. The optional Compose model proxy alone owns those credentials;
 the native node connects to its host-visible private socket and forwards only
 invocation-bound capability traffic through the Smol guest transport.
 
-The API and worker mount the node socket directory read-only. Both typed
-capabilities use the same host endpoint, while retaining distinct closed
+In that profile, the API and worker mount the node socket directory read-only.
+Both typed capabilities use the same host endpoint with distinct closed
 protocols and pinned images:
 
 ```text

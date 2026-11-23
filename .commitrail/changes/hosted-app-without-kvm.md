@@ -73,6 +73,14 @@ changes are outside this migration prerequisite.
 - Human review focus: preserved AWS and identity startup gates, explicit
   offline response, inference availability, and retained checker delivery.
 
+## Review findings
+
+- `ARCH-APP-001` and `QA-APPHOST-001`: the repository keeps unfiltered
+  selection when the caller supplies no exclusions. The scheduled due-work
+  regression exercises that call directly.
+- `DOC-APP-001`: the hosted documentation scopes the native prerequisites to
+  the single-host profile and describes the retryable API and MCP responses.
+
 ## Reconciliation
 
 - Current-source reconciliation: verified against `a2154e8a`.
