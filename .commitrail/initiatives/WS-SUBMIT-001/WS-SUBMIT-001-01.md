@@ -7434,3 +7434,35 @@ Shared modified-content execution overb9a26bd60, not clean-commit or independent
 runtime execution. This removes the old creation-service dependency from this
 test, not all remaining hidden old producers or broader qualification work.
 Ruff, test-structure, Commitrail record and whitespace gates pass on final content.
+
+Next bounded predecessor cutover batch: move the successful replacement/replay
+matrix (human-review true/false) and dispatch SQL cause/receipt substitution test
+to public raw ZIP, T4 receipt replay before and after actual T5, and finalized
+source-backed admissions. Preserve one physical upload/one PRE, changed raw and
+semantic content, exact predecessor/cause lineage, prior immutable history,
+consumed admission and valid dispatch, all four SQL substitution refusals and no
+economic effects. Allowed: test_submission_predecessor_custody.py, existing test
+fixture helper only if required for the file boundary, and this record. Inventory
+shared helpers before edits; parameterize only the existing provider-write trace
+with unchanged defaults for remaining consumers. No production/migration/authority
+changes or hidden old-create calls added. Required QA/architecture review, three
+real PostgreSQL cases, Ruff/structure/record/whitespace gates, single PR708 commit.
+This removes two more old writer consumers while retaining A05/A22/A24/A31 proof;
+full old-producer deletion and specification/provider qualification remain open.
+
+Predecessor replay v1 passed3 in113.87s/schema0085/all cleanup complete
+(/tmp/submission-predecessor-replay-v1.log/.json). The full creation-snapshot
+replay assertion was added at12:53 after the pytest child began12:52:41; do not
+credit v1 with that added assertion. Freeze final content and run v2 including
+that stronger no-extra-product/event oracle. Review found lineage/substitution
+checks preserved and default trace consumers unchanged. No production gap found.
+
+Frozen predecessor replay v2 passed3 in95.81s/schema0085/all database+MinIO
+cleanup complete (/tmp/submission-predecessor-replay-v2.log/.json). Both review
+policy branches prove stable replay before/after actual T5, unchanged preparation
+and creation graphs, exact one traced physical upload and one PRE, intact prior
+history and consumed source-backed lineage; the SQL test retains all four
+substitution refusals. Ruff, test-structure, record and whitespace gates pass.
+Shared worktree proof overa29886861, not clean-commit/independent execution. Scope
+is test cutover, so roadmap capability/readiness claims do not change. Remaining
+old preparation/creation consumers and full qualification remain explicit work.
