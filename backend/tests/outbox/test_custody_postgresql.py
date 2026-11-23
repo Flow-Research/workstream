@@ -90,6 +90,9 @@ async def test_projection_and_receipt_commit_together(delivery_harness, side):
 )
 async def test_completed_custody_is_immutable(delivery_harness, change):
     h = delivery_harness
+    # Let claim and completion reach the immutability assertions under CI load.
+    h.options = h.options.model_copy(update={"lease_seconds": 60})
+    h.delivery = h.build()
     claim = await h.claim()
     receipt = await h.delivery.invoke(claim)
     async with h.factory() as session:

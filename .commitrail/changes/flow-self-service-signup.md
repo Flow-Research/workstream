@@ -172,8 +172,10 @@ delivery owner as ordinary assignment, revision and completion effects.
   claim or recovery. Retain ordinary and unsupported expired recovery.
 - Refresh the exact identifier-generation classifications for the changed outbox
   syntax. The authority fact-substitution test uses a 60-second lease to isolate
-  its assertions from short-lease expiry under CI load; expiry tests retain their
-  existing explicit bounds and assertions.
+  its assertions from short-lease expiry under CI load. The completed-custody
+  immutability test likewise uses an explicit bounded lease so authorization
+  finishes before it tests forbidden storage mutations. Expiry tests retain
+  their existing explicit bounds and assertions.
 - Update the existing hosted release preflight test and relevant existing
   backend test owners. Document the app profile and its offline limits in
   `deploy/hosted/README.md` and reconcile the affected part of
