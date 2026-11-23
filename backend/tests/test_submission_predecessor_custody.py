@@ -51,7 +51,6 @@ from app.modules.tasks.api.submission_context import (
     TaskSubmissionContextUnavailable,
 )
 from app.modules.tasks.models import SubmissionDispatch
-from app.modules.tasks.submission_composition import TaskSubmissionCreationService
 from app.modules.tasks.submission_context import TaskSubmissionContextService
 from app.adapters.tasks import task_submission_context_port
 from tests.auth_concurrency_support import wait_for_named_database_lock
@@ -759,94 +758,107 @@ async def test_sql_selected_pre_reservation_and_admission_reject_foreign_routed_
 async def test_dispatch_commit_requires_current_predecessor_checker_fence(
     tmp_path, isolated_database_env, monkeypatch, advance_fence,
 ):
+    """T4 rejects a superseded cause despite a stale port; current T4 reaches T5."""
+    from app.modules.artifacts.intake.foreground_admission import ForegroundIntakeAdmission
+    from app.modules.artifacts.intake.models import SubmissionIntakeOperation, SubmissionSourceCharge
+    from tests.retained_material_fixtures import finalize_retained_intake
+    from tests.tasks.submission_dispatch.test_revision_capacity import (
+        _revision_http_runtime, _revision_upload_headers,
+    )
+    from tests.tasks.submission_dispatch.test_replacement_creation import _creation_snapshot
+    from tests.tasks.test_public_submission_intake import _client
+
     async with remediation_source(tmp_path, isolated_database_env) as h:
         source_id = await _fixture_revision_context(h)
-        request = _replacement_request(
-            h, revision_archive(h.data), predecessor_id=h.created.submission_id,
-            idempotency_key=new_record_id(),
-        )
-        admission_id = await _verified_admission(
-            h.factory, h.store, h.namespace, h.settings, h.actor_context, request,
-        )
         async with h.factory.begin() as session:
-            frozen = await task_submission_context_port(session).lock_submission_context(
-                _context_request(h)
-            )
+            frozen = await task_submission_context_port(session).lock_submission_context(_context_request(h))
         assert frozen.checker_remediation_manifest_id == source_id
-        creation = SubmissionCreationRequest(
-            task_id=h.request.task_id,
-            assignment_id=h.request.assignment_id,
-            contributor_id=h.actor_context.actor_profile_id,
-            predecessor_submission_id=h.created.submission_id,
-            admission_id=admission_id,
-            summary=request.summary,
-            contributor_attestation=request.contributor_attestation,
-        )
-
-        if advance_fence:
-            await reserve(h, await next_request(h))
-            async with h.factory.begin() as session:
-                with pytest.raises(TaskSubmissionContextUnavailable):
-                    await task_submission_context_port(session).lock_submission_context(
-                        _context_request(h)
-                    )
 
         class FrozenTaskContextPort:
             async def lock_submission_context(self, selected):
                 assert selected == _context_request(h)
                 return frozen
 
-        staged = []
-        original_create = TaskSubmissionCreationService.create
+        operations, snapshots, staged, commit_errors = [], [], [], []
+        original_accept = ForegroundIntakeAdmission.accept
+        original_stage = ForegroundIntakeAdmission._accept_new
 
-        async def traced_create(service, selected):
-            result = await original_create(service, selected)
-            assert await service._session.scalar(text(
-                "SELECT count(*) FROM public.submission_dispatches WHERE submission_id=:id"
-            ), {"id": result.submission_id}) == 1
-            staged.append(result.submission_id)
+        async def accept_after_fence_change(admission, owner, *args, **kwargs):
+            operations.append(owner.operation_id)
+            if advance_fence:
+                await reserve(h, await next_request(h))
+                async with h.factory.begin() as session:
+                    with pytest.raises(TaskSubmissionContextUnavailable):
+                        await task_submission_context_port(session).lock_submission_context(_context_request(h))
+                # Freeze only the TASK context reader. All writers and SQL guards remain real.
+                monkeypatch.setattr(admission, "_contexts", lambda _session: FrozenTaskContextPort())
+                monkeypatch.setattr(
+                    "app.adapters.tasks.task_submission_context_port", lambda _session: FrozenTaskContextPort())
+            snapshots.append(await _creation_snapshot(h))
+            return await original_accept(admission, owner, *args, **kwargs)
+
+        async def trace_staged_acceptance(admission, session, authority, repository, row, owner, *args):
+            result = await original_stage(admission, session, authority, repository, row, owner, *args)
+            await session.flush()
+            assert row.state == "finalization_pending" and row.finalization_event_id is not None
+            staged.append(owner.operation_id)
+            original_commit = session.commit
+
+            async def observed_commit():
+                try:
+                    await original_commit()
+                except IntegrityError as exc:
+                    commit_errors.append((exc.orig.sqlstate, str(exc.orig)))
+                    raise
+
+            monkeypatch.setattr(session, "commit", observed_commit)
             return result
 
-        monkeypatch.setattr(TaskSubmissionCreationService, "create", traced_create)
+        monkeypatch.setattr(ForegroundIntakeAdmission, "accept", accept_after_fence_change)
+        monkeypatch.setattr(ForegroundIntakeAdmission, "_accept_new", trace_staged_acceptance)
+        data = revision_archive(h.data)
+        async with _client(h, monkeypatch, isolated_database_env) as client:
+            settings, errors, calls = await _revision_http_runtime(h, client, tmp_path, monkeypatch, data)
+            response = await client.post(
+                f"/api/v1/tasks/{h.request.task_id}/submissions",
+                headers=_revision_upload_headers(h), content=data)
+        assert len(calls) == 1 and not errors, errors
+        assert len(operations) == 1 and staged == operations
+        operation_id = operations[0]
         if advance_fence:
-            # Deliberately stale TASK port only: the writer still executes real
-            # AUTH, ART consumption, CHECKERS reservation, outbox and SQL commit.
-            monkeypatch.setattr(
-                "app.adapters.tasks.task_submission_context_port",
-                lambda _session: FrozenTaskContextPort(),
-            )
-            with pytest.raises(
-                IntegrityError, match="revision context unavailable for new submission",
-            ):
-                async with h.factory() as session:
-                    await compose_hidden_submission_creation_command(
-                        session, h.actor_context, request_id=new_record_id(),
-                        correlation_id=new_record_id(),
-                    ).create(creation)
-            assert staged == []  # The INSERT guard stops before any dispatch is staged.
+            assert len(commit_errors) == 1
+            assert commit_errors[0][0] == "23514"
+            assert "revision acceptance is no longer eligible" in commit_errors[0][1]
+            assert response.status_code == 503, response.text
+            assert response.json()["error"]["code"] == "submission_infrastructure_unavailable"
+            after, before = await _creation_snapshot(h), snapshots[0]
+            assert after[:8] == before[:8]
+            assert after[8] == before[8]
             async with h.factory() as session:
-                assert await session.scalar(text("SELECT count(*) FROM public.submissions")) == 1
-                assert await session.scalar(text("SELECT count(*) FROM public.submission_dispatches")) == 1
-                admission = await session.get(SubmissionBundleAdmission, str(admission_id))
-                assert admission.status == "ready"
-                assert await session.scalar(text(
-                    "SELECT status FROM public.workstream_tasks WHERE id=:id"
-                ), {"id": h.request.task_id}) == "needs_revision"
+                operation = await session.get(SubmissionIntakeOperation, operation_id)
+                assert operation.state == "failed" and operation.acceptance_receipt is None
+                assert operation.finalization_event_id is None and operation.finalized_submission_id is None
+                charge = await session.get(SubmissionSourceCharge, operation_id)
+                assert charge.state == "sealed" and charge.accounted_bytes == operation.raw_byte_count > 0
+                assert (await session.execute(text(
+                    "SELECT status,active_submission_operation_id FROM public.workstream_tasks WHERE id=:id"
+                ), {"id": h.request.task_id})).one() == ("needs_revision", None)
+                await no_economic_effects(session)
         else:
+            assert commit_errors == []
+            assert response.status_code == 202, response.text
+            assert response.json()["operation_id"] == str(operation_id)
+            submission_id = await finalize_retained_intake(h.factory, SimpleNamespace(
+                operation_id=operation_id, store=h.store.wrapped, namespace=h.namespace, settings=settings))
             async with h.factory() as session:
-                created = await compose_hidden_submission_creation_command(
-                    session, h.actor_context, request_id=new_record_id(),
-                    correlation_id=new_record_id(),
-                ).create(creation)
-            assert staged == [created.submission_id]
-            assert created.submission_version == 2
-            async with h.factory() as session:
-                dispatch = await session.get(SubmissionDispatch, str(created.submission_id))
+                dispatch = await session.get(SubmissionDispatch, str(submission_id))
+                assert dispatch.submission_version == 2
                 assert dispatch.checker_remediation_manifest_id == source_id
                 assert await session.scalar(text(
                     "SELECT public.submission_dispatch_valid(d) "
                     "FROM public.submission_dispatches d WHERE d.submission_id=:id"
-                ), {"id": created.submission_id}) is True
+                ), {"id": submission_id}) is True
+                await no_economic_effects(session)
 
 
 async def test_foreign_predecessor_stops_at_task_context_before_art_effects(

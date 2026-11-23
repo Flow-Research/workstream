@@ -7385,3 +7385,52 @@ is shared modified-content execution over532984f33, not independent or cleancomm
 execution. Fresh origin/main remainsa2154e8a4 and is already contained. This fixes
 existing error semantics and retires this module's old JSON creation dependency;
 remaining old producers, full-suite CI and provider/spec readiness remain open.
+
+Next bounded retirement: replace test_dispatch_commit_requires_current_predecessor_checker_fence
+in test_submission_predecessor_custody.py. The remaining test uses an old ready
+admission and hidden create command; current acceptance must instead reject a
+stale checker generation at T4 even if a deliberately frozen TASK context port
+returns the earlier valid context. Use public raw ZIP and real PRE, advance the
+real checker fence after PRE, retain real AUTH/ART/CHECKERS/SQL, and require no
+accepted event/product facts plus retained sealed charge. Positive control uses
+current context and real T5 to verify the routed predecessor dispatch. Allowed:
+that test module and this record; remove its now-unused old creation-service
+import only after checking callers. Shared historical fixtures and other old
+consumers remain untouched. No production behavior/SQL/authorization changes.
+Risk: lineage/currentness proof; QA and architecture/security review required.
+Run both real PostgreSQL branches, static/structure/record gates, then commit to
+single PR708. A12/A24/A31/A35 evidence advances; full old-producer retirement,
+provider qualification and all-goal completion are not inferred from this test.
+
+QA-FENCE001: generic503 plus rollback alone could credit an unrelated deferred
+failure. Preserve cause proof by observing only the staged T4 session's real
+commit, capturing and rethrowing its IntegrityError unchanged. Require23514 and
+'revision acceptance is no longer eligible' for the stale case, and no commit
+error for the valid case. This restores the old test's cause-specific assertion
+at the new T4 boundary without exposing SQL diagnostics through the public API.
+
+Fence v1 passed positive T4/T5 but failed stale-case stage observation126.43s:
+CHECKERS lock_acceptance independently obtains the same canonical TASK context
+through selected_pre_submit_task_guard and refuses the advanced fence before
+staging. This is an earlier valid guard, not a product bypass. To retain the
+intended independent SQL guard proof, freeze the TASK context factory for that
+T4 consumer too, after first proving the genuine canonical port rejects. Keep
+CHECKERS validation/source locking and all writers real. Existing broad TASK
+factory replacement was also the old test's fault injection; no production
+change or additional owner authority is introduced. v2 includes QA's exact
+commit-cause observation plus both port instances of that one stale TASK reader.
+
+Fence v2 passed2 in61.85s/schema0085/all database+MinIO cleanup complete
+(/tmp/submission-current-predecessor-fence-v2.log/.json). One existing Pydantic
+serialization warning comes from the synthetic next-request fixture; no warning
+is suppressed. The stale case stages real T4, then observes exact23514 currentness
+refusal and full rollback/charged-source custody; valid context reaches real T5
+and a valid version2 routed dispatch. QA-FENCE001 counterprobe independently
+rejects unrelated23514, wrong SQLSTATE and missing error
+(/tmp/submission-predecessor-fence-qa-cause-probe.json). Existing
+ test_stale_routed_cause_denies_acceptance_after_successful_pre separately covers
+normal context denial; this new boundary is intentionally SQL-backstop proof.
+Shared modified-content execution overb9a26bd60, not clean-commit or independent
+runtime execution. This removes the old creation-service dependency from this
+test, not all remaining hidden old producers or broader qualification work.
+Ruff, test-structure, Commitrail record and whitespace gates pass on final content.
