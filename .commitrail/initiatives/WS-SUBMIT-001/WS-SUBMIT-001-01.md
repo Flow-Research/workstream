@@ -8186,3 +8186,13 @@ No production guard or ownership rule changes for this finding.
 The repaired marker-only and retained-version controls passed together
 (`/tmp/submission-known-marker-only-v1.log/.json`, schema0088, complete
 isolated cleanup). Ruff and whitespace checks passed on this test-only repair.
+
+Clean `96c91c718bc39c627caf31bc439f726d437ad271` review closure:
+architecture/security/documentation PASS and QA/test-delta PASS WITH LOW RISKS.
+QA-KNOWN-001 is resolved. The same independent marker-guard omission now fails
+the repaired exact case at `writes_settled is False`, because the mutant returns
+true (`/tmp/submission-known-marker-qa-mutant-repair.log/.json`, expected failure
+in7.91s,0088, complete cleanup). Review snapshots match; production code remains
+the reviewed31f59daf4 change. Supplied suite receipts identify precommit
+worktrees rather than exact-head launches. Missing-handle initiation, genuine
+orphans, native AWS and full-goal qualification remain open.
