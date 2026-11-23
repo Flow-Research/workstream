@@ -52,15 +52,46 @@ class SealedSourceCleanup:
         self._authorization = authorization
         self._intake = SubmissionIntakeRepository(session, tasks)
 
+    async def _require_namespace(self, namespace):
+        persisted = await self._session.get(ArtifactStorageNamespace, "primary")
+        if persisted is None or any(getattr(persisted, key) != value for key, value in asdict(namespace).items()):
+            raise IntakeCustodyConflict("source_cleanup_namespace_unavailable")
+
+    async def expired_foreground(self, namespace, *, limit: int) -> tuple[UUID, ...]:
+        """Discover expired pre-handoff owners; discovery cannot change custody."""
+        if type(limit) is not int or not 1 <= limit <= 1000:
+            raise ValueError("source cleanup candidate bound is invalid")
+        await self._authorization.authorize()
+        await self._authorization.revalidate()
+        await self._require_namespace(namespace)
+        operation = SubmissionIntakeOperation
+        now = await self._session.scalar(select(func.clock_timestamp()))
+        identifiers = await self._session.scalars(select(operation.id).where(
+            operation.namespace_id == "primary",
+            operation.namespace_fingerprint == namespace.namespace_fingerprint,
+            operation.state.in_(("receiving", "pre_checking")),
+            operation.lease_expires_at <= now,
+        ).order_by(operation.lease_expires_at, operation.id).limit(limit))
+        return tuple(UUID(identifier) for identifier in identifiers)
+
+    async def abandon_expired(self, operation_id: UUID, namespace) -> bool:
+        """Fence a dead foreground owner without deleting bytes or releasing charges."""
+        await self._authorization.authorize()
+        operation = await self._intake._lock(operation_id)
+        await self._authorization.revalidate()
+        await self._require_namespace(namespace)
+        if (operation.namespace_id != "primary"
+                or operation.namespace_fingerprint != namespace.namespace_fingerprint):
+            raise IntakeCustodyConflict("source_cleanup_namespace_unavailable")
+        return await self._intake.abandon_expired(operation_id)
+
     async def candidates(self, namespace, *, limit: int) -> tuple[UUID, ...]:
         """Discover a bounded page; every result still requires an exact claim."""
         if type(limit) is not int or not 1 <= limit <= 1000:
             raise ValueError("source cleanup candidate bound is invalid")
         await self._authorization.authorize()
         await self._authorization.revalidate()
-        persisted = await self._session.get(ArtifactStorageNamespace, "primary")
-        if persisted is None or any(getattr(persisted, key) != value for key, value in asdict(namespace).items()):
-            raise IntakeCustodyConflict("source_cleanup_namespace_unavailable")
+        await self._require_namespace(namespace)
         operation, claim, charge = SubmissionIntakeOperation, SubmissionSourceCleanupClaim, SubmissionSourceCharge
         now = await self._session.scalar(select(func.clock_timestamp()))
         retained = select(ArtifactReplica.id).where(or_(

@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from app.adapters.artifacts import (
     create_artifact_store_bootstrap, create_submission_source_cleanup_provider,
     submission_source_cleanup_execution, submission_source_cleanup_candidates,
+    abandon_expired_submission_foregrounds,
     configured_artifact_storage_namespace, IntakeCustodyConflict,
 )
 from app.core.config import get_settings
@@ -47,9 +48,11 @@ async def validate_source_cleanup_startup():
 async def sweep_sealed_submission_sources(sessions, settings):
     """One finite page; confirmed counts include already-confirmed replay."""
     profile, namespace, namespace_claim = _configuration(settings)
-    candidates, confirmed, timed_out, provider = (), 0, False, None
+    candidates, confirmed, timed_out, provider, abandoned = (), 0, False, None, 0
     try:
         async with asyncio.timeout(profile.run_seconds):
+            abandoned = await abandon_expired_submission_foregrounds(
+                sessions, namespace, profile.maximum_candidates, operation_timeout_seconds=profile.lease_seconds)
             candidates = await submission_source_cleanup_candidates(sessions, namespace, profile.maximum_candidates)
             if candidates:
                 provider = create_submission_source_cleanup_provider(
@@ -71,7 +74,7 @@ async def sweep_sealed_submission_sources(sessions, settings):
         if provider is not None:
             provider.close()
     return {"candidates": len(candidates), "confirmed": confirmed,
-            "deferred": len(candidates) - confirmed, "timed_out": timed_out}
+            "deferred": len(candidates) - confirmed, "timed_out": timed_out, "abandoned": abandoned}
 
 
 async def run_source_cleanup_sweep():

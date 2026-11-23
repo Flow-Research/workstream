@@ -1062,6 +1062,41 @@ async def submission_source_cleanup_candidates(sessions, namespace, limit):
             authority.close()
 
 
+async def abandon_expired_submission_foregrounds(sessions, namespace, limit, *, operation_timeout_seconds):
+    """Recover one bounded page with an independent custody root per operation."""
+    import asyncio
+    from app.adapters.tasks import intake_task_custody_port
+    from app.modules.artifacts.authorization import PreparedSubmissionSourceCleanupAuthorization
+    from app.modules.artifacts.intake.cleanup import SealedSourceCleanup
+    from app.core.identifiers import new_record_id
+    from contextlib import asynccontextmanager
+
+    @asynccontextmanager
+    async def root():
+        async with sessions.begin() as session:
+            authority = PreparedSubmissionSourceCleanupAuthorization(
+                session, request_id=new_record_id(), correlation_id=new_record_id())
+            try:
+                yield SealedSourceCleanup(session, intake_task_custody_port(session), authority)
+            finally:
+                authority.close()
+
+    async with root() as owner:
+        candidates = await owner.expired_foreground(namespace, limit=limit)
+    abandoned = 0
+    for operation in candidates:
+        try:
+            async with asyncio.timeout(operation_timeout_seconds):
+                async with root() as owner:
+                    changed = await owner.abandon_expired(operation, namespace)
+            abandoned += changed
+        except TimeoutError:
+            # A busy task cannot consume every operation's recovery opportunity.
+            # Any uncertain commit is resolved from durable state on the next pass.
+            continue
+    return abandoned
+
+
 def submission_source_cleanup_execution(*, sessions, provider, lease_duration):
     """Compose deletion with the fixed cleanup service and TASK custody owner."""
     from app.adapters.tasks import intake_task_custody_port

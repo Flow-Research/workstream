@@ -7889,3 +7889,43 @@ Next runtime work is expired foreground abandonment plus unsealed/uncertain and
 orphan reconciliation, followed by separate-runner integration and final goal
 qualification. No broker-crash, native AWS, production deployment or full-goal
 completion claim is made. One draft PR708 remains the delivery vehicle.
+
+Next runtime scope: recover expired receiving/PRE owners through the existing
+source-cleanup worker and existing abandon_expired primitive, then extend the
+same cleanup ownership to interrupted/unsealed provider obligations. No alternate
+submission lifecycle, PRE worker, accepted-work expiration or source charge
+release from mere lease expiry. First recovery step uses the existing indexed
+expiry candidates, exact configured namespace and current cleanup service;
+each operation gets its own TASK-first root and an after-lock authority recheck.
+State/lease are rechecked by the current primitive, which fences the old owner
+and releases only its task pointer. Source bytes remain charged. The existing
+12-hour sweep is the periodic caller; this step does not claim prompt runtime
+reaping or change revision expiry. Allowed files: existing ART intake cleanup,
+repository/capacity and their SQL guards as required for later unsealed custody;
+ART composition, cleanup provider/worker/API, focused integration tests and
+required migration/head/fingerprint files; current runbook and this checklist.
+Prohibited: weakening accepted-source retention, synthesizing a sealed source to
+release partial-upload charges, using absence or an abort acknowledgement as
+settlement, broad provider deletion, introducing deployment defaults. Risk:
+security/workflow. Required QA and architecture/security review. First proof:
+expired receiving/PRE clears only its exact task guard and rejects late owners;
+live and accepted operations survive; revoked service/foreign namespace cannot
+mutate custody; source charges remain until separately confirmed cleanup.
+Unsealed reconciliation is not considered implemented by this first step.
+
+Expired-foreground first-step evidence: V1 passed eight PostgreSQL cases in
+255.14s, including the existing cleanup/retry/accepted-protection cases and both
+receiving/PRE abandonment cases. Before finalizing the change, recovery attempts
+were individually bounded using the existing explicit profile lease interval,
+and the expiry query was changed to bind a database-clock value so the existing
+expiry index can supply candidates. V2 passed seven affected cases in164.77s:
+both foreground phases, real TASK-lock timeout followed by successful next-sweep
+recovery, and service/namespace denial against both sealed and expired targets.
+Both isolated runs used schema0087 and report complete resource cleanup.
+Logs/receipts: /tmp/submission-expired-foreground-v1.log/.json and
+/tmp/submission-expired-foreground-v2.log/.json. The exact module boundary passed
+in44.39s; structure, Ruff, record/link and whitespace checks passed. No schema
+change, new worker queue, PRE retry or source-charge release was introduced.
+These proofs do not implement or qualify unsealed-byte reclamation. The periodic
+caller is explicitly the existing12-hour sweep; prompt runtime reaping remains
+separate. Required focused review follows against the clean candidate.

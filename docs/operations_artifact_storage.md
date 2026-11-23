@@ -275,7 +275,13 @@ persisted namespace, current cleanup-service authority and provider configuratio
 before forking. Each sweep repeats current authority checks. The task has a
 fixed 360-second process hard limit; broker messages cannot extend it.
 
-Beat schedules a bounded sweep every 12 hours. Sources must have been both sealed
+Beat schedules a bounded sweep every 12 hours. Its recovery pass first fences
+expired receiving/PRE operations, rechecking each under its task lock and current
+service authority. This clears only the old operation's task pointer; it neither
+resumes PRE nor releases storage charges. Live and accepted operations remain
+protected. Recovery uses the sweep's explicit page/run limits and bounds each
+attempt by the configured lease interval. This is periodic foreground recovery,
+not the prompt runtime-session reaper. Sources must have been both sealed
 and terminal for at least two hours. Candidate discovery grants no deletion
 permission: the existing owner locks task/source custody, rejects accepted or
 retained sources, and commits an audited exact-generation claim before provider
