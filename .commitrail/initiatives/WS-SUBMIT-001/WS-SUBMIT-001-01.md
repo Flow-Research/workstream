@@ -7319,3 +7319,69 @@ committed-resource substitution, and late outbox/audit rollback. Separate custod
 control above proves active-intake rollback/reclaim isolation. Module/authorization
 boundary suite passed92 in101.54s. These are bounded shared local proofs; full-suite
 CI, provider qualification and remaining specification work are still required.
+
+Next bounded cutover proof: replace the remaining JSON creation commit-boundary
+race in test_revision_expiry.py with raw ZIP/PRE/T4 and actual T5 continuation.
+The old test still calls the removed public JSON contract and patches the old
+TaskSubmissionCreationService. Preserve both timing branches: committed timely
+T4 protects pending work; a transaction held beyond its existing eligibility
+cutoff rolls back acceptance and lets due expiry release the assignment. Do not
+relax current deadlines or alter production behavior. Inspect/delete only the
+now-unreferenced local old-path helper/imports; shared consumers remain intact.
+Allowed files: that test and this record. QA/architecture review focuses on real
+transaction locks, no orphan accepted event/product facts, exact retained source
+charge, timely accepted continuation and unchanged historical source. Run both
+PostgreSQL branches plus relevant static gates. Single PR708; no merge/readiness
+claim. This advances A11/A12/A31/A35 and old-producer retirement without treating
+fixture success as complete specification/provider qualification.
+
+Commit-boundary v1: timely branch passed; late branch failed180.62s with expected
+SQL23514 'revision acceptance is no longer eligible' at deferred commit, but API
+returned503 submission_infrastructure_unavailable. Cleanup complete. This is a
+conclusive acceptance rollback mislabeled by generic IntegrityError translation,
+not unknown commit. Expand scope narrowly to foreground_admission.py: after that
+rollback, fresh authorized exact-owner read plus canonical TASK context recheck
+may classify a confirmed expired revision as revision_deadline_expired. Do not
+infer expiry from SQL text or map other integrity errors to expiry. Preserve
+unknown-commit handling and all deadline/SQL rules. Late-race terminal proof must
+permit foreground to finish failed with the known expiry code before worker
+invalidation, as well as worker cancelled/abandoned; both retain exact charge,
+fence and no acceptance. QA/architecture review required for the added projection.
+The structural gate found a133-line test; factor finalized-state assertions into
+one named helper without weakening or relaxing the gate.
+
+Review refinement: a post-rollback expired context alone cannot identify the cause
+of an unrelated integrity error. Replace that broad classifier with a dedicated
+constraint identifier on the revision-deadline SQL rejection. Add migration0085
+which separates that predicate from other existing acceptance-currentness guards;
+no eligibility relaxation or retained-row mutation. Only the named deadline
+violation maps to409; all other integrity failures retain their original handling.
+Add a real unrelated-integrity failure while the revision window is valid, as
+QA-COMMIT001 requests. This expands allowed scope to that migration and the same
+foreground translation/test paths, avoiding ambiguous cause inference.
+
+0085 integration includes the canonical Alembic head pin (and retained0084
+upgrade starting point) in alembic/env.py, plus tests/conftest.py's exact schema
+fingerprint. Actual isolated PostgreSQL upgrade applied0085 successfully; v3
+then refused all4 fixture setups at the intentional old fingerprint gate39.59s,
+complete cleanup. Measured new canonical hash:
+4dd5956392e13454b03eccbe6001ad4f8251a88934539465ea9bc0b049cd4844.
+Only the acceptance-currentness function body changes in this migration; no
+rows/tables/privileges are replaced. Pin that measured result, not a guessed hash.
+Intermediate broad-classifier v2 passed2/232.18s and initial-lease control passed
+1/62.39s on0084, but those results do not qualify the superseding named-error fix.
+
+Final named-error candidate: v4 passed4 in283.03s/schema0085/all cleanup complete
+(/tmp/submission-t4-commit-boundary-v4.log/.json). Timely T4 remains pending through
+stale expiry then real T5 finalizes one dispatch; late deferred revision deadline
+returns409 and exact replay without another PRE; unrelated real revision SQL
+integrity failure returns503 with no accepted/expiry facts; initial lease-expiry
+control remains a generic custody conflict. QA-COMMIT001 is covered. Schema parity
+probe (/tmp/submission-0085-schema-parity.py/.log/.json) passed on separate owned
+PG: reversing only this function change inside a rolled-back transaction restores
+the exact full0084 catalog fingerprint, and rollback restores exact0085 fingerprint.
+Cleanup complete. Ruff/structure/record/Markdown links/whitespace pass. Evidence
+is shared modified-content execution over532984f33, not independent or cleancommit
+execution. Fresh origin/main remainsa2154e8a4 and is already contained. This fixes
+existing error semantics and retires this module's old JSON creation dependency;
+remaining old producers, full-suite CI and provider/spec readiness remain open.

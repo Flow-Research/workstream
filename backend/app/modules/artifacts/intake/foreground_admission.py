@@ -286,6 +286,8 @@ class ForegroundIntakeAdmission:
                                                  request, terminal_digest, checkers, outbox)
             return receipt
         except IntegrityError as exc:
+            if integrity_constraint_name(exc) == "ck_submission_revision_acceptance_deadline":
+                raise SubmissionIntakeFailure("revision_deadline_expired") from None
             raise IntakeCustodyConflict("intake_acceptance_conflict") from exc
         except IntakeCommitUnknown:
             async with self._root() as (session, authority):
