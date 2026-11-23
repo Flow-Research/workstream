@@ -4,16 +4,19 @@ The composition root must supply current authority and act only on a committed c
 This owner retains uncertain targets and releases charges only with both exact
 object absence and settled upload-part obligations supplied by that coordinator.
 """
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import datetime, timedelta
 from uuid import UUID
 
-from sqlalchemy import func, select, text
+from sqlalchemy import func, or_, select, text
 
 from app.modules.artifacts.api.submission_intake import SealedSubmissionSource, SubmissionSourceUpload
 from app.modules.artifacts.api.submission_cleanup import SubmissionSourceCleanupAuthorityFacts
 from app.modules.artifacts.intake.capacity import SubmissionSourceCapacity
-from app.modules.artifacts.intake.models import SubmissionSourceCleanupClaim, SubmissionSourceUploadReceipt
+from app.modules.artifacts.intake.models import (
+    SubmissionIntakeOperation, SubmissionSourceCharge, SubmissionSourceCleanupClaim, SubmissionSourceUploadReceipt,
+)
+from app.modules.artifacts.models import ArtifactStorageNamespace, ArtifactReplica, SubmissionBundleAdmission
 from app.modules.artifacts.intake.repository import IntakeCustodyConflict, SubmissionIntakeRepository
 
 # Match the existing bounded durable finalization delivery lease, not a default.
@@ -48,6 +51,40 @@ class SealedSourceCleanup:
         self._session = session
         self._authorization = authorization
         self._intake = SubmissionIntakeRepository(session, tasks)
+
+    async def candidates(self, namespace, *, limit: int) -> tuple[UUID, ...]:
+        """Discover a bounded page; every result still requires an exact claim."""
+        if type(limit) is not int or not 1 <= limit <= 1000:
+            raise ValueError("source cleanup candidate bound is invalid")
+        await self._authorization.authorize()
+        await self._authorization.revalidate()
+        persisted = await self._session.get(ArtifactStorageNamespace, "primary")
+        if persisted is None or any(getattr(persisted, key) != value for key, value in asdict(namespace).items()):
+            raise IntakeCustodyConflict("source_cleanup_namespace_unavailable")
+        operation, claim, charge = SubmissionIntakeOperation, SubmissionSourceCleanupClaim, SubmissionSourceCharge
+        now = await self._session.scalar(select(func.clock_timestamp()))
+        retained = select(ArtifactReplica.id).where(or_(
+            ArtifactReplica.source_operation_id == operation.id,
+            (ArtifactReplica.storage_namespace_id == operation.namespace_id)
+            & (ArtifactReplica.namespace_fingerprint == operation.namespace_fingerprint)
+            & (ArtifactReplica.provider_object_ref == operation.object_ref),
+        )).exists()
+        admitted = select(SubmissionBundleAdmission.id).where(
+            SubmissionBundleAdmission.source_operation_id == operation.id).exists()
+        identifiers = await self._session.scalars(select(operation.id)
+            .join(charge, charge.operation_id == operation.id)
+            .outerjoin(claim, claim.operation_id == operation.id)
+            .where(operation.namespace_id == "primary",
+                   operation.namespace_fingerprint == namespace.namespace_fingerprint,
+                   operation.state.in_(("rejected", "failed", "abandoned", "cancelled")),
+                   operation.accepted_at.is_(None), operation.provider_generation.is_not(None),
+                   operation.sealed_at.is_not(None), operation.terminal_at <= now - timedelta(hours=2),
+                   operation.sealed_at <= now - timedelta(hours=2), charge.state == "sealed",
+                   claim.confirmed_at.is_(None),
+                   or_(claim.operation_id.is_(None), claim.lease_expires_at <= now),
+                   ~retained, ~admitted)
+            .order_by(func.coalesce(claim.claimed_at, operation.terminal_at), operation.id).limit(limit))
+        return tuple(UUID(identifier) for identifier in identifiers)
 
     async def _locked(self, operation_id):
         await self._authorization.authorize()

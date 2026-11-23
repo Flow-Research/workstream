@@ -285,6 +285,7 @@ class Settings(BaseSettings):
     # Required source-intake envelopes and runtime/capacity profile. No old
     # preparation timers or unmeasured deployment defaults are inherited.
     submission_execution_profile: dict[str, object] | None = None
+    submission_source_cleanup_profile: dict[str, object] | None = None
     artifact_intake_image_digest: str | None = None
     artifact_intake_config_digest: str | None = None
     external_checker_service_socket: Path | None = None

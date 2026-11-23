@@ -1046,6 +1046,22 @@ def worker_submission_finalization_recovery_handler(*, sessions, delivery_option
     )
 
 
+async def submission_source_cleanup_candidates(sessions, namespace, limit):
+    """Discover candidates under the fixed service through ART ownership."""
+    from app.adapters.tasks import intake_task_custody_port
+    from app.modules.artifacts.authorization import PreparedSubmissionSourceCleanupAuthorization
+    from app.modules.artifacts.intake.cleanup import SealedSourceCleanup
+    from app.core.identifiers import new_record_id
+    async with sessions.begin() as session:
+        authority = PreparedSubmissionSourceCleanupAuthorization(
+            session, request_id=new_record_id(), correlation_id=new_record_id())
+        try:
+            return await SealedSourceCleanup(session, intake_task_custody_port(session), authority).candidates(
+                namespace, limit=limit)
+        finally:
+            authority.close()
+
+
 def submission_source_cleanup_execution(*, sessions, provider, lease_duration):
     """Compose deletion with the fixed cleanup service and TASK custody owner."""
     from app.adapters.tasks import intake_task_custody_port

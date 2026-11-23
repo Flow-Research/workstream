@@ -7791,3 +7791,53 @@ not an independent final-head/native-provider/full-suite qualification.
 SystemPython full structure validation passed; Ruff, record, link and whitespace
 checks passed. Overview now checks this fixture cutover complete and puts the
 missing production source-cleanup integration first. Full goal remains active.
+
+Production cleanup integration scope: connect the existing sealed-source owner
+to an exclusive prefork cleanup queue and a12-hour scheduled bounded sweep.
+Require an explicit cleanup profile (page, run and lease bounds, upload-principal
+identifier for separately credentialed S3 cleanup); no deployment values invented.
+Discover only aged terminal sealed operations in the configured retained namespace,
+under current cleanup-service authority. Exclude accepted/retained/released/live
+claims, then recheck existing custody and consume exact authority on every claim.
+Provider I/O remains outside roots; confirmed absence/settlement alone releases
+charge. Repeated or concurrent sweeps and process loss recover through existing
+claim generations. Fair ordering moves attempted unresolved work behind older
+unattempted eligible work. Explicitly leave unsealed/uncertain-begin/completion
+and genuine-orphan reconciliation open until separately implemented and proved.
+Allowed: cleanup API/profile and owner, ART worker composition, dedicated worker
+module/topology, existing Celery wiring/Settings, intake model+0087candidate-index
+migration+Alembic predecessor gate+measured test schema fingerprint; focused
+worker/real-PG+Local provider tests, deployment example documentation, overview
+and record. No new public/admin deletion surface, retention relaxation, provider
+qualification or API upload credential expansion. Risk: security/workflow; QA and
+ARCH/SEC reviews required. Proof: registered schedule and bounded/exclusive worker,
+real owner+provider sweep, replay/concurrent/uncertain retries, namespace/service
+denial and protected accepted custody; migrations/current/predecessor and boundary
+checks. Human focus: an indexed candidate is never deletion authority.
+
+User deployment correction: API/application infrastructure and microVM execution
+must be separate. The reported t3.large application instance is not required to
+provide nested virtualization or local KVM. Dedicated execution infrastructure
+and future paid sandbox adapters share the provider-independent core contract;
+one PRE session does not mean one shared API/runner host. Inspect and remove
+shared-host assumptions within execution integration. Native proof belongs on
+the selected runner; do not treat missing API-host KVM as a deployment blocker.
+Cleanup test scope also includes the existing stalled-accepted protection test
+and registration of the two new test modules in the existing CI lane catalogue;
+no lane exclusions or gate weakening are authorized.
+
+Cleanup verification in progress: measured0087 schema fingerprint is
+094801f2d9fab469983e8b49ca3a0b260ded61dacd7e823380626637e440be25.
+The isolated probe restored the exact0086 fingerprint by dropping only the new
+index, then executed the actual0086-to0087 upgrade and recovered the new exact
+fingerprint; database/MinIO cleanup completed. First worker run passed the real
+reclamation/live-PRE/repeated-sweep case and failed three tests: one test's
+one-second lease timed out before committing its intended uncertain claim, and
+two denial cases imported their exception from the wrong module. Corrected to
+an explicit30-second test lease and the actual exception owner; rerun includes
+concurrent sweeps and stalled accepted-source protection. No production profile
+value was inferred from those test values. Boundary discovery exposed private
+ART imports in the worker adapter; moved candidate composition into the existing
+ART root and reused configured namespace composition. Startup validation now
+runs before fork, outside Celery's short child-init window, and disposes resources
+before return. A failed startup cannot mark the parent validated.

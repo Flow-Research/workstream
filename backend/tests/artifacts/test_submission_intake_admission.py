@@ -31,7 +31,7 @@ from tests.authorization.admin_access.fixtures import (
 )
 
 
-async def test_stalled_accepted_source_is_protected_from_cleanup(recovery_intake):
+async def test_stalled_accepted_source_is_protected_from_cleanup(recovery_intake, tmp_path, monkeypatch):
     """Exhausted finalizer delivery never turns accepted input into garbage."""
     from sqlalchemy.exc import DBAPIError
     from sqlalchemy import text
@@ -40,6 +40,15 @@ async def test_stalled_accepted_source_is_protected_from_cleanup(recovery_intake
     from app.modules.actors.api import ServiceIdentity
     f, operation = recovery_intake.f, recovery_intake.owner.operation_id
     await provision_post_submit_service(f.factory, ServiceIdentity.ARTIFACT_SOURCE_CLEANUP)
+    from app.adapters.artifacts import source_cleanup_worker
+    settings = _settings(tmp_path).model_copy(update={"submission_source_cleanup_profile": {
+        "maximum_candidates": 10, "run_seconds": 60, "lease_seconds": 30,
+    }})
+    def forbidden(**kwargs):
+        pytest.fail("stalled accepted source reached deletion capability")
+    monkeypatch.setattr(source_cleanup_worker, "create_submission_source_cleanup_provider", forbidden)
+    for _ in range(2):
+        assert (await source_cleanup_worker.sweep_sealed_submission_sources(f.factory, settings))["candidates"] == 0
     with pytest.raises(DBAPIError, match="cleanup is protected"):
         async with f.factory.begin() as session:
             await owner(session).claim(

@@ -57,6 +57,9 @@ class SubmissionIntakeOperation(Base):
         UniqueConstraint("acceptance_decision_id", name="uq_intake_acceptance_decision"),
         UniqueConstraint("finalization_event_id", name="uq_intake_finalization_event"),
         Index("uq_submission_intake_active_task", "task_id", unique=True, postgresql_where=text("state in ('receiving','pre_checking','finalization_pending')")),
+        Index("ix_submission_intake_cleanup_candidates", "terminal_at", "id",
+              postgresql_where=text("state in ('rejected','failed','abandoned','cancelled') "
+                                    "and accepted_at is null and sealed_at is not null")),
         Index("ix_submission_intake_expiry", "lease_expires_at", "id", postgresql_where=text("state in ('receiving','pre_checking')")),
     )
 

@@ -8,6 +8,13 @@ from app.workers.outbox_topology import (
     OUTBOX_DELIVERY_TASK, OUTBOX_QUEUE, FINALIZATION_DELIVERY_TASK, FINALIZATION_QUEUE,
     is_finalization_worker_process,
 )
+from app.workers.source_cleanup_topology import (
+    SOURCE_CLEANUP_QUEUE, SOURCE_CLEANUP_TASK, SOURCE_CLEANUP_SCHEDULE,
+    is_source_cleanup_worker_process,
+)
+from app.modules.artifacts.api.submission_cleanup import (
+    SUBMISSION_SOURCE_SWEEP_SECONDS, SubmissionSourceCleanupProfile,
+)
 from app.workers.project_setup_topology import (
     CELERY_VISIBILITY_TIMEOUT_SECONDS,
     PROJECT_GUIDE_CONSUMER_MARKER,
@@ -43,6 +50,7 @@ OBSERVED_TASK_NAMES = frozenset(
     {
         OUTBOX_DELIVERY_TASK,
         FINALIZATION_DELIVERY_TASK,
+        SOURCE_CLEANUP_TASK,
         "workstream.outbox.scan_pending",
         "workstream.tasks.scan_retained_revisions",
         "workstream.project_setup.derive_post_policy",
@@ -62,6 +70,9 @@ OBSERVED_TASK_NAMES = frozenset(
 @worker_process_init.connect
 def initialize_artifact_runtime_for_process(**_kwargs: object) -> None:
     """Claim and initialize the artifact provider once per Celery child."""
+    if is_source_cleanup_worker_process():
+        # Parent validated cleanup startup; each sweep rechecks current authority.
+        return
     if is_finalization_worker_process():
         # Finalized replay needs retained SQL facts only. Unfinished finalization
         # leases/initializes the same provider through _WorkerSourceObservation.
@@ -108,6 +119,8 @@ def create_celery_app() -> Celery:
         Configured Celery application for durable background jobs.
     """
     settings = get_settings()
+    if settings.submission_source_cleanup_profile is not None:
+        SubmissionSourceCleanupProfile.model_validate(settings.submission_source_cleanup_profile)
     broker_url = settings.celery_broker_url
     if broker_url is None:
         if settings.celery_task_always_eager:
@@ -122,6 +135,7 @@ def create_celery_app() -> Celery:
         backend=settings.celery_result_backend_url,
         include=[
             "app.workers.artifacts",
+            "app.workers.source_cleanup",
             "app.workers.project_setup",
             "app.workers.post_policy",
             "app.workers.outbox",
@@ -129,8 +143,9 @@ def create_celery_app() -> Celery:
         ],
     )
     celery_app.conf.update(
-        task_queues=(Queue("celery"), Queue(OUTBOX_QUEUE), Queue(FINALIZATION_QUEUE)),
-        task_routes={OUTBOX_DELIVERY_TASK: {"queue": OUTBOX_QUEUE},
+        task_queues=(Queue("celery"), Queue(OUTBOX_QUEUE), Queue(FINALIZATION_QUEUE), Queue(SOURCE_CLEANUP_QUEUE)),
+        task_routes={SOURCE_CLEANUP_TASK: {"queue": SOURCE_CLEANUP_QUEUE},
+                     OUTBOX_DELIVERY_TASK: {"queue": OUTBOX_QUEUE},
                      FINALIZATION_DELIVERY_TASK: {"queue": FINALIZATION_QUEUE}},
         accept_content=["json"],
         result_serializer="json",
@@ -149,6 +164,9 @@ def create_celery_app() -> Celery:
         worker_disable_prefetch=True,
         **{PROJECT_GUIDE_CONSUMER_MARKER: True},
         beat_schedule={
+            **({SOURCE_CLEANUP_SCHEDULE: {
+                "task": SOURCE_CLEANUP_TASK, "schedule": SUBMISSION_SOURCE_SWEEP_SECONDS,
+            }} if settings.submission_source_cleanup_profile is not None else {}),
             "outbox-delivery-recovery": {
                 "task": "workstream.outbox.scan_pending", "schedule": 60.0,
             },
