@@ -8269,3 +8269,16 @@ initial system-Python validation's secondary stale_catalogue_test error came
 from local plugin imports; no catalogue record was changed to suppress it.
 Ruff, Commitrail and whitespace checks passed. Full collection is checked
 separately; collection success is not execution of the full backend suite.
+
+Clean e858c5e82 CI-integrity/QA/test-delta PASS WITH LOW RISKS. Independent
+allowance-expansion mutation is rejected by the existing exact-set test. The
+migration rename is byte-identical; exactly five shared test additions account
+for the fingerprint delta, with no family moves. Affected pair collection passed
+12 tests in 18.82s (`/tmp/submission-cleanup-paired-collection-after.log`, exit 0).
+
+Full local collection is NOT passed: one run printed 12,597 collected tests but
+exited 139; a diagnostic run reproduced SIGSEGV in pytest fixture ordering
+(`/tmp/submission-cleanup-collection-after-v2.log` and
+`/tmp/submission-cleanup-collection-diagnostic.log`, Python 3.12.3). The cause is
+not established. Do not substitute the paired collection or focused execution
+for full-head qualification. Hosted CI must run on the repaired pushed head.
