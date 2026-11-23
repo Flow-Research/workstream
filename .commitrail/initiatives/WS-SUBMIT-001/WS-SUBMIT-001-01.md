@@ -8171,3 +8171,18 @@ pair are bounded proofs, not native AWS qualification. Ruff, structure,
 protected-module boundary, record/link, stale-authorization-doc and whitespace
 checks passed. The overview now distinguishes recorded-handle settlement from
 the still-open missing-handle and genuine-orphan paths.
+
+Clean31f59daf4 review: architecture/security/documentation scoped PASS; QA found
+QA-KNOWN-001, a masked delete-marker negative. Its fixture retained both a data
+version and marker, so MaxKeys1/truncation or the version guard could still deny
+settlement when the marker guard was omitted. QA's isolated omission mutant
+passed that exact test in21.38s
+(`/tmp/submission-known-marker-qa-mutant.log/.json`,0088, complete cleanup),
+demonstrating the coverage gap rather than a production defect. Repair only the
+fixture: after making the marker, remove the exact admin-seeded data version;
+assert zero versions and one marker. Keep the separate version-only control.
+No production guard or ownership rule changes for this finding.
+
+The repaired marker-only and retained-version controls passed together
+(`/tmp/submission-known-marker-only-v1.log/.json`, schema0088, complete
+isolated cleanup). Ruff and whitespace checks passed on this test-only repair.

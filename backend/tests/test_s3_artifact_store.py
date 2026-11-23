@@ -1399,9 +1399,10 @@ async def test_unsealed_cleanup_preserves_unresolved_obligations(source_store, m
             # must preserve it, never manufacture a source identity to delete it.
             async with source_store._client() as client:
                 key = source_store._source_key(intent.location)
-                await client.put_object(Bucket=MINIO_BUCKET, Key=key, Body=b"unexplained")
+                seeded = await client.put_object(Bucket=MINIO_BUCKET, Key=key, Body=b"unexplained")
                 if obligation == "delete_marker":
                     await client.delete_object(Bucket=MINIO_BUCKET, Key=key)
+                    await client.delete_object(Bucket=MINIO_BUCKET, Key=key, VersionId=seeded["VersionId"])
         result = await S3SubmissionSourceCleanup(cleanup_store).remove_unsealed(value)
         assert result.writes_settled is False
         assert result.observed_source is None
@@ -1410,8 +1411,8 @@ async def test_unsealed_cleanup_preserves_unresolved_obligations(source_store, m
         if obligation in {"version", "delete_marker"}:
             async with source_store._client() as client:
                 retained = await client.list_object_versions(Bucket=MINIO_BUCKET, Prefix=key)
-            assert len(retained["Versions"]) == 1
-            assert bool(retained.get("DeleteMarkers")) is (obligation == "delete_marker")
+            assert len(retained.get("Versions", [])) == (0 if obligation == "delete_marker" else 1)
+            assert len(retained.get("DeleteMarkers", [])) == (1 if obligation == "delete_marker" else 0)
     finally:
         await source_store.request_source_abort(upload)
         cleanup_store.close()
