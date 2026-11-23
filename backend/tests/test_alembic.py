@@ -1372,13 +1372,74 @@ async def test_roles_anywhere_upgrade_preserves_old_proof_and_refuses_downgrade(
             await engine.dispose()
 
 
-async def test_revision_upgrade_retains_policy_source_and_running_window(
+async def _assert_upgraded_incompatible_revision_blocked(h, tmp_path, database_url, monkeypatch):
+    """Preserve zero-PRE history without admitting new work under incompatible locks."""
+    from sqlalchemy import text
+    from app.adapters.artifacts import ConfiguredSubmissionCommand
+    from app.modules.artifacts.intake.foreground_upload import ForegroundSourceUpload
+    from app.modules.artifacts.intake.repository import IntakeCustodyConflict
+    from tests.tasks.post_submit_routing.support import revision_archive
+    from tests.tasks.submission_dispatch.test_replacement_creation import _creation_snapshot
+    from tests.tasks.submission_dispatch.test_revision_capacity import (
+        _revision_http_runtime, _revision_upload_headers,
+    )
+    from tests.tasks.test_public_submission_intake import _client
+
+    async def intake_snapshot():
+        async with h.factory() as session:
+            return tuple([await session.scalar(text(
+                f"SELECT jsonb_agg(to_jsonb(r) ORDER BY {key}) FROM public.{table} r"
+            )) for table, key in (("submission_intake_operations", "id"),
+                                  ("submission_source_charges", "operation_id"),
+                                  ("selected_pre_submit_runs", "id"), ("audit_events", "id"))])
+
+    async def forbidden_body():
+        pytest.fail("incompatible locked policy consumed the request body")
+        yield b"unreachable"
+
+    async def forbidden_upload(*args, **kwargs):
+        pytest.fail("incompatible locked policy reached source upload")
+
+    command_errors, submit = [], ConfiguredSubmissionCommand._submit
+    async def observe_command(command, *args, **kwargs):
+        try:
+            return await submit(command, *args, **kwargs)
+        except IntakeCustodyConflict as exc:
+            command_errors.append(str(exc))
+            raise
+
+    async with h.factory() as session:
+        policy = await session.scalar(text("""
+            SELECT p.compiled_bundle FROM public.pre_submit_checker_policies p
+            JOIN public.workstream_tasks t ON t.locked_pre_submit_checker_policy_id=p.id
+            WHERE t.id=:task
+        """), {"task": h.request.task_id})
+        assert policy["entries"] == []
+    async with _client(h, monkeypatch, database_url) as client:
+        _, errors, calls = await _revision_http_runtime(
+            h, client, tmp_path, monkeypatch, revision_archive(h.data))
+        before, creation = await intake_snapshot(), await _creation_snapshot(h)
+        with monkeypatch.context() as patch:
+            patch.setattr(ConfiguredSubmissionCommand, "_submit", observe_command)
+            patch.setattr(ForegroundSourceUpload, "receive", forbidden_upload)
+            response = await client.post(
+                f"/api/v1/tasks/{h.request.task_id}/submissions",
+                headers=_revision_upload_headers(h), content=forbidden_body())
+        assert response.status_code == 503, response.text
+        assert response.json()["error"]["code"] == "submission_infrastructure_unavailable"
+        assert command_errors == ["intake_requires_one_pre_and_post_checker"]
+        assert calls == [] and errors == []
+        assert await intake_snapshot() == before
+        assert await _creation_snapshot(h) == creation
+
+
+async def test_revision_upgrade_retains_window_and_blocks_incompatible_policy(
     tmp_path,
     isolated_database_env,
     migration_lock,
     monkeypatch,
 ):
-    """A genuine guarded 0047 window survives and remains usable on the new head."""
+    """A genuine 0047 window survives; incompatible locked policy cannot admit new work."""
     from sqlalchemy import select, text
     from app.adapters.tasks import task_post_submit_outcome
     from app.modules.tasks.revision.models import TaskRevisionPreparation
@@ -1392,12 +1453,6 @@ async def test_revision_upgrade_retains_policy_source_and_running_window(
         retained_revision_rows,
     )
     from tests.tasks.post_submit_routing.outcome_support import invoked_completion
-    from tests.tasks.post_submit_routing.support import revision_archive
-    from tests.tasks.submission_dispatch.test_replacement_creation import (
-        _create,
-        _creation_request,
-        _ready_replacement,
-    )
 
     with migration_lock():
         await _execute(isolated_database_env, "drop schema public cascade; create schema public")
@@ -1454,11 +1509,8 @@ async def test_revision_upgrade_retains_policy_source_and_running_window(
                 assert view.deadline_at == preparation.deadline_at
                 h.revision_preparation_id = preparation.id
                 h.revision_preparation_sha256 = preparation.preparation_sha256
-            prepared, admission_id = await _ready_replacement(h, revision_archive(h.data))
-            creation = _creation_request(h, prepared, admission_id)
-            successor = await _create(h, creation)
-            assert successor.submission_version == 2
-            assert successor.submission_id != h.created.submission_id
+            await _assert_upgraded_incompatible_revision_blocked(
+                h, tmp_path, isolated_database_env, monkeypatch)
             async with h.factory() as session:
                 retained = await retained_revision_rows(session, outcome.routing_manifest_id)
                 for owner in (

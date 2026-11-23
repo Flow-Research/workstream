@@ -7523,3 +7523,66 @@ over9b9467653, not an independent or clean-commit execution. QA and ARCH/SEC
 inspected the exception translation assertion and found no weakening. This is
 A13 handoff protection only; full acceptance/provider/CI qualification remains
 open, with the same single draft PR708 and no merge-readiness claim.
+
+Next bounded migration proof: replace the post-upgrade hidden creation call in
+`test_revision_upgrade_retains_policy_source_and_running_window` with public
+raw ZIP, real PRE/T4 and durable OUTBOX/T5. Preserve genuine guarded 0047 source
+creation, whole retained-row equality across upgrade, unchanged policy/window
+and historical routing evidence afterward. Assert accepted operation, one PRE,
+consumed source-backed admission and valid v2 dispatch. Allowed files: this
+record and backend/tests/test_alembic.py; existing fixture correction only if
+a concrete mismatch is diagnosed. No product/schema changes or disabling guards.
+Risk: migration/lineage proof; QA/test-delta and architecture/security reviewers.
+Run this PostgreSQL migration case plus Ruff/structure/record gates. Human focus
+is historical evidence preserved while only new work uses current submission.
+The older 0047 cap fixture still uses shared preparation helpers before upgrade;
+do not delete those helpers until that historical fixture has a retained-data
+replacement. Same draft PR708; full qualification remains open.
+
+Retained-window v1 reached the new public call after successful 0047-to-0086
+upgrade/history checks but returned infrastructure503 (137.58s). No private
+diagnostic appeared in the public envelope. Add failure-only PRE terminal code
+and controlled runtime diagnostics to the test before rerunning; do not change
+production behavior or replace this historical lineage with a fresh fixture.
+
+The v2 diagnostic shows no runtime call and no new PRE terminal; the archived
+0047 policy has `compiled_bundle.entries=[]`. Specification section 20.2 (line1135)
+explicitly requires an incompatible locked task to remain blocked pending a
+governed rebase/re-release, never silently relocked. Therefore successful new
+submission is an obsolete expectation of this particular historical fixture,
+not a product defect to bypass. Correct the bounded proof to preserve its
+window/history checks and require exact cardinality denial through public HTTP
+before body/provider/PRE, with no intake or creation effects. Compatible new
+revision acceptance/T5 remains covered by the prior raw-ZIP revision tests.
+No policy mutation, historical evidence deletion, or production exception.
+
+V3 confirms exact `IntakeCustodyConflict('intake_requires_one_pre_and_post_checker')`
+before runtime, rather than an unknown infrastructure fault (183.69s; cleanup
+complete). V4 executes the corrected refusal proof with exact before/after
+intake, source-charge, historical PRE, audit and full creation snapshots; body
+and source-upload callbacks must not execute. Public503 remains the existing
+generic mapping, not an actionable rebase-message claim. No successful migration
+T5 claim applies to this zero-PRE fixture. QA and ARCH/SEC independently verified
+its pinned archive and specification20.2 before approving the expectation change.
+
+Reviewers found a snapshot SQL defect: source charges use operation_id, not id.
+Use explicit table/key pairs for deterministic before/after comparison. This
+changes only the snapshot query; no product behavior or refusal assertion. V4
+was already running the earlier query; final proof must use corrected V5.
+
+Stopped the confirmed-live V4 pytest child with SIGTERM after the reviewer
+identified its invalid snapshot query, saving an unnecessary full historical
+rebuild. The isolated runner completed cleanup. V4 is interrupted, not passing
+evidence or a timeout. Launch V5 only after that authoritative termination.
+
+Final retained-window V5 passed1 in138.42s at schema0086; database and MinIO
+cleanup complete (/tmp/submission-retained-window-v5.log/.json). Genuine0047
+window creation and upgrade/history equality remain proved; current public
+intake refuses the incompatible zero-PRE lock with the exact cardinality cause,
+without reading body, uploading, invoking PRE or changing intake/charge/PRE/
+audit/creation facts. Ruff, structure, record and whitespace gates pass. Shared
+frozen-worktree evidence overb6c3452c1, not clean-head or native-provider proof.
+This removes the post-upgrade hidden-create consumer from test_alembic; the
+before-upgrade cap fixture still needs its historical writer replacement.
+No capability/readiness claim changed; full cleanup/provider/CI and acceptance
+audit remain open under the same goal and draft PR708.
