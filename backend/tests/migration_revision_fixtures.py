@@ -178,8 +178,7 @@ async def historical_revision_source(tmp_path, database_url, monkeypatch, snapsh
             intake=LocalIntakeAdapter(), archive_limits=SubmissionArchiveLimits(), artifact_deadline_ms=180_000,
         )
 
-        def archived_bootstrap(_settings, *, activation_guard):
-            assert activation_guard is None
+        def archived_bootstrap(_settings):
             return _HistoricalArtifactBootstrap(store, namespace)
 
         monkeypatch.setattr(

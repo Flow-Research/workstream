@@ -75,7 +75,7 @@ async def import_source_client(task_database_env, monkeypatch, tmp_path):
     # ASGITransport omits lifespan startup. Claim the actual singleton before
     # scripted guide prerequisites reuse it; no guide provider bytes are proved.
     settings = get_settings()
-    bootstrap = create_artifact_store_bootstrap(settings, activation_guard=None)
+    bootstrap = create_artifact_store_bootstrap(settings)
     try:
         await validate_artifact_storage_namespace_at_startup(
             bootstrap, settings, db_session.get_session_factory()

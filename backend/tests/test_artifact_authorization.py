@@ -178,9 +178,8 @@ def test_readiness_is_static_and_aws_never_active() -> None:
         artifact_scratch_root=None,
     )
     readiness = artifact_provider_readiness(aws)
-    assert readiness["status"] == "inactive_live_proof_required"
+    assert readiness["status"] == "configured_inactive"
     assert readiness["active"] is False
-    assert readiness["prerequisites"]["aws_live_proof_present"] is False
 
 
 async def test_quota_reconciliation_is_configuration_driven_and_rollback_safe() -> None:

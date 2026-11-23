@@ -3,17 +3,15 @@
 from __future__ import annotations
 
 import importlib
-import asyncio
 from pathlib import Path
 from types import ModuleType, SimpleNamespace
-from uuid import UUID
 
 import pytest
 
 from app.adapters.artifacts import artifact_preparation_limits
-from app.core.config import Settings, get_settings
+from app.core.config import ARTIFACT_DIRECT_USER_IDENTITY_TIMEOUT_SECONDS, Settings, get_settings
+from app.interfaces.artifacts import ArtifactConfigurationError
 from app.main import create_app
-from app.interfaces.artifacts import ArtifactProviderLiveProofRequiredError
 from tests.artifact_store_helpers import artifact_admission_limit_settings
 
 
@@ -30,7 +28,7 @@ def _enabled_settings(tmp_path: Path, **changes: object) -> Settings:
 
 
 def _aws_setting_values(tmp_path: Path) -> dict[str, object]:
-    """Return a syntactically complete native-AWS activation binding."""
+    """Return a native AWS role credential configuration."""
     return {
         **artifact_admission_limit_settings(),
         "environment": "production",
@@ -41,17 +39,6 @@ def _aws_setting_values(tmp_path: Path) -> dict[str, object]:
         "artifact_s3_bucket": "workstream-artifacts-prod",
         "artifact_s3_credential_mode": "aws_workload_identity",
         "artifact_s3_aws_workload_identity_method": "container-role",
-        "release_id": "sha256:" + "1" * 64,
-        "artifact_s3_runtime_role_arn": "arn:aws:iam::123456789012:role/workstream-runtime",
-        "artifact_s3_runtime_trust_policy_sha256": "sha256:" + "3" * 64,
-        "artifact_s3_runtime_policy_arn": "arn:aws:iam::123456789012:policy/workstream-runtime",
-        "artifact_s3_readiness_role_arn": "arn:aws:iam::123456789012:role/workstream-readiness",
-        "artifact_s3_readiness_trust_policy_sha256": "sha256:" + "4" * 64,
-        "artifact_s3_readiness_policy_arn": "arn:aws:iam::123456789012:policy/workstream-readiness",
-        "artifact_s3_negative_role_arn": "arn:aws:iam::123456789012:role/workstream-negative",
-        "artifact_s3_negative_trust_policy_sha256": "sha256:" + "5" * 64,
-        "artifact_s3_bootstrap_principal_arn": "arn:aws:iam::123456789012:role/workstream-bootstrap",
-        "artifact_s3_bucket_policy_sha256": "sha256:" + "2" * 64,
         "artifact_s3_operation_total_timeout_seconds": 300,
         "artifact_complete_read_deadline_seconds": 300,
         "artifact_terminal_persistence_margin_seconds": 120,
@@ -86,8 +73,7 @@ async def test_enabled_startup_validates_namespace_then_cleans_before_yield(
         events.append("namespace")
         return "claim"
 
-    def create(_settings: Settings, *, activation_guard: object) -> _Store:
-        assert activation_guard is None
+    def create(_settings: Settings) -> _Store:
         events.append("construct")
         return store
 
@@ -127,14 +113,7 @@ async def test_production_auth_validation_precedes_artifact_startup(
         events.append("namespace")
         return SimpleNamespace(namespace_fingerprint="sha256:" + "3" * 64)
 
-    class Guard:
-        async def select_for_call(self, **_kwargs: object) -> None:
-            events.append("activation")
-
-    guard = Guard()
-
-    def create(_settings: Settings, *, activation_guard: object) -> _Store:
-        assert activation_guard is guard
+    def create(_settings: Settings) -> _Store:
         events.append("construct")
         return store
 
@@ -143,11 +122,6 @@ async def test_production_auth_validation_precedes_artifact_startup(
         return 0
 
     monkeypatch.setattr(main_module, "build_auth_verifier", validate_auth)
-    monkeypatch.setattr(
-        main_module,
-        "artifact_provider_activation_guard",
-        lambda *_args: guard,
-    )
     monkeypatch.setattr(main_module, "create_artifact_store_bootstrap", create)
     monkeypatch.setattr(
         main_module,
@@ -163,7 +137,6 @@ async def test_production_auth_validation_precedes_artifact_startup(
         "auth",
         "construct",
         "namespace",
-        "activation",
         "initialize",
         "cleanup",
         "close",
@@ -187,156 +160,37 @@ async def test_disabled_startup_does_not_construct_or_clean_artifacts(
         pass
 
 
-async def test_aws_s3_startup_requires_live_provider_proof(
+async def test_missing_direct_user_key_refuses_api_startup_after_namespace_validation(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    """Reject native AWS after namespace lineage when fresh activation is absent."""
     import app.main as main_module
 
+    settings = Settings(**(_aws_setting_values(tmp_path) | {
+        "artifact_s3_credential_mode": "aws_access_key",
+        "artifact_s3_aws_workload_identity_method": None,
+        "artifact_s3_runtime_user_arn": "arn:aws:iam::123456789012:user/workstream-artifacts",
+        "artifact_s3_direct_user_credential_file": tmp_path / "missing.json",
+    }))
     events: list[str] = []
     store = _Store(events)
 
-    class Guard:
-        async def select_for_call(self, **_kwargs: object) -> None:
-            events.append("activation")
-            raise ArtifactProviderLiveProofRequiredError("proof is absent")
-
-    guard = Guard()
-
-    def create(_settings: Settings, *, activation_guard: object) -> _Store:
-        assert activation_guard is guard
-        events.append("construct")
-        return store
-
-    async def validate_namespace(*_args: object) -> object:
+    async def validate_namespace(_settings: Settings, candidate: object) -> str:
+        assert candidate is store
         events.append("namespace")
-        return SimpleNamespace(namespace_fingerprint="sha256:" + "3" * 64)
+        return "claim"
 
+    monkeypatch.setenv("HOME", str(tmp_path))
     monkeypatch.setattr(main_module, "build_auth_verifier", lambda _settings: None)
-    monkeypatch.setattr(
-        main_module,
-        "artifact_provider_activation_guard",
-        lambda *_args: guard,
-    )
-    monkeypatch.setattr(main_module, "create_artifact_store_bootstrap", create)
-    monkeypatch.setattr(
-        main_module,
-        "_validate_artifact_storage_namespace_at_startup",
-        validate_namespace,
-    )
-    app = create_app(Settings(**_aws_setting_values(tmp_path)))
+    monkeypatch.setattr(main_module, "create_artifact_store_bootstrap", lambda _settings: store)
+    monkeypatch.setattr(main_module, "_validate_artifact_storage_namespace_at_startup", validate_namespace)
+    app = create_app(settings)
 
-    with pytest.raises(ArtifactProviderLiveProofRequiredError) as caught:
+    with pytest.raises(ArtifactConfigurationError, match="AWS credentials could not be resolved"):
         async with app.router.lifespan_context(app):
-            pass
+            pytest.fail("API startup accepted the unavailable direct IAM user key")
 
-    assert caught.value.code == "artifact_provider_live_proof_required"
-    assert events == ["construct", "namespace", "activation", "close"]
-
-
-def test_aws_worker_guard_rebinds_to_each_sync_task_loop_and_disposes_resources(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    """A process store must not retain the initialization loop's session factory."""
-    from app.adapters.artifacts import internal_workers
-    from app.interfaces.artifacts import ArtifactProviderActivationLease
-    from app.workers.async_runner import run_async_task
-
-    settings = Settings(**_aws_setting_values(tmp_path))
-    events: list[tuple[str, int, int | None]] = []
-    loops: list[asyncio.AbstractEventLoop] = []
-    activation_id = UUID("0199e648-0b77-7000-8000-000000000001")
-
-    def loop_number() -> int:
-        loop = asyncio.get_running_loop()
-        if loop not in loops:
-            loops.append(loop)
-        return loops.index(loop)
-
-    class Engine:
-        def __init__(self) -> None:
-            self.identifier = len([event for event in events if event[0] == "engine"]) + 1
-            events.append(("engine", self.identifier, None))
-
-        async def dispose(self) -> None:
-            events.append(("dispose", self.identifier, loop_number()))
-
-    class Guard:
-        def __init__(self, sessions: object) -> None:
-            self.sessions = sessions
-
-        async def select_for_call(self, *, namespace_fingerprint: str):
-            del namespace_fingerprint
-            events.append(("guard", id(self.sessions), loop_number()))
-            return ArtifactProviderActivationLease(activation_id)
-
-        async def require_for_call(self, activation_id, *, namespace_fingerprint: str):
-            del namespace_fingerprint
-            return ArtifactProviderActivationLease(activation_id)
-
-    class Store(_Store):
-        def __init__(self, guard) -> None:
-            super().__init__([])
-            self.guard = guard
-
-        async def guarded_call(self) -> None:
-            await self.guard.select_for_call(namespace_fingerprint="sha256:" + "3" * 64)
-
-    class Bootstrap:
-        def __init__(self, guard) -> None:
-            self.store = Store(guard)
-
-        def initialize_after_namespace_claim(self, _claim: object):
-            return self.store
-
-        def close(self) -> None:
-            return None
-
-    monkeypatch.setattr(internal_workers, "get_settings", lambda: settings)
-    monkeypatch.setattr(internal_workers, "get_database_url", lambda: "postgresql+asyncpg://unused")
-    monkeypatch.setattr(internal_workers, "create_async_engine", lambda *_a, **_k: Engine())
-    monkeypatch.setattr(
-        internal_workers,
-        "artifact_provider_activation_guard",
-        lambda _settings, sessions: Guard(sessions),
-    )
-    monkeypatch.setattr(
-        internal_workers,
-        "create_artifact_store_bootstrap",
-        lambda _settings, *, activation_guard: Bootstrap(activation_guard),
-    )
-    monkeypatch.setattr(
-        internal_workers,
-        "artifact_storage_namespace_spec",
-        lambda *_a: SimpleNamespace(namespace_fingerprint="sha256:" + "3" * 64),
-    )
-    monkeypatch.setattr(
-        internal_workers,
-        "validate_artifact_storage_namespace_at_startup",
-        lambda *_a: _async_value(SimpleNamespace(namespace_fingerprint="sha256:" + "3" * 64)),
-    )
-
-    async def guarded_operation() -> None:
-        async with internal_workers._artifact_worker_database():
-            with internal_workers._artifact_internal_runtime() as (store, _namespace):
-                await store.guarded_call()
-
-    internal_workers.shutdown_artifact_internal_runtime()
-    try:
-        run_async_task(internal_workers.initialize_artifact_internal_runtime)
-        run_async_task(guarded_operation)
-        run_async_task(guarded_operation)
-    finally:
-        internal_workers.shutdown_artifact_internal_runtime()
-
-    guards = [event for event in events if event[0] == "guard"]
-    disposals = [event for event in events if event[0] == "dispose"]
-    assert len(guards) == 3
-    assert len({event[1] for event in guards}) == 3
-    assert len({event[2] for event in guards}) == 3
-    assert len(disposals) == 3
+    assert events == ["namespace", "close"]
 
 
 async def _async_value(value: object) -> object:
@@ -357,8 +211,7 @@ async def test_namespace_failure_is_fail_closed_and_skips_cleanup(
         events.append("namespace")
         raise RuntimeError("namespace mismatch")
 
-    def create(_settings: Settings, *, activation_guard: object) -> _Store:
-        assert activation_guard is None
+    def create(_settings: Settings) -> _Store:
         events.append("construct")
         return store
 
@@ -396,8 +249,7 @@ async def test_cleanup_failure_prevents_startup_and_closes_store(
         events.append("namespace")
         return "claim"
 
-    def create(_settings: Settings, *, activation_guard: object) -> _Store:
-        assert activation_guard is None
+    def create(_settings: Settings) -> _Store:
         events.append("construct")
         return store
 
@@ -508,12 +360,35 @@ def test_cleanup_task_runs_shared_helper_and_propagates_failure(
         artifacts_module.cleanup_stale_scratch.run()
 
 
-def test_aws_s3_celery_beat_uses_activation_startup_validator(
+def test_celery_prefork_allows_direct_iam_user_startup_verification(
     monkeypatch: pytest.MonkeyPatch,
     request: pytest.FixtureRequest,
     tmp_path: Path,
 ) -> None:
-    """Keep provider activation at process startup rather than app construction."""
+    celery_module, _artifacts_module = _load_worker_modules(monkeypatch, request)
+    base = _aws_setting_values(tmp_path) | {"celery_task_always_eager": True}
+    workload = Settings(**base)
+    direct_user = Settings(**(base | {
+        "artifact_s3_credential_mode": "aws_access_key",
+        "artifact_s3_aws_workload_identity_method": None,
+        "artifact_s3_runtime_user_arn": "arn:aws:iam::123456789012:user/workstream-artifacts",
+        "artifact_s3_direct_user_credential_file": tmp_path / "aws-access-key.json",
+    }))
+
+    monkeypatch.setattr(celery_module, "get_settings", lambda: workload)
+    prior_child_budget = celery_module.create_celery_app().conf.worker_proc_alive_timeout
+    monkeypatch.setattr(celery_module, "get_settings", lambda: direct_user)
+    direct_child_budget = celery_module.create_celery_app().conf.worker_proc_alive_timeout
+
+    assert direct_child_budget == prior_child_budget + ARTIFACT_DIRECT_USER_IDENTITY_TIMEOUT_SECONDS
+
+
+def test_aws_s3_celery_beat_uses_namespace_startup_validator(
+    monkeypatch: pytest.MonkeyPatch,
+    request: pytest.FixtureRequest,
+    tmp_path: Path,
+) -> None:
+    """Check provider namespace at process startup."""
     celery_module, _artifacts_module = _load_worker_modules(monkeypatch, request)
     settings = Settings(**_aws_setting_values(tmp_path), celery_task_always_eager=True)
     monkeypatch.setattr(celery_module, "get_settings", lambda: settings)

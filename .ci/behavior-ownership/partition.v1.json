@@ -2,15 +2,7 @@
   "assignments": [
     {
       "group": "artifacts",
-      "target": "backend/app/adapters/artifacts/aws_live_proof.py"
-    },
-    {
-      "group": "artifacts",
-      "target": "backend/app/adapters/artifacts/aws_roles_anywhere.py"
-    },
-    {
-      "group": "artifacts",
-      "target": "backend/app/adapters/artifacts/aws_roles_anywhere_proof.py"
+      "target": "backend/app/adapters/artifacts/aws_direct_user.py"
     },
     {
       "group": "artifacts",
@@ -346,10 +338,6 @@
     },
     {
       "group": "shared",
-      "target": "backend/app/core/aws_roles_anywhere.py"
-    },
-    {
-      "group": "shared",
       "target": "backend/app/core/cancellation.py"
     },
     {
@@ -615,10 +603,6 @@
     {
       "group": "artifacts",
       "target": "backend/app/modules/artifacts/preparation_reads.py"
-    },
-    {
-      "group": "artifacts",
-      "target": "backend/app/modules/artifacts/provider_activation.py"
     },
     {
       "group": "artifacts",
@@ -2458,11 +2442,7 @@
     },
     {
       "group": "shared",
-      "target": "backend/scripts/aws_artifact_provider_proof.py"
-    },
-    {
-      "group": "shared",
-      "target": "backend/scripts/aws_roles_anywhere_config.py"
+      "target": "backend/scripts/aws_direct_user_config.py"
     },
     {
       "group": "shared",
@@ -2589,7 +2569,7 @@
       "target": "backend/scripts/validate_test_lane_evidence.py"
     }
   ],
-  "authority_digest": "8acfc19af79aa50e6fb8d119c8336e3ca3e6c77d101149da086f6ed53d779149",
+  "authority_digest": "af687beaaa56d7b3f72fd3f92cf70af9e5df5f721cc36f7212bceb47d1add30d",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }

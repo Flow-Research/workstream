@@ -116,15 +116,19 @@ def checker_service_binary(values: dict[str, str]) -> Path:
 GUIDE_PARSER_UID = 10002
 GUIDE_PARSER_GID = 10001
 DOCKER_SOCKET = Path("/var/run/docker.sock")
-ROLES_ANYWHERE_CERTIFICATE_TARGET = Path(
-    "/run/workstream-roles-anywhere/certificate.pem"
+DIRECT_USER_CREDENTIAL_TARGET = Path(
+    "/run/workstream-artifact-credentials/aws-access-key.json"
 )
-ROLES_ANYWHERE_PRIVATE_KEY_TARGET = Path(
-    "/run/workstream-roles-anywhere/private-key.pem"
+DIRECT_USER_CREDENTIAL_HOST_FILE_KEY = (
+    "WORKSTREAM_ARTIFACT_S3_DIRECT_USER_CREDENTIAL_HOST_FILE"
 )
+DIRECT_USER_CREDENTIAL_FILE_KEY = "WORKSTREAM_ARTIFACT_S3_DIRECT_USER_CREDENTIAL_FILE"
 DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
 IMAGE_REFERENCE = re.compile(r"[^\s@]+@sha256:[0-9a-f]{64}\Z")
 ENVIRONMENT_KEY = re.compile(r"[A-Z][A-Z0-9_]*\Z")
+IAM_USER_ARN = re.compile(
+    r"arn:(?:aws|aws-us-gov|aws-cn):iam::[0-9]{12}:user/[A-Za-z0-9+=,.@_/-]{1,512}\Z"
+)
 
 BASE_SECRET_FILE_KEYS = (
     "WORKSTREAM_DATABASE_URL_FILE",
@@ -223,7 +227,6 @@ FORBIDDEN_RENDERED_KEYS = tuple(
     key for key in FORBIDDEN_RELEASE_KEYS if key != "WORKSTREAM_DEBUG"
 )
 EXACT_RELEASE_VALUES = {
-    "WORKSTREAM_ARTIFACT_S3_AWS_WORKLOAD_IDENTITY_METHOD": {"roles-anywhere"},
     "WORKSTREAM_TOKEN_INTROSPECTION_MODE": {"disabled"},
     "WORKSTREAM_MODEL_PROXY_ENABLED": {"true", "false"},
     "WORKSTREAM_PROJECT_AGENT_RUNTIME": {
@@ -269,41 +272,10 @@ TIMEOUT_KEYS = (
     "WORKSTREAM_ARTIFACT_COMPLETE_READ_DEADLINE_SECONDS",
     "WORKSTREAM_ARTIFACT_TERMINAL_PERSISTENCE_MARGIN_SECONDS",
 )
-AWS_S3_EVIDENCE_KEYS = (
+AWS_S3_IDENTITY_KEYS = (
     "WORKSTREAM_RELEASE_ID",
-    "WORKSTREAM_ARTIFACT_S3_RUNTIME_ROLE_ARN",
-    "WORKSTREAM_ARTIFACT_S3_RUNTIME_TRUST_POLICY_SHA256",
-    "WORKSTREAM_ARTIFACT_S3_RUNTIME_POLICY_ARN",
-    "WORKSTREAM_ARTIFACT_S3_READINESS_ROLE_ARN",
-    "WORKSTREAM_ARTIFACT_S3_READINESS_TRUST_POLICY_SHA256",
-    "WORKSTREAM_ARTIFACT_S3_READINESS_POLICY_ARN",
-    "WORKSTREAM_ARTIFACT_S3_NEGATIVE_ROLE_ARN",
-    "WORKSTREAM_ARTIFACT_S3_NEGATIVE_TRUST_POLICY_SHA256",
-    "WORKSTREAM_ARTIFACT_S3_BOOTSTRAP_PRINCIPAL_ARN",
-    "WORKSTREAM_ARTIFACT_S3_BUCKET_POLICY_SHA256",
-    "WORKSTREAM_ARTIFACT_S3_ROLES_ANYWHERE_TRUST_ANCHOR_ARN",
-    "WORKSTREAM_ARTIFACT_S3_ROLES_ANYWHERE_TRUST_ANCHOR_SHA256",
-    "WORKSTREAM_ARTIFACT_S3_ROLES_ANYWHERE_PROFILE_ARN",
-    "WORKSTREAM_ARTIFACT_S3_ROLES_ANYWHERE_PROFILE_SHA256",
+    "WORKSTREAM_ARTIFACT_S3_RUNTIME_USER_ARN",
 )
-ROLES_ANYWHERE_HOST_FILE_KEYS = (
-    "WORKSTREAM_ARTIFACT_S3_ROLES_ANYWHERE_RUNTIME_CERTIFICATE_HOST_FILE",
-    "WORKSTREAM_ARTIFACT_S3_ROLES_ANYWHERE_RUNTIME_PRIVATE_KEY_HOST_FILE",
-    "WORKSTREAM_ARTIFACT_S3_ROLES_ANYWHERE_READINESS_CERTIFICATE_HOST_FILE",
-    "WORKSTREAM_ARTIFACT_S3_ROLES_ANYWHERE_READINESS_PRIVATE_KEY_HOST_FILE",
-    "WORKSTREAM_ARTIFACT_S3_ROLES_ANYWHERE_NEGATIVE_CERTIFICATE_HOST_FILE",
-    "WORKSTREAM_ARTIFACT_S3_ROLES_ANYWHERE_NEGATIVE_PRIVATE_KEY_HOST_FILE",
-)
-PROOF_SERVICES = {
-    "aws-proof-runtime": "runtime_immutability",
-    "aws-proof-readiness": "readiness",
-    "aws-proof-negative": "negative_access",
-    "aws-proof-coordinate": "coordinate",
-}
-PROOF_GROUP_TIMEOUT_SECONDS = 120.0
-PROOF_CLEANUP_RESERVE_SECONDS = 10.0
-PROOF_INNER_KILL_AFTER_SECONDS = 5
-PROOF_TIMEOUT_RETURN_CODE = 124
 REQUIRED_RELEASE_KEYS = (
     "COMPOSE_PROJECT_NAME",
     "WORKSTREAM_BACKEND_IMAGE",
@@ -323,12 +295,11 @@ REQUIRED_RELEASE_KEYS = (
     "WORKSTREAM_ARTIFACT_S3_REGION",
     "WORKSTREAM_ARTIFACT_S3_BUCKET",
     "WORKSTREAM_ARTIFACT_S3_PRIVATE_PREFIX",
-    "WORKSTREAM_ARTIFACT_S3_AWS_WORKLOAD_IDENTITY_METHOD",
+    DIRECT_USER_CREDENTIAL_HOST_FILE_KEY,
     "WORKSTREAM_CHECKER_CONFIG_FILE",
     *PROJECT_AGENT_CONFIGURATION_KEYS,
     *INTAKE_DIGEST_KEYS,
-    *ROLES_ANYWHERE_HOST_FILE_KEYS,
-    *AWS_S3_EVIDENCE_KEYS,
+    *AWS_S3_IDENTITY_KEYS,
     *TIMEOUT_KEYS,
     *BASE_SECRET_FILE_KEYS,
 )
@@ -476,9 +447,15 @@ def validate_identity_host_inputs(values: dict[str, str]) -> None:
     protected = [Path(values[key]) for key in keys]
     for path in protected:
         _private_metadata(path, kind="file", uid=1000, gid=1000, mode=0o400)
-    backend_files = [Path(values[key]) for key in
-                     (*BASE_SECRET_FILE_KEYS, *ROLES_ANYWHERE_HOST_FILE_KEYS,
-                      "WORKSTREAM_POSTGRES_PASSWORD_FILE") if values.get(key)]
+    backend_files = [
+        Path(values[key])
+        for key in (
+            *BASE_SECRET_FILE_KEYS,
+            DIRECT_USER_CREDENTIAL_HOST_FILE_KEY,
+            "WORKSTREAM_POSTGRES_PASSWORD_FILE",
+        )
+        if values.get(key)
+    ]
     try:
         if any(os.path.samestat(a.stat(), b.stat()) for i, a in enumerate(protected)
                for b in protected[i + 1:] + backend_files if b.exists()):
@@ -679,11 +656,19 @@ def validate_environment(values: dict[str, str]) -> None:
     endpoint = values.get("WORKSTREAM_OBSERVABILITY_OTLP_ENDPOINT", "")
     if endpoint and not endpoint.startswith("https://"):
         raise PreflightError("production observability endpoint must use HTTPS")
-    identities = [Path(values[key]) for key in ROLES_ANYWHERE_HOST_FILE_KEYS]
-    if any(not path.is_absolute() for path in identities):
-        raise PreflightError("Roles Anywhere host identity paths must be absolute")
-    if len(set(identities)) != len(identities):
-        raise PreflightError("Roles Anywhere host identity paths must be distinct")
+    if IAM_USER_ARN.fullmatch(values["WORKSTREAM_ARTIFACT_S3_RUNTIME_USER_ARN"]) is None:
+        raise PreflightError("artifact runtime user must use an exact IAM user ARN")
+    credential_path = Path(values[DIRECT_USER_CREDENTIAL_HOST_FILE_KEY])
+    if (
+        not credential_path.is_absolute()
+        or credential_path != credential_path.resolve(strict=False)
+        or any(character.isspace() or character in ",:" for character in str(credential_path))
+        or credential_path.is_relative_to(root)
+        or root.is_relative_to(credential_path)
+    ):
+        raise PreflightError(
+            "direct IAM user credentials require one canonical private host path"
+        )
 
 
 def load_checker_config(path: Path) -> dict[str, Any]:
@@ -745,7 +730,7 @@ def validate_checker_config(config: dict[str, Any], values: dict[str, str]) -> N
         Path(smol["guest_binary"]),
         *(
             Path(values[key])
-            for key in (*_secret_file_keys(values), *ROLES_ANYWHERE_HOST_FILE_KEYS)
+            for key in (*_secret_file_keys(values), DIRECT_USER_CREDENTIAL_HOST_FILE_KEY)
         ),
     ]
     protected_inputs.extend(
@@ -1154,7 +1139,7 @@ def validate_private_host_inputs(
         Path(values["WORKSTREAM_CHECKER_CONFIG_FILE"]),
         *((Path(values[TRIAL_KEYS[0]]),) if values.get(TRIAL_KEYS[0]) else ()),
         *(Path(values[key]) for key in _secret_file_keys(values)),
-        *(Path(values[key]) for key in ROLES_ANYWHERE_HOST_FILE_KEYS),
+        Path(values[DIRECT_USER_CREDENTIAL_HOST_FILE_KEY]),
     ]
     for path in private_paths:
         _private_metadata(path, kind="file", uid=uid, gid=gid, mode=0o400)
@@ -1250,8 +1235,6 @@ def render_compose(environment_path: Path, values: dict[str, str]) -> dict[str, 
             "--env-file",
             str(environment_path),
             *_compose_file_arguments(values),
-            "--profile",
-            "aws-proof",
             "config",
             "--format",
             "json",
@@ -1329,7 +1312,7 @@ def run_compose(
     selected_services = set(compose_arguments) & {
         "postgres", "redis",
         "api", "mcp", "worker", "beat", "model-proxy", "identity",
-        "guide-document-parser", *PROOF_SERVICES,
+        "guide-document-parser",
     }
     targets_api = not selected_services or "api" in selected_services or (
         "--no-deps" not in compose_arguments
@@ -1543,79 +1526,6 @@ def run_shutdown(environment_path: Path, values: dict[str, str]) -> int:
     return 0
 
 
-def run_proof_group(
-    environment_path: Path, values: dict[str, str], group_nonce: UUID
-) -> int:
-    """Run the fixed proof sequence within one bounded, cleanup-reserved window."""
-    deadline = time.monotonic() + PROOF_GROUP_TIMEOUT_SECONDS
-    for service, mode in PROOF_SERVICES.items():
-        container_name = f"workstream-proof-{group_nonce.hex}-{service}"
-        try:
-            command_timeout = (
-                deadline - time.monotonic() - PROOF_CLEANUP_RESERVE_SECONDS
-            )
-            if command_timeout <= PROOF_INNER_KILL_AFTER_SECONDS + 1:
-                return PROOF_TIMEOUT_RETURN_CODE
-            inner_timeout = max(
-                1,
-                int(command_timeout - PROOF_INNER_KILL_AFTER_SECONDS - 1),
-            )
-            completed = subprocess.run(
-                [
-                    "docker",
-                    "compose",
-                    "--env-file",
-                    str(environment_path),
-                    *_compose_file_arguments(values),
-                    "--profile",
-                    "aws-proof",
-                    "run",
-                    "--rm",
-                    "--no-deps",
-                    "--name",
-                    container_name,
-                    service,
-                    "/usr/bin/timeout",
-                    "--signal=TERM",
-                    f"--kill-after={PROOF_INNER_KILL_AFTER_SECONDS}s",
-                    f"{inner_timeout}s",
-                    "python",
-                    "-m",
-                    "scripts.aws_artifact_provider_proof",
-                    mode,
-                    "--group-nonce",
-                    str(group_nonce),
-                ],
-                check=False,
-                env=compose_environment(values),
-                timeout=command_timeout,
-            )
-        except subprocess.TimeoutExpired:
-            return PROOF_TIMEOUT_RETURN_CODE
-        except OSError as exc:
-            raise PreflightError("hosted AWS proof job could not start") from exc
-        finally:
-            cleanup_timeout = min(
-                PROOF_CLEANUP_RESERVE_SECONDS,
-                max(0.0, deadline - time.monotonic()),
-            )
-            if cleanup_timeout > 0:
-                try:
-                    subprocess.run(
-                        ["docker", "rm", "--force", container_name],
-                        check=False,
-                        env=compose_environment(values),
-                        stdout=subprocess.DEVNULL,
-                        stderr=subprocess.DEVNULL,
-                        timeout=cleanup_timeout,
-                    )
-                except (OSError, subprocess.TimeoutExpired):
-                    pass
-        if completed.returncode != 0:
-            return completed.returncode
-    return 0
-
-
 def _service_mounts(service: dict[str, Any]) -> dict[str, dict[str, Any]]:
     volumes = service.get("volumes")
     if not isinstance(volumes, list):
@@ -1795,7 +1705,6 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
         "worker",
         "beat",
         "guide-document-parser",
-        *PROOF_SERVICES,
     }
     model_proxy_enabled = values["WORKSTREAM_MODEL_PROXY_ENABLED"] == "true"
     if model_proxy_enabled:
@@ -1850,7 +1759,6 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
         "api",
         "worker",
         "beat",
-        *PROOF_SERVICES,
     }
     if model_proxy_enabled:
         backend_runtime_services.add("model-proxy")
@@ -1870,38 +1778,23 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
         raise PreflightError(
             "API, worker, Beat and guide parser must use one exact backend image"
         )
-    if any(services[name]["image"] != backend_image for name in PROOF_SERVICES):
-        raise PreflightError("AWS proof jobs must use the exact backend image")
     if (
         model_proxy_enabled
         and services["model-proxy"]["image"] != values["WORKSTREAM_MODEL_PROXY_IMAGE"]
     ):
         raise PreflightError("model proxy must use the exact agents backend image")
-    if any(services[name].get("pull_policy") != "never" for name in PROOF_SERVICES):
-        raise PreflightError(
-            "AWS proof jobs must use the cached release image without pulling"
-        )
     for name in (
         "api",
         "worker",
         "beat",
         "guide-document-parser",
-        *PROOF_SERVICES,
         *({"model-proxy"} if model_proxy_enabled else set()),
     ):
         if services[name].get("entrypoint") is not None:
             raise PreflightError(f"backend image entrypoint is overridden: {name}")
-    runtime_identity_mounts = {
-        str(ROLES_ANYWHERE_CERTIFICATE_TARGET): (
-            values[
-                "WORKSTREAM_ARTIFACT_S3_ROLES_ANYWHERE_RUNTIME_CERTIFICATE_HOST_FILE"
-            ],
-            True,
-        ),
-        str(ROLES_ANYWHERE_PRIVATE_KEY_TARGET): (
-            values[
-                "WORKSTREAM_ARTIFACT_S3_ROLES_ANYWHERE_RUNTIME_PRIVATE_KEY_HOST_FILE"
-            ],
+    direct_user_credential_mount = {
+        str(DIRECT_USER_CREDENTIAL_TARGET): (
+            values[DIRECT_USER_CREDENTIAL_HOST_FILE_KEY],
             True,
         ),
     }
@@ -1910,7 +1803,7 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
         str(paths.socket_root): (str(paths.socket_root), True),
     }
     expected_mounts = {
-        "api": shared_backend_mounts | runtime_identity_mounts,
+        "api": shared_backend_mounts | direct_user_credential_mount,
         "worker": shared_backend_mounts
         | {str(paths.guide_root): (str(paths.guide_root), True)}
         | (
@@ -1918,47 +1811,17 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
             if model_proxy_enabled
             else {}
         )
-        | runtime_identity_mounts,
+        | direct_user_credential_mount,
         "beat": {},
         "guide-document-parser": {
             str(paths.guide_root): (str(paths.guide_root), False),
         },
-        "aws-proof-runtime": runtime_identity_mounts,
-        "aws-proof-readiness": {
-            str(ROLES_ANYWHERE_CERTIFICATE_TARGET): (
-                values[
-                    "WORKSTREAM_ARTIFACT_S3_ROLES_ANYWHERE_READINESS_CERTIFICATE_HOST_FILE"
-                ],
-                True,
-            ),
-            str(ROLES_ANYWHERE_PRIVATE_KEY_TARGET): (
-                values[
-                    "WORKSTREAM_ARTIFACT_S3_ROLES_ANYWHERE_READINESS_PRIVATE_KEY_HOST_FILE"
-                ],
-                True,
-            ),
-        },
-        "aws-proof-negative": {
-            str(ROLES_ANYWHERE_CERTIFICATE_TARGET): (
-                values[
-                    "WORKSTREAM_ARTIFACT_S3_ROLES_ANYWHERE_NEGATIVE_CERTIFICATE_HOST_FILE"
-                ],
-                True,
-            ),
-            str(ROLES_ANYWHERE_PRIVATE_KEY_TARGET): (
-                values[
-                    "WORKSTREAM_ARTIFACT_S3_ROLES_ANYWHERE_NEGATIVE_PRIVATE_KEY_HOST_FILE"
-                ],
-                True,
-            ),
-        },
-        "aws-proof-coordinate": {},
     }
     if model_proxy_enabled:
         expected_mounts["model-proxy"] = {
             str(paths.scratch): (str(paths.scratch), False),
             str(paths.model_root): (str(paths.model_root), False),
-            **runtime_identity_mounts,
+            **direct_user_credential_mount,
         }
     if values.get(TRIAL_KEYS[0]):
         expected_mounts["model-proxy"][str(TRIAL_MANIFEST_TARGET)] = (
@@ -2105,51 +1968,6 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
             ]
         ):
             raise PreflightError("model proxy delivery profile is invalid")
-    for name in ("aws-proof-runtime", "aws-proof-readiness", "aws-proof-negative"):
-        service = services[name]
-        if service.get("profiles") != ["aws-proof"]:
-            raise PreflightError(f"{name} is not isolated behind the proof profile")
-    coordinator = services["aws-proof-coordinate"]
-    if coordinator.get("profiles") != ["aws-proof"]:
-        raise PreflightError("AWS proof coordinator must remain credential-free")
-    expected_roles = {
-        "aws-proof-runtime": "WORKSTREAM_ARTIFACT_S3_RUNTIME_ROLE_ARN",
-        "aws-proof-readiness": "WORKSTREAM_ARTIFACT_S3_READINESS_ROLE_ARN",
-        "aws-proof-negative": "WORKSTREAM_ARTIFACT_S3_NEGATIVE_ROLE_ARN",
-    }
-    for name, role_key in expected_roles.items():
-        environment = services[name].get("environment")
-        if (
-            not isinstance(environment, dict)
-            or environment.get("WORKSTREAM_RELEASE_ROLE") != "proof"
-            or environment.get("WORKSTREAM_DATABASE_URL_FILE")
-            != "/run/secrets/database_url"
-            or environment.get("WORKSTREAM_ARTIFACT_S3_ROLES_ANYWHERE_ROLE_ARN")
-            != environment.get(role_key)
-        ):
-            raise PreflightError(f"{name} selects the wrong proof identity")
-    coordinator_environment = coordinator.get("environment")
-    if (
-        not isinstance(coordinator_environment, dict)
-        or coordinator_environment.get("WORKSTREAM_RELEASE_ROLE") != "proof"
-        or coordinator_environment.get("WORKSTREAM_DATABASE_URL_FILE")
-        != "/run/secrets/database_url"
-    ):
-        raise PreflightError("AWS proof coordinator environment is invalid")
-    for name in PROOF_SERVICES:
-        mounted = services[name].get("secrets")
-        service_uid, service_gid = services[name]["user"].split(":", maxsplit=1)
-        if (
-            not isinstance(mounted, list)
-            or len(mounted) != 1
-            or not isinstance(mounted[0], dict)
-            or mounted[0].get("source") != "database_url"
-            or mounted[0].get("target") != "database_url"
-            or mounted[0].get("uid") != service_uid
-            or mounted[0].get("gid") != service_gid
-            or mounted[0].get("mode") not in (0o400, "0400")
-        ):
-            raise PreflightError(f"{name} must receive only the database secret")
     environments: dict[str, dict[str, Any]] = {}
     active_roles = ("api", "worker", "beat") + (
         ("model-proxy",) if model_proxy_enabled else ()
@@ -2160,6 +1978,15 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
             raise PreflightError(f"{role} release environment is unavailable")
         if environment.get("WORKSTREAM_RELEASE_ROLE") != role:
             raise PreflightError(f"{role} has an unsafe release role")
+        expected_direct_credential = (
+            str(DIRECT_USER_CREDENTIAL_TARGET)
+            if role in {"api", "worker", "model-proxy"}
+            else None
+        )
+        if environment.get(DIRECT_USER_CREDENTIAL_FILE_KEY) != expected_direct_credential:
+            raise PreflightError(
+                f"{role} direct IAM user credential selector differs from its release role"
+            )
         required_file_keys = set(_role_secret_file_keys(role, values))
         for key, (_, target) in SECRET_FILE_TARGETS.items():
             if key in required_file_keys:
@@ -2202,6 +2029,7 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
                     "WORKSTREAM_RELEASE_ROLE",
                     "WORKSTREAM_GUIDE_DOCUMENT_PARSER_SOCKET",
                     "WORKSTREAM_CHECKER_MODEL_PROXY_SOCKET",
+                    DIRECT_USER_CREDENTIAL_FILE_KEY,
                     *TRIAL_KEYS,
                     *GITHUB_APP_KEYS,
                 }
@@ -2218,15 +2046,9 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
         "WORKSTREAM_ENVIRONMENT": "production",
         "WORKSTREAM_ARTIFACT_STORE_BACKEND": "s3_compatible",
         "WORKSTREAM_ARTIFACT_S3_PROVIDER_PROFILE": "aws_s3",
-        "WORKSTREAM_ARTIFACT_S3_CREDENTIAL_MODE": "aws_workload_identity",
+        "WORKSTREAM_ARTIFACT_S3_CREDENTIAL_MODE": "aws_access_key",
         "WORKSTREAM_ARTIFACT_S3_ADDRESSING_STYLE": "virtual",
-        "WORKSTREAM_ARTIFACT_S3_AWS_WORKLOAD_IDENTITY_METHOD": "roles-anywhere",
-        "WORKSTREAM_ARTIFACT_S3_ROLES_ANYWHERE_CERTIFICATE_FILE": str(
-            ROLES_ANYWHERE_CERTIFICATE_TARGET
-        ),
-        "WORKSTREAM_ARTIFACT_S3_ROLES_ANYWHERE_PRIVATE_KEY_FILE": str(
-            ROLES_ANYWHERE_PRIVATE_KEY_TARGET
-        ),
+        DIRECT_USER_CREDENTIAL_FILE_KEY: str(DIRECT_USER_CREDENTIAL_TARGET),
         "WORKSTREAM_ARTIFACT_SCRATCH_ROOT": str(paths.scratch),
         "WORKSTREAM_EXTERNAL_CHECKER_MATERIAL_ROOT": str(paths.scratch),
         "WORKSTREAM_EXTERNAL_CHECKER_SERVICE_SOCKET": str(paths.socket),
@@ -2240,7 +2062,6 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
         "api",
         "worker",
         "beat",
-        *PROOF_SERVICES,
         *(("model-proxy",) if model_proxy_enabled else ()),
     ):
         service_environment = services[name].get("environment")
@@ -2286,7 +2107,7 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
         "WORKSTREAM_CHECKER_MODEL_PROXY_SOCKET"
     ) != str(paths.model_socket):
         raise PreflightError("model proxy lacks its fixed socket")
-    for name in ("api", "beat", *PROOF_SERVICES):
+    for name in ("api", "beat"):
         service_environment = services[name].get("environment") or {}
         if not isinstance(service_environment, dict):
             raise PreflightError(f"{name} release environment is invalid")
@@ -2331,12 +2152,6 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
                 raise PreflightError(
                     f"secret value was interpolated into Compose: {name}.{key}"
                 )
-    if environment.get(
-        "WORKSTREAM_ARTIFACT_S3_ROLES_ANYWHERE_ROLE_ARN"
-    ) != environment.get("WORKSTREAM_ARTIFACT_S3_RUNTIME_ROLE_ARN"):
-        raise PreflightError(
-            "hosted Roles Anywhere identity must select the runtime role"
-        )
     for key in FORBIDDEN_RENDERED_KEYS:
         if environment.get(key):
             raise PreflightError(

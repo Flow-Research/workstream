@@ -14,7 +14,7 @@ The checked-in [release environment template](release.env.example),
 [canonical Settings](../../backend/app/core/config.py) define the source
 topology. An operator must still build and publish exact images, provision the
 host and external services, configure private assets and credentials, run the
-fixed AWS proof, and verify the public journey for that deployment. A render,
+real S3 storage qualification, and verify the public journey for that deployment. A render,
 image build or preflight alone does not establish hosted operation or a real
 model call. The [capability ledger](../../docs/roadmap_status.md) and
 [hosted drill report](../../docs/reports/garden-hosted-drill-2026-11-06.md)
@@ -86,7 +86,7 @@ a distinct fixed identity (10003 or 10004), no supplementary groups and no
 capabilities. The broker and children verify their process protections before
 processing documents; startup fails if the required identity boundary is absent.
 The broker owns the socket directory and socket. Only the guide worker mounts that directory as
-a read-only client. API, Beat, proof jobs and the native node do not
+a read-only client. API, Beat and the native node do not
 receive it. The parser process validates directory and socket ownership before
 binding. The health check drops to client UID/GID 10001 with no capabilities before
 performing a framed protocol round trip against the fixed parser build identity.
@@ -120,9 +120,7 @@ OpenAI 3.x input-count and Responses dependencies for both setup SDKs and POST
 checkers. The proxy rejects any non-`agents` image before reading the provider
 credential. `manager_authored` is accepted in either worker image with the exact
 `none/none/none` setup tuple; `WORKSTREAM_MODEL_PROXY_ENABLED` independently
-decides whether approved POST images can use the proxy. The backend image
-also installs the official Roles Anywhere helper 1.8.5 at its fixed path, with
-architecture-specific hashes checked during the build and image proof. Build the native service and static guest from the same reviewed source using the
+decides whether approved POST images can use the proxy. Build the native service and static guest from the same reviewed source using the
 [node instructions](../../external_checkers/README.md#smol-microvm-engine). Record the
 installed service digest in `WORKSTREAM_CHECKER_SERVICE_BINARY_SHA256`; the
 private node config pins Smol, the guest and every cached archive/config. A local build tag is build evidence only; the release file must
@@ -273,7 +271,7 @@ Leave all three blank when unused. The private file contains the complete PEM,
 including its newlines, with the same runtime ownership and `0400` mode.
 The checked release command selects `compose.github.yml` only for this pair.
 Only the outbox worker receives the mounted key and App settings; API/migrations,
-Beat, parser, model proxy and proof jobs receive none. Preflight reads file
+Beat, parser and model proxy receive none. Preflight reads file
 metadata only; the worker loader sets the adapter's existing private-key variable
 without evaluating or logging its contents. Never put a raw private key in the
 release environment. Follow the
@@ -290,8 +288,7 @@ mount of `/var/lib/workstream/model-runtime` and the fixed socket selector; it
 receives no provider credential or endpoint override. A proxy-disabled
 `manager_authored` release omits both credential selectors, mounts and secret
 definitions; a proxy-enabled one can still run approved POST model checks. Beat
-gets the database and broker secrets because its startup guard verifies the
-current artifact-provider activation before scheduling jobs. An absent required selector or unknown role stops
+gets only the database and broker secrets needed to schedule jobs. An absent required selector or unknown role stops
 startup, and an unrelated secret is neither mounted nor loaded. The loader
 independently requires the running identity and mode `0400`, performs no shell
 evaluation and never prints a value. Do not put AWS static keys in these files.
@@ -307,7 +304,7 @@ model socket from its canonical host path. Its separate writable
 `/var/lib/workstream/model-relays` directory is private to the native service, owned by the runtime UID/GID with mode `0700`.
 Start the proxy before the native node. The service creates an invocation relay
 and the Smol transport exposes only its guest-local capability endpoint. Project
-images receive neither the global socket nor provider credentials. API, Beat and proof jobs receive
+images receive neither the global socket nor provider credentials. API and Beat receive
 neither model directory.
 The two provider file paths are trusted release configuration. The proxy loads
 only configured dedicated files as `OPENROUTER_API_KEY` or `OPENAI_API_KEY`; this is
@@ -319,7 +316,7 @@ fixed by the registered adapter and cannot be supplied in the release file.
 The parser receives no database, broker, S3, Flow, model or provider credential.
 The release file also fixes the runtime, provider, model, model API, adapter
 options and whole-run/document/tool budgets. Those non-secret values are shared
-by API, worker, Beat and proof roles so every Settings snapshot describes the
+by API, worker and Beat so every Settings snapshot describes the
 same release. The parser receives only its fixed socket selector. The example
 selects `openai_agents_sdk` through OpenRouter with
 `openai/gpt-5.6-terra`; changing a trusted selector requires another reviewed
@@ -343,71 +340,22 @@ This provider credential is not reused for retained OpenAI resource cleanup.
 The exact-ID historical cleanup reader has no hosted credential selector in
 this slice and therefore fails closed until a separately reviewed retained-data
 credential is supplied.
-This external-host profile selects Roles Anywhere and mounts the runtime leaf
-certificate/key read-only into API and worker. Beat keeps only its database and
-broker secrets: its startup guard validates the stored provider activation and
-namespace without constructing the S3 adapter or signing helper. The checker
-controller receives no AWS identity. Three profile-gated proof jobs receive
-their own leaf pairs one at a time; the coordinator receives no certificate.
-EC2 instance-role authentication remains an independent native-AWS application
-method, but it is not this hosted topology. Follow the complete CA, AWS, renewal
-and revocation procedure in
-[`docs/operations_aws_roles_anywhere.md`](../../docs/operations_aws_roles_anywhere.md).
+The hosted profile uses `WORKSTREAM_ARTIFACT_S3_CREDENTIAL_MODE=aws_access_key`.
+Set `WORKSTREAM_ARTIFACT_S3_RUNTIME_USER_ARN` to the dedicated IAM user and
+`WORKSTREAM_ARTIFACT_S3_DIRECT_USER_CREDENTIAL_HOST_FILE` to its private JSON
+credential file. Compose mounts it read-only at
+`/run/workstream-artifact-credentials/aws-access-key.json` only in API, worker
+and model-proxy. Beat, MCP, parser and checker guests receive no storage key.
 
-Set the immutable release digest and every exact AWS role, managed-policy,
-trust-policy, Roles Anywhere resource and bucket-policy identity from the
-approved release evidence. The release wrapper allowlists these non-secret
-values and the shared Compose environment passes them unchanged to API, worker
-and Beat.
-The [canonical application Settings](../../backend/app/core/config.py) defines
-these fields and validates their format and relationships. It rejects a
-malformed digest or ARN, a mixed AWS partition/account, reused workload roles
-or trust-policy digests, or reused managed policies when any of those processes
-starts. Preflight checks presence and rendered custody only so it does not
-create a second IAM-policy validator.
-
-The proof command loads this exact Settings contract with distinct active IAM
-identities. Run the wrapper's fixed `proof --group-nonce <uuid>` operation. It
-executes runtime immutability, readiness, negative access and then the
-credential-free coordinator. Arbitrary Compose `run` commands remain outside
-the wrapper. A locally rendered job is still not live AWS evidence.
-
-Recurring proof jobs use the exact digest-pinned backend image already cached
-on the release host (`pull_policy: never`). They do not refresh registry login
-or contact the registry to start a proof. Acquire the reviewed images through
-the authenticated release `pull` operation before starting verification. If the
-selected image is absent, verification fails and later proof identities do not
-run; restore that exact image through the release process. There is no alternate
-image or implicit download. Deployment services retain their normal pull policy.
-An image-cache failure does not extend AWS evidence freshness: activation becomes
-unavailable when its existing proof window expires, even if process health
-checks remain green.
-
-If a recurring proof timer is enabled, check its oneshot state and the exact
-group receipts before release finalization or a database preservation check.
-An in-progress group is unsettled evidence even when earlier groups passed;
-let it finish and verify its result before using a settled interval for the
-final check. Keep the timer's normal cadence and the proof guard intact. The
-wrapper does not coordinate a release finalization window automatically; do
-not delete a running receipt or treat it as a pass.
-
-The [example S3 and completion timeouts](release.env.example) are starting
-values, not latency measurements. Canonical Settings requires:
-
-```text
-max(S3 operation total, complete-read deadline)
-  + terminal-persistence margin + 300-second proof refresh
-  + 120-second proof sequence allowance + 30-second clock margin
-  <= 900-second activation validity
-```
-
-Preflight checks only that these required values are finite and positive. The
-canonical application owner validates eligibility at startup. Replace the example values only with values supported by the hosted AWS
-drill; satisfying the arithmetic does not prove live latency, AWS identity or
-activation.
+Follow [S3 credential setup](../../docs/operations_aws_s3_credentials.md) for
+restricted policies and rotation. Qualification verifies real conditional
+upload/readback and denied destructive access before cutover. There are no
+periodic proof jobs, certificate mounts or expiring database activations.
+Keep operation deadlines bounded and measured against the deployment; a network
+failure remains a recoverable storage failure, not permission to declare success.
 
 `WORKSTREAM_ARTIFACT_PREPARATION_TOTAL_DEADLINE_SECONDS` explicitly carries the
-existing ART processing deadline to every backend role and proof job. The
+existing ART processing deadline to every backend role. The
 template preserves its 3,400-second default. With the unchanged ZIP inspection,
 cleanup margin and scratch TTL defaults, it must be finite and strictly between
 300 and 3,600 seconds: ZIP inspection must fit inside processing, and processing
@@ -498,11 +446,9 @@ sudo python3 deploy/hosted/preflight.py --env-file /etc/workstream/release.env
 Preflight cannot attest the active AWS identity, absence of extra IAM
 permissions, Flow token acceptance, a successful VM boot, collector delivery,
 backup recoverability or a live checker result. The
-[AWS operations guide](../../docs/operations_aws_roles_anywhere.md) describes
-the exact role, policy, bucket and certificate preparation and the fixed proof
-group. This configuration carries those values into every long-running process
-environment for canonical startup validation. Rendered values and valid formats
-do not prove the underlying cloud facts or completed proof-job execution.
+[S3 operations guide](../../docs/operations_aws_s3_credentials.md) describes
+the restricted identity, bucket policy and storage qualification. Rendered
+configuration does not establish live cloud behavior.
 
 ## Start and inspect
 
@@ -558,26 +504,16 @@ the receipts and inspect the outcome before an explicitly chosen retry; the
 wrapper never retries automatically or infers readiness. No award, policy
 publication or external fulfillment is performed by this operation.
 
-Cold startup has explicit prerequisite stages to avoid a schema/activation/proxy/
-node dependency cycle. `migrate` runs only the existing API image's Alembic command
-with no dependencies. Ordinary API startup launches only the server; it never
-applies migrations. Run `migrate` successfully before first activation or an
-upgrade, and requalify a restored database before enabling host recovery.
-The fixed AWS `proof` sequence and exactly
-`up -d model-proxy` validate static topology and private inputs but require no live
-node and release no API, worker or scheduler. The proof command retains its exact
-credential-separated AWS observations and coordinator; it does not use intake or
-project execution. The API image's release entrypoint loads its API role secrets
-and executes the supplied Alembic command without application startup or service
-health checks. Alembic loads settings and model metadata, then connects directly
-to PostgreSQL; activation and proxy/node readiness follow migration. Run these
-reviewed operator steps:
+Cold startup orders migrations before application services. `migrate` runs the
+existing API image's Alembic command without application startup or checker
+health checks. Ordinary API startup never applies migrations. Qualify the
+configured storage credential before cutover, then start the optional model
+proxy and the native node for the single-host checker topology. Run these
+operator steps:
 
 ```sh
 sudo python3 deploy/hosted/compose.py --env-file /etc/workstream/release.env pull
 sudo python3 deploy/hosted/compose.py --env-file /etc/workstream/release.env migrate
-sudo python3 deploy/hosted/compose.py --env-file /etc/workstream/release.env \
-  proof --group-nonce <fresh-uuid>
 sudo python3 deploy/hosted/compose.py --env-file /etc/workstream/release.env \
   up -d model-proxy
 # Wait for the proxy health check, then start the reviewed native unit explicitly.
@@ -589,7 +525,7 @@ sudo python3 deploy/hosted/compose.py --env-file /etc/workstream/release.env ps
 ```
 
 A proxy-disabled release omits its proxy stage. Schema migration and any required
-fresh AWS activation still precede API startup. Keep reviewed files unchanged
+storage qualification still precede release cutover. Keep reviewed files unchanged
 between validation and launch. These checks do not constrain a trusted host
 administrator and do not attest the running node's complete source custody;
 qualification separately records its actual process/binary identities.
@@ -609,7 +545,7 @@ Docker restart policies do not enforce Compose dependency health ordering at
 host boot. The native node can exhaust its start attempts before the model proxy
 socket is ready, and MCP can retain a stopped API's network namespace. Install
 [workstream-hosted.service](workstream-hosted.service) after the initial schema,
-AWS activation, pinned image installation and public journey have passed. Copy
+storage qualification, pinned image installation and public journey have passed. Copy
 the reviewed checkout to `/opt/workstream/source`, or edit both absolute source
 paths in the copied unit to its permanent root-owned location. Keep that checkout
 and `/etc/workstream/release.env` private and writable only by the deployment
@@ -636,8 +572,8 @@ failures in its journal. Inspect `journalctl -u workstream-hosted.service` and
 Resume uses installed digest-pinned images with `--pull never`; registry login
 and network availability to the registry are unnecessary for reboot. A missing
 image fails recovery. It never initializes accounts, rotates credentials,
-migrates the schema or repeats cloud proof. Upgrades still follow the reviewed
-migration and activation procedure. Container restart can begin independently
+migrates the schema or rotates credentials. Upgrades still follow the reviewed
+migration and storage qualification procedure. Container restart can begin independently
 before reconciliation; the unit repairs dependency races and checks readiness,
 not a new runtime health monitor. Record an actual reboot and post-reboot public
 journey before claiming restart qualification.
@@ -738,7 +674,7 @@ the current schema. Otherwise repair forward with a new reviewed digest.
 ## Backup and restore proof
 
 Use the selected PostgreSQL provider's consistent backup/snapshot facility and
-the [AWS bucket versioning and custody procedure](../../docs/operations_aws_roles_anywhere.md#provision-the-closed-aws-trust).
+the [AWS bucket versioning and custody procedure](../../docs/operations_aws_s3_credentials.md).
 Before release, identify the provider's exact backup and restore operations,
 retention policy, authorized operator and isolated restore target. Verify that
 the target can read the retained artifact namespace without write authority.
@@ -774,7 +710,7 @@ cannot supply one universal provider command for environment-managed PostgreSQL.
 
 For each deployment, retain its exact source, service-image, checker-image,
 configuration, native binary/cache and corpus identities with the results of
-full preflight, a fresh fixed AWS proof group, public API/worker journey, drain
+full preflight, real S3 storage qualification, public API/worker journey, drain
 and restart, supported recovery and isolated backup restore. Verify real Flow
 human/service authority, AWS custody and negative identity cases, registry
 access, Smol isolation, representative CPU/memory/PID/disk/time limits,

@@ -17,9 +17,9 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api.router import api_router
 from app.adapters.artifacts import (
-    artifact_provider_activation_guard,
     cleanup_stale_artifact_scratch,
     create_artifact_store_bootstrap,
+    verify_artifact_provider_startup,
 )
 from app.adapters.observability import create_observability_export_adapter
 from app.core.api_controls import (
@@ -102,22 +102,13 @@ async def _application_lifespan(app: FastAPI) -> AsyncIterator[None]:
         ):
             build_auth_verifier(settings)
         if settings.artifact_store_backend != "disabled":
-            activation_guard = artifact_provider_activation_guard(
-                settings,
-            )
-            bootstrap = create_artifact_store_bootstrap(
-                settings,
-                activation_guard=activation_guard,
-            )
+            bootstrap = create_artifact_store_bootstrap(settings)
             try:
                 claim = await _validate_artifact_storage_namespace_at_startup(
                     settings,
                     bootstrap,
                 )
-                if activation_guard is not None:
-                    await activation_guard.select_for_call(
-                        namespace_fingerprint=claim.namespace_fingerprint,
-                    )
+                await verify_artifact_provider_startup(settings)
                 bootstrap.initialize_after_namespace_claim(claim)
                 await cleanup_stale_artifact_scratch(settings)
             finally:
