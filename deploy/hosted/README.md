@@ -558,7 +558,7 @@ before the worker starts. Beat retains existing recovery schedules. API health
 is a lightweight endpoint; Celery health checks its processes. Typed native
 readiness verifies runtime/identity/cache-count and pinned intake/default facts;
 exact image selection is independently checked during every execution. None of
-these checks replaces a public authenticated journey, provider proof, resource
+these checks replaces a public authenticated journey, storage qualification, resource
 qualification or restart/cleanup evidence. Each Compose service has its existing
 finite restart policy; the native unit retains its own bounded systemd policy.
 

@@ -2,7 +2,7 @@
 
 - Initiative: None
 - Durable disposition: Planned
-- Intended merge outcome: Flow Identity supports branded self-registration, verified email and password recovery without granting Workstream permissions.
+- Intended merge outcome: Flow Identity supports branded self-registration, verified email and password recovery without granting Workstream permissions; the same delivery migrates always-on services to an app-only host with dedicated S3 credentials.
 
 ## Intent
 
@@ -23,7 +23,7 @@ PR716 delivered native CLI, Swagger and dedicated issuer password grants.
 
 - `deploy/identity/**`: provider configuration, minimal theme, registration
   marker provisioning if no stock configuration safely supports it, documentation.
-- `deploy/hosted/**`: only identity email configuration and operator instructions.
+- `deploy/hosted/**`: identity email configuration, app-only hosting, direct S3 credential configuration, and operator instructions.
 - `scripts/*identity*`, `scripts/test_keycloak_configuration.py`, identity test
   fixtures, `.github/requirements/identity-browser.*` and `.github/workflows/identity.yml`: real provider/browser/email proofs.
 - `scripts/check_stale_artifact_contracts.py` and its focused asset regression: recognize binary image assets without exempting source/configuration text.
@@ -140,3 +140,225 @@ Preserve identity accounts, database state and public URLs during migration.
 Verify login/API/MCP and unavailable checker behavior before moving the Elastic
 IP and stopping the old host. Separate KVM execution qualification remains an
 explicit follow-up boundary, not a claim made by app-only startup.
+
+## App-only hosting scope
+
+## Intent
+
+Run the main API, MCP, Flow Identity, PostgreSQL, Redis, guide parser, and
+inference proxy on an app host without KVM.
+
+## Current behavior
+
+The current
+[hosted composition](../../deploy/hosted/README.md) checks for native Smol
+before running the API or worker. The shared [outbox scan](../../backend/app/workers/outbox.py)
+currently delivers checker requests through the same queue and PostgreSQL
+delivery owner as ordinary assignment, revision and completion effects.
+
+## Bounded change
+
+- Add an explicit hosted app profile in `deploy/hosted/{compose.py,preflight.py,compose.yml,release.env.example}`
+  and an overlay for native-only configuration if needed. The app profile
+  preserves existing API, parser, inference proxy, storage qualification, database,
+  broker, and identity validation and activates without local checker files,
+  mounts, native systemd start, or KVM readiness. Reject conflicting native or
+  trial configuration in this profile. Keep the existing single-host mode.
+- Compose a fixed checker-delivery exclusion in `backend/app/core/config.py`,
+  `backend/app/adapters/outbox/__init__.py`,
+  `backend/app/modules/outbox/delivery.py` and `delivery_repository.py`. Filter
+  the exact checker request and reconciliation event types before candidate
+  pagination, including expired claims, and enforce the same filter before
+  claim or recovery. Retain ordinary and unsupported expired recovery.
+- Refresh the exact identifier-generation classifications for the changed outbox
+  syntax. The authority fact-substitution test uses a 60-second lease to isolate
+  its assertions from short-lease expiry under CI load; expiry tests retain their
+  existing explicit bounds and assertions.
+- Update the existing hosted release preflight test and relevant existing
+  backend test owners. Document the app profile and its offline limits in
+  `deploy/hosted/README.md` and reconcile the affected part of
+  `docs/roadmap_status.md`.
+
+The same public ZIP preparation route resolves the absent typed intake before
+reading bytes and returns the existing retryable 503. MCP continues calling
+that API. Keep event schemas, authority, receipts, lease owner, and public
+contracts. Existing checker rows remain available for a later checker worker.
+Private second-node routing, model relay wiring, provisioning and cloud
+changes are outside this migration prerequisite.
+
+## Acceptance criteria
+
+- [x] App-only preflight and startup select the complete ordinary stack with
+  no checker config, socket, image assets, or hardware. They enforce archive
+  storage qualification, runtime identity, parser and enabled model-proxy custody.
+- [x] Authorized ZIP preparation without intake returns the existing 503
+  without opening the ZIP stream, creating a PRE record, or creating a Submission.
+- [x] An app-only scan omits selected POST request/reconciliation work,
+  including expired claims, while ordinary events progress. Direct stale
+  deliveries cannot mutate the retained checker rows. The regular topology
+  can subsequently select and recover those rows.
+- [x] The regular hosted profile still requires native prerequisites and
+  the same dedicated model credentials, intake image, and active readiness.
+
+## Evidence
+
+| Claim | Evidence |
+|---|---|
+| Render, preflight and startup roles | 80 combined hosted configuration tests passed, using real Compose rendering and controlled startup dependencies. |
+| Existing retryable API contract | 53 ART tests passed, including the mounted upload route with real command composition and a guarded byte source. |
+| Durable event filtering and wrong-role refusal | The repository's isolated PostgreSQL 16 runner passed the focused outbox test covering checker and completion events, due and expired states, and keyset selection. |
+| Static checks | Affected backend lint, stale wording, Markdown links and whitespace passed. |
+
+## Risk and review routing
+
+- Risk class: L1.
+- Required reviewers: architecture, security, QA, product/operations, documentation, test delta.
+- Human review focus: preserved AWS and identity startup gates, explicit
+  offline response, inference availability, and retained checker delivery.
+
+## Review findings
+
+- `ARCH-APP-001` and `QA-APPHOST-001`: the repository keeps unfiltered
+  selection when the caller supplies no exclusions. The scheduled due-work
+  regression exercises that call directly.
+- `DOC-APP-001`: the hosted documentation scopes the native prerequisites to
+  the single-host profile and describes the retryable API and MCP responses.
+
+## Reconciliation
+
+- Current-source reconciliation: verified against `a2154e8a`.
+- Next usable boundary: qualify private checker-host ingress and worker attachment to the same durable owners.
+
+## Dedicated S3 credentials scope
+
+## Intent
+
+The operator approved replacing the current deployment's manual certificate dependency with dedicated restricted access keys. Do not introduce an online CA or require EC2 hosting. Preserve product records, bucket objects and enforced storage protections; remove obsolete proof-only records with their tables.
+
+## Current behavior
+
+Native AWS configuration rejects static credentials. Runtime and proof evidence bind three distinct role ARNs and exact policies. MinIO static credentials are local-only. Hosted startup currently binds certificate files and Roles Anywhere checks.
+
+## Bounded change
+
+### Allowed
+
+- ART provider interfaces, S3 and local adapters, backend and Celery startup,
+  ART storage orchestration, and artifact readiness reporting.
+- The proof-only models, operator commands, deployment scheduling and focused
+  tests, plus one forward migration dropping only the two proof tables.
+- Release-image workflow selections and their contract tests, native backend
+  configuration example, and app-only hosted deployment integration.
+- Direct IAM-user credential loading and isolated AWS authentication, IAM
+  policy generation, live deployment verification, and affected operator docs.
+
+### Not allowed
+
+- Ambient credential fallback, provisioning credentials in runtime,
+  credentials in tools/checker guests, deletion of product records or bytes,
+  and weakened bucket immutability or authorization.
+- New certificate services, new general-purpose credential frameworks, unrelated product work.
+
+## Design and decisions
+
+The user explicitly requires removing the expiring database-proof system, not
+retaining an alternate activation path. Remove proof/activation models and
+runtime gates, periodic jobs, proof-only configuration, obsolete tests and
+current documentation. Drop proof-only tables through an explicit forward
+migration after checking references. Do not rewrite old migration history.
+Project/assignment/submission records, artifact metadata and stored bytes are
+not part of this deletion.
+
+Use one dedicated IAM user with direct access to the configured S3 bucket and
+artifact prefix, through one isolated private credential file. No certificate
+infrastructure, AssumeRole hop or three-user verification workflow. Preserve
+AWS authentication, conditional writes, full-byte readback, exact namespace,
+Workstream authorization, retry/recovery and terminal transaction safeguards.
+Deployment qualification checks actual storage behavior without persisting an
+expiring permission-to-use-storage record or running a privileged scheduler.
+
+## Acceptance criteria
+
+- Explicit private-file credentials authenticate on a non-EC2 host with metadata/ambient lookup disabled.
+- Incorrect, disabled or missing credentials fail closed without secret-bearing errors.
+- The dedicated key cannot administer IAM, change bucket protections, delete retained artifacts, or access other prefixes; deployment operator credentials are absent from application containers.
+- Exact-byte upload/read, immutable-write denials, namespace custody and authorization remain enforced. Replace the expiring role-proof dependency deliberately; do not silently skip guards or invent activation receipts.
+- Key replacement is verified before retiring the previous key; certificate trust is retired only after successful direct-key storage qualification.
+- Operator receives exact restricted IAM configuration and private secret-file instructions; real AWS proof precedes deployment readiness claims.
+
+## Risk and review routing
+
+- Risk class: L1.
+- Reviewers: security, architecture, QA/test delta, documentation.
+- Human review focus: long-lived secret trade-off, preserved principal isolation, migration/rotation and rollback.
+
+## Evidence
+
+Source trace establishes certificate coupling and isolated proof-only database references. Backend and policy implementation and live dedicated-user storage qualification passed the focused checks recorded below. Deployment cutover and full CI remain pending.
+
+## Review focus
+
+Review removal of transient activation plumbing without removing product
+namespace, authorization, exact-byte, retry or terminal transaction safeguards.
+The user explicitly authorized removal of proof-only tables. There are no
+product foreign keys into them; the forward migration must not use CASCADE.
+
+## Reconciliation
+
+The operator requires one delivery PR for the identity and hosting work. Integrate app-only deployment with dedicated S3 credentials in that same change, preserving both boundaries. Certificate renewal is superseded for the replacement deployment.
+
+## Dependency trace and scope correction
+
+Activation UUIDs are transient runtime evidence only. No product artifact put,
+replica, operation, observation, verification or recovery record stores them.
+Foreign keys are confined to the proof/activation tables. Removal therefore
+requires a forward cleanup migration for proof-only storage, not rewriting
+artifact lineage. Preserve product data and file bytes.
+
+The old 15-minute proof validity detected configuration drift. Removing it
+removes that bounded drift-detection claim; it does not remove per-operation
+AWS authorization, conditional writes, hash verification or product authority.
+Update current specifications accordingly. AWS administrators remain trusted.
+
+No new proof table, timer or receipt is allowed. Candidate review follows the
+focused implementation evidence below.
+
+## Implementation verification
+
+- Backend credential/startup checks: 333 initial targeted tests, followed by
+  120 focused tests after the prefork startup-budget correction.
+- Real MinIO: 42 adapter/conformance cases passed.
+- PostgreSQL 16: 13 migration/terminal/recovery/assigned-document cases passed,
+  including preservation of an existing product artifact row after dropping
+  the two proof-only tables.
+- Hosted configuration and image checks: 97 tests passed.
+- Policy generation: eight tests and focused security inspection passed.
+- Complete backend collection: 11,551 cases collected; full hosted execution
+  remains pending and is not inferred from focused passes.
+- Ruff, whitespace and changed Markdown link checks passed.
+- Live AWS qualification with the dedicated user passed conditional create,
+  exact readback, missing HEAD 404, replay precondition, and denied overwrite,
+  delete, wrong-prefix put and anonymous read. This used a synthetic 66-byte
+  object and the generated bucket policy; it does not claim the migrated
+  application journey has passed.
+- New host is provisioned with pinned unchanged Identity/MCP/PostgreSQL/Redis
+  images. Backend release build, integrated deployment and public cutover are
+  still pending. Old host and Elastic IP remain unchanged.
+
+Obsolete tests exercised the removed certificate/activation mechanism. Mixed
+terminal/recovery tests retain their independent product assertions under the
+new storage path; no CI skip or coverage threshold was introduced.
+
+## Integration repair evidence
+
+The release-image workflow still selected removed activation-era tests. Replace
+those selectors with the current AWS settings rejection cases and the complete
+direct-user credential module; retain the image build/verification gates. A
+workflow contract checks that every explicitly selected backend test exists.
+The stale activation argument in the retained stale-put observation test is
+removed without changing its fencing assertions. The native backend example
+now documents only the dedicated credential file for this deployment path.
+
+App-only deployment integration retains direct-key mounts for API, worker and
+enabled model proxy while excluding them from Beat, MCP, parser and checker
+guests. Native checker custody stays exclusive to the single-host overlay.
