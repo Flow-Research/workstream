@@ -7874,3 +7874,18 @@ in7.82s (/tmp/submission-cleanup-isolation-after.log). The charge concurrency
 assertion now allows either one or two successful confirmation observations,
 while preserving its exact single durable claim and zero-charge checks.
 The source owner/provider semantics are unchanged by this repair.
+
+Repair verification/review closure at clean8928f39244f90402ce796fddac0d8a938a672bce:
+ARCH/SEC scoped PASS; QA/test-delta PASS WITH LOW RISKS. QA independently removed
+the execution hook in memory and the registered-task negative failed; restoring
+the hook passed (/tmp/submission-cleanup-isolation-qa-probe.json). No other
+blocking scoped finding remains. System-Python structure validation passed after
+the repair. Existing worker regression run passed35; six API startup tests failed
+because the --noconftest command omitted the standard test pagination HMAC secret.
+Supplying that exact test-only conftest setting passed all six in21.52s; no product
+change or gate weakening was made. Record/link/Ruff/whitespace checks passed.
+The two implementation commits close sealed-source worker integration only.
+Next runtime work is expired foreground abandonment plus unsealed/uncertain and
+orphan reconciliation, followed by separate-runner integration and final goal
+qualification. No broker-crash, native AWS, production deployment or full-goal
+completion claim is made. One draft PR708 remains the delivery vehicle.

@@ -19,6 +19,7 @@ limits are in [the change record](WS-SUBMIT-001-01.md).
 - [x] Revision expiry and assignment invalidation serialize with acceptance; accepted input remains protected.
 - [x] Pending-revision protection prevents dispatch against the older Submission.
 - [x] Cleanup claim, retention barriers, exact-generation deletion and confirmed charge release owners.
+- [x] Production sealed-source sweep wiring: explicit profile, dedicated worker/task isolation, 12-hour schedule, indexed discovery and focused real-storage retry/retention proof.
 - [x] Historical cap fixture no longer depends on the old writer; capture, restore/recovery and neighboring upgrade controls passed.
 
 Recent focused evidence includes atomic invalidation (`8a854f7a6`), public
@@ -52,15 +53,17 @@ qualification, not a redesign of submission ownership.
 
 | Order | Required outcome | Concrete finishing evidence |
 | --- | --- | --- |
-| 1 | Integrate production source cleanup scheduling/startup and uncertain/unsealed reconciliation | Real worker callers of the cleanup owner; restart and repeated sweeps; interrupted multipart and lost acknowledgements; accepted/stalled source survives; confirmed cleanup releases charge once. |
+| 1 | Finish expired-foreground, uncertain/unsealed and genuine-orphan reconciliation | Wire the existing expired-foreground owner; reconcile interrupted multipart and lost acknowledgements; retained/stalled sources survive; actual absence and settled writes release charges once; exercise worker loss/restart. |
 | 2 | Remove superseded preparation/submission writers and remaining consumers | Trace all remaining callers, preserve their distinct authority/history contracts, then delete obsolete implementation. Current T5 `create_accepted` remains. |
 | 3 | Complete separate-runner integration and runtime/provider/resource qualification | Authenticated remote execution replacing the current API-side Unix-socket coupling; actual Smol one-session/isolation proof on runner infrastructure; representative maxima, cold paths, concurrency and timing measurements; applicable AWS exact-version/uncertain multipart proof. Portable/MinIO evidence is insufficient for these claims. |
 | 4 | Execute final full-system verification and close the acceptance matrix | Full backend lanes, CLI/MCP contracts and CI at the final head; every A01–A35 row linked to an executed, scope-matching result. Fix actual failures without weakening requirements. |
 | 5 | Reconcile configuration and delivery documentation | Resolve C01–C07 using measured/approved values; update affected roadmap/overview/index and local spreadsheet exports; preserve the distinction between implemented, exposed and deployed. |
 
-The concrete next runtime gap is order 1. Production sealed-source worker wiring
-is now implemented in the working tree, with verification and review unfinished.
-Unsealed/uncertain reconciliation remains unimplemented. Further optional test
+The concrete next runtime gap is order 1. Sealed-source scheduling and task
+isolation passed scoped implementation review at `8928f3924`; focused integration
+cases passed across two runs. This is not deployed-provider or broker-crash
+qualification. `abandon_expired()` has no production caller; unsealed/uncertain
+and genuine-orphan reconciliation remain unfinished. Further optional test
 migration must not displace closing this integration.
 
 ## Acceptance evidence still to close
