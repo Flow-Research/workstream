@@ -1372,7 +1372,7 @@ async def test_roles_anywhere_upgrade_preserves_old_proof_and_refuses_downgrade(
             await engine.dispose()
 
 
-async def _assert_upgraded_incompatible_revision_blocked(h, tmp_path, database_url, monkeypatch):
+async def _assert_upgraded_incompatible_revision_blocked(h, tmp_path, database_url, monkeypatch, *, headers=None):
     """Preserve zero-PRE history without admitting new work under incompatible locks."""
     from sqlalchemy import text
     from app.adapters.artifacts import ConfiguredSubmissionCommand
@@ -1424,7 +1424,7 @@ async def _assert_upgraded_incompatible_revision_blocked(h, tmp_path, database_u
             patch.setattr(ForegroundSourceUpload, "receive", forbidden_upload)
             response = await client.post(
                 f"/api/v1/tasks/{h.request.task_id}/submissions",
-                headers=_revision_upload_headers(h), content=forbidden_body())
+                headers=headers if headers is not None else _revision_upload_headers(h), content=forbidden_body())
         assert response.status_code == 503, response.text
         assert response.json()["error"]["code"] == "submission_infrastructure_unavailable"
         assert command_errors == ["intake_requires_one_pre_and_post_checker"]

@@ -2,7 +2,9 @@
 
 import asyncio
 from contextlib import asynccontextmanager
-from types import SimpleNamespace
+import base64
+import json
+from uuid import UUID
 
 from alembic import command
 import pytest
@@ -14,125 +16,61 @@ from app.core.identifiers import new_record_id
 from app.modules.actors.api import ServiceIdentity
 from app.modules.authorization.runtime import AuthorizationDenied, PreparedAuthorizationUnsupported
 from app.modules.outbox.service import OutboxService
-from app.modules.projects.api import ProjectLockedPolicyContextRequest
-from app.modules.tasks.post_submit_routing.source import TaskRoutingSourcePreparer
 from app.modules.tasks.revision.models import TaskRevisionExhaustion
-from app.modules.tasks.revision.service import select_candidate
 from tests.checkers.execution.support import service_link_state
 from tests.migration_fixtures import current_schema_revision
 from tests.migration_revision_fixtures import (
     assert_historical_revision_guards, enter_predecessor_owner_shape,
-    historical_revision_source, leave_predecessor_owner_shape, insert_0047_preparation,
+    historical_revision_source, leave_predecessor_owner_shape, drop_retained_owner_read_projection,
     retained_revision_rows,
 )
 from tests.tasks.post_submit_routing.outcome_support import invoked_completion
-from tests.tasks.post_submit_routing.support import revision_archive
-from tests.tasks.submission_dispatch.test_replacement_creation import (
-    _create, _creation_request, _ready_replacement,
-)
-from tests.tasks.submission_dispatch.test_revision_capacity import _fail_current_submission
 from tests.tasks.submission_dispatch.test_revision_exhaustion import (
     StagedFailure, _apply, _assert_exhausted_assignment_immutable, _history_rejects_source,
-    _snapshot, _submit_initial_after_reclaim,
+    _snapshot,
 )
 from tests.tasks.submission_dispatch.test_revision_expiry import _provision_expirer
 from tests.tasks.test_public_submission_intake import _client
 from tests.test_alembic import (
     _alembic_config,
     _execute,
-    _historical_artifact_lineage_projection,
+    _historical_artifact_lineage_projection, _assert_upgraded_incompatible_revision_blocked,
 )
 
 
 pytestmark = pytest.mark.postgres_schema_contract
 
 
-async def _0047_head(session, manifest_id):
-    """Read actual historical columns while current ORM has additive clock fields."""
-    row = (await session.execute(text("""
-        SELECT p.* FROM public.task_revision_preparations p
-        WHERE p.routing_manifest_id=:id AND NOT EXISTS(
-          SELECT 1 FROM public.task_revision_preparations child WHERE child.predecessor_id=p.id)
-    """), {"id": manifest_id})).mappings().one_or_none()
-    return None if row is None else SimpleNamespace(
-        **row, remaining_microseconds=None, clock_observed_at=None,
-    )
-
-
 @asynccontextmanager
 async def _retained_cap_source(tmp_path, database_url, monkeypatch):
-    """Execute old source selection before real AUTH with every 0047 guard enabled."""
+    """Upgrade checksum-bound guarded 0047 rows without the superseded writer."""
+    from app.modules.tasks.api.routing_outcome import TaskRoutingOutcome
     await _execute(database_url, "drop schema public cascade; create schema public")
     await asyncio.to_thread(command.upgrade, _alembic_config(), "0047_revision_recovery")
-    shape = pytest.MonkeyPatch()
-    await enter_predecessor_owner_shape(_execute, database_url, shape)
-    original = TaskRoutingSourcePreparer.prepare
-
-    async def old_source(preparer, *args, **kwargs):
-        source = await original(preparer, *args, **kwargs)
-        if source.exhaustion is None:
-            return source
-        policy = source.source.locked_policy
-        context = await preparer._projects.lock_locked_policy_context(ProjectLockedPolicyContextRequest(
-            project_id=source.source.project_id, guide_version=policy.locked_guide_version,
-            source_snapshot_id=policy.locked_guide_source_snapshot_id,
-            source_snapshot_hash=policy.locked_guide_source_snapshot_hash,
-            effective_policy_id=policy.locked_effective_project_submission_artifact_policy_id,
-            effective_policy_hash=policy.locked_effective_project_submission_artifact_policy_hash,
-            pre_submit_policy_id=policy.locked_pre_submit_checker_policy_id,
-            pre_submit_policy_bundle_hash=policy.locked_pre_submit_checker_bundle_hash,
-        ))
-        candidate = await select_candidate(preparer._projects, context)
-        assert candidate.max_revision_rounds == 1
-        return source.model_copy(update={"exhaustion": None, "revision_candidate": candidate})
-
     async with historical_revision_source(
-        tmp_path,
-        database_url,
-        monkeypatch,
-        "0047_revision_source_cap_one",
+        tmp_path, database_url, monkeypatch, "0047_retained_cap_blocked",
     ) as h:
-        async with _historical_artifact_lineage_projection(database_url):
-            await assert_historical_revision_guards(h.factory, "0047_revision_recovery")
-            h.envelope = await invoked_completion(h)
-            await assert_historical_revision_guards(h.factory, "0047_revision_recovery")
-            with monkeypatch.context() as patch:
-                patch.setattr(TaskRoutingSourcePreparer, "prepare", old_source)
-                patch.setattr(
-                    "app.modules.tasks.post_submit_routing.outcome.prepare_revision",
-                    insert_0047_preparation,
-                )
-                patch.setattr("app.modules.tasks.revision.service.head_for_source", _0047_head)
-                patch.setattr("app.modules.tasks.submission_context.head_for_source", _0047_head)
-                initial = await _apply(h)
-                async with h.factory() as session:
-                    first = await _0047_head(session, initial.routing_manifest_id)
-                    h.revision_preparation_id = first.id
-                    h.revision_preparation_sha256 = first.preparation_sha256
-                h.data = revision_archive(h.data)
-                prepared, admission = await _ready_replacement(h, h.data)
-                h.created = await _create(h, _creation_request(h, prepared, admission))
-                assert h.created.submission_version == 2
-                retained = await _fail_current_submission(h, terminal=True)
-                async with h.factory() as session:
-                    blocked = await _0047_head(session, retained.routing_manifest_id)
-                    assert (blocked.outcome, blocked.blocked_reason) == (
-                        "blocked",
-                        "revision_limit_reached",
-                    )
-                    assert blocked.next_revision_round == 2 and blocked.max_revision_rounds == 1
-                    before = await retained_revision_rows(session, retained.routing_manifest_id)
-                    assert await session.scalar(text("""
-                        SELECT count(*) FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid
-                        JOIN pg_namespace n ON n.oid=c.relnamespace
-                        WHERE n.nspname='public' AND NOT t.tgisinternal AND t.tgenabled='D'
-                    """)) == 0
-        shape.undo()
-        await leave_predecessor_owner_shape(_execute, database_url)
+        seed = h.historical_seed
+        routed = TaskRoutingOutcome.model_validate_json(json.dumps(seed["routed"]))
+        h.store.objects.update({ref: base64.b64decode(data) for ref, data in seed["objects"].items()})
+        await assert_historical_revision_guards(h.factory, "0047_revision_recovery")
+        async with h.factory() as session:
+            before = await retained_revision_rows(session, routed.routing_manifest_id)
+            blocked = (await session.execute(text("""
+                SELECT outcome,blocked_reason,next_revision_round,max_revision_rounds
+                FROM public.task_revision_preparations WHERE routing_manifest_id=:id
+            """), {"id": routed.routing_manifest_id})).one()
+            assert blocked == ("blocked", "revision_limit_reached", 2, 1)
+        async with h.engine.begin() as connection:
+            await drop_retained_owner_read_projection(connection)
+            await connection.execute(text("ALTER TABLE public.checker_runs DROP COLUMN input_context_custody"))
         await asyncio.to_thread(command.upgrade, _alembic_config(), current_schema_revision())
         async with h.factory() as session:
-            assert await retained_revision_rows(session, retained.routing_manifest_id) == before
-        yield h, retained, before
+            assert await retained_revision_rows(session, routed.routing_manifest_id) == before
+        # The archive retained a positively requested retry, not a live lease.
+        # Fresh dispatcher authority supplies this test's current invocation.
+        h.envelope = await invoked_completion(h)
+        yield h, routed, before
 
 
 async def _recover(h, manifest_id):
@@ -216,8 +154,18 @@ async def test_retained_cap_recovery_releases_once_and_preserves_exact_routing_r
             assert await _snapshot(h) == committed
             async with _client(h, monkeypatch, isolated_database_env) as client:
                 await _history_rejects_source(h, client, h.created.submission_id)
-                h.created = await _submit_initial_after_reclaim(h, client)
-                assert h.created.submission_version == 3
+                claim = await client.post(f"/api/v1/tasks/{h.request.task_id}/claim",
+                    headers={"Idempotency-Key": str(new_record_id())})
+                assert claim.status_code == 200, claim.text
+                assignment = UUID(claim.json()["assignment"]["id"])
+                assert assignment != h.request.assignment_id
+                assert claim.json()["task"]["status"] == "in_progress"
+            await _assert_upgraded_incompatible_revision_blocked(
+                h, tmp_path, isolated_database_env, monkeypatch,
+                headers={"Content-Type": "application/zip", "Idempotency-Key": str(new_record_id()),
+                    "X-Task-Assignment-Id": str(assignment),
+                    "X-Submission-Summary": h.creation_request.summary,
+                    "X-Contributor-Attestation": h.creation_request.contributor_attestation})
             async with h.factory() as session:
                 assert await session.scalar(text(
                     "SELECT public.task_revision_exhaustion_complete(:id)"

@@ -1,75 +1,70 @@
-# WS-SUBMIT-001 — One-request submission and durable continuation
+# WS-SUBMIT-001 — Submission execution completion checklist
 
 - Disposition: Planned
-- Intent: implement the user-approved [specification](../../../docs/spec_submission_execution.md), preserving downstream authority and retained evidence.
+- Target: the complete [submission execution specification](../../../docs/spec_submission_execution.md).
+- Delivery: one PR, #708, with focused commits; no merge request before complete verification.
 
-The user authorized the complete specification on 11 November 2026. Completion
-requires D01–D18, I01–I12, T1–T5 and evidence for A01–A35. This record does not
-authorize merge or production deployment.
+## Implemented on this branch
 
-## Current boundary
+Checked items describe implementation with focused proof. They do not mean the
+complete acceptance matrix or deployment is qualified. Detailed runs and their
+limits are in [the change record](WS-SUBMIT-001-01.md).
 
-[WS-SUBMIT-001-01](WS-SUBMIT-001-01.md) establishes exact command/source value
-contracts and hidden pre-handoff database custody with TASK/source/lease guards. Per-operation physical source reservations are implemented with explicit limits.
-Hidden S3-compatible source methods and a backpressured receiver now provide
-bounded parts, conditional completion, exact-version reads and scoped uncertain
-upload discovery. Local source methods keep one ZIP inode through sealing, verify
-exact generations and preserve completed bytes on late abort. Private upload
-composition commits intent before provider begin, handle before parts, and EOF
-before provider completion, then binds known source facts before fenced sealing. Full foreground authorization/heartbeat
-integration, confirmed physical reclamation, AWS qualification and accepted authority remain
-to implement and integrate.
-The existing public flow stays active until coordinated cutover.
+- [x] Exact intake/source identities, durable custody, leases and physical byte reservations.
+- [x] Streaming Local/MinIO source upload and source-bound PRE orchestration.
+- [x] Atomic T4 acceptance: pending task custody, accepted receipt and durable finalization event.
+- [x] T5 formal Submission/binding/POST dispatch through existing owners, with replay and rollback tests.
+- [x] Public raw-ZIP API and corresponding CLI/MCP submission/progress contracts.
+- [x] One-image-per-phase policy guards and retained-policy refusal.
+- [x] Revision expiry and assignment invalidation serialize with acceptance; accepted input remains protected.
+- [x] Pending-revision protection prevents dispatch against the older Submission.
+- [x] Cleanup claim, retention barriers, exact-generation deletion and confirmed charge release owners.
+- [x] Historical cap fixture no longer depends on the old writer; capture, restore/recovery and neighboring upgrade controls passed.
 
-## Delivery sequence
+Recent focused evidence includes atomic invalidation (`8a854f7a6`), public
+ZIP/T5 lineage (`168e5268f`), and policy-error translation (`d31a45773`). The
+last change passed seven PostgreSQL cases and 92 boundary checks. These are
+bounded results, not full-head qualification.
 
-1. Owner contracts/schema: exact identities, ART operation, TASK guard, accepted
-   authority, PRE evidence and database constraints.
-2. Streaming receipt, completion reconciliation, physical accounting and cleanup.
-3. One-session PRE, trusted defaults, isolation and provider substitution proof.
-4. Foreground T1–T4, exact replay and durable accepted receipt.
-5. Worker T5, recovery and existing POST dispatch.
-6. Single API/CLI/MCP mutation and truthful progress reads.
-7. Image cardinality, readiness, migration/cutover and integrated proof.
+## Remaining work, in execution order
 
-The user requires one PR for the complete work, with focused commits for each
-stage and end-to-end testing before requesting merge. Maintain the single
-WS-SUBMIT-001-01 change record as implementation proceeds. This explicit
-instruction supersedes the repository default of separate PRs per stage.
-Authorization covers the sequence; do not stop for intermediate merges or
-repeat discovery or verification without a relevant changed assumption.
+| Order | Required outcome | Concrete finishing evidence |
+| --- | --- | --- |
+| 1 | Integrate production source cleanup scheduling/startup and uncertain/unsealed reconciliation | Real worker callers of the cleanup owner; restart and repeated sweeps; interrupted multipart and lost acknowledgements; accepted/stalled source survives; confirmed cleanup releases charge once. |
+| 2 | Remove superseded preparation/submission writers and remaining consumers | Trace all remaining callers, preserve their distinct authority/history contracts, then delete obsolete implementation. Current T5 `create_accepted` remains. |
+| 3 | Complete native/runtime/provider and resource qualification | Actual Smol one-session/isolation proof; representative maxima, cold paths, concurrency and timing measurements; applicable AWS exact-version/uncertain multipart proof. Portable/MinIO evidence is insufficient for these claims. |
+| 4 | Execute final full-system verification and close the acceptance matrix | Full backend lanes, CLI/MCP contracts and CI at the final head; every A01–A35 row linked to an executed, scope-matching result. Fix actual failures without weakening requirements. |
+| 5 | Reconcile configuration and delivery documentation | Resolve C01–C07 using measured/approved values; update affected roadmap/overview/index and local spreadsheet exports; preserve the distinction between implemented, exposed and deployed. |
 
-## Acceptance tracking
+The concrete next runtime gap is order 1: the ART cleanup execution and provider
+factory exist, but the current production worker tree has no caller. Further
+optional test migration must not displace closing this integration.
 
-All integrated scenarios remain Planned. Contract unit tests do not complete
-them. Final evidence must name the executed test/drill and proved boundary.
+## Acceptance evidence still to close
 
-| Scenarios | Proof required | Disposition |
-|---|---|---|
-| A01–A03 | Public success and PRE failures | Planned |
-| A04–A08 | Replay, concurrency, interruptions and unknown commit | Planned |
-| A09–A13 | Worker recovery, authority and pending reads | Planned |
-| A14–A18 | Cleanup races, protection, versions and physical charges | Planned |
-| A19–A23 | Bounded ingress, framing, archives, identity and safe findings | Planned |
-| A24–A30 | Substitution, runtime isolation/recovery, capacity and adapters | Planned |
-| A31–A35 | Downstream behavior, migration, policy and clients | Planned |
+No row below is declared fully complete merely because some related tests pass.
+This is the final qualification queue, not a claim that all listed code is absent.
 
-## Configuration and reconciliation
+| IDs | Existing implementation/focused evidence | Required closure |
+| --- | --- | --- |
+| A01–A03 | Public ZIP flow, default/project PRE and formal finalization tests | Complete API/CLI journey with required real runtime and POST evidence. |
+| A04–A08 | Metadata/body replay, competing custody, interruption and T4 uncertainty tests | Reconcile exact cases and execute integrated final-head failure/retry matrix. |
+| A09–A13 | T5 rollback/redelivery, accepted authority, pending reads and old-POST guard | Real worker crash/broker-unavailable drill and final-head reconciliation. |
+| A14–A18 | Cleanup lock/retention/charge owners and Local/MinIO provider tests | Production sweeps, accepted-source survival, AWS versions and uncertain multipart ownership. |
+| A19–A23 | Streaming/framing, safe archives, semantic identity and bounded findings code/tests | Measured permitted maxima/slow-provider memory bounds and complete safety matrix. |
+| A24–A30 | Source/result/fence contracts and runtime/capacity/substitution tests | Actual native isolation/failure/cleanup, multiple replicas/nodes, saturation and adapter qualification. |
+| A31–A32 | Existing governed POST/revision/acceptance owners preserved with focused journeys | Final combined downstream tests, exact ContributionRecord/award facts, both review branches. |
+| A33–A35 | Retained migrations, cardinality guards and API/CLI/MCP cutover | Finish old-writer retirement and full current-head migration/client convergence proof. |
 
-C01–C07 remain unresolved as specified; fixtures are not approved deployment
-defaults. Current Caddy allows 16 KiB total headers; target packet text permits
-64 KiB each. Human-review execution remains unavailable in current main and is
-not delivered by preserving its guards.
+## Configuration and external evidence
 
-Initial main is `a4e485edea03db90c71189c51eac85cf4c3b1139`. The 14 commits after
-the spec baseline change deployment/identity, not submission owners. At initial
-intake, open PR #698 changed CLI preparation and #707 changed public access/profile
-behavior. Reconcile affected surfaces without modifying their branches.
+C01–C07 remain open until individually reconciled with the specification and
+actual deployment evidence. Test-only leases/profiles are not approved defaults.
+Current local inspection found no `/dev/kvm` or `smol` executable, so this host
+cannot currently provide the required native Smol qualification. AWS source
+qualification remains separate from MinIO and existing SHA-object activation.
+Request only concrete missing access or decisions after the corresponding drill
+and proposed values are prepared.
 
-PR #707 merged during the first change. Reconciled current main `94334ccf4`,
-including issuer-owned profile metadata, public Swagger and schema head 0068.
-Its roadmap paragraph is preserved; no new submission behavior was introduced.
-
-Real PostgreSQL, S3/MinIO and Smol proof is required where claimed. Request
-missing live access when a concrete drill is prepared. Historical old-flow
-drills cannot establish this implementation's completion.
+The full goal includes D01–D18, I01–I12, T1–T5 and A01–A35. A partial green
+suite, fixture capture, review approval or a single commit does not complete it.

@@ -95,7 +95,16 @@ async def _restore_historical_revision_rows(
     database_url: str, snapshot_name: str
 ) -> dict[str, object]:
     """Restore captured setup rows; this setup step is not a writer-guard proof."""
-    snapshot = _historical_revision_snapshots()[snapshot_name]
+    if snapshot_name == "0047_retained_cap_blocked":
+        archive = _REVISION_ARCHIVE.with_name("retained_cap_source.json.gz").read_bytes()
+        assert hashlib.sha256(archive).hexdigest() == "62f9ae1c767182e3c91dd705a0e282133b44e882921634f7fbc4a41ad3decbde"
+        body = json.loads(gzip.decompress(archive))
+        assert body["schema_version"] == "workstream.retained_cap_source.v1"
+        assert body["source_revision"] == "e2b926288899bcd9b05e1a560ec19b6bca8cfcfc"
+        snapshot = body["snapshot"]
+        assert snapshot["revision"] == "0047_revision_recovery"
+    else:
+        snapshot = _historical_revision_snapshots()[snapshot_name]
     return await _restore_validated_snapshot_rows(
         database_url,
         snapshot,
@@ -188,6 +197,7 @@ async def historical_revision_source(tmp_path, database_url, monkeypatch, snapsh
         )
         creation = seed["creation_request"]
         yield SimpleNamespace(
+            historical_seed=seed,
             factory=factory,
             engine=engine,
             request=SelectedPostSubmissionEvaluationRequest.model_validate_json(

@@ -17,29 +17,11 @@ manifest facts.
 
 ## Implementation snapshot
 
-This branch has tested internal source contracts/custody, physical reservations,
-bounded Local/MinIO streaming, foreground upload/lease owners, source-bound PRE
-contracts/runtime implementation, atomic T4 acceptance, T5 registration and
-source-backed POST. Controlled/portable PRE tests do not qualify native Smol;
-MinIO tests do not qualify AWS. Detailed evidence below belongs to its stated
-commit or worktree, not automatically to every later head.
-
-Finalization now has production OUTBOX registration and invocation fencing, with
-real PostgreSQL recovery proof. A dedicated local worker queue and internal
-authorized stall projection are implemented. Full Celery/provider execution,
-independent worker capacity and public progress/operator endpoints remain unfinished.
-Internal audited finalization recovery now reuses the existing Operator gate-repair
-action, preserves the original delivery and runs the same T5 under a live child lease.
-Private sealed-source cleanup claims, retention barriers and atomic charge-release
-custody are now implemented and database-tested. Cleanup claims and confirmations now require exact audited service decisions.
-Internal Local/S3 exact-generation deletion now composes committed audited claims
-with separately observed settlement and charge release. Local database/provider
-and MinIO protocol/principal tests cover that private path; native AWS cleanup is
-not qualified. Worker startup/scheduling and uncertain/unsealed reconciliation
-remain uncomposed.
-Remaining work includes durable-worker deployment, complete cleanup, public API/CLI/MCP
-cutover, real revision/review/ContributionRecord journeys, policy cardinality and
-the A01–A35/C01–C07 completion audit. No public end-to-end readiness is claimed.
+The current completion checklist and next blocking integration live in
+[OVERVIEW.md](OVERVIEW.md). This record retains chronological implementation and
+verification evidence; older entries are not the current work queue. Evidence
+belongs to its stated commit/worktree and provider, not automatically to later
+heads. The full specification remains unfinished.
 
 ## Original behavior being replaced
 
@@ -7735,3 +7717,77 @@ the isolated ART final-denial composition test, named old commit-race tests,
 and a real0047 cap-source fixture using replacement creation. Retire shared
 writer only with those contracts preserved, including historical-row proof;
 current create_accepted remains production T5. No new PR or merge request.
+
+Next bounded retirement removes live hidden-writer dependency from the retained
+0047 cap recovery fixture. Capture its genuine guarded v2 cap-blocked rows once
+at d31a45773, after null-only projections are removed and before current upgrade;
+retain checksum/provenance and capture source as non-executable documentation.
+Current test will restore exact predecessor rows, check guards and retained-row
+invariance through real upgrade, then exercise current recovery/replay/authority.
+Allowed: migration_revision_fixtures.py, test_revision_exhaustion_recovery.py,
+test_replacement_creation.py (only traced unused historical helpers), new
+checksum-bound cap archive/capture provenance under backend/tests/fixtures and
+this record; temporary capture test removed after run. No runtime, migration,
+policy or data deletion changes. Risk: retained history/security proof; required
+QA/test-delta and ARCH/SEC review, isolated cap recovery and neighboring upgrade
+control, Ruff/structure/record checks. Human focus: data snapshot is setup, not
+a fabricated current writer or a claim that rawZIP existed in0047. Preserve
+replay and revocation proof; incompatible retained policy must remain blocked
+under spec20.2 rather than silently relocked for a new successful submission.
+
+Capture V1 failed before producing rows: current ORM reads source_operation_id
+on genuine0047 admissions, where the column does not exist (204.29s; allcleanup).
+Use detached pre-cutover e2b926288899bcd9b05e1a560ec19b6bca8cfcfc owners for
+the one-time capture instead of extending current compatibility projections.
+Keep explicit historical0047 adaptations documented. No output from V1 credited.
+Captured invocation leases also cannot authorize future replay: restore uses
+current authorized delivery continuation rather than extending archived clocks.
+
+Extend allowed scope to test_alembic.py existing incompatible-policy helper:
+accept explicit initial-submission headers so cap reclaim reuses the same
+exact private-cardinality/HTTP/no-body/no-upload/rollback proof without copying
+it. Capture completes the known historical routing invocation with authorized
+RETRY before its lease expires (explicit test-only600s lease/1s backoff). Restore
+will claim the same event afresh through existing dispatcher authority; no
+archived lease extension, unsafe unknown replay or production registry change.
+
+Pinned capture V2 passed1 in134.47s, sourcee2b926288, schema0065 final receipt
+and complete cleanup (/tmp/submission-cap-capture-v2.log/.json). Archived rows
+are genuine0047 before upgrade,71nonempty tables/twoSubmissions, canonical v2
+ZIP hash/length verified and both object bytes retained. Source completion is
+retryable with RETRY_REQUESTED from actual authority. Archive SHA256
+62f9ae1c767182e3c91dd705a0e282133b44e882921634f7fbc4a41ad3decbde.
+Capture/provenance files retained under fixtures; no temporary current test.
+
+User requested correction of fragmented goal tracking. Replace the stale overview
+and duplicated implementation snapshot with one current completion checklist.
+This expands allowed documentation scope to OVERVIEW.md. Current source trace
+shows submission_source_cleanup_execution and its provider factory exist but
+have no production worker caller; close that runtime integration before further
+optional test migration. Preserve full A01–A35 and C01–C07 requirements.
+
+Current restore V1:2controls passed, cap fixture failed before recovery at strict
+UUID decoding of archived routing outcome (575.27s, schema0086, completecleanup).
+Use JSON-mode validation consistent with other archived Pydantic values. No
+migration/product defect or cap recovery pass claimed. Rerun only the failed
+cap case; unchanged assignment-backfill and retained-window controls remain valid.
+
+Cap V2 runner exited migration_failed before pytest, without migration output
+or metadata (metadata is written only after migration). No pass or receipt
+claimed. The runner reached normal cleanup without reporting a cleanup failure.
+Use isolated systemPython3.12.3 environment with the same existing dependency
+packages and faulthandler enabled for V3; the unchanged structure checker already
+passed on that interpreter after UV3.12.13 native crashes. No product/gate changes
+and no root-cause claim for the V2 setup failure. JSON-mode archive parsing also
+passed directly against the exact v2 Submission selector before the rerun.
+
+Cap restore V3 passed1 in123.38s under systemPython3.12.3, schema0086 and
+complete database/MinIO cleanup (/tmp/submission-cap-restore-v3.log/.json).
+Exact0047 restore/real upgrade/history invariance, recovery denial/rollback,
+one release, new assignment with incompatible-policy refusal, live invocation
+replay and revoked-service denial all executed. The two unchanged neighboring
+upgrade controls passed in V1. These are shared precommit proofs over d31a45773,
+not an independent final-head/native-provider/full-suite qualification.
+SystemPython full structure validation passed; Ruff, record, link and whitespace
+checks passed. Overview now checks this fixture cutover complete and puts the
+missing production source-cleanup integration first. Full goal remains active.

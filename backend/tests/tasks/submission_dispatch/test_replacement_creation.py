@@ -6,13 +6,11 @@ import pytest
 from sqlalchemy import func, select, text
 
 from app.adapters.checkers import evaluation_coordinator
-from app.api.deps.authorization import compose_hidden_submission_creation_command
 from app.core.identifiers import new_record_id
 from app.modules.artifacts.models import SubmissionBundleAdmission
 from app.modules.outbox.api import OutboxPersistenceError
 from app.modules.outbox.models import OutboxEvent
 from app.modules.tasks.api import (
-    SubmissionCreationRequest,
     TaskSubmissionContextUnavailable,
 )
 from app.modules.tasks.models import Submission, SubmissionDispatch
@@ -20,66 +18,9 @@ from app.modules.tasks.repository import TaskRepository
 from tests.checkers.post_submit.support import change_request
 from tests.tasks.post_submit_routing.remediation_support import remediation_source
 from tests.tasks.post_submit_routing.support import revision_archive
-from tests.tasks.submission_lineage_support import _verified_admission
 from tests.test_submission_predecessor_custody import (
     _fixture_revision_context,
-    _prepare,
-    _replacement_request,
 )
-
-
-async def _ready_replacement(h, data: bytes):
-    """Prepare once, then replay through the independent verifier to ready."""
-    idempotency_key = new_record_id()
-    request = _replacement_request(
-        h,
-        data,
-        predecessor_id=h.created.submission_id,
-        idempotency_key=idempotency_key,
-    )
-    prepared = await _prepare(h, request)
-    assert prepared.replayed is False
-    assert prepared.put_attempt_id is not None
-    assert prepared.admission_id is None
-    replay = _replacement_request(
-        h,
-        data,
-        predecessor_id=h.created.submission_id,
-        idempotency_key=idempotency_key,
-    )
-    admission_id = await _verified_admission(
-        h.factory,
-        h.store,
-        h.namespace,
-        h.settings,
-        h.actor_context,
-        replay,
-    )
-    return request, admission_id
-
-
-def _creation_request(h, prepared, admission_id):
-    return SubmissionCreationRequest(
-        task_id=h.request.task_id,
-        assignment_id=h.request.assignment_id,
-        contributor_id=h.actor_context.actor_profile_id,
-        predecessor_submission_id=h.created.submission_id,
-        admission_id=admission_id,
-        summary=prepared.summary,
-        contributor_attestation=prepared.contributor_attestation,
-    )
-
-
-async def _create(h, request, *, context=None, label=None):
-    async with h.factory() as session:
-        if label is not None:
-            session.info["replacement_creation_contender"] = label
-        return await compose_hidden_submission_creation_command(
-            session,
-            context or h.actor_context,
-            request_id=new_record_id(),
-            correlation_id=new_record_id(),
-        ).create(request)
 
 
 def _revision_command(h, root, data):

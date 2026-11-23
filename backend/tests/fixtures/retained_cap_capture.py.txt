@@ -1,0 +1,79 @@
+"""One-time capture of guarded historical cap source; not a current writer."""
+import base64
+import gzip
+import json
+from dataclasses import asdict, is_dataclass
+from pathlib import Path
+
+import asyncpg
+import pytest
+from pydantic import TypeAdapter
+
+from tests.tasks.submission_dispatch import test_revision_exhaustion_recovery as recovery
+
+pytestmark = pytest.mark.postgres_schema_contract
+
+
+def encoded(value):
+    if hasattr(value, 'model_dump'):
+        return value.model_dump(mode='json')
+    return TypeAdapter(dict).dump_python(asdict(value) if is_dataclass(value) else vars(value), mode='json')
+
+
+async def test_capture(isolated_database_env, tmp_path, migration_lock, monkeypatch):
+    from app.modules.outbox.api import DeliveryOptions, FinalizationCause
+    from tests.tasks.post_submit_routing import outcome_support
+    snapshot = {}
+    compose = outcome_support.outbox_delivery
+    def delivery(*args, **kwargs):
+        kwargs['options'] = DeliveryOptions(lease_seconds=600, handler_timeout_seconds=599,
+                                            retry_base_seconds=1, retry_cap_seconds=1)
+        return compose(*args, **kwargs)
+    monkeypatch.setattr(outcome_support, 'outbox_delivery', delivery)
+    fail_current = recovery._fail_current_submission
+    async def complete_for_retry(h, **kwargs):
+        routed = await fail_current(h, **kwargs)
+        receipt = await h.completion_delivery.finalize(h.envelope.claim, FinalizationCause.RETRY)
+        assert json.loads(receipt.outcome_json)['error_code'] == 'RETRY_REQUESTED'
+        return routed
+    monkeypatch.setattr(recovery, '_fail_current_submission', complete_for_retry)
+    leave = recovery.leave_predecessor_owner_shape
+
+    async def capture_after_leave(execute, database_url):
+        await leave(execute, database_url)
+        connection = await asyncpg.connect(database_url.replace('+asyncpg', ''))
+        try:
+            async with connection.transaction(isolation='repeatable_read', readonly=True):
+                assert await connection.fetchval('SHOW session_replication_role') == 'origin'
+                assert await connection.fetchval("SELECT count(*) FROM pg_trigger t JOIN pg_class c ON c.oid=t.tgrelid JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND NOT t.tgisinternal AND t.tgenabled NOT IN ('O','A')") == 0
+                snapshot['revision'] = await connection.fetchval('SELECT version_num FROM alembic_version')
+                assert snapshot['revision'] == '0047_revision_recovery'
+                snapshot['tables'] = {}
+                for row in await connection.fetch("SELECT tablename FROM pg_tables WHERE schemaname='public' ORDER BY tablename"):
+                    name = row['tablename']
+                    rows = json.loads(await connection.fetchval(f'SELECT coalesce(jsonb_agg(to_jsonb(r) ORDER BY to_jsonb(r)::text),\'[]\')::text FROM public."{name}" r'))
+                    if rows:
+                        snapshot['tables'][name] = rows
+                assert len(snapshot['tables']['submissions']) == 2
+                assert any(row['outcome'] == 'blocked' and row['blocked_reason'] == 'revision_limit_reached'
+                           and row['next_revision_round'] == 2 and row['max_revision_rounds'] == 1
+                           for row in snapshot['tables']['task_revision_preparations'])
+        finally:
+            await connection.close()
+
+    monkeypatch.setattr(recovery, 'leave_predecessor_owner_shape', capture_after_leave)
+    with migration_lock():
+        async with recovery._retained_cap_source(tmp_path, isolated_database_env, monkeypatch) as (h, routed, before):
+            snapshot['seed'] = {
+                'request': encoded(h.request), 'created': encoded(h.created),
+                'actor_context': encoded(h.actor_context), 'creation_request': encoded(h.creation_request),
+                'source': TypeAdapter(dict).dump_python(h.source, mode='json'),
+                'data_base64': base64.b64encode(h.data).decode(),
+                'envelope': encoded(h.envelope), 'routed': encoded(routed),
+                'objects': {ref: base64.b64encode(data).decode() for ref, data in h.store.objects.items()},
+            }
+    body = dict(schema_version='workstream.retained_cap_source.v1',
+                source_revision='e2b926288899bcd9b05e1a560ec19b6bca8cfcfc',
+                source_test='tests/tasks/submission_dispatch/test_revision_exhaustion_recovery.py::_retained_cap_source',
+                snapshot=snapshot)
+    Path('/tmp/retained-cap-source.json.gz').write_bytes(gzip.compress(json.dumps(body, sort_keys=True).encode(), mtime=0))
