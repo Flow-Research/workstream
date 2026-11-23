@@ -362,3 +362,30 @@ now documents only the dedicated credential file for this deployment path.
 App-only deployment integration retains direct-key mounts for API, worker and
 enabled model proxy while excluding them from Beat, MCP, parser and checker
 guests. Native checker custody stays exclusive to the single-host overlay.
+
+## Hosted migration evidence — 2026-11-23
+
+The cheaper t3.large app host runs PostgreSQL, Redis, Flow Identity, API, MCP,
+parser, model proxy, Celery worker and Beat. All nine containers report healthy;
+the hosted reconciliation and HTTPS ingress units are enabled. Existing accounts
+and database state were copied after stopping source writers. Source/target
+account, task, assignment and submission counts matched before qualification
+traffic. Redis SAVE was explicitly confirmed before its snapshot was copied.
+The final migration removed only the obsolete provider-proof tables.
+
+The same Elastic IP/public URLs now reach the new host. A real browser
+code/PKCE flow, discovery of 132 MCP tools, an authenticated profile tool call,
+and direct API login/profile access passed after cutover. Dedicated S3
+credentials passed synthetic create/full-byte readback and conditional-replay,
+overwrite, deletion, foreign-prefix and anonymous-access checks inside the API
+container. The old m7i.large is confirmed stopped; its volume remains available
+for recovery and is not claimed deleted. The new 100 GiB root volume has about
+91 GiB free.
+
+The app profile intentionally has no native checker socket or execution
+service. PRE remains unavailable and POST requests are excluded from ordinary
+delivery, as proved by the focused API/outbox tests. No live ZIP/checker journey
+or separate KVM host is claimed by this migration. Full hosted CI and human
+approval remain separate PR readiness requirements. A local Chrome process
+crashed before its first page; a clean rerun passed the complete public OAuth
+and MCP call. That failed attempt is not counted as successful evidence.

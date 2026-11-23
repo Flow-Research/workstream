@@ -385,7 +385,7 @@ The [app-only hosted profile](../deploy/hosted/README.md#app-host-without-kvm)
 can run core services and guide setup while checker execution is offline. ZIP
 preparation returns retryable unavailability, POST requests and reconciliation
 remain in PostgreSQL, and ordinary Celery delivery continues. Assembled split-host
-checker operation and live app-only deployment remain unqualified.
+checker operation remains unqualified. The operator app-only host is deployed; public identity login, API profile access, browser OAuth/PKCE and the MCP profile tool passed after migration.
 
 The [independent MCP package](../mcp_server/README.md) implements 132
 self-service, administrative access, actor/identity-lifecycle, project-shell,
@@ -571,8 +571,12 @@ The single-host checker deployment binds trusted intake and project execution
 to the existing native Smol node with private material paths and pinned image
 identities. Preflight establishes configuration and host prerequisites, not a
 completed live drill. Earlier certificate-based drills remain historical
-observations; direct-key cutover and the cheaper-host migration require fresh
-live qualification. Controlled drain/restart and ordinary isolated database
+observations. The 2026-11-23 app-host cutover preserved existing accounts and
+databases, retained the public URLs/Elastic IP, and verified dedicated-key
+S3 create/readback and overwrite/delete/foreign-prefix/anonymous denials from
+the deployed API container. The old compute instance is stopped. External
+checker execution is intentionally unavailable until a separate execution host
+is connected; this is not a new live contribution-journey qualification. Controlled drain/restart and ordinary isolated database
 restore previously preserved accepted pilot facts. Broader interruption and
 recovery scenarios remain separate release checks.
 
