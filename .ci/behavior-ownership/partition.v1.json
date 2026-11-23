@@ -34,6 +34,10 @@
     },
     {
       "group": "artifacts",
+      "target": "backend/app/adapters/artifacts/source_cleanup_worker.py"
+    },
+    {
+      "group": "artifacts",
       "target": "backend/app/adapters/artifacts/trusted_intake.py"
     },
     {
@@ -2613,6 +2617,14 @@
       "target": "backend/app/workers/revision_recovery.py"
     },
     {
+      "group": "shared",
+      "target": "backend/app/workers/source_cleanup.py"
+    },
+    {
+      "group": "shared",
+      "target": "backend/app/workers/source_cleanup_topology.py"
+    },
+    {
       "group": "lifecycle",
       "target": "backend/app/workers/task_settings.py"
     },
@@ -2773,7 +2785,7 @@
       "target": "backend/scripts/validate_test_lane_evidence.py"
     }
   ],
-  "authority_digest": "243abe36c015d6d06b7c114de7cb0c1d9104b69b75a4b3c059b114fab5b49880",
+  "authority_digest": "09e7f0ea136d434065582f1d4709092a27ad1b6f883768f26f055da52ffae5c8",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }

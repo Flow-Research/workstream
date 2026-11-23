@@ -8234,3 +8234,38 @@ The measured 0089 schema fingerprint is
 `fb82d1094faebbf8c2ae35a71987772af7cd2519944423b5ab91a6902e3c3580`.
 Scoped Ruff passed. Native AWS, genuine orphan reconciliation and full-system
 qualification are not established by these focused proofs.
+
+Clean 09701e433 scoped review: architecture/security/docs PASS and QA/test-delta
+PASS WITH LOW RISKS. Independent early-abort mutation failed the exact
+missing-handle test because the cross-session durable handle set was NULL
+(`/tmp/submission-observed-before-abort-qa-mutant.log/.json`, expected failure
+51.67s, 0089, complete cleanup). Structure, record, links and stale-doc gates
+passed. This closes the bounded implementation review, not the full goal.
+
+CI repair scope: a46c317a2 hosted preflight fails partition_target_mismatch;
+full collection fails on identical artifact/migration test basenames. Reproduced
+locally in `/tmp/submission-cleanup-partition-before.log` and
+`/tmp/submission-cleanup-collection-before.log`. Rename only the migration test
+and update its lane selector; add exactly the three existing cleanup modules to
+the current submission partition allowance and canonical partition, preserving
+its protected base and every prior target. Update the existing exact-additions
+negative test. Allowed files: that migration test, lane catalogue,
+behavior_ownership.py, partition.v1.json, test_behavior_ownership.py and this
+record. No workflow, skip, threshold or assertion weakening. Acceptance: full
+collection succeeds, partition validates against origin/main, arbitrary neighbor
+additions still fail and existing migration tests retain selection. Risk:
+CI selection; focused CI-integrity and QA/test-delta review required.
+
+Affected CI scope also includes test_ci_lane_catalogue.py: the existing family
+fingerprint predates five intentionally added shared cleanup test modules (four
+artifact controls and the cleanup migration). Reconcile its exact count/hash,
+without moving any existing test between families. Preserve negative controls.
+
+CI repair verification: exact partition and lane catalogue controls passed
+61 tests in 14.26s (`/tmp/submission-cleanup-ci-repair-tests-v2.log`), including
+refusal of unapproved additions/removals. Behavior ownership validation passed
+against origin/main (`/tmp/submission-cleanup-partition-after-v2.log`). The
+initial system-Python validation's secondary stale_catalogue_test error came
+from local plugin imports; no catalogue record was changed to suppress it.
+Ruff, Commitrail and whitespace checks passed. Full collection is checked
+separately; collection success is not execution of the full backend suite.
