@@ -199,19 +199,69 @@ async def test_sweep_fences_expired_foreground_without_releasing_source_charge(i
 
 
 async def test_busy_expired_task_defers_then_recovers_on_next_sweep(intake):
+    from types import SimpleNamespace
+    from app.core.identifiers import new_record_id
+    from tests.tasks.lineage_fixtures import seed_started_task_for_artifact_test
+    sealed_operation, _ = await sealed_local_source(intake)
+    await cleanup_fixtures.age_fixture(intake, sealed_operation, preserve_upload_deadline=True)
+    other = SimpleNamespace(**vars(intake))
+    other.task, other.assignment = new_record_id(), new_record_id()
+    async with intake.engine.begin() as connection:
+        project = await connection.scalar(text("SELECT project_id FROM workstream_tasks WHERE id=:id"), {"id": intake.task})
+        await seed_started_task_for_artifact_test(connection, dict(
+            task=str(other.task), assignment=str(other.assignment), project=str(project),
+            actor=str(intake.actor.actor_profile_id)))
     async with intake.factory.begin() as session:
-        row = await reserve(intake, session, with_upload=False)
+        row = await reserve(other, session, with_upload=False)
         operation = UUID(row.id)
     await cleanup_fixtures.age_fixture(intake, operation, preserve_upload_deadline=True)
     bounded = settings_for(intake).model_copy(update={"submission_source_cleanup_profile": {
-        "maximum_candidates": 10, "lease_seconds": 2, "run_seconds": 60,
+        "maximum_candidates": 10, "lease_seconds": 30, "run_seconds": 30,
     }})
     async with intake.factory.begin() as blocker:
-        await blocker.execute(text("SELECT id FROM workstream_tasks WHERE id=:id FOR UPDATE"), {"id": intake.task})
-        async with asyncio.timeout(10):
+        await blocker.execute(text("SELECT id FROM workstream_tasks WHERE id=:id FOR UPDATE"), {"id": other.task})
+        async with asyncio.timeout(40):
             result = await composition.sweep_sealed_submission_sources(intake.factory, bounded)
-        assert result["abandoned"] == 0 and result["timed_out"] is False
+        assert result["abandoned"] == 0 and result["timed_out"] is True
+        assert result["confirmed"] == 1
         assert await blocker.scalar(text("SELECT state FROM submission_intake_operations WHERE id=:id"),
                                     {"id": operation}) == "receiving"
     result = await composition.sweep_sealed_submission_sources(intake.factory, settings_for(intake))
     assert result["abandoned"] == 1 and result["confirmed"] == 0
+
+
+async def test_expired_recovery_rechecks_service_after_waiting_for_task(intake, monkeypatch):
+    from app.modules.artifacts.authorization import PreparedSubmissionSourceCleanupAuthorization
+    from app.modules.authorization.runtime import PreparedAuthorizationUnsupported
+    async with intake.factory.begin() as session:
+        row = await reserve(intake, session, with_upload=False)
+        operation = UUID(row.id)
+    await cleanup_fixtures.age_fixture(intake, operation, preserve_upload_deadline=True)
+    authorized = asyncio.Event()
+    original = PreparedSubmissionSourceCleanupAuthorization.authorize
+    calls = 0
+    async def observe_authorization(self):
+        nonlocal calls
+        await original(self)
+        calls += 1
+        if calls == 2:  # Discovery committed; this is the mutation root's preflight.
+            authorized.set()
+    monkeypatch.setattr(PreparedSubmissionSourceCleanupAuthorization, "authorize", observe_authorization)
+    recovery = None
+    try:
+        async with intake.factory.begin() as blocker:
+            await blocker.execute(text("SELECT id FROM workstream_tasks WHERE id=:id FOR UPDATE"), {"id": intake.task})
+            recovery = asyncio.create_task(composition.sweep_sealed_submission_sources(intake.factory, settings_for(intake)))
+            await asyncio.wait_for(authorized.wait(), timeout=10)
+            await service_link_state(intake.factory, ServiceIdentity.ARTIFACT_SOURCE_CLEANUP, active=False)
+            before = await state(intake)
+        with pytest.raises(PreparedAuthorizationUnsupported):
+            await asyncio.wait_for(recovery, timeout=10)
+        assert await state(intake) == before
+        async with intake.factory() as session:
+            assert str(await session.scalar(text("SELECT active_submission_operation_id FROM workstream_tasks WHERE id=:id"),
+                                            {"id": intake.task})) == str(operation)
+    finally:
+        if recovery is not None and not recovery.done():
+            recovery.cancel()
+            await asyncio.gather(recovery, return_exceptions=True)

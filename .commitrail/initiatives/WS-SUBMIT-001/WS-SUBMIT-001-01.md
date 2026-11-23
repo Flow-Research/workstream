@@ -7929,3 +7929,40 @@ change, new worker queue, PRE retry or source-charge release was introduced.
 These proofs do not implement or qualify unsealed-byte reclamation. The periodic
 caller is explicitly the existing12-hour sweep; prompt runtime reaping remains
 separate. Required focused review follows against the clean candidate.
+
+Review of9d0e56f30 found a liveness issue: a blocked expired operation can consume
+the whole run envelope before sealed work starts. Repair reserves half the
+existing run envelope for foreground recovery, leaving sealed processing time;
+no new deployment setting or queue. The held-lock test now includes an unrelated
+aged sealed source and equal operation/run limits. QA-EXPIRED-001 also requests
+a discriminating real PostgreSQL race: authorize discovery, block mutation on
+TASK, revoke cleanup service, release TASK, and prove operation/generation/charge
+and task pointer unchanged. Both findings are accepted and repaired together.
+
+Unsealed-path inspection, for continuation: current charge_shape requires
+sealed_at even for released charges, so partial-source release needs an explicit
+SQL/owner extension, never a fabricated seal. Reuse the existing cleanup claim
+and authority mechanism with a typed unsealed target. An absent initiation
+receipt, checked under operation custody, proves foreground never obtained write
+permission; a receipt with uncertain
+begin requires scoped handle discovery and settlement; committed EOF permits
+exact completion observation. An observed completed version must become a durable
+exact cleanup target before deletion, with fresh age protection for late writes.
+Local can settle partial writers under its existing operation lock and retained
+abort tombstone. S3 abort acknowledgement or one empty observation is insufficient
+for writes_settled. Preserve conservative charge for unresolved remote outcomes.
+This is implementation guidance, not completed reconciliation or provider proof.
+
+Repair proof: the held-TASK/unrelated-sealed regression failed against9d0e56f30
+with confirmed0 rather than1 in58.98s. With half-envelope recovery isolation,
+both foreground phase controls and the contention regression passed in the
+four-case repair run. Its revocation case reached the correct authorization
+denial but expected the wrong exception class; fixed the test to expect the
+actual PreparedAuthorizationUnsupported boundary. Exact revocation replay passed
+in24.31s and checked unchanged operation/generation/charge/audit state plus the
+original task pointer. Logs: /tmp/submission-expired-starvation-before.log/.json,
+/tmp/submission-expired-repair.log/.json (3 pass,1 expected-error mismatch), and
+/tmp/submission-expired-revocation.log/.json (1 pass). All isolated receipts report
+schema0087 and completed cleanup. System-Python structure validation passed after
+the repair; Ruff, record/link and whitespace checks passed. No production denial
+was suppressed or broadened to satisfy the test. Clean review replay follows.

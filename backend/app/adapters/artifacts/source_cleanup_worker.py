@@ -51,8 +51,14 @@ async def sweep_sealed_submission_sources(sessions, settings):
     candidates, confirmed, timed_out, provider, abandoned = (), 0, False, None, 0
     try:
         async with asyncio.timeout(profile.run_seconds):
-            abandoned = await abandon_expired_submission_foregrounds(
-                sessions, namespace, profile.maximum_candidates, operation_timeout_seconds=profile.lease_seconds)
+            try:
+                # Reserve at least half the envelope for sealed sources even
+                # when expired foreground custody is blocked on a TASK lock.
+                async with asyncio.timeout(profile.run_seconds / 2):
+                    abandoned = await abandon_expired_submission_foregrounds(
+                        sessions, namespace, profile.maximum_candidates, operation_timeout_seconds=profile.lease_seconds)
+            except TimeoutError:
+                timed_out = True
             candidates = await submission_source_cleanup_candidates(sessions, namespace, profile.maximum_candidates)
             if candidates:
                 provider = create_submission_source_cleanup_provider(

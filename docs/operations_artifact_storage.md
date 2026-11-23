@@ -280,7 +280,9 @@ expired receiving/PRE operations, rechecking each under its task lock and curren
 service authority. This clears only the old operation's task pointer; it neither
 resumes PRE nor releases storage charges. Live and accepted operations remain
 protected. Recovery uses the sweep's explicit page/run limits and bounds each
-attempt by the configured lease interval. This is periodic foreground recovery,
+attempt by the configured lease interval. Foreground recovery can use at most
+half the run envelope, preserving time for unrelated sealed cleanup even when a
+task lock is held. This is periodic foreground recovery,
 not the prompt runtime-session reaper. Sources must have been both sealed
 and terminal for at least two hours. Candidate discovery grants no deletion
 permission: the existing owner locks task/source custody, rejects accepted or
