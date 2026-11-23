@@ -332,7 +332,7 @@ async def _storage_case(tmp_path, database_url, monkeypatch) -> AsyncIterator[_S
             "artifact_scratch_minimum_free_bytes": 0,
         }
     )
-    bootstrap = create_artifact_store_bootstrap(settings, activation_guard=None)
+    bootstrap = create_artifact_store_bootstrap(settings)
     namespace = artifact_storage_namespace_spec(settings, bootstrap)
     store = bootstrap.initialize_after_namespace_claim(
         ArtifactStoreNamespaceClaim(

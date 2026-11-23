@@ -129,3 +129,14 @@ Admin API scope endpoints and issuer revocation before Garden disconnect succeed
 Prove revoking a credential after concurrent rotation invalidates its successor;
 retain retryable connection custody when the issuer is unavailable. Do not apply
 persistent hosted grants until these checks pass.
+
+## Operator-directed delivery consolidation
+
+Keep identity onboarding, the cheaper app-only hosted deployment, and removal
+of certificate/expiring-proof S3 dependencies in one delivery PR. The bounded
+hosting and storage contracts remain in their existing change records; they
+are implementation scopes within this delivery, not separate merge gates.
+Preserve identity accounts, database state and public URLs during migration.
+Verify login/API/MCP and unavailable checker behavior before moving the Elastic
+IP and stopping the old host. Separate KVM execution qualification remains an
+explicit follow-up boundary, not a claim made by app-only startup.

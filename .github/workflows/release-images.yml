@@ -72,8 +72,8 @@ jobs:
           (
             cd backend
             .venv/bin/python -m pytest -q \
-              tests/test_config.py::test_aws_s3_requires_every_exact_activation_binding \
-              tests/test_config.py::test_aws_factory_fails_with_live_proof_before_constructing_provider
+              tests/test_config.py::test_aws_s3_settings_fail_closed \
+              tests/test_aws_direct_user_credentials.py
           )
           backend/.venv/bin/python -m unittest -v \
             scripts.test_hosted_release_config scripts.test_hosted_release_images \

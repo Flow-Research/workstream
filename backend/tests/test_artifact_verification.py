@@ -21,7 +21,6 @@ import app.modules.artifacts.service as artifact_service
 from app.adapters.artifacts.local import LocalStorageAdapter, LocalStorageBootstrap
 from app.core.config import Settings, get_settings
 from app.interfaces.artifacts import (
-    ArtifactProviderOperationEvidence,
     ArtifactStoreNamespaceClaim,
 )
 from app.modules.actors.api import ServiceIdentity
@@ -760,7 +759,6 @@ async def test_complete_read_uses_total_deadline_for_progressing_stream() -> Non
     with pytest.raises(TimeoutError):
         await orchestrator._read_complete(
             "sha256/" + "a" * 64,
-            operation_evidence=ArtifactProviderOperationEvidence(),
         )
 
 

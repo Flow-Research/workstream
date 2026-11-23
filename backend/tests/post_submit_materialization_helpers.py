@@ -16,7 +16,6 @@ from app.api.deps.authorization import compose_hidden_submission_creation_comman
 from app.core.identifiers import new_record_id
 from app.interfaces.artifacts import (
     ArtifactByteRange,
-    ArtifactProviderOperationEvidence,
     ArtifactStoreNamespaceClaim,
 )
 from app.modules.artifacts.api import SubmissionBundlePreparationRequest
@@ -52,14 +51,11 @@ class CountedStore:
         self,
         reference: str,
         byte_range: ArtifactByteRange | None = None,
-        *,
-        operation_evidence: ArtifactProviderOperationEvidence | None = None,
     ):
         self.opens.append(reference)
         return self.wrapped.open(
             reference,
             byte_range,
-            operation_evidence=operation_evidence,
         )
 
 
@@ -156,7 +152,7 @@ def _material_storage(tmp_path, provider, storage_settings, scratch_limits, post
                 "external_checker_material_root": tmp_path / "scratch",
             }
         )
-    bootstrap = create_artifact_store_bootstrap(settings, activation_guard=None)
+    bootstrap = create_artifact_store_bootstrap(settings)
     namespace = artifact_storage_namespace_spec(settings, bootstrap)
     store = bootstrap.initialize_after_namespace_claim(
         ArtifactStoreNamespaceClaim(

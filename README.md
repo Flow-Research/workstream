@@ -406,19 +406,13 @@ and the same private bucket.
 The repository-managed MinIO port is bound to host loopback. A Workstream
 process running on a separate non-production container network may instead use
 an operator-controlled private MinIO endpoint; that remains development/test
-protocol proof and never qualifies as hosted-provider activation evidence.
-Native AWS S3 uses exact release, namespace, role/policy, reviewed role-trust
-policy digest and bucket-policy bindings. API, Celery task-process and Beat
-startup require a matching fresh immutable three-probe activation. The adapter
-also reloads that activation before every
-AWS SDK call and before committing provider-derived terminal facts. Missing,
-stale or mismatched proof fails with `artifact_provider_live_proof_required`
-before credential probing or provider I/O. See the
-[artifact storage operations runbook](docs/operations_artifact_storage.md);
-repository code and MinIO tests alone do not establish live AWS readiness.
-For a host outside AWS compute, the [Roles Anywhere setup guide](docs/operations_aws_roles_anywhere.md)
-uses dedicated certificate identities and generated configuration for the same
-S3 upload, download and assigned guide-document access paths.
+protocol verification and does not establish live AWS readiness.
+Hosted AWS uses a dedicated restricted IAM-user credential, with private file
+mounts and no ambient credential fallback. No recurring database activation or
+certificate renewal is required. Namespace ownership, authorization, conditional
+writes and full-byte readback still protect uploaded and downloaded artifacts.
+See [S3 credential setup](docs/operations_aws_s3_credentials.md) and the
+[storage operations runbook](docs/operations_artifact_storage.md).
 
 The local development URL uses the password and PostgreSQL host port selected
 in the ignored environment files:

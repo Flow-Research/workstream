@@ -1,53 +1,32 @@
 name: ${COMPOSE_PROJECT_NAME:?set COMPOSE_PROJECT_NAME in the release environment file}
 
 x-backend-environment: &backend-environment
+  WORKSTREAM_HOSTED_PROFILE: ${WORKSTREAM_HOSTED_PROFILE:-single-host}
   WORKSTREAM_ARTIFACT_ADMISSION_DEPLOYMENT_MAXIMUM_BYTES: "4294967296"
   WORKSTREAM_ARTIFACT_ADMISSION_PRODUCER_MAXIMUM_BYTES: "268435456"
   WORKSTREAM_ARTIFACT_ADMISSION_PROJECT_MAXIMUM_BYTES: "1073741824"
   WORKSTREAM_ARTIFACT_ADMISSION_TASK_MAXIMUM_BYTES: "67108864"
   WORKSTREAM_RELEASE_ID: ${WORKSTREAM_RELEASE_ID:?set the immutable release digest}
   WORKSTREAM_ARTIFACT_S3_ADDRESSING_STYLE: virtual
-  WORKSTREAM_ARTIFACT_S3_AWS_WORKLOAD_IDENTITY_METHOD: ${WORKSTREAM_ARTIFACT_S3_AWS_WORKLOAD_IDENTITY_METHOD:?set the approved workload identity method}
-  WORKSTREAM_ARTIFACT_S3_BOOTSTRAP_PRINCIPAL_ARN: ${WORKSTREAM_ARTIFACT_S3_BOOTSTRAP_PRINCIPAL_ARN:?set the exact bootstrap principal ARN}
   WORKSTREAM_ARTIFACT_S3_BUCKET: ${WORKSTREAM_ARTIFACT_S3_BUCKET:?set the private AWS S3 bucket}
-  WORKSTREAM_ARTIFACT_S3_BUCKET_POLICY_SHA256: ${WORKSTREAM_ARTIFACT_S3_BUCKET_POLICY_SHA256:?set the exact bucket policy digest}
   WORKSTREAM_ARTIFACT_S3_CONNECT_TIMEOUT_SECONDS: ${WORKSTREAM_ARTIFACT_S3_CONNECT_TIMEOUT_SECONDS:?set the measured S3 connect timeout}
-  WORKSTREAM_ARTIFACT_S3_CREDENTIAL_MODE: aws_workload_identity
-  WORKSTREAM_ARTIFACT_S3_NEGATIVE_ROLE_ARN: ${WORKSTREAM_ARTIFACT_S3_NEGATIVE_ROLE_ARN:?set the exact negative-proof role ARN}
-  WORKSTREAM_ARTIFACT_S3_NEGATIVE_TRUST_POLICY_SHA256: ${WORKSTREAM_ARTIFACT_S3_NEGATIVE_TRUST_POLICY_SHA256:?set the exact negative-proof trust policy digest}
+  WORKSTREAM_ARTIFACT_S3_CREDENTIAL_MODE: aws_access_key
   WORKSTREAM_ARTIFACT_S3_OPERATION_TOTAL_TIMEOUT_SECONDS: ${WORKSTREAM_ARTIFACT_S3_OPERATION_TOTAL_TIMEOUT_SECONDS:?set the measured total S3 operation timeout}
   WORKSTREAM_ARTIFACT_S3_POOL_TIMEOUT_SECONDS: ${WORKSTREAM_ARTIFACT_S3_POOL_TIMEOUT_SECONDS:?set the measured S3 pool timeout}
   WORKSTREAM_ARTIFACT_S3_PRIVATE_PREFIX: ${WORKSTREAM_ARTIFACT_S3_PRIVATE_PREFIX:?set the private artifact prefix}
   WORKSTREAM_ARTIFACT_S3_PROVIDER_PROFILE: aws_s3
-  WORKSTREAM_ARTIFACT_S3_READINESS_POLICY_ARN: ${WORKSTREAM_ARTIFACT_S3_READINESS_POLICY_ARN:?set the exact readiness policy ARN}
-  WORKSTREAM_ARTIFACT_S3_READINESS_ROLE_ARN: ${WORKSTREAM_ARTIFACT_S3_READINESS_ROLE_ARN:?set the exact readiness role ARN}
-  WORKSTREAM_ARTIFACT_S3_READINESS_TRUST_POLICY_SHA256: ${WORKSTREAM_ARTIFACT_S3_READINESS_TRUST_POLICY_SHA256:?set the exact readiness trust policy digest}
   WORKSTREAM_ARTIFACT_S3_READ_TIMEOUT_SECONDS: ${WORKSTREAM_ARTIFACT_S3_READ_TIMEOUT_SECONDS:?set the measured S3 read timeout}
   WORKSTREAM_ARTIFACT_S3_REGION: ${WORKSTREAM_ARTIFACT_S3_REGION:?set the AWS region}
-  WORKSTREAM_ARTIFACT_S3_ROLES_ANYWHERE_CERTIFICATE_FILE: /run/workstream-roles-anywhere/certificate.pem
-  WORKSTREAM_ARTIFACT_S3_ROLES_ANYWHERE_PRIVATE_KEY_FILE: /run/workstream-roles-anywhere/private-key.pem
-  WORKSTREAM_ARTIFACT_S3_ROLES_ANYWHERE_PROFILE_ARN: ${WORKSTREAM_ARTIFACT_S3_ROLES_ANYWHERE_PROFILE_ARN:?set the exact Roles Anywhere profile ARN}
-  WORKSTREAM_ARTIFACT_S3_ROLES_ANYWHERE_PROFILE_SHA256: ${WORKSTREAM_ARTIFACT_S3_ROLES_ANYWHERE_PROFILE_SHA256:?set the canonical Roles Anywhere profile digest}
-  WORKSTREAM_ARTIFACT_S3_ROLES_ANYWHERE_ROLE_ARN: ${WORKSTREAM_ARTIFACT_S3_RUNTIME_ROLE_ARN:?set the exact runtime role ARN}
-  WORKSTREAM_ARTIFACT_S3_ROLES_ANYWHERE_TRUST_ANCHOR_ARN: ${WORKSTREAM_ARTIFACT_S3_ROLES_ANYWHERE_TRUST_ANCHOR_ARN:?set the exact Roles Anywhere trust anchor ARN}
-  WORKSTREAM_ARTIFACT_S3_ROLES_ANYWHERE_TRUST_ANCHOR_SHA256: ${WORKSTREAM_ARTIFACT_S3_ROLES_ANYWHERE_TRUST_ANCHOR_SHA256:?set the canonical Roles Anywhere trust anchor digest}
-  WORKSTREAM_ARTIFACT_S3_RUNTIME_POLICY_ARN: ${WORKSTREAM_ARTIFACT_S3_RUNTIME_POLICY_ARN:?set the exact runtime policy ARN}
-  WORKSTREAM_ARTIFACT_S3_RUNTIME_ROLE_ARN: ${WORKSTREAM_ARTIFACT_S3_RUNTIME_ROLE_ARN:?set the exact runtime role ARN}
-  WORKSTREAM_ARTIFACT_S3_RUNTIME_TRUST_POLICY_SHA256: ${WORKSTREAM_ARTIFACT_S3_RUNTIME_TRUST_POLICY_SHA256:?set the exact runtime trust policy digest}
+  WORKSTREAM_ARTIFACT_S3_RUNTIME_USER_ARN: ${WORKSTREAM_ARTIFACT_S3_RUNTIME_USER_ARN:?set the exact runtime IAM user ARN}
   WORKSTREAM_ARTIFACT_S3_WRITE_TIMEOUT_SECONDS: ${WORKSTREAM_ARTIFACT_S3_WRITE_TIMEOUT_SECONDS:?set the measured S3 write timeout}
   WORKSTREAM_ARTIFACT_SCRATCH_ROOT: ${WORKSTREAM_DEPLOYMENT_ROOT:-/var/lib/workstream}/scratch
   WORKSTREAM_ARTIFACT_PREPARATION_TOTAL_DEADLINE_SECONDS: ${WORKSTREAM_ARTIFACT_PREPARATION_TOTAL_DEADLINE_SECONDS:?set the artifact preparation deadline}
-  WORKSTREAM_ARTIFACT_INTAKE_SERVICE_SOCKET: ${WORKSTREAM_DEPLOYMENT_ROOT:-/var/lib/workstream}/checker-runtime/checker.sock
-  WORKSTREAM_ARTIFACT_INTAKE_IMAGE_DIGEST: ${WORKSTREAM_ARTIFACT_INTAKE_IMAGE_DIGEST:?set the pinned trusted intake image digest}
-  WORKSTREAM_ARTIFACT_INTAKE_CONFIG_DIGEST: ${WORKSTREAM_ARTIFACT_INTAKE_CONFIG_DIGEST:?set the pinned trusted intake config digest}
   WORKSTREAM_ARTIFACT_STORE_BACKEND: s3_compatible
   WORKSTREAM_ARTIFACT_COMPLETE_READ_DEADLINE_SECONDS: ${WORKSTREAM_ARTIFACT_COMPLETE_READ_DEADLINE_SECONDS:?set the measured complete-read deadline}
   WORKSTREAM_ARTIFACT_TERMINAL_PERSISTENCE_MARGIN_SECONDS: ${WORKSTREAM_ARTIFACT_TERMINAL_PERSISTENCE_MARGIN_SECONDS:?set the measured terminal persistence margin}
   WORKSTREAM_AUTH_PROVIDER: flow
   WORKSTREAM_DEBUG: "false"
   WORKSTREAM_ENVIRONMENT: production
-  WORKSTREAM_EXTERNAL_CHECKER_MATERIAL_ROOT: ${WORKSTREAM_DEPLOYMENT_ROOT:-/var/lib/workstream}/scratch
-  WORKSTREAM_EXTERNAL_CHECKER_SERVICE_SOCKET: ${WORKSTREAM_DEPLOYMENT_ROOT:-/var/lib/workstream}/checker-runtime/checker.sock
   WORKSTREAM_OBSERVABILITY_LOG_LEVEL: ${WORKSTREAM_OBSERVABILITY_LOG_LEVEL:-INFO}
   WORKSTREAM_OBSERVABILITY_OTLP_ENDPOINT: ${WORKSTREAM_OBSERVABILITY_OTLP_ENDPOINT:-}
   WORKSTREAM_OBSERVABILITY_TRACE_SAMPLE_RATIO: ${WORKSTREAM_OBSERVABILITY_TRACE_SAMPLE_RATIO:-0.1}
@@ -84,24 +63,6 @@ x-backend-runtime: &backend-runtime
   security_opt: [no-new-privileges:true]
   tmpfs:
     - /tmp:mode=0700,uid=${WORKSTREAM_RUNTIME_UID},gid=${WORKSTREAM_RUNTIME_GID}
-
-x-proof-environment: &proof-environment
-  <<: *backend-environment
-  WORKSTREAM_RELEASE_ROLE: proof
-  WORKSTREAM_DATABASE_URL_FILE: /run/secrets/database_url
-
-x-proof-job: &proof-job
-  <<: *backend-runtime
-  pull_policy: never
-  profiles: [aws-proof]
-  environment: *proof-environment
-  secrets:
-    - source: database_url
-      target: database_url
-      uid: "${WORKSTREAM_RUNTIME_UID}"
-      gid: "${WORKSTREAM_RUNTIME_GID}"
-      mode: 0400
-  command: [/bin/false]
 
 services:
   guide-document-parser:
@@ -151,6 +112,7 @@ services:
       WORKSTREAM_CELERY_BROKER_URL_FILE: /run/secrets/celery_broker_url
       WORKSTREAM_API_RATE_LIMIT_KEY_SECRET_FILE: /run/secrets/api_rate_limit_key
       WORKSTREAM_PAGINATION_CURSOR_HMAC_SECRET_FILE: /run/secrets/pagination_cursor_hmac
+      WORKSTREAM_ARTIFACT_S3_DIRECT_USER_CREDENTIAL_FILE: /run/workstream-artifact-credentials/aws-access-key.json
     secrets:
       - source: database_url
         target: database_url
@@ -188,16 +150,8 @@ services:
         source: ${WORKSTREAM_DEPLOYMENT_ROOT:-/var/lib/workstream}/scratch
         target: ${WORKSTREAM_DEPLOYMENT_ROOT:-/var/lib/workstream}/scratch
       - type: bind
-        source: ${WORKSTREAM_DEPLOYMENT_ROOT:-/var/lib/workstream}/checker-runtime
-        target: ${WORKSTREAM_DEPLOYMENT_ROOT:-/var/lib/workstream}/checker-runtime
-        read_only: true
-      - type: bind
-        source: ${WORKSTREAM_ARTIFACT_S3_ROLES_ANYWHERE_RUNTIME_CERTIFICATE_HOST_FILE:?set the private runtime certificate path}
-        target: /run/workstream-roles-anywhere/certificate.pem
-        read_only: true
-      - type: bind
-        source: ${WORKSTREAM_ARTIFACT_S3_ROLES_ANYWHERE_RUNTIME_PRIVATE_KEY_HOST_FILE:?set the private runtime key path}
-        target: /run/workstream-roles-anywhere/private-key.pem
+        source: ${WORKSTREAM_ARTIFACT_S3_DIRECT_USER_CREDENTIAL_HOST_FILE:?set the private AWS access-key file path}
+        target: /run/workstream-artifact-credentials/aws-access-key.json
         read_only: true
     restart: on-failure:5
     stop_grace_period: 30s
@@ -216,6 +170,7 @@ services:
       WORKSTREAM_DATABASE_URL_FILE: /run/secrets/database_url
       WORKSTREAM_CELERY_BROKER_URL_FILE: /run/secrets/celery_broker_url
       WORKSTREAM_GUIDE_DOCUMENT_PARSER_SOCKET: ${WORKSTREAM_DEPLOYMENT_ROOT:-/var/lib/workstream}/guide-runtime/guide.sock
+      WORKSTREAM_ARTIFACT_S3_DIRECT_USER_CREDENTIAL_FILE: /run/workstream-artifact-credentials/aws-access-key.json
     secrets:
       - source: database_url
         target: database_url
@@ -244,20 +199,12 @@ services:
         source: ${WORKSTREAM_DEPLOYMENT_ROOT:-/var/lib/workstream}/scratch
         target: ${WORKSTREAM_DEPLOYMENT_ROOT:-/var/lib/workstream}/scratch
       - type: bind
-        source: ${WORKSTREAM_DEPLOYMENT_ROOT:-/var/lib/workstream}/checker-runtime
-        target: ${WORKSTREAM_DEPLOYMENT_ROOT:-/var/lib/workstream}/checker-runtime
-        read_only: true
-      - type: bind
         source: ${WORKSTREAM_DEPLOYMENT_ROOT:-/var/lib/workstream}/guide-runtime
         target: ${WORKSTREAM_DEPLOYMENT_ROOT:-/var/lib/workstream}/guide-runtime
         read_only: true
       - type: bind
-        source: ${WORKSTREAM_ARTIFACT_S3_ROLES_ANYWHERE_RUNTIME_CERTIFICATE_HOST_FILE:?set the private runtime certificate path}
-        target: /run/workstream-roles-anywhere/certificate.pem
-        read_only: true
-      - type: bind
-        source: ${WORKSTREAM_ARTIFACT_S3_ROLES_ANYWHERE_RUNTIME_PRIVATE_KEY_HOST_FILE:?set the private runtime key path}
-        target: /run/workstream-roles-anywhere/private-key.pem
+        source: ${WORKSTREAM_ARTIFACT_S3_DIRECT_USER_CREDENTIAL_HOST_FILE:?set the private AWS access-key file path}
+        target: /run/workstream-artifact-credentials/aws-access-key.json
         read_only: true
     depends_on:
       api:
@@ -282,6 +229,7 @@ services:
       WORKSTREAM_RELEASE_ROLE: model-proxy
       WORKSTREAM_DATABASE_URL_FILE: /run/secrets/database_url
       WORKSTREAM_CHECKER_MODEL_PROXY_SOCKET: ${WORKSTREAM_DEPLOYMENT_ROOT:-/var/lib/workstream}/model-runtime/model.sock
+      WORKSTREAM_ARTIFACT_S3_DIRECT_USER_CREDENTIAL_FILE: /run/workstream-artifact-credentials/aws-access-key.json
     secrets:
       - source: database_url
         target: database_url
@@ -297,12 +245,8 @@ services:
         source: ${WORKSTREAM_DEPLOYMENT_ROOT:-/var/lib/workstream}/model-runtime
         target: ${WORKSTREAM_DEPLOYMENT_ROOT:-/var/lib/workstream}/model-runtime
       - type: bind
-        source: ${WORKSTREAM_ARTIFACT_S3_ROLES_ANYWHERE_RUNTIME_CERTIFICATE_HOST_FILE:?set the private runtime certificate path}
-        target: /run/workstream-roles-anywhere/certificate.pem
-        read_only: true
-      - type: bind
-        source: ${WORKSTREAM_ARTIFACT_S3_ROLES_ANYWHERE_RUNTIME_PRIVATE_KEY_HOST_FILE:?set the private runtime key path}
-        target: /run/workstream-roles-anywhere/private-key.pem
+        source: ${WORKSTREAM_ARTIFACT_S3_DIRECT_USER_CREDENTIAL_HOST_FILE:?set the private AWS access-key file path}
+        target: /run/workstream-artifact-credentials/aws-access-key.json
         read_only: true
     restart: on-failure:5
     stop_grace_period: 7320s
@@ -352,51 +296,6 @@ services:
       timeout: 5s
       retries: 6
       start_period: 20s
-
-  aws-proof-runtime:
-    <<: *proof-job
-    volumes:
-      - type: bind
-        source: ${WORKSTREAM_ARTIFACT_S3_ROLES_ANYWHERE_RUNTIME_CERTIFICATE_HOST_FILE:?set the private runtime proof certificate path}
-        target: /run/workstream-roles-anywhere/certificate.pem
-        read_only: true
-      - type: bind
-        source: ${WORKSTREAM_ARTIFACT_S3_ROLES_ANYWHERE_RUNTIME_PRIVATE_KEY_HOST_FILE:?set the private runtime proof key path}
-        target: /run/workstream-roles-anywhere/private-key.pem
-        read_only: true
-
-  aws-proof-readiness:
-    <<: *proof-job
-    environment:
-      <<: *proof-environment
-      WORKSTREAM_ARTIFACT_S3_ROLES_ANYWHERE_ROLE_ARN: ${WORKSTREAM_ARTIFACT_S3_READINESS_ROLE_ARN:?set the exact readiness role ARN}
-    volumes:
-      - type: bind
-        source: ${WORKSTREAM_ARTIFACT_S3_ROLES_ANYWHERE_READINESS_CERTIFICATE_HOST_FILE:?set the private readiness proof certificate path}
-        target: /run/workstream-roles-anywhere/certificate.pem
-        read_only: true
-      - type: bind
-        source: ${WORKSTREAM_ARTIFACT_S3_ROLES_ANYWHERE_READINESS_PRIVATE_KEY_HOST_FILE:?set the private readiness proof key path}
-        target: /run/workstream-roles-anywhere/private-key.pem
-        read_only: true
-
-  aws-proof-negative:
-    <<: *proof-job
-    environment:
-      <<: *proof-environment
-      WORKSTREAM_ARTIFACT_S3_ROLES_ANYWHERE_ROLE_ARN: ${WORKSTREAM_ARTIFACT_S3_NEGATIVE_ROLE_ARN:?set the exact negative-proof role ARN}
-    volumes:
-      - type: bind
-        source: ${WORKSTREAM_ARTIFACT_S3_ROLES_ANYWHERE_NEGATIVE_CERTIFICATE_HOST_FILE:?set the private negative proof certificate path}
-        target: /run/workstream-roles-anywhere/certificate.pem
-        read_only: true
-      - type: bind
-        source: ${WORKSTREAM_ARTIFACT_S3_ROLES_ANYWHERE_NEGATIVE_PRIVATE_KEY_HOST_FILE:?set the private negative proof key path}
-        target: /run/workstream-roles-anywhere/private-key.pem
-        read_only: true
-
-  aws-proof-coordinate:
-    <<: *proof-job
 
 secrets:
   database_url:

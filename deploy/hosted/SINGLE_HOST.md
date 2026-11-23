@@ -104,18 +104,17 @@ Public participant access requires DNS and a trusted public certificate. The
 documented private access profile remains suitable only for authorized operators;
 never disable TLS verification to bypass missing DNS.
 
-Prepare the existing scoped AWS identities, certificate files and S3 configuration
-using the [AWS runbook](../../docs/operations_aws_roles_anywhere.md). Retain the
-bucket and its immutable objects during a compute rebuild. Install the native
-node configuration, pinned cache and systemd unit using the canonical node
-instructions. Keep private credentials out of the checker guests.
+Prepare the dedicated S3 credential using the
+[S3 runbook](../../docs/operations_aws_s3_credentials.md). Retain the bucket
+and its immutable objects during a compute rebuild. Install the native node
+configuration, pinned cache and systemd unit using the canonical node
+instructions. Keep private credentials out of checker guests.
 
-Follow the [ordered activation commands](README.md#start-and-inspect): migrate,
-run a fresh fixed AWS proof, start the model proxy when enabled, start the native
+Follow the [ordered startup commands](README.md#start-and-inspect): migrate,
+qualify S3 storage access, start the model proxy when enabled, start the native
 unit, run full preflight, then start the application. Start identity through its
-existing fixed bootstrap command before any step requiring token verification.
-The AWS proof and native readiness are required for this exact release; results
-from a retired deployment are not interchangeable.
+bootstrap command before any step requiring token verification. Native readiness
+is required for the single-host checker topology.
 
 After the API is healthy, complete admission and authorization bootstrap:
 
@@ -129,16 +128,8 @@ through `POST /api/v1/service-actors` under that administrator's fresh access
 token. The identity list in
 [`provision_local_service_actors.py`](../../backend/scripts/provision_local_service_actors.py)
 is a reference; that local-development script's token issuer is not the hosted
-Rust login path. Do not import its fixture tokens into this installation.
+Keycloak login path. Do not import its fixture tokens into this installation.
 
-
-For this continuously running AWS deployment, install and enable the
-[five-minute proof renewal timer](../../docs/operations_aws_roles_anywhere.md)
-before exercising uploads. Verify its first group completed successfully. A
-one-time activation expires after 15 minutes; healthy application containers do
-not keep it valid. The recurring proof uses the exact cached release image and
-does not need a retained registry login. Preserve the fail-closed expiry guard
-and inspect failed renewal receipts instead of extending evidence validity.
 
 Install the [host boot recovery unit](README.md#reconcile-an-installed-host-after-reboot)
 after initial activation. Set its checkout path to this installed release and

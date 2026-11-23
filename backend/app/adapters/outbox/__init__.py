@@ -32,6 +32,7 @@ def outbox_delivery(
     registry: HandlerRegistry,
     options: DeliveryOptions,
     event_options: Mapping[tuple[str, int], DeliveryOptions] | None = None,
+    excluded_events: frozenset[tuple[str, int]] = frozenset(),
 ) -> OutboxDelivery:
     """No default authority, installed handler, worker or runtime discovery."""
     return OutboxDelivery(
@@ -40,6 +41,7 @@ def outbox_delivery(
         registry=registry,
         options=options,
         event_options=event_options,
+        excluded_events=excluded_events,
     )
 
 
@@ -61,6 +63,7 @@ def production_outbox_delivery(session_factory):
         evaluation_request_handler,
     )
     from app.adapters.checkers import post_submit_delivery_reconciliation_handler
+    from app.core.config import get_settings
     from app.modules.checkers.api.delivery_reconciliation import (
         POST_SUBMIT_DELIVERY_RECONCILIATION_EVENT as RECONCILIATION_EVENT,
     )
@@ -157,6 +160,11 @@ def production_outbox_delivery(session_factory):
                 handler_timeout_seconds=SELECTED_POST_HANDLER_TIMEOUT_SECONDS,
             )
         },
+        excluded_events=(
+            frozenset({(REQUEST_EVENT, 1), (RECONCILIATION_EVENT, 1)})
+            if get_settings().hosted_profile == "app"
+            else frozenset()
+        ),
     )
 
 

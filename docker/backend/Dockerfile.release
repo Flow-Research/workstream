@@ -1,22 +1,5 @@
 # syntax=docker/dockerfile:1@sha256:87999aa3d42bdc6bea60565083ee17e86d1f3339802f543c0d03998580f9cb89
 
-FROM python:3.12-slim-bookworm@sha256:4766d8b510c428e595d74b9cc5bbb2fae8e26316fffb4adc89908d79aacd58a2 AS roles-anywhere-helper
-
-ADD --checksum=sha256:beec9ed1c492d93db809890f16713e3556353294b823c2184ad4e891f1b2b54d \
-    https://rolesanywhere.amazonaws.com/releases/1.8.5/X86_64/Linux/Amzn2023/aws_signing_helper \
-    /tmp/aws_signing_helper-amd64
-ADD --checksum=sha256:3d131aa888cd56da446f9c6bb460b1f0569f6c7edc74eae6193a2fe3928883ba \
-    https://rolesanywhere.amazonaws.com/releases/1.8.5/Aarch64/Linux/Amzn2023/aws_signing_helper \
-    /tmp/aws_signing_helper-arm64
-
-ARG TARGETARCH
-RUN case "${TARGETARCH}" in \
-        amd64) helper=/tmp/aws_signing_helper-amd64 ;; \
-        arm64) helper=/tmp/aws_signing_helper-arm64 ;; \
-        *) echo "unsupported Roles Anywhere helper architecture" >&2; exit 1 ;; \
-    esac \
-    && install -m 0555 "${helper}" /aws_signing_helper
-
 FROM python:3.12-slim-bookworm@sha256:4766d8b510c428e595d74b9cc5bbb2fae8e26316fffb4adc89908d79aacd58a2
 
 COPY --from=ghcr.io/astral-sh/uv:0.12.3@sha256:2d890623d310b57771ce840f0da5eed5fc6d657da05ffaa45d82797b53fa3abc \
@@ -52,7 +35,6 @@ WORKDIR /workspace/backend
 COPY packages/external-services/ /workspace/packages/external-services/
 COPY backend/ ./
 COPY docker/backend/release-entrypoint.sh /usr/local/bin/workstream-release-entrypoint
-COPY --from=roles-anywhere-helper /aws_signing_helper /usr/local/bin/aws_signing_helper
 
 RUN --mount=type=cache,target=/root/.cache/uv \
     case "${WORKSTREAM_PROJECT_AGENT_SDK_ENVIRONMENT}" in \
@@ -66,7 +48,6 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     && chmod 0444 /etc/workstream/project-agent-sdk-environment \
     && rm -rf /workspace/backend/build /workspace/backend/workstream_backend.egg-info \
     && chmod 0555 /usr/local/bin/workstream-release-entrypoint \
-        /usr/local/bin/aws_signing_helper \
     && chown -R workstream:workstream /workspace /opt/venv
 
 USER workstream

@@ -118,7 +118,7 @@ def minio_settings(
 def initialize_minio_store(*, private_prefix: str) -> S3CompatibleArtifactStore:
     """Construct, claim, and initialize one MinIO namespace."""
     bootstrap = create_artifact_store_bootstrap(
-        minio_settings(private_prefix=private_prefix), activation_guard=None
+        minio_settings(private_prefix=private_prefix)
     )
     assert type(bootstrap) is S3CompatibleArtifactStoreBootstrap
     namespace_identity = bootstrap.namespace_identity
@@ -146,7 +146,7 @@ async def test_wrong_minio_credentials_map_403_to_unavailable() -> None:
         access_key=access_key,
         secret_key=secret_key,
     )
-    bootstrap = create_artifact_store_bootstrap(settings, activation_guard=None)
+    bootstrap = create_artifact_store_bootstrap(settings)
     namespace = bootstrap.namespace_identity
     _, fingerprint = artifact_store_namespace_material(
         backend="s3_compatible",
@@ -262,7 +262,7 @@ async def test_hard_size_limit_fails_before_provider_io(
 def test_namespace_claim_mismatch_fails_before_provider_io() -> None:
     """Reject a configured namespace mismatch without routing elsewhere."""
     bootstrap = create_artifact_store_bootstrap(
-        minio_settings(private_prefix="namespace/exact"), activation_guard=None
+        minio_settings(private_prefix="namespace/exact")
     )
     namespace = bootstrap.namespace_identity
     wrong = ArtifactStoreNamespaceClaim(
@@ -329,7 +329,6 @@ def test_s3_constructor_and_bootstrap_reject_invalid_runtime_values() -> None:
         "private_prefix": "negative/constructor",
         "addressing_style": "path",
         "session_factory": lambda: session,
-        "activation_guard": None,
         "buffer_bytes": 2,
         "connect_timeout_seconds": 1,
         "read_timeout_seconds": 1,
@@ -402,7 +401,7 @@ async def test_s3_operation_client_ignores_ambient_proxy_environment(
 def test_namespace_claim_is_single_use_and_close_disables_operations() -> None:
     """One exact claim activates one adapter once and close revokes local use."""
     bootstrap = create_artifact_store_bootstrap(
-        minio_settings(private_prefix="negative/single-use"), activation_guard=None
+        minio_settings(private_prefix="negative/single-use")
     )
     namespace = bootstrap.namespace_identity
     _, fingerprint = artifact_store_namespace_material(
@@ -633,10 +632,7 @@ async def test_precondition_failure_requires_exact_replay_verification(
     async def verify(
         provider_ref: str,
         _commitment: object,
-        *,
-        operation_evidence: object,
     ) -> None:
-        assert operation_evidence is not None
         verified.append(provider_ref)
 
     monkeypatch.setattr(store, "_client", fake_client)
@@ -843,10 +839,7 @@ async def test_uncertain_transport_put_requires_independent_observation(
     async def matches(
         provider_ref: str,
         _commitment: object,
-        *,
-        operation_evidence: object,
     ) -> bool:
-        assert operation_evidence is not None
         observed.append(provider_ref)
         return committed
 

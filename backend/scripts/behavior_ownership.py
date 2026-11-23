@@ -109,7 +109,7 @@ CHECKER_IMAGE_PUBLISH_TARGETS = frozenset({
     "backend/scripts/checker_smol_cache.py",
     "backend/scripts/checker_image_samples.py",
 })
-AWS_ARTIFACT_ACTIVATION_TARGETS = frozenset({
+AWS_ARTIFACT_PROOF_REMOVED_TARGETS = frozenset({
     "backend/app/adapters/artifacts/aws_live_proof.py",
     "backend/app/adapters/artifacts/aws_roles_anywhere.py",
     "backend/app/adapters/artifacts/aws_roles_anywhere_proof.py",
@@ -117,6 +117,10 @@ AWS_ARTIFACT_ACTIVATION_TARGETS = frozenset({
     "backend/app/modules/artifacts/provider_activation.py",
     "backend/scripts/aws_artifact_provider_proof.py",
     "backend/scripts/aws_roles_anywhere_config.py",
+})
+AWS_DIRECT_USER_TARGETS = frozenset({
+    "backend/app/adapters/artifacts/aws_direct_user.py",
+    "backend/scripts/aws_direct_user_config.py",
 })
 AUTH_ART_OPERATOR_TARGETS = frozenset({
     "backend/app/modules/artifacts/api/operator_authority.py",
@@ -1112,12 +1116,14 @@ def _validate_additive_partition_transition(
         "backend/app/modules/reviews/api/acceptance.py" not in current_by_target
     ):
         raise BehaviorOwnershipError("untrusted_partition_change")
+    if removed & AWS_ARTIFACT_PROOF_REMOVED_TARGETS and not AWS_DIRECT_USER_TARGETS.issubset(current_by_target):
+        raise BehaviorOwnershipError("untrusted_partition_change")
     retained_trusted = [
         item for item in trusted_assignments if item["target"] not in removed
     ]
     if (
         trusted_targets != sorted(trusted_targets)
-        or removed - (NEUTRAL_GUIDE_RUNTIME_REMOVED_TARGETS | REV_04C_REMOVED_TARGETS | ARCH_04D2_REMOVED_TARGETS | ARCH_03D_REMOVED_TARGETS | TASK_CHECKER_CLEANUP_REMOVED_TARGETS | ARCH_03C2_REMOVED_TARGETS | OUTBOX_IDENTITY_REMOVED_TARGETS | V01_BASELINE_REMOVED_TARGETS | POL_03B_REMOVED_TARGETS | POL_04B_REMOVED_TARGETS | POL_05A_REMOVED_TARGETS | ARCH_03A_GUIDE_CONTEXT_REMOVED_TARGETS | ARCH_04B_SEAM_REMOVED_TARGETS | PILOT_04_RETIRED_CATALOGUE_TARGETS | FORGE_PROOF_FACTS_REMOVED_TARGETS | SHARED_ADAPTER_PACKAGE_REMOVED_TARGETS)
+        or removed - (NEUTRAL_GUIDE_RUNTIME_REMOVED_TARGETS | REV_04C_REMOVED_TARGETS | ARCH_04D2_REMOVED_TARGETS | ARCH_03D_REMOVED_TARGETS | TASK_CHECKER_CLEANUP_REMOVED_TARGETS | ARCH_03C2_REMOVED_TARGETS | OUTBOX_IDENTITY_REMOVED_TARGETS | V01_BASELINE_REMOVED_TARGETS | POL_03B_REMOVED_TARGETS | POL_04B_REMOVED_TARGETS | POL_05A_REMOVED_TARGETS | ARCH_03A_GUIDE_CONTEXT_REMOVED_TARGETS | ARCH_04B_SEAM_REMOVED_TARGETS | PILOT_04_RETIRED_CATALOGUE_TARGETS | FORGE_PROOF_FACTS_REMOVED_TARGETS | SHARED_ADAPTER_PACKAGE_REMOVED_TARGETS | AWS_ARTIFACT_PROOF_REMOVED_TARGETS)
         or [current_by_target[item["target"]] for item in retained_trusted]
         != retained_trusted
     ):
@@ -1127,7 +1133,7 @@ def _validate_additive_partition_transition(
         AUTH_BOUNDARY_FOUNDATION_TARGETS | TASK_CHECKER_CLEANUP_TARGETS
         | PILOT_08_REVISION_TARGETS
         | PILOT_READ_1_TARGETS
-        | AWS_ARTIFACT_ACTIVATION_TARGETS
+        | AWS_DIRECT_USER_TARGETS
         | AUTH_ART_OPERATOR_TARGETS
         | CHECKER_MODEL_RUNTIME_TARGETS
         | CHECKER_TRIAL_RUNTIME_TARGETS

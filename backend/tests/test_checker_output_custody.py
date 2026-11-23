@@ -90,7 +90,7 @@ async def test_canonical_public_provisioning_enables_exact_model_request_custody
     engine = create_async_engine(isolated_database_env)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     settings = _output_storage_settings(tmp_path, provider, None)
-    bootstrap = create_artifact_store_bootstrap(settings, activation_guard=None)
+    bootstrap = create_artifact_store_bootstrap(settings)
     namespace = artifact_storage_namespace_spec(settings, bootstrap)
     store = ObservedStore(bootstrap.initialize_after_namespace_claim(
         ArtifactStoreNamespaceClaim(
