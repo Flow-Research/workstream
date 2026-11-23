@@ -362,6 +362,8 @@ guests. Native checker custody stays exclusive to the single-host overlay.
 
 Relationship-conflict verification now supplies both empty observation values
 the completion operation expects and preserves the submission task contexts.
+Retained stale-claim and revision-error test callers use that same signature;
+their fencing, retry and error-propagation assertions remain unchanged.
 Direct-user credential resolution runs outside the S3 pool deadline and within
 the existing identity and operation deadlines. A first upload with a six-second
 identity load succeeds under the ten-second identity budget and five-second S3

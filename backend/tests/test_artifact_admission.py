@@ -1178,7 +1178,6 @@ async def test_verification_claim_takeover_and_scanner_due_order_are_fenced(
                     "verified",
                     "sha256:" + "1" * 64,
                     1,
-                    None,
                 )
                 == "stale"
             )
