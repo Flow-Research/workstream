@@ -9285,3 +9285,92 @@ audit performs no state transitions. Its SQL graph parsed and ran against a
 fresh migrated isolated database; the deliberately absent operation yielded
 the expected missing-graph assertion, and that database was cleaned. A
 successful live graph is still pending the next end-to-end run.
+
+### Retire qualification-script preparation callers
+
+Release image guards exposed an import of removed preparation composition from
+run_selected_end_to_end_probe.py. Its only live imports are the locked registry
+specification and secret-fixture builders; preserve those exact functions in
+public_probe_support.py and retire the obsolete hidden-owner drill. Port the
+shared current public/model qualification path from preparation/admission plus
+JSON201 to raw-ZIP202, immutable acceptance replay, public operation observation
+and actual dedicated T5 worker. Preserve input hashes, model/forge/paid-effect
+custody, native verdict and governed-outcome assertions. No old-writer alias,
+compatibility route, injected verifier/finalizer or skipped test.
+
+Allowed first scope: run_selected_end_to_end_probe.py, run_public_journey_probe.py,
+public_probe_support.py, public_hosted_attachment.py, public_hosted_model_post.py,
+their two scripts/test_public_hosted_* guard modules and this record. Require
+exclusive finalization worker startup/inspection, and preserve POST fault timing
+by pausing only the general worker across T4/T5 before enabling the injected POST
+failure. Medium qualification-tool risk: run the36 release guards plus new
+current source-flow assertions, imports, Ruff/structure/diff/record checks and
+scoped review. No production, remote, IAM, paid call or deployment mutation.
+
+The independently separable local public_intake_trials/public_runtime_trials
+remain mandatory follow-up: zero/multi PRE and VM-before-seal vectors are
+superseded; transfer current resource/cancellation/deadline safety claims and
+use distinct tasks for multiple accepted sources. Do not call those vectors
+qualified by this guard repair. Root owns operations wording and current native
+journey work; this change does not claim a complete native/model qualification.
+
+Common-flow repair replaces only the obsolete command, not model/forge evidence.
+The two helper builders moved unchanged; the hidden-owner drill is deleted after
+tracing its live imports. Current _submit sends raw ZIP once, replays its exact
+key/body, observes public operation progress with all four selectors bound and
+checks real finalized admission/PRE hashes and acknowledged finalization custody.
+No preparation/verifier task injection remains. Model replay retains the original
+revision acknowledgement instead of asking current work-context to fabricate one.
+The local launcher adds an exclusive production finalization consumer and pauses
+only its general consumer until the POST fault is installed after PRE/T5. It
+uses explicit remote-TLS/source-profile settings and an existing canonical parser
+socket; no retired Unix/proof argument or second parser launcher is introduced.
+Hosted inspection now requires the already-defined finalization service.
+
+Initial guard replay resolved all9 import failures and exposed one remaining
+obsolete stalled-verifier test (35pass/1error). Ported that safety assertion to
+current stalled source finalization: only GET is allowed and no finalizer task
+may be injected. All40 guards passed20.81s in
+/tmp/submission-qualification-guards-v2.log (original36 plus4 current contracts).
+New controls cover raw bytes/exact replay, each foreign progress selector with
+a valid control, exclusive worker composition and the existing parser socket.
+This is local guard/contract evidence, not native or paid execution.
+
+The current CLI/native journey owner confirmed upload/PRE source/execution
+cancellation, original deadline expiry, launch/controller loss and POST outage
+recovery are not covered by its happy/failure journey. They remain mandatory in
+the following local trial-vector migration; this common-flow commit does not
+silently remove or qualify them. The old selected-drill README paragraph needs
+root's coordinated wording update after deletion. No remote mutation occurred.
+
+Final live-caller trace also found model qualification explicitly requiring an
+empty PRE approval, and shared task setup calling removed start/requirements
+routes. Port these within the same allowed files: one non-model baseline PRE
+plus exactly one paid model POST retains all rubric/profile/budget guards;
+claim must prove in_progress/started_at and read current work-context. This is
+required current cardinality/lifecycle alignment, not paid execution or a
+qualification shortcut. Local zero/multi resource vectors remain separate.
+
+Root's common-flow review required preserving the canonical supplied runner
+window instead of an old hardcoded90s override. The launcher now validates the
+explicit typed source profile with its owner-selected source-contract context
+and refuses any request window shorter than its aggregate deadline; it does
+not alter product defaults or shorten a model POST window. A new positive/short
+window guard first exposed omitted validation context (40pass/1error), then the
+canonical context helper was supplied. The model guide explicitly discloses its
+required non-model PRE; all model POST rubric/profile/accounting guards remain.
+
+Final common-flow guards passed41/41 in44.464s at the frozen candidate
+(/tmp/submission-qualification-guards-frozen.log). A final DTO trace corrected
+task setup to public accepted_at rather than internal started_at; its focused
+positive/refusal guard passed1/1 in48.466s
+(/tmp/submission-qualification-claim-final.log). These are split local guard
+receipts, not one42-case aggregate or actual native/paid qualification.
+The bounded in-memory selector mutant removes only task_id comparison; the
+named guard fails with RuntimeError-not-raised while the valid control passes
+(/tmp/submission-qualification-selector-mutant.json). No source or production
+file was mutated by that probe. Root requested the affected README paragraph
+update; it now points at current public raw-ZIP flow and labels old drill
+receipts as history, retaining the mandatory local-vector gap.
+Structure and Ruff/diff pass; final record/link checks follow this append.
+No remote action, deployment or paid request occurred.

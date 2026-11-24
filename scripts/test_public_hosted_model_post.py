@@ -333,7 +333,10 @@ class HostedModelAuthority(unittest.TestCase):
                 response = {**body, 'entry_digest': spec.spec_digest, 'registry_entry_id': str(new_record_id())}
             return httpx.Response(201, json=response)
 
-        attachment = SimpleNamespace(token_for_label=lambda label: 'scoped-rs256-fixture')
+        baseline_pre = {'requirement_id': 'project.pre_submit', 'registry_entry_id': str(new_record_id()),
+                        'registry_entry_digest': 'sha256:' + 'b' * 64, 'configuration': {}}
+        attachment = SimpleNamespace(token_for_label=lambda label: 'scoped-rs256-fixture',
+            approval_attachments=lambda count: {'pre_submit_attachments': [baseline_pre]})
 
         async def exercise():
             async with httpx.AsyncClient(base_url='http://127.0.0.1:8000', transport=httpx.MockTransport(handler)) as client:
@@ -353,7 +356,7 @@ class HostedModelAuthority(unittest.TestCase):
         self.assertEqual(budget['configuration_version'], 1)
         self.assertEqual(qualification.state['historical_charge']['status'], 'unresolved_separate')
         selected = qualification.approval_attachments()
-        self.assertEqual(selected['pre_submit_attachments'], [])
+        self.assertEqual(selected['pre_submit_attachments'], [baseline_pre])
         [attachment] = selected['post_submit_attachments']
         self.assertEqual(attachment['requirement_id'], CHECK)
         self.assertEqual(attachment['registry_entry_id'], qualification.registry['registry_entry_id'])
@@ -364,20 +367,21 @@ class HostedModelAuthority(unittest.TestCase):
         self.assertEqual(configuration['model_profile_id'], str(profile_id))
         self.assertEqual(configuration['model_profile_digest'], qualification.profile.profile_digest)
         original = qualification.guide_bytes()
-        rules = json.loads(qualification.rules(original, 0))
+        rules = json.loads(qualification.rules(original, 1))
         self.assertNotIn('pre_submit_bindings', rules)
         self.assertNotIn('post_submit_bindings', rules)
         doc = SimpleNamespace(source_item_id=new_record_id(), ingest_id=new_record_id(), sha256=digest(original))
         authored = SimpleNamespace(source_item_id=new_record_id(), ingest_id=new_record_id(), sha256=digest(canonical(rules)))
         result = _compile_rules(SimpleNamespace(agent_version='v1', material=SimpleNamespace(documents=[doc, authored])), [(authored, rules)])
-        [suggestion] = result.requirements
-        self.assertEqual(suggestion.stage, 'post_submit')
+        self.assertEqual([item.stage for item in result.requirements], ['pre_submit', 'post_submit'])
+        [suggestion] = [item for item in result.requirements if item.stage == 'post_submit']
         self.assertNotEqual(suggestion.suggestion_id, attachment['requirement_id'])
         self.assertEqual([ref.sha256 for ref in suggestion.evidence_refs], [doc.sha256, authored.sha256])
         self.assertEqual(suggestion.check_specification, specification()[0])
         self.assertTrue(suggestion.check_specification.implementation_needs)
-        with self.assertRaisesRegex(RuntimeError, 'must not propose a PRE check'):
-            qualification.rules(original, 1)
+        for count in (0, 2):
+            with self.assertRaisesRegex(RuntimeError, 'exactly one baseline PRE'):
+                qualification.rules(original, count)
 
     def test_ambiguous_effect_or_outstanding_reservation_cannot_claim_model_proof(self):
         good = {'reserved_nanodollars': 0, 'effects': [{'state': 'completed', 'provider_response_known': True,
@@ -433,26 +437,30 @@ class HostedModelAuthority(unittest.TestCase):
         subprocess.run(['sh', 'tests/run.sh'], cwd=self.root, capture_output=True, check=True, timeout=5)
         self.assertIn(b'no execution or trial measurement is claimed', (self.root / 'evidence/results').read_bytes())
 
-    def test_hosted_stalled_admission_does_not_inject_a_verifier_task(self):
+    def test_stalled_source_finalization_does_not_inject_a_worker_task(self):
         from app.core.config import get_settings
 
         with patch.dict(os.environ, {'WORKSTREAM_CELERY_BROKER_URL': 'redis://127.0.0.1:6379/15'}):
-            # Earlier proof imports may have cached settings without a broker.
             get_settings.cache_clear()
             try:
                 from experiments.pilot04_external_checker_runtime import run_public_journey_probe as probe
-                from app.workers.artifacts import verify_object
+                from app.workers.outbox import finalize_submission
 
-                result = {'pre_submission_results': [{}], 'submission_bundle_preparation_status': 'object_confirmed', 'admission_id': None}
-                ticks = iter(range(0, 1000, 31))
-                with patch.object(probe, '_fixture_hashes', return_value={}), \
-                        patch.object(probe, '_scan_audit_count', new=AsyncMock(return_value=0)), \
-                        patch.object(probe, '_json', new=AsyncMock(return_value=result)), \
-                        patch.object(probe, '_artifact_task_state', new=AsyncMock(return_value=([], [('job', 'pending', None)]))), \
+                task, assignment, operation, key = (str(new_record_id()) for _ in range(4))
+                context = {'acceptance_receipt': {'operation_id': operation}, 'idempotency_key': key}
+                progress = {'operation_id': operation, 'task_id': task, 'assignment_id': assignment,
+                            'idempotency_key': key, 'operation_state': 'finalization_pending',
+                            'operationally_stalled': False}
+                ticks = iter(range(0, 1000, 101))
+                with patch.object(probe, '_json', new=AsyncMock(return_value=progress)) as reads, \
                         patch.object(probe.time, 'monotonic', side_effect=lambda: next(ticks)), \
-                        patch.object(probe.asyncio, 'sleep', new=AsyncMock()), patch.object(verify_object, 'apply_async') as dispatch:
-                    with self.assertRaisesRegex(RuntimeError, 'remained object_confirmed'):
-                        asyncio.run(probe._ready_admission(None, None, 'task', 'assignment', 'token', b'zip', 'summary', 'attestation', hosted=True))
+                        patch.object(probe.asyncio, 'sleep', new=AsyncMock()), \
+                        patch.object(finalize_submission, 'apply_async') as dispatch:
+                    with self.assertRaisesRegex(RuntimeError, 'source finalization did not complete'):
+                        asyncio.run(probe._await_finalized_source(
+                            None, None, task, assignment, 'token', context, b'zip'))
+                    self.assertEqual(reads.await_count, 2)
+                    self.assertTrue(all(call.args[1] == 'GET' for call in reads.await_args_list))
                     dispatch.assert_not_called()
             finally:
                 get_settings.cache_clear()
@@ -475,6 +483,140 @@ class HostedModelAuthority(unittest.TestCase):
             attach.assert_awaited_once_with('inspected-later', 'postgresql+asyncpg://isolated', 'redis://isolated',
                                            Path('/private/model.json'))
             local.assert_not_called()
+
+
+class PublicSourceCommandContracts(unittest.TestCase):
+    def test_raw_zip_acceptance_replays_once_then_observes_finalization(self):
+        import httpx
+        from experiments.pilot04_external_checker_runtime import run_public_journey_probe as probe
+
+        task, assignment, operation = (str(new_record_id()) for _ in range(3))
+        accepted = {'operation_id': operation, 'task_id': task, 'assignment_id': assignment,
+                    'status': 'accepted', 'replayed': False, 'pre_submission_results': [{}]}
+        posts, reads = [], []
+        graph = {'submission_id': str(new_record_id()), 'submission_version': 1,
+                 'evaluation_request_id': str(new_record_id()), 'admission_id': str(new_record_id())}
+
+        async def respond(request):
+            self.assertNotIn('submission-bundle-preparations', request.url.path)
+            if request.method == 'POST':
+                self.assertEqual(request.headers['Content-Type'], 'application/zip')
+                self.assertEqual(request.headers['Content-Length'], '7')
+                self.assertEqual(request.content, b'raw-zip')
+                posts.append(dict(request.headers))
+                return httpx.Response(202, json=accepted | {'replayed': len(posts) > 1})
+            self.assertEqual(request.method, 'GET')
+            self.assertEqual(dict(request.url.params), {'operation_id': operation})
+            reads.append(request.url.path)
+            return httpx.Response(200, json={
+                'operation_id': operation, 'task_id': task, 'assignment_id': assignment,
+                'idempotency_key': posts[0]['idempotency-key'], 'operationally_stalled': False,
+                'operation_state': 'finalized' if len(reads) == 2 else 'finalization_pending', **graph})
+
+        async def exercise():
+            async with httpx.AsyncClient(transport=httpx.MockTransport(respond), base_url='http://test') as client:
+                return await probe._submit(client, None, task_id=task, assignment_id=assignment,
+                    contributor_token='token', archive=b'raw-zip', summary='summary',
+                    attestation='attestation', predecessor_id=None)
+
+        with patch.object(probe, '_finalized_source_evidence', new=AsyncMock(return_value=graph)) as retained, \
+                patch.object(probe, '_fixture_hashes', return_value={'expected': 'hashes'}), \
+                patch.object(probe.asyncio, 'sleep', new=AsyncMock()):
+            saved = asyncio.run(exercise())
+        self.assertEqual(posts[0], posts[1])
+        self.assertEqual(len(posts), 2)
+        self.assertEqual(len(reads), 2)
+        self.assertEqual(saved['acceptance_receipt'], accepted)
+        self.assertEqual(saved['submission_id'], graph['submission_id'])
+        retained.assert_awaited_once()
+
+    def test_progress_selector_substitution_fails_before_retained_reads(self):
+        from experiments.pilot04_external_checker_runtime import run_public_journey_probe as probe
+
+        task, assignment, operation, key = (str(new_record_id()) for _ in range(4))
+        context = {'acceptance_receipt': {'operation_id': operation}, 'idempotency_key': key}
+        valid = {'task_id': task, 'assignment_id': assignment, 'operation_id': operation,
+                 'idempotency_key': key, 'operation_state': 'finalized', 'operationally_stalled': False,
+                 'submission_id': str(new_record_id()), 'submission_version': 1,
+                 'evaluation_request_id': str(new_record_id())}
+        with patch.object(probe, '_fixture_hashes', return_value={}), \
+                patch.object(probe, '_finalized_source_evidence', new=AsyncMock(return_value={'control': True})) as retained:
+            with patch.object(probe, '_json', new=AsyncMock(return_value=valid)):
+                self.assertEqual(asyncio.run(probe._await_finalized_source(
+                    None, None, task, assignment, 'token', context, b'zip')), {'control': True})
+            retained.reset_mock()
+            for field in ('task_id', 'assignment_id', 'operation_id', 'idempotency_key'):
+                with self.subTest(field=field), \
+                        patch.object(probe, '_json', new=AsyncMock(return_value=valid | {field: str(new_record_id())})):
+                    with self.assertRaisesRegex(RuntimeError, 'substituted command selectors'):
+                        asyncio.run(probe._await_finalized_source(None, None, task, assignment, 'token', context, b'zip'))
+                    retained.assert_not_awaited()
+
+    def test_public_claim_starts_work_without_retired_routes(self):
+        from app.modules.tasks.schemas import AssignmentResponse
+        from experiments.pilot04_external_checker_runtime import public_probe_support as support
+
+        self.assertIn('accepted_at', AssignmentResponse.model_fields)
+        self.assertNotIn('started_at', AssignmentResponse.model_fields)
+        task, assignment = (str(new_record_id()) for _ in range(2))
+        for accepted in ('2026-01-01T00:00:00Z', None):
+            replies = [{'id': task}, {}, {}, {'task': {'status': 'in_progress'},
+                       'assignment': {'id': assignment, 'accepted_at': accepted}}, {}]
+            with self.subTest(accepted=accepted), patch.object(support, '_json', new=AsyncMock(side_effect=replies)) as requests:
+                call = support._started_public_task(None, project_id='project', manager_token='manager',
+                    contributor_token='contributor', source_ref='claim-contract')
+                if accepted is None:
+                    with self.assertRaisesRegex(RuntimeError, 'immediately start'):
+                        asyncio.run(call)
+                else:
+                    self.assertEqual(asyncio.run(call), (task, assignment))
+                    self.assertTrue(requests.await_args.args[2].endswith('/work-context'))
+                paths = [item.args[2] for item in requests.await_args_list]
+                self.assertFalse(any(path.endswith('/start') or path.endswith('/submission-requirements') for path in paths))
+
+    def test_finalization_worker_is_exclusive_and_uses_production_app(self):
+        from experiments.pilot04_external_checker_runtime import run_public_journey_probe as probe
+
+        with patch.object(probe, '_process', return_value='owned') as launch:
+            process, _ = probe._start_finalization_worker({}, Path('/private/proof'))
+        self.assertEqual(process, 'owned')
+        command = launch.call_args.args[0]
+        self.assertEqual(command[command.index('-A') + 1], 'app.workers.celery_app')
+        self.assertEqual([x for x in command if x.startswith('--queues=')],
+                         ['--queues=workstream.submission_finalization'])
+
+    def test_source_profile_cannot_exceed_the_supplied_runner_window(self):
+        from experiments.pilot04_external_checker_runtime import run_public_journey_probe as probe
+        from tests.checkers.external.test_selected_pre_submit_coordination import _source_reservation
+
+        runtime = _source_reservation().runtime_profile
+        profile = {'capacity': {'maximum_total_bytes': 4 * 1024**2},
+                   'runtime': runtime.model_dump(mode='json'), 'upload_total_seconds': 300.0,
+                   'upload_idle_seconds': 10.0, 'foreground_lease_seconds': 10.0,
+                   'heartbeat_seconds': 1.0, 'replay_total_seconds': 30.0, 'part_bytes': 5 * 1024**2}
+        window = runtime.aggregate_deadline_ms / 1000
+        settings = SimpleNamespace(submission_execution_profile=profile, external_checker_service_timeout_seconds=window)
+        self.assertEqual(probe._require_source_runtime_window(settings).runtime, runtime)
+        settings.external_checker_service_timeout_seconds = window - 0.1
+        with self.assertRaisesRegex(RuntimeError, 'exceeds the configured runner request timeout'):
+            probe._require_source_runtime_window(settings)
+
+    def test_parser_requires_an_existing_socket_without_starting_a_service(self):
+        import socket
+        from experiments.pilot04_external_checker_runtime import run_public_journey_probe as probe
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'guide.sock'
+            settings = SimpleNamespace(guide_document_parser_socket=path)
+            with self.assertRaisesRegex(RuntimeError, 'existing guide parser socket'):
+                probe._require_parser_socket(settings)
+            with socket.socket(socket.AF_UNIX) as bound:
+                bound.bind(str(path))
+                self.assertEqual(probe._require_parser_socket(settings), path)
+                alias = Path(directory) / 'alias.sock'
+                alias.symlink_to(path)
+                with self.assertRaisesRegex(RuntimeError, 'existing guide parser socket'):
+                    probe._require_parser_socket(SimpleNamespace(guide_document_parser_socket=alias))
 
 
 if __name__ == '__main__':

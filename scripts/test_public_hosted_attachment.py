@@ -308,7 +308,7 @@ class HostedFixtureContracts(unittest.TestCase):
         from datetime import UTC, datetime
         from app.core.identifiers import new_record_id
         from app.modules.checkers.api.external import ExternalCheckerRegistrySpec
-        from experiments.pilot04_external_checker_runtime.run_selected_end_to_end_probe import _locked_spec
+        from experiments.pilot04_external_checker_runtime.public_probe_support import _locked_spec
 
         capabilities = {'pre_submit': {'capability_id': 'probe.hosted_pre', 'capability_version': 'v1'},
                         'post_submit': {'capability_id': 'probe.hosted_post', 'capability_version': 'v1'}}

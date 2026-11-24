@@ -273,6 +273,10 @@ class ModelPostQualification:
         from experiments.pilot04_external_checker_runtime.public_probe_support import _json
 
         require('project_id' not in self.state, 'this qualification already owns one project')
+        baseline = attachment.approval_attachments(1)['pre_submit_attachments']
+        require(len(baseline) == 1 and baseline[0]['requirement_id'] == 'project.pre_submit'
+                and baseline[0]['configuration'] == {}, 'model qualification requires one non-model baseline PRE')
+        self.pre_submit_attachment = baseline[0]
         self.checkpoint(phase='project_created', project_id=project_id)
         token = attachment.token_for_label('operator')
         root = f'/api/v1/operations/projects/{project_id}'
@@ -304,16 +308,18 @@ class ModelPostQualification:
         _, statement = specification()
         return ('# Hosted model POST engineering qualification\n\n'
                 'This manager-authored guide describes only the Terminal Systems '
-                f'`{CHECK}` model rubric. It does not claim setup inference, a real pilot or runtime trials.\n\n'
+                f'`{CHECK}` model rubric. Intake also uses the non-model engineering fixture PRE check, '
+                'which rejects project-rejected.txt without a model call. '
+                'It does not claim setup inference, a real pilot or runtime trials.\n\n'
                 + statement + '\n').encode()
 
     def rules(self, original, count):
         from experiments.pilot04_external_checker_runtime.public_hosted_attachment import manager_rules
 
-        require(count == 0, 'model qualification must not propose a PRE check')
-        body = json.loads(manager_rules(original, 0))
+        require(count == 1, 'model qualification requires exactly one baseline PRE check')
+        body = json.loads(manager_rules(original, 1))
         spec, statement = specification()
-        body['requirements'] = [{'suggestion_id': 'suggested.solver_brief_and_extension_disclosure',
+        body['requirements'] = [item for item in body['requirements'] if item['stage'] == 'pre_submit'] + [{'suggestion_id': 'suggested.solver_brief_and_extension_disclosure',
             'statement': statement, 'stage': 'post_submit',
             'classification_rationale': 'The rubric evaluates the submitted task after intake.',
             'evidence_refs': body['findings'][0]['evidence_refs'], 'check_specification': spec.model_dump(mode='json')}]
@@ -324,7 +330,7 @@ class ModelPostQualification:
         """Select the exact published model image and profile as the human manager."""
         from app.modules.checkers.api.external_policy import ExternalCheckerImageAttachment
 
-        require(hasattr(self, 'registry') and hasattr(self, 'profile'),
+        require(hasattr(self, 'registry') and hasattr(self, 'profile') and hasattr(self, 'pre_submit_attachment'),
                 'model image and profile must be published before approval')
         configuration = {'check': CHECK, **self.profile.selector.model_dump(mode='json')}
         # The selector DTO uses profile_* names; image configuration reserves model_profile_* names.
@@ -336,7 +342,7 @@ class ModelPostQualification:
             'registry_entry_digest': self.registry['entry_digest'],
             'configuration': configuration,
         })
-        return {'pre_submit_attachments': [],
+        return {'pre_submit_attachments': [self.pre_submit_attachment],
                 'post_submit_attachments': [entry.model_dump(mode='json')]}
 
 
@@ -456,7 +462,7 @@ async def run_model_post(attachment, client, factory, qualification):
     qualification.verify_cache(attachment)
     await attachment.transition('live')
     project, contributor, manager_token, contributor_token = await _public_project(
-        client, factory, attachment, human_review_required=False, pre_requirements=0)
+        client, factory, attachment, human_review_required=False, pre_requirements=1)
     project_id = str(project.project_id)
     task, assignment = await _started_public_task(client, project_id=project_id,
         manager_token=manager_token, contributor_token=contributor_token, source_ref='hosted-model-engineering-proof')
@@ -467,8 +473,7 @@ async def run_model_post(attachment, client, factory, qualification):
     attestation = 'rights_confirmed; no confidential data or credentials.'
     saved = await _submit(client, factory, task_id=task, assignment_id=assignment,
         contributor_token=contributor_token, archive=archive, summary=summary,
-        attestation=attestation, predecessor_id=None,
-        hosted=True)
+        attestation=attestation, predecessor_id=None)
     qualification.checkpoint(phase='submission_created', submission=saved)
     async with factory() as session:
         dispatch = await session.get(SubmissionDispatch, saved['submission_id'])
@@ -586,11 +591,9 @@ async def observe_model_post(attachment, client, factory, qualification, *, proj
         event = await session.get(OutboxEvent, completion)
         require(event.delivery_state == 'acknowledged', 'model completion was not acknowledged')
     before = {str(identifier): await _outbox_snapshot(factory, identifier) for identifier in (event_id, completion)}
-    replay = await _json(client, 'POST', f'/api/v1/tasks/{task}/submissions',
-        attachment.token_for_label('contributor'), 201,
-        json={'assignment_id': assignment, 'admission_id': saved['admission_id'],
-              'predecessor_submission_id': None, 'summary': summary, 'contributor_attestation': attestation})
-    require(replay == saved, 'completed public Submission replay changed its receipt')
+    from experiments.pilot04_external_checker_runtime.run_public_journey_probe import _replay_source_submission
+    await _replay_source_submission(client, task, assignment, attachment.token_for_label('contributor'),
+                                    archive, summary, attestation, saved)
     duplicate_tasks = []
     for identifier in (event_id, completion):
         duplicate = await attachment.deliver_duplicate(identifier, project_id)

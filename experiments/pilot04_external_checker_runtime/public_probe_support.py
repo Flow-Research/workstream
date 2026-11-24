@@ -11,6 +11,10 @@ import httpx
 from sqlalchemy import select, text
 
 from app.core.identifiers import new_record_id
+from app.modules.checkers.api.external import (
+    PRE_SUBMIT_INPUT_SCHEMA_ID, ExternalCheckerRegistrySpec, ExternalCheckerSchema, external_checker_json_hash,
+)
+from tests.checkers.external.support import post_registry_spec, registry_spec
 from app.modules.authorization.api import ActorIdentityFacts, ActorKind
 from app.modules.actors.api.service_identities import ServiceIdentity
 from app.modules.actors.models import ActorIdentityLink, ActorProfile
@@ -171,7 +175,7 @@ async def _wait_outbox_acknowledged(factory, event_id: UUID, project_id: UUID) -
 
 async def _started_public_task(client, *, project_id: str, manager_token: str,
                                contributor_token: str, source_ref: str) -> tuple[str, str]:
-    """Use the same public task, claim and start path for both project tasks."""
+    """Use public task creation and the claim which immediately starts work."""
     from tests.test_tasks import complete_task_payload
 
     payload = complete_task_payload()
@@ -192,14 +196,9 @@ async def _started_public_task(client, *, project_id: str, manager_token: str,
         200, headers={"Idempotency-Key": str(uuid4())},
     )
     assignment_id = claimed["assignment"]["id"]
-    await _json(
-        client, "POST", f"/api/v1/tasks/{task_id}/start", contributor_token,
-        200, headers={"Idempotency-Key": str(uuid4())},
-    )
-    await _json(
-        client, "GET", f"/api/v1/tasks/{task_id}/submission-requirements",
-        contributor_token, 200,
-    )
+    _require(claimed["task"]["status"] == "in_progress" and claimed["assignment"]["accepted_at"] is not None,
+             "public claim did not immediately start this assignment")
+    await _json(client, "GET", f"/api/v1/tasks/{task_id}/work-context", contributor_token, 200)
     return task_id, assignment_id
 
 
@@ -268,3 +267,35 @@ async def _public_project(client, factory, env, *, human_review_required, pre_re
              "public project submitter grant names another actor or role")
 
     return compilation, contributor, manager_token, contributor_token
+
+
+def _locked_spec(phase: str, image: dict[str, str]) -> ExternalCheckerRegistrySpec:
+    source = registry_spec("pre_submit") if phase == "pre_submit" else post_registry_spec()
+    values = source.model_dump(mode="json")
+    if phase == "pre_submit":
+        document = {"type": "object"}
+        values["input_schema"] = ExternalCheckerSchema(
+            schema_id=PRE_SUBMIT_INPUT_SCHEMA_ID,
+            schema_version="v1",
+            document=document,
+            schema_sha256=external_checker_json_hash(document),
+        ).model_dump(mode="json")
+    values["image_digest"] = image["platform_manifest_digest"]
+    values["resources"] |= {"deadline_ms": 30_000, "maximum_output_bytes": 8_192}
+    return ExternalCheckerRegistrySpec.model_validate(values)
+
+def _secret_archive(source: bytes) -> bytes:
+    """Preserve the valid packet while introducing one known private key."""
+    output = BytesIO()
+    with ZipFile(BytesIO(source)) as existing, ZipFile(output, "w") as target:
+        for item in existing.infolist():
+            value = existing.read(item)
+            if item.filename == "task.toml":
+                value += b"\n-----BEGIN OPENSSH PRIVATE KEY-----\nencoded\n"
+            copy = ZipInfo(item.filename, date_time=(1980, 1, 1, 0, 0, 0))
+            copy.create_system, copy.external_attr = (
+                item.create_system,
+                item.external_attr,
+            )
+            target.writestr(copy, value)
+    return output.getvalue()

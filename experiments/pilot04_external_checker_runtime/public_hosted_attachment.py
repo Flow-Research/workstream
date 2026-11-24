@@ -291,7 +291,7 @@ class HostedAttachment:
         port = urlparse(self.origin).port
         require(port == int(values.get('WORKSTREAM_API_HOST_PORT', '8000')), "published API port differs")
         environment = module.compose_environment(values)
-        services = ['api', 'worker', 'beat', 'guide-document-parser']
+        services = ['api', 'worker', 'submission-finalization-worker', 'beat', 'guide-document-parser']
         if values['WORKSTREAM_MODEL_PROXY_ENABLED'] == 'true':
             services.append('model-proxy')
         observed = {}
@@ -383,7 +383,7 @@ class HostedAttachment:
         """Register only the two requested fixture identities under public Operator authority."""
         from app.modules.checkers.api.external import ExternalCheckerRegistryEntry
         from experiments.pilot04_external_checker_runtime.public_probe_support import _json
-        from experiments.pilot04_external_checker_runtime.run_selected_end_to_end_probe import _locked_spec
+        from experiments.pilot04_external_checker_runtime.public_probe_support import _locked_spec
 
         images = [item for item in self.native_binding.get('node_config', {}).get('cache', [])
                   if item['repository'] == 'workstream-test/public-journey']

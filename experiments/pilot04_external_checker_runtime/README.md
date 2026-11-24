@@ -22,18 +22,19 @@ result, isolation receipt, database finalization, and workspace cleanup. The
 database must be disposable and independently cleaned by the caller; the probe
 does not create or drop it.
 
-`run_selected_end_to_end_probe.py` exercises PostgreSQL and MinIO through
-selected PRE admission, immutable Submission/initial dispatch and production
-request/completion handlers. It requires default-secret rejection and an actual
-external PRE image rejection to preserve `in_progress` with no new Submission.
-The latter uses `project-rejected.txt` as a fixture project rule, implemented
-only inside the image. It also tests unavailable-service recovery through fresh
-verified bytes and restarted completion delivery with exact replay. This hidden
-owner drill does not provide public contributor upload/CLI, false-guide
-activation or hosted gVisor deployment proof. Run it through the isolated-test
-runner so owned database, role and MinIO cleanup are checked.
+`run_public_journey_probe.py` is the current qualification entry point. Its
+shared submission path sends raw ZIP bytes to the public task submission API,
+retains the accepted202 receipt, and observes exact operation progress until the
+exclusive finalization worker commits Submission and POST dispatch. It uses no
+preparation endpoint, ready-admission JSON creation, or injected verifier task.
+Model qualification keeps one non-model PRE and one model POST; model/forge
+identity, accounting and governed-outcome checks remain explicit. The retired
+hidden-owner selected drill and its stored receipts describe historical runs,
+not current-HEAD qualification. Local cancellation/deadline/controller-loss
+vectors still need their separate current-source migration; the guard repair
+does not qualify those runs.
 
-The companion `run_public_journey_probe.py` starts with public project/guide
+The public journey starts with public project/guide
 creation, original synthetic Markdown bytes and two task examples. The public
 upload dispatches real Celery setup. Its explicit `guide_worker` entry point
 selects a recorded inference adapter through the existing typed runtime port;
