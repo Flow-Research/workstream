@@ -34,6 +34,12 @@ full-head qualification.
 ## Execution deployment decision
 
 The API/application server and microVM execution run on separate infrastructure.
+Celery workload queues must also have dedicated workers: no worker consumes a
+mixed queue list, and no catch-all worker handles unrelated workloads. Outbox
+publication must remain available while POST execution is stopped or saturated;
+it must not share the POST or submission-finalization consumer. The PRE6 drill
+accepted a fresh source but exposed publication waiting behind the paused general
+worker, so dedicated scanner delivery and the corresponding T5 proof remain open.
 The application instance is a verified t3.large; the dedicated always-on runner
 is an m7i.large with native KVM. App-origin mTLS health and native transport
 smoke receipts establish connectivity. V14 also proves the connected local API
