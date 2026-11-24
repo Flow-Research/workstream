@@ -10330,3 +10330,5 @@ checks unchanged. New helper/test stay below120lines, and the guard module is
 Commitrail is checked against bc4c37acd. Actual hosted validate_node remains a
 separate read-only check after review and incremental source staging. No
 supervisor start or native fault proof is claimed here; roadmap scope unchanged.
+
+Integrated runner config validation and focused PRE fixture at5c3be023d: combined worker-group cleanup and hosted-attachment suite passed41 tests plus73 subtests in26.57s. Ruff passed all six affected Python paths, whitespace passed and Commitrail passed. This verifies the combined local test tooling, not execution of the remote fault. Staging/read-only validation of the new runner-pinned source remains the next deployment action.
