@@ -27,7 +27,6 @@ from app.core.hashing import canonical_json_hash
 from app.modules.actors.api.service_identities import ServiceIdentity
 from app.interfaces.artifacts import ArtifactStoreUnavailableError
 from app.modules.artifacts.api import (
-    SubmissionBundlePreparationCheckFailed,
     SubmissionBundlePreparationRejected,
     SubmissionBundlePreparationRequest,
 )
@@ -38,9 +37,6 @@ from app.modules.artifacts.authorization import (
 from app.modules.checkers.models import CheckerRun, SelectedPreSubmitRun
 from app.modules.artifacts.models import (
     SubmissionBundleAdmission,
-)
-from app.modules.artifacts.submission_admission import (
-    PreparedSubmissionBundlePreparationCommand,
 )
 from app.modules.authorization.api import ActorIdentityFacts, ActorKind
 from app.modules.checkers.api.execution import CheckerExecutionUnavailable
@@ -61,8 +57,7 @@ from tests.tasks.post_submit_routing.remediation_support import (
 from tests.tasks.post_submit_routing.support import next_request, revision_archive
 from tests.tasks.submission_lineage_support import _verified_admission
 from tests.selected_predecessor_fixtures import (
-    _snapshot, _secret_archive, _assert_default_failure,
-    _queued_selected_body, _insert_selected_reservation,
+    _snapshot, _secret_archive, _queued_selected_body, _insert_selected_reservation,
 )
 
 
@@ -275,6 +270,11 @@ async def test_real_replacement_compares_consumed_predecessor_and_replays_exactl
             assert admission.checker_remediation_manifest_id == source_id
             assert admission.pre_submit_evidence_set_id is None
             assert selected is not None and selected.eligible
+            assert selected.request_json["default_context"]["predecessor"] == {
+                "submission_id": str(predecessor_id), "submission_version": 1,
+                "archive_sha256": predecessor_admission.archive_sha256,
+                "semantic_manifest_sha256": predecessor_admission.semantic_manifest_sha256,
+            }
             lineage = selected.request_json["admission_lineage"]
             assert lineage["predecessor_submission_id"] == str(predecessor_id)
             assert lineage["predecessor_submission_version"] == 1
@@ -415,73 +415,6 @@ async def test_blocked_replacement_precheck_preserves_revision_state(
             assert accepted.json()['status'] == 'accepted' and accepted.json()['replayed'] is False
             assert len(calls) == 1 and not errors, errors
             assert provider_writes == []
-
-
-async def test_replacement_loads_exact_consumed_predecessor(
-    tmp_path, isolated_database_env, monkeypatch,
-):
-    loaded = []
-    original_load = PreparedSubmissionBundlePreparationCommand._load_predecessor
-
-    async def traced_load(self, task_context):
-        predecessor = await original_load(self, task_context)
-        loaded.append((task_context.predecessor, predecessor))
-        return predecessor
-
-    monkeypatch.setattr(
-        PreparedSubmissionBundlePreparationCommand, "_load_predecessor", traced_load,
-    )
-    async with remediation_source(tmp_path, isolated_database_env) as h:
-        predecessor_id = h.created.submission_id
-        await _fixture_revision_context(h)
-        loaded.clear()
-        for data in (h.data, _same_semantics_different_archive(h.data)):
-            with pytest.raises(SubmissionBundlePreparationCheckFailed):
-                await _prepare(h, _replacement_request(
-                    h, data, predecessor_id=predecessor_id,
-                    idempotency_key=new_record_id(),
-                ))
-        changed_data = revision_archive(h.data)
-        baseline = await _snapshot(h)
-        secret_request = _replacement_request(
-            h, _secret_archive(changed_data), predecessor_id=predecessor_id,
-            idempotency_key=new_record_id(),
-        )
-        with pytest.raises(SubmissionBundlePreparationCheckFailed) as blocked:
-            await _prepare(h, secret_request)
-        await _assert_default_failure(
-            h, secret_request, blocked.value, baseline, "high_confidence_secret_detected",
-        )
-        idempotency_key = new_record_id()
-        admission_id = await _verified_admission(
-            h.factory, h.store, h.namespace, h.settings, h.actor_context,
-            _replacement_request(
-                h, changed_data, predecessor_id=predecessor_id,
-                idempotency_key=idempotency_key,
-            ),
-        )
-        replay = await _prepare(h, _replacement_request(
-            h, changed_data, predecessor_id=predecessor_id,
-            idempotency_key=idempotency_key,
-        ))
-        assert replay.admission_id == admission_id
-        async with h.factory() as session:
-            predecessor_admission = await session.get(
-                SubmissionBundleAdmission, str(h.creation_request.admission_id)
-            )
-            admission = await session.get(SubmissionBundleAdmission, str(admission_id))
-            assert admission.status == "ready"
-        assert len(loaded) == 5
-        for task_predecessor, artifact_predecessor in loaded:
-            assert task_predecessor.submission_id == predecessor_id
-            assert task_predecessor.version == 1
-            assert artifact_predecessor.submission_id == predecessor_id
-            assert artifact_predecessor.submission_version == 1
-            assert artifact_predecessor.archive_sha256 == predecessor_admission.archive_sha256
-            assert (
-                artifact_predecessor.semantic_manifest_sha256
-                == predecessor_admission.semantic_manifest_sha256
-            )
 
 
 async def test_replacement_dispatch_sql_rejects_cause_and_receipt_substitution(

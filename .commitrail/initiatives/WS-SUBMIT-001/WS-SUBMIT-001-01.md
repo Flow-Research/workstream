@@ -8695,3 +8695,21 @@ commit2b318e914. The positive path reaches consumed admission through T5 with
 the exact routing manifest, not an old ready-only preparation. Ruff/diff and
 Commitrail checks passed. This remains controlled runtime evidence, not live
 AWS/native public acceptance.
+
+Retire the implementation-only _load_predecessor probe in the same predecessor
+test module. Its five-call count belongs to the removed preparation workflow;
+raw/semantic refusal and secret/warning behavior are retained in the reviewed
+public cases above, and acceptance/replay/consumed lineage in
+test_real_replacement_compares_consumed_predecessor_and_replays_exactly. Move
+the exact predecessor ID/version/raw hash/semantic hash assertions into that
+public case's persisted PRE context before deleting the private probe/import.
+Allowed: this test module and record only. No production/retained data changes.
+Verify both review-policy parameters of the retained public replacement test,
+Ruff/diff, and QA assertion-preservation review. Other old writer callers remain.
+
+Both retained public replacement/replay policy cases passed in57.17s with the
+explicit predecessor context assertions. Receipt
+/tmp/submission-public-predecessor-context.json records schema0090 and complete
+PostgreSQL/MinIO cleanup; its launcher HEAD was9836bfcd5 with these test edits.
+This removes only the duplicated private-method probe; the remaining old SQL
+reservation/admission fixtures still require migration before writer retirement.
