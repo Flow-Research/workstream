@@ -97,7 +97,7 @@ and truthful loaded-page/evidence states, without new API or product operations.
 [WS-CLI-001-51](../.commitrail/initiatives/WS-CLI-001/WS-CLI-001-51.md) adds direct
 collection navigation and confirmed Claim through the existing
 public API, with caller-owned saved keys and explicit replay. Contribution
-Evidence remains an explicit CLI handoff; ZIP preparation/Submission, other
+Evidence remains an explicit CLI handoff; ZIP submission, other
 TUI mutations and management remain separate. Neither this interface nor release automation
 establishes hosted operation or a published binary.
 
@@ -107,20 +107,25 @@ CLI and MCP cannot edit email. Optional issuer name seeds first admission; subse
 display-name edits, including clearing it, remain local. Identity and authority remain
 bound to issuer/subject, not email; signed email is not proof of mailbox verification.
 
-The [single-request submission specification](spec_submission_execution.md) is
-the approved target for [WS-SUBMIT-001](../.commitrail/initiatives/WS-SUBMIT-001/OVERVIEW.md).
-Its hidden owner boundaries define immutable command/source values and durable
-foreground intake custody with a matching TASK pointer, source/lease fences and
-per-operation physical source reservations under explicit limits. Hidden bounded
-receipt and S3-compatible source capabilities cover conditional completion and
-exact-version reads. Local source methods preserve one ZIP inode through sealing
-and completed bytes on late abort. Private upload composition commits intent
-before provider begin, handle before parts, and EOF before provider completion,
-then binds the resulting source under the current fence.
-Full foreground authorization/heartbeat integration, cleanup orchestration, AWS
-source qualification, one-session PRE, accepted handoff,
-finalization and client cutover remain planned;
-the active API still uses preparation followed by admission-consuming submission.
+The [single-request submission specification](spec_submission_execution.md) governs
+[WS-SUBMIT-001](../.commitrail/initiatives/WS-SUBMIT-001/OVERVIEW.md). The current
+implementation exposes one raw-ZIP mutation through API, CLI and MCP, with durable
+intake/source custody, bounded streaming, one-session PRE, atomic T4 acceptance
+and dedicated durable T5 finalization into the existing Submission/POST owners.
+Exact source generations stay protected while accepted work awaits finalization.
+Indexed cleanup reconciles known operation writes and releases charges only after
+confirmed settlement; genuinely absent-operation inventory is optional.
+
+Superseded preparation writers are removed; authorized historical reads remain.
+New policies require exactly one project image per phase, separate from the
+Workstream PRE default. Locked `human_review_required=false` lets passing required
+POST invoke shared automatic acceptance and contribution/award creation. Default
+true retains `review_pending` and its guards; live human review remains deferred.
+Scoped PostgreSQL/MinIO, client and real Redis/Celery child-recovery proofs exist.
+The separate runner has native transport and app-origin mTLS connectivity evidence;
+complete public native acceptance, maximum/resource and failure qualification,
+AWS source permissions/version cleanup, hosted activation and final A01–A35/C01–C07
+closure remain deployment/release gates. Implementation is not hosted qualification.
 
 ## Product Goal
 
@@ -129,7 +134,7 @@ Workstream turns governed work into trusted `ContributionRecord` facts:
 ```text
 Project Guide
 -> governed Task
--> artifact preparation and pre-submission intake checks
+-> raw ZIP upload and pre-submission intake checks
 -> immutable Submission
 -> post-submission evaluation against locked requirements
 -> policy-governed acceptance: authorized human Review or automated decision
@@ -271,10 +276,10 @@ shared Harnessy retains its minimum of one. Locked false ReviewPolicy passing
 POST reached shared acceptance, one submitter ContributionRecord and one earned
 100 FLOW award with null Review references. [Exact hosted evidence](reports/garden-hosted-drill-2026-11-06.md). Managers discover exact activation selections through the authorized
 draft post-policy read; Finance publication remains separate. Task policy
-lineage, public ZIP preparation and admission-backed immutable Submission creation
-are implemented for initial work and exact checker remediation. Their complete
-public API and Celery service journey passed its bounded local drill under
-public guide inputs and recorded inference. TASK
+lineage and raw-ZIP accepted-source finalization are implemented for initial work
+and exact checker remediation. Earlier preparation/admission journey receipts
+remain historical evidence; they do not qualify the replacement native public
+submission flow. TASK
 now reserves and replays exact post-submit routing requests internally. Hidden
 AUTH binds those requests to exact source and branch consequences through
 canonical PREP. The hidden authorized outcome operation commits source custody
@@ -310,9 +315,9 @@ Operator reconciliation classifies uncertain post-submit request/completion
 deliveries and appends at most one child to verify committed effects or invoke
 the existing owner after proving no effect. Unresolved sources and an UNKNOWN
 child remain held. Full hosted interruption proof remains outstanding. PILOT-04 registers
-selected request and completion handlers in production composition. ARCH-02I-B
-publishes ZIP preparation and the canonical admission-backed Submission POST in
-OpenAPI. Current completion classification has no `task_setup_blocked` path, so
+selected request and completion handlers in production composition. WS-SUBMIT-001
+publishes the raw-ZIP Submission POST and exact submission-operation progress in
+OpenAPI; the superseded preparation mutation is absent. Current completion classification has no `task_setup_blocked` path, so
 a manager-visible setup-fault hold is future safety work rather than a
 first-journey prerequisite.
 
@@ -473,8 +478,8 @@ separate. CLI contribution-evidence commands now provide self and authorized
 project reads, including exact server CSV downloads. Backend fixed-membership
 pagination and the CLI's bounded internal traversal preserve complete selections
 through 100,000 contributions without exposing cursor controls.
-Explicit CLI ZIP preparation, admission-backed creation/replay, submission history
-and contributor checker findings now consume the public APIs. PILOT-READ-1 adds
+CLI raw-ZIP submission, accepted receipt replay, exact operation progress,
+submission history and contributor checker findings consume the public APIs. PILOT-READ-1 adds
 typed attempt status, `decided_at` and finding counts to history, and per-finding
 `check_id`/`path`/`line` to checker results. The CLI also exposes the seven
 existing manager task requirements/context,
@@ -500,9 +505,9 @@ task import batches and ZIP preparations with finding counts; plus the Finance
 list of every ContributionPolicy version. The CLI `project guide
 list|show|readiness|document`, `project submissions|assignments|summary|import-batches`,
 `project preparations` and `project contribution-policy list` commands consume
-them. Preparation does
-not create a Submission; readiness recovery is an explicit same-key POST replay,
-not a polling GET. PILOT-08 exposes frozen revision-change summaries through
+them. Historical preparation reads remain available. The current raw-ZIP command
+returns accepted custody before durable finalization creates the Submission;
+selector-bound GETs observe progress and exact same-key POST resolves replay. PILOT-08 exposes frozen revision-change summaries through
 contributor task context and requires the exact preparation acknowledgement for
 checker-remediation intake. CLI submission/history text distinguishes the absence
 of that summary in historical responses from the separate current task-context
@@ -628,8 +633,9 @@ Both stages enforce quality, but answer different questions and produce
 different outcomes. They are not one combined checker phase.
 
 The phase is distinct from the execution method. Static inspection and other
-checks that can reliably finish within 60 seconds belong before Submission
-creation, even when they use durable execution and polling. Longer work,
+checks intended to meet the approximately 60-second experience target belong
+before Submission creation. PRE runs in the foreground with an explicitly
+qualified finite aggregate envelope; 60 seconds is not an inferred hard cutoff. Longer work,
 repeated trials and model evaluation belong in background POST. Automation alone
 does not make a check POST. Recording a model evaluator's inputs and result does
 not promise identical judgments on rerun; it still needs an explicit
@@ -637,7 +643,7 @@ implementation, runtime dependency and policy binding.
 
 | Stage | Purpose and examples | Policy and execution boundary | Outcome |
 | --- | --- | --- | --- |
-| Pre-submission intake checks | Is this bounded package check acceptable before creating a Submission? Check static structure, required/forbidden files, evidence integrity and other work that reliably completes within 60 seconds. | The locked selected PRE policy runs the single Workstream default followed by every required digest-pinned project image on ART-verified material. PRE may use durable execution and polling, but a proposed check and selected registry deadline must remain within the 60-second boundary. | Blocking failures return correction feedback and prevent Submission creation. Passing intake does not prove the task is accepted or ready for review. |
+| Pre-submission intake checks | Is this bounded package check acceptable before creating a Submission? Check static structure, required/forbidden files and evidence integrity within the qualified PRE envelope. | One PRE session runs the Workstream default followed, on success, by the single approved project image against the exact sealed source. The foreground operation has explicit admission and aggregate deadlines; POST and T5 use durable consumers. | Blocking failures return correction feedback and prevent Submission creation. Passing intake does not prove the task is accepted or ready for review. |
 | Post-submission evaluation | Does the submitted work meet checks that need longer execution, repeated trials or model evaluation? Evaluate the exact immutable work and evidence under the locked requirements. | The Submission-stamped external POST policy drives approved digest-pinned images through the Rust service and durable `CheckerRun` ownership after immutable Submission creation. Only supported, registered checks execute. 04F1 verifies current completed failure evidence through the same CHECKERS port. The locked project revision policy requires an explicit integer cap `N >= 0` and positive deadline hours. | Persist current evidence. The hidden authorized operation publishes exact source custody. `allow_review` branches on locked ReviewPolicy: true moves TASK to `review_pending`; false invokes shared acceptance under TASK authority. Exact current `needs_revision` with another revision remaining moves TASK to contributor remediation under either mode, with a running or setup-paused PostgreSQL window and no REV/CON effects. Failure on the final permitted attempt immediately records rejection and exhaustion, closes the assignment as `revision_exhausted`, and returns TASK to `ready` without another preparation or window. CHECKERS never writes TASK state or acceptance itself. B8 supplies completion custody; PILOT-04 registers selected request/completion production delivery. |
 
 PR #697's intended initial setup reads only assigned guide documents and task
@@ -646,12 +652,12 @@ and POST check specifications, never registry matches, image choices or runtime
 availability. PM and engineering review the suggestions; engineering implements
 and registers external images. An authorized Project Manager makes explicit PRE
 and POST image attachment choices during policy approval. The phase lists are
-independent of suggestion IDs and may intentionally be empty; the Workstream
+independent of suggestion IDs and each require exactly one approved project image; the Workstream
 PRE default stays separate. Approval locks exact image digest and configuration.
 Registration after proposal does not change its hash or require another setup
 run. Missing implementation does not block a source-sufficient proposal. Both
-phase lists must be present; explicit empty lists are valid, and suggestions impose
-no image-membership requirement. Retained
+phase lists must be present and contain exactly one selection; missing, empty or
+multiple selections are rejected. Suggestions impose no image-membership requirement. Retained
 result bytes and hashes remain immutable evidence, not an alternate compiler or
 executor. Setup inference is not a runtime judge.
 The inference adapter drafts a candidate, then reviews source coverage in a fresh
@@ -683,8 +689,8 @@ cannot be reused as post-submission review-gate evidence. See the
 | Operator artifact diagnosis | **Public API and CLI with exact Operator authority** | Eight bounded artifact GETs use current persisted system-Operator grants and exact AUTH decisions, with response-validated read commits and concealed denials. An independently guarded reasoned verification retry atomically records its decisions, recovery chain and audit; exact replay rechecks authority. The CLI consumes all nine routes, with malformed-lineage rejection and receipt-specific pagination. Signed PostgreSQL proof covers eligible retry, exact replay, wrong-resource refusal and revoked-Operator concealment. | Hosted S3 proof remains separate; diagnosis does not grant provider access or activate AWS |
 | Bulk task import | **Public backend and CLI batch journey** | PILOT-02A supplies exact source custody; PILOT-02B imports 1..500 verified JSON rows under one immutable native batch, retains per-Task AUTH/TaskCreated facts, recovers exact original IDs with fresh authority and exposes batch status; actual 200-row, rollback, concurrent-wait and SQL-custody controls pass on PostgreSQL/MinIO. PILOT-02C adds atomic whole-batch screen/release with fresh per-Task authority, locked guide/policy custody and explicit CLI/CSV commands. WS-CLI-001-31 adds bounded, hash-checked CLI source download through public custody with no-overwrite local publication. Optional task-local criteria remain optional through single/bulk screening and release; required instructions and guide locks remain enforced. | No remaining PILOT-02 implementation gate; deployment and full contributor-lifecycle proof are separate |
 | Contributor artifact preparation | **Public initial and checker-remediation entry** | One outer ZIP up to 500 MiB through the published preparation route (MCP transport: 64 MiB); scratch reservations grow before writes from counted bytes plus bounded headroom; unreadable or structurally rejected ZIPs return sanitized non-retryable 422 feedback before PRE reservation or durable effects; bounded scratch inspection; canonical manifest; shared evaluation-content capacity and exact locked-policy checks before attempts or durable intent; platform and project prechecks; unchanged-work rejection; durable put intent; verification; capacity-charged ready admission; final handoff validates the exact activated historical guide through owner ports; same-key ready replay does not repeat checker or PUT. The preparing contributor reads back their own preparations with outcome, storage state, finding counts and intake findings (PILOT-READ-2); a Project Manager lists a project's preparations with finding counts only (PILOT-READ-3). CLI preparation, read-back, creation/replay and history consume these public owners | Bounded local API/CLI journeys and hosted PRE rejection, lost-response recovery, ready admission and exact replay passed. Hosted CLI/MCP preparation, creation and replay passed in the [fresh resource-qualified journey](reports/managed-mcp-hosted-2026-11-07.md#sealed-size-resource-qualification-and-fresh-hosted-journey). Complete remaining intake negatives, isolation and interruption scenarios |
-| Pre-submission intake checking | **Public selected entry with approved-guide lineage and bounded feedback** | One versioned Workstream default checker enforces safe ZIP/resource bounds, independently verified digest/manifest, high-confidence secret rejection and unchanged-work rejection. Missing summary/attestation produces warnings only. Successful preparation and its exact replay return the same bounded intake results as a blocked one (PILOT-READ-1), so nonblocking findings such as coverage gaps stay visible; CLI preparation prints them. Approved project PRE checks are immutable digest-pinned images run by the Rust service on verified read-only ART material. A supported system Operator API and explicit CLI commands register and read exact immutable external-checker entries with server-selected UUIDv7 identity, fresh authority and replay recovery. Durable selected custody takes TASK before CHECKERS; only a complete pass grants admission to the existing atomic Submission transaction. Both executable catalogues are removed. CLI preparation prints bounded contributor failure details. The same typed adapter also accepts the Smol node's fresh microVM execution receipts, with bounded concurrency and exact-lease recovery; ART uses a separate typed trusted intake capability, prepares after authorized upload/download has been sealed and counted, verifies raw guest exports and closes intake before project execution. API and Celery workers require a configured pinned Smol intake image/socket. Hosted API/Celery composition uses one native Smol endpoint for typed intake and project execution, with read-only client socket mounts and no Compose checker controller. The isolated public Smol drill proved the preceding upload-overlap implementation, zero/two PRE bindings, cancellation, bounded runtime retry/recovery and public Operator POST retry through both governed policy branches | Bounded self-hosted Smol/Celery proof and hosted selected PRE rejection/pass with AWS-verified admission passed. Complete the remaining ZIP, interruption and representative-limit matrix; production Flow certification remains separate. Registry publication alone does not activate an image or change a saved proposal. Work findings create no Submission and preserve in_progress; infrastructure failures retain recoverable outcomes. PR #697 requires explicit authorized phase attachments at approval; public REV lifecycle controls are a separate boundary. Seal-first sizing uses a required image/runtime-bound storage envelope. Pinned cold/maximum-input qualification and a separate fresh hosted CLI/MCP PRE-to-contribution journey passed; [resource evidence and limits](reports/managed-mcp-hosted-2026-11-07.md#sealed-size-resource-qualification-and-fresh-hosted-journey) distinguish VM floors, measured latency and canonical-owner fixtures from public maximum-size uploads. |
-| Immutable Submission creation | **Public admission-backed entry with explicit CLI consumption** | Canonical POST derives contributor identity and consumes a ready admission for initial work or exact checker remediation; durable pre-submit reservation and same-key ready recovery without rerunning checks or PUT; TASK-owned atomic creation with exact assignment ContributionPolicyVersion, locked policy lineage and service/database checked-packet custody; fixed-service artifact binding; exact replay, authority, concurrency and rollback proof. CLI creation/replay and bounded history use these public owners | Bounded local API/CLI unpaid automated-acceptance journeys and hosted immutable Submission creation/exact replay passed. The small hosted POST-to-contribution journey and accepted-state submission replay passed; Garden v3 additionally passed real current-head POST and exact accepted-state replay with one 100 FLOW award. Broader interruption proof remains. Live human-review revision remains separate |
+| Pre-submission intake checking | **Public raw-ZIP intake with durable source custody** | Bounded streaming seals one exact source before one PRE session runs the Workstream default and, on success, one approved project image. Current authorization, leases, task locks, source generations and replay fences guard T4. Bounded findings distinguish QC rejection from infrastructure failure. The remote typed adapter separates API/application services from native execution; host-specific isolation stays in the provider. | Complete native public acceptance and remaining failure, isolation, capacity and maximum-input qualification. Historical upload-overlap/zero-or-multiple-PRE drills do not qualify the current flow. App-origin mTLS and native transport smoke are proved; hosted activation and AWS source qualification remain open. |
+| Immutable Submission creation | **Accepted-source finalization with API/CLI/MCP progress** | T4 atomically records pending task custody, accepted receipt and outbox event. Dedicated durable T5 consumes that exact source into one Submission, retained binding and initial POST dispatch under recorded authority. Source cleanup cannot delete accepted work. Real Redis publication outage and Celery child-death/redelivery preserve one graph; exact replay and rollback have scoped PostgreSQL proof. | Complete the connected native public journey, AWS exact-version qualification, hosted cutover and final acceptance matrix. Earlier preparation/admission and Garden receipts remain historical, not qualification of the replacement flow. Live human review remains deferred. |
 | Post-submission evaluation and governed outcome | **Selected external execution and production completion routing** | Immutable approved image bindings, Rust service/SDK and typed ART callback grants; exact verified input custody, bounded normalized JSON results and phase authority. Project-owned digest-pinned images implement project requirements inside the generic service contract; the former named terminal-benchmark continuation is retired. The shared service does not interpret project-private build plans or provide a host-side continuation. Production outbox request/completion handlers run selected images and preserve exact restart/replay. True-policy success reaches review_pending; false-policy success invokes shared authorized FinalAcceptance and atomically creates the submitter ContributionRecord and complete frozen award set. Contributor-correctable failures retain exact remediation causes; a supported public system-Operator read and explicit CLI page list expose known finalized infrastructure failures; exact public/CLI retry invokes the existing owner with fresh authority and no spent contributor round. Supported uncertain request/completion reconciliation uses at most one immutable child to verify committed facts or invoke the existing owner after proving no effect; unresolved sources and an UNKNOWN child stay held. PILOT-READ-1 extends the single external result contract with findings carrying `check_id`, `path`, `line` and the `coverage_incomplete` level, and stores each finding immutably. A coverage gap without errors never auto-accepts: under a true ReviewPolicy it reaches review_pending, otherwise it returns to the contributor as `needs_revision` (`checker_coverage_incomplete`) without spending a revision round. Each Submission records its evidence-guarded attempt outcome and decision time. The bounded local public API/Celery drill passed both branches, prefork Celery process restart and late authority revocation | Live human review and human-triggered contributor revision remain separate #554 work. The merged false-activation guard uses the earlier approved requirement inventory; PR #697 replaces that dependency with explicit human phase attachments and the locked ReviewPolicy guard. New false/pass effects require LIVE REV bound to the current reviewed manifest; a known pre-effect refusal retries within the existing OUTBOX budget, then dead-letters if exhausted. The full hosted interruption drill for uncertain request/completion reconciliation remains outstanding. True handoff has no REV/CON prerequisite. Project-specific image correctness, registration, approved-policy activation and qualification on the intended runtime remain separate requirements. Former named-profile experiments are historical evidence. Hosted automatic dispatch and infrastructure-failure retention were observed. The repaired image passed controlled native trials and additive deployment; the small incident-summary pilot independently proves a real negative, corrected positive and exact contribution outcome. [Garden v3](reports/garden-hosted-drill-2026-11-06.md) adds one open-PR current-head POST pass through durable workers to shared acceptance and a 100 FLOW award; its POST negative cases are controlled image evidence only. Advanced benchmark trials/model grading and broader interruption proof remain separate |
 | Operator uncertain-delivery CLI | **Existing public delivery routes consumed by explicit CLI commands** | WS-CLI-001-40 adds one project-bound page of finalized UNKNOWN deliveries and a deliberate reasoned, UUID-keyed reconciliation of one exact event. Fresh backend authority and classification remain decisive; a page never authorizes a later write. | Native signed PostgreSQL proof is scoped to an owner-produced source; a hosted interruption and deployed CLI remain unproven |
 | Review queue and lease | **Hidden persistence foundation** | Queue/admission idempotency and ReviewLease/preference persistence; complete unavailable REV action/principal catalogue and typed AUTH contracts; ART-07A1 metadata-only packet contract and REV-03B immutable normalized packet persistence with live ingest custody; REV-04A Review/finding/resolution and completed request storage | Future resolver proof; canonical admission from `allow_review`; claim/lease/packet authority; lease copies the Submission-stamped policy version with no CON lookup |
@@ -1357,7 +1363,8 @@ hidden exact-cause replacement intake and 04F4 supplies the retry owner; the
 supported public Operator discovery/retry path now invokes it. PILOT-04
 registers selected request and completion delivery in production composition; passing
 false-policy results use the shared atomic acceptance operation. ARCH-02I-B
-publishes admission-backed initial and checker-remediation Submission entry.
+supplied the earlier admission-backed entry; WS-SUBMIT-001 now exposes raw-ZIP
+accepted custody and durable finalization for initial work and checker remediation.
 Live setup does not wait for downstream task/checker execution.
 
 The [first complete contributor milestone](../.commitrail/initiatives/WS-ARCH-001/planning/PLAN.md#first-complete-contributor-milestone)
@@ -1549,10 +1556,11 @@ Delivered foundations (bounded local journey proven; no deployment claim)
   privacy-bounded API/Celery diagnostics (current export disabled; collector optional)
   digest-only API/Celery/Beat/checker release configuration (hosted proof still required)
   WS-EXEC-001-01 Smol node + existing typed execution adapter + exact-lease recovery
-  WS-EXEC-001-02 authorized upload/download overlap + trusted guest ZIP/default intake
-  WS-EXEC-001-02 public Smol API/Celery proof + required hosted intake configuration
+  historical WS-EXEC-001-02 upload-overlap receipts remain historical
+  WS-SUBMIT-001 raw ZIP -> sealed source -> one PRE -> atomic T4 pending custody
+    -> dedicated durable T5 -> immutable Submission/binding -> POST
     -> locked true: review_pending; locked false: shared acceptance + contribution + applicable award
-    -> intended hosted deployment proof with actual Flow/AWS identities remains separate
+    -> separate API/runner transport verified; complete native/hosted journey remains required
   verified guide originals -> explicit PM assistance OR provider-free uploaded rules
     -> unified compilation -> separate manager pre/post approvals
     -> existing activation guards (human review defaults true; approved false supported)
@@ -1574,7 +1582,7 @@ Delivered foundations (bounded local journey proven; no deployment claim)
   WS-CLI-001-51 existing public claim -> explicit TUI confirmation + caller-owned key
     direct Ready/Mine/Submissions navigation; unknown -> explicit unchanged replay
     later ZIP/Submission need per-operation recovery; Evidence needs typed single-page port
-  task/assignment/Submission lineage + public ZIP intake/admission-backed creation
+  task/assignment/Submission lineage + public raw-ZIP accepted-source finalization
   ARCH-03D exact approved historical guide through durable intake handoff
   ARCH-04B hidden verified Submission input
   shared setup/POST model-call ART request/response custody with exact owner authority
@@ -1730,12 +1738,21 @@ and award history never changes.
 Client scope remains distinct from product completion: the contributor TUI
 presents existing reads/downloads plus deliberate claim with
 externally saved replay keys. It does not complete human review, payment or
-hosted proof. In-TUI Contribution Evidence, ZIP preparation/Submission and
+hosted proof. In-TUI Contribution Evidence, ZIP submission and
 automatic crash recovery remain separate interface boundaries,
 not new backend lifecycle prerequisites. CLI binary distribution still requires
 protected publication and independent public-asset/install verification.
 
 v0.1 is not ready until all of the following are true:
+
+- Qualify the current single-request submission flow, not only its historical
+  preparation/admission predecessors: public native PRE/T4/T5/POST and automatic
+  acceptance, exact retained source/contribution facts, failure/retry behavior,
+  maximum/slow-upload memory, isolation and capacity. Qualify AWS source IAM and
+  exact-version cleanup before opening its gate; activate separate-runner hosted
+  API/consumers with measured/approved C01–C07 settings and reconcile A01–A35.
+  Default review_pending remains protected; live human review is deferred from
+  this submission initiative. See [WS-SUBMIT-001](../.commitrail/initiatives/WS-SUBMIT-001/OVERVIEW.md).
 
 - Finish PR #697 proposal/attachment separation verification and reproduce the
   connected guide-to-contribution journey
@@ -2070,21 +2087,19 @@ The [offline gVisor build spike](engineering/pilot00-gvisor-offline-build-spike.
 selects a sealed-cache Kaniko builder plus a separate gVisor oracle sandbox for
 PILOT-04/PILOT-06. PILOT-04 now has a normalized external request/result
 contract, immutable authorized digest-pinned registry, selected Rust service/SDK
-with a typed Unix-socket adapter and request-bound ART grant, and one versioned
+with typed execution adapters and request-bound ART grants, and one versioned
 Workstream default checker with exactly four blocking outcomes. Both executable
-catalogues are removed. Verified ZIP/default checks precede approved external PRE
-images; only a complete pass permits immutable Submission creation and durable
-POST dispatch. Under PR #697, setup suggestions do not select registered images;
-an authorized Project Manager supplies exact phase attachments, including
-intentional empty lists, and approval locks their digest/configuration identities.
-Registration alone grants no project authority. Both phase lists must be present;
-explicit empty lists are valid, and suggestions impose no image-membership
-requirement. Production completion routes true-policy success to review_pending
+catalogues are removed. The sealed-source PRE session runs default checks before
+one approved external PRE image; passing T4 accepts durable custody for T5 and
+POST. Setup suggestions do not select registered images. An authorized Project
+Manager supplies exactly one attachment per phase, and approval locks its digest
+and configuration. Registration alone grants no project authority; suggestions
+impose no image-membership requirement. Production completion routes true-policy success to review_pending
 and false-policy success through shared atomic acceptance. Default failures prevent
 Submission creation; infrastructure failures retain recoverable outcomes. Local
 Rust/MinIO integration evidence uses runc/docker-dev, not gVisor. ARCH-02I-B
-delivers public Submission entry; CLI25 consumes it through explicit preparation,
-creation/replay and history/findings commands. The spike proves only the included small Linux fixture;
+supplied the earlier public entry; WS-SUBMIT-001 replaces that writer with raw-ZIP
+acceptance, progress and replay across API/CLI/MCP while preserving history/findings. The spike proves only the included small Linux fixture;
 representative task sizing, hosted hardening and macOS fallback evidence
 remain.
 

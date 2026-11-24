@@ -9374,3 +9374,28 @@ update; it now points at current public raw-ZIP flow and labels old drill
 receipts as history, retaining the mandatory local-vector gap.
 Structure and Ruff/diff pass; final record/link checks follow this append.
 No remote action, deployment or paid request occurred.
+
+### Reconcile current delivery scope and capability claims
+
+Allowed scope: affected submission statements in roadmap_status.md, this
+initiative overview/index and local one-sheet XLSX/CSV exports. The ledger still
+describes the removed two-step writer, empty phase selections and unimplemented
+T4/T5; replace those with current owners and distinguish implementation from
+unqualified deployment. Preserve default review_pending and user-deferred live
+human review, historical receipts, mandatory known-operation cleanup and all
+remaining runtime/provider/resource evidence. Do not mark the initiative complete
+or imply AWS/native public acceptance from component tests. Verification: compare
+claims to current routes/guards and named receipts, Markdown/stale-wording checks,
+and exactly one WorkStream RoadMap export sheet with current definition.
+
+Reconciled executive submission summary, lifecycle scoreboard, dependency map,
+release gates and current initiative/index boundary against the current raw-ZIP
+route, exactly-one phase guards, indexed cleanup and recorded broker/native
+transport proofs. Older named hosted receipts remain historical. The initiative
+stays Planned; no complete native public or AWS qualification is claimed.
+Local ignored sheets/workstream_roadmap.xlsx and CSV export the25 lifecycle
+scoreboard rows plus current README definition. Verified identical cell data,
+exactly one sheet named WorkStream RoadMap and gitignore exclusion. Markdown
+links, stale authorization/review scans and diff checks pass. Full Go CLI
+suite also passed on4652f39bd (/tmp/submission-cli-go-current.log); later changes
+touch qualification scripts/docs only. Latest main fetch found0missing commits.

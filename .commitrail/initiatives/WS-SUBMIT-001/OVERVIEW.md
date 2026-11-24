@@ -25,7 +25,7 @@ limits are in [the change record](WS-SUBMIT-001-01.md).
 - [x] Unsealed cleanup and discovered multipart handles use durable cleanup ownership; ambiguous empty discovery retains its charge.
 - [x] Admission-only TASK writer removed; accepted-source finalization remains the sole Submission writer.
 - [x] Source-backed POST reaches both default human review and automatic acceptance with exact contribution/award lineage and replay checks.
-- [x] Actual finalizer process death before source observation and after commit has separate recovery receipts; real broker qualification remains open.
+- [x] Real Redis publication recovery and Celery child SIGKILL/redelivery before observation and after commit preserve one finalized graph (08fd205d0); parent-process/Beat and deployed qualification remain separate.
 
 Recent focused evidence includes atomic invalidation (`8a854f7a6`), public
 ZIP/T5 lineage (`168e5268f`), and policy-error translation (`d31a45773`). These and the cleanup/recovery runs recorded below are bounded results, not
@@ -34,10 +34,11 @@ full-head qualification.
 ## Execution deployment decision
 
 The API/application server and microVM execution run on separate infrastructure.
-The user reports a new t3.large EC2 application instance; this is deployment
-context, not independently verified provisioning evidence. Do not require nested
+The application instance is a verified t3.large; the dedicated always-on runner
+is an m7i.large with native KVM. App-origin mTLS health and native transport
+smoke receipts establish connectivity, not the complete deployed submission journey. Do not require nested
 virtualization, a Smol binary, host sockets or local KVM on the API instance.
-Self-hosted microVM execution will use dedicated runner infrastructure. A paid
+Self-hosted microVM execution uses dedicated runner infrastructure. A paid
 sandbox may implement the same qualified execution capability later.
 
 One PRE session means one isolated execution session per PRE operation, not one
@@ -84,15 +85,17 @@ journey. The remaining cleanup and verification requirements below still apply.
 
 | Order | Required outcome | Concrete finishing evidence |
 | --- | --- | --- |
-| 1 | Finish remaining uncertain/orphan reconciliation | Reconcile interrupted multipart and lost acknowledgements; retained/stalled sources survive; actual absence and settled writes release charges once; exercise worker loss/restart. |
-| 2 | Retire remaining superseded preparation writers and consumers | Trace all remaining callers, preserve their distinct authority/history contracts, then delete obsolete implementation. Current T5 `create_accepted` remains. |
-| 3 | Complete separate-runner integration and runtime/provider/resource qualification | Authenticated remote execution replacing the current API-side Unix-socket coupling; actual Smol one-session/isolation proof on runner infrastructure; representative maxima, cold paths, concurrency and timing measurements; applicable AWS exact-version/uncertain multipart proof. Portable/MinIO evidence is insufficient for these claims. |
+| 1 | Qualify the connected public journey | Real PRE, durable T5, POST and automatic acceptance under locked false ReviewPolicy; exact ZIP, source generation, ContributionRecord and applicable awards; failures and replay. Preserve default review_pending guards. |
+| 2 | Finish affected qualification callers | Preparation API/materialization and the admission-only TASK writer are removed. Current qualification scripts use raw ZIP acceptance and dedicated finalization; remaining runtime fault vectors must use that same flow and preserve their evidence. |
+| 3 | Complete separate-runner integration and runtime/provider/resource qualification | Activate the prepared authenticated remote configuration on the app deployment; actual Smol one-session/isolation proof on runner infrastructure; representative maxima, cold paths, concurrency and timing measurements; applicable AWS exact-version/uncertain multipart proof. Portable/MinIO evidence is insufficient for these claims. |
 | 4 | Execute final full-system verification and close the acceptance matrix | Full backend lanes, CLI/MCP contracts and CI at the final head; every A01–A35 row linked to an executed, scope-matching result. Fix actual failures without weakening requirements. |
 | 5 | Reconcile configuration and delivery documentation | Resolve C01–C07 using measured/approved values; update affected roadmap/overview/index and local spreadsheet exports; preserve the distinction between implemented, exposed and deployed. |
 
-The next integration boundary is the separate runner and live source provider,
-in parallel with the remaining writer audit. Ordinary unsealed cleanup is
-implemented; genuine-orphan reconciliation remains open. AWS policy and adapter
+The next integration boundary is the complete public journey and live AWS source
+qualification. Ordinary indexed unsealed cleanup is implemented. Spec §17.4 makes
+inventory for genuinely absent operation records optional; it is not a new
+scanner prerequisite. Uncertain writes of known operations remain owned and
+conservatively charged until proved settled. AWS policy and adapter
 drill preparation are reviewed, but IAM administration access is pending and no
 live source qualification has run. Do not repeat completed local proofs as a
 substitute for connecting and testing the deployed journey.
@@ -106,10 +109,10 @@ lost-abort/replay case proves conservative charge retention then one release.
 Remote initiation without a recorded handle now retains discovered IDs before
 abort and binds them to a fresh cleanup authorization. Focused PostgreSQL/MinIO
 checks cover growing observations and lost-abort replay. Empty ambiguous
-discovery remains charged; genuine-orphan reconciliation and deployed operational
-drills remain open. Actual local finalizer SIGKILL recovery has separate passing
-before-observation and after-commit receipts, not a real broker crash proof.
-This partial implementation does not complete order 1.
+discovery remains charged; deployed cleanup qualification remains open. Real
+Redis outage recovery and Celery child redelivery are proved with unchanged
+production leases/backoff; these do not qualify broker-server loss or hosted
+operation.
 
 ## Acceptance evidence still to close
 
@@ -120,19 +123,20 @@ This is the final qualification queue, not a claim that all listed code is absen
 | --- | --- | --- |
 | A01–A03 | Public ZIP flow, default/project PRE and formal finalization tests | Complete API/CLI journey with required real runtime and POST evidence. |
 | A04–A08 | Metadata/body replay, competing custody, interruption and T4 uncertainty tests | Reconcile exact cases and execute integrated final-head failure/retry matrix. |
-| A09–A13 | T5 rollback/redelivery, actual local SIGKILL recovery, accepted authority, pending reads and old-POST guard | Real Celery/broker-unavailable drill and final-head reconciliation. |
+| A09–A13 | T5 rollback/redelivery, actual local SIGKILL recovery, accepted authority, pending reads and old-POST guard | Real Redis publication outage and Celery child-redelivery proofs passed; reconcile the remaining exact cases at the final head. |
 | A14–A18 | Cleanup lock/retention/charge owners and Local/MinIO provider tests | Production sweeps, accepted-source survival, AWS versions and uncertain multipart ownership. |
 | A19–A23 | Streaming/framing, safe archives, semantic identity and bounded findings code/tests | Measured permitted maxima/slow-provider memory bounds and complete safety matrix. |
 | A24–A30 | Source/result/fence contracts and runtime/capacity/substitution tests | Actual native isolation/failure/cleanup, multiple replicas/nodes, saturation and adapter qualification. |
-| A31–A32 | Source-backed POST reaches review_pending or shared automatic FinalAcceptance with exact contribution/awards and replay checks | Complete public-API/native journey and final combined downstream tests, including human acceptance. |
-| A33–A35 | Retained migrations, cardinality guards and API/CLI/MCP cutover | Finish old-writer retirement and full current-head migration/client convergence proof. |
+| A31–A32 | Source-backed POST reaches review_pending or shared automatic FinalAcceptance with exact contribution/awards and replay checks | Complete public-API/native automatic acceptance and final downstream tests. Keep default review_pending guards; live human review remains explicitly deferred by the user. |
+| A33–A35 | Retained migrations, cardinality guards and API/CLI/MCP cutover | Affected old writers are retired; finish current-head migration/client convergence and remaining qualification callers. |
 
 ## Configuration and external evidence
 
 C01–C07 remain open until individually reconciled with the specification and
 actual deployment evidence. Test-only leases/profiles are not approved defaults.
 Native Smol qualification must run on the dedicated execution infrastructure,
-not the API host. The current local environment does not supply that evidence. AWS source
+not the API host. Native transport smoke is recorded; complete public/runtime
+qualification must be linked to its actual results. AWS source
 qualification remains separate from MinIO and ordinary SHA-object operation.
 Current main's dedicated credentials replace expiring provider activation;
 submission work must not reinstate the retired activation subsystem.
