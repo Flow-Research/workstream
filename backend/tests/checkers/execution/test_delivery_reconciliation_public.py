@@ -34,6 +34,7 @@ from tests.reviews.lifecycle.fixtures import (
     live_acceptance_lifecycle as live_acceptance_lifecycle,
 )
 from tests.tasks.evaluation_delivery.support import delivery_fixture, invoked, outcome, state
+from tests.checkers.execution.support import ControlledSelectedExecution
 from tests.tasks.post_submit_routing.outcome_support import (
     apply_outcome,
     authorized_routing_source,
@@ -413,8 +414,8 @@ async def test_public_operator_retries_proven_no_effect_request_once(
 
         settings = h.settings.model_copy(
             update={
-                "external_checker_service_socket": None,
-                "external_checker_material_root": None,
+                "external_runner_host": None,
+                "external_runner_port": None,
             }
         )
         monkeypatch.setattr("app.core.config.get_settings", lambda: settings)
@@ -423,11 +424,17 @@ async def test_public_operator_retries_proven_no_effect_request_once(
             "worker_post_submission_materialization",
             lambda *, sessions: h.service,
         )
+        selected = ControlledSelectedExecution()
+        monkeypatch.setattr(
+            "app.adapters.checkers.configured_post_submit_external_execution",
+            lambda settings, *, sessions: selected,
+        )
         child_id = UUID(result["successor"]["event_id"])
         delivered = await production_outbox_delivery(h.factory).deliver(
             child_id, h.request.project_id, "reconcile-request"
         )
         assert outcome(delivered)["delivery_state"] == "acknowledged"
+        assert len(selected.requests) == 1
         completed = await state(h)
         assert completed["run"]["status"] == "completed"
         assert completed["events"] == 1

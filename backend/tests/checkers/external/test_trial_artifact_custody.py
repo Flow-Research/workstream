@@ -163,6 +163,8 @@ async def test_trial_bytes_use_real_art_custody_and_recover_exact_original(
     ) as h:
         catalog = catalog_for(h.request)
         await provision_post_submit_service(h.factory, ServiceIdentity.ARTIFACT_CHECKER_OUTPUT)
+        await provision_post_submit_service(h.factory, ServiceIdentity.ARTIFACT_PUT_RESOLVER)
+        await provision_post_submit_service(h.factory, ServiceIdentity.ARTIFACT_VERIFIER)
         await reserve(h)
         h.service = DiagnosticMaterialization(h.service)
         adapter = PublishingExecution(h, catalog, projected)
@@ -332,6 +334,8 @@ async def test_competing_trial_publication_observes_pin_commit_or_complete_rollb
     ) as h:
         catalog = catalog_for(h.request)
         await provision_post_submit_service(h.factory, ServiceIdentity.ARTIFACT_CHECKER_OUTPUT)
+        await provision_post_submit_service(h.factory, ServiceIdentity.ARTIFACT_PUT_RESOLVER)
+        await provision_post_submit_service(h.factory, ServiceIdentity.ARTIFACT_VERIFIER)
         await reserve(h)
         h.service = DiagnosticMaterialization(h.service)
         adapter = CompetingPublication(h, catalog, projected, rollback)

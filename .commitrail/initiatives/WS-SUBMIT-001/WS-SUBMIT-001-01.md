@@ -10424,3 +10424,34 @@ Read-only service journal at18:10:44 reports `PRE request rejected: PRE configur
 ### Retire impossible duplicate revision-fence probe
 
 TASK E cloud failure occurs because the obsolete test reserves a new checker generation after T4 has already staged finalization_pending. The current TASK owner correctly refuses it. Scoped ARCH/SEC review identifies two existing stronger real-PostgreSQL tests in test_submission_predecessor_custody.py: test_dispatch_commit_requires_current_predecessor_checker_fence advances the fence before T4 and verifies real deferred23514/rollback plus positiveT5; test_replacement_holds_task_custody_against_successor_generation verifies acceptedT4 denies a waiting successor while retaining predecessor fence. Retire only the impossible duplicate test in test_tasks.py and its sole-use stale_fence_before_acceptance_commit helper; no replacement behavior or product change. Preserve both named current tests and replay them after the shared slot is free. Refresh only mechanically affected shrinking structural debt metadata with reviewed diff; no gate/policy change. Human review focus is that both distinct race orderings remain covered by real owners and SQL.
+
+### Cloud project lifecycle C fixture repair
+
+The cloud `project_lifecycle_c` lane at the integrated submission head reported
+four failures. Three trial custody journeys reach ART materialization without
+the `ARTIFACT_PUT_RESOLVER` and `ARTIFACT_VERIFIER` fixed service actors used
+by the existing checker-output storage owner, so authorization stops before
+trial publication. The public operator reconciliation request test
+creates its child production handler with the default remote checker adapter
+while its fixture has no runner endpoint, so acknowledged delivery records an
+`infrastructure_failed` checker run. This bounded change may adjust only the
+three trial setup calls and that operator test's selected execution factory.
+It must retain the real ART, CHECKERS, AUTH, OUTBOX and SQL owner operations,
+the trial/model behavior, and the public operator reconciliation authority.
+The selected POST adapter may be controlled only for the child delivery, as
+the existing `delivery_fixture` controls the original request. No production,
+schema, runtime profile, or test expectation may be relaxed. Focused
+PostgreSQL cases were deferred until the concurrent native PRE proof released
+the local heavy test slot. The first isolated four-case replay reached the
+next missing `ARTIFACT_VERIFIER` identity in all three trial cases, while the
+operator child completed; its PostgreSQL and MinIO cleanup both completed
+(`/tmp/submission-project-lifecycle-c-fixture.log/.json`). After provisioning
+the exact two identities composed by `checker_output_storage`, the two trial
+publication race variants, trial byte custody and trial/model receipt custody
+all passed (4 in 107.48 seconds, schema 0091, PostgreSQL and MinIO cleanup
+true; `/tmp/submission-project-lifecycle-trials-v2.log/.json`). These are
+isolated worktree receipts whose metadata names the pre-commit base, not a
+claim of exact committed-head execution. They retain the real publication,
+verification, binding, model proxy and selected POST owner paths; no native
+runner qualification follows from the controlled selected response in the
+operator reconciliation case.
