@@ -22,14 +22,6 @@
     },
     {
       "group": "artifacts",
-      "target": "backend/app/adapters/artifacts/s3_compatible.py"
-    },
-    {
-      "group": "artifacts",
-      "target": "backend/app/adapters/artifacts/s3_compatible.py"
-    },
-    {
-      "group": "artifacts",
       "target": "backend/app/adapters/artifacts/source_cleanup.py"
     },
     {
@@ -427,14 +419,6 @@
     {
       "group": "shared",
       "target": "backend/app/interfaces/artifact_operations.py"
-    },
-    {
-      "group": "shared",
-      "target": "backend/app/interfaces/artifacts.py"
-    },
-    {
-      "group": "shared",
-      "target": "backend/app/interfaces/artifacts.py"
     },
     {
       "group": "shared",
@@ -2538,10 +2522,6 @@
     },
     {
       "group": "lifecycle",
-      "target": "backend/app/modules/tasks/submission_replay.py"
-    },
-    {
-      "group": "lifecycle",
       "target": "backend/app/modules/tasks/submitted_bundle.py"
     },
     {
@@ -2781,7 +2761,7 @@
       "target": "backend/scripts/validate_test_lane_evidence.py"
     }
   ],
-  "authority_digest": "2d59facc4e33f68f8b2da6712e6497e91b7cda4c8df13c226842d9841918b084",
+  "authority_digest": "4e1cb7d1dbc23133efd77854a6c6f5c7ecaee7a75f928845c5b81ca86c20b66c",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }

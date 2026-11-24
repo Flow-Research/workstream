@@ -439,9 +439,14 @@ REV_04C_PARTICIPATION_TARGETS = frozenset({
 REV_04B_ACCEPTANCE_TARGETS = frozenset({"backend/app/modules/reviews/acceptance/models.py", "backend/app/modules/reviews/acceptance/schemas.py"})
 REV_04A_SOURCE_TARGETS = frozenset({"backend/app/modules/reviews/decision/models.py", "backend/app/modules/reviews/decision/schemas.py"})
 REV_03B_PACKET_TARGETS = frozenset({'backend/app/modules/reviews/packet/models.py', 'backend/app/modules/reviews/packet/repository.py', 'backend/app/modules/reviews/packet/schemas.py'})
+SUBMISSION_INTAKE_REMOVED_TARGETS = frozenset({"backend/app/modules/tasks/submission_replay.py"})
+SUBMISSION_INTAKE_FINALIZATION_TARGETS = frozenset({
+    "backend/app/modules/tasks/submission_composition.py",
+    "backend/app/modules/tasks/accepted_submission.py",
+    "backend/app/modules/artifacts/intake/finalization.py",
+})
 ARCH_04E1BB6_DISPATCH_TARGETS = frozenset({
     "backend/app/modules/tasks/submission_dispatch.py",
-    "backend/app/modules/tasks/submission_replay.py",
     "backend/app/modules/tasks/submission_participants.py",
     "backend/app/modules/authorization/prepared_submission_replay.py",
 })
@@ -1169,12 +1174,14 @@ def _validate_additive_partition_transition(
         raise BehaviorOwnershipError("untrusted_partition_change")
     if removed & AWS_ARTIFACT_PROOF_REMOVED_TARGETS and not AWS_DIRECT_USER_TARGETS.issubset(current_by_target):
         raise BehaviorOwnershipError("untrusted_partition_change")
+    if removed & SUBMISSION_INTAKE_REMOVED_TARGETS and not SUBMISSION_INTAKE_FINALIZATION_TARGETS.issubset(current_by_target):
+        raise BehaviorOwnershipError("untrusted_partition_change")
     retained_trusted = [
         item for item in trusted_assignments if item["target"] not in removed
     ]
     if (
         trusted_targets != sorted(trusted_targets)
-        or removed - (NEUTRAL_GUIDE_RUNTIME_REMOVED_TARGETS | REV_04C_REMOVED_TARGETS | ARCH_04D2_REMOVED_TARGETS | ARCH_03D_REMOVED_TARGETS | TASK_CHECKER_CLEANUP_REMOVED_TARGETS | ARCH_03C2_REMOVED_TARGETS | OUTBOX_IDENTITY_REMOVED_TARGETS | V01_BASELINE_REMOVED_TARGETS | POL_03B_REMOVED_TARGETS | POL_04B_REMOVED_TARGETS | POL_05A_REMOVED_TARGETS | ARCH_03A_GUIDE_CONTEXT_REMOVED_TARGETS | ARCH_04B_SEAM_REMOVED_TARGETS | PILOT_04_RETIRED_CATALOGUE_TARGETS | FORGE_PROOF_FACTS_REMOVED_TARGETS | SHARED_ADAPTER_PACKAGE_REMOVED_TARGETS | AWS_ARTIFACT_PROOF_REMOVED_TARGETS)
+        or removed - (NEUTRAL_GUIDE_RUNTIME_REMOVED_TARGETS | REV_04C_REMOVED_TARGETS | ARCH_04D2_REMOVED_TARGETS | ARCH_03D_REMOVED_TARGETS | TASK_CHECKER_CLEANUP_REMOVED_TARGETS | ARCH_03C2_REMOVED_TARGETS | OUTBOX_IDENTITY_REMOVED_TARGETS | V01_BASELINE_REMOVED_TARGETS | POL_03B_REMOVED_TARGETS | POL_04B_REMOVED_TARGETS | POL_05A_REMOVED_TARGETS | ARCH_03A_GUIDE_CONTEXT_REMOVED_TARGETS | ARCH_04B_SEAM_REMOVED_TARGETS | PILOT_04_RETIRED_CATALOGUE_TARGETS | FORGE_PROOF_FACTS_REMOVED_TARGETS | SHARED_ADAPTER_PACKAGE_REMOVED_TARGETS | AWS_ARTIFACT_PROOF_REMOVED_TARGETS | SUBMISSION_INTAKE_REMOVED_TARGETS)
         or [current_by_target[item["target"]] for item in retained_trusted]
         != retained_trusted
     ):

@@ -8347,3 +8347,43 @@ not establish separate-runner or full-system readiness. The user's explicitly
 requested runner worktree now owns infrastructure plus authenticated remote
 PRE/POST execution and removal of shared-host material assumptions. The lead
 retains submission lifecycle/cleanup and final integration in PR708.
+
+
+### Retire admission-only TASK submission entry
+
+Intent: make accepted intake custody the sole TASK Submission creation entry;
+remove the unused admission-only command and HTTP composition. Risk: high
+(authorization and transaction sequencing). Allowed files: TASK composition,
+participants, replay helper and adapter; authorization HTTP dependency wiring;
+affected composition/binding/revision tests; exact module ownership inventory
+and this record. Prohibited: retained rows/schema/audit parsers, ART binding
+concurrency behavior, accepted-custody guards, runner-owned files, deployment.
+Acceptance: no callable admission-only writer; accepted T5 still atomically
+creates one Submission, binding and POST dispatch and replays exactly.
+Preserve accepted authority closure and invalid ART-result refusal with focused
+replacement tests. Old human-entry denial tests are superseded by T1 revoked
+admission/replay and T4 revocation tests; finalization uses service custody.
+The old DB final-denial test refused before any write; retain real binding
+rollback/concurrency proof and exercise current T5 transactional proof instead.
+Remove only old-entry revision mapping tests; retain repair/ART mapping and T4
+expiry winner-order coverage. Retained SUBMISSION_CREATE audit parsers stay.
+Verification: focused composition, binding, revision, T1/T4/T5 PostgreSQL tests,
+Ruff and affected ownership/structure checks. Reviewers: scoped ARCH/SEC and QA
+on clean candidate. Human review focus: no bypass of accepted custody or loss
+of rollback/replay proof. Same PR708 per explicit user instruction.
+
+The exact inventory check exposed pre-existing duplicate entries at 43ab89385:
+s3_compatible.py and interfaces/artifacts.py each appeared three times with
+identical groups. Deduplicate those exact entries and refresh the digest;
+retain duplicate rejection and all ownership checks. The removed TASK replay
+module is permitted only while all accepted-finalization owners remain.
+
+Retirement candidate: 24 focused composition/parser/revision checks passed
+(12.55s), including replacement accepted-service authority denial, policy
+failure closure, and invalid ART result refusal before dispatch. Test-structure
+validation and scoped Ruff passed. Ownership suite: 171 cases passed initially;
+exact inventory then passed after removing duplicate entries, sorting and
+staging the deleted module (inventory intentionally reads the Git index).
+The new accepted-owner-required retirement control passed. PostgreSQL receipt
+`/tmp/submission-retire-writer.log/.json` is still running at candidate freeze;
+no integration success is claimed yet. No schema or retained-data changes.

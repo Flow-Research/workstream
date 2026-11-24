@@ -2824,3 +2824,15 @@ def test_partition_allows_only_the_shared_adapter_package_relocation() -> None:
             current,
             _partition(sorted([retained, removed, "backend/app/interfaces/forge_facts.py"])),
         )
+
+
+def test_submission_replay_retirement_requires_accepted_finalization_owners() -> None:
+    owners = ownership.SUBMISSION_INTAKE_FINALIZATION_TARGETS
+    retired = "backend/app/modules/tasks/submission_replay.py"
+    trusted = _partition(sorted({retired, *owners}))
+    ownership._validate_additive_partition_transition(_partition(sorted(owners)), trusted)
+    for missing in owners:
+        with pytest.raises(ownership.BehaviorOwnershipError, match="untrusted_partition_change"):
+            ownership._validate_additive_partition_transition(
+                _partition(sorted(owners - {missing})), trusted,
+            )

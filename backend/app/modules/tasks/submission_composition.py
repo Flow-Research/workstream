@@ -1,4 +1,4 @@
-"""TASK-owned immutable Submission command for the hidden composed transaction."""
+"""TASK-owned immutable Submission creation from accepted intake custody."""
 
 from __future__ import annotations
 
@@ -9,31 +9,20 @@ from app.core.identifiers import new_record_id
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text, select, func
-from sqlalchemy.exc import DBAPIError
 
-from app.modules.projects.api.policy_lineage import RevisionPolicySemantics
-from app.modules.tasks.api.submission_context import require_revision_capacity
 from app.modules.tasks.api import (
-    SubmissionCreationAuthorizationPort,
-    SubmissionCreationAuthorityFacts,
-    SubmissionCreationPreparationFacts,
     SubmissionCreationRequest,
-    SubmissionCreationResult,
     SubmissionCreationUnavailable,
-    TaskSubmissionContextRequest,
-    TaskSubmissionContextPort,
 )
 from app.modules.checkers.api.pre_submit_material import SubmissionPacketView
 from app.modules.tasks.models import EvidenceItem, Submission
 from app.modules.tasks.submission_participants import (
     SubmissionArtifactAdmissionPort, SubmissionArtifactAdmissionRequest,
-    SubmissionArtifactAdmissionResult, SubmissionArtifactReplayRequest,
+    SubmissionArtifactAdmissionResult,
 )
 from app.modules.tasks.submission_dispatch import (
     SubmissionDispatch, creation_request_digest, evaluation_request_event,
 )
-from app.modules.tasks.submission_replay import read_creation_replay
-from app.modules.tasks.lifecycle import ensure_allowed_transition
 from app.modules.checkers.api.execution import EvaluationCoordinationPort
 from app.modules.checkers.api.selected_post_submit import (
     make_selected_post_submit_request,
@@ -106,105 +95,23 @@ class TaskSubmissionCreationService:
         self,
         session: AsyncSession,
         *,
-        authorization: SubmissionCreationAuthorizationPort | None,
         admissions: SubmissionArtifactAdmissionPort,
         contexts: TaskService,
-        submission_contexts: TaskSubmissionContextPort,
         evaluations: EvaluationCoordinationPort,
         events: OutboxAppendPort,
     ) -> None:
         self._session = session
-        self._authorization = authorization
         self._admissions = admissions
         self._repository = TaskRepository(session)
         self._contexts = contexts
-        self._submission_contexts = submission_contexts
         self._evaluations = evaluations
         self._events = events
-
-    async def create(self, request: SubmissionCreationRequest) -> SubmissionCreationResult:
-        """Create one Submission without opening or committing a transaction."""
-        if self._authorization is None:
-            raise SubmissionCreationUnavailable("submission creation authority is unavailable")
-        if not self._session.in_transaction() or self._session.in_nested_transaction():
-            raise RuntimeError("submission creation requires one root transaction")
-        preliminary = SubmissionCreationPreparationFacts(
-            task_id=request.task_id,
-            assignment_id=request.assignment_id,
-            contributor_id=request.contributor_id,
-            admission_id=request.admission_id,
-            predecessor_submission_id=request.predecessor_submission_id,
-        )
-        await self._authorization.authorize(preliminary)
-        connection = await self._session.connection()
-        if connection.in_nested_transaction():
-            raise RuntimeError("submission creation requires one root transaction")
-        try:
-            await self._session.execute(text("SELECT pg_catalog.pg_export_snapshot()"))
-        except DBAPIError as exc:
-            if getattr(exc.orig, "sqlstate", None) != "25001":
-                raise
-            raise RuntimeError("submission creation requires one root transaction") from exc
-        task = await self._repository.get_task(str(request.task_id), for_update=True)
-        if task is None:
-            raise SubmissionCreationUnavailable("submission creation is unavailable")
-        replay = await read_creation_replay(self._session, task, request)
-        if replay is not None:
-            return await self._replay(request, *replay)
-        context = await self._submission_contexts.lock_submission_context(
-            TaskSubmissionContextRequest(
-                task_id=request.task_id,
-                assignment_id=request.assignment_id,
-                contributor_id=request.contributor_id,
-                predecessor_submission_id=request.predecessor_submission_id,
-            )
-        )
-        # Version orders every Submission on the task; the revision allowance
-        # belongs to this assignment and is carried separately in the context.
-        latest_task_submission = await self._repository.get_latest_submission_for_task(task.id)
-        version = latest_task_submission.version + 1 if latest_task_submission else 1
-        if context.predecessor is not None and version != context.predecessor.version + 1:
-            raise SubmissionCreationUnavailable("submission creation is unavailable")
-        submission_id = new_record_id()
-        final = SubmissionCreationAuthorityFacts(
-            task_id=preliminary.task_id,
-            assignment_id=preliminary.assignment_id,
-            contributor_id=preliminary.contributor_id,
-            admission_id=preliminary.admission_id,
-            predecessor_submission_id=preliminary.predecessor_submission_id,
-            submission_id=submission_id,
-            submission_version=version,
-            task_context=context,
-        )
-        prepared_authorization = await self._authorization.prepare(final)
-        try:
-            project = await self._contexts._load_locked_task_context(task)
-            if context.predecessor is not None:
-                selected_revision = project.facts.activation_receipt.command.revision
-                require_revision_capacity(
-                    context, project_id=project.facts.project_id,
-                    policy_id=selected_revision.policy_id,
-                    policy_generation=selected_revision.generation,
-                    policy_hash=selected_revision.policy_hash,
-                    max_revision_rounds=RevisionPolicySemantics.model_validate_json(
-                        project.facts.revision_policy.value,
-                    ).max_revision_rounds,
-                )
-            async def authorize_creation():
-                return await self._authorization.consume(prepared_authorization, final)
-            receipt = await self._create_bound_submission(
-                request, task, context, project, submission_id, version, authorize_creation,
-                accepted_operation_id=None,
-            )
-        finally:
-            self._authorization.close(prepared_authorization)
-        return receipt.result()
 
     async def create_accepted(
         self, request: SubmissionCreationRequest, *, authority_facts, finalization_authority,
         snapshot_sha256: str, eligible_status: str, remediation_id: UUID | None,
     ):
-        """Continue accepted service custody through the same Submission writer."""
+        """Continue accepted service custody through the sole Submission writer."""
         from dataclasses import replace
         from app.modules.tasks.accepted_submission import accepted_submission_context
         if not self._session.in_transaction() or self._session.in_nested_transaction():
@@ -246,7 +153,7 @@ class TaskSubmissionCreationService:
         self, request, task, context, project, submission_id, version, authorize_creation,
         *, accepted_operation_id,
     ):
-        """The sole Submission/binding/POST writer for either authorized entry."""
+        """Atomically create Submission, binding and POST from accepted custody."""
         submission = build_submission(
             submission_id=str(submission_id), task=task,
             contribution_policy_version_id=context.submitter_contribution_policy_version_id,
@@ -310,11 +217,9 @@ class TaskSubmissionCreationService:
             policy=selected.policy,
             **request_fields,
         )
-        if accepted_operation_id is None:
-            ensure_allowed_transition(task.status, "submitted")
-            task.status = "submitted"
-            await self._session.flush()
-        elif task.status != "evaluation_pending" or task.active_submission_operation_id != str(accepted_operation_id):
+        if (not isinstance(accepted_operation_id, UUID)
+                or task.status != "evaluation_pending"
+                or task.active_submission_operation_id != str(accepted_operation_id)):
             raise SubmissionCreationUnavailable("accepted task custody differs")
         reservation = await self._evaluations.reserve_current_evaluation(evaluation)
         if (reservation.request_id != evaluation.evaluation_request_id
@@ -338,8 +243,6 @@ class TaskSubmissionCreationService:
         event = await self._events.append(evaluation_request_event(receipt))
         receipt.evaluation_event_id = event.event_id
         self._session.add(receipt)
-        if accepted_operation_id is None:
-            ensure_allowed_transition(task.status, "evaluation_pending")
         task.status = "evaluation_pending"
         await self._session.flush()
         return receipt
@@ -355,54 +258,3 @@ class TaskSubmissionCreationService:
         if valid is not True:
             raise SubmissionCreationUnavailable("finalized dispatch differs")
         return receipt.result()
-
-    async def _replay(self, request, receipt, context) -> SubmissionCreationResult:
-        """Verify the complete original commit under fresh authority, without repair."""
-        facts = SubmissionCreationAuthorityFacts(
-            task_id=request.task_id, assignment_id=request.assignment_id,
-            contributor_id=request.contributor_id, admission_id=request.admission_id,
-            predecessor_submission_id=request.predecessor_submission_id,
-            submission_id=UUID(receipt.submission_id), submission_version=receipt.submission_version,
-            task_context=context,
-        )
-        prepared = await self._authorization.prepare(facts)
-        try:
-            await self._authorization.validate_replay(prepared, facts, UUID(receipt.creation_decision_id))
-            consumed = await self._admissions.read_consumed(SubmissionArtifactReplayRequest(
-                admission_id=request.admission_id, project_id=UUID(receipt.project_id),
-                task_id=request.task_id, assignment_id=request.assignment_id,
-                contributor_id=request.contributor_id, submission_id=UUID(receipt.submission_id),
-                submission_version=receipt.submission_version,
-                packet_sha256=SubmissionPacketView(request.summary, request.contributor_attestation).sha256,
-                task_context=context,
-            ))
-            if (consumed.binding_id, consumed.content_id, consumed.binding_decision_id) != (
-                UUID(receipt.artifact_binding_id), UUID(receipt.artifact_content_id), UUID(receipt.binding_decision_id),
-            ):
-                raise SubmissionCreationUnavailable("submission creation is unavailable")
-            stored = await self._evaluations.read_reserved_evaluation(
-                project_id=UUID(receipt.project_id), task_id=UUID(receipt.task_id),
-                submission_id=UUID(receipt.submission_id), request_id=UUID(receipt.evaluation_request_id),
-            )
-            evaluation, reservation = stored.request, stored.reservation
-            if (
-                reservation.request_digest != receipt.evaluation_request_digest
-                or reservation.attempt_id != UUID(receipt.evaluation_attempt_id)
-                or reservation.result_id != UUID(receipt.evaluation_result_id)
-                or reservation.evaluation_generation != 1
-                or evaluation.assignment_id != UUID(receipt.assignment_id)
-                or evaluation.submission_version != receipt.submission_version
-                or evaluation.binding_id != consumed.binding_id
-                or evaluation.content_id != consumed.content_id
-                or evaluation.content_sha256 != consumed.archive_sha256
-                or evaluation.byte_count != consumed.byte_count
-                or consumed.selected_evaluation_content is None
-                or evaluation.project_id != consumed.selected_evaluation_content.project_id
-                or evaluation.expected_context != consumed.selected_evaluation_content.expected_context
-                or evaluation.policy != consumed.selected_evaluation_content.policy
-            ):
-                raise SubmissionCreationUnavailable("submission creation is unavailable")
-            await self._events.require_existing(receipt.evaluation_event_id, evaluation_request_event(receipt))
-            return receipt.result()
-        finally:
-            self._authorization.close(prepared)

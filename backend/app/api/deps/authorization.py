@@ -56,34 +56,6 @@ from app.schemas.auth import AuthVerificationResult
 logger = logging.getLogger(__name__)
 
 
-def compose_hidden_submission_creation_command(
-    session: AsyncSession,
-    context: AuthorizationContext,
-    *,
-    request_id: UUID,
-    correlation_id: UUID,
-):
-    """Wire the sole admission-backed TASK/ART transaction for internal and HTTP callers."""
-    from app.adapters.artifacts import submission_admission_consumption_port
-    from app.adapters.tasks import TransactionalSubmissionCreationCommand
-    from app.modules.authorization.prepared import (
-        PreparedSubmissionCreationAuthorization,
-    )
-
-    from app.core.config import get_settings
-
-    return TransactionalSubmissionCreationCommand(
-        session,
-        settings=get_settings(),
-        authorization=PreparedSubmissionCreationAuthorization(session, context),
-        admissions=submission_admission_consumption_port(
-            session,
-            request_id=request_id,
-            correlation_id=correlation_id,
-        ),
-    )
-
-
 def _authorization_context(
     resolved: ResolvedActor,
     request_id: UUID,
@@ -256,23 +228,6 @@ async def get_authorization_actor_identity(
             else PublicActorKind.HUMAN
         ),
         service_identity=service_identity,
-    )
-
-
-async def get_submission_creation_command(
-    request: Request,
-    resolved: Annotated[ResolvedActor, Depends(get_authorization_actor)],
-    session: Annotated[AsyncSession, Depends(get_db_session)],
-):
-    """Bind the existing atomic writer after actor resolution releases its read root."""
-    request_id, correlation_id = (UUID(value) for value in request_ids(request))
-    context = _authorization_context(resolved, request_id, correlation_id)
-    await session.rollback()
-    return compose_hidden_submission_creation_command(
-        session,
-        context,
-        request_id=request_id,
-        correlation_id=correlation_id,
     )
 
 
