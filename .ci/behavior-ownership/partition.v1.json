@@ -758,23 +758,11 @@
     },
     {
       "group": "artifacts",
-      "target": "backend/app/modules/artifacts/submission_authorization.py"
-    },
-    {
-      "group": "artifacts",
       "target": "backend/app/modules/artifacts/submission_bindings.py"
     },
     {
       "group": "artifacts",
-      "target": "backend/app/modules/artifacts/submission_custody.py"
-    },
-    {
-      "group": "artifacts",
       "target": "backend/app/modules/artifacts/submission_manifest.py"
-    },
-    {
-      "group": "artifacts",
-      "target": "backend/app/modules/artifacts/submission_materialization.py"
     },
     {
       "group": "artifacts",
@@ -2761,7 +2749,7 @@
       "target": "backend/scripts/validate_test_lane_evidence.py"
     }
   ],
-  "authority_digest": "4e1cb7d1dbc23133efd77854a6c6f5c7ecaee7a75f928845c5b81ca86c20b66c",
+  "authority_digest": "ec63dcd5f70071cd2dcb69a2c3e127162a2b017aa3734bed14d12440c38d8bdc",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }

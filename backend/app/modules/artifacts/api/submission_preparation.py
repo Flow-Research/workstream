@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterable
-from dataclasses import dataclass
 from enum import StrEnum
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Literal, Protocol
@@ -11,34 +9,8 @@ from uuid import UUID
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 
-from app.modules.authorization.api import ActorIdentityFacts
 if TYPE_CHECKING:
     from app.modules.checkers.api.selected_pre_submit import SelectedPreSubmitExecutionFacts
-
-
-class SubmissionBundlePreparationRejected(RuntimeError):
-    """Reject preparation with one stable ART-owned failure code."""
-
-
-class SubmissionBundlePreparationCheckFailed(SubmissionBundlePreparationRejected):
-    """Carry the exact bounded CHECKERS facts for one blocked preparation."""
-
-    def __init__(
-        self,
-        facts: SelectedPreSubmitExecutionFacts,
-    ) -> None:
-        from app.modules.checkers.api.selected_pre_submit import SelectedPreSubmitExecutionFacts
-
-        if type(facts) is not SelectedPreSubmitExecutionFacts:
-            raise TypeError("pre-submission feedback facts are invalid")
-        if facts.eligible is not False:
-            raise ValueError("blocked pre-submission facts require eligible false")
-        super().__init__("pre_submission_checker_failed")
-        self.facts = facts
-
-    def public_results(self) -> list[dict[str, object]]:
-        """Return sanitized ordered work findings without execution authority."""
-        return public_pre_submission_results(self.facts)
 
 
 def public_pre_submission_results(
@@ -103,14 +75,6 @@ def pre_submission_finding_counts(facts: SelectedPreSubmitExecutionFacts) -> dic
     }
 
 
-class SubmissionBundlePreparationUnavailable(RuntimeError):
-    """Conceal unavailable or denied preparation authority."""
-
-
-class SubmissionBundlePreparationInfrastructureUnavailable(RuntimeError):
-    """Authorized preparation cannot safely recover its execution or continuation."""
-
-
 class SubmissionBundlePreparationStatus(StrEnum):
     """Closed public state vocabulary for one ART preparation operation."""
 
@@ -127,36 +91,6 @@ class SubmissionBundlePreparationStatus(StrEnum):
     ABSENT_REPLAY_REQUIRED = "absent_replay_required"
     STALE = "stale"
     READY = "ready"
-
-
-@dataclass(frozen=True, slots=True)
-class SubmissionBundlePreparationRequest:
-    """One continuous contributor ZIP request with server-owned actor facts."""
-
-    actor: ActorIdentityFacts
-    request_id: UUID
-    correlation_id: UUID
-    task_id: UUID
-    assignment_id: UUID
-    predecessor_submission_id: UUID | None
-    idempotency_key: UUID
-    summary: str
-    contributor_attestation: str
-    media_type: str
-    byte_source: AsyncIterable[bytes]
-    revision_preparation_id: str | None = None
-    revision_preparation_sha256: str | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class SubmissionBundlePreparationResult:
-    """Bounded preparation result without custody or provider coordinates."""
-
-    put_attempt_id: UUID
-    admission_id: UUID | None
-    submission_bundle_preparation_status: SubmissionBundlePreparationStatus
-    replayed: bool
-    pre_submission_results: tuple[dict[str, object], ...]
 
 
 PreparationOutcome = Literal["pending", "passed", "failed", "infrastructure_failed"]
@@ -235,12 +169,3 @@ class SubmissionBundlePreparationReadPort(Protocol):
     ) -> tuple[tuple[ProjectSubmissionBundlePreparation, ...], bool]:
         """Every contributor's preparations in one project, without findings."""
         ...
-
-
-class SubmissionBundlePreparationCommand(Protocol):
-    """Prepare one hidden contributor bundle through the sole ART command."""
-
-    async def prepare(
-        self, request: SubmissionBundlePreparationRequest
-    ) -> SubmissionBundlePreparationResult:
-        """Run the continuous fail-closed preparation workflow."""

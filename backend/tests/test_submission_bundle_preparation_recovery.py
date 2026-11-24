@@ -16,9 +16,6 @@ from app.adapters.artifacts import get_submission_intake_command
 from app.modules.artifacts.api.submission_intake import SubmissionIntakeFailure
 from app.modules.artifacts.api.submission_preparation import public_pre_submission_results
 from app.main import create_app
-from app.modules.artifacts.api import (
-    SubmissionBundlePreparationCheckFailed,
-)
 from app.modules.checkers.api.default_checker import (
     WORKSTREAM_DEFAULT_BEHAVIOR_SHA256, WORKSTREAM_DEFAULT_CHECK_IDS,
     WorkstreamDefaultCheckerResult,
@@ -164,21 +161,6 @@ async def test_mounted_submission_preserves_non_feedback_error_boundaries(
     assert payload["error"]["retryable"] is retryable
     assert payload["error"]["details"] == {}
     assert "results" not in payload["error"]["details"]
-
-
-@pytest.mark.parametrize("eligible", (True, 0, None))
-def test_blocked_feedback_rejects_noncanonical_or_non_false_facts(eligible) -> None:
-    with pytest.raises(TypeError, match="feedback facts are invalid"):
-        SubmissionBundlePreparationCheckFailed(object())  # type: ignore[arg-type]
-    from dataclasses import fields
-
-    original = _feedback_facts()
-    forged = object.__new__(SelectedPreSubmitExecutionFacts)
-    for field in fields(original):
-        object.__setattr__(forged, field.name, getattr(original, field.name))
-    object.__setattr__(forged, "eligible", eligible)
-    with pytest.raises(ValueError, match="require eligible false"):
-        SubmissionBundlePreparationCheckFailed(forged)
 
 
 @pytest.mark.asyncio

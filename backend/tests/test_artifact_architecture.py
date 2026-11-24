@@ -17,8 +17,8 @@ from tests.architecture_ast import imported_symbols_and_calls
 BACKEND_ROOT = Path(__file__).parents[1]
 APP_ROOT = BACKEND_ROOT / "app"
 ARTIFACT_OPERATIONS = APP_ROOT / "interfaces" / "artifact_operations.py"
-SUBMISSION_PREPARATION_API = (
-    APP_ROOT / "modules" / "artifacts" / "api" / "submission_preparation.py"
+SUBMISSION_INTAKE_API = (
+    APP_ROOT / "modules" / "artifacts" / "api" / "submission_intake.py"
 )
 SUBMISSION_ADMISSION_API = APP_ROOT / "modules" / "artifacts" / "api" / "submission_admission.py"
 CHECKER_OUTPUT_CUSTODY_API = APP_ROOT / "modules" / "checkers" / "api" / "output_custody.py"
@@ -820,7 +820,6 @@ def _assert_checker_custody_consumers(
             "app/adapters/artifacts/__init__.py",
             "app/modules/artifacts/post_submit_materialization.py",
             "app/modules/artifacts/post_submit_selection.py",
-            "app/modules/artifacts/submission_materialization.py",
             "app/modules/checkers/default_checker.py",
             "app/modules/checkers/execution.py",
         },
@@ -886,12 +885,12 @@ def test_checker_custody_inventory_rejects_unregistered_import(
         _assert_checker_custody_consumers(injected_inventory)
 
 
-def test_submission_preparation_http_request_never_carries_prepared_authority() -> None:
-    tree = _tree(SUBMISSION_PREPARATION_API)
+def test_submission_intake_metadata_never_carries_prepared_authority() -> None:
+    tree = _tree(SUBMISSION_INTAKE_API)
     request_class = next(
         node
         for node in tree.body
-        if isinstance(node, ast.ClassDef) and node.name == "SubmissionBundlePreparationRequest"
+        if isinstance(node, ast.ClassDef) and node.name == "SubmissionIntakeMetadata"
     )
     fields = {
         node.target.id: _annotation_names(node.annotation)
@@ -899,10 +898,11 @@ def test_submission_preparation_http_request_never_carries_prepared_authority() 
         if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name)
     }
     assert "prepared_authorization" not in fields
-    assert fields["actor"] == {"ActorIdentityFacts"}
-    assert fields["request_id"] == {"UUID"}
-    assert fields["correlation_id"] == {"UUID"}
-    assert fields["idempotency_key"] == {"UUID"}
+    assert fields["task_id"] == {"UUID"}
+    assert fields["assignment_id"] == {"UUID"}
+    assert fields["predecessor_submission_id"] == {"UUID"}
+    assert "actor" not in fields
+    assert "idempotency_key" not in fields
 
 
 def test_prepared_handle_never_enters_public_async_or_provider_contracts() -> None:

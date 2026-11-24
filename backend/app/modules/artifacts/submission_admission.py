@@ -9,10 +9,6 @@ from app.core.identifiers import new_record_id
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.modules.artifacts.api import (
-    SubmissionBundlePreparationRejected,
-    SubmissionBundlePreparationRequest,
-)
 from app.modules.artifacts.models import (
     ArtifactContent,
     ArtifactOperationReceipt,
@@ -27,35 +23,11 @@ from app.modules.artifacts.models import (
 from app.modules.checkers.api.historical_selected_pre_submit import (
     HistoricalSelectedPreSubmitReservation, HistoricalSelectedPreSubmitTerminal,
 )
-from app.modules.tasks.api.submission_context import require_revision_acknowledgement
 from app.modules.tasks.api import (
     TaskRetainedSubmissionParentsRequest,
-    TaskSubmissionContextFacts,
     TaskSubmissionContextPort,
     TaskSubmissionContextUnavailable,
 )
-
-
-def validate_submission_packet_headers(summary: str, attestation: str) -> None:
-    """Reject lossy header decoding only after contributor preflight succeeds."""
-    try:
-        summary.encode("ascii")
-        attestation.encode("ascii")
-    except UnicodeEncodeError as exc:
-        raise SubmissionBundlePreparationRejected(
-            "submission_bundle_packet_header_encoding_invalid"
-        ) from exc
-
-
-def require_revision_preparation_acknowledgement(
-    task: TaskSubmissionContextFacts,
-    request: SubmissionBundlePreparationRequest,
-) -> None:
-    """Compare the contributor's explicit acknowledgement after fresh authority."""
-    try:
-        require_revision_acknowledgement(task, request.revision_preparation_id, request.revision_preparation_sha256)
-    except TaskSubmissionContextUnavailable as exc:
-        raise SubmissionBundlePreparationRejected(exc.code) from exc
 
 
 class SubmissionBundleAdmissionPublicationError(RuntimeError):

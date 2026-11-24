@@ -328,7 +328,7 @@ def test_checker_to_art_public_import_would_close_a_cycle(tmp_path: Path) -> Non
     )
     _write(
         tmp_path / "backend/app/modules/checkers/future_execution.py",
-        "from app.modules.artifacts.api import SubmissionBundlePreparationCommand\n",
+        "from app.modules.artifacts.api import SubmissionBundlePreparationStatus\n",
     )
     _, graph, _ = boundary.scan(tmp_path, boundary.load_registry(registry_path))
     assert graph["artifacts"] == {"checkers"}

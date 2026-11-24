@@ -9050,3 +9050,42 @@ this evidence append and is repeated for the final record. Original SIGKILL test
 and helper ASTs are unchanged. No new module/lane registration or production edit.
 This is a single focused precommit execution, not a final-head/full-suite/native
 or deployed governed-outcome qualification. V1's setup failure remains above.
+
+Next retire the obsolete ART submission preparation writer API and its exclusive
+prepared-bundle materialization module. Remove Request/Result/Command and
+writer-only exceptions, header/revision wrappers and stale capacity fixtures;
+retain read DTOs/status, historical AUTH/ORM readers, publisher byte behavior,
+current source grants and shared scratch cleanup. Migrate revision
+acknowledgement, packet-header and cleanup assertions to current owners before
+removing obsolete tests. Allowed: ART API/submission admission/materialization,
+their direct tests and architecture inventories, catalogue only if selection
+changes, and this record. No schema/data/deployment changes. Medium API and
+test-coverage risk. Verify current intake contracts, retained publisher and
+historical reads, shared scratch cleanup, imports, architecture, structure,
+ownership, Ruff and diff; seek scoped architecture and QA review.
+
+Retirement implementation removes the writer Request/Result/Command,
+writer-only exceptions, obsolete header/revision wrappers, exclusive prepared
+materialization module and its unused capacity fixture. The selected PRE test
+module now retains current source-first revision binding, direct TASK revision
+acknowledgement and four historical publisher controls; the intake lifecycle
+module retains three shared scratch/cancellation cleanup tests. Current
+SubmissionIntakeMetadata packet validation replaces the removed header helper
+test. ART read DTO/status, historical AUTH parsers and retained publisher stay;
+AST comparison confirms the publisher class, publication error, PRE feedback
+projections and read DTOs are unchanged. Protected behavior ownership partition
+removes exactly this module plus submission_custody.py and
+submission_authorization.py, which earlier retirement commits had already
+deleted but left listed in the manifest.
+
+Staged-tree verification: selected PRE/coordination/shared cleanup 119 passed;
+current intake, admission and packet contract tests 153 passed; artifact and
+module-boundary architecture 90 passed; behavior ownership tests 172 passed.
+Structure and module-boundary validators, behavior partition validator,
+Commitrail record check, Ruff and diff check passed. No PostgreSQL/storage or
+native PRE qualification is claimed from this retirement-only verification.
+An attempted whole-backend collection using the base backend virtual environment
+collected 12080 cases but ended with eight unrelated optional-agent import
+errors because that environment lacks `httpx2`; it is not counted as a pass.
+The repository-wide Markdown-link checker also fails unchanged on two links to
+the missing `deploy/hosted/SINGLE_HOST.md` in untouched documents.

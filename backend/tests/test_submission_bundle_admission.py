@@ -10,16 +10,12 @@ import pytest
 
 import app.adapters.artifacts as artifact_adapters
 from app.core.config import Settings
-from app.modules.artifacts.api import (
-    SubmissionBundlePreparationRejected,
-)
 from app.interfaces.artifacts import (
     ArtifactConfigurationError,
 )
 from tests.artifact_store_helpers import artifact_admission_limit_settings
 from app.main import create_app
 from app.api.routes.artifact_submissions import router as submission_router
-from app.modules.artifacts.submission_admission import validate_submission_packet_headers
 
 
 @pytest.mark.asyncio
@@ -109,12 +105,3 @@ def test_submission_is_public_binary_contract() -> None:
                         if parameter["in"] == "header" and parameter["required"]}
     assert {"X-Task-Assignment-Id", "Idempotency-Key"} <= required_headers
     assert operation["responses"]["202"] and operation["responses"]["422"]
-
-
-def test_submission_packet_headers_reject_non_ascii() -> None:
-    validate_submission_packet_headers("plain summary", "plain attestation")
-    with pytest.raises(
-        SubmissionBundlePreparationRejected,
-        match="submission_bundle_packet_header_encoding_invalid",
-    ):
-        validate_submission_packet_headers("caf\N{LATIN SMALL LETTER E WITH ACUTE}", "ok")
