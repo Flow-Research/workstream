@@ -8405,3 +8405,20 @@ Commitrail, changed Markdown links, stale artifact contracts and diff checks
 passed. This closes the admission-only TASK writer retirement; genuine-orphan
 cleanup, remote execution/AWS qualification, operational crash evidence and
 full end-to-end acceptance remain open under the unchanged goal.
+
+
+### Process-loss finalization qualification
+
+Intent: close the exception-only worker-loss proof gap with actual SIGKILL
+before source observation and after committed T5. Allowed: a focused ART
+integration test, exact lane registration and this record. Prohibited:
+production behavior/leases/schema/provider changes, runner files, broker or
+full-system qualification claims. Risk: medium verification change across
+transaction custody; use existing scoped QA/ARCH reviewers. Acceptance: a child
+process dies by SIGKILL at each boundary; persisted claim remains unresolved;
+after real lease expiry the existing recovery/delivery owners finalize exactly
+one Submission/binding/POST dispatch, preserving accepted source identity.
+Finalized replay must not reread the provider. Verify real PostgreSQL, child
+cleanup, existing structure/lane checks. Human focus: real process death and
+committed-state assertions, without fabricated expired timestamps. This does
+not replace the distinct lost-ACK tests or prove broker outage behavior.
