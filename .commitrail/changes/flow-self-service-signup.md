@@ -439,8 +439,10 @@ Live evidence on instance `i-0936c305f8f67d835` proves m7i.large nested KVM,
 Smol health with two pinned manifests, a completed request-bound remote POST,
 and a completed streamed-ZIP PRE. PRE reported native Smol isolation and
 `cleanup=destroyed`; POST and PRE left material workspaces, model relays and
-Smol leases empty. Focused local remote transport/intake coverage passed 85
-tests. Successful-checker public acceptance and a real model-callback provider
+Smol leases empty. Focused local remote transport/intake coverage passed 113
+tests, including cancellation while source export is blocked and after exact
+source EOF while native execution is active; both close source/transport and
+leave the remote workspace empty. Successful-checker public acceptance and a real model-callback provider
 journey remain explicit integration qualifications, not claims from the
 transport smoke tests.
 

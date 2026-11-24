@@ -1165,26 +1165,56 @@ async def test_single_pre_expired_lease_does_not_open_source_or_runtime(tmp_path
 
 
 @pytest.mark.asyncio
-async def test_single_pre_cancellation_closes_source_and_transport(tmp_path):
+@pytest.mark.parametrize("stage", ["source", "execution"])
+async def test_single_pre_cancellation_closes_source_and_transport(tmp_path, stage):
+    from dataclasses import replace
     from app.modules.checkers.api.selected_pre_submit import SelectedPreSubmitLeaseFacts
     from app.modules.checkers.selected_pre_submit_execution import SelectedPreSubmitProcessor
     from tests.checkers.external.test_selected_pre_submit_coordination import _source_reservation
 
     entered, source_closed, connection_closed = asyncio.Event(), asyncio.Event(), asyncio.Event()
+    payload = b"exact cancellation source" * 4000
     reservation = _source_reservation()
+    if stage == "execution":
+        reservation = replace(
+            reservation,
+            source_contracts=selected_pre_submit_source_contracts(),
+            source=reservation.source.model_copy(
+                update={
+                    "raw_sha256": "sha256:" + hashlib.sha256(payload).hexdigest(),
+                    "raw_byte_count": len(payload),
+                }
+            ),
+        )
     lease = SelectedPreSubmitLeaseFacts(reservation, uuid4(), 1, reservation.pre_deadline_at)
     class Grant:
         async def open_source(self, *, lease):
             try:
-                entered.set()
-                await asyncio.Event().wait()
-                yield b"unreachable"
+                if stage == "source":
+                    entered.set()
+                    await asyncio.Event().wait()
+                    yield b"unreachable"
+                else:
+                    for offset in range(0, len(payload), 16 * 1024):
+                        yield payload[offset:offset + 16 * 1024]
             finally:
                 source_closed.set()
 
     async def handle(reader, writer):
         try:
-            await reader.read()
+            if stage == "execution":
+                request_size = struct.unpack(">I", await reader.readexactly(4))[0]
+                request = json.loads(await reader.readexactly(request_size))
+                assert request["request_digest"] == reservation.request_digest
+                received = bytearray()
+                while True:
+                    size = struct.unpack(">I", await reader.readexactly(4))[0]
+                    if size == 0:
+                        break
+                    received.extend(await reader.readexactly(size))
+                assert bytes(received) == payload
+                entered.set()
+            assert await reader.read() == b""
         finally:
             writer.close()
             await writer.wait_closed()
@@ -1221,6 +1251,7 @@ async def test_single_pre_cancellation_closes_source_and_transport(tmp_path):
             await task
         await asyncio.wait_for(connection_closed.wait(), 2)
         assert source_closed.is_set()
+        assert list((materials / "workspaces").iterdir()) == []
     finally:
         if not task.done():
             task.cancel()
@@ -1229,3 +1260,4 @@ async def test_single_pre_cancellation_closes_source_and_transport(tmp_path):
         remote.close()
         await server.wait_closed()
         await remote.wait_closed()
+        await node.close()
