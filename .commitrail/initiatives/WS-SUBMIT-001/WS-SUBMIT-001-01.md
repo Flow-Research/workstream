@@ -8497,3 +8497,36 @@ setup grant under local aws-source-qualification-20261124; requested admin
 access/application. No alternate/default AWS credentials used. Runner owner
 confirmed no concurrent bucket/IAM work; app configuration remains untouched.
 AWS gate and live provider qualification remain open pending access and proof.
+
+
+### Prepare live source adapter qualification
+
+Allowed: local non-secret qualification script in
+aws-source-qualification-20261124 and this record. Risk: high when executed
+(provider writes/exact-version deletion); preparation is side-effect free.
+Use existing production source/cleanup adapters and private direct-user files,
+new UUIDv7 synthetic operation keys only, durable local target journal before
+provider creation, and exact upload/version cleanup only for those targets.
+Never touch product rows or retained product keys. Refuse ambient AWS settings
+and require explicit runtime/cleanup principals. Check conditional multipart,
+exact readback, runtime delete/abort denial, lost begin/completion/delete ACK,
+and retained independent source survival. Return non-secret results and keep
+uncertain targets in the journal. No execution before access is supplied and
+bounded ARCH/SEC review of the script hash. This qualifies provider behavior,
+not SQL ownership, broker execution, native PRE/POST or the complete journey.
+
+LIVE-AWS-DRILL-01 pre-execution finding: lost-response checks must compare the
+reconciled handle/version with the exact successful provider response retained
+by the fault injector. The local drill now retains those identifiers in memory
+and its fsynced journal, refuses a different discovered upload before abort,
+and requires the recovered/deleted VersionId to match. No drill execution or
+AWS mutation has occurred; re-review the new script hash before use.
+
+Qualification preparation closure: ARCH/SEC PASS for script SHA256
+ a94f860a2efc01f6ac5612c47e5d12fae43bf9aae5b7b56b812ae5ed44aa5ff9.
+Compile, Ruff, help/import and optimized-mode rejection before provider/report
+I/O passed. No credential contents read or AWS drill executed. Retain an
+identical copy as scripts/qualify_submission_source.py in this same PR, with
+pilot-specific invocation/limits in operations_aws_s3_credentials.md; these two
+paths extend this preparation scope for reproducibility. IAM admin action is
+still pending. Runtime file permissions were inspected only and are already0400.

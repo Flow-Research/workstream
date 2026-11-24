@@ -92,6 +92,17 @@ closed until this source qualification is complete. Confirm guide reads and subm
 Workstream as well. These tests qualify the deployment; they do not create a
 time-limited permission record required by ordinary storage operations.
 
+The reviewed pilot drill is [qualify_submission_source.py](../scripts/qualify_submission_source.py).
+It is deliberately pinned to the current pilot bucket, prefix and two principal
+ARNs; it is not a generic cleanup command. Run from the repository root with
+`PYTHONPATH=backend`, explicit `--runtime-key-file`, `--cleanup-key-file` and a
+new private `--report` JSONL path. Both key files must have mode `0400`.
+It creates only new synthetic operation keys, journals each target before
+provider I/O, and cleans only their exact handles/versions. A failed run retains
+its journal and uncertain targets for reconciliation. It does not test product
+SQL ownership or the public submission journey and must not be counted as those
+proofs. Do not run it before the reviewed IAM policies are applied.
+
 To rotate, create the replacement key, write a new private file, verify the
 identity and storage operations, restart affected consumers with the new file,
 and disable the old key. Delete the old key after verifying that no service
