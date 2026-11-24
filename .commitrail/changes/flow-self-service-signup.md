@@ -477,3 +477,13 @@ group, mTLS health from the app host, offline render/private-input checks, and a
 coordinated consumer-first upgrade. No app, network or IAM state changed during
 the inspection; AWS source admission remains closed pending its separate IAM
 qualification.
+
+Connection preparation then added only the runner-group TCP 9443 rule sourced
+from the app security group and installed the CA/client certificate/client key
+as private mode-0400 app files. An app-host TLS 1.3 exchange returned the exact
+runner health identity; this is host connectivity evidence, not deployed
+API/worker proof. Clean tracked source was staged under a new inactive immutable
+release directory, while the active unit, environment and containers remained
+unchanged. The deployed image records the `agents` SDK selection. It has no
+submission execution or cleanup profile, exposing a separate fail-closed hosted
+configuration gap before activation.

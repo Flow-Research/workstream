@@ -82,6 +82,15 @@ obligation:
 - timings in milliseconds: admission 0, preparation 3377, execution 79922,
   cleanup 123, total 83424
 
+The preparation interval includes Smol machine creation, start and guest copy.
+The execution interval begins at `machine exec` and includes delivery, spooling,
+validation and staging of the 462,365,541-byte trusted root (459,170,607 expanded
+bytes), followed by source and worker/project execution. The code has 2 ms I/O
+polling but no configured fixed wait in that path; its aggregate and guest
+timeout is 120 seconds. The receipt has no finer substage timings, so the trusted
+root is the dominant-size code-path explanation for the 79.9-second execution,
+not a separately measured attribution.
+
 The final check found zero children in `materials/workspaces`, `model-relay` and
 `smol-leases`. Both services were loaded, enabled and active. The restored unit
 files matched their retained root-private backups exactly:
@@ -155,6 +164,9 @@ unchanged. Its observed source profile is hosted `app`, store backend
 `s3_compatible`, provider `aws_s3`, credential mode `aws_access_key` and virtual
 addressing. Keep those values and the existing credential mount unchanged; the
 separate AWS source-admission gate remains closed pending qualification.
+The installed image records SDK environment `agents`, runtime
+`openai_agents_sdk`, provider `openrouter` and API `chat_completions`; a candidate
+backend build must use `WORKSTREAM_PROJECT_AGENT_SDK_ENVIRONMENT=agents`.
 
 The installed release predates the remote-runner wiring. Its release environment
 contains no external-runner or trusted-intake keys, API and worker have no
@@ -221,11 +233,44 @@ The bounded activation sequence is:
    success should the hosted systemd unit be repointed to the new immutable
    release and reconciled.
 
-At handoff, the SG rule, app TLS files, new backend image digest and new immutable
-release were still absent. No app container, unit, environment, network or IAM
-state was changed. The AWS submission-source admission gate remains separately
-blocked on its IAM qualification; it must remain closed until that evidence
-passes, but it does not require adding a local-native checker fallback.
+The deployed API has no submission execution or source-cleanup profile. The
+candidate `Settings` values therefore remain `None`, and the hosted release
+environment/Compose/preflight do not yet expose approved values. C01-C06 remain
+unresolved; do not invent them or claim public source execution ready.
+
+## App connection preparation receipt
+
+After explicit coordination, the one private runner rule was created through
+the isolated AWS provisioner wrapper and read back:
+
+- security-group rule: `sgr-0374858efbff06c93`
+- runner group: `sg-06167eb0a825ed79a`
+- protocol/port: TCP 9443
+- source group: `sg-015b341d9f8d39117`
+- description: `Workstream app to runner mTLS`
+
+There is no CIDR source and no public 9443 rule. The three TLS files were copied
+to `/etc/workstream/runner-tls` without printing their contents. The directory is
+root-owned mode 0700; `ca.crt`, `app.crt` and `app.key` are regular, single-link,
+nonempty files owned by uid/gid 10001 with mode 0400. The certificate chain and
+client private-key match passed on the app host.
+
+A direct health exchange originating on the app host negotiated TLS 1.3 with
+certificate name `runner.workstream.internal` and returned exact ready identity:
+Linux/amd64, `smolvm`, `smol-microvm`, two cached manifests and sandbox uid/gid
+10001. This proves app-host network, mTLS and protocol reachability only; the
+deployed API and worker still use the old image and have not received runner
+configuration.
+
+Clean tracked source commit `08066c81a7a1d6c2b58676677b5c77cd970fbd86` was
+atomically staged, root-owned and non-writable by group/other at
+`/opt/workstream/releases/08066c81a7a1d6c2b58676677b5c77cd970fbd86` (3,950
+files). Its Compose wrapper, Compose file and preflight hashes match the local
+commit. It is only a candidate snapshot: the active unit still points to
+`013ffbac2291179c03ff6d832f52efee9382322d`, no candidate backend image was built
+on the live t3 app, and no environment, container, unit, IAM or source-gate state
+changed. Root must freeze the eventual exact integration head and build its
+`agents` image elsewhere before activation.
 
 ## Evidence and secret locations
 
