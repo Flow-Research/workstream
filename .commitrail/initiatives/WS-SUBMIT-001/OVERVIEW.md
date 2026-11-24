@@ -36,7 +36,9 @@ full-head qualification.
 The API/application server and microVM execution run on separate infrastructure.
 The application instance is a verified t3.large; the dedicated always-on runner
 is an m7i.large with native KVM. App-origin mTLS health and native transport
-smoke receipts establish connectivity, not the complete deployed submission journey. Do not require nested
+smoke receipts establish connectivity. V14 also proves the connected local API
+and real remote runner through automatic acceptance, rejection and default
+review_pending; it does not prove the deployed API/worker release. Do not require nested
 virtualization, a Smol binary, host sockets or local KVM on the API instance.
 Self-hosted microVM execution uses dedicated runner infrastructure. A paid
 sandbox may implement the same qualified execution capability later.
@@ -85,20 +87,23 @@ journey. The remaining cleanup and verification requirements below still apply.
 
 | Order | Required outcome | Concrete finishing evidence |
 | --- | --- | --- |
-| 1 | Qualify the connected public journey | Real PRE, durable T5, POST and automatic acceptance under locked false ReviewPolicy; exact ZIP, source generation, ContributionRecord and applicable awards; failures and replay. Preserve default review_pending guards. |
+| 1 | Reproduce the connected proof on the deployed API | V14 passes real PRE/T5/POST, automatic acceptance, exact ZIP/Contribution export, rejection, replay and default review_pending with a local API and separate AWS runner. The actual deployed API/consumers remain to activate and prove. |
 | 2 | Finish affected qualification callers | Preparation API/materialization and the admission-only TASK writer are removed. Current qualification scripts use raw ZIP acceptance and dedicated finalization; remaining runtime fault vectors must use that same flow and preserve their evidence. |
 | 3 | Complete separate-runner integration and runtime/provider/resource qualification | Activate the prepared authenticated remote configuration on the app deployment; actual Smol one-session/isolation proof on runner infrastructure; representative maxima, cold paths, concurrency and timing measurements; applicable AWS exact-version/uncertain multipart proof. Portable/MinIO evidence is insufficient for these claims. |
 | 4 | Execute final full-system verification and close the acceptance matrix | Full backend lanes, CLI/MCP contracts and CI at the final head; every A01–A35 row linked to an executed, scope-matching result. Fix actual failures without weakening requirements. |
 | 5 | Reconcile configuration and delivery documentation | Resolve C01–C07 using measured/approved values; update affected roadmap/overview/index and local spreadsheet exports; preserve the distinction between implemented, exposed and deployed. |
 
-The next integration boundary is the complete public journey and live AWS source
-qualification. Ordinary indexed unsealed cleanup is implemented. Spec §17.4 makes
-inventory for genuinely absent operation records optional; it is not a new
-scanner prerequisite. Uncertain writes of known operations remain owned and
-conservatively charged until proved settled. AWS policy and adapter
-drill preparation are reviewed, but IAM administration access is pending and no
-live source qualification has run. Do not repeat completed local proofs as a
-substitute for connecting and testing the deployed journey.
+The connected public journey passed at 85ce76e17 (V14): 573 CLI invocations,
+real PRE/T4/T5/POST, exact source and Contribution/export custody, PRE/POST
+rejection and default review_pending; owned database/bucket cleanup passed.
+Live AWS source qualification passed at 074cade5e with the actual restricted
+runtime/cleanup identities, pinned versions, lost acknowledgements and exact
+cleanup. Neither result claims a deployed API journey. The next boundary is
+qualified AWS admission activation, separate-runner hosted cutover and remaining
+native fault/isolation/capacity and final full-head qualification. Ordinary
+indexed unsealed cleanup is implemented; optional absent-operation inventory is
+not a new prerequisite. Known uncertain writes stay owned and charged until
+settled. Do not repeat completed local proofs instead of closing these gaps.
 
 The current unsealed change extends that same cleanup owner: Local incomplete
 uploads can be reclaimed, and an observed late completion is retained until a
@@ -121,13 +126,13 @@ This is the final qualification queue, not a claim that all listed code is absen
 
 | IDs | Existing implementation/focused evidence | Required closure |
 | --- | --- | --- |
-| A01–A03 | Public ZIP flow, default/project PRE and formal finalization tests | Complete API/CLI journey with required real runtime and POST evidence. |
+| A01–A03 | V14 connected public API/CLI journey with real separate-runner PRE and POST, T4/T5 and exact source checks | Reconcile each requirement and reproduce on the deployed release. |
 | A04–A08 | Metadata/body replay, competing custody, interruption and T4 uncertainty tests | Reconcile exact cases and execute integrated final-head failure/retry matrix. |
 | A09–A13 | T5 rollback/redelivery, actual local SIGKILL recovery, accepted authority, pending reads and old-POST guard | Real Redis publication outage and Celery child-redelivery proofs passed; reconcile the remaining exact cases at the final head. |
-| A14–A18 | Cleanup lock/retention/charge owners and Local/MinIO provider tests | Production sweeps, accepted-source survival, AWS versions and uncertain multipart ownership. |
-| A19–A23 | Streaming/framing, safe archives, semantic identity and bounded findings code/tests | Measured permitted maxima/slow-provider memory bounds and complete safety matrix. |
+| A14–A18 | Cleanup lock/retention/charge owners, Local/MinIO tests and live AWS exact-version/lost-ack cleanup with retained-source survival | Production worker sweeps and exact acceptance-case reconciliation. |
+| A19–A23 | Streaming/framing, safe archives, semantic identity and findings tests; local A19 496 MiB slow-provider memory/backpressure drill | Full permitted maxima and safety matrix, native/deployment scope where required. |
 | A24–A30 | Source/result/fence contracts and runtime/capacity/substitution tests | Actual native isolation/failure/cleanup, multiple replicas/nodes, saturation and adapter qualification. |
-| A31–A32 | Source-backed POST reaches review_pending or shared automatic FinalAcceptance with exact contribution/awards and replay checks | Complete public-API/native automatic acceptance and final downstream tests. Keep default review_pending guards; live human review remains explicitly deferred by the user. |
+| A31–A32 | V14 proves real POST automatic acceptance, exact Contribution/export and default review_pending; focused tests cover applicable awards/replay | Deployed release and final downstream tests. Keep default review_pending guards; live human review remains explicitly deferred by the user. |
 | A33–A35 | Retained migrations, cardinality guards and API/CLI/MCP cutover | Affected old writers are retired; finish current-head migration/client convergence and remaining qualification callers. |
 
 ## Configuration and external evidence
@@ -135,9 +140,9 @@ This is the final qualification queue, not a claim that all listed code is absen
 C01–C07 remain open until individually reconciled with the specification and
 actual deployment evidence. Test-only leases/profiles are not approved defaults.
 Native Smol qualification must run on the dedicated execution infrastructure,
-not the API host. Native transport smoke is recorded; complete public/runtime
-qualification must be linked to its actual results. AWS source
-qualification remains separate from MinIO and ordinary SHA-object operation.
+not the API host. V14 records connected public native proof; remaining runtime
+faults/capacity and deployed API proof need their own receipts. Live AWS source
+qualification passed separately from MinIO and ordinary SHA-object operation.
 Current main's dedicated credentials replace expiring provider activation;
 submission work must not reinstate the retired activation subsystem.
 Request only concrete missing access or decisions after the corresponding drill

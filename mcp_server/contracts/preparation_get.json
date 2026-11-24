@@ -1,5 +1,5 @@
 {
-  "canonical_sha256": "e7f1bb9a59affbbe855b6948fb3b9a20e2f5fddf54f3acbd38a0debc5ffe6084",
+  "canonical_sha256": "178620e9596db912a29be5b288b5b86a25b7234971f9772a234b9f9ed805b230",
   "components": {
     "schemas": {
       "ApiError": {
@@ -264,7 +264,7 @@
     }
   },
   "operation": {
-    "description": "One of your preparations with every intake finding; others are not found.",
+    "description": "One historical preparation with its intake findings; others are not found.",
     "operationId": "read_my_preparation_api_v1_tasks__task_id__submission_bundle_preparations__preparation_id__get",
     "parameters": [
       {
@@ -541,6 +541,6 @@
     "method": "GET",
     "openapi_version": "3.1.0",
     "path": "/api/v1/tasks/{task_id}/submission-bundle-preparations/{preparation_id}",
-    "repository_sha": "f0431385573eb53353c5ffc3c6cdb6a93d206b73"
+    "repository_sha": "b23b9be281cc4ec5428bdc50f097a4c4c35a7c16"
   }
 }

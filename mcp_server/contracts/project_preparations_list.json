@@ -1,5 +1,5 @@
 {
-  "canonical_sha256": "f435dfbfcd335f00948ed84edc949d65802052d096620f4ddd8f6593c6880eef",
+  "canonical_sha256": "4edab7436e7c5903d8263cf3b9c20d5dd105feb04d19eecd7649634ca76efada",
   "components": {
     "schemas": {
       "ApiError": {
@@ -291,7 +291,7 @@
     }
   },
   "operation": {
-    "description": "Every contributor's ZIP preparations, newest first, with finding counts and no findings or files.\n\n``outcome=failed`` lists completed intake checks that blocked the ZIP.",
+    "description": "Historical ZIP preparations, newest first, with counts and no findings or files.\n\n``outcome=failed`` lists completed intake checks that blocked the ZIP.",
     "operationId": "list_project_preparations_api_v1_projects__project_id__submission_bundle_preparations_get",
     "parameters": [
       {
@@ -609,6 +609,6 @@
     "method": "GET",
     "openapi_version": "3.1.0",
     "path": "/api/v1/projects/{project_id}/submission-bundle-preparations",
-    "repository_sha": "bb39ac10aed24e3484f3155706f7a8902ef97694"
+    "repository_sha": "b23b9be281cc4ec5428bdc50f097a4c4c35a7c16"
   }
 }

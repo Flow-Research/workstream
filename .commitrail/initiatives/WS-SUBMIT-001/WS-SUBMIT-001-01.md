@@ -10152,3 +10152,34 @@ Structure validation exited0 (/tmp/submission-remote-pre-structure.log); after t
 small callback/test addition, a bounded AST check confirmed all added functions
 remain below120lines and the guard module remains below1200 without ledger edits.
 Ruff, links and whitespace pass. Commitrail is checked against the bridge base.
+
+### Complete connected native journey and current read contracts
+
+V14 passed all six stages and 573 CLI invocations at clean85ce76e17, schema 0090.
+Public PRE rejection leaves no Submission; correct input reaches one passing
+registered POST, FinalAcceptance, Submission and Contribution with exact original
+ZIP hash in Contribution/CSV export, no Review and no awards for this policy.
+Incorrect input passes PRE then reaches failed POST/needs_revision without
+acceptance effects. Default-required review reaches review_pending with zero
+Review/Contribution/FinalAcceptance. Read-only source/effect audits and Operator
+custody checks passed. Metadata confirms owned database and MinIO cleanup;
+journey-owned provider container/secret were removed. Evidence:
+`/tmp/submission-public-journey-live-v14.log` and matching.json; private timing
+snapshot `/tmp/submission-public-journey-v14-pre-intervals.json`.
+
+Topology was disposable local API/PostgreSQL/MinIO/Redis and the real dedicated
+AWS Smol runner, not the deployed API release. DB-recorded PRE intervals were
+86.422219, 85.504909, 83.267697, 80.466899 seconds under the test 120-second / 2 CPU /
+2 GiB / 8 GiB / 64-process profile. These are not HTTP or execution-only timings.
+The approximately 60-second target is not met; C01 hard-limit approval was
+requested with these measurements and remains pending. Do not fabricate defaults.
+
+Historical preparation route descriptions were refreshed in exactly three MCP
+snapshots using current exported OpenAPI and the canonical fragment/hash helpers;
+only descriptions, hashes and source provenance changed. No schema or permission
+changed. Five focused configured checks passed 1.35s, including both current
+OpenAPI comparisons (`/tmp/submission-historical-mcp-contracts-final.log`).
+The initial selector command selected two nodes from the wrong module and ran
+no tests; corrected selection uses the existing task-execution contract module.
+Roadmap, initiative overview/index and local sheet exports are reconciled to
+these scoped results while keeping hosted activation and final qualification open.
