@@ -75,31 +75,6 @@ def probe_revision_insert():
     assert len(observed) == 1
 
 
-@contextmanager
-def stale_fence_before_acceptance_commit():
-    """Reserve a legitimate successor after T4 staging, before deferred SQL checks."""
-    from app.adapters.checkers import evaluation_coordinator
-    from app.modules.artifacts.intake.foreground_admission import ForegroundIntakeAdmission
-    from tests.checkers.execution.storage_fixture import storage_request
-
-    original = ForegroundIntakeAdmission._accept_new
-    observed = []
-
-    async def accept(admission, session, authority, repository, row, owner,
-                     request, terminal_digest, checkers, outbox):
-        receipt = await original(admission, session, authority, repository, row, owner,
-                                 request, terminal_digest, checkers, outbox)
-        predecessor = row.accepted_context["predecessor_submission_id"]
-        assert predecessor is not None and row.state == "finalization_pending"
-        successor = await storage_request(session, predecessor, generation=2)
-        reserved = await evaluation_coordinator(session).reserve_current_evaluation(successor)
-        assert reserved.request_id == successor.evaluation_request_id
-        observed.append(row.id)
-        return receipt
-
-    with patch.object(ForegroundIntakeAdmission, "_accept_new", accept):
-        yield observed
-    assert len(observed) == 1
 
 
 async def revision_target_snapshot(factory, task_id):

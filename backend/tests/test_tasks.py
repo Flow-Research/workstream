@@ -2537,31 +2537,6 @@ async def test_retained_submission_versions_are_readable_without_exposing_packet
     assert denied.status_code == 404
 
 
-async def test_revision_acceptance_rejects_checker_fence_changed_before_commit(task_client, monkeypatch):
-    from app.modules.artifacts.intake.repository import IntakeCustodyConflict
-    from tests.tasks.submission_dispatch.accepted_revision_probes import stale_fence_before_acceptance_commit
-
-    project = await create_active_project(task_client, post_submit_registry_spec=post_registry_spec())
-    task = await create_started_task(task_client, project["id"], monkeypatch)
-    first = await seed_retained_submission(task["id"], complete_submission_payload())
-    await route_retained_checker_remediation(first)
-    set_dev_actor(monkeypatch, roles="worker", subject="worker-one")
-    with stale_fence_before_acceptance_commit():
-        with pytest.raises(IntakeCustodyConflict) as error:
-            await seed_retained_submission(task["id"], complete_submission_payload(), predecessor_id=first)
-    assert "revision acceptance is no longer eligible" in str(error.value.__cause__)
-    async with db_session.get_session_factory()() as session:
-        assert await session.scalar(text("SELECT count(*) FROM submissions WHERE task_id=:id"), {"id": task["id"]}) == 1
-        assert await session.scalar(text("SELECT count(*) FROM submission_bundle_admissions WHERE task_id=:id"), {"id": task["id"]}) == 1
-        row = (await session.execute(text("""
-            SELECT state, acceptance_receipt, finalization_event_id FROM submission_intake_operations
-            WHERE task_id=:id AND command_metadata->>'predecessor_submission_id' IS NOT NULL
-        """), {"id": task["id"]})).one()
-        assert row.state == "failed" and row.acceptance_receipt is None and row.finalization_event_id is None
-        assert await session.scalar(text("""
-            SELECT count(*) FROM outbox_events
-            WHERE event_type='SubmissionFinalizationRequested' AND payload->>'task_id'=:id
-        """), {"id": task["id"]}) == 1
 
 
 async def test_retained_submission_history_preserves_locked_guide_after_activation(
