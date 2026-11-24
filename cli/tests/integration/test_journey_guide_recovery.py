@@ -125,3 +125,13 @@ def test_guide_dispatch_refuses_wrong_acknowledged_setup(substitution):
             client, "token", COMMAND, SELECTOR
         )
     assert client.calls == [(SELECTOR, 0), (COMMAND, None)]
+
+
+def test_review_required_branch_selects_backend_default_by_omission():
+    required = MODULE._review_policy_input(human_review_required=True)
+    automatic = MODULE._review_policy_input(human_review_required=False)
+    assert required == {
+        "review_preference_window_seconds": 3600,
+        "review_lease_duration_seconds": 1800,
+    }
+    assert automatic == required | {"human_review_required": False}

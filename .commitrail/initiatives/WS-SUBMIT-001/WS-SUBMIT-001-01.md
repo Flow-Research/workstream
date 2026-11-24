@@ -9879,3 +9879,19 @@ for the actual bucket, namespace and same-account IAM users. ARCH/SEC review
 found no blocker to administrator application; metadata-list scope is explicit
 in administrator-handoff.txt. Live policy application, credentials provisioning
 and actual AWS source qualification remain unperformed. Pinned Ruff/diff pass.
+
+The first clean run with the repaired POST dispatcher (`f14a19179`) passed
+public setup, real native PRE rejection for the missing-summary ZIP, correct
+ZIP T4/T5 and automatic POST acceptance, exact accepted Contribution/export,
+the source/effect read-only audit, incorrect-count ZIP POST failure with no
+acceptance, and Operator custody. It stopped while creating the separate
+review-required project: that fixture skipped `set-review-policy` entirely,
+leaving the public activation context without a selected review policy. The
+backend and built CLI both require such a selection. The journey now calls
+the ordinary public `set-review-policy` with only required window and lease
+fields in this branch, letting the backend apply its documented default
+`human_review_required=true`; the automatic branch continues to pass explicit
+`false`. It checks the selected response. A focused test pins omission versus
+explicit false. This is a fixture correction, not a human acceptance route.
+The stopped run's isolated PostgreSQL database and MinIO bucket were cleaned;
+`review_pending` remains unobserved in that run.

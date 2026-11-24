@@ -152,6 +152,17 @@ def validate_authored_rules_template():
     ProjectGuideCompilationResult.model_validate(body)
 
 
+def _review_policy_input(*, human_review_required: bool) -> dict:
+    """Omission selects the backend's required-review default for this guide."""
+    body = {
+        "review_preference_window_seconds": 3600,
+        "review_lease_duration_seconds": 1800,
+    }
+    if not human_review_required:
+        body["human_review_required"] = False
+    return body
+
+
 def configure_guide(client, tokens, project_id, *, human_review_required=False):
     manager = tokens["manager"]
     guide = client.write_and_replay(
@@ -173,24 +184,16 @@ def configure_guide(client, tokens, project_id, *, human_review_required=False):
     guide_id = guide["id"]
     policies = [
         (
+            "set-review-policy",
+            _review_policy_input(human_review_required=human_review_required),
+        ),
+        (
             "set-revision-policy",
             {"max_revision_rounds": 2, "revision_deadline_hours": 48},
         ),
     ]
-    if not human_review_required:
-        policies.insert(
-            0,
-            (
-                "set-review-policy",
-                {
-                    "human_review_required": False,
-                    "review_preference_window_seconds": 3600,
-                    "review_lease_duration_seconds": 1800,
-                },
-            ),
-        )
     for command, body in policies:
-        client.write_and_replay(
+        selected = client.write_and_replay(
             manager,
             "project",
             "guide",
@@ -201,6 +204,11 @@ def configure_guide(client, tokens, project_id, *, human_review_required=False):
             '"no-current-policy"',
             body=body,
         )
+        if (
+            command == "set-review-policy"
+            and selected["human_review_required"] is not human_review_required
+        ):
+            raise AssertionError("selected review mode differs from authored default")
     for document, content in zip(
         guide["documents"], (GUIDE, json.dumps(authored_rules()).encode()), strict=True
     ):
