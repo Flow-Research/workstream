@@ -744,8 +744,6 @@ class Settings(BaseSettings):
         if self.checker_model_proxy_socket is not None:
             if not self.checker_model_proxy_socket.is_absolute():
                 raise ValueError("checker model proxy socket must be absolute")
-            if any(value is None for value in external_values):
-                raise ValueError("checker model proxy requires the external runner")
             if self.artifact_store_backend == "disabled":
                 raise ValueError("checker model proxy requires enabled artifact storage")
         if self.artifact_store_backend == "disabled":

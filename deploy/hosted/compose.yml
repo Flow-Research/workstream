@@ -277,30 +277,9 @@ services:
       WORKSTREAM_DATABASE_URL_FILE: /run/secrets/database_url
       WORKSTREAM_CHECKER_MODEL_PROXY_SOCKET: ${WORKSTREAM_DEPLOYMENT_ROOT:-/var/lib/workstream}/model-runtime/model.sock
       WORKSTREAM_ARTIFACT_S3_DIRECT_USER_CREDENTIAL_FILE: /run/workstream-artifact-credentials/aws-access-key.json
-      WORKSTREAM_EXTERNAL_RUNNER_HOST: ${WORKSTREAM_EXTERNAL_RUNNER_HOST:?set the private runner address}
-      WORKSTREAM_EXTERNAL_RUNNER_PORT: ${WORKSTREAM_EXTERNAL_RUNNER_PORT:-9443}
-      WORKSTREAM_EXTERNAL_RUNNER_SERVER_NAME: ${WORKSTREAM_EXTERNAL_RUNNER_SERVER_NAME:?set the runner certificate name}
-      WORKSTREAM_EXTERNAL_RUNNER_CA_PATH: /run/secrets/external_runner_ca
-      WORKSTREAM_EXTERNAL_RUNNER_CERTIFICATE_PATH: /run/secrets/external_runner_certificate
-      WORKSTREAM_EXTERNAL_RUNNER_PRIVATE_KEY_PATH: /run/secrets/external_runner_private_key
     secrets:
       - source: database_url
         target: database_url
-        uid: "${WORKSTREAM_RUNTIME_UID}"
-        gid: "${WORKSTREAM_RUNTIME_GID}"
-        mode: 0400
-      - source: external_runner_ca
-        target: external_runner_ca
-        uid: "${WORKSTREAM_RUNTIME_UID}"
-        gid: "${WORKSTREAM_RUNTIME_GID}"
-        mode: 0400
-      - source: external_runner_certificate
-        target: external_runner_certificate
-        uid: "${WORKSTREAM_RUNTIME_UID}"
-        gid: "${WORKSTREAM_RUNTIME_GID}"
-        mode: 0400
-      - source: external_runner_private_key
-        target: external_runner_private_key
         uid: "${WORKSTREAM_RUNTIME_UID}"
         gid: "${WORKSTREAM_RUNTIME_GID}"
         mode: 0400

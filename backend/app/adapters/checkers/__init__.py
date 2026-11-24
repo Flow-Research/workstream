@@ -61,6 +61,7 @@ def external_checker_execution_factory(
     ca_path: Path,
     certificate_path: Path,
     private_key_path: Path,
+    model_proxy_socket_path: Path | None,
     timeout_seconds: float,
 ) -> ExternalServiceAdapterFactory[RemoteTlsExternalCheckerAdapter]:
     """Compose the sole dedicated-node external checker adapter factory."""
@@ -77,6 +78,7 @@ def external_checker_execution_factory(
             ca_path=ca_path,
             certificate_path=certificate_path,
             private_key_path=private_key_path,
+            model_proxy_socket_path=model_proxy_socket_path,
             timeout_seconds=timeout_seconds,
             source_contracts=selected_pre_submit_source_contracts(),
         ),
@@ -173,6 +175,7 @@ def configured_external_checker_execution_factory(settings):
         ca_path=settings.external_runner_ca_path,
         certificate_path=settings.external_runner_certificate_path,
         private_key_path=settings.external_runner_private_key_path,
+        model_proxy_socket_path=settings.checker_model_proxy_socket,
         timeout_seconds=float(settings.external_checker_service_timeout_seconds),
     )
 

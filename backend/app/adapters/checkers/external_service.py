@@ -9,6 +9,7 @@ import json
 import hashlib
 from datetime import datetime, timezone
 from pathlib import Path
+import re
 import ssl
 import struct
 from typing import Literal
@@ -57,6 +58,7 @@ _PROTOCOL = "external_checker_service.v1"
 _REMOTE_PROTOCOL = "workstream.remote_runner.v1"
 _MAXIMUM_RESPONSE_BYTES = MAX_RESULT_BYTES + 16_384
 _EXECUTION_OVERHEAD_SECONDS = EXTERNAL_CHECKER_EXECUTION_CLEANUP_MARGIN_MS / 1000
+_CHANNEL_ID = re.compile(r"[0-9a-f]{32}")
 
 
 class RemoteTlsExternalCheckerAdapter:
@@ -71,6 +73,7 @@ class RemoteTlsExternalCheckerAdapter:
         ca_path: Path,
         certificate_path: Path,
         private_key_path: Path,
+        model_proxy_socket_path: Path | None,
         timeout_seconds: float,
         source_contracts: SelectedPreSubmitSourceContracts,
     ) -> None:
@@ -87,6 +90,8 @@ class RemoteTlsExternalCheckerAdapter:
             or any(not path.is_absolute() or path.is_symlink() for path in (
                 ca_path, certificate_path, private_key_path
             ))
+            or model_proxy_socket_path is not None
+            and (not model_proxy_socket_path.is_absolute() or model_proxy_socket_path.is_symlink())
             or type(timeout_seconds) is not float
             or not 0.1 <= timeout_seconds <= 3_700.0
         ):
@@ -96,6 +101,7 @@ class RemoteTlsExternalCheckerAdapter:
         self._ca_path = ca_path
         self._certificate_path = certificate_path
         self._private_key_path = private_key_path
+        self._model_proxy_socket_path = model_proxy_socket_path
         self._timeout_seconds = timeout_seconds
         self._identity = ExternalServiceAdapterIdentity(
             EXTERNAL_CHECKER_CAPABILITY_KEY,
@@ -152,6 +158,24 @@ class RemoteTlsExternalCheckerAdapter:
         ).encode()
         await self._send_frame(writer, control)
         return reader, writer
+
+    @staticmethod
+    async def _read_frame(reader: asyncio.StreamReader, maximum: int) -> bytes:
+        size = struct.unpack(">I", await reader.readexactly(4))[0]
+        if size == 0 or size > maximum:
+            raise ValueError("remote runner frame is invalid")
+        return await reader.readexactly(size)
+
+    async def _exchange_local_callback(self, payload: bytes) -> bytes:
+        if self._model_proxy_socket_path is None:
+            raise ValueError("model proxy callback is unavailable")
+        reader, writer = await asyncio.open_unix_connection(self._model_proxy_socket_path)
+        try:
+            await self._send_frame(writer, payload)
+            return await self._read_frame(reader, 64 * 1024 * 1024)
+        finally:
+            writer.close()
+            await await_cancellation_resistant(writer.wait_closed())
 
     async def execute_pre(
         self, lease: SelectedPreSubmitLeaseFacts, grant: ExternalPreSubmitSourceGrant,
@@ -329,15 +353,48 @@ class RemoteTlsExternalCheckerAdapter:
                             await await_cancellation_resistant(stream.aclose())
                         writer.write(struct.pack(">I", 0))
                         await writer.drain()
-                    size = struct.unpack(">I", await reader.readexactly(4))[0]
-                    if size == 0 or size > _MAXIMUM_RESPONSE_BYTES:
-                        raise ExternalServiceProtocolError(self._identity)
-                    raw = await reader.readexactly(size)
-                    if await reader.read(1):
-                        raise ExternalServiceProtocolError(self._identity)
+                    while True:
+                        header = json.loads(await self._read_frame(reader, 16_384))
+                        if (
+                            type(header) is not dict
+                            or header.get("protocol_version") != _REMOTE_PROTOCOL
+                        ):
+                            raise ValueError("remote runner response header is invalid")
+                        operation = header.get("operation")
+                        if operation == "callback_request":
+                            if (
+                                set(header)
+                                != {"protocol_version", "operation", "channel_id"}
+                                or type(header["channel_id"]) is not str
+                                or _CHANNEL_ID.fullmatch(header["channel_id"]) is None
+                            ):
+                                raise ValueError("remote callback header is invalid")
+                            callback = await self._read_frame(reader, 64 * 1024 * 1024)
+                            response = await self._exchange_local_callback(callback)
+                            await self._send_frame(
+                                writer,
+                                json.dumps(
+                                    {
+                                        "protocol_version": _REMOTE_PROTOCOL,
+                                        "operation": "callback_response",
+                                        "channel_id": header["channel_id"],
+                                    },
+                                    separators=(",", ":"),
+                                ).encode(),
+                            )
+                            await self._send_frame(writer, response)
+                            continue
+                        if operation != "execution_result" or set(header) != {
+                            "protocol_version", "operation"
+                        }:
+                            raise ValueError("remote execution result header is invalid")
+                        raw = await self._read_frame(reader, _MAXIMUM_RESPONSE_BYTES)
+                        if await reader.read(1):
+                            raise ValueError("remote execution result contains trailing data")
+                        break
                 finally:
                     writer.close()
-                    await writer.wait_closed()
+                    await await_cancellation_resistant(writer.wait_closed())
         except ExternalServiceProtocolError:
             raise
         except (TimeoutError, OSError, asyncio.IncompleteReadError) as exc:

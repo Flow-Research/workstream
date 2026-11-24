@@ -427,9 +427,12 @@ certificate. PRE source and POST material bytes cross that boundary in bounded
 frames; no API-host filesystem path crosses it. The runner verifies exact
 request/source/grant bindings, stages one private runner-local workspace, invokes
 the existing native Unix service, and removes the exact session on success,
-failure, timeout or disconnect. A persistent outbound app model-proxy bridge
-preserves request-bound model callbacks without opening inbound access to the
-app host. Future managed providers must implement the same typed task/source/
+failure, timeout or disconnect. Model, trial-evidence and setup-model callback
+frames are multiplexed over the exact invocation's authenticated execute
+connection; losing that app-process owner fails the callback and stops native
+execution without selecting another replica. Startup refuses stale staged
+material until the stopped native service and exact bounded residue have been
+reconciled. Future managed providers must implement the same typed task/source/
 result contract; no E2B, Daytona or other vendor is claimed supported here.
 
 Live evidence on instance `i-0936c305f8f67d835` proves m7i.large nested KVM,

@@ -27,55 +27,12 @@ MAXIMUM_FRAME_BYTES = 64 * 1024 * 1024
 MAXIMUM_MATERIAL_BYTES = 1024 * 1024 * 1024
 MAXIMUM_FILES = 4_000
 _GRANT_ID = re.compile(r"extract_[0-9a-f]{32}")
+_INCOMING_ID = re.compile(r"\.incoming-[0-9a-f]{32}")
 _SHA256 = re.compile(r"sha256:[0-9a-f]{64}")
 
 
 class ProtocolError(Exception):
     """A remote peer sent a malformed or unbound request."""
-
-
-class ModelBridge:
-    """Serialize runner-local callbacks over one app-authenticated TLS session."""
-
-    def __init__(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
-        self.reader, self.writer = reader, writer
-        self.lock = asyncio.Lock()
-        self.closed = asyncio.Event()
-
-    async def exchange(self, request: bytes) -> bytes:
-        async with self.lock:
-            if self.closed.is_set():
-                raise ProtocolError("model bridge is unavailable")
-            channel_id = uuid.uuid4().hex
-            header = json.dumps(
-                {
-                    "protocol_version": PROTOCOL,
-                    "operation": "model_request",
-                    "channel_id": channel_id,
-                },
-                separators=(",", ":"),
-            ).encode()
-            try:
-                await _write_frame(self.writer, header)
-                await _write_frame(self.writer, request)
-                response_header = _decode_object(
-                    await _read_frame(self.reader, MAXIMUM_CONTROL_BYTES)
-                )
-                if response_header != {
-                    "protocol_version": PROTOCOL,
-                    "operation": "model_response",
-                    "channel_id": channel_id,
-                }:
-                    raise ProtocolError("model response header differs")
-                return await _read_frame(self.reader, MAXIMUM_FRAME_BYTES)
-            except (OSError, ssl.SSLError, asyncio.IncompleteReadError):
-                self.close()
-                raise ProtocolError("model bridge is unavailable") from None
-
-    def close(self) -> None:
-        if not self.closed.is_set():
-            self.closed.set()
-            self.writer.close()
 
 
 def _closed_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -122,6 +79,87 @@ async def _write_frame(writer: asyncio.StreamWriter, body: bytes) -> None:
     await writer.drain()
 
 
+class ExecutionChannel:
+    """Multiplex native callback frames over the exact owning execute connection."""
+
+    def __init__(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        self.reader, self.writer = reader, writer
+        self.closed = asyncio.Event()
+        self._write_lock = asyncio.Lock()
+        self._pending: dict[str, asyncio.Future[bytes]] = {}
+        self._router = asyncio.create_task(self._route_responses())
+
+    async def callback(self, request: bytes) -> bytes:
+        channel_id = uuid.uuid4().hex
+        future = asyncio.get_running_loop().create_future()
+        self._pending[channel_id] = future
+        try:
+            async with self._write_lock:
+                if self.closed.is_set():
+                    raise ProtocolError("execute channel is unavailable")
+                await _write_frame(
+                    self.writer,
+                    json.dumps(
+                        {
+                            "protocol_version": PROTOCOL,
+                            "operation": "callback_request",
+                            "channel_id": channel_id,
+                        },
+                        separators=(",", ":"),
+                    ).encode(),
+                )
+                await _write_frame(self.writer, request)
+            return await future
+        finally:
+            self._pending.pop(channel_id, None)
+
+    async def result(self, response: bytes) -> None:
+        async with self._write_lock:
+            if self.closed.is_set():
+                raise ProtocolError("execute channel is unavailable")
+            await _write_frame(
+                self.writer,
+                json.dumps(
+                    {"protocol_version": PROTOCOL, "operation": "execution_result"},
+                    separators=(",", ":"),
+                ).encode(),
+            )
+            await _write_frame(self.writer, response)
+
+    async def _route_responses(self) -> None:
+        failure: BaseException = ProtocolError("execute channel closed")
+        try:
+            while True:
+                header = _decode_object(await _read_frame(self.reader, 16_384))
+                if (
+                    set(header) != {"protocol_version", "operation", "channel_id"}
+                    or header.get("protocol_version") != PROTOCOL
+                    or header.get("operation") != "callback_response"
+                    or type(header.get("channel_id")) is not str
+                ):
+                    raise ProtocolError("callback response header is invalid")
+                future = self._pending.get(header["channel_id"])
+                if future is None or future.done():
+                    raise ProtocolError("callback response has no owner")
+                future.set_result(await _read_frame(self.reader, MAXIMUM_FRAME_BYTES))
+        except asyncio.CancelledError as exc:
+            failure = exc
+            raise
+        except (ProtocolError, OSError, ssl.SSLError, asyncio.IncompleteReadError) as exc:
+            failure = exc
+        finally:
+            self.closed.set()
+            for future in tuple(self._pending.values()):
+                if not future.done():
+                    future.set_exception(failure)
+
+    async def close(self) -> None:
+        if not self._router.done():
+            self._router.cancel()
+        await asyncio.gather(self._router, return_exceptions=True)
+        self.closed.set()
+
+
 def _peer_name(writer: asyncio.StreamWriter) -> set[str]:
     certificate = writer.get_extra_info("peercert")
     if type(certificate) is not dict:
@@ -152,6 +190,7 @@ def _manifest_files(
         raise ProtocolError("material inventory is invalid")
     values: list[tuple[PurePosixPath, int, str, bool]] = []
     roles: set[str] = set()
+    inventory_entries = 0
     for item in materials:
         if type(item) is not dict or set(item) != {"material", "directories", "files"}:
             raise ProtocolError("material descriptor is invalid")
@@ -168,6 +207,9 @@ def _manifest_files(
         files = item["files"]
         if type(directories) is not list or type(files) is not list:
             raise ProtocolError("material inventory is invalid")
+        inventory_entries += len(directories) + len(files)
+        if inventory_entries > MAXIMUM_FILES:
+            raise ProtocolError("material inventory is unbounded")
         seen: set[str] = set()
         for value in directories:
             path = _relative_path(value)
@@ -194,8 +236,6 @@ def _manifest_files(
                 raise ProtocolError("material file is invalid")
             seen.add(str(path))
             values.append((PurePosixPath("materials", role, *path.parts), count, digest, executable))
-    if len(values) > MAXIMUM_FILES:
-        raise ProtocolError("material file count is unbounded")
     return tuple(values)
 
 
@@ -230,6 +270,56 @@ def _remove_tree(path: Path) -> None:
             os.chmod(Path(current, name), 0o700, follow_symlinks=False)
     os.chmod(path, 0o700, follow_symlinks=False)
     shutil.rmtree(path)
+
+
+def _reconcile_stale_workspaces(config: dict[str, Any]) -> int:
+    """Remove only bounded edge-owned residue while the native service is stopped."""
+    socket_path = Path(config.get("socket_path", ""))
+    material_root = Path(config.get("material_root", ""))
+    workspaces = material_root / "workspaces"
+    if not socket_path.is_absolute() or socket_path.exists():
+        raise ValueError("native service must be stopped before reconciliation")
+    metadata = workspaces.lstat()
+    if (
+        not stat.S_ISDIR(metadata.st_mode)
+        or stat.S_ISLNK(metadata.st_mode)
+        or metadata.st_uid != os.getuid()
+        or metadata.st_mode & 0o077
+        or workspaces.resolve() != workspaces
+    ):
+        raise ValueError("workspace root custody is invalid")
+    entries = sorted(workspaces.iterdir())
+    # One exclusive execution can leave at most one renamed or incoming tree.
+    # More residue cannot be attributed safely to one crashed edge process.
+    if len(entries) > 1:
+        raise ValueError("workspace residue ownership is uncertain")
+    removed = 0
+    for entry in entries:
+        if (
+            not (_GRANT_ID.fullmatch(entry.name) or _INCOMING_ID.fullmatch(entry.name))
+            or entry.is_symlink()
+            or not entry.is_dir()
+        ):
+            raise ValueError("workspace residue ownership is uncertain")
+        count, total = 0, 0
+        for current, directories, files in os.walk(entry, followlinks=False):
+            for name in (*directories, *files):
+                item = Path(current, name)
+                observed = item.lstat()
+                if (
+                    observed.st_uid != os.getuid()
+                    or stat.S_ISLNK(observed.st_mode)
+                    or not (stat.S_ISDIR(observed.st_mode) or stat.S_ISREG(observed.st_mode))
+                ):
+                    raise ValueError("workspace residue ownership is uncertain")
+                count += 1
+                if stat.S_ISREG(observed.st_mode):
+                    total += observed.st_size
+                if count > MAXIMUM_FILES + 10_000 or total > MAXIMUM_MATERIAL_BYTES + MAXIMUM_CONTROL_BYTES:
+                    raise ValueError("workspace residue is unbounded")
+        _remove_tree(entry)
+        removed += 1
+    return removed
 
 
 def _write_descriptor(descriptor: int, body: bytes) -> None:
@@ -276,11 +366,22 @@ class RemoteNode:
         if (
             not self.material_root.is_dir()
             or self.material_root.is_symlink()
+            or metadata.st_uid != os.getuid()
             or metadata.st_mode & 0o077
             or self.material_root.resolve() != self.material_root
         ):
             raise ValueError("remote node material root is not private")
         self.workspaces.mkdir(mode=0o700, exist_ok=True)
+        workspace_metadata = self.workspaces.lstat()
+        if (
+            not stat.S_ISDIR(workspace_metadata.st_mode)
+            or stat.S_ISLNK(workspace_metadata.st_mode)
+            or workspace_metadata.st_uid != os.getuid()
+            or workspace_metadata.st_mode & 0o077
+            or self.workspaces.resolve() != self.workspaces
+            or any(self.workspaces.iterdir())
+        ):
+            raise ValueError("remote node workspace root requires reconciliation")
         context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         context.minimum_version = ssl.TLSVersion.TLSv1_3
         context.verify_mode = ssl.CERT_REQUIRED
@@ -288,7 +389,7 @@ class RemoteNode:
         context.load_verify_locations(config["tls_ca_path"])
         self.ssl_context = context
         self._execution = asyncio.Lock()
-        self._model_bridge: ModelBridge | None = None
+        self._active_channel: ExecutionChannel | None = None
         self._model_server: asyncio.AbstractServer | None = None
 
     async def start_model_proxy(self) -> None:
@@ -325,8 +426,6 @@ class RemoteNode:
         if self._model_server is not None:
             self._model_server.close()
             await self._model_server.wait_closed()
-        if self._model_bridge is not None:
-            self._model_bridge.close()
         try:
             metadata = self.model_proxy_socket_path.lstat()
             if stat.S_ISSOCK(metadata.st_mode) and metadata.st_uid == os.getuid():
@@ -340,10 +439,10 @@ class RemoteNode:
         try:
             async with asyncio.timeout(self.timeout):
                 request = await _read_frame(reader, MAXIMUM_FRAME_BYTES)
-                bridge = self._model_bridge
-                if bridge is None:
-                    raise ProtocolError("model bridge is unavailable")
-                response = await bridge.exchange(request)
+                channel = self._active_channel
+                if channel is None:
+                    raise ProtocolError("execute callback owner is unavailable")
+                response = await channel.callback(request)
                 await _write_frame(writer, response)
                 if await reader.read(1):
                     raise ProtocolError("model proxy request contains trailing data")
@@ -372,10 +471,6 @@ class RemoteNode:
                     }:
                         raise ProtocolError("proxy request is invalid")
                     await self._proxy(reader, writer)
-                elif operation == "model_bridge":
-                    if set(control) != {"protocol_version", "operation", "capability"} or capability != CHECKER_CAPABILITY:
-                        raise ProtocolError("model bridge request is invalid")
-                    await self._serve_model_bridge(reader, writer)
                 elif operation == "execute":
                     if capability != CHECKER_CAPABILITY:
                         raise ProtocolError("execute capability differs")
@@ -391,31 +486,6 @@ class RemoteNode:
             except (OSError, ssl.SSLError):
                 pass
 
-    async def _serve_model_bridge(
-        self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
-    ) -> None:
-        bridge = ModelBridge(reader, writer)
-        previous = self._model_bridge
-        self._model_bridge = bridge
-        if previous is not None:
-            previous.close()
-        await _write_frame(
-            writer,
-            json.dumps(
-                {
-                    "protocol_version": PROTOCOL,
-                    "operation": "model_bridge",
-                    "status": "ready",
-                },
-                separators=(",", ":"),
-            ).encode(),
-        )
-        try:
-            await bridge.closed.wait()
-        finally:
-            if self._model_bridge is bridge:
-                self._model_bridge = None
-
     async def _proxy(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         native_reader, native_writer = await asyncio.open_unix_connection(self.socket_path)
 
@@ -424,19 +494,23 @@ class RemoteNode:
                 target.write(chunk)
                 await target.drain()
 
-        tasks = {
-            asyncio.create_task(copy(reader, native_writer)),
-            asyncio.create_task(copy(native_reader, writer)),
-        }
-        done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
-        for task in pending:
-            task.cancel()
-        await asyncio.gather(*done, *pending, return_exceptions=True)
-        native_writer.close()
+        tasks: set[asyncio.Task[None]] = set()
         try:
-            await native_writer.wait_closed()
-        except OSError:
-            pass
+            tasks = {
+                asyncio.create_task(copy(reader, native_writer)),
+                asyncio.create_task(copy(native_reader, writer)),
+            }
+            await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+        finally:
+            for task in tasks:
+                if not task.done():
+                    task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
+            native_writer.close()
+            try:
+                await native_writer.wait_closed()
+            except OSError:
+                pass
 
     async def _execute(
         self,
@@ -510,6 +584,8 @@ class RemoteNode:
         target = self.workspaces / grant_id
         incoming = self.workspaces / f".incoming-{uuid.uuid4().hex}"
         native_writer: asyncio.StreamWriter | None = None
+        channel: ExecutionChannel | None = None
+        wait_tasks: set[asyncio.Task[Any]] = set()
         if target.exists():
             raise ProtocolError("grant is already active")
         incoming.mkdir(mode=0o700)
@@ -547,19 +623,30 @@ class RemoteNode:
             encoded = json.dumps(
                 request, ensure_ascii=False, allow_nan=False, separators=(",", ":")
             ).encode()
+            channel = ExecutionChannel(reader, writer)
+            if self._active_channel is not None:
+                raise ProtocolError("execute callback owner is already active")
+            self._active_channel = channel
             await _write_frame(native_writer, encoded)
             response_task = asyncio.create_task(_read_frame(native_reader, MAXIMUM_FRAME_BYTES))
-            disconnect_task = asyncio.create_task(reader.read(1))
+            disconnect_task = asyncio.create_task(channel.closed.wait())
+            wait_tasks = {response_task, disconnect_task}
             done, _ = await asyncio.wait(
-                {response_task, disconnect_task}, return_when=asyncio.FIRST_COMPLETED
+                wait_tasks, return_when=asyncio.FIRST_COMPLETED
             )
             if disconnect_task in done:
-                response_task.cancel()
                 raise ProtocolError("remote client disconnected")
-            disconnect_task.cancel()
             response = await response_task
-            await _write_frame(writer, response)
+            await channel.result(response)
         finally:
+            for task in wait_tasks:
+                if not task.done():
+                    task.cancel()
+            await asyncio.gather(*wait_tasks, return_exceptions=True)
+            if self._active_channel is channel:
+                self._active_channel = None
+            if channel is not None:
+                await channel.close()
             if native_writer is not None:
                 native_writer.close()
                 try:
@@ -571,10 +658,7 @@ class RemoteNode:
 
 
 async def _main(config_path: Path) -> None:
-    raw = config_path.read_bytes()
-    if len(raw) > 64 * 1024:
-        raise ValueError("remote node configuration is too large")
-    node = RemoteNode(_decode_object(raw))
+    node = RemoteNode(_load_config(config_path))
     await node.start_model_proxy()
     try:
         server = await asyncio.start_server(
@@ -590,8 +674,20 @@ async def _main(config_path: Path) -> None:
         await node.close()
 
 
+def _load_config(config_path: Path) -> dict[str, Any]:
+    raw = config_path.read_bytes()
+    if len(raw) > 64 * 1024:
+        raise ValueError("remote node configuration is too large")
+    return _decode_object(raw)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=Path, required=True)
+    parser.add_argument("--reconcile-stale-workspaces", action="store_true")
     arguments = parser.parse_args()
-    asyncio.run(_main(arguments.config))
+    if arguments.reconcile_stale_workspaces:
+        configuration = _load_config(arguments.config)
+        print(_reconcile_stale_workspaces(configuration))
+    else:
+        asyncio.run(_main(arguments.config))

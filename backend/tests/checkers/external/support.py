@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+import hashlib
+import json
+from typing import Any
 from uuid import uuid4
 
 from app.core.identifiers import new_record_id
+from app.interfaces.external_checker_execution import ExternalCheckerMaterialGrant
 from app.modules.checkers.api.external import (
     POST_SUBMIT_INPUT_SCHEMA_ID,
     PRE_SUBMIT_INPUT_SCHEMA_ID,
@@ -23,6 +27,60 @@ from app.modules.checkers.api.external import (
 )
 
 SHA = "sha256:" + "a" * 64
+
+
+class EmptyExternalMaterialSource:
+    """One valid descriptor-relative grant with no material file payloads."""
+
+    files: tuple[()] = ()
+
+    def __init__(self, manifest: bytes) -> None:
+        self.manifest = manifest
+
+    async def open_file(self, item: Any):
+        raise AssertionError(f"empty material source opened an unexpected file: {item!r}")
+        yield b""  # pragma: no cover - retain the async-iterator contract
+
+
+def empty_external_material_grant(request, *, suffix: str = "a"):
+    """Build a canonical empty grant bound to one normalized request."""
+    grant_id = "extract_" + suffix * 32
+    body = {
+        "protocol_version": "workstream.external_checker_material_grant.v2",
+        "grant_id": grant_id,
+        "request_digest": request.request_digest,
+        "phase": request.identity.phase,
+        "identity": request.identity.model_dump(mode="json"),
+        "evaluation_context_sha256": None,
+        "materials": [
+            {
+                "material": request.materials[0].model_dump(mode="json"),
+                "directories": [],
+                "files": [],
+            }
+        ],
+        "visible_roles": [request.materials[0].role],
+    }
+    canonical = json.dumps(
+        body,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        allow_nan=False,
+    ).encode()
+    binding = "sha256:" + hashlib.sha256(canonical).hexdigest()
+    manifest = json.dumps(
+        {**body, "binding_digest": binding},
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        allow_nan=False,
+    ).encode()
+    return ExternalCheckerMaterialGrant(
+        grant_id=grant_id,
+        binding_digest=binding,
+        source=EmptyExternalMaterialSource(manifest),
+    )
 
 
 def schema(schema_id: str, *, required: tuple[str, ...] = ()) -> ExternalCheckerSchema:

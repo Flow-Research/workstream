@@ -972,6 +972,7 @@ def _pre_transport_processor(lease, endpoint, changed):
     from app.modules.checkers.selected_pre_submit_execution import SelectedPreSubmitProcessor
     adapter = RemoteTlsExternalCheckerAdapter(
         **endpoint,
+        model_proxy_socket_path=None,
         timeout_seconds=0.2 if changed == "slow_decode" else 5.0,
         source_contracts=selected_pre_submit_source_contracts(),
     )
@@ -1155,7 +1156,8 @@ async def test_single_pre_expired_lease_does_not_open_source_or_runtime(tmp_path
     adapter = RemoteTlsExternalCheckerAdapter(
         host="127.0.0.1", port=1, server_name="runner.test",
         ca_path=certificates["ca"], certificate_path=certificates["client_certificate"],
-        private_key_path=certificates["client_key"], timeout_seconds=5.0,
+        private_key_path=certificates["client_key"], model_proxy_socket_path=None,
+        timeout_seconds=5.0,
         source_contracts=selected_pre_submit_source_contracts(),
     )
     with pytest.raises(SelectedPreSubmitInfrastructureUnavailable, match="deadline_exceeded"):
@@ -1206,7 +1208,8 @@ async def test_single_pre_cancellation_closes_source_and_transport(tmp_path):
     adapter = RemoteTlsExternalCheckerAdapter(
         host="127.0.0.1", port=remote.sockets[0].getsockname()[1], server_name="runner.test",
         ca_path=certificates["ca"], certificate_path=certificates["client_certificate"],
-        private_key_path=certificates["client_key"], timeout_seconds=5.0,
+        private_key_path=certificates["client_key"], model_proxy_socket_path=None,
+        timeout_seconds=5.0,
         source_contracts=selected_pre_submit_source_contracts(),
     )
     processor = SelectedPreSubmitProcessor(lease=lease, execution=adapter, source_contracts=selected_pre_submit_source_contracts())
