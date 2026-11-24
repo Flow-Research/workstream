@@ -10719,3 +10719,35 @@ incident-summary requirement positive and foreign selection/image negatives
 pass; the full affected hosted attachment module passes
 `40 passed, 78 subtests passed`, with Ruff lint and diff checks. A sixth
 connected run must still prove fresh-key T5 and final cleanup.
+
+
+### Identifier metadata contract reconciliation
+
+Intent: repair the two exact identifier-metadata failures from shared shard H
+without changing persisted identities or owner-local Python representations.
+Allowed files: `backend/tests/test_identifier_schema.py` and this record.
+No product/model/migration changes or removal of UUIDv7 guards are authorized
+by this bounded change. Cleanup claims reuse the intake operation foreign key
+as their primary key; they do not generate a second identity. The sole current
+foreign-key representation difference is intake.finalization_event_id (string)
+to outbox.event_id (UUID), both native PostgreSQL UUID. AGENTS.md explicitly
+preserves owner-local string/UUID boundaries.
+Acceptance: classify the exact cleanup-claim natural key and compare relational
+PostgreSQL UUID types, retaining every generated-key version/variant assertion.
+Verification: complete identifier metadata module, current metadata inventory,
+diff check and scoped architecture review; existing real T4/T5 proofs cover the
+unchanged runtime conversion boundary. Risk is test-contract interpretation;
+review focuses on preserving native types and distinguishing generated from
+referenced identities. No new deployment or full-suite claim follows.
+
+Scoped ARCH review independently confirmed the cleanup key is already classified
+in `backend/scripts/identifier_inventory.py`, migration 0073 uses native UUID,
+and the acceptance owner deliberately stores `str(outbox.append(...).event_id)`.
+Apply only the exact ART-to-OUTBOX representation exception and assert its
+False/True Python mapping plus identical PostgreSQL UUID types; retain generic
+representation equality for every other relationship.
+
+Verification: all five identifier metadata tests passed in 0.61 seconds; pinned
+Ruff and diff checks passed. ARCH inspected the final exact exception and found
+no further scoped issue. Metadata inventory confirms this is the sole current
+representation difference and cleanup claims the sole omitted referenced key.
