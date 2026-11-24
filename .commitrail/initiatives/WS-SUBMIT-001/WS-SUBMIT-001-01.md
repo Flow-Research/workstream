@@ -10332,3 +10332,9 @@ separate read-only check after review and incremental source staging. No
 supervisor start or native fault proof is claimed here; roadmap scope unchanged.
 
 Integrated runner config validation and focused PRE fixture at5c3be023d: combined worker-group cleanup and hosted-attachment suite passed41 tests plus73 subtests in26.57s. Ruff passed all six affected Python paths, whitespace passed and Commitrail passed. This verifies the combined local test tooling, not execution of the remote fault. Staging/read-only validation of the new runner-pinned source remains the next deployment action.
+
+### Repair busy-node fixture for the finite runner supervisor
+
+Intent: release-image CI at877c06c81 found the existing busy-node control still calls serve without required run_id, maximum_seconds and image_digest, failing before its refusal assertion. Bounded change: scripts/test_public_smol_proof.py and this record only; supply explicit finite test pins and a matching cache entry so the existing busy-resource refusal is reached. No production changes, weakened assertions or skipped checks. Low-risk fixture repair; verify the complete existing script suite, including optimized Python refusal, and Ruff. Root reviews exact diff; human review focus is preserving no-control/no-config mutation for all four resource classes.
+
+Fixture repair verification: all13 scripts.test_public_smol_proof unittest cases passed in3.026s, including the optimized-Python subprocess and all four busy-resource subcases. Ruff and whitespace checks passed. Exact review confirms only matching test config and the three required bounded supervisor arguments changed; all refusal and no-mutation assertions remain.

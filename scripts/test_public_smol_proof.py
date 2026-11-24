@@ -264,7 +264,8 @@ class PrivateFaultControls(unittest.TestCase):
 
     def test_busy_node_refused_before_control_or_config_mutation(self):
         config_path = self.root / 'service.json'
-        original = b'{"test": "untouched"}'
+        image_digest = 'sha256:' + 'a' * 64
+        original = json.dumps({'cache': [{'platform_manifest_digest': image_digest}]}).encode()
         config_path.write_bytes(original)
         config_path.chmod(0o600)
         control_root = self.root / 'control'
@@ -275,7 +276,9 @@ class PrivateFaultControls(unittest.TestCase):
                     patch.object(faults, 'ForeignControl') as foreign, \
                     patch.object(subprocess, 'run') as commands:
                 with self.assertRaisesRegex(RuntimeError, 'node must be drained'):
-                    faults.serve(config_path, control_root, 'owned.service', self.root / 'manifest')
+                    faults.serve(config_path, control_root, 'owned.service', self.root / 'manifest',
+                                 run_id='2f662dee-328c-4df5-8b8e-e9f934360654',
+                                 maximum_seconds=30, image_digest=image_digest)
                 controls.assert_not_called()
                 foreign.assert_not_called()
                 commands.assert_not_called()
