@@ -10410,3 +10410,7 @@ the unchanged exact sibling-binding control pass. Pinned read-only runner checks
 also showed UID10001 can traverse `/var/lib` and execute original Smol. The new
 run path and preflight remain to be staged and exercised; pre1 is still failed
 evidence, not an injected-launch proof.
+
+### Active-guide exact selected POST assertion
+
+Cloud project_lifecycle_g at merge5bc9a104 (PR877c06c81) ran525 cases:524 passed, one active-guide test expected an empty required POST list although its approved canonical bundle now selects acme.safe_archive under mandatory single-image cardinality. Isolated schema0091 database/MinIO cleanup completed. Bounded low-risk fixture correction: backend/tests/test_projects.py plus this record; require the exact selected POST checker supplied by the approved canonical bundle, retaining every other response/authority assertion. No production/cardinality/fixture mutation. Root review; one real PostgreSQL case after native pre2 releases the shared slot. Do not credit that replay before execution.

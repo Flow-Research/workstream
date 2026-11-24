@@ -5160,7 +5160,7 @@ async def test_active_guide_retrieval_returns_exact_policy_bundle(project_client
     assert active.json()["guide"]["effective_at"] is not None
     assert activation["guide"]["approved_by"] == guide["created_by"]
     assert datetime.fromisoformat(activation["guide"]["effective_at"]) == datetime.fromisoformat(active.json()["guide"]["effective_at"])
-    assert active.json()["post_submit_checker_policy"]["required_checkers"] == []
+    assert active.json()["post_submit_checker_policy"]["required_checkers"] == ["acme.safe_archive"]
     assert (
         active.json()["guide_source_snapshot"]["bundle_hash"]
         == (bundle["source_snapshot"]["bundle_hash"])
