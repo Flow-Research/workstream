@@ -8759,3 +8759,33 @@ reconciliation findings closed. The initially suspected missing worker model
 socket was retracted after checking the selected inference Compose overlay.
 Agent reports112 focused tests; real provider callbacks and complete public
 acceptance remain unqualified. No app deployment or restart occurred.
+
+QA closed upload-fence c8a6cc9da PASS WITH LOW RISKS. Next transfer the last
+private predecessor-rule tests to current public intake. Allowed: predecessor
+custody test, obsolete artifacts/test_selected_predecessor_rules.py and record.
+The positive persisted PRE context must select the consumed admission's rules,
+not its different policy-context hash. Four public negative cases substitute
+only that read result (absent admission/run/rules or contradictory evidence),
+leaving database rows/guards unchanged, and must fail before PRE/acceptance while
+retaining charged source custody. Existing initial public source tests prove no
+predecessor required. Then retire the old private-method harness. Medium test
+migration risk; real PostgreSQL cases, Ruff/structure and scoped QA review.
+The same retirement also removes that obsolete module's explicit entry from
+backend/scripts/test_lane_catalogue.py; current public replacement tests retain
+their existing integration lane. No lane policy or other module ownership changes.
+The catalogue's independent shared-family count/digest in
+tests/test_ci_lane_catalogue.py is updated solely for this one module deletion;
+recursive inventory coverage passed before that expected fingerprint update.
+The same inventory check exposed an earlier runner integration omission: the
+project-family fingerprint lacked exactly tests/checkers/external/test_remote_node.py.
+Removing only that module reproduces the previous digest. Update the expected
+project count/digest for that already-owned module; no membership change.
+
+All four public predecessor-custody fault cases and both positive review-policy
+replay cases passed in165.79s, schema0090 with complete cleanup
+(/tmp/submission-public-predecessor-rules.json). Launcher wasc8a6cc9da with final
+test bytes; hosted integration afterward did not alter these tests. No retained
+row/guard was changed by fault injection. Structure/Ruff/diff passed. The old
+private predecessor-rule harness is now replaced by this current public proof.
+Hosted follow-up97750e9c8 integrated092986b8a; ARCH/SEC passed its exact delta.
+Runner-only repaired service qualification is coordinated; API remains unchanged.

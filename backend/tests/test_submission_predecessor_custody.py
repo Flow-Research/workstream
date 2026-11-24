@@ -237,6 +237,8 @@ async def test_real_replacement_compares_consumed_predecessor_and_replays_exactl
                 "archive_sha256": predecessor_admission.archive_sha256,
                 "semantic_manifest_sha256": predecessor_admission.semantic_manifest_sha256,
             }
+            assert predecessor_admission.selected_rules_sha256 != predecessor_admission.locked_policy_context_hash
+            assert selected.request_json["default_context"]["predecessor_rules_sha256"] == predecessor_admission.selected_rules_sha256
             lineage = selected.request_json["admission_lineage"]
             assert lineage["predecessor_submission_id"] == str(predecessor_id)
             assert lineage["predecessor_submission_version"] == 1
@@ -255,6 +257,64 @@ async def test_real_replacement_compares_consumed_predecessor_and_replays_exactl
             ), {"key": UUID(headers["Idempotency-Key"])}) == 1
             await no_economic_effects(session)
         assert await _replacement_history(h, source_id, predecessor_id) == immutable_before
+
+
+@pytest.mark.parametrize("missing", ["admission", "run", "rules", "contradictory_evidence"])
+async def test_public_replacement_requires_consumed_predecessor_rules(
+    tmp_path, isolated_database_env, monkeypatch, missing,
+):
+    from sqlalchemy.ext.asyncio import AsyncSession
+    from app.modules.artifacts.intake.models import SubmissionIntakeOperation, SubmissionSourceCharge
+    from tests.tasks.submission_dispatch.test_revision_capacity import _revision_http_runtime, _revision_upload_headers
+    from tests.tasks.test_public_submission_intake import _client
+
+    async with remediation_source(tmp_path, isolated_database_env) as h:
+        await _fixture_revision_context(h)
+        data, intercepted = revision_archive(h.data), []
+        before = await _snapshot(h)
+        original_scalar = AsyncSession.scalar
+
+        async def incomplete_predecessor(session, statement, *args, **kwargs):
+            value = await original_scalar(session, statement, *args, **kwargs)
+            descriptions = getattr(statement, "column_descriptions", ())
+            if (len(descriptions) == 1 and descriptions[0].get("expr") is SubmissionBundleAdmission
+                    and "consumed_by_submission_id" in str(getattr(statement, "whereclause", ""))):
+                assert value is not None and value.consumed_by_submission_id == str(h.created.submission_id)
+                assert value.selected_rules_sha256 != value.locked_policy_context_hash
+                intercepted.append(value.id)
+                # Fault only the owner's read; retained database evidence stays immutable.
+                session.expunge(value)
+                if missing == "admission":
+                    return None
+                setattr(value, {
+                    "run": "selected_pre_submit_run_id", "rules": "selected_rules_sha256",
+                    "contradictory_evidence": "pre_submit_evidence_set_id",
+                }[missing], new_record_id() if missing == "contradictory_evidence" else None)
+            return value
+
+        async with _client(h, monkeypatch, isolated_database_env) as client:
+            _, errors, calls = await _revision_http_runtime(h, client, tmp_path, monkeypatch, data)
+            headers = _revision_upload_headers(h)
+            monkeypatch.setattr(AsyncSession, "scalar", incomplete_predecessor)
+            response = await client.post(f"/api/v1/tasks/{h.request.task_id}/submissions",
+                                         headers=headers, content=data)
+        assert response.status_code == 503, response.text
+        assert response.json()["error"]["code"] == "submission_infrastructure_unavailable"
+        assert intercepted == [str(h.creation_request.admission_id)]
+        assert calls == [] and not errors
+        assert await _snapshot(h) == before
+        async with h.factory() as session:
+            operation = (await session.scalars(select(SubmissionIntakeOperation).where(
+                SubmissionIntakeOperation.idempotency_key == headers["Idempotency-Key"]))).one()
+            assert operation.state == "failed" and operation.acceptance_receipt is None
+            assert operation.finalized_submission_id is None and operation.finalization_event_id is None
+            charge = await session.get(SubmissionSourceCharge, operation.id)
+            assert charge.state == "sealed" and charge.accounted_bytes == len(data)
+            retained = await session.get(SubmissionBundleAdmission, str(h.creation_request.admission_id))
+            assert retained.selected_pre_submit_run_id is not None and retained.selected_rules_sha256 is not None
+            assert retained.pre_submit_evidence_set_id is None and retained.status == "consumed"
+            assert await session.scalar(text("SELECT count(*) FROM submissions")) == 1
+            await no_economic_effects(session)
 
 
 async def test_replacement_without_routed_cause_denied_before_bytes(
