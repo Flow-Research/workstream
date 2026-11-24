@@ -13,6 +13,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import tempfile
 
 from botocore.exceptions import ClientError
 from app.adapters.artifacts import create_artifact_store_bootstrap
@@ -33,7 +34,7 @@ RUNTIME = "arn:aws:iam::094032936130:user/workstream-storage"
 CLEANUP = "arn:aws:iam::094032936130:user/workstream-source-cleanup"
 
 
-def store_for(key_file, principal):
+def store_for(key_file, principal, *, scratch_root):
     limits = {f"artifact_admission_{scope}_maximum_bytes": 6 * 1024**2
               for scope in ("task", "producer", "project", "deployment")}
     settings = Settings(environment="production", artifact_store_backend="s3_compatible",
@@ -41,6 +42,7 @@ def store_for(key_file, principal):
         artifact_s3_bucket=BUCKET, artifact_s3_private_prefix=PREFIX,
         artifact_s3_credential_mode="aws_access_key", artifact_s3_runtime_user_arn=principal,
         artifact_s3_direct_user_credential_file=key_file,
+        artifact_scratch_root=scratch_root,
         artifact_stream_buffer_bytes=65536, artifact_s3_operation_total_timeout_seconds=60,
         **limits)
     bootstrap = create_artifact_store_bootstrap(settings)
@@ -226,7 +228,7 @@ def main():
             os.environ.pop(key)
     fd = os.open(args.report, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     runtime = cleanup_store = None
-    with os.fdopen(fd, "w") as output:
+    with os.fdopen(fd, "w") as output, tempfile.TemporaryDirectory(prefix="workstream-source-qualification-") as scratch:
         def emit(event, **facts):
             output.write(json.dumps({"event": event, "at": datetime.now(UTC).isoformat(), **facts}) + "\n")
             output.flush()
@@ -235,8 +237,8 @@ def main():
             head = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
             emit("started", commit=head, bucket=BUCKET, prefix=PREFIX, runtime=RUNTIME, cleanup=CLEANUP,
                  script_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest())
-            runtime = store_for(args.runtime_key_file.resolve(), RUNTIME)
-            cleanup_store = store_for(args.cleanup_key_file.resolve(), CLEANUP)
+            runtime = store_for(args.runtime_key_file.resolve(), RUNTIME, scratch_root=Path(scratch))
+            cleanup_store = store_for(args.cleanup_key_file.resolve(), CLEANUP, scratch_root=Path(scratch))
             asyncio.run(asyncio.wait_for(qualify(runtime, cleanup_store, emit), timeout=900))
             emit("completed", result="passed")
             print("AWS source adapter qualification passed; see private report")

@@ -9997,3 +9997,18 @@ preservation are not proved by mocked lifecycle tests. Existing filesystem-based
 trial callers are not yet wired to this bridge, no two-host fault drill has run,
 and independent supervisor disconnect/restoration, API/runner separation,
 aggregate native expiry and source/execution cancellation remain required.
+
+
+### AWS source qualification scratch prerequisite
+
+The first live attempt at439de11ff verified both exact IAM users but stopped
+before source intent creation or provider writes: enabled storage Settings
+requires artifact_scratch_root, which the drill omitted. Journal
+live-620b55b065974b6f9e99db3dc8948560.jsonl contains only started and ValidationError.
+The bounded repair supplies an owned temporary scratch directory to the two
+existing production adapter constructors and removes it on exit. Only the
+qualification script and this evidence record change; no product validation,
+credential policy, source ownership, retention or cleanup rule changes.
+Verification uses the real AWS drill after the prerequisite repair. The bucket
+policy now exactly matches the reviewed guard; the cleanup credential is
+installed on the API host with0400 ownership10001 and its exact IAM ARN verified.
