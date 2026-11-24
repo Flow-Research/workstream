@@ -10592,3 +10592,81 @@ trace-count assertion remains unchanged. A fourth connected run is still
 required to prove same-key replay, fresh-key accepted T5 and full cleanup.
 
 Integrated B/D/G repair replay atc897ad192 passed all3 exact PostgreSQL cases in89.42s, schema0091, complete isolated database cleanup (`/tmp/submission-policy-and-post-repairs.log` and `.json`). These cover persisted required PRE selection, public active-guide POST selection, and selected POST materialization/replay with the exact locked member. The unchanged structural validator and Commitrail check passed on integrated source before this replay.
+
+### Shared CI capacity and immediate failure diagnostics (2026-11-24)
+
+Intent: three shared-foundation jobs from run45451579222 exhausted the unchanged
+1500-second budget. The exact receipts retain A1301/2319, B881/2184 and C1394/2214
+completed nodes, no skips/deselections, and successful cleanup. Buffered progress
+dots cannot identify failed node IDs soundly; no inferred failure mapping is used.
+
+Allowed scope: existing shared-family shard tuple, independent exact inventory
+controls and hosted aggregation/validator counts, existing lane report hook and
+focused runner tests, affected operations guide, this record. Increase only shared a..c to a..i using the
+existing node hash; preserve every family member, project/task assignment,
+timeout, status, isolation, coverage, interruption and exact-once custody gate.
+No product change, skip, new evidence schema, framework or budget increase.
+Immediate failed reports must print node/phase and bounded existing traceback,
+redact configured secrets, and flush before a subsequent hang or interruption.
+
+Acceptance: historical6717-node shared inventory has exactly one new owner per
+node; other5679 ownerships unchanged; independent family fingerprints unchanged.
+Actual subprocess regression must retain a failure before final pytest summary
+when a later node is interrupted. Missing shards/duplicates still fail existing
+evidence controls. Existing1500-second budget and hosted status dependency remain
+unchanged. Root selected9 shared shards for headroom beyond the smallest8
+(799..868nodes versus slowest observed881 completions); node counts do not prove
+timing. CI-integrity/QA review and fresh hosted replay remain required. Risk is
+CI selection/diagnostic custody; human focus is complete inventory and unchanged
+blocking gates. Roadmap capability claims are unaffected.
+
+The historical12396-node canonical manifest is preserved byte-for-byte per row
+except shared lane selection. Shared6717 redistributes to a..i counts
+809/751/767/738/688/738/772/745/709; all5679 other nodes keep their exact owners.
+All shared/project/task module tuples, old lane definitions and independent
+family membership fingerprints are unchanged. Six new shared shards are the
+only added lanes. Hosted coverage/aggregation and independent validator now
+require exactly23 distinct complete lanes rather than17; workflow changes only
+those two exact-count checks. Existing1500-second budgets and blocking status
+logic are untouched. /tmp/submission-shared-capacity-preservation.json records
+the original manifest digest and exact counts; this is inspected redistribution,
+not fresh hosted runtime qualification.
+
+Existing report hook now flushes failed node/phase plus at most65536characters
+of redacted existing traceback, with explicit truncation. No report file/schema
+or new collection behavior. Ordinary/admin output owners still apply their
+existing outer redaction and buffering; child report bytes survive timeout
+before pytest can print its final summary. Actual subprocess proof creates
+setup/call/teardown failures then a hanging node, uses the production isolated
+process timeout path, and requires all three exact reports without final summary.
+It removes all four outer custody-path environments and checks unchanged parent
+sentinels, preventing synthetic nodes from polluting hosted lane evidence.
+
+First narrow red run exposed missing reports; two5-second branches did not
+reach the hang under load, so those are harness failures, not discriminator
+proof. The consolidated20-second test reaches every failure phase in one child.
+First full focused run252pass/1fail caught the unchanged17-row timing fixture;
+its exact23-row sum now includes all new lanes and retains missing/extra/invalid
+timing refusal. Final five-module pure suite passed273 in50.75s
+(/tmp/submission-shared-capacity-tests-v2.log), including new-i missing/foreign
+bundle, latest-failed/no-fallback, partial/duplicate/skip custody controls.
+The final parent-custody test-only tightening was separately replayed successfully
+(/tmp/submission-lane-custody-regression.log). No database run was started.
+
+An isolated omission mutant reached the hanging node and actual timeout124,
+then failed specifically because exact setup report bytes were absent; no final
+summary existed (/tmp/submission-lane-report-omission-mutant-v2.log). Initial
+mutant setup lacked app/HEAD prerequisites and is excluded from behavioral proof.
+Configured-secret redaction, finite output, passed-report silence and unchanged
+skip recording are tested directly. Full unchanged structural validation exited0
+(/tmp/submission-shared-capacity-structure.log) before the final test-only child
+custody assertion addition; no policy, debt ledger or runtime assertion changed.
+Ruff and whitespace pass. CI-integrity review and fresh hosted completion remain
+required; this change neither identifies old buffered failure IDs nor claims
+all current tests pass or the full submission goal is complete.
+
+The affected operations guide now names nine shared shards and immediate bounded
+failure diagnostics. Its bucket wording follows current isolation owner: shared
+lanes create/probe/remove their distinct buckets; only omnicore_sdk retains the
+fixed workstream-artifacts traffic-proof bucket. Historical17-lane receipts in
+reports/roadmap remain historical and unchanged.

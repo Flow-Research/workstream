@@ -652,7 +652,7 @@ jobs:
           set -euo pipefail
           shopt -s nullglob
           coverage_files=(.ci/test-lanes/run/.coverage.*)
-          test "${#coverage_files[@]}" -eq 17
+          test "${#coverage_files[@]}" -eq 23
           for source in "${coverage_files[@]}"; do
             destination="$(basename "${source}")"
             test -f "${source}"
@@ -731,7 +731,7 @@ jobs:
               raise SystemExit("hosted evidence head drift")
 
           lanes = summary.get("lanes")
-          if not isinstance(lanes, list) or len(lanes) != 17:
+          if not isinstance(lanes, list) or len(lanes) != 23:
               raise SystemExit("invalid hosted lane inventory")
           collected: list[str] = []
           completed: list[str] = []

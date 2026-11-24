@@ -24,6 +24,12 @@ LANES = (
     "shared_foundations_a",
     "shared_foundations_b",
     "shared_foundations_c",
+    "shared_foundations_d",
+    "shared_foundations_e",
+    "shared_foundations_f",
+    "shared_foundations_g",
+    "shared_foundations_h",
+    "shared_foundations_i",
     "schema_contracts",
     "project_lifecycle_a",
     "project_lifecycle_b",
@@ -42,7 +48,7 @@ LANES = (
 
 
 def test_validator_requires_exact_expanded_lane_and_shared_s3_custody() -> None:
-    assert validator.LANE_COUNT == len(LANES) == 17
+    assert validator.LANE_COUNT == len(LANES) == 23
     assert validator.SHARED_S3_LANES == {"omnicore_sdk"}
 
 
@@ -219,7 +225,7 @@ def test_rejects_wrong_head_and_noncanonical_manifest(tmp_path: Path) -> None:
         ),
     ],
 )
-@pytest.mark.parametrize("lane_name", ["shared_foundations_a", "project_lifecycle_d", "project_lifecycle_e", "task_lifecycle_d"])
+@pytest.mark.parametrize("lane_name", ["shared_foundations_a", "shared_foundations_i", "project_lifecycle_d", "project_lifecycle_e", "task_lifecycle_d"])
 def test_rejects_node_custody_failures(tmp_path: Path, mutation, message: str, lane_name: str) -> None:
     metadata, summary_path, summary = _bundle(tmp_path)
     lane = next(row for row in summary["lanes"] if row["name"] == lane_name)
@@ -244,7 +250,7 @@ def test_rejects_node_custody_failures(tmp_path: Path, mutation, message: str, l
         ("interrupted", True, "lane_interrupted"),
     ],
 )
-@pytest.mark.parametrize("lane_name", ["shared_foundations_a", "project_lifecycle_d", "project_lifecycle_e", "task_lifecycle_d"])
+@pytest.mark.parametrize("lane_name", ["shared_foundations_a", "shared_foundations_i", "project_lifecycle_d", "project_lifecycle_e", "task_lifecycle_d"])
 def test_rejects_failed_or_partial_lane(
     tmp_path: Path, field: str, value: object, message: str, lane_name: str
 ) -> None:

@@ -24,7 +24,7 @@ def test_committed_lanes_cover_recursive_inventory_exactly_once() -> None:
     runner.validate_lane_inventory(discovered)
 
     assigned = [module for lane in LANES for module in lane.modules]
-    assert len(LANES) == 17
+    assert len(LANES) == 23
     assert all(lane.requires_postgres for lane in LANES)
     assert Counter(assigned)[catalogue.SCHEMA_MODULE] == 1
     assert all(
@@ -198,6 +198,12 @@ def test_expanded_lane_families_keep_exact_semantic_owners() -> None:
                 "shared_foundations_a",
                 "shared_foundations_b",
                 "shared_foundations_c",
+                "shared_foundations_d",
+                "shared_foundations_e",
+                "shared_foundations_f",
+                "shared_foundations_g",
+                "shared_foundations_h",
+                "shared_foundations_i",
             ),
             catalogue.SHARED_FOUNDATION_MODULES,
         ),
@@ -814,8 +820,8 @@ def test_workflow_lane_inventory_matches_catalogue() -> None:
     assert source.count("path: backend/.ci/download\n          merge-multiple: false") == 1
     assert '--expected-head "${GITHUB_SHA}"' in source
     assert '--run-attempt "${GITHUB_RUN_ATTEMPT}"' in source
-    assert 'test "${#coverage_files[@]}" -eq 17' in source
-    assert "len(lanes) != 17" in source
+    assert 'test "${#coverage_files[@]}" -eq 23' in source
+    assert "len(lanes) != 23" in source
     assert 'Path(".ci/download"), expected_head, int(os.environ["GITHUB_RUN_ATTEMPT"])' in source
     assert 'timing_path = bundle / "job-start-epoch.txt"' in source
     assert (

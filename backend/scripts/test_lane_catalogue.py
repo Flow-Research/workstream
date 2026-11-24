@@ -8,6 +8,12 @@ PARTITIONED_SHARED_LANES = (
     "shared_foundations_a",
     "shared_foundations_b",
     "shared_foundations_c",
+    "shared_foundations_d",
+    "shared_foundations_e",
+    "shared_foundations_f",
+    "shared_foundations_g",
+    "shared_foundations_h",
+    "shared_foundations_i",
 )
 PARTITIONED_PROJECT_LANES = (
     "project_lifecycle_a",

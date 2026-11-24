@@ -68,6 +68,7 @@ raise SystemExit(result.returncode)
 HEARTBEAT_SECONDS = 60.0
 CLEANUP_GRACE_SECONDS = 10.0
 POLL_SECONDS = 0.05
+FAILED_REPORT_MAX_CHARS = 65536
 SHA_RE = re.compile(r"[0-9a-f]{40}")
 LANE_RE = re.compile(r"[a-z][a-z0-9_]*")
 INTERRUPTED = False
@@ -144,10 +145,20 @@ def pytest_runtest_logfinish(nodeid: str, location: tuple[str, int | None, str])
 
 
 def pytest_runtest_logreport(report: Any) -> None:
-    """Record every skip observed during setup, call, or teardown."""
+    """Record skips and retain failures before timeout can erase the summary."""
     destination = os.environ.get(SKIPPED_ENV)
     if destination and report.skipped:
         _append_node(destination, report.nodeid)
+    if report.failed:
+        rendered = f"\nLANE FAILURE {report.nodeid} [{report.when}]\n{report.longreprtext}\n"
+        for name in TRACEBACK_SECRET_ENVS:
+            value = os.environ.get(name)
+            if value:
+                rendered = rendered.replace(value, f"[REDACTED_{name}]")
+        if len(rendered) > FAILED_REPORT_MAX_CHARS:
+            rendered = rendered[:FAILED_REPORT_MAX_CHARS] + "\n[TRACEBACK TRUNCATED]\n"
+        sys.stderr.write(rendered)
+        sys.stderr.flush()
 
 
 def pytest_deselected(items: list[Any]) -> None:

@@ -331,11 +331,17 @@ def test_timing_summary_is_derived_from_exact_declared_lanes() -> None:
         0.125,
         0.375,
         0.25,
+        0.25,
+        0.25,
+        0.25,
+        0.25,
+        0.25,
+        0.25,
     )
     lanes = [{"elapsed_seconds": value} for value in elapsed]
 
     assert runner._timing_summary(lanes) == {
-        "aggregate_runner_seconds": 15.0,
+        "aggregate_runner_seconds": 16.5,
         "slowest_lane_seconds": 3.75,
     }
     with pytest.raises(LaneError, match="invalid_lane_timing_inventory"):
@@ -501,3 +507,74 @@ def test_partial_startup_failure_records_exactly_four_failed_lanes(
     summary = json.loads(summary_path.read_text(encoding="utf-8"))
     assert len(summary["lanes"]) == 4
     assert all(row["execution_exit_code"] != 0 for row in summary["lanes"])
+
+
+def test_failed_report_survives_later_node_timeout(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Actual timed-out pytest retains all failure phases without final summary."""
+    from scripts import run_isolated_tests as isolated
+
+    marker = tmp_path / "waiting"
+    module = tmp_path / "test_failure_then_wait.py"
+    module.write_text(
+        "import time\nfrom pathlib import Path\nimport pytest\n"
+        "@pytest.fixture\ndef setup_failure():\n"
+        "    raise AssertionError('lane-setup-fault')\n"
+        "@pytest.fixture\ndef teardown_failure():\n    yield\n"
+        "    raise AssertionError('lane-teardown-fault')\n"
+        "def test_00_setup(setup_failure): pass\n"
+        "def test_01_call(): raise AssertionError('lane-call-fault')\n"
+        "def test_02_teardown(teardown_failure): pass\n"
+        "def test_03_waits():\n"
+        f"    Path({str(marker)!r}).touch()\n    time.sleep(60)\n",
+        encoding="utf-8",
+    )
+    evidence = {}
+    for name in (runner.COLLECTED_ENV, runner.COMPLETED_ENV,
+                 runner.SKIPPED_ENV, runner.DESELECTED_ENV):
+        path = tmp_path / name
+        path.write_bytes(b"parent-custody\n")
+        monkeypatch.setenv(name, str(path))
+        evidence[name] = path
+    env = os.environ.copy()
+    for name in evidence:
+        env.pop(name)
+    env["PYTEST_DISABLE_PLUGIN_AUTOLOAD"] = "1"
+    env["PYTHONPATH"] = str(runner.ROOT)
+    command = [sys.executable, "-m", "pytest", "-q", "--noconftest",
+               "-c", "/dev/null", "-p", "scripts.run_test_lanes", str(module)]
+    code, stdout, stderr = isolated._run(command, env, timeout=20)
+
+    assert code == 124
+    assert marker.exists(), (stdout, stderr)
+    assert all(path.read_bytes() == b"parent-custody\n" for path in evidence.values())
+    assert b"short test summary info" not in stdout + stderr
+    for index, phase in enumerate(("setup", "call", "teardown")):
+        assert f"::test_0{index}_{phase} [{phase}]".encode() in stderr
+        assert f"AssertionError: lane-{phase}-fault".encode() in stderr
+
+
+def test_failed_report_redacts_secrets_bounds_output_and_preserves_skips(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path,
+) -> None:
+    destination = tmp_path / "skipped.jsonl"
+    destination.touch()
+    monkeypatch.setenv(runner.SKIPPED_ENV, str(destination))
+    for index, name in enumerate(runner.TRACEBACK_SECRET_ENVS):
+        monkeypatch.setenv(name, f"private-lane-value-{index}")
+    secrets = [os.environ[name] for name in runner.TRACEBACK_SECRET_ENVS]
+    report = types.SimpleNamespace(nodeid="test_exact", when="call", skipped=False,
+                                   failed=True, longreprtext=" ".join(secrets) + "x" * 100000)
+    runner.pytest_runtest_logreport(report)
+    output = capsys.readouterr().err
+    assert all(secret not in output for secret in secrets)
+    assert all(f"[REDACTED_{name}]" in output for name in runner.TRACEBACK_SECRET_ENVS)
+    assert output.startswith("\nLANE FAILURE test_exact [call]\n")
+    assert output.endswith("\n[TRACEBACK TRUNCATED]\n")
+    assert len(output) == runner.FAILED_REPORT_MAX_CHARS + len("\n[TRACEBACK TRUNCATED]\n")
+    for failed, skipped in ((False, False), (False, True)):
+        report.failed, report.skipped = failed, skipped
+        runner.pytest_runtest_logreport(report)
+    assert capsys.readouterr().err == ""
+    assert destination.read_text().splitlines() == ['"test_exact"']

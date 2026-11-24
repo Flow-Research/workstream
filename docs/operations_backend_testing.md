@@ -202,12 +202,16 @@ The lane logs retain all setup/call/teardown phase durations,
 including phases below five milliseconds, for performance diagnosis. This output
 is bounded by the selected test inventory and remains diagnostic only: it cannot
 select tests or override completeness, cleanup or the execution deadline.
+Failed setup/call/teardown reports also flush the exact node and phase with a
+redacted traceback capped at 65,536 characters before pytest's final summary.
+The isolated runner retains those bytes if a later test times out; its existing
+outer output buffering and redaction remain in place.
 Measure final-report overhead alongside test execution when comparing allocations.
 The five `task_lifecycle_a` through `task_lifecycle_e` lanes use the same
 deterministic partition mechanism for the remaining TASK and checker nodes. The single `schema_contracts` lane owns all baseline/PostgreSQL schema, reset and
 isolated-runner contracts, together with database-backed migration, storage, and
 custody proofs. The
-`shared_foundations_a`, `shared_foundations_b`, and `shared_foundations_c` lanes deterministically
+nine `shared_foundations_a` through `shared_foundations_i` lanes deterministically
 partition exact node IDs from the remaining authorization, artifact, API, and
 infrastructure modules. This includes the database-independent repository inspections
 in `test_artifact_architecture.py`, `architecture/test_module_boundaries.py`, and
@@ -249,9 +253,9 @@ validates complete execution.
 There is no duplicate standalone inventory pass in each matrix job.
 Each lane receives a distinct
 runner-created database and role plus a distinct MinIO prefix custody record.
-All three shared-foundation jobs run in separate MinIO containers, use the actual
-`workstream-artifacts` test bucket, and receive distinct run prefixes; other
-lanes create, probe, and remove distinct buckets.
+All nine shared-foundation jobs run in separate MinIO containers and create,
+probe, and remove distinct buckets with distinct run prefixes. Only `omnicore_sdk`
+uses the fixed `workstream-artifacts` bucket for its existing S3 traffic proof.
 The isolated-runner self-tests remain in the canonical manifest as the explicit
 `admin_runner_self_test` execution kind. The lane orchestrator runs only those
 nodes directly with the admin URL while stripping application database URLs;
