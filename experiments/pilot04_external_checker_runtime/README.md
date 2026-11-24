@@ -30,15 +30,18 @@ preparation endpoint, ready-admission JSON creation, or injected verifier task.
 Model qualification keeps one non-model PRE and one model POST; model/forge
 identity, accounting and governed-outcome checks remain explicit. The retired
 hidden-owner selected drill and its stored receipts describe historical runs,
-not current-HEAD qualification. Local cancellation/deadline/controller-loss
-vectors still need their separate current-source migration; the guard repair
-does not qualify those runs.
+not current-HEAD qualification. Local upload cancellation/timeout and native launch/deadline/controller-loss
+callers now use current source intake with exact retained charges and one PRE.
+Their contract tests do not qualify actual native fault execution; connected
+source/execution cancellation remains a separate mandatory native vector.
 
 The public journey starts with public project/guide
 creation, original synthetic Markdown bytes and two task examples. The public
 upload dispatches real Celery setup. Its explicit `guide_worker` entry point
 selects a recorded inference adapter through the existing typed runtime port;
-production composition has no test switch. The adapter reads the actual scoped
+production composition has no test switch. The existing production parser
+service must be supplied through its canonical socket setting; this worker does
+not replace it. The recorded inference adapter reads the actual scoped
 ART document grant and checks exact bytes, normalized examples and correction
 feedback. Stored source commitments and the runtime-observed canonical input
 hash must agree. This proves integration, not model reasoning or hosted inference.
@@ -55,13 +58,13 @@ inject guide, proposal, policy, Task, Submission, acceptance or award facts.
 Locally signed tokens do not certify the hosted Flow Identity service.
 
 The companion uses a live loopback API,
-the public manager guide activation, project submitter grant, and task lifecycle, contributor ZIP
-preparation and canonical Submission POST, and a real Redis-backed prefork
+the public manager guide activation, project submitter grant, and task lifecycle, contributor raw-ZIP
+submission acceptance and exclusive finalization, and a real Redis-backed prefork
 Celery worker and Beat scheduler for artifact and outbox delivery. The isolated
 run sets the supported artifact scan interval to 10 seconds and requires a
-retained scheduler audit before public intake; no manual scanner dispatch can
-make a preparation ready. After a bounded timeout, the probe may publish the
-exact pending verifier for private diagnosis and then unconditionally fails.
+retained scheduler audit before public intake. Accepted source progress must
+close through the dedicated production finalization worker; a timeout fails
+without injecting a verifier or a finalization task.
 OUTBOX keeps its production 60-second Beat scan. The probe only observes its
 ordinary first delivery and due retry through retained project-scoped worker
 attempts and dispatch decisions; it publishes a duplicate message only after
@@ -92,8 +95,10 @@ and API/worker/Beat processes belong to one disposable local run; the isolated-t
 runner owns database/role/MinIO namespace cleanup. This still does not certify
 hosted gVisor, arbitrary checker quality, live human review, or deployment.
 
-Run from `backend/` on a dedicated Linux x86-64 KVM host with disposable
-PostgreSQL, MinIO and Redis. Provision the [Smol node](../../external_checkers/README.md#smol-microvm-engine)
+The command below describes the operator-local fault harness, not a qualified
+two-host deployment. Production API/workers must stay on an app-only host and
+KVM on a separate Linux x86-64 runner. Remote fault transport is still missing,
+as detailed below. Use disposable PostgreSQL, MinIO and Redis. Provision the [Smol node](../../external_checkers/README.md#smol-microvm-engine)
 with `maximum_parallel=1`, the pinned trusted intake image and this directory's
 project fixture image. Both are operator-provisioned cache entries; no registry
 or Docker socket is needed by the API/worker or running guests. Build the Rust
@@ -125,8 +130,12 @@ it permits only the recorded test wrapper substitution and compares the host
 validation receipt. Do not generate expected binary hashes from an unverified
 node and call that independent build custody.
 
-The API proof entry point records genuine intake readiness/cleanup acknowledgements;
-it delegates to the production adapter and is never imported by production.
+The launcher uses the production API entry point. Native allocation/deletion
+traces and retained source/PRE facts supply the fault evidence. Supply the
+existing parser socket through `WORKSTREAM_GUIDE_DOCUMENT_PARSER_SOCKET`, the
+canonical remote TLS runner settings, and an explicit
+`WORKSTREAM_SUBMISSION_EXECUTION_PROFILE`; no parser or runner is provisioned
+by this launcher.
 
 ```sh
 PYTHONPATH=.:tests:.. .venv/bin/python scripts/run_isolated_tests.py \
@@ -146,11 +155,13 @@ worker and Beat; the host supervisor owns node configuration and restart. Remove
 only the drill's own infrastructure after verifying both cleanup receipts. Do
 not remove retained product evidence or use broad container/volume pruning.
 
-The expanded cases cover authenticated upload readiness before the last byte,
-disconnect cleanup, no unauthenticated allocation, default-only and two ordered
-project PRE bindings, stopping at the first failed binding, bounded pre-launch
-retry/exhaustion, controller loss, same-key infrastructure replay and fresh-request
-recovery. POST outage uses the existing **public Operator discovery/retry routes**
+The current fault callers hold an incomplete upload without native allocation,
+cancel or time out provider input while retaining its reserved charge, and
+exercise Workstream default rejection before the single project PRE. Native
+launch retry/exhaustion, original execution deadline, controller loss, same-key
+infrastructure replay and fresh-request recovery use separate tasks. These
+ported callers still require actual native fault execution; unit guard results
+do not qualify those resource and cancellation boundaries. POST outage uses the existing **public Operator discovery/retry routes**
 and observes the next durable generation before governed acceptance. The prior
 non-live routing retry remains a separate trial. Check the final JSON cases and
 `cleanup_complete`, `database_cleanup_complete` and `minio_cleanup_complete`;
@@ -161,3 +172,22 @@ attempts and governed outcomes. Private logs contain diagnostic metadata, never
 provider credentials. The Flow signer and guide inference are explicit fixtures;
 this proves self-hosted execution through real API/PG/MinIO/Celery owners, not
 production Flow, live model quality, native AWS S3 activation or hosted deployment.
+
+The fault supervisor is an operator-local harness: it reads the owned node's
+lease/cgroup/Smol state and exchanges private command/trace files. It currently
+has no authenticated remote fault-control/trace transport. The application's
+production TLS connection to a separate runner does not supply that transport.
+Do not mount runner paths into the API host or move KVM to the API to make these
+vectors run. For the requested two-host deployment these fault vectors remain
+unqualified until an operator can address and collect exact evidence from the
+owned remote node. The contract tests here issue no remote fault commands.
+
+Current PRE uses one selected-image VM for trusted defaults and the optional
+project phase; a default blocker still allocates that VM but never invokes the
+project member. PRE has one native creation attempt. Automatic launch retry and
+exhaustion belong to the POST vectors, with faults installed after accepted T5
+and recovery through the existing public Operator route. The PRE selected-image
+marker deadline is distinct from the aggregate VM envelope. An actual aggregate
+expiry receipt with unchanged epoch/deadline and exact deletion/foreign-resource
+checks is still required; a pure expiry guard or inner checker timeout does not
+qualify it.

@@ -359,21 +359,17 @@ class HostedFixtureContracts(unittest.TestCase):
         for spec in registered_specs:
             expected = _locked_spec(spec.phase, image).model_dump(mode='json') | capabilities[spec.phase]
             self.assertEqual(spec.model_dump(mode='json'), expected)
-        for count in (0, 1, 2):
-            selected = attachment.approval_attachments(count)
-            self.assertEqual(len(selected['pre_submit_attachments']), count)
-            self.assertEqual(len(selected['post_submit_attachments']), 1)
-            for phase, entries in (('pre_submit', selected['pre_submit_attachments']),
-                                   ('post_submit', selected['post_submit_attachments'])):
-                published = attachment.registered_images[phase]
-                for entry in entries:
-                    self.assertEqual(entry['registry_entry_id'], str(published.registry_entry_id))
-                    self.assertEqual(entry['registry_entry_digest'], published.entry_digest)
-                    self.assertEqual(entry['configuration'], {})
-            self.assertEqual([item['requirement_id'] for item in selected['pre_submit_attachments']],
-                             ['project.pre_submit.01', 'project.pre_submit.02'] if count == 2 else
-                             (['project.pre_submit'] if count == 1 else []))
-            self.assertEqual(selected['post_submit_attachments'][0]['requirement_id'], 'project.post_submit')
+        selected = attachment.approval_attachments(1)
+        for phase in ('pre_submit', 'post_submit'):
+            published = attachment.registered_images[phase]
+            self.assertEqual(selected[phase + '_attachments'], [{
+                'requirement_id': 'project.' + phase,
+                'registry_entry_id': str(published.registry_entry_id),
+                'registry_entry_digest': published.entry_digest, 'configuration': {},
+            }])
+        for count in (0, 2):
+            with self.subTest(count=count), self.assertRaisesRegex(RuntimeError, 'exactly one PRE'):
+                attachment.approval_attachments(count)
 
     def test_baseline_registration_refuses_unvalidated_cache_and_substituted_receipts(self):
         import httpx
@@ -520,31 +516,220 @@ class HostedFixtureContracts(unittest.TestCase):
                 probe.main()
             launch.assert_not_called()
 
-    def test_stalled_upload_refuses_early_cleanup_or_reset_deadline(self):
-        import time
+    def test_native_execution_refuses_early_cleanup_or_reset_deadline(self):
+        from experiments.pilot04_external_checker_runtime.public_runtime_trials import _require_original_runtime_expiry
+
+        created = {'lease': {'epoch': 'original', 'expires_ms': 1000}}
+        _require_original_runtime_expiry(created, {'wall_ms': 1001, 'lease': created['lease']})
+        for deletion in (
+            {'wall_ms': 999, 'lease': created['lease']},
+            {'wall_ms': 1001, 'lease': {'epoch': 'original', 'expires_ms': 2000}},
+            {'wall_ms': 1001, 'lease': {'epoch': 'restarted', 'expires_ms': 1000}},
+        ):
+            with self.subTest(deletion=deletion), self.assertRaisesRegex(RuntimeError, 'original lease expiry'):
+                _require_original_runtime_expiry(created, deletion)
+
+    def test_selected_wait_failure_does_not_claim_aggregate_vm_expiry(self):
+        from experiments.pilot04_external_checker_runtime import public_runtime_trials as runtime
+
+        lease = {'epoch': 'original', 'expires_ms': 120000}
+        events = [{'operation': 'create', 'project': True, 'lease': lease},
+                  {'operation': 'exec', 'project': True, 'wall_ms': 1000},
+                  {'operation': 'delete', 'project': True, 'wall_ms': 31000, 'lease': dict(lease)}]
+        row = SimpleNamespace(terminal_json={'infrastructure_failure_code': 'implementation_unavailable'},
+            request_json={'policy': {'entries': [{'registry': {'resources': {'deadline_ms': 30000}}}]}})
+        def check():
+            return asyncio.run(runtime._runtime_fault_evidence(Path('/operator'), 0, 'project_wait_failure', None, row))
+        with patch.object(runtime, 'trace_events', return_value=events):
+            check()  # Cleanup before aggregate expiry is valid for this inner wait/failure vector.
+            for target, field, value in ((events[2], 'wall_ms', 30999),
+                    (events[2]['lease'], 'expires_ms', 240000),
+                    (row.terminal_json, 'infrastructure_failure_code', 'deadline_exceeded')):
+                original = target[field]
+                target[field] = value
+                try:
+                    with self.subTest(field=field), self.assertRaises(RuntimeError):
+                        check()
+                finally:
+                    target[field] = original
+
+    def test_pre_runtime_fault_vectors_use_single_vm_and_separate_tasks(self):
+        from experiments.pilot04_external_checker_runtime import public_runtime_trials as runtime
+
+        operations = []
+        row = SimpleNamespace(id='run', status='infrastructure_failed', terminal_json={'infrastructure_failure_code': 'failure'})
+        async def source(client, route, headers, token, key, content, expected):
+            self.assertEqual(expected, 503)
+            operations.append(route)
+            return {'error': {'code': 'service_unavailable'}}
+        async def resume():
+            operations.append('start')
+        async def accepted(*args):
+            return {'submission_id': 'submission-' + args[10]}
+
+        project = SimpleNamespace(project_id=uuid4())
+        with patch.object(runtime, '_public_project', new=AsyncMock(return_value=(project, None, 'manager', 'actor'))), \
+                patch.object(runtime, '_started_public_task', new=AsyncMock(side_effect=[(f'task-{i}', f'assignment-{i}') for i in range(4)])), \
+                patch.object(runtime, 'archive_with_modes', return_value=b'zip'), \
+                patch.object(runtime, '_with_fixture_file', return_value=b'wait'), \
+                patch.object(runtime, '_source_request', side_effect=source), \
+                patch.object(runtime, '_selected', new=AsyncMock(return_value=row)), \
+                patch.object(runtime, '_runtime_fault_evidence', new=AsyncMock(return_value=[])), \
+                patch.object(runtime, '_recover_failed_source', new=AsyncMock(side_effect=accepted)), \
+                patch.object(runtime, 'trace_events', return_value=[]), \
+                patch.object(runtime, 'node_command', new=AsyncMock(return_value={'foreign_preserved': True, 'resources': {}})), \
+                patch.object(runtime, 'assert_launches', return_value=['vm']) as launches, \
+                patch.object(runtime, '_drain_source_trial_posts', new=AsyncMock()) as drain, \
+                patch.object(runtime, '_post_launch_trials', new=AsyncMock(return_value=[])) as posts:
+            asyncio.run(runtime.public_runtime_trials(None, None, None, Path('/operator'),
+                stop_worker=lambda: operations.append('stop'), start_worker=resume, operator_token='operator'))
+        self.assertEqual(operations, ['stop'] + [f'/api/v1/tasks/task-{i}/submissions' for i in range(4)] + ['start'])
+        self.assertEqual([(call.kwargs['creates'], call.kwargs['executions']) for call in launches.call_args_list],
+                         [(1, 0), (1, 0), (1, 1), (1, 1)])
+        self.assertEqual(len(drain.await_args.args[2]), 4)
+        self.assertEqual(posts.await_args.args[7], 'operator')
+
+    def test_post_native_retries_install_fault_after_t5_and_use_operator_recovery(self):
+        from experiments.pilot04_external_checker_runtime import public_runtime_trials as runtime
+        from experiments.pilot04_external_checker_runtime import run_public_journey_probe as probe
+
+        operations = []
+        async def submit(*args):
+            operations.append('submit')
+            self.assertEqual(args[6], 202)
+            return {'accepted': True}
+        async def finalized(*args):
+            operations.append('T5')
+            return {'submission_id': 'submission'}
+        async def node(root, action):
+            operations.append(action)
+            return {'foreign_preserved': True, 'resources': {}}
+        async def resume():
+            operations.append('start')
+        async def complete(*args, **kwargs):
+            operations.append('POST')
+        async def retry(*args):
+            self.assertEqual(args[4], 'operator')
+            operations.append('operator_retry')
+            return object(), {'receipt_id': 'receipt'}
+        session = AsyncMock()
+        session.__aenter__.return_value = session
+        session.get.return_value = SimpleNamespace(evaluation_event_id='event')
+        with patch.object(runtime, '_started_public_task', new=AsyncMock(side_effect=[('task1', 'assignment1'), ('task2', 'assignment2')])), \
+                patch.object(runtime, '_source_request', side_effect=submit), \
+                patch.object(runtime, '_selected', new=AsyncMock()), patch.object(runtime, '_assert_current_pre'), \
+                patch.object(runtime, '_observe_accepted_source', side_effect=finalized), \
+                patch.object(runtime, 'node_command', side_effect=node), patch.object(runtime, 'trace_events', return_value=[]), \
+                patch.object(runtime, 'assert_launches', return_value=['vm']) as launches, \
+                patch.object(runtime, '_wait_outbox_acknowledged', new=AsyncMock()), \
+                patch.object(runtime, 'retry_post_outage', side_effect=retry), \
+                patch.object(probe, '_complete_post', side_effect=complete):
+            asyncio.run(runtime._post_launch_trials(None, lambda: session, 'project', 'manager', 'actor', b'zip',
+                Path('/operator'), 'operator', stop_worker=lambda: operations.append('stop'), start_worker=resume))
+        self.assertEqual(operations, ['stop', 'submit', 'T5', 'project_fail_once', 'start', 'POST', 'drained',
+            'stop', 'submit', 'T5', 'project_fail_all', 'start', 'operator_retry', 'POST', 'drained', 'clear', 'drained'])
+        self.assertEqual([(call.kwargs['creates'], call.kwargs['executions']) for call in launches.call_args_list],
+                         [(2, 1), (3, 0), (1, 1)])
+
+    def test_source_pre_retains_default_stop_and_exact_one_native_member(self):
+        from experiments.pilot04_external_checker_runtime.public_intake_trials import _assert_current_pre
+
+        member = {'order': 0, 'requirement_id': 'project.pre_submit', 'request_digest': 'request',
+                  'result': {'verdict': 'passed', 'request_digest': 'request', 'findings': []},
+                  'isolation': {'runtime': 'smolvm', 'isolation_mode': 'smol-microvm'}}
+        execution = {'required_external_count': 1, 'eligible': True,
+                     'workstream_default': {'eligible': True, 'checks': []}, 'external_members': [member]}
+        def row(value):
+            return SimpleNamespace(status='completed', terminal_json={'execution': value})
+
+        _assert_current_pre(row(execution))
+        secret = copy.deepcopy(execution)
+        secret.update(eligible=False, external_members=[], workstream_default={'eligible': False,
+            'checks': [{'status': 'failed', 'failure_code': 'high_confidence_secret_detected'}]})
+        _assert_current_pre(row(secret), failure='secret')
+        project = copy.deepcopy(execution)
+        project['eligible'] = False
+        project['external_members'][0]['result'].update(verdict='failed', findings=[{'code': 'probe.project_rule_failed'}])
+        _assert_current_pre(row(project), failure='project')
+        for field, value in (('required_external_count', 0), ('external_members', []), ('eligible', False)):
+            invalid = copy.deepcopy(execution)
+            invalid[field] = value
+            with self.subTest(field=field), self.assertRaises(RuntimeError):
+                _assert_current_pre(row(invalid))
+        for field, value in (('order', 1), ('requirement_id', 'foreign'), ('request_digest', 'foreign')):
+            invalid = copy.deepcopy(execution)
+            invalid['external_members'][0][field] = value
+            with self.subTest(field=field), self.assertRaises(RuntimeError):
+                _assert_current_pre(row(invalid))
+        secret['external_members'] = [member]
+        with self.assertRaisesRegex(RuntimeError, 'default blocker'):
+            _assert_current_pre(row(secret), failure='secret')
+
+    def test_local_approval_uses_exact_registry_entries_in_root_transaction(self):
+        from sqlalchemy.ext.asyncio import async_sessionmaker
+        from app.core.identifiers import new_record_id
+        from app.modules.checkers import external_registry as registry
+        from experiments.pilot04_external_checker_runtime.public_guide_setup import _local_approval_attachments
+        from tests.checkers.external.support import registry_spec, post_registry_spec
+
+        entries = [SimpleNamespace(capability_id=spec.capability_id, capability_version=spec.capability_version,
+            phase=spec.phase, registry_entry_id=new_record_id(), entry_digest='sha256:' + digit * 64)
+            for spec, digit in ((registry_spec('pre_submit'), 'a'), (post_registry_spec(), 'b'))]
+        repository = AsyncMock()
+        repository.all_entries.return_value = entries
+        repository.by_exact_id.side_effect = lambda key: next(entry for entry in entries if entry.registry_entry_id == key)
+        with patch.object(registry, 'ExternalCheckerRegistryRepository', return_value=repository), \
+                patch.object(registry, '_row_entry', side_effect=lambda row: row):
+            result = asyncio.run(_local_approval_attachments(async_sessionmaker()))
+            for entry in entries:
+                self.assertEqual(result[entry.phase + '_attachments'], [{
+                    'requirement_id': 'project.' + entry.phase,
+                    'registry_entry_id': str(entry.registry_entry_id),
+                    'registry_entry_digest': entry.entry_digest, 'configuration': {},
+                }])
+            repository.all_entries.return_value = entries[:1]
+            with self.assertRaisesRegex(AssertionError, 'absent or ambiguous'):
+                asyncio.run(_local_approval_attachments(async_sessionmaker()))
+            repository.all_entries.return_value = entries + [entries[0]]
+            with self.assertRaisesRegex(AssertionError, 'absent or ambiguous'):
+                asyncio.run(_local_approval_attachments(async_sessionmaker()))
+
+    def test_current_guide_refuses_zero_or_multiple_pre_before_setup(self):
+        from experiments.pilot04_external_checker_runtime.public_guide_setup import public_guide_setup
+
+        for count in (0, 2):
+            with self.subTest(count=count), self.assertRaisesRegex(ValueError, 'exactly one PRE'):
+                asyncio.run(public_guide_setup(None, None, True, None, None, pre_requirements=count))
+
+    def test_source_failure_preserves_exact_charge_and_releases_only_task_pointer(self):
         from experiments.pilot04_external_checker_runtime import public_intake_trials as intake
 
-        class StreamingClient:
-            async def post(self, route, *, headers, content):
-                async for _ in content:
-                    pass
-                raise AssertionError('invalid expiry should fail before completing request')
+        operation = SimpleNamespace(id='source', task_id='task', acceptance_receipt=None,
+            finalized_submission_id=None, finalization_event_id=None, selected_pre_submit_run_id='run',
+            failure_code='submission_infrastructure_unavailable')
+        charge = SimpleNamespace(state='sealed', accounted_bytes=42)
+        task = SimpleNamespace(status='in_progress', active_submission_operation_id=None)
+        session = AsyncMock()
+        session.__aenter__.return_value = session
+        session.get.side_effect = lambda model, key: charge if key == 'source' else task
+        async def exercise():
+            return await intake._assert_source_failure(lambda: session, 'task', 'key', 42, sealed=True,
+                code='submission_infrastructure_unavailable')
 
-        expires = time.time_ns() // 1_000_000 + 1000
-        prepared = {'operation': 'prepare_completed', 'name': 'exact-intake', 'project': False,
-                    'lease': {'epoch': 'original', 'expires_ms': expires}}
-        for deletion in (
-            {'wall_ms': expires - 1, 'lease': prepared['lease']},
-            {'wall_ms': expires + 1, 'lease': {'epoch': 'original', 'expires_ms': expires + 1000}},
-            {'wall_ms': expires + 1, 'lease': {'epoch': 'restarted', 'expires_ms': expires}},
-        ):
-            with self.subTest(deletion=deletion), patch.object(intake, 'trace_events', return_value=[]), \
-                    patch.object(intake, '_native_event', new=AsyncMock(side_effect=[prepared, deletion])), \
-                    patch.object(intake, 'node_command', new=AsyncMock()) as cleanup:
-                with self.assertRaisesRegex(RuntimeError, 'original lease expiry'):
-                    asyncio.run(intake._expire_upload(StreamingClient(), None, '/public', {}, 'token', b'zip',
-                                                     'task', Path('/owned/control')))
-                cleanup.assert_not_awaited()
+        with patch.object(intake, '_wait_source_state', new=AsyncMock(return_value=operation)), \
+                patch.object(intake, '_assert_no_submission_after_intake_failure', new=AsyncMock()) as no_product:
+            self.assertIs(asyncio.run(exercise()), operation)
+            no_product.assert_awaited_once_with(unittest.mock.ANY, 'task', 'run')
+            for target, field, value in ((charge, 'accounted_bytes', 0), (charge, 'state', 'released'),
+                    (task, 'active_submission_operation_id', 'foreign'), (task, 'status', 'ready'),
+                    (operation, 'acceptance_receipt', {'accepted': True})):
+                original = getattr(target, field)
+                setattr(target, field, value)
+                try:
+                    with self.subTest(field=field, value=value), self.assertRaises(RuntimeError):
+                        asyncio.run(exercise())
+                finally:
+                    setattr(target, field, original)
 
 
 if __name__ == '__main__':

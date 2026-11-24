@@ -414,7 +414,7 @@ class HostedAttachment:
         """Select exact published fixture images as the human manager."""
         from app.modules.checkers.api.external_policy import ExternalCheckerImageAttachment
 
-        require(pre_requirements in (0, 1, 2), 'unsupported hosted PRE fixture count')
+        require(pre_requirements == 1, 'current qualification requires exactly one PRE image')
         require(set(self.registered_images) == {'pre_submit', 'post_submit'},
                 'baseline registry publications are incomplete')
 
@@ -425,10 +425,7 @@ class HostedAttachment:
                 registry_entry_digest=entry.entry_digest, configuration={},
             ).model_dump(mode='json')
 
-        pre_ids = ('project.pre_submit.01', 'project.pre_submit.02') if pre_requirements == 2 else (
-            ('project.pre_submit',) if pre_requirements == 1 else ()
-        )
-        return {'pre_submit_attachments': [attach('pre_submit', key) for key in pre_ids],
+        return {'pre_submit_attachments': [attach('pre_submit', 'project.pre_submit')],
                 'post_submit_attachments': [attach('post_submit', 'project.post_submit')]}
 
     async def provision_services(self, client):
@@ -566,8 +563,11 @@ async def _run(attachment, database_url, broker_url, qualification):
             while await _scan_audit_count(factory) <= scans_before:
                 require(time.monotonic() < deadline, 'hosted Beat did not dispatch an authorized artifact scan')
                 await asyncio.sleep(2)
-            intake = await public_intake_trials(client, factory, attachment, None, attachment.node_root)
-            runtime = await public_runtime_trials(client, factory, attachment, attachment.node_root)
+            intake = await public_intake_trials(client, factory, attachment, attachment.node_root,
+                stop_worker=attachment.stop_worker, start_worker=attachment.start_worker)
+            runtime = await public_runtime_trials(client, factory, attachment, attachment.node_root,
+                stop_worker=attachment.stop_worker, start_worker=attachment.start_worker,
+                operator_token=attachment.token_for_label('operator'))
             human = await _one_mode(client, factory, attachment, human_review_required=True,
                                     operator_id=attachment.actors['operator'].actor_profile_id)
             automatic = await _one_mode(client, factory, attachment, human_review_required=False,

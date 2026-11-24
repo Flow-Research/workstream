@@ -174,8 +174,36 @@ async def _source_evidence(factory, guide, setup, package, original):
             "uploaded_sha256": "sha256:" + hashlib.sha256(original).hexdigest()}
 
 
+async def _local_approval_attachments(factory):
+    """Select the exact previously published fixture identities, never empty phases."""
+    from app.modules.checkers.api.external_policy import ExternalCheckerImageAttachment
+    from app.modules.checkers.external_registry import ExternalCheckerRegistryReader
+    from tests.checkers.external.support import post_registry_spec, registry_spec
+
+    attachments = {}
+    async with factory() as session, session.begin():
+        reader = ExternalCheckerRegistryReader(session)
+        entries = await reader.list_entries()
+        for spec in (registry_spec("pre_submit"), post_registry_spec()):
+            matches = [entry for entry in entries if
+                       (entry.capability_id, entry.capability_version, entry.phase)
+                       == (spec.capability_id, spec.capability_version, spec.phase)]
+            if len(matches) != 1:
+                raise AssertionError("exact registered local fixture image is absent or ambiguous")
+            entry = await reader.read_exact(matches[0].registry_entry_id, matches[0].entry_digest)
+            attachments[spec.phase + "_attachments"] = [ExternalCheckerImageAttachment(
+                requirement_id="project." + spec.phase,
+                registry_entry_id=entry.registry_entry_id,
+                registry_entry_digest=entry.entry_digest,
+                configuration={},
+            ).model_dump(mode="json")]
+    return attachments
+
+
 async def public_guide_setup(client, factory, human_review_required, call, token_for, *,
                              pre_requirements=1, attachment=None):
+    if pre_requirements != 1:
+        raise ValueError("current qualification requires exactly one PRE image")
     model_post = attachment.model_post if attachment else None
     if model_post and 'project_id' in model_post.state:
         raise RuntimeError('this model qualification already owns one project')
@@ -228,6 +256,9 @@ async def public_guide_setup(client, factory, human_review_required, call, token
     compilation_root = root + f"/compilations/{setup['finalized_compilation_id']}"
     initial = await call(client, "GET", compilation_root + "/proposal", token, 200)
     initial_setup = setup
+    attachments = (model_post.approval_attachments() if model_post else
+                   attachment.approval_attachments(pre_requirements) if attachment else
+                   await _local_approval_attachments(factory))
     if human_review_required and attachment is None:
         correction = await _correct_public_proposal(client, compilation_root, initial, token, call)
         setup = await wait_for_guide_read(client, root + "/setup-runs/latest", token,
@@ -244,13 +275,10 @@ async def public_guide_setup(client, factory, human_review_required, call, token
                    headers={"Idempotency-Key": str(uuid4())},
                    json={"target": initial["target"],
                          "acknowledged_warning_hashes": initial["warning_hashes"],
-                         "pre_submit_attachments": [], "post_submit_attachments": []})
+                         **attachments})
         compilation_root = root + f"/compilations/{setup['finalized_compilation_id']}"
     await _finance_policy(client, factory, UUID(project["id"]), token_for,
                           not human_review_required and attachment is None, call, attachment)
-    attachments = (model_post.approval_attachments() if model_post else
-                   attachment.approval_attachments(pre_requirements) if attachment else
-                   {"pre_submit_attachments": [], "post_submit_attachments": []})
     post = await _approve_policies(client, compilation_root, token, call, attachments)
     context = post["activation_context"]
     activation = {"target": post["target"], **{field: context[field] for field in (

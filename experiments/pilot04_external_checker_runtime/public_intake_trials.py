@@ -1,18 +1,18 @@
-"""Public zero/two-binding and upload-overlap evidence on the real one-slot node."""
+"""Current public source-intake failure boundaries on the owned native node."""
 
 import asyncio
-import json
 from pathlib import Path
 import time
 from uuid import uuid4
 
 from sqlalchemy import func, select
 
+from app.modules.artifacts.intake.models import SubmissionIntakeOperation, SubmissionSourceCharge
 from app.modules.artifacts.models import SubmissionBundleAdmission, SubmissionBundleDurableIntent
 from app.modules.checkers.models import SelectedPreSubmitRun
-from app.modules.tasks.models import Submission
+from app.modules.tasks.models import Submission, WorkstreamTask
 from experiments.pilot04_external_checker_runtime.public_probe_support import (
-    _json, _public_project, _require, _started_public_task, _with_fixture_file,
+    _json, _public_project, _require, _secret_archive, _started_public_task, _with_fixture_file,
 )
 from experiments.pilot04_external_checker_runtime.public_node_faults import assert_launches, node_command, trace_events
 from tests.post_submit_materialization_helpers import archive_with_modes
@@ -38,243 +38,205 @@ async def _selected(factory, key):
         return row
 
 
-def _assert_default_only_pre(row):
-    value = row.terminal_json["execution"]
-    _require(row.status == "completed" and value["eligible"]
-             and value["workstream_default"]["eligible"]
-             and value["required_external_count"] == 0 and value["external_members"] == [],
-             "default-only policy did not retain its exact zero-project execution")
+async def _source_operation(factory, key):
+    async with factory() as session:
+        return (await session.scalars(select(SubmissionIntakeOperation).where(
+            SubmissionIntakeOperation.idempotency_key == key))).one_or_none()
 
 
-def _assert_ordered_pre_and_stop(row, *, failed):
-    value = row.terminal_json["execution"]
-    members = value["external_members"]
-    expected = ["project.pre_submit.01"] if failed else ["project.pre_submit.01", "project.pre_submit.02"]
-    _require(row.status == "completed" and value["workstream_default"]["eligible"]
-             and value["required_external_count"] == 2 and value["eligible"] is not failed
-             and [member["requirement_id"] for member in members] == expected
-             and [member["order"] for member in members] == list(range(len(expected)))
-             and len({member["request_digest"] for member in members}) == len(expected),
-             "two-binding policy did not retain its ordered executed prefix")
-    for member in members:
-        _require(member["result"]["verdict"] == ("failed" if failed else "passed")
-                 and member["result"]["request_digest"] == member["request_digest"]
-                 and member["isolation"]["runtime"] == "smolvm",
-                 "selected member lost its real isolated request/result custody")
-
-
-def _events(path):
-    return [json.loads(line) for line in path.read_text().splitlines()] if path and path.exists() else []
-
-
-def _assert_project_invocations(row, trace, observer_start, node_root, runtime_start):
-    members = row.terminal_json['execution']['external_members']
-    expected = [member['request_digest'] for member in members]
-    observed = _events(trace)[observer_start:]
-    starts = [event for event in observed if event['event'] == 'project_started']
-    ends = [event for event in observed if event['event'] == 'project_completed']
-    _require(trace is None or ([event['session'] for event in starts] == expected
-             and [event['session'] for event in ends] == expected),
-             'project adapter invocations differ from retained ordered members')
-    order = [(event['event'], event['session']) for event in observed
-             if event['event'] in {'project_started', 'project_completed'}]
-    _require(trace is None or order == [(kind, digest) for digest in expected
-                       for kind in ('project_started', 'project_completed')],
-             'project checker invocations overlap or run outside canonical order')
-    machines = assert_launches(node_root, runtime_start, creates=len(expected),
-                               executions=len(expected), shared_deadline=False)
-    executions = [event for event in trace_events(node_root)[runtime_start:]
-                  if event['project'] and event['operation'] == 'exec']
-    _require([event['name'] for event in executions] == machines,
-             'project guest execution order differs from fresh allocation order')
-    for started, ended, executed in zip(starts, ends, executions if trace else [], strict=True):
-        _require(started['monotonic'] <= executed['monotonic'] <= ended['monotonic'],
-                 'project VM execution is outside its exact adapter request')
-    return machines
-
-
-async def _wait_event(path, start, event, session=None):
-    deadline = time.monotonic() + 45
-    while time.monotonic() < deadline:
-        found = [item for item in _events(path)[start:] if item["event"] == event
-                 and (session is None or item["session"] == session)]
-        if found:
-            return found[0]
-        await asyncio.sleep(0.05)
-    raise RuntimeError("real intake adapter did not acknowledge " + event)
-
-
-async def _native_event(root, start, operation, *, name=None, timeout=45):
+async def _wait_source_state(factory, key, states, *, timeout=90):
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
-        matches = [event for event in trace_events(root)[start:]
-                   if event['operation'] == operation and event['project'] is False
-                   and (name is None or event['name'] == name)]
-        if matches:
-            _require(len(matches) == 1 and matches[0].get('lease')
-                     and matches[0]['lease']['name'] == matches[0]['name'],
-                     'native preparation evidence is ambiguous or lacks a lease')
-            return matches[0]
+        operation = await _source_operation(factory, key)
+        if operation is not None and operation.state in states:
+            return operation
         await asyncio.sleep(.05)
-    raise RuntimeError('native intake did not reach ' + operation)
+    raise RuntimeError('source operation did not reach its exact expected state')
 
 
-async def _prepared(trace, start, node_root, runtime_start):
-    if trace is not None:
-        return await _wait_event(trace, start, 'prepare_ready')
-    event = await _native_event(node_root, runtime_start, 'prepare_completed')
-    return {'evidence': 'native_prepare_completed', 'session': event['name'], **event}
+async def _assert_source_failure(factory, task, key, size, *, sealed, code=None):
+    """Failed input remains charged without PRE admission or accepted handoff."""
+    row = await _wait_source_state(factory, key, {'failed', 'cancelled', 'rejected', 'abandoned'})
+    _require(row.task_id == task and row.acceptance_receipt is None
+             and row.finalized_submission_id is None and row.finalization_event_id is None,
+             'failed source escaped into accepted custody')
+    if code is not None:
+        _require(row.failure_code == code, 'source failure changed its exact code')
+    async with factory() as session:
+        charge = await session.get(SubmissionSourceCharge, row.id)
+        owner = await session.get(WorkstreamTask, task)
+        _require(charge and charge.state == ('sealed' if sealed else 'reserved')
+                 and charge.accounted_bytes == size > 0,
+                 'failed source released or changed its exact charge')
+        _require(owner.status == 'in_progress' and owner.active_submission_operation_id is None,
+                 'failed source changed Task eligibility or retained its pointer')
+        if not sealed:
+            _require(row.raw_byte_count is None and row.selected_pre_submit_run_id is None,
+                     'incomplete upload sealed bytes or reserved PRE')
+            _require(await session.scalar(select(func.count()).select_from(SelectedPreSubmitRun).where(
+                SelectedPreSubmitRun.task_id == task)) == 0, 'incomplete upload created a PRE run')
+    await _assert_no_submission_after_intake_failure(factory, task, row.selected_pre_submit_run_id)
+    return row
 
 
-async def _closed(trace, start, session, node_root, runtime_start):
-    if trace is not None:
-        await _wait_event(trace, start, 'close_confirmed', session)
-    else:
-        await _native_event(node_root, runtime_start, 'delete', name=session)
+async def _observe_accepted_source(client, factory, task, assignment, token, archive, key, receipt):
+    from experiments.pilot04_external_checker_runtime.run_public_journey_probe import _await_finalized_source
+
+    _require(receipt['status'] == 'accepted' and receipt['replayed'] is False,
+             'source trial did not retain a new accepted receipt')
+    context = {'acceptance_receipt': receipt, 'idempotency_key': key}
+    return await _await_finalized_source(client, factory, task, assignment, token, context, archive)
 
 
-async def _cancel_upload(client, factory, route, headers, token, archive, trace, task, node_root):
-    start = len(_events(trace))
-    key = str(uuid4())
-    ready = asyncio.Event()
-    session_id = None
-    runtime_start = len(trace_events(node_root))
+def _assert_current_pre(row, *, failure=None):
+    """One selected image replaces obsolete zero/multi-image approval vectors."""
+    value = row.terminal_json['execution']
+    _require(row.status == 'completed' and value['required_external_count'] == 1,
+             'current PRE did not retain exactly one required project image')
+    members = value['external_members']
+    if failure == 'secret':
+        failed = [check['failure_code'] for check in value['workstream_default']['checks']
+                  if check['status'] == 'failed']
+        _require(not value['eligible'] and not value['workstream_default']['eligible']
+                 and failed == ['high_confidence_secret_detected'] and members == [],
+                 'default blocker reached project execution or lost exact feedback')
+        return
+    _require(value['workstream_default']['eligible'] and value['eligible'] is (failure is None)
+             and len(members) == 1 and members[0]['order'] == 0
+             and members[0]['requirement_id'] == 'project.pre_submit',
+             'one-project PRE lost its default-before-project boundary')
+    member = members[0]
+    _require(member['result']['verdict'] == ('failed' if failure else 'passed')
+             and member['result']['request_digest'] == member['request_digest']
+             and member['isolation']['runtime'] == 'smolvm'
+             and member['isolation']['isolation_mode'] == 'smol-microvm',
+             'selected member lost its exact native request/result custody')
+    if failure:
+        _require([f['code'] for f in member['result']['findings']] == ['probe.project_rule_failed'],
+                 'project PRE failure lost its exact finding')
+
+
+async def _source_request(client, route, headers, token, key, content, expected):
+    return await _json(client, 'POST', route, token, expected,
+        headers=headers | {'Idempotency-Key': key, 'Content-Length': str(len(content))}, content=content)
+
+
+async def _cancel_upload(client, factory, route, headers, token, archive, task, node_root):
+    """Cancel incomplete provider upload before any native allocation is permitted."""
+    key, ready, start = str(uuid4()), asyncio.Event(), len(trace_events(node_root))
 
     async def incomplete():
-        nonlocal session_id
         yield archive[:1]
-        session_id = (await _prepared(trace, start, node_root, runtime_start))["session"]
+        await _wait_source_state(factory, key, {'receiving'})
+        _require(len(trace_events(node_root)) == start, 'incomplete upload allocated native resources')
         ready.set()
         await asyncio.Event().wait()
 
-    pending = asyncio.create_task(client.post(
-        route, headers=headers | {"Authorization": "Bearer " + token, "Idempotency-Key": key},
-        content=incomplete(),
-    ))
+    pending = asyncio.create_task(client.post(route, headers=headers | {
+        'Authorization': 'Bearer ' + token, 'Idempotency-Key': key, 'Content-Length': str(len(archive))},
+        content=incomplete()))
     try:
-        await asyncio.wait_for(ready.wait(), timeout=45)
+        await asyncio.wait_for(ready.wait(), timeout=90)
     finally:
         pending.cancel()
         await asyncio.gather(pending, return_exceptions=True)
-    await _closed(trace, start, session_id, node_root, runtime_start)
-    cleanup = await node_command(node_root, "drained")
-    _require(cleanup["foreign_preserved"] and not any(cleanup["resources"].values()),
-             "cancelled upload retained owned resources or changed the foreign control")
-    machines = assert_launches(node_root, runtime_start, creates=1, executions=0, project=False)
-    assert_launches(node_root, runtime_start, creates=0, executions=0)
-    async with factory() as session:
-        _require(await session.scalar(select(func.count()).select_from(SelectedPreSubmitRun).where(
-            SelectedPreSubmitRun.idempotency_key == key)) == 0,
-            "incomplete upload reserved a selected checker run")
-    await _assert_no_submission_after_intake_failure(factory, task)
-    return {"case": "cancelled_upload", "session": session_id, "machines": machines,
-            "cleanup": cleanup, "reserved_runs": 0}
+    row = await _assert_source_failure(factory, task, key, len(archive), sealed=False)
+    assert_launches(node_root, start, creates=0, executions=0, project=False)
+    assert_launches(node_root, start, creates=0, executions=0)
+    cleanup = await node_command(node_root, 'drained')
+    _require(cleanup['foreign_preserved'] and not any(cleanup['resources'].values()),
+             'cancelled upload changed foreign resources')
+    return {'case': 'cancelled_source_upload', 'operation_id': row.id,
+            'failure_code': row.failure_code, 'native_allocations': 0, 'cleanup': cleanup}
 
 
 async def _expire_upload(client, factory, route, headers, token, archive, task, node_root):
-    """Hold a real HTTP body open through its original native lease deadline."""
-    key, start = str(uuid4()), len(trace_events(node_root))
-    observed = {}
+    """Retain the original upload deadline while real idle/total timing closes input."""
+    key, start, observed = str(uuid4()), len(trace_events(node_root)), {}
 
     async def stalled():
         yield archive[:1]
-        prepared = await _native_event(node_root, start, 'prepare_completed')
-        remaining = (prepared['lease']['expires_ms'] - time.time_ns() // 1_000_000) / 1000
-        _require(0 < remaining <= 3600, 'native intake expiry exceeds bounded public proof window')
-        deleted = await _native_event(node_root, start, 'delete', name=prepared['name'], timeout=remaining + 45)
-        _require(deleted['wall_ms'] >= prepared['lease']['expires_ms']
-                 and deleted['lease']['epoch'] == prepared['lease']['epoch']
-                 and deleted['lease']['expires_ms'] == prepared['lease']['expires_ms'],
-                 'stalled upload did not reach its original lease expiry')
-        observed.update(prepared=prepared, deleted=deleted)
+        row = await _wait_source_state(factory, key, {'receiving'})
+        observed['original_deadline'] = row.upload_deadline_at
+        _require(len(trace_events(node_root)) == start, 'stalled upload allocated native resources')
+        await _wait_source_state(factory, key, {'failed'}, timeout=3600)
         yield archive[1:]
 
     response = await client.post(route, headers=headers | {'Authorization': 'Bearer ' + token,
-                                  'Idempotency-Key': key}, content=stalled())
-    _require(response.status_code == 503
-             and response.json()['error']['code'] == 'service_unavailable'
-             and response.json()['detail'] == 'pre_submission_attempt_outcome_unresolved',
-             'expired upload was not reported as unresolved infrastructure')
+        'Idempotency-Key': key, 'Content-Length': str(len(archive))}, content=stalled(), timeout=3660)
+    _require(response.status_code == 408 and response.json()['error']['code'] == 'submission_upload_timeout',
+             'expired source upload did not return its exact timeout')
+    row = await _assert_source_failure(factory, task, key, len(archive), sealed=False,
+                                      code='submission_upload_timeout')
+    _require(row.upload_deadline_at == observed['original_deadline'], 'stalled upload reset its original deadline')
+    assert_launches(node_root, start, creates=0, executions=0, project=False)
+    assert_launches(node_root, start, creates=0, executions=0)
+    await _source_request(client, route, headers, token, key, archive, 408)
+    return {'case': 'source_upload_timeout', 'operation_id': row.id, 'native_allocations': 0,
+            'original_deadline': row.upload_deadline_at.isoformat()}
+
+
+async def _drain_source_trial_posts(factory, project_id, accepted, node_root):
+    from experiments.pilot04_external_checker_runtime.run_public_journey_probe import _complete_post
+
+    for saved in accepted:
+        await _complete_post(factory, submission_id=saved['submission_id'], project_id=project_id,
+                             recommendation='allow_review', deliver_completion=False)
     cleanup = await node_command(node_root, 'drained')
     _require(cleanup['foreign_preserved'] and not any(cleanup['resources'].values()),
-             'expired upload cleanup changed foreign custody or retained resources')
-    machines = assert_launches(node_root, start, creates=1, executions=0, project=False)
-    assert_launches(node_root, start, creates=0, executions=0)
-    async with factory() as session:
-        _require(await session.scalar(select(func.count()).select_from(SelectedPreSubmitRun).where(
-            SelectedPreSubmitRun.idempotency_key == key)) == 0,
-            'expired incomplete upload reserved a selected checker run')
-    await _assert_no_submission_after_intake_failure(factory, task)
-    return {'case': 'stalled_upload_original_expiry', 'observed': observed, 'machines': machines,
-            'http_status': response.status_code, 'reserved_runs': 0, 'cleanup': cleanup}
+             'source-trial POST execution retained resources or changed foreign custody')
 
 
-async def public_intake_trials(client, factory, env, trace: Path, node_root: Path):
-    evidence = []
-    for count in (0, 2):
-        project, _, manager, contributor = await _public_project(
-            client, factory, env, human_review_required=True, pre_requirements=count,
-        )
-        task, assignment = await _started_public_task(
-            client, project_id=str(project.project_id), manager_token=manager,
-            contributor_token=contributor, source_ref=f"intake-bindings-{count}",
-        )
-        archive = archive_with_modes("evidence/results", project.project_id)
-        route = f"/api/v1/tasks/{task}/submission-bundle-preparations"
-        headers = {"Content-Type": "application/zip", "X-Task-Assignment-Id": assignment,
-                   "X-Submission-Summary": "Completed task evidence.",
-                   "X-Contributor-Attestation": "rights_confirmed; no confidential data or credentials."}
-        if count == 0:
-            start = len(_events(trace))
-            unauth_runtime_start = len(trace_events(node_root))
-            response = await client.post(route, headers=headers | {"Idempotency-Key": str(uuid4())}, content=archive)
-            _require(response.status_code == 401,
-                     f"unauthenticated upload returned {response.status_code}; expected 401")
-            _require(len(_events(trace)) == start, "unauthenticated upload allocated an intake session")
-            _require(len(trace_events(node_root)) == unauth_runtime_start,
-                     'unauthenticated upload allocated native resources')
-            evidence.append(await _cancel_upload(
-                client, factory, route, headers, contributor, archive, trace, task, node_root,
-            ))
-            if trace is None:
-                evidence.append(await _expire_upload(
-                    client, factory, route, headers, contributor, archive, task, node_root))
-                # The real configured upload deadline may outlive a fixture
-                # token. Mint a fresh token for the next independent request.
-                contributor = env.token_for_label('contributor')
-            start = len(_events(trace))
-            runtime_start = len(trace_events(node_root))
-            key = str(uuid4())
-            async def delayed_upload():
-                yield archive[:1]
-                ready = await _prepared(trace, start, node_root, runtime_start)
-                evidence.append({"case": "upload_overlap", "ready": ready,
-                                 "upload_finished_at": time.monotonic()})
-                yield archive[1:]
-            result = await _json(client, "POST", route, contributor, 202,
-                                 headers=headers | {"Idempotency-Key": key}, content=delayed_upload())
-            session = evidence[-1]['ready']['session']
-            await _closed(trace, start, session, node_root, runtime_start)
+async def public_intake_trials(client, factory, env, node_root: Path, *, stop_worker, start_worker):
+    """Current one-PRE default/project failures and source-before-native boundaries."""
+    project, _, manager, token = await _public_project(client, factory, env, human_review_required=True)
+    task, assignment = await _started_public_task(client, project_id=str(project.project_id),
+        manager_token=manager, contributor_token=token, source_ref='source-intake-boundaries')
+    archive = archive_with_modes('evidence/results', project.project_id)
+    route = f'/api/v1/tasks/{task}/submissions'
+    headers = {'Content-Type': 'application/zip', 'X-Task-Assignment-Id': assignment,
+               'X-Submission-Summary': 'Completed task evidence.',
+               'X-Contributor-Attestation': 'rights_confirmed; no confidential data or credentials.'}
+    evidence, accepted = [], []
+    stop_worker()
+    try:
+        start = len(trace_events(node_root))
+        response = await client.post(route, headers=headers | {'Idempotency-Key': str(uuid4())}, content=archive)
+        _require(response.status_code == 401 and len(trace_events(node_root)) == start,
+                 'unauthenticated source upload allocated native resources')
+        evidence.append(await _cancel_upload(client, factory, route, headers, token, archive, task, node_root))
+        evidence.append(await _expire_upload(client, factory, route, headers, token, archive, task, node_root))
+        for failure, content in (('secret', _secret_archive(archive)),
+                                 ('project', _with_fixture_file(archive, 'project-rejected.txt'))):
+            start, key = len(trace_events(node_root)), str(uuid4())
+            result = await _source_request(client, route, headers, token, key, content, 422)
+            _require(result['error']['code'] == 'pre_submission_checker_failed', 'work failure lost public feedback')
             row = await _selected(factory, key)
-            _assert_default_only_pre(row)
-            _assert_project_invocations(row, trace, start, node_root, runtime_start)
-            evidence.append({"case": "default_only", "run_id": row.id,
-                             "preparation_status": result["submission_bundle_preparation_status"]})
-        else:
-            for failed in (True, False):
-                runtime_start = len(trace_events(node_root))
-                observer_start = len(_events(trace))
-                key = str(uuid4())
-                result = await _json(client, "POST", route, contributor, 422 if failed else 202,
-                                     headers=headers | {"Idempotency-Key": key},
-                                     content=_with_fixture_file(archive, "project-rejected.txt") if failed else archive)
-                row = await _selected(factory, key)
-                _assert_ordered_pre_and_stop(row, failed=failed)
-                machines = _assert_project_invocations(
-                    row, trace, observer_start, node_root, runtime_start)
-                if failed:
-                    await _assert_no_submission_after_intake_failure(factory, task, row.id)
-                evidence.append({"case": "ordered_stop" if failed else "ordered_pass", "run_id": row.id, "machines": machines,
-                                 "request_digests": [member["request_digest"]
-                                                     for member in row.terminal_json["execution"]["external_members"]]})
+            _assert_current_pre(row, failure=failure)
+            await _assert_source_failure(factory, task, key, len(content), sealed=True,
+                                         code='pre_submission_checker_failed')
+            # One VM runs trusted defaults and, only if eligible, the project phase.
+            assert_launches(node_root, start, creates=1, executions=1)
+            evidence.append({'case': failure + '_rejection', 'run_id': row.id})
+        start, key, released = len(trace_events(node_root)), str(uuid4()), {}
+
+        async def delayed():
+            yield archive[:1]
+            await _wait_source_state(factory, key, {'receiving'})
+            _require(len(trace_events(node_root)) == start, 'source allocated native VM before complete body')
+            released['at'] = time.monotonic()
+            yield archive[1:]
+
+        result = await _json(client, 'POST', route, token, 202, headers=headers | {
+            'Idempotency-Key': key, 'Content-Length': str(len(archive))}, content=delayed())
+        row = await _selected(factory, key)
+        _assert_current_pre(row)
+        assert_launches(node_root, start, creates=1, executions=1)
+        _require(all(item['monotonic'] >= released['at'] for item in trace_events(node_root)[start:]
+                     if item['operation'] == 'create'), 'native allocation preceded complete source release')
+        accepted.append(await _observe_accepted_source(client, factory, task, assignment, token, archive, key, result))
+        evidence.append({'case': 'complete_source_before_native', 'run_id': row.id, 'submission': accepted[-1]})
+    finally:
+        await start_worker()
+    await _drain_source_trial_posts(factory, project.project_id, accepted, node_root)
     return evidence

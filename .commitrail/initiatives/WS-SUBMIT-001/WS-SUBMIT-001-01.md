@@ -9489,3 +9489,152 @@ upload deadline, 30-second idle deadline, 60-second foreground lease and
 The isolated database and versioned bucket were removed by the runner.
 This is local MinIO/Caddy resource evidence for a deliberately failed upload,
 not native AWS, PRE or accepted-submission qualification.
+
+### Port local native failure vectors to current source intake
+
+Allowed next scope: public_intake_trials.py, public_runtime_trials.py,
+public_guide_setup.py, guide_worker.py, run_public_journey_probe.py,
+public_hosted_attachment.py, scripts/test_public_hosted_attachment.py and this
+record. Preserve actual native launch retries, controller death/restart, original
+lease epoch/deadline, exact deletion/foreign-resource control, failure replay,
+fresh recovery and authorized POST retry. Use one PRE and separate tasks for
+independent accepted vectors; no zero/multi approval or VM-before-EOF claim.
+Upload cancellation/timeout must retain reserved source charge and no PRE/T4/T5,
+and valid source upload must allocate native processing only after EOF.
+
+Pause only the general worker after each fixture project's guide setup while
+measuring PRE resources; the dedicated finalizer stays real. Resume and observe
+queued POST execution before the next fixture so it cannot pollute PRE counts.
+Read source operations/charges and public progress rather than old admission
+status. Keep exact native deadline safety in its current execution-stage guard.
+Remove the local worker's scripted parser override but keep explicitly recorded
+inference; consume the already-supplied canonical parser service. Local policy
+approval must select the exact registered one-PRE/one-POST fixture entries.
+
+Risk: medium qualification control code. Run affected guard contracts, omission
+probes, imports, Ruff/structure/record/link/diff and scoped review. Real native
+resource/controller vectors require a separately authorized qualified execution;
+local contract tests cannot close them. No remote fault commands, deployment or
+paid requests will be issued in this repair worktree.
+
+Include the affected README status paragraph in this local-vector scope so
+implemented caller migration remains distinct from unexecuted native proof.
+
+Implementation of this bounded port:
+
+- public_intake_trials now sends public raw ZIP with exact declared length;
+  cancellation and timeout precede EOF/native allocation and require terminal
+  operation, no acceptance/finalization selectors, released Task pointer and
+  exact positive reserved charge. The source-upload timeout keeps its original
+  stored upload deadline. Default-secret rejection blocks the single external
+  image; project rejection retains its exact finding/request/native receipt.
+  A deliberately incomplete valid body cannot allocate a VM; after releasing
+  its final bytes the accepted source must finalize through public progress and
+  the actual dedicated T5 worker.
+- public_runtime_trials uses four separate tasks for one-attempt launch
+  refusals, controller death and selected-image timeout. POST separately retains
+  automatic launch retry/exhaustion; actual aggregate native expiry is pending. It keeps exact native
+  create/start/exec/delete counts, shared deadline/epoch, foreign-resource
+  survival, failed terminal replay without another VM, and fresh-key recovery.
+  The pre-existing public Operator POST outage/retry function is AST unchanged.
+  General workers stop only after guide setup and restart before observing each
+  queued POST result; T5 is never patched or manually injected.
+- Local approvals read exact immutable registered fixture identities inside a
+  root transaction, selecting exactly one PRE and POST. Stale approval uses
+  otherwise-valid attachments. Hosted approval rejects zero/multiple PRE input.
+  The local API now starts app.main:app; the old optional observer module stays
+  solely because its shared adapter-transparency test still consumes it. No
+  obsolete prepare observer or tracing environment is installed by this flow.
+  guide_worker retains recorded inference and production ART source receipts,
+  but no longer overrides the real parser. Existing canonical parser socket,
+  explicit TLS runner and source profile remain required. Local HTTP request
+  timeout derives from upload/runner envelopes, replacing the obsolete90s cap.
+
+Executed contract evidence: affected HostedAttachment/ModelPOST unittest suites
+passed45 in224.097s (/tmp/submission-local-vectors-guards-v1.log). The subsequently
+added final local registry selection/root-transaction guard passed1 in45.359s
+(/tmp/submission-local-approval-guard-v1.log). These are split receipts, not an
+aggregate final-head46-case run. Named current PRE and source-failure guards
+use controlled typed-shaped facts to check exact selected image/default stop,
+charge preservation, no accepted handoff and pointer release; they do not prove
+those PostgreSQL/native boundaries end to end. The current native expiry guard
+has a valid control plus early deletion, reset deadline and changed epoch
+refusals. An in-memory omission of only deletion-at-original-expiry caused its
+named guard to fail RuntimeError-not-raised, without editing source files
+(/tmp/submission-local-native-expiry-mutant.json and .log).
+
+Ruff, whitespace, record and links passed; structure validation is pending at
+this append. No actual native fault, remote service mutation, deployment or paid
+model/forge call was performed. Required qualification remains actual connected
+upload cancellation/timeout, launch retry/exhaustion, controller death/restart,
+original native expiry and POST recovery on an owned node. Native PRE source and
+execution cancellation are distinct remaining vectors; provider-stage upload
+cancellation does not qualify them. Recorded setup inference does not certify
+real model inference. This change ports affected callers, not full-system or
+native/AWS qualification.
+
+Root review caught two protocol-shape distinctions before freeze. The actual
+smol/pre/admission.rs selects the locked registry's image cache, and pre.rs
+passes it to prepare_with_connection: one VM runs both trusted defaults and
+optional project execution. Thus the existing image-based `project` trace flag
+classifies the whole source PRE VM, not the guest project phase. Default-secret
+rejection now requires exactly one native VM and zero external members, never
+zero VM. create_pre explicitly has one create attempt; source launch failures
+now require one failed launch, no retry and fresh-key recovery. Native automatic
+2/3 launch retry/exhaustion is preserved in bounded POST cases: valid source
+PRE/T4/T5 precedes fault installation while the general worker is paused, then
+real POST consumes the fault. Exhaustion uses unchanged public Operator retry
+and a fresh successful POST machine; no finalizer or custody patch.
+
+The selected-image marker timeout also differs from aggregate PRE VM expiry.
+The PRE trial requires an unchanged aggregate lease plus its exact retained
+failure, not deletion-after-aggregate-expiry. Actual aggregate expiry remains
+unqualified. The separate pure original-expiry guard still protects that future
+receipt contract; it is not invoked by or credited as the inner-timeout vector.
+Controller kill observes native VM execution/controller identity, not proof of
+entry into the guest project phase.
+
+Topology limit: public_node_faults reads the runner's lease/cgroup/Smol state
+and exchanges operator-local private command/trace files. Current TLS source
+execution does not supply authenticated remote fault control or evidence
+transport. The requested separate app/runner deployment must not share these
+paths or move KVM onto the API host. This operator-local harness is not ready to
+qualify that topology; remote fault transport and actual native aggregate
+expiry/source/execution cancellation are concrete remaining prerequisites.
+No new production control framework or remote action was introduced.
+
+Final current-shape guard result: the two added PRE/POST vector composition
+contracts passed2 in91.897s (/tmp/submission-current-runtime-vector-guards-v2.log).
+They observe separate tasks, exactly one source PRE creation attempt, native
+POST2/3 launch retries, fault installation after accepted T5 and before worker
+resume, and the unchanged Operator recovery route. Their first run reported
+only two mock argument-index errors, corrected in the final guard source; no
+production defect or native execution was inferred. The two-case receipt is
+separate from the earlier45 and local-registry1 receipts. No aggregate final-head
+suite, remote transport, aggregate-expiry or actual native fault pass is claimed.
+Root requested a contention hold; no further guard/probe was launched after it.
+
+The selected wait case is named project_wait_failure. Static tracing through
+pre.rs::run_project_phase and guest::run_project shows that its inner timeout
+may exit the bootstrap and become implementation_unavailable at the host, before
+the aggregate VM deadline. It now requires that exact current classification,
+exec-to-delete elapsed time at least the locked selected deadline, and unchanged
+aggregate VM epoch/deadline. It does not label generic failure as a proven typed
+inner-deadline result or aggregate expiry. A new pure guard has a valid cleanup
+before aggregate expiry control plus early-selected-cleanup, reset-lease and
+wrong-classification refusals; execution is pending the shared A19 memory-run
+slot. Actual receiving cancellation here uses an incomplete one-byte HTTP body;
+it does not claim completed remote part upload or native PRE cancellation.
+
+After the A19 runner and its cleanup became terminal, the held selected-wait
+pure guard passed1 in30.742s (/tmp/submission-selected-wait-guard-final.log).
+No new native or remote run occurred. Full structure validation exited0
+(/tmp/submission-local-vectors-structure-final.log) before the final23-line pure
+guard addition; protected backend files and ledgers remain untouched. Final
+Ruff, Markdown links and whitespace checks passed. Final record gate follows
+this evidence append. Executed contract custody is45+1+2+1 separate guards,
+not an aggregate49-case or clean-commit runtime run. The native-expiry omission
+probe is controlled in-memory evidence only. Actual two-host fault transport,
+aggregate VM expiry, native PRE source/execution cancellation and real native
+fault execution remain mandatory open qualification, without API-side KVM or
+shared runner paths.

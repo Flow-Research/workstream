@@ -1111,7 +1111,6 @@ async def run(database_url: str, image_reference: str, node_config: Path,
     env = api_environment()
     env.update({
         "WORKSTREAM_DATABASE_URL": database_url,
-        "WORKSTREAM_PROBE_INTAKE_TRACE": str(root / "intake-trace.jsonl"),
         "WORKSTREAM_E2E_FLOW_ISSUER": "https://identity.flowresearch.tech",
         "WORKSTREAM_FLOW_AUTH_ISSUER": "https://identity.flowresearch.tech",
         "WORKSTREAM_CELERY_BROKER_URL": broker_url,
@@ -1155,7 +1154,7 @@ async def run(database_url: str, image_reference: str, node_config: Path,
     _require(runtime_settings.external_runner_host is not None
              and runtime_settings.submission_execution_profile is not None,
              "supply explicit remote TLS runner and source execution profile before qualification")
-    _require_source_runtime_window(runtime_settings)
+    source_profile = _require_source_runtime_window(runtime_settings)
     _require_parser_socket(runtime_settings)
     for field in (
         "artifact_store_backend", "artifact_s3_provider_profile", "artifact_s3_region",
@@ -1221,7 +1220,7 @@ async def run(database_url: str, image_reference: str, node_config: Path,
         origin = f"http://127.0.0.1:{port}"
         api = _process([
             sys.executable, "-m", "uvicorn",
-            "experiments.pilot04_external_checker_runtime.public_intake_observer:app",
+            "app.main:app",
             "--host", "127.0.0.1", "--port", str(port),
             "--log-level", "error", "--no-access-log",
         ], env=env, log=root / "api.log")
@@ -1236,14 +1235,17 @@ async def run(database_url: str, image_reference: str, node_config: Path,
             "--schedule", str(root / "beat-schedule"),
         ], env=env, log=root / "beat.log")
         await _wait_beat_scan(factory, beat, scans_before_beat)
-        async with httpx.AsyncClient(base_url=origin, timeout=90) as client:
+        async with httpx.AsyncClient(base_url=origin, timeout=(source_profile.upload_total_seconds
+                + runtime_settings.external_checker_service_timeout_seconds)) as client:
             from experiments.pilot04_external_checker_runtime.public_intake_trials import public_intake_trials
             intake_trials = await public_intake_trials(
-                client, factory, env, root / "intake-trace.jsonl", root / "node-control")
+                client, factory, env, root / "node-control",
+                stop_worker=stop_owned_worker, start_worker=start_owned_worker)
             from experiments.pilot04_external_checker_runtime.public_runtime_trials import public_runtime_trials
             fault_root = root / "node-control"
             _require((fault_root / "supervisor-ready").exists(), "owned node supervisor is absent")
-            runtime_trials = await public_runtime_trials(client, factory, env, fault_root)
+            runtime_trials = await public_runtime_trials(client, factory, env, fault_root,
+                stop_worker=stop_owned_worker, start_worker=start_owned_worker, operator_token=_token(env, operator))
             true = await _one_mode(client, factory, env,
                                    human_review_required=True,
                                    operator_id=operator.actor_profile_id)
