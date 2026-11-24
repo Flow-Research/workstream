@@ -8991,3 +8991,62 @@ Independent catalogue repair verified:59 tests passed in15.63s
 (/tmp/submission-catalogue-current.log); Commitrail and diff checks passed.
 The warning reflects running this pure module without the asyncio plugin,
 not a skipped asynchronous case.
+
+### Qualify finalization publication recovery through real Redis/prefork
+
+Allowed: the existing test_submission_finalization_worker_loss.py module and
+this record. Add one bounded integration proof: signed public raw-ZIP acceptance
+through real PRE/T4 owners using the existing controlled guest transport; actual
+production scanner publication fails at a closed test-only TCP endpoint while
+accepted custody remains intact; restore that endpoint as a transparent Redis
+forwarder, run the same scanner and deliver duplicate production finalization
+tasks through the exclusive non-eager prefork worker. Preserve real registry,
+AUTH, outbox claim/invocation/finalization and provider observation. Observe task
+completion without replacing handlers; require one durable Submission, binding
+and POST event, stable receipt/replay and retained source charge.
+
+Risk: medium test-process/network custody. Use one isolated PostgreSQL/MinIO
+launcher and a unique Redis key prefix; terminate only the owned worker process
+group, drain owned proxy connections and remove only prefixed Redis keys. The
+shared Redis container must remain running. No production/schema/provider changes
+or new queue. Verify focused test, Ruff/structure and scoped review. This does
+not qualify Beat scheduling, SIGKILL broker redelivery, native guest execution,
+AWS, deployment or the complete public governed-acceptance journey. Existing
+SIGKILL owner tests remain separate. User authorized parallel end-to-end proof;
+all edits are isolated from the primary checkout.
+
+Initial isolated V1 stopped after public acceptance but before discovery: the
+fixture exported local artifact configuration without environment=test, so the
+unchanged Settings validator refused local production storage. Receipt
+/tmp/submission-finalizer-real-broker-v1.json confirms schema0090 and complete
+cleanup; it is not successful broker evidence. Match the existing fixture's test
+environment explicitly and isolate/close this proof's Celery connection pools
+so later tests do not inherit the temporary broker endpoint.
+
+Final V2 passed1 in109.24s under system Python3.12.3 with real Redis7.4.12.
+/tmp/submission-finalizer-real-broker-v2.{log,json} records launcher08066c81a,
+schema0090 and complete PostgreSQL/MinIO cleanup; executable test bytes were
+728682ecb2092fddbf20d04d7e760964772469fc before execution and remain unchanged. The actual
+scanner reports selected1/published0 during connection refusal, then
+selected1/published1 after restoration. Original plus two duplicate production
+tasks returned SUCCESS from the exclusive prefork child; one recorded delivery
+and two unavailable duplicate deliveries leave one completed outbox attempt,
+Submission, binding and POST event. Accepted receipt and one PRE invocation are
+stable through public same-key replay. Source remains sealed and fully charged;
+only T5 clears the task pointer.
+
+The test removes only its unique Redis prefix and owned worker/proxy resources.
+A post-run read confirmed shared Redis still responds and no finalizer-proof-*
+keys remain. One Python fork-with-threads DeprecationWarning is retained (the
+existing repository real-broker prefork pattern); passing does not establish
+thread-free process startup or broker-crash redelivery. Production scanner logic
+is invoked directly to simulate its next scheduled pass; Beat itself is outside
+this proof. The task, registry, delivery/authority and source provider are real;
+only PRE guest transport uses the existing controlled fixture.
+
+Ruff and diff checks pass; test-structure validation exits0
+(/tmp/submission-finalizer-broker-structure.log). Commitrail gate exits0 before
+this evidence append and is repeated for the final record. Original SIGKILL test
+and helper ASTs are unchanged. No new module/lane registration or production edit.
+This is a single focused precommit execution, not a final-head/full-suite/native
+or deployed governed-outcome qualification. V1's setup failure remains above.
