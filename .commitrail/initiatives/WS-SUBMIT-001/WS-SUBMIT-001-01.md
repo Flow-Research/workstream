@@ -8429,3 +8429,10 @@ Use a bounded PostgreSQL-clock expiry wait rather than a fixed 50ms margin,
 without retrying or weakening the recovery assertion. Switch fork to spawn so
 the child cannot inherit pytest threads. Rerun both cases for these harness
 changes; no production timing changes.
+
+Spawn rerun failed both startup bounds before reaching either crash boundary;
+therefore it supplies no crash/recovery proof. Restore the repository's existing
+prefork test approach (matching durable worker topology), whose first run
+reached both SIGKILL boundaries. Keep the database-clock gate and fresh child
+engine. Record the fork/thread warning as a harness limitation, not production
+qualification. No extra retries or enlarged startup bound.

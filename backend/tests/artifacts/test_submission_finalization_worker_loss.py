@@ -97,7 +97,7 @@ async def test_sigkill_finalizer_recovers_exact_accepted_operation(admission_int
     async with f.factory() as session:
         row = await session.get(SubmissionIntakeOperation, str(owner.operation_id))
         event_id = UUID(row.finalization_event_id)
-    process = multiprocessing.get_context("spawn").Process(target=_crash_worker, args=(
+    process = multiprocessing.get_context("fork").Process(target=_crash_worker, args=(
         f.factory.kw["bind"].url, tmp_path, event_id, f.project, kill_at))
     observations = []
     delivery, store = _delivery(f.factory, tmp_path, observations=observations,
