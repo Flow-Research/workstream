@@ -8964,3 +8964,30 @@ for ListUserPolicies; no policy mutation or credential change was attempted.
 Runner owner is preparing the app connection/deployment delta read-only while
 root finishes remaining API/materialization retirement. Hosted qualification
 still requires the prepared administrative IAM grant/policies.
+
+Hosted connection verification now proves app-host private mTLS to the separate
+runner (receipt f7a777a30); API/worker activation remains unproved. Read-only
+deployed inventory at 2026-11-24 13:18:50 UTC found schema
+0069_remove_artifact_proof, zero contributor admissions/PRE/checker runs/formal
+Submissions, and one guide object_confirmed put with one retained replica. A
+second read found no workstream_tasks or checker_policies rows. Repeat under
+actual cutover drain; preserve guide custody. Receipt:
+/tmp/workstream-deployed-cutover-inventory-20261124.txt. Public API module8/8
+and CLI submission HTTP/public API18/18 passed with controlled PRE transport;
+these are not deployed journey evidence.
+
+Bounded verification repair: update only the independent project ownership
+fingerprint in backend/tests/test_ci_lane_catalogue.py and this record. The
+runner test addition8fa9ae12c and retired preparation-command test removal
+c4873cc36 left the count258 unchanged but changed the exact module mapping.
+Replacing current test_remote_node.py with retired
+test_selected_preparation_command.py in memory restores the old expected
+f2581105 digest exactly; current mapping hashes to2d323a55. No lane ownership,
+selector, count or assertion changes. Low risk; verify complete catalogue
+module and diff/record checks. Human review focus: independent fixed digest
+continues to reject unreviewed ownership changes.
+
+Independent catalogue repair verified:59 tests passed in15.63s
+(/tmp/submission-catalogue-current.log); Commitrail and diff checks passed.
+The warning reflects running this pure module without the asyncio plugin,
+not a skipped asynchronous case.
