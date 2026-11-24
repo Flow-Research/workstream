@@ -298,35 +298,51 @@ async def test_real_replacement_compares_consumed_predecessor_and_replays_exactl
 async def test_replacement_without_routed_cause_denied_before_bytes(
     tmp_path, isolated_database_env, monkeypatch,
 ):
-    provider_writes = _trace_provider_writes(monkeypatch)
-    async with remediation_source(tmp_path, isolated_database_env) as h:
-        before_route = await _snapshot(h)
-        provider_writes.clear()
-        with pytest.raises(
-            SubmissionBundlePreparationRejected,
-            match="submission_bundle_preparation_context_changed",
-        ):
-            await _prepare(h, replace(
-                _replacement_request(
-                    h, revision_archive(h.data), predecessor_id=h.created.submission_id,
-                    idempotency_key=new_record_id(),
-                ),
-                byte_source=_forbidden_bytes(),
-            ))
-        assert await _snapshot(h) == before_route
-        assert provider_writes == []
+    from app.modules.artifacts.intake.foreground_upload import ForegroundSourceUpload
+    from tests.retained_material_fixtures import finalize_retained_intake
+    from tests.tasks.submission_dispatch.test_revision_capacity import _revision_http_runtime, _revision_upload_headers
+    from tests.tasks.test_public_submission_intake import _client
 
-        source_id = await _fixture_revision_context(h)
-        admission_id = await _verified_admission(
-            h.factory, h.store, h.namespace, h.settings, h.actor_context,
-            _replacement_request(
-                h, revision_archive(h.data), predecessor_id=h.created.submission_id,
-                idempotency_key=new_record_id(),
-            ),
-        )
+    async with remediation_source(tmp_path, isolated_database_env) as h:
+        writes = _trace_provider_writes(monkeypatch, operations=(
+            "begin_source_upload", "upload_source_part", "complete_source_upload", "put", "observe_put_result"))
+        before_route = await _snapshot(h)
+        data = revision_archive(h.data)
+        async with _client(h, monkeypatch, isolated_database_env) as client:
+            settings, errors, calls = await _revision_http_runtime(h, client, tmp_path, monkeypatch, data)
+            route = f"/api/v1/tasks/{h.request.task_id}/submissions"
+            headers = {
+                'Content-Type': 'application/zip', 'Idempotency-Key': str(new_record_id()),
+                'X-Task-Assignment-Id': str(h.request.assignment_id),
+                'X-Predecessor-Submission-Id': str(h.created.submission_id),
+            }
+            async with h.factory() as session:
+                before_operations = await session.scalar(text('SELECT count(*) FROM submission_intake_operations'))
+            async def forbidden_upload(*_args, **_kwargs):
+                pytest.fail('unrouted replacement reached source upload')
+            with monkeypatch.context() as guard:
+                guard.setattr(ForegroundSourceUpload, 'receive', forbidden_upload)
+                refused = await client.post(route, headers=headers, content=_forbidden_bytes())
+            assert refused.status_code == 404, refused.text
+            assert refused.json()['error']['code'] == 'submission_unavailable'
+            assert await _snapshot(h) == before_route
+            assert writes == [] and calls == [] and not errors
+            async with h.factory() as session:
+                assert await session.scalar(text('SELECT count(*) FROM submission_intake_operations')) == before_operations
+            source_id = await _fixture_revision_context(h)
+            accepted = await client.post(route, headers=_revision_upload_headers(h), content=data)
+            assert accepted.status_code == 202, accepted.text
+            assert len(calls) == 1 and not errors, errors
+            assert writes == ['begin_source_upload', 'upload_source_part', 'complete_source_upload']
+        submission_id = await finalize_retained_intake(h.factory, SimpleNamespace(
+            operation_id=UUID(accepted.json()['operation_id']), store=h.store.wrapped,
+            namespace=h.namespace, settings=settings))
         async with h.factory() as session:
-            admission = await session.get(SubmissionBundleAdmission, str(admission_id))
+            admission = (await session.execute(text(
+                'SELECT checker_remediation_manifest_id,status FROM submission_bundle_admissions '
+                'WHERE consumed_by_submission_id=:id'), {'id': submission_id})).one()
             assert admission.checker_remediation_manifest_id == source_id
+            assert admission.status == 'consumed'
 
 
 async def test_unchanged_replacement_archive_or_manifest_denied(

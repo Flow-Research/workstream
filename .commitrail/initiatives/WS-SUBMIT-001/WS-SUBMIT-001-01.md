@@ -8678,3 +8678,11 @@ socket on cancellation/timeout; REMOTE-STAGE-03 reconciles or safely quarantines
 staged files left by process death before admitting work. The runner owner owns
 the batch repair and regression tests. No app configuration or restart occurred.
 These are concrete runtime findings; no native production-ready claim is made.
+
+Next test-only retirement replaces the remaining no-routed-cause preparation
+case with raw-ZIP HTTP. Allowed: that case in test_submission_predecessor_custody
+and this record. Preserve refusal before body/upload/PRE/reservation, unchanged
+ART facts, and successful fresh-key acceptance/finalization after the real
+routing owner creates revision context, with exact remediation lineage. No
+production or runner edits. Verify the one real PostgreSQL case, Ruff/diff,
+and focused QA review; existing authority checks remain unchanged.
