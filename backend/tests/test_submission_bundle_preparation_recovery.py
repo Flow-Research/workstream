@@ -2,36 +2,22 @@
 
 from app.adapters.artifacts import selected_pre_submit_source_contracts
 
-from tests.trusted_intake_fixtures import LocalIntakeAdapter
-from app.modules.artifacts.api.submission_archive import SubmissionArchiveLimits
 
-from contextlib import asynccontextmanager
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock
 from app.core.identifiers import new_record_id
 
 import pytest
 from httpx import ASGITransport, AsyncClient
 
 
-import app.modules.artifacts.submission_admission as submission_admission
 from app.api.deps.authorization import get_authorization_actor_identity
 from app.adapters.artifacts import get_submission_intake_command
 from app.modules.artifacts.api.submission_intake import SubmissionIntakeFailure
 from app.modules.artifacts.api.submission_preparation import public_pre_submission_results
 from app.main import create_app
 from app.modules.artifacts.api import (
-    SubmissionBundlePreparationRequest,
     SubmissionBundlePreparationCheckFailed,
-    SubmissionBundlePreparationRejected,
-)
-from app.modules.artifacts.submission_admission import (
-    PreparedSubmissionBundlePreparationCommand,
-    SubmissionBundlePreparationRuntime,
-)
-from app.modules.artifacts.api.submission_archive import (
-    SubmissionArchiveFailureCode,
-    SubmissionArchiveRejectedError,
 )
 from app.modules.checkers.api.default_checker import (
     WORKSTREAM_DEFAULT_BEHAVIOR_SHA256, WORKSTREAM_DEFAULT_CHECK_IDS,
@@ -41,7 +27,6 @@ from app.modules.checkers.api.selected_pre_submit import SelectedPreSubmitExecut
 from app.modules.authorization.api import ActorIdentityFacts, ActorKind
 def _actor():
     return ActorIdentityFacts(new_record_id(), new_record_id(), ActorKind.HUMAN)
-
 
 
 def _feedback_facts(*, eligible: bool = False) -> SelectedPreSubmitExecutionFacts:
@@ -67,7 +52,6 @@ def _feedback_facts(*, eligible: bool = False) -> SelectedPreSubmitExecutionFact
         external_members=execution.external_members if eligible else (),
         source_contracts=selected_pre_submit_source_contracts(),
     )
-
 
 
 async def _mounted_submission_response(error=None, *, command=None, packet_text=True):
@@ -157,204 +141,6 @@ async def test_mounted_submission_does_not_reclassify_unexpected_failure() -> No
             headers=SubmissionIntakeHeaders(metadata, new_record_id(), None),
             actor=_actor(), command=command,
         )
-
-
-@asynccontextmanager
-async def _transaction():
-    yield
-
-
-def _post_reservation_runtime_case():
-    actor = _actor()
-    request = SubmissionBundlePreparationRequest(
-        actor=actor,
-        request_id=new_record_id(),
-        correlation_id=new_record_id(),
-        task_id=new_record_id(),
-        assignment_id=new_record_id(),
-        predecessor_submission_id=None,
-        idempotency_key=new_record_id(),
-        summary="summary",
-        contributor_attestation="attestation",
-        media_type="application/zip",
-        byte_source=SimpleNamespace(),
-    )
-    prepared = SimpleNamespace(
-        generation_id=new_record_id(),
-        commitment=SimpleNamespace(sha256="sha256:" + "1" * 64, byte_count=100),
-        inspect=AsyncMock(return_value=object()),
-        close=AsyncMock(),
-    )
-    policy = SimpleNamespace(policy_sha256="sha256:" + "a" * 64)
-    selected = SimpleNamespace(
-        policy=policy,
-        default_input=object(),
-        change_gate=object(),
-    )
-    reservation = SimpleNamespace(attempt_id=new_record_id())
-    materialization = SimpleNamespace(
-        prepare_selected_authorization=AsyncMock(return_value=object()),
-        authorize_inspected=AsyncMock(),
-    )
-    coordinator = SimpleNamespace(
-        read_current=AsyncMock(return_value=None),
-        reserve=AsyncMock(return_value=reservation.attempt_id),
-    )
-    later_failure = SubmissionArchiveRejectedError(
-        SubmissionArchiveFailureCode.INTEGRITY_FAILURE
-    )
-    selected_execution = SimpleNamespace(
-        execute=AsyncMock(side_effect=later_failure),
-    )
-    durable_put = SimpleNamespace(
-        admit_in_transaction=AsyncMock(),
-        publish_after_commit=AsyncMock(),
-    )
-    runtime = SubmissionBundlePreparationRuntime(
-        preparation=SimpleNamespace(prepare=AsyncMock(return_value=prepared)),
-        intake=LocalIntakeAdapter(), archive_limits=SubmissionArchiveLimits(),
-        materialization=materialization,
-        durable_put=durable_put,
-        selected_coordinator=coordinator,
-        selected_execution=selected_execution,
-        storage_scheme="s3",
-        artifact_deadline_ms=120_000,
-    )
-    return SimpleNamespace(
-        request=request,
-        prepared=prepared,
-        policy=policy,
-        selected=selected,
-        reservation=reservation,
-        materialization=materialization,
-        coordinator=coordinator,
-        later_failure=later_failure,
-        selected_execution=selected_execution,
-        durable_put=durable_put,
-        runtime=runtime,
-    )
-
-
-def _post_reservation_command(case, monkeypatch):
-    @asynccontextmanager
-    async def runtime_factory():
-        yield case.runtime
-
-    authority = SimpleNamespace(
-        preflight=AsyncMock(),
-        transaction=_transaction,
-        close=Mock(),
-    )
-    command = PreparedSubmissionBundlePreparationCommand(
-        session=SimpleNamespace(begin=_transaction),
-        authority=authority,
-        task_contexts=SimpleNamespace(),
-        project_contexts=SimpleNamespace(),
-        runtime_factory=runtime_factory,
-    )
-    task = SimpleNamespace(
-        predecessor=None,
-        checker_remediation_manifest_id=None,
-        revision_context=None,
-    )
-    project = SimpleNamespace(
-        effective_policy_id=new_record_id(),
-        pre_submit_policy_id=new_record_id(),
-        external_checker_policies=SimpleNamespace(value="{}"),
-    )
-    command._lock_authorized_context = AsyncMock(return_value=(task, project))
-    command._load_predecessor = AsyncMock(return_value=None)
-    command._load_predecessor_rules = AsyncMock(return_value=None)
-    monkeypatch.setattr(
-        submission_admission,
-        "LockedExternalCheckerPolicies",
-        SimpleNamespace(
-            model_validate_json=Mock(
-                return_value=SimpleNamespace(pre_submit=case.policy)
-            )
-        ),
-    )
-    monkeypatch.setattr(
-        submission_admission,
-        "build_submission_manifest",
-        Mock(return_value=object()),
-    )
-    monkeypatch.setattr(
-        submission_admission,
-        "bind_selected_pre_submit_admission",
-        Mock(return_value=case.selected),
-    )
-    monkeypatch.setattr(
-        submission_admission,
-        "build_selected_pre_submit_reservation",
-        Mock(return_value=case.reservation),
-    )
-    monkeypatch.setattr(
-        submission_admission,
-        "selected_pre_submit_attempt_request_digest",
-        Mock(return_value="sha256:" + "2" * 64),
-    )
-    monkeypatch.setattr(
-        submission_admission,
-        "selected_pre_submit_execution_budget_ms",
-        Mock(return_value=60_000),
-    )
-    return command, authority
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("failure_stage", ["empty_sealed_archive", "inspection"])
-async def test_pre_reservation_archive_failure_is_rejected_without_reserving(
-    monkeypatch, failure_stage,
-) -> None:
-    case = _post_reservation_runtime_case()
-    if failure_stage == "empty_sealed_archive":
-        from hashlib import sha256
-
-        case.prepared.commitment.byte_count = 0
-        case.prepared.commitment.sha256 = "sha256:" + sha256(b"").hexdigest()
-    else:
-        case.prepared.inspect.side_effect = SubmissionArchiveRejectedError(
-            SubmissionArchiveFailureCode.MALFORMED
-        )
-    command, authority = _post_reservation_command(case, monkeypatch)
-
-    with pytest.raises(SubmissionBundlePreparationRejected) as failure:
-        await command.prepare(case.request)
-
-    assert str(failure.value) == SubmissionArchiveFailureCode.MALFORMED.value
-    if failure_stage == "empty_sealed_archive":
-        case.prepared.inspect.assert_not_awaited()
-    else:
-        case.prepared.inspect.assert_awaited_once()
-    case.materialization.authorize_inspected.assert_not_awaited()
-    case.coordinator.reserve.assert_not_awaited()
-    case.selected_execution.execute.assert_not_awaited()
-    case.durable_put.admit_in_transaction.assert_not_awaited()
-    case.durable_put.publish_after_commit.assert_not_awaited()
-    case.prepared.close.assert_awaited_once()
-    authority.close.assert_called_once()
-
-
-@pytest.mark.asyncio
-async def test_post_reservation_archive_failure_remains_recoverable(
-    monkeypatch,
-) -> None:
-    """A later projection failure must retain its reserved PRE recovery owner."""
-    case = _post_reservation_runtime_case()
-    command, authority = _post_reservation_command(case, monkeypatch)
-
-    with pytest.raises(SubmissionArchiveRejectedError) as failure:
-        await command.prepare(case.request)
-
-    assert failure.value is case.later_failure
-    case.materialization.authorize_inspected.assert_awaited_once()
-    case.coordinator.reserve.assert_awaited_once_with(case.reservation)
-    case.selected_execution.execute.assert_awaited_once()
-    case.durable_put.admit_in_transaction.assert_not_awaited()
-    case.durable_put.publish_after_commit.assert_not_awaited()
-    case.prepared.close.assert_awaited_once()
-    authority.close.assert_called_once()
 
 
 @pytest.mark.asyncio

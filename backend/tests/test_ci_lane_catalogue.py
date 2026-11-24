@@ -111,7 +111,6 @@ def test_checker_delivery_and_routing_preparation_partition_every_node_once() ->
         "tests/checkers/external/test_selected_intake_lifecycle.py",
         "tests/checkers/external/test_selected_pre_submit_coordination.py",
         "tests/checkers/external/test_selected_pre_submit_service.py",
-        "tests/checkers/external/test_selected_preparation_command.py",
         "tests/checkers/execution/test_execution.py",
         "tests/checkers/execution/test_completion_evidence.py",
         "tests/checkers/execution/test_coordination.py",
@@ -321,12 +320,12 @@ def test_semantic_family_membership_has_an_independent_fingerprint() -> None:
     """A catalogue-internal move across semantic families must fail this contract."""
     expected = {
         "shared": (
-            278,
-            "0a1ac7e344208a8178f30f48b54774afaf57b54bf76e89a34debfc5867d18038",
+            277,
+            "450b3fdb7336f81066405c487b2fa05fb2ee394dae66df917b5dbc0bb7009229",
         ),
         "project": (
-            259,
-            "a39f6728caab1ab6d593ca5740cbd505e60996bbdb924195fba553aa89933178",
+            258,
+            "90240bd7c6dcb03c20bcf271ec2afbc153901f49ede40fc074ce06d6a8d3c15e",
         ),
         "task": (
             96,

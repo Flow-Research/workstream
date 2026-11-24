@@ -2,23 +2,17 @@
 
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 from app.core.identifiers import new_record_id
 
 import pytest
-from httpx import ASGITransport, AsyncClient
-from starlette.requests import Request
 
 import app.adapters.artifacts as artifact_adapters
 from app.core.config import Settings
-from app.db.session import get_db_session
 from app.modules.artifacts.api import (
     SubmissionBundlePreparationRejected,
     SubmissionBundlePreparationRequest,
-    SubmissionBundlePreparationResult,
-    SubmissionBundlePreparationUnavailable,
 )
 from app.modules.artifacts.schemas import (
     ArtifactAuthorityDeniedError,
@@ -30,17 +24,8 @@ from app.modules.artifacts.submission_authorization import (
     DenySubmissionBundlePreparedAuthorization,
     DenySubmissionBundlePreparationAuthorization,
 )
-from app.modules.artifacts.submission_admission import (
-    SubmissionBundleDurablePutResult,
-)
-from app.modules.artifacts.submission_admission import (
-    PreparedSubmissionBundlePreparationCommand,
-)
 from app.modules.authorization.api import ActorIdentityFacts, ActorKind
 from app.modules.authorization.prepared import PreparedAuthorizationHandle
-from app.modules.artifacts.api.submission_preparation import public_pre_submission_results
-from tests.artifact_store_helpers import artifact_byte_stream
-from tests.test_submission_bundle_preparation_recovery import _feedback_facts
 from tests.artifact_store_helpers import artifact_admission_limit_settings
 from app.main import create_app
 from app.api.routes.artifact_submissions import router as submission_router
@@ -73,10 +58,6 @@ def _preparation_request(
     )
 
 
-def _sha(character: str) -> str:
-    return "sha256:" + character * 64
-
-
 @pytest.mark.asyncio
 async def test_artifact_adapter_preserves_public_actor_facts() -> None:
     actor = _actor()
@@ -86,9 +67,6 @@ async def test_artifact_adapter_preserves_public_actor_facts() -> None:
 
 @pytest.mark.asyncio
 async def test_explicit_deny_preparation_authority_denies() -> None:
-    from app.modules.artifacts.submission_authorization import (
-        DenySubmissionBundlePreparationAuthorization,
-    )
 
     authority = DenySubmissionBundlePreparationAuthorization()
     request = _preparation_request(byte_source=object())
@@ -163,8 +141,6 @@ def test_artifact_adapter_maps_preparation_limits_from_settings() -> None:
     )
 
 
-
-
 def test_artifact_adapter_requires_configured_scratch_root() -> None:
     settings = Settings()
     settings.artifact_scratch_root = None
@@ -195,57 +171,6 @@ def test_artifact_adapter_builds_configured_local_bootstrap(tmp_path) -> None:
         bootstrap.close()
 
 
-def test_artifact_adapter_composes_submission_command_from_owner_ports(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    request_id = new_record_id()
-    correlation_id = new_record_id()
-    request = Request(
-        {
-            "type": "http",
-            "method": "POST",
-            "path": "/hidden",
-            "headers": [],
-            "state": {
-                "request_id": str(request_id),
-                "correlation_id": str(correlation_id),
-            },
-        }
-    )
-    request.scope["app"] = SimpleNamespace(
-        state=SimpleNamespace(
-            settings=Settings(),
-        )
-    )
-    session = object()
-    internal_authority = object()
-    authority = SimpleNamespace(close=Mock())
-    task_contexts = object()
-    project_contexts = object()
-    monkeypatch.setattr(
-        artifact_adapters, "task_submission_context_port", Mock(return_value=task_contexts)
-    )
-    monkeypatch.setattr(
-        artifact_adapters,
-        "project_locked_policy_context_port",
-        Mock(return_value=project_contexts),
-    )
-
-    command = artifact_adapters.get_submission_bundle_preparation_command(
-        request,
-        session,  # type: ignore[arg-type]
-        internal_authority,  # type: ignore[arg-type]
-        authority,
-    )
-
-    assert command._session is session
-    assert command._authority is authority
-    assert command._task_contexts is task_contexts
-    assert command._project_contexts is project_contexts
-    artifact_adapters.task_submission_context_port.assert_called_once_with(session)
-    artifact_adapters.project_locked_policy_context_port.assert_called_once_with(session)
-
-
 def test_submission_is_public_binary_contract() -> None:
     from fastapi import FastAPI
 
@@ -272,50 +197,6 @@ def test_submission_is_public_binary_contract() -> None:
     assert operation["responses"]["202"] and operation["responses"]["422"]
 
 
-@pytest.mark.asyncio
-async def test_app_profile_zip_preparation_is_retryable_without_reading_upload(tmp_path) -> None:
-    root = tmp_path / "objects"
-    root.mkdir(mode=0o700)
-    app = create_app(Settings(
-        _env_file=None,
-        **artifact_admission_limit_settings(),
-        environment="test",
-        hosted_profile="app",
-        artifact_store_backend="local",
-        artifact_local_root=root,
-        artifact_scratch_root=tmp_path / "scratch",
-        artifact_scratch_minimum_free_bytes=0,
-    ))
-    session = SimpleNamespace(rollback=AsyncMock(), begin=Mock())
-    authority = SimpleNamespace(preflight=AsyncMock(), close=Mock())
-    app.dependency_overrides.update({
-        get_db_session: lambda: session,
-        artifact_adapters.get_submission_bundle_preparation_actor: _actor,
-        artifact_adapters.get_artifact_internal_authority: object,
-        artifact_adapters.get_submission_bundle_preparation_authorization: lambda: authority,
-    })
-
-    async def upload():
-        pytest.fail("offline preparation consumed the uploaded body")
-        yield b"PK"
-
-    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
-        response = await client.post(
-            f"/api/v1/tasks/{new_record_id()}/submission-bundle-preparations",
-            headers={
-                "Content-Type": "application/zip",
-                "X-Task-Assignment-Id": str(new_record_id()),
-                "Idempotency-Key": str(new_record_id()),
-            },
-            content=upload(),
-        )
-    assert response.status_code == 503
-    assert response.json()["error"]["code"] == "service_unavailable"
-    assert response.json()["error"]["retryable"] is True
-    authority.preflight.assert_awaited_once()
-    session.begin.assert_not_called()
-
-
 def test_submission_packet_headers_reject_non_ascii() -> None:
     validate_submission_packet_headers("plain summary", "plain attestation")
     with pytest.raises(
@@ -323,197 +204,6 @@ def test_submission_packet_headers_reject_non_ascii() -> None:
         match="submission_bundle_packet_header_encoding_invalid",
     ):
         validate_submission_packet_headers("caf\N{LATIN SMALL LETTER E WITH ACUTE}", "ok")
-
-
-@asynccontextmanager
-async def _transaction():
-    yield
-
-
-@pytest.mark.asyncio
-async def test_hidden_preparation_denies_before_reading_uploaded_bytes() -> None:
-    reads = 0
-
-    async def bytes_source():
-        nonlocal reads
-        reads += 1
-        yield b"PK\x03\x04must-not-be-read"
-
-    def runtime_factory():
-        raise AssertionError("runtime must not open before contributor preflight")
-
-    command = PreparedSubmissionBundlePreparationCommand(
-        session=SimpleNamespace(),
-        authority=DenySubmissionBundlePreparationAuthorization(),
-        task_contexts=SimpleNamespace(),
-        project_contexts=SimpleNamespace(),
-        runtime_factory=runtime_factory,
-    )
-    with pytest.raises(SubmissionBundlePreparationUnavailable):
-        await command.prepare(
-            _preparation_request(
-                byte_source=bytes_source(),
-                summary="caf\N{LATIN SMALL LETTER E WITH ACUTE}",
-            )
-        )
-    assert reads == 0
-
-
-@pytest.mark.asyncio
-async def test_hidden_preparation_closes_authority_after_invalid_media_type() -> None:
-    authority = SimpleNamespace(
-        preflight=AsyncMock(),
-        close=Mock(),
-    )
-    command = PreparedSubmissionBundlePreparationCommand(
-        session=SimpleNamespace(),
-        authority=authority,
-        task_contexts=SimpleNamespace(),
-        project_contexts=SimpleNamespace(),
-        runtime_factory=Mock(side_effect=AssertionError("runtime must stay closed")),
-    )
-    with pytest.raises(
-        SubmissionBundlePreparationRejected,
-        match="submission_bundle_media_type_invalid",
-    ):
-        await command.prepare(
-            _preparation_request(
-                byte_source=artifact_byte_stream(b"{}"), media_type="application/json"
-            )
-        )
-    authority.close.assert_called_once_with()
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("denied_phase", ("actor", "grant"))
-async def test_authority_denial_preserves_task_actor_project_grant_order(denied_phase) -> None:
-    events = []
-    denial = ArtifactAuthorityDeniedError("submission bundle preparation is unavailable")
-
-    def phase(name):
-        async def invoke(*_args, **_kwargs):
-            events.append(name)
-            if name == denied_phase:
-                raise denial
-            return object()
-
-        return invoke
-
-    authority = SimpleNamespace(
-        lock_actor=AsyncMock(side_effect=phase("actor")),
-        revalidate=AsyncMock(side_effect=phase("grant")),
-    )
-    references = SimpleNamespace(
-        project_id=new_record_id(), guide_version="v1",
-        source_snapshot_id=new_record_id(), source_snapshot_hash=_sha("1"),
-        effective_policy_id=new_record_id(), effective_policy_hash=_sha("2"),
-        pre_submit_policy_id=new_record_id(), pre_submit_policy_bundle_hash=_sha("3"),
-    )
-    task = SimpleNamespace(locked_project_context=references)
-    async def lock_task(*args):
-        events.append("task")
-        return task
-    project_contexts = SimpleNamespace(lock_locked_policy_context=AsyncMock(side_effect=phase("project")))
-    command = PreparedSubmissionBundlePreparationCommand(
-        session=SimpleNamespace(), authority=authority,
-        task_contexts=SimpleNamespace(lock_submission_context=AsyncMock(side_effect=lock_task)),
-        project_contexts=project_contexts, runtime_factory=Mock(),
-    )
-    with pytest.raises(ArtifactAuthorityDeniedError) as caught:
-        await command._lock_authorized_context(_preparation_request(byte_source=object()))
-    assert caught.value is denial
-    assert events == (
-        ["task", "actor"] if denied_phase == "actor" else ["task", "actor", "project", "grant"]
-    )
-    command._runtime_factory.assert_not_called()
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "admission_status,expected_status",
-    (
-        ("ready", "ready"),
-        ("stale", "stale"),
-        ("consumed", "conflict"),
-    ),
-)
-async def test_selected_replay_projects_current_admission_state(
-    admission_status,
-    expected_status,
-) -> None:
-    attempt_id = new_record_id()
-    admission_id = new_record_id()
-    row_result = SimpleNamespace(
-        one_or_none=lambda: (
-            SimpleNamespace(id=str(new_record_id())),
-            SimpleNamespace(id=str(attempt_id), status="object_confirmed"),
-            SimpleNamespace(id=str(admission_id), status=admission_status),
-        )
-    )
-    session = SimpleNamespace(begin=_transaction, execute=AsyncMock(return_value=row_result))
-    command = PreparedSubmissionBundlePreparationCommand(
-        session=session,
-        authority=SimpleNamespace(),
-        task_contexts=SimpleNamespace(),
-        project_contexts=SimpleNamespace(),
-        runtime_factory=Mock(),
-    )
-
-    execution = _feedback_facts(eligible=True)
-    result = await command._selected_replay_result(SimpleNamespace(
-        run_id=new_record_id(), status="completed",
-        terminal=SimpleNamespace(outcome="completed", execution=execution),
-    ))
-
-    # Exact replay returns the retained intake feedback, not a fresh check.
-    assert result == SubmissionBundlePreparationResult(
-        put_attempt_id=attempt_id,
-        admission_id=admission_id if admission_status == "ready" else None,
-        submission_bundle_preparation_status=expected_status,
-        replayed=True,
-        pre_submission_results=tuple(public_pre_submission_results(execution)),
-    )
-
-
-@pytest.mark.parametrize(
-    "durable_status",
-    (
-        "prepared",
-        "put_in_flight",
-        "object_confirmed",
-        "stored_pending_verification",
-        "observed_confirmed",
-        "acknowledgement_unknown",
-        "provider_unavailable",
-        "conflict",
-        "integrity_mismatch",
-        "missing",
-        "absent_replay_required",
-        "stale",
-        "ready",
-    ),
-)
-def test_durable_put_result_projects_every_closed_preparation_status(
-    durable_status: str,
-) -> None:
-    durable = SubmissionBundleDurablePutResult(
-        put_attempt_id=new_record_id(),
-        selected_pre_submit_run_id=new_record_id(),
-        operation_identity=_sha("9"),
-        admission_id=None,
-        status=durable_status,
-        replayed=True,
-    )
-    execution = _feedback_facts(eligible=True)
-    assert PreparedSubmissionBundlePreparationCommand._result(durable, execution) == (
-        SubmissionBundlePreparationResult(
-            put_attempt_id=durable.put_attempt_id,
-            admission_id=None,
-            submission_bundle_preparation_status=durable_status,
-            replayed=True,
-            pre_submission_results=tuple(public_pre_submission_results(execution)),
-        )
-    )
 
 
 @pytest.mark.asyncio

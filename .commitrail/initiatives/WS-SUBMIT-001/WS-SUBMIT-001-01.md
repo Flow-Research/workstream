@@ -8789,3 +8789,37 @@ row/guard was changed by fault injection. Structure/Ruff/diff passed. The old
 private predecessor-rule harness is now replaced by this current public proof.
 Hosted follow-up97750e9c8 integrated092986b8a; ARCH/SEC passed its exact delta.
 Runner-only repaired service qualification is coordinated; API remains unchanged.
+
+QA closed predecessor-rule transfer a0856e8fb PASS WITH LOW RISKS. Current remote
+PRE cancellation source/execution cases integrated asf9fb0a090 (runner c12fd6cce,
+reported113 focused passing cases). Next remove two preparation-only modules:
+test_pre_submit_evidence_relock.py and external/test_selected_preparation_command.py.
+Allowed files: those modules, test_lane_catalogue.py, test_ci_lane_catalogue.py,
+and this record. No production or schema changes. Medium test-retirement risk.
+The relock behavior is now the reviewed public upload-fence race c8a6cc9da.
+Old selected-before-durable/prepared-size ordering is obsolete: current public
+raw-ZIP/replay and source custody tests require sealed exact source before PRE,
+then T4/T5. Current no-route/nonremediation public tests refuse bytes before
+execution; foreground upload timeout/failure retains charge; expired PRE lease
+refuses source/runtime opening. Source/execution cancellation closes readers,
+remote transport and staged workspace; upload cancellation retains durable
+cleanup custody. Current received-failure and unknown-acceptance tests preserve
+recoverable outcomes. All mounted HTTP/shared ART tests remain. Verify exact
+lane inventory/fingerprints, current runtime cancellation/expired-lease controls,
+Ruff/diff/structure and QA deletion mapping. Remaining old SQL fixtures and
+command references still prevent production writer retirement.
+Extend the same test-only batch to preparation-command-only cases/fixtures in
+ test_submission_bundle_admission.py and test_submission_bundle_preparation_recovery.py.
+Retain all mounted/public HTTP tests, public feedback fixture, shared scratch,
+limits/bootstrap, and still-existing authorization-class tests. Remove old hidden
+factory/endpoint/private lock-order/replay/status projection tests and obsolete
+pre/post preparation archive wrappers. Their current public authority, replay,
+source failure and cancellation proofs are mapped above and in the QA retirement
+review; no old public endpoint or ready-admission contract remains required.
+Run both retained modules in addition to focused cancellation/inventory checks.
+
+Retained module checks passed26/26 in19.19s. Current remote PRE cancellation
+(source/execution), expired-lease and exact inventory/fingerprint/partition
+checks passed6/6 in7.56s. Unused private fixture helpers/imports were removed
+afterward; executable retained test bodies are unchanged. Ruff/diff passed.
+No production factory or retained-data reader has been removed in this batch.
