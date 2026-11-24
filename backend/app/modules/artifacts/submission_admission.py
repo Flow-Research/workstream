@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from app.modules.artifacts.selected_pre_submit_source_contracts import ArtifactPreSubmitSourceContracts
-
 from collections.abc import Callable
 from contextlib import AbstractAsyncContextManager, AsyncExitStack
 import asyncio
@@ -80,12 +78,14 @@ from app.modules.artifacts.selected_pre_submit_admission import (
 from app.modules.artifacts.selected_pre_submit_execution import (
     SelectedPreSubmitExecutionService,
 )
+from app.modules.checkers.api.historical_selected_pre_submit import (
+    HistoricalSelectedPreSubmitReservation, HistoricalSelectedPreSubmitTerminal,
+)
 from app.modules.checkers.api.selected_pre_submit import (
     SelectedPreSubmitCompletion,
     SelectedPreSubmitCoordinationPort,
     SelectedPreSubmitCurrentFacts,
     SelectedPreSubmitExecutionFacts,
-    SelectedPreSubmitReservationFacts,
     SelectedPreSubmitRequestConflict,
     SelectedPreSubmitUnavailable,
 )
@@ -338,10 +338,7 @@ class SubmissionBundleAdmissionPublisher:
         if task_contexts is None:
             raise RuntimeError("submission verification TASK composition is unavailable")
         try:
-            selected = SelectedPreSubmitReservationFacts.from_canonical_body(
-                row.selected_request_json,
-                source_contracts=ArtifactPreSubmitSourceContracts(),
-            )
+            selected = HistoricalSelectedPreSubmitReservation.from_canonical_body(row.selected_request_json)
         except (TypeError, ValueError) as exc:
             raise SubmissionBundleAdmissionPublicationError(
                 "selected PRE request snapshot is invalid"
@@ -397,10 +394,7 @@ class SubmissionBundleAdmissionPublisher:
         if intent.pre_submit_evidence_set_id is not None or intent.selected_pre_submit_run_id is None:
             raise SubmissionBundleAdmissionPublicationError("external PRE durable intent is unavailable")
         try:
-            selected = SelectedPreSubmitReservationFacts.from_canonical_body(
-                intent.selected_request_json,
-                source_contracts=ArtifactPreSubmitSourceContracts(),
-            )
+            selected = HistoricalSelectedPreSubmitReservation.from_canonical_body(intent.selected_request_json)
         except (TypeError, ValueError) as exc:
             raise SubmissionBundleAdmissionPublicationError(
                 "selected PRE request snapshot is invalid"
@@ -425,6 +419,12 @@ class SubmissionBundleAdmissionPublisher:
         if existing is not None:
             return existing
         terminal = intent.selected_terminal_json
+        try:
+            retained_terminal = HistoricalSelectedPreSubmitTerminal.from_canonical_body(terminal)
+        except (TypeError, ValueError) as exc:
+            raise SubmissionBundleAdmissionPublicationError(
+                "selected PRE terminal snapshot is invalid"
+            ) from exc
         if (
             selected.admission_lineage is None
             or selected.attempt_id != UUID(intent.selected_pre_submit_run_id)
@@ -435,6 +435,7 @@ class SubmissionBundleAdmissionPublisher:
             or terminal.get("outcome") != "completed"
             or type(terminal.get("execution")) is not dict
             or terminal["execution"].get("eligible") is not True
+            or retained_terminal.lease.reservation != selected
         ):
             raise SubmissionBundleAdmissionPublicationError(
                 "selected PRE terminal snapshot is invalid"

@@ -1348,6 +1348,8 @@ class ArtifactStorageOrchestrator:
         *,
         submission_task_contexts: TaskSubmissionContextPort | None = None,
     ) -> str:
+        from app.modules.artifacts.submission_admission import SubmissionBundleAdmissionPublicationError
+
         claim_id, claim_generation = claimed.id, claimed.execution_generation
         try:
             return await self._complete_verification_transaction(
@@ -1355,12 +1357,12 @@ class ArtifactStorageOrchestrator:
                 observed_sha256, observed_size,
                 submission_task_contexts=submission_task_contexts,
             )
-        except IntegrityError as exc:
-            if integrity_constraint_name(exc) != "ck_revision_admission_deadline_expired":
+        except (IntegrityError, SubmissionBundleAdmissionPublicationError) as exc:
+            if isinstance(exc, IntegrityError) and integrity_constraint_name(exc) != "ck_revision_admission_deadline_expired":
                 raise
             # The failed root rolled back every verifier and admission effect.
             # Recheck the same job fence under fresh authority and retain a
-            # terminal conflict instead of retrying an expired admission.
+            # terminal conflict for inadmissible retained custody.
             return await self._complete_verification_transaction(
                 claim_id, claim_generation, executor_id, expected_facts, outcome,
                 observed_sha256, observed_size,
@@ -1461,6 +1463,10 @@ class ArtifactStorageOrchestrator:
                     states
                 )
                 replica.last_reconciled_at = now
+            if publication_conflict:
+                outcome = "conflict"
+                observed_sha256 = None
+                observed_size = None
             verification_receipt = await self._repo.add_verification_receipt(
                 ArtifactVerificationReceipt(
                     id=str(new_record_id()),
@@ -1472,24 +1478,14 @@ class ArtifactStorageOrchestrator:
                 )
             )
             if outcome == "verified":
-                try:
-                    if publication_conflict:
-                        raise SubmissionBundleAdmissionPublicationError(
-                            "submission admission retained identity is invalid"
-                        )
-                    await publisher.publish_verified(
-                        verification_job_id=job.id,
-                        verification_receipt_id=verification_receipt.id,
-                        retained_parents=retained_parents,
-                    )
-                except SubmissionBundleAdmissionPublicationError:
-                    # Valid bytes can still have permanently inadmissible
-                    # submission lineage. Keep one fenced terminal receipt and
-                    # prevent an endless verifier retry loop.
-                    outcome = "conflict"
-                    verification_receipt.outcome = "conflict"
-                    verification_receipt.observed_sha256 = None
-                    verification_receipt.observed_byte_count = None
+                # Publication failure rolls back this entire transaction. The
+                # caller rechecks authority/fence and inserts one conflict fact;
+                # an inserted verification receipt must never be rewritten.
+                await publisher.publish_verified(
+                    verification_job_id=job.id,
+                    verification_receipt_id=verification_receipt.id,
+                    retained_parents=retained_parents,
+                )
             job.status = outcome
             job.next_run_at = None
             job.terminal_result_code = outcome

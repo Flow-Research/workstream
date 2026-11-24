@@ -518,3 +518,40 @@ async def test_packet_custody_upgrade_preserves_retained_submission(
                     "SELECT count(*) FROM pg_catalog.pg_trigger WHERE tgname='submission_packet_custody'"
                 )) == 1
         await asyncio.to_thread(command.upgrade, _config(), "head")
+
+
+@pytest.mark.postgres_schema_contract
+async def test_retained_publication_failure_inserts_one_immutable_conflict(
+    isolated_database_env, tmp_path, migration_lock, monkeypatch,
+):
+    from app.modules.artifacts.submission_admission import SubmissionBundleAdmissionPublicationError
+    calls = []
+
+    async def refuse_publication(self, **kwargs):
+        calls.append(kwargs['verification_receipt_id'])
+        # The tentative verified receipt really exists before publication fails.
+        receipt = await self._session.get(ArtifactVerificationReceipt, kwargs['verification_receipt_id'])
+        assert receipt.outcome == 'verified'
+        raise SubmissionBundleAdmissionPublicationError('controlled publication rejection')
+
+    async with retained_pending_verification(isolated_database_env, tmp_path, migration_lock) as h:
+        monkeypatch.setattr(SubmissionBundleAdmissionPublisher, 'publish_verified', refuse_publication)
+        async with h.factory() as session:
+            job_id = await session.scalar(select(ArtifactVerificationJob.id).where(
+                ArtifactVerificationJob.originating_put_attempt_id == str(h.put_attempt_id)))
+            await session.rollback()
+            authority = PreparedArtifactInternalAuthority(
+                session, service_identity=ServiceIdentity.ARTIFACT_VERIFIER,
+                request_id=new_record_id(), correlation_id=new_record_id(),
+            )
+            result = await ArtifactStorageOrchestrator(
+                session, h.store, h.namespace, h.settings, authority,
+            ).verify_object(UUID(job_id), submission_task_contexts=task_submission_context_port(session))
+            assert result == 'conflict'
+        async with h.factory() as session:
+            receipt = (await session.scalars(select(ArtifactVerificationReceipt))).one()
+            assert receipt.outcome == 'conflict'
+            assert receipt.observed_sha256 is receipt.observed_byte_count is None
+            assert len(calls) == 1 and receipt.id != calls[0]
+            assert (await session.get(ArtifactVerificationJob, job_id)).status == 'conflict'
+            assert await session.scalar(select(func.count()).select_from(SubmissionBundleAdmission)) == 0

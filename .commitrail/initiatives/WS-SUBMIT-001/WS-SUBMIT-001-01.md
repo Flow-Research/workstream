@@ -8609,3 +8609,16 @@ upgrade, and checks object hash before yielding current verifier tests. Removed
 the old _prepared_packet producer from test_submission_lineage.py; preserve its
 four lifecycle/rollback/locking cases and mark their actual schema operations.
 This does not yet retire other callers of the old preparation command.
+
+The four-case verifier run completed with3fail/1pass (492.26s, cleanup complete).
+The unchanged missing-TASK rollback test passed. Actual retained verification
+exposed two production defects: publisher decodes archived v1 PRE using the new
+source-bound request type, and publication conflict mutates an already-inserted
+immutable verification receipt. Extend this bounded scope to the retained
+publisher in submission_admission.py and verification completion in service.py.
+Use the existing read-only historical PRE decoder, never a new live v1 path.
+On publication failure, roll back the verified transaction and retry the exact
+job fence under fresh authority with one immutable conflict receipt. Preserve
+trigger immutability, bytes and retained parent locks; add a focused publication
+failure regression. ARCH/SEC and QA review remain required; the red run is not
+successful historical-continuation evidence.
