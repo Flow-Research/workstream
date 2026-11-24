@@ -68,7 +68,6 @@ def production_outbox_delivery(session_factory, *, finalization_worker: bool | N
         evaluation_request_handler,
     )
     from app.adapters.checkers import post_submit_delivery_reconciliation_handler
-    from app.core.config import get_settings
     from app.modules.checkers.api.delivery_reconciliation import (
         POST_SUBMIT_DELIVERY_RECONCILIATION_EVENT as RECONCILIATION_EVENT,
     )
@@ -189,11 +188,6 @@ def production_outbox_delivery(session_factory, *, finalization_worker: bool | N
         session_factory, authorization_factory=outbox_dispatch_authorization,
         registry=registry, options=DeliveryOptions(),
         event_options={key: value for key, value in event_options.items() if key in registry.keys},
-        excluded_events=(
-            frozenset({(REQUEST_EVENT, 1), (RECONCILIATION_EVENT, 1)}).intersection(registry.keys)
-            if get_settings().hosted_profile == "app"
-            else frozenset()
-        ),
     )
 
 

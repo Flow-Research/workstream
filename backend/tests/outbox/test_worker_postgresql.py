@@ -401,8 +401,7 @@ def test_delivery_task_has_independent_hard_limit(worker):
 
 
 @pytest.mark.parametrize("expired", [False, True])
-@pytest.mark.parametrize("profile", ["single-host", "app"])
-async def test_finalization_worker_cannot_deliver_or_recover_post_event(delivery_harness, monkeypatch, expired, profile):
+async def test_finalization_worker_cannot_deliver_or_recover_post_event(delivery_harness, monkeypatch, expired):
     from app.adapters.outbox import production_outbox_delivery
     h = delivery_harness
     kind = "PostSubmissionEvaluationRequested"
@@ -412,7 +411,7 @@ async def test_finalization_worker_cannot_deliver_or_recover_post_event(delivery
         assert await owner.claim(event.event_id, h.project, "post-worker") is not None
         async with h.factory() as session:
             await session.execute(text("select pg_sleep(3.05)"))
-    monkeypatch.setenv("WORKSTREAM_HOSTED_PROFILE", profile)
+    monkeypatch.setenv("WORKSTREAM_HOSTED_PROFILE", "app")
     get_settings.cache_clear()
     try:
         finalization = production_outbox_delivery(h.factory, finalization_worker=True)

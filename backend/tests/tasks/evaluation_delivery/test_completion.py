@@ -319,7 +319,7 @@ async def test_production_registry_delivers_request_then_completion_exactly_once
             "worker_post_submission_materialization",
             lambda *, sessions: h.service,
         )
-        delivery = production_outbox_delivery(h.factory)
+        delivery = production_outbox_delivery(h.factory, finalization_worker=False)
         assert delivery._registry.keys[-3:] == (
             (REQUEST_EVENT, 1),
             (COMPLETION_EVENT, 1),

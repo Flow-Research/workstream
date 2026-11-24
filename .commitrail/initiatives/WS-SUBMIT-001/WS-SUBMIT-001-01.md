@@ -9711,3 +9711,25 @@ Acceptance: POST mock execution receives an explicit typed source capability wit
 Exact retained proof map: `tests/artifacts/test_submission_pre_source.py::test_source_pre_execution_uses_committed_authorized_local_read` owns real source claim, short committed AUTH roots, finalization and failure retention. `tests/checkers/external/test_runtime.py::test_single_pre_expired_lease_does_not_open_source_or_runtime` rejects source/runtime access after lease expiry, and `test_single_pre_cancellation_closes_source_and_transport` owns interruption drainage. `tests/checkers/external/test_selected_pre_submit_coordination.py::test_selected_pre_expired_lease_read_keeps_task_first_custody` owns expired-lease TASK lock order; the adjacent authority-digest test binds the distinct deadline outcome. `tests/artifacts/test_submission_intake_custody.py::test_expiry_can_only_abandon_and_cannot_resume` owns the current required operation-level fence, charge retention, and fresh-key recovery; `test_submission_intake_admission.py::test_t4_and_expiry_serialize_both_winner_orders` owns accepted handoff versus abandonment. Spec section 16 requires the operation to terminalize/fence and forbids PRE worker continuation; it does not require an orphaned selected-run row itself to gain a synthetic deadline terminal. Those are existing current-source tests, not newly executed PostgreSQL/native proof in this commit. The removed test module's synthetic `recover_expired` method did not exist on the current service, so retaining it would create false API coverage. A selected run left `running` after a crashed foreground is a retained observation, not an adopted recovery path or a claim of selected-run terminalization.
 
 Focused final pure execution: 111 passed and two unrelated real-PostgreSQL POST cases deselected in 14.01 seconds, exit 0. Initial run had 52 passed, two PostgreSQL setup errors because no isolated database URL was provided, and the independent project fingerprint failed before its count/hash update; it was not credited as a pass. The two deselected cases use `material_fixture` and `live_executor`, not the edited fake source-grant constructors. The current catalogue has 257 project modules with independently recomputed family and lane ownership hashes. This is affected pure test custody, not a full backend CI pass.
+
+### Restore remote POST delivery in the app-only topology
+
+CI's production POST/reconciliation calls return no claim because the app-only
+profile exclusion still removes those event types. Settings now permit only
+hosted_profile=app; native execution moved to the authenticated runner, so this
+old local-runtime exclusion blocks the required current path. Allowed scope:
+backend/app/adapters/outbox/__init__.py, existing production delivery tests if
+needed, and this record. Remove only profile-based exclusion/get_settings import;
+retain exact handler registration, exclusive finalization worker filtering,
+finite leases, authorization and configured remote adapter failures. No deployment,
+provider default, local KVM fallback or authority changes. Medium workflow risk;
+QA reviews the composition against remote wiring. Verification uses existing
+production request/completion tests for both policy branches and real public
+reconciliation/custody tests, plus the native journey. Human review focus: app
+workers can dispatch remote POST while finalization workers remain exclusive.
+
+Use the actual general-worker composition (finalization_worker=False) in
+the existing request→completion regression for both policy branches. The
+existing finalization-worker isolation test retains pending/expired cases
+under the sole supported app profile; remove its obsolete single-host variant.
+These tests directly exercise the two worker groups affected by this fix.
