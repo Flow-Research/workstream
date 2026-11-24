@@ -9895,3 +9895,23 @@ fields in this branch, letting the backend apply its documented default
 explicit false. This is a fixture correction, not a human acceptance route.
 The stopped run's isolated PostgreSQL database and MinIO bucket were cleaned;
 `review_pending` remains unobserved in that run.
+
+
+### Existing AWS runtime permissions rechecked after administrator update
+
+On 2026-11-24, the running API container's canonical isolated AWS credential
+provider returned HTTP 200 for GetBucketVersioning (Enabled) and
+ListObjectVersions under a fresh submission-source/v1 operation prefix. The
+existing API key remains in its private mount; no credential was exposed or
+provided to the runner. Receipt: `/tmp/submission-aws-permission-recheck-20261124.json`.
+
+A separate read of the actual bucket policy still returned the old five
+statements: source keys remain outside DenyOutsideArtifactNamespace's allowed
+SHA namespace and DenyArtifactDeletion still covers all objects. The reviewed
+source bucket guard update is therefore not yet applied. Receipt:
+`source-policy-applied-read-aed80ad765474a2eb0d7b7c2999a048f.json` in the private
+AWS setup directory. The separate cleanup credential file location is pending.
+These two successful reads close the previous read-permission failures only;
+actual multipart, exact-version, restricted cleanup and lost-acknowledgement
+AWS qualification remain unproved. No service, policy or deployment was changed
+by these checks.
