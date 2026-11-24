@@ -8911,3 +8911,33 @@ Structure and authorization boundaries, scoped Ruff/diff passed. Fresh origin/ma
 remainsd713594eb and has0 commits absent from this branch. Low-level old admission
 branch/authorization/materialization remain explicitly pending; no complete
 writer-retirement or full-suite qualification claim is made yet.
+
+Next delete the now-uncalled low-level prepared-submission writer: the
+SubmissionBundleArtifactAdmissionRequest schema/union arm, ArtifactAdmissionService
+submission kwargs/branch/intent creation and three private submission-facts/replay
+methods, and exclusive submission_custody.py. Allowed: service.py, schemas.py,
+submission_custody.py, old DTO-only coordination test, exact architecture inventory,
+and this record. Preserve verifier/publisher, ORM/history, shared guide/import/
+model/trial producers, current source intake and their authority guards. Remove
+only the obsolete DTO-shape test; current source reservation/admission SQL proofs
+replace its lineage invariant. Medium architecture/security risk; imports,
+architecture/current source contract tests, shared artifact admission tests,
+structure/auth boundaries and scoped ARCH/QA. No schema/data/deployment changes.
+Architecture tests surfaced stale pre-cutover expectations already in the
+current branch: preparation POST (now read-only), two rather than three ART
+capability factories (cleanup is separate), and retired Unix transport names.
+Update these exact inventories to current public raw-ZIP/read-only history and
+remote-TLS constructors. Preserve aliased-constructor mutation controls and
+closed composition-root counts; no relaxed wildcard or skipped assertion.
+
+Low-level writer deletion verification passed: shared committed put/independent
+verification PostgreSQL case1/1 in32.01s, schema0090/fullcleanup
+(/tmp/submission-lowlevel-retirement.json);53 architecture cases42.81s after
+current inventory repair (/tmp/submission-retired-writer-architecture.log);
+57 current source-first/historical decoder coordination cases13.03s
+(/tmp/submission-retired-writer-coordination.log). App/outbox import, structure,
+authorization boundaries and Ruff/diff passed. AST comparison confirms verifier/
+orchestrator and every surviving admission method except admit/request-boundary
+are unchanged. Removed DTO/custody names are now forbidden by the existing retired
+intake architecture check. Old authorization and materialization-only code still
+needs cleanup; no full-suite/deployment completion claim.

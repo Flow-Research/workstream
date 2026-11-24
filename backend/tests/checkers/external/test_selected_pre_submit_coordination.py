@@ -21,7 +21,6 @@ from sqlalchemy.schema import CreateTable
 
 from app.core.identifiers import new_record_id
 from app.core.hashing import canonical_json_hash
-from app.modules.artifacts.schemas import SubmissionBundleArtifactAdmissionRequest
 from app.modules.artifacts.submission_bindings import SubmissionAdmissionConsumptionService
 from app.modules.artifacts.models import (
     SubmissionBundleAdmission,
@@ -415,28 +414,6 @@ def test_selected_pre_request_binds_complete_later_admission_lineage() -> None:
             body, source_contracts=selected_pre_submit_source_contracts())
 
 
-def test_submission_artifact_request_selects_exactly_one_pre_lineage() -> None:
-    selected_id = new_record_id()
-    request = SubmissionBundleArtifactAdmissionRequest(
-        pre_submit_evidence_set_id=None,
-        custody=object(),
-        replay_durable_intent_id=None,
-        selected_pre_submit_run_id=selected_id,
-        selected_terminal_digest=SHA,
-    )
-    assert request.selected_pre_submit_run_id == selected_id
-    with pytest.raises(ValueError, match="lineage"):
-        SubmissionBundleArtifactAdmissionRequest(
-            pre_submit_evidence_set_id=new_record_id(),
-            custody=object(),
-            replay_durable_intent_id=None,
-            selected_pre_submit_run_id=selected_id,
-            selected_terminal_digest=SHA,
-        )
-    with pytest.raises(ValueError, match="lineage"):
-        replace(request, selected_terminal_digest=None)
-
-
 def test_selected_ready_admission_binds_selected_run() -> None:
     run_id = new_record_id()
     admission = SimpleNamespace(
@@ -491,7 +468,6 @@ def _retained_v1(name="selected_pre_v1"):
     from pathlib import Path
 
     return json.loads((Path(__file__).parent / "fixtures" / f"{name}.json").read_text())
-
 
 
 def _retained_row(retained):

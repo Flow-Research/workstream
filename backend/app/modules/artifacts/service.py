@@ -7,7 +7,7 @@ import hashlib
 import sys
 from collections.abc import AsyncIterable, Awaitable, Callable
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from uuid import UUID
 from app.core.identifiers import new_record_id
@@ -34,12 +34,8 @@ from app.interfaces.artifacts import (
     artifact_store_namespace_material,
 )
 from workstream_external_services import ExternalServiceAdapterIdentity
-from app.modules.projects.api import (
-    ProjectLockedPolicyContextPort, ProjectLockedPolicyContextRequest,
-    ProjectLockedPolicyContextUnavailable,
-)
 from app.modules.tasks.api import (
-    TaskSubmissionContextPort, TaskSubmissionContextRequest, TaskSubmissionContextUnavailable,
+    TaskSubmissionContextPort,
 )
 from app.modules.projects.api.guide_documents import DOCUMENT_EXTENSIONS, GuideDocumentUploadTargetPort
 from app.modules.artifacts.guide_formats import BoundGuideFormatInspector, GuideFormatDetector, GuideFormatLimits
@@ -64,7 +60,6 @@ from app.modules.artifacts.models import (
     ArtifactStorageNamespace,
     ArtifactVerificationJob,
     ArtifactVerificationReceipt,
-    SubmissionBundleDurableIntent,
 )
 from app.modules.artifacts.metrics import (
     ArtifactAdmissionMetrics,
@@ -105,11 +100,6 @@ from app.modules.artifacts.schemas import (
     CheckerOutputArtifactAdmissionRequest,
     GuideArtifactAdmissionRequest,
     GuideArtifactIngestAuthorityFacts,
-    SubmissionBundleArtifactAdmissionRequest,
-    SubmissionBundleDurableIntentAuthorityFacts,
-)
-from app.modules.artifacts.submission_authorization import (
-    SubmissionBundlePreparedAuthorization,
 )
 from app.modules.artifacts.sources import CommittedArtifactSource, PreparedArtifact
 from app.modules.checkers.api.output_custody import (
@@ -2005,9 +1995,6 @@ class ArtifactAdmissionService:
         request: ArtifactAdmissionRequest,
         *,
         guide_prepared_authorization: GuideArtifactPreparedAuthorization | None = None,
-        submission_prepared_authorization: SubmissionBundlePreparedAuthorization | None = None,
-        submission_task_contexts: TaskSubmissionContextPort | None = None,
-        submission_project_contexts: ProjectLockedPolicyContextPort | None = None,
         checker_output_authority: CheckerOutputWriteAuthority | None = None,
         task_import_source_authority: TaskImportSourceAdmissionAuthority | None = None,
         prepared_authorization: PreparedAuthorizationHandle | None = None,
@@ -2115,44 +2102,11 @@ class ArtifactAdmissionService:
                     raise ArtifactAdmissionConflictError(str(exc)) from exc
                 except ValueError as exc:
                     raise ArtifactAdmissionRelationshipError(str(exc)) from exc
-            submission_facts: _AdmissionFacts | None = None
-            if type(request) is SubmissionBundleArtifactAdmissionRequest:
-                if (
-                    submission_prepared_authorization is None
-                    or submission_task_contexts is None
-                    or submission_project_contexts is None
-                    or prepared_authorization is not None
-                ):
-                    raise ArtifactAuthorityDeniedError(
-                        "submission bundle durable preparation is unavailable"
-                    )
-                authority_facts, submission_facts = await self._submission_bundle_facts(
-                    request, task_contexts=submission_task_contexts,
-                    project_contexts=submission_project_contexts,
-                )
-                replay_attempt = await self._submission_bundle_replay_attempt(
-                    request,
-                    authority_facts,
-                )
-                if replay_attempt is not None:
-                    authority_facts = replace(
-                        authority_facts,
-                        operation_identity=replay_attempt.operation_identity,
-                    )
-                prepared_authorization = await submission_prepared_authorization.prepare_final(
-                    facts=authority_facts
-                )
-                await submission_prepared_authorization.consume(
-                    prepared_authorization=prepared_authorization,
-                    facts=authority_facts,
-                )
-                if replay_attempt is not None:
-                    return await self._result(replay_attempt, replayed=True)
             namespace = await _claim_and_validate_storage_namespace(
                 self._repo,
                 self._namespace,
             )
-            facts = import_facts or submission_facts or await self._derive_admission_facts(request)
+            facts = import_facts or await self._derive_admission_facts(request)
             scopes = self._derive_scopes(facts)
             request_digest = canonical_json_hash(
                 {
@@ -2218,14 +2172,6 @@ class ArtifactAdmissionService:
                     counter.scope_type, counter.counted_bytes, counter.limit_bytes
                 )
             if replay is not None:
-                if facts.selected_pre_submit_run_id is not None:
-                    intent = await self._repo.get_submission_bundle_intent_by_selected_run(
-                        facts.selected_pre_submit_run_id
-                    )
-                    if intent is None or intent.put_attempt_id != replay.id:
-                        raise ArtifactAdmissionConfigurationError(
-                            "submission bundle replay intent is incomplete"
-                        )
                 linked_charge_ids = await self._repo.list_put_attempt_charge_ids(replay.id)
                 reserved_charge_ids = tuple(sorted(charge.id for charge in charges))
                 if linked_charge_ids != reserved_charge_ids:
@@ -2274,44 +2220,6 @@ class ArtifactAdmissionService:
                 terminal_at=None,
             )
             await self._repo.add_put_attempt(attempt, charges)
-            if facts.selected_pre_submit_run_id is not None:
-                selected_request = (
-                    request.custody.selected_reservation
-                    if type(request) is SubmissionBundleArtifactAdmissionRequest
-                    else None
-                )
-                await self._repo.add_submission_bundle_intent(
-                    SubmissionBundleDurableIntent(
-                        id=str(new_record_id()),
-                        pre_submit_evidence_set_id=facts.pre_submit_evidence_set_id,
-                        selected_pre_submit_run_id=facts.selected_pre_submit_run_id,
-                        selected_request_json=(
-                            selected_request.canonical_body()
-                            if selected_request is not None
-                            else None
-                        ),
-                        selected_request_digest=(
-                            selected_request.request_digest
-                            if selected_request is not None
-                            else None
-                        ),
-                        selected_terminal_json=(
-                            request.custody.selected_terminal_body
-                            if selected_request is not None
-                            and type(request)
-                            is SubmissionBundleArtifactAdmissionRequest
-                            else None
-                        ),
-                        selected_terminal_digest=(
-                            request.custody.selected_terminal_digest
-                            if selected_request is not None
-                            and type(request)
-                            is SubmissionBundleArtifactAdmissionRequest
-                            else None
-                        ),
-                        put_attempt_id=attempt.id,
-                    )
-                )
             return await self._result(attempt, replayed=False)
 
     @staticmethod
@@ -2320,7 +2228,6 @@ class ArtifactAdmissionService:
         if type(request) not in {
             GuideArtifactAdmissionRequest,
             CheckerOutputArtifactAdmissionRequest,
-            SubmissionBundleArtifactAdmissionRequest,
             TaskImportSourceAdmissionRequest,
         }:
             raise TypeError("invalid artifact admission request")
@@ -2348,8 +2255,6 @@ class ArtifactAdmissionService:
                 value is not None for value in lineage_claims
             ):
                 raise TypeError("guide artifact lineage claims are incomplete")
-            return
-        if type(request) is SubmissionBundleArtifactAdmissionRequest:
             return
         return
 
@@ -2446,213 +2351,6 @@ class ArtifactAdmissionService:
             operation_identity=operation_identity,
         )
 
-    async def _submission_bundle_replay_attempt(
-        self,
-        request: SubmissionBundleArtifactAdmissionRequest,
-        current: SubmissionBundleDurableIntentAuthorityFacts,
-    ) -> ArtifactPutAttempt | None:
-        """Reuse one committed intent when fresh checked custody exactly matches it."""
-        if request.replay_durable_intent_id is None:
-            return None
-        intent = await self._repo.lock_submission_bundle_intent(
-            str(request.replay_durable_intent_id)
-        )
-        if intent is None:
-            raise ArtifactAdmissionRelationshipError(
-                "submission bundle replay intent is unavailable"
-            )
-        reservation = request.custody.selected_reservation
-        attempt = await self._repo.lock_put_attempt(intent.put_attempt_id)
-        if (
-            attempt is None
-            or intent.selected_pre_submit_run_id != str(reservation.attempt_id)
-            or intent.pre_submit_evidence_set_id is not None
-            or intent.selected_request_json != reservation.canonical_body()
-            or intent.selected_request_digest != reservation.request_digest
-            or intent.selected_terminal_json
-            != request.custody.selected_terminal_body
-            or intent.selected_terminal_digest
-            != request.custody.selected_terminal_digest
-            or attempt.producer_request_type != "submission_bundle"
-            or attempt.status
-            not in {
-                "prepared",
-                "acknowledgement_unknown",
-                "absent_replay_required",
-                "object_confirmed",
-            }
-            or attempt.sha256 != current.archive_sha256
-            or attempt.byte_count != current.archive_byte_count
-            or attempt.media_type != current.media_type
-        ):
-            raise ArtifactAdmissionRelationshipError(
-                "selected submission bundle replay intent does not match custody"
-            )
-        return attempt
-
-    async def _submission_bundle_facts(
-        self, request: SubmissionBundleArtifactAdmissionRequest, *,
-        task_contexts: TaskSubmissionContextPort,
-        project_contexts: ProjectLockedPolicyContextPort,
-    ) -> tuple[SubmissionBundleDurableIntentAuthorityFacts, _AdmissionFacts]:
-        """Revalidate the sole external PRE custody under current owner locks."""
-        from app.modules.artifacts.submission_custody import SubmissionBundlePreparedCustody
-
-        if type(request.custody) is not SubmissionBundlePreparedCustody:
-            raise ArtifactAuthorityDeniedError("submission bundle prepared custody is unavailable")
-        return await self._selected_submission_bundle_facts(
-            request, task_contexts=task_contexts, project_contexts=project_contexts,
-        )
-
-    async def _selected_submission_bundle_facts(
-        self,
-        request: SubmissionBundleArtifactAdmissionRequest,
-        *,
-        task_contexts: TaskSubmissionContextPort,
-        project_contexts: ProjectLockedPolicyContextPort,
-    ) -> tuple[SubmissionBundleDurableIntentAuthorityFacts, _AdmissionFacts]:
-        """Revalidate selected terminal custody against current TASK and PROJECT locks."""
-        reservation = request.custody.selected_reservation
-        lineage = reservation.admission_lineage
-        commitment = request.source.commitment
-        if (
-            lineage is None
-            or request.pre_submit_evidence_set_id is not None
-            or request.selected_pre_submit_run_id != reservation.attempt_id
-            or request.selected_terminal_digest
-            != request.custody.selected_terminal_digest
-            or reservation.prepared_generation_id
-            != request.custody.prepared_generation_id
-            or reservation.archive_sha256 != commitment.sha256
-            or reservation.archive_byte_count != commitment.byte_count
-            or commitment.media_type != "application/zip"
-            or canonical_json_hash(lineage.semantic_manifest_body)
-            != reservation.semantic_manifest_sha256
-        ):
-            raise ArtifactAdmissionRelationshipError(
-                "selected submission bundle passing evidence is unavailable"
-            )
-        try:
-            task = await task_contexts.lock_submission_context(
-                TaskSubmissionContextRequest(
-                    task_id=reservation.task_id,
-                    assignment_id=reservation.assignment_id,
-                    contributor_id=reservation.actor_profile_id,
-                    predecessor_submission_id=lineage.predecessor_submission_id,
-                )
-            )
-            locked = await project_contexts.lock_locked_policy_context(
-                ProjectLockedPolicyContextRequest(
-                    project_id=reservation.project_id,
-                    guide_version=lineage.guide_version,
-                    source_snapshot_id=lineage.source_snapshot_id,
-                    source_snapshot_hash=lineage.source_snapshot_sha256,
-                    effective_policy_id=lineage.effective_policy_id,
-                    effective_policy_hash=lineage.effective_policy_sha256,
-                    pre_submit_policy_id=lineage.pre_submit_policy_id,
-                    pre_submit_policy_bundle_hash=lineage.pre_submit_policy_sha256,
-                )
-            )
-        except (TaskSubmissionContextUnavailable, ProjectLockedPolicyContextUnavailable) as exc:
-            raise ArtifactAdmissionRelationshipError(
-                "selected_pre_submit_locked_context_changed"
-            ) from exc
-        predecessor = task.predecessor
-        revision = task.revision_context
-        if (
-            task.contributor_id != reservation.actor_profile_id
-            or task.task_id != reservation.task_id
-            or task.assignment_id != reservation.assignment_id
-            or (predecessor.submission_id if predecessor is not None else None)
-            != lineage.predecessor_submission_id
-            or (predecessor.version if predecessor is not None else None)
-            != lineage.predecessor_submission_version
-            or task.checker_remediation_manifest_id
-            != lineage.checker_remediation_manifest_id
-            or (predecessor is not None and (
-                revision is None or revision.disposition != "ready"
-                or revision.source_submission_id != predecessor.submission_id
-                or revision.source_routing_manifest_id != task.checker_remediation_manifest_id
-            ))
-            or lineage.revision_preparation_id != (
-                revision.preparation_id if revision is not None else None
-            )
-            or lineage.revision_preparation_sha256 != (
-                revision.preparation_sha256 if revision is not None else None
-            )
-            or locked.project_id != reservation.project_id
-            or locked.guide_id != lineage.guide_id
-            or locked.guide_version != lineage.guide_version
-            or locked.source_snapshot_id != lineage.source_snapshot_id
-            or locked.source_snapshot_hash != lineage.source_snapshot_sha256
-            or locked.effective_policy_id != lineage.effective_policy_id
-            or locked.effective_policy_hash != lineage.effective_policy_sha256
-            or locked.pre_submit_policy_id != lineage.pre_submit_policy_id
-            or locked.pre_submit_policy_bundle_hash
-            != lineage.pre_submit_policy_sha256
-            or reservation.policy_sha256 != lineage.effective_plan_sha256
-        ):
-            raise ArtifactAdmissionRelationshipError(
-                "selected submission bundle locked context changed"
-            )
-        operation_identity = canonical_json_hash(
-            {
-                "request_type": "submission_bundle",
-                "selected_pre_submit_run_id": str(reservation.attempt_id),
-            }
-        )
-        authority_facts = SubmissionBundleDurableIntentAuthorityFacts(
-            actor_profile_id=reservation.actor_profile_id,
-            identity_link_id=reservation.identity_link_id,
-            project_id=reservation.project_id,
-            task_id=reservation.task_id,
-            assignment_id=reservation.assignment_id,
-            predecessor_submission_id=lineage.predecessor_submission_id,
-            predecessor_submission_version=lineage.predecessor_submission_version,
-            checker_remediation_manifest_id=lineage.checker_remediation_manifest_id,
-            pre_submit_evidence_set_id=None,
-            prepared_generation_id=reservation.prepared_generation_id,
-            guide_id=lineage.guide_id,
-            guide_version=lineage.guide_version,
-            source_snapshot_id=lineage.source_snapshot_id,
-            source_snapshot_sha256=lineage.source_snapshot_sha256,
-            effective_policy_id=lineage.effective_policy_id,
-            effective_policy_sha256=lineage.effective_policy_sha256,
-            pre_submit_policy_id=lineage.pre_submit_policy_id,
-            pre_submit_policy_sha256=lineage.pre_submit_policy_sha256,
-            effective_plan_sha256=lineage.effective_plan_sha256,
-            semantic_manifest_id=lineage.semantic_manifest_id,
-            semantic_manifest_sha256=reservation.semantic_manifest_sha256,
-            semantic_manifest_body=lineage.semantic_manifest_body,
-            packet_sha256=lineage.packet_sha256,
-            archive_sha256=reservation.archive_sha256,
-            archive_byte_count=reservation.archive_byte_count,
-            media_type=commitment.media_type,
-            storage_scheme=lineage.storage_scheme,
-            operation_identity=operation_identity,
-            replay_durable_intent_id=request.replay_durable_intent_id,
-            selected_pre_submit_run_id=reservation.attempt_id,
-            selected_terminal_digest=request.custody.selected_terminal_digest,
-        )
-        return authority_facts, _AdmissionFacts(
-            request_type="submission_bundle",
-            producer_type="actor_profile",
-            producer_ref=str(reservation.actor_profile_id),
-            project_id=str(reservation.project_id),
-            guide_id=str(lineage.guide_id),
-            task_id=str(reservation.task_id),
-            guide_source_item_id=None,
-            guide_source_snapshot_id=str(lineage.source_snapshot_id),
-            checker_run_id=None,
-            logical_role=None,
-            submission_id=None,
-            submission_version=None,
-            checker_request_digest=None,
-            checker_request_digest_facts=None,
-            pre_submit_evidence_set_id=None,
-            operation_identity=operation_identity,
-            selected_pre_submit_run_id=str(reservation.attempt_id),
-        )
 
     async def _require_active_human_actor(self, context: AuthorizationContext) -> None:
         """Revalidate and lock exact human identity state inside admission."""

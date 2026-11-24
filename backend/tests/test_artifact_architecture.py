@@ -76,10 +76,11 @@ INTERNAL_ADMISSION_TYPES = {
     "ArtifactAdmissionResult",
     "CheckerOutputArtifactAdmissionRequest",
     "GuideArtifactAdmissionRequest",
-    "SubmissionBundleArtifactAdmissionRequest",
 }
 
 RETIRED_CONTRIBUTOR_INTAKE_NAMES = {
+    "SubmissionBundleArtifactAdmissionRequest",
+    "SubmissionBundlePreparedCustody",
     "ArtifactUploadItem",
     "ArtifactUploadSession",
     "ContributorArtifactAdmissionRequest",
@@ -174,8 +175,7 @@ def test_only_canonical_admission_backed_contributor_intake_routes_are_composed(
     assert not {path for path in paths if any(fragment in path for fragment in forbidden_fragments)}
     preparation_path = "/api/v1/tasks/{task_id}/submission-bundle-preparations"
     project_preparations = "/api/v1/projects/{project_id}/submission-bundle-preparations"
-    # Contributors read their own preparations back and Project Managers list a
-    # project's; only the task POST prepares.
+    # Retained preparations remain read-only; new ZIP intake uses task submissions.
     assert {path for path in paths if "submission-bundle" in path} == {
         preparation_path,
         f"{preparation_path}/{{preparation_id}}",
@@ -188,11 +188,8 @@ def test_only_canonical_admission_backed_contributor_intake_routes_are_composed(
         if "submission-bundle" in path
         for method in operations
         if method != "parameters"
-    } == {"post", "get"}
-    assert "post" not in paths[f"{preparation_path}/{{preparation_id}}"]
-    preparation = paths[preparation_path]["post"]
-    assert preparation["security"]
-    assert preparation["x-workstream-action-id"] == "artifact.submission_bundle.prepare"
+    } == {"get"}
+    assert paths[preparation_path]["get"]["security"]
 
     creation_path = "/api/v1/tasks/{task_id}/submissions"
     assert {
@@ -378,8 +375,8 @@ def _assert_concrete_adapter_composition(
             in {
                 "LocalStorageAdapter",
                 "S3CompatibleArtifactStore",
-                "UnixSocketExternalCheckerAdapter",
-                "UnixSocketTrustedIntakeAdapter",
+                "RemoteTlsExternalCheckerAdapter",
+                "RemoteTlsTrustedIntakeAdapter",
                 "OpenAIResponsesCheckerModelProvider",
                 "OpenRouterCheckerModelProvider",
             }
@@ -391,8 +388,8 @@ def _assert_concrete_adapter_composition(
             if name in {"OTLPMetricExporter", "OTLPSpanExporter", "PeriodicExportingMetricReader"}
         )
     assert Counter(factory_calls) == {
-        # Immutable storage and ephemeral trusted intake are separate capabilities.
-        COMPOSITION_ROOT: 2,
+        # Storage, trusted intake and source cleanup are separate capabilities.
+        COMPOSITION_ROOT: 3,
         CHECKER_COMPOSITION_ROOT: 2,
         # Inference and retained-resource cleanup are distinct typed capabilities.
         AGENT_COMPOSITION_ROOT: 2,
@@ -427,8 +424,8 @@ def test_concrete_adapter_construction_has_one_composition_path(
         "from workstream_external_services import ExternalServiceAdapterFactory as factory\nfactory[object]('extra')\n",
         "from workstream_external_services import ExternalServiceAdapterFactory\nfactory: object = ExternalServiceAdapterFactory\nfactory[object]('extra')\n",
         "import workstream_external_services as external\nexternal.ExternalServiceAdapterFactory[object]('extra')\n",
-        "from app.adapters.artifacts.trusted_intake import UnixSocketTrustedIntakeAdapter as runtime\nruntime(configuration)\n",
-        "import app.adapters.artifacts.trusted_intake as intake\nintake.UnixSocketTrustedIntakeAdapter(configuration)\n",
+        "from app.adapters.artifacts.trusted_intake import RemoteTlsTrustedIntakeAdapter as runtime\nruntime(configuration)\n",
+        "import app.adapters.artifacts.trusted_intake as intake\nintake.RemoteTlsTrustedIntakeAdapter(configuration)\n",
         "from app.adapters.project_agents.openai_agent_sdk import OpenAIAgentSdkProjectGuideRuntime as runtime\nruntime(configuration)\n",
         "import app.adapters.project_agents.openai_agent_sdk as sdk\nsdk.OpenAIAgentSdkProjectGuideRuntime(configuration)\n",
         "from app.adapters.project_agents.omnicore_agent import OmniCoreAgentProjectGuideRuntime as runtime\nruntime(configuration)\n",
