@@ -8387,3 +8387,9 @@ staging the deleted module (inventory intentionally reads the Git index).
 The new accepted-owner-required retirement control passed. PostgreSQL receipt
 `/tmp/submission-retire-writer.log/.json` is still running at candidate freeze;
 no integration success is claimed yet. No schema or retained-data changes.
+
+QA-RETIRE-001: retained ART concurrency fixture reconstructed a request without
+accepted_operation_id, so it would reject before reaching concurrency. Preserve
+that exact identity with dataclasses.replace. This isolated ART schema proves
+binding concurrency/rollback only; real accepted-source SQL custody remains
+covered by the full-schema T5 cases, not this narrow fixture.

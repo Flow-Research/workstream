@@ -129,14 +129,7 @@ async def _seed(session, schema: str, request) -> None:
 async def test_postgresql_consumption_is_concurrent_and_rollback_safe(
     isolated_database_env: str,
 ) -> None:
-    request = _request()
-    request = type(request)(
-        packet_sha256=request.packet_sha256,
-        admission_id=request.admission_id,
-        submission_id=request.submission_id,
-        submission_version=2,
-        task_context=request.task_context,
-    )
+    request = replace(_request(), submission_version=2)
     async with _isolated_binding_schema(isolated_database_env) as (schema, factory):
         async with factory.begin() as seed:
             await _seed(seed, schema, request)
