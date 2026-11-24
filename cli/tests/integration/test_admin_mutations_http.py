@@ -46,6 +46,26 @@ def service_receipt():
     }
 
 
+def test_current_source_cleanup_service_identity_reaches_public_provision(
+    cli, tmp_path
+):
+    identity = "workstream.artifact.source_cleanup"
+    file = tmp_path / "service.json"
+    file.write_text(json.dumps(service_body() | {"service_identity": identity}))
+    with http_fixture() as (origin, response, requests):
+        response.update(
+            status=201,
+            body=json.dumps(
+                service_receipt() | {"service_identity": identity}
+            ).encode(),
+        )
+        result = invoke(cli, origin, file, "service-actor", "provision")
+        assert result.returncode == 0
+        assert json.loads(result.stdout)["service_identity"] == identity
+        assert len(requests) == 1
+        assert requests == [("POST", "/api/v1/service-actors", "Bearer " + TOKEN)]
+
+
 def lifecycle_receipt(resource, selected, *, version=None):
     return {
         "resource_type": resource,

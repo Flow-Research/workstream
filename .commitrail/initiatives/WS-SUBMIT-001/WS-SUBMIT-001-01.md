@@ -9200,3 +9200,88 @@ these exercise the six environment-selected checks. Root compared parsed JSON
 before/after: only the description, canonical hash and repository SHA differ.
 No integration/deployed acceptance claim. Markdown links, Commitrail and diff
 checks pass.
+
+Next bounded change: modernize the existing connected public CLI journey in
+`cli/tests/journey` and its current `cli/README.md` instructions. The present
+script still calls removed `task prepare` and `task submit --admission`, runs a
+local native checker socket, and registers Harnessy proof declarations that
+need unavailable forge facts. Replace those steps with current raw ZIP
+`task submit` and `task submission-operation` reads, the deterministic
+`pilots/terminal_systems/mvp` correct/incorrect/pre-missing ZIPs and matching
+PRE/POST registry entries, an explicitly configured remote TLS runner, and
+the existing real API/Redis/MinIO/PostgreSQL worker path. Keep public setup,
+claim, retained submission, governed outcome, contribution, replay, Operator
+custody and exact award checks in the same journey. Run a separate default
+human-review branch through public review commands if the current contracts
+support it. No mocked checker, model, authority, provider or synthetic
+Submission/Review/Contribution. No production, schema, deployment or external
+service changes; runner image installation is a separate owned prerequisite.
+
+Allowed files: existing `cli/tests/journey/*.py`, the pilot's bounded
+`pilots/terminal_systems/mvp/registry.py` input generator, its
+connected-journey documentation in `cli/README.md`, and this record. Required inputs are
+explicit runner TLS host/port/server name/CA/client certificate/key, exact
+intake image/config digests, measured submission execution and cleanup
+profiles, PRE/POST registry JSON and pinned image; missing inputs fail before
+API or worker start. Worker queues must include exclusive finalization and
+source cleanup consumers. Preserve resource ownership/cleanup of this
+isolated local drill. Risk: high integration and process custody; require
+focused pure tests, static/lint/structure checks, exact real PG/MinIO/Redis
+and runner execution with cleanup metadata, then scoped review. Partial setup
+or source acceptance cannot be reported as full governed-acceptance proof.
+
+Current scope resolution: the user keeps live human review deferred. The
+public default-review branch must stop at `review_pending` and prove it did
+not fabricate a Review or Contribution; the main locked-false branch must
+reach real automatic acceptance. No human-review API or CLI operation is
+added here.
+
+The first isolated run failed before its first CLI call because the evidence
+directory parent was not created; both isolated database and MinIO cleanup
+completed. After fixing that setup defect, the second run passed public
+identity, authority and Project creation. It then exposed a stale CLI-local
+service-identity allowlist: the backend accepts
+`workstream.artifact.source_cleanup`, but `admin service-actor provision`
+rejected it as `invalid_arguments` before issuing HTTP. The bounded change
+therefore also allows the exact identity in
+`cli/internal/api/admin_inspection.go` and its existing admin HTTP contract
+module. The rebuilt CLI passed all 25 focused admin mutation contracts,
+including the new positive provisioning case and existing unknown-identity
+negative. That second run also cleaned its isolated database and MinIO bucket;
+neither diagnostic run reached the external checker.
+
+The third isolated run passed service provisioning and public Project setup,
+then its guide compilation stayed queued and timed out. The real guide
+compiler requires the hardened fixed-parser socket; this launcher had not
+supplied one. The dedicated cleanup child also exited at startup: the
+test cleanup profile's null `upload_principal` and shared upload credential
+violated its separate-provider-principal guard. The root-owned local parser
+now serves a source-bound Markdown read under its fixed UID/GID/socket modes.
+The journey uses an independently owned local MinIO instance with a distinct
+read/write cleanup IAM user, a private secret file and an explicit profile
+naming the actual foreground upload principal. Only the exclusive cleanup
+worker receives the second credential. Parser identity, credential separation
+and all named files are checked before API startup; a worker process exiting
+during startup now fails early. The third run's isolated database and bucket
+were removed; it did not reach PRE or POST. These are local drill prerequisites,
+not hosted credential or parser qualification.
+
+With those prerequisites, the fourth isolated run reached the real parser and
+finished guide compilation as `compilation_invalid_terminal/unsafe_text`.
+The sole offending authored prose was a slash-joined count phrase in one
+POST check step. It was rewritten as plain prose; the unchanged production
+untrusted-result model now validates the authored fixture before API startup.
+An in-memory restoration of the slash phrase fails that preflight at the
+exact check-step field. No checker runner call occurred in this fourth run;
+database and bucket cleanup both completed.
+
+The connected drill now checks the accepted Contribution's original ZIP hash
+directly. A separate read-only query in the isolated database compares each
+finalized operation, sealed physical charge, source admission, replica and
+content to the public operation/submission and exact uploaded ZIP; it also
+counts Submission, dispatch, POST run, acceptance, Review, Contribution and
+award rows for each auto-acceptance, failed-POST and review-pending Task. The
+audit performs no state transitions. Its SQL graph parsed and ran against a
+fresh migrated isolated database; the deliberately absent operation yielded
+the expected missing-graph assertion, and that database was cleaned. A
+successful live graph is still pending the next end-to-end run.

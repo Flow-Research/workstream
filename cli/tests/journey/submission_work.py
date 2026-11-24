@@ -1,137 +1,209 @@
-"""Real CLI intake, durable evaluation and unpaid contribution observation."""
+"""Public raw ZIP intake, real POST routing and governed contribution evidence."""
 
 import csv
 import hashlib
-import json
+from pathlib import Path
 import subprocess
+import sys
 import time
 from uuid import uuid4
-from zipfile import ZipFile
+
+from task_work import create_claimed_task
+from source_audit import audit_accepted_source
+
+PILOT = Path(__file__).resolve().parents[3] / "pilots/terminal_systems/mvp"
+PACKET = (
+    "--summary",
+    "Fixed incident summary",
+    "--attestation",
+    "I counted the supplied incident events and retained the input.",
+)
+
+
+def _package(client, kind):
+    archive = client.directory / f"{kind}.zip"
+    subprocess.run(
+        [sys.executable, str(PILOT / "package.py"), kind, str(archive)],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    if archive.stat().st_size <= 0:
+        raise AssertionError("pilot package is empty")
+    return archive
+
+
+def _command(task_id, assignment_id, archive, key):
+    return (
+        "task",
+        "submit",
+        task_id,
+        "--assignment",
+        assignment_id,
+        *PACKET,
+        "--file",
+        str(archive),
+        "--idempotency-key",
+        key,
+    )
+
+
+def _progress(client, token, task_id, key, operation_id=None):
+    by_key = client.call(
+        token, "task", "submission-operation", task_id, "--idempotency-key", key
+    )
+    if operation_id is not None:
+        by_id = client.call(
+            token,
+            "task",
+            "submission-operation",
+            task_id,
+            "--operation-id",
+            operation_id,
+        )
+        if by_key != by_id or by_id["operation_id"] != operation_id:
+            raise AssertionError("key and operation reads differ")
+    return by_key
+
+
+def _wait_for_stage(client, token, task_id, key, receipt, expected_stage):
+    deadline = time.monotonic() + 600
+    while time.monotonic() < deadline:
+        observed = _progress(client, token, task_id, key, receipt["operation_id"])
+        if observed["operationally_stalled"]:
+            raise AssertionError("durable submission requires explicit recovery")
+        if observed["processing_stage"] == expected_stage:
+            if (
+                observed["operation_state"] != "finalized"
+                or not observed["submission_id"]
+            ):
+                raise AssertionError("governed outcome has no finalized Submission")
+            return observed
+        if observed["operation_state"] in {
+            "rejected",
+            "failed",
+            "abandoned",
+            "cancelled",
+        }:
+            raise AssertionError("accepted source failed before governed evaluation")
+        if observed["processing_stage"] in {"accepted", "needs_revision", "rejected"}:
+            raise AssertionError("submission reached a different governed outcome")
+        time.sleep(1)
+    raise AssertionError("durable evaluation did not reach its governed outcome")
+
+
+def _submit(client, token, task_id, assignment_id, archive):
+    key = str(uuid4())
+    command = _command(task_id, assignment_id, archive, key)
+    receipt = client.call(token, *command)
+    if (
+        receipt["status"] != "accepted"
+        or receipt["processing_stage_at_acceptance"] != "finalization_pending"
+    ):
+        raise AssertionError("source command did not return T4 acceptance")
+    replay = client.call(token, *command)
+    if replay != (receipt | {"replayed": True}):
+        raise AssertionError("exact source replay changed accepted command snapshot")
+    progress = _progress(client, token, task_id, key, receipt["operation_id"])
+    if progress["pre_submission_results"] != receipt["pre_submission_results"]:
+        raise AssertionError("accepted feedback changed during operation observation")
+    return key, receipt
+
+
+def _pre_missing_has_no_submission(client, token, task_id, assignment_id):
+    key = str(uuid4())
+    command = _command(task_id, assignment_id, _package(client, "pre-missing"), key)
+    failure = client.call(token, *command, expected_exit=1)
+    if failure["error"]["code"] != "pre_submission_checker_failed":
+        raise AssertionError("missing summary was not rejected by real PRE")
+    observed = _progress(client, token, task_id, key)
+    if (
+        observed["operation_state"] != "rejected"
+        or observed["processing_stage"] != "rejected"
+        or observed["submission_id"] is not None
+        or observed["next_action"] != "correct_and_submit_new_key"
+    ):
+        raise AssertionError("rejected PRE candidate created downstream work")
+    if client.call(token, "me", "submissions", "--task", task_id)["items"]:
+        raise AssertionError("rejected PRE candidate created a Submission")
+
+
+def _incorrect_post_has_no_acceptance(client, tokens, project_id, previous_records):
+    task_id, assignment_id = create_claimed_task(
+        client, tokens, project_id, title="Reject incorrect incident counts"
+    )
+    archive = _package(client, "incorrect")
+    key, receipt = _submit(client, tokens["alice"], task_id, assignment_id, archive)
+    observed = _wait_for_stage(
+        client, tokens["alice"], task_id, key, receipt, "needs_revision"
+    )
+    submission_id = observed["submission_id"]
+    outcome = client.call(tokens["alice"], "submission", "show", submission_id)
+    if outcome["status"] != "needs_revision":
+        raise AssertionError("incorrect shaped summary bypassed governed revision")
+    runs = client.call(tokens["alice"], "submission", "findings", submission_id)
+    if len(runs["items"]) != 1 or not any(
+        result["checker_name"] == "terminal.post.incident_summary_counts"
+        and result["status"] == "failed"
+        for result in runs["items"][0]["results"]
+    ):
+        raise AssertionError("incorrect counts lack real failed POST evidence")
+    records = client.call(tokens["alice"], "contributions", "--project", project_id)[
+        "items"
+    ]
+    if records != previous_records or any(
+        item["task_id"] == task_id for item in records
+    ):
+        raise AssertionError("failed POST created acceptance, award or contribution")
+    audit_accepted_source(
+        receipt["operation_id"], submission_id, task_id, archive, accepted=False
+    )
+
+
+def observe_review_pending(client, tokens, project_id, task_id, assignment_id):
+    """Prove the default human-review branch stops before final acceptance."""
+    archive = client.directory / "correct.zip"
+    if not archive.is_file():
+        archive = _package(client, "correct")
+    key, accepted = _submit(client, tokens["alice"], task_id, assignment_id, archive)
+    observed = _wait_for_stage(
+        client, tokens["alice"], task_id, key, accepted, "review_pending"
+    )
+    submission = client.call(
+        tokens["alice"], "submission", "show", observed["submission_id"]
+    )
+    if submission["status"] != "review_pending":
+        raise AssertionError("default review policy did not retain pending review")
+    records = client.call(tokens["alice"], "contributions", "--project", project_id)[
+        "items"
+    ]
+    if records:
+        raise AssertionError("pending human review fabricated a contribution or award")
+    audit_accepted_source(
+        accepted["operation_id"],
+        observed["submission_id"],
+        task_id,
+        archive,
+        accepted=False,
+    )
+    return observed
 
 
 def submit_and_observe(
     client, tokens, actors, project_id, task_id, assignment_id, grant
 ):
     token = tokens["alice"]
-    packet = (
-        "--assignment",
-        assignment_id,
-        "--summary",
-        "Local declared-proof format exercise",
-        "--attestation",
-        "These are illustrative format claims, not verified remote work.",
-    )
-    rejected = client.directory / "rejected.zip"
-    with ZipFile(rejected, "x") as bundle:
-        bundle.writestr("proof.json", "{}")
-    failure = client.call(
-        token,
-        "task",
-        "prepare",
-        task_id,
-        *packet,
-        "--file",
-        str(rejected),
-        "--idempotency-key",
-        str(uuid4()),
-        expected_exit=1,
-    )
-    if failure["error"]["code"] != "pre_submission_checker_failed":
-        raise AssertionError("invalid declared proof was not rejected by intake")
-    # Exact task-history resolution requires an existing Submission. The self
-    # collection supports an empty result and is the appropriate absence proof.
-    if client.call(token, "me", "submissions", "--task", task_id)["items"]:
-        raise AssertionError("rejected candidate created a submission")
-    archive = client.directory / "submission.zip"
-    with ZipFile(archive, "x") as bundle:
-        bundle.writestr(
-            "proof.json",
-            json.dumps(
-                {
-                    "schema": "harnessy.work.proof.v1",
-                    "commit_sha": "a" * 40,
-                    "pr_url": "https://github.com/example/format-exercise/pull/1",
-                    "ci_run_url": "https://github.com/example/format-exercise/actions/runs/1",
-                    "ci_conclusion": "success",
-                    "merged": True,
-                }
-            ),
-        )
+    _pre_missing_has_no_submission(client, token, task_id, assignment_id)
+    archive = _package(client, "correct")
     archive_hash = "sha256:" + hashlib.sha256(archive.read_bytes()).hexdigest()
-    command = (
-        "task",
-        "prepare",
-        task_id,
-        *packet,
-        "--file",
-        str(archive),
-        "--idempotency-key",
-        str(uuid4()),
-    )
-    first = client.call(token, *command)
-    deadline = time.monotonic() + 240
-    while time.monotonic() < deadline:
-        page = client.call(token, "task", "preparations", task_id)
-        matching = [
-            item for item in page["items"] if item["archive_sha256"] == archive_hash
-        ]
-        if len(matching) > 1:
-            raise AssertionError("one preparation request produced duplicate runs")
-        if matching and matching[0]["state"] == "ready":
-            ready = matching[0]
-            break
-        if matching and matching[0]["state"] in {
-            "checks_failed",
-            "infrastructure_failed",
-            "stale",
-        }:
-            raise AssertionError("real intake failed; no substitution permitted")
-        time.sleep(1)
-    else:
-        raise AssertionError("real intake did not reach ready admission")
-    replay = client.call(token, *command)
-    if (
-        replay["put_attempt_id"] != first["put_attempt_id"]
-        or replay["admission_id"] != ready["admission_id"]
-        or replay["replayed"] is not True
-    ):
-        raise AssertionError("exact preparation replay changed custody")
-    submit = ("task", "submit", task_id, *packet, "--admission", ready["admission_id"])
-    receipt = client.call(token, *submit)
-    if client.call(token, *submit) != receipt:
-        raise AssertionError("exact submission replay changed receipt")
-    deadline = time.monotonic() + 240
-    while time.monotonic() < deadline:
-        outcome = client.call(token, "submission", "show", receipt["submission_id"])
-        if outcome["status"] == "accepted":
-            break
-        if outcome["status"] in {"rejected", "needs_revision"}:
-            raise AssertionError(
-                "real checker did not reach the expected acceptance branch"
-            )
-        time.sleep(1)
-    else:
-        # Capture the public failure state before the isolated runtime is torn
-        # down. These reads never repair/retry work or turn the timeout into a
-        # pass; one failed diagnostic must not hide the original failure.
-        for diagnostic_token, arguments in (
-            (token, ("submission", "findings", receipt["submission_id"])),
-            (
-                tokens["operator"],
-                ("operations", "checker", "retry-sources", project_id),
-            ),
-            (
-                tokens["operator"],
-                ("operations", "delivery", "list", project_id),
-            ),
-        ):
-            try:
-                client.call(diagnostic_token, *arguments)
-            except (AssertionError, subprocess.TimeoutExpired, OSError, ValueError):
-                # The client retains redacted execution metadata and private
-                # receipts when available. Do not print arbitrary server text.
-                print("Evaluation diagnostic unavailable: " + arguments[1])
-        raise AssertionError("durable evaluation did not reach acceptance")
+    key, accepted = _submit(client, token, task_id, assignment_id, archive)
+    observed = _wait_for_stage(client, token, task_id, key, accepted, "accepted")
+    receipt = {
+        "submission_id": observed["submission_id"],
+        "submission_version": int(observed["submission_version"]),
+    }
+    outcome = client.call(token, "submission", "show", receipt["submission_id"])
     retained = client.call(token, "me", "submissions", "--task", task_id)
     if retained["next_cursor"] is not None or len(retained["items"]) != 1:
         raise AssertionError("submission replay did not retain exactly one attempt")
@@ -139,14 +211,16 @@ def submit_and_observe(
         retained["items"][0]["submission_id"] != receipt["submission_id"]
         or outcome["id"] != receipt["submission_id"]
     ):
-        raise AssertionError("retained submission differs from accepted receipt")
+        raise AssertionError("retained submission differs from accepted operation")
     for field, value in {
         "task_id": task_id,
         "version": receipt["submission_version"],
         "status": "accepted",
     }.items():
         if retained["items"][0][field] != value or outcome[field] != value:
-            raise AssertionError("retained submission differs from accepted receipt")
+            raise AssertionError("retained submission differs from accepted operation")
+    if retained["items"][0].get("artifact_hash") not in (None, archive_hash):
+        raise AssertionError("retained submission differs from submitted ZIP")
     runs = client.call(token, "submission", "findings", receipt["submission_id"])
     if runs["next_cursor"] is not None or len(runs["items"]) != 1:
         raise AssertionError("expected one real post-submit checker run")
@@ -161,12 +235,11 @@ def submit_and_observe(
         if run[field] != value:
             raise AssertionError("checker run does not bind the accepted attempt")
     if not run["completed_at"] or not any(
-        # Public findings name the manager-selected requirement, independently
-        # of the setup suggestion ID and registry capability.
-        result["checker_name"] == "project.proof_post" and result["status"] == "passed"
+        result["checker_name"] == "terminal.post.incident_summary_counts"
+        and result["status"] == "passed"
         for result in run["results"]
     ):
-        raise AssertionError("registered checker has no completed passing evidence")
+        raise AssertionError("registered POST checker lacks passing evidence")
     if (
         client.call(
             token,
@@ -198,6 +271,8 @@ def submit_and_observe(
             raise AssertionError("contribution differs from the exercised attempt")
     if not record["source_final_acceptance_id"]:
         raise AssertionError("accepted contribution lacks final acceptance provenance")
+    if record["artifact_hash"] != archive_hash:
+        raise AssertionError("accepted contribution does not bind the original ZIP")
     exported = client.call(tokens["finance"], "project", "contributions", project_id)
     if exported["items"] != records:
         raise AssertionError("authorized project export differs from own evidence")
@@ -224,6 +299,14 @@ def submit_and_observe(
     ):
         if rows[0][field] != record[field]:
             raise AssertionError("CSV lineage differs from JSON evidence")
+    audit_accepted_source(
+        accepted["operation_id"],
+        receipt["submission_id"],
+        task_id,
+        archive,
+        accepted=True,
+    )
+    _incorrect_post_has_no_acceptance(client, tokens, project_id, records)
     client.call(token, "project", "show", project_id)
     client.write_and_replay(
         tokens["manager"],

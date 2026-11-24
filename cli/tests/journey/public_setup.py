@@ -2,17 +2,14 @@
 
 import hashlib
 import json
+from pathlib import Path
 import time
 from uuid import uuid4
 
 
-GUIDE = b"""# Local CLI contract exercise
-Submit proof.json at the ZIP root. This exercise checks the format of declared
-proof claims only; it does not verify any remote work or award compensation.
-Both intake and post-submission evaluation use the registered harnessy.work_proof
-checker. Claims must use harnessy.work.proof.v1, a forty-digit hexadecimal commit,
-GitHub HTTPS PR and CI URLs, success CI conclusion, and merged true.
-"""
+PILOT = Path(__file__).resolve().parents[3] / "pilots/terminal_systems/mvp"
+GUIDE = (PILOT / "guide.md").read_bytes()
+TASK = (PILOT / "task.md").read_text(encoding="utf-8")
 
 
 def poll(client, token, arguments, predicate):
@@ -32,61 +29,86 @@ def poll(client, token, arguments, predicate):
 
 
 def authored_rules():
+    """Manager-authored suggestions for the real incident-summary PRE/POST image."""
     reference = {"document": "sha256:" + hashlib.sha256(GUIDE).hexdigest()}
     requirements = []
-    for phase in ("pre_submit", "post_submit"):
+    for phase, check in (
+        ("pre_submit", "incident_summary_layout"),
+        ("post_submit", "incident_summary_counts"),
+    ):
+        post = phase == "post_submit"
+        code = "terminal.incident_summary." + (
+            "incorrect_counts" if post else "invalid_layout"
+        )
         requirements.append(
             {
-                "suggestion_id": f"proof.{phase}",
-                "statement": "Validate the declared proof fields.",
+                "suggestion_id": f"incident.{phase}",
+                "statement": (
+                    "Verify the fixed event file and exact per-service counts."
+                    if post
+                    else "Require the fixed event file and a shaped summary."
+                ),
                 "stage": phase,
                 "evidence_refs": [reference],
-                "classification_rationale": "Static inspection can validate declared fields, without verifying remote work.",
+                "classification_rationale": (
+                    "Offline image evaluation compares the submitted output with the fixed input."
+                    if post
+                    else "Offline image inspection checks required root files and JSON shape."
+                ),
                 "check_specification": {
-                    "evaluation_method": "Inspect the declared proof fields in proof.json.",
+                    "evaluation_method": "Execute the pinned offline incident-summary checker image.",
                     "inputs": [
                         {
-                            "input_id": "proof",
+                            "input_id": "incident_files",
                             "kind": "relative_file",
-                            "relative_path": "proof.json",
-                            "purpose": "Declared proof claims, without network verification.",
+                            "relative_path": "summary.json",
+                            "purpose": "Contributor output to inspect with the fixed events.jsonl input.",
                         }
                     ],
-                    "check_steps": [
-                        "Require a regular proof.json of at most 65536 bytes containing a UTF-8 JSON object.",
-                        "Require schema harnessy.work.proof.v1 and commit_sha of exactly 40 hexadecimal characters.",
-                        "Require pr_url and ci_run_url with scheme https, authority github.com and a non-root path.",
-                        "Require ci_conclusion success and merged equal to the JSON boolean true.",
-                    ],
+                    "check_steps": (
+                        [
+                            "Require root events.jsonl equal to the fixed seven incident events.",
+                            "Require root summary.json with the services array and exact per-service total and error counts.",
+                        ]
+                        if post
+                        else [
+                            "Require root events.jsonl with the fixed seven incident events.",
+                            "Require root summary.json as a JSON object with a nonempty services array.",
+                        ]
+                    ),
                     "pass_conditions": [
-                        "All declared proof fields satisfy the static predicates."
+                        "The pinned image returns passed with no error findings."
                     ],
                     "failure_findings": [
                         {
-                            "code": "harnessy.proof.invalid_json",
+                            "code": code,
                             "level": "error",
-                            "condition": "proof.json is not a UTF-8 JSON object.",
-                            "message": "proof.json must contain a valid JSON object.",
+                            "condition": "The submitted files violate this phase's incident summary check.",
+                            "message": "Correct the incident summary files and submit again.",
                         }
                     ],
                     "positive_tests": [
-                        "A JSON object satisfying every stated field predicate passes."
+                        "The supplied correct ZIP passes the selected phase."
                     ],
                     "negative_tests": [
                         {
-                            "name": "invalid_json",
-                            "scenario": "proof.json contains malformed JSON.",
+                            "name": "incorrect_counts" if post else "missing_summary",
+                            "scenario": (
+                                "The shaped summary has incorrect per-service counts."
+                                if post
+                                else "The summary.json root file is absent."
+                            ),
                             "expected_verdict": "failed",
-                            "expected_finding_codes": ["harnessy.proof.invalid_json"],
+                            "expected_finding_codes": [code],
                         }
                     ],
                     "implementation_needs": [
-                        "Implement a JSON parser and the listed static field predicates."
+                        "Use the registered incident-summary image and fixed events input."
                     ],
                     "inability_to_evaluate": [
                         {
-                            "code": "harnessy.proof.unreadable",
-                            "condition": "proof.json cannot be read as candidate content.",
+                            "code": "terminal.incident_summary.unavailable",
+                            "condition": "The pinned image or material is unavailable.",
                         }
                     ],
                 },
@@ -99,21 +121,38 @@ def authored_rules():
             {
                 "severity": "info",
                 "code": "guide.ready",
-                "message": "Explicit unpaid format-validation exercise.",
+                "message": "Fixed incident summary with pinned offline PRE and POST checks.",
                 "evidence_refs": [reference],
             }
         ],
         "submission_artifact_policy": {
-            "maximum_file_size_bytes": 1000000,
-            "maximum_package_size_bytes": 5000000,
-            "required_artifacts": ["proof.json"],
+            "maximum_file_size_bytes": 1_000_000,
+            "maximum_package_size_bytes": 5_000_000,
+            "required_artifacts": ["events.jsonl"],
         },
         "requirements": requirements,
         "setup_notes": [],
     }
 
 
-def configure_guide(client, tokens, project_id):
+def validate_authored_rules_template():
+    """Apply the production untrusted-result schema before starting a live run."""
+    from app.interfaces.project_agents import ProjectGuideCompilationResult
+
+    body = authored_rules()
+    body.pop("format")
+    reference = {
+        "source_item_id": "018f0ebc-7966-7e8d-bc4d-1cae1e000001",
+        "document_version_id": "018f0ebc-7966-7e8d-bc4d-1cae1e000002",
+        "sha256": "sha256:" + hashlib.sha256(GUIDE).hexdigest(),
+    }
+    for item in (*body["findings"], *body["requirements"]):
+        item["evidence_refs"] = [reference]
+    body["agent_version"] = "v1"
+    ProjectGuideCompilationResult.model_validate(body)
+
+
+def configure_guide(client, tokens, project_id, *, human_review_required=False):
     manager = tokens["manager"]
     guide = client.write_and_replay(
         manager,
@@ -122,9 +161,9 @@ def configure_guide(client, tokens, project_id):
         "create",
         project_id,
         body={
-            "version": "cli-exercise",
-            "change_summary": "Unpaid local CLI journey",
-            "task_examples": [{"content": "Prepare the declared proof fields."}],
+            "version": "incident-summary-v1",
+            "change_summary": "Fixed incident-summary CLI journey",
+            "task_examples": [{"content": TASK}],
             "documents": [
                 {"label": "Guide.md", "media_type": "text/markdown"},
                 {"label": "workstream-rules.json", "media_type": "text/markdown"},
@@ -132,20 +171,25 @@ def configure_guide(client, tokens, project_id):
         },
     )
     guide_id = guide["id"]
-    for command, body in (
-        (
-            "set-review-policy",
-            {
-                "human_review_required": False,
-                "review_preference_window_seconds": 3600,
-                "review_lease_duration_seconds": 1800,
-            },
-        ),
+    policies = [
         (
             "set-revision-policy",
             {"max_revision_rounds": 2, "revision_deadline_hours": 48},
         ),
-    ):
+    ]
+    if not human_review_required:
+        policies.insert(
+            0,
+            (
+                "set-review-policy",
+                {
+                    "human_review_required": False,
+                    "review_preference_window_seconds": 3600,
+                    "review_lease_duration_seconds": 1800,
+                },
+            ),
+        )
+    for command, body in policies:
         client.write_and_replay(
             manager,
             "project",
@@ -275,18 +319,18 @@ def approve_and_activate(client, token, project_id, guide_id, registry_entries):
             "target": proposal["target"],
             "pre_submit_attachments": [
                 {
-                    "requirement_id": "project.proof_pre",
+                    "requirement_id": "terminal.pre.incident_summary_layout",
                     "registry_entry_id": registry_entries["pre"]["registry_entry_id"],
                     "registry_entry_digest": registry_entries["pre"]["entry_digest"],
-                    "configuration": {},
+                    "configuration": {"check": "incident_summary_layout"},
                 }
             ],
             "post_submit_attachments": [
                 {
-                    "requirement_id": "project.proof_post",
+                    "requirement_id": "terminal.post.incident_summary_counts",
                     "registry_entry_id": registry_entries["post"]["registry_entry_id"],
                     "registry_entry_digest": registry_entries["post"]["entry_digest"],
-                    "configuration": {},
+                    "configuration": {"check": "incident_summary_counts"},
                 }
             ],
             "acknowledged_warning_hashes": [],

@@ -20,7 +20,7 @@ class JourneyClient:
         self.evidence = None
         if location := os.environ.get("WORKSTREAM_CLI_JOURNEY_EVIDENCE"):
             self.evidence = Path(location) / "cli-receipts"
-            self.evidence.mkdir(mode=0o700)
+            self.evidence.mkdir(mode=0o700, parents=True)
 
     def complete_stage(self, stage: str):
         self.completed_stages.append(stage)

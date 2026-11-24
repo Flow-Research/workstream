@@ -2206,60 +2206,87 @@ or extra branch-protection setting is needed.
 
 `tests/journey/bootstrap.py` exercises the built CLI against a fresh migrated
 PostgreSQL database, real MinIO, a private Redis broker, prefork Celery workers
-and the real external checker service. It creates product prerequisites through
-public CLI operations. The documented local administrator bootstrap and lifecycle
-deployment transition are explicit deployment prerequisites, not fixture-created
-project, submission or acceptance records.
+(including exclusive finalization and source-cleanup queues), and one pinned
+remote TLS checker runner. It creates project, guide, task, assignment and
+submission prerequisites through public CLI operations. The local administrator
+bootstrap and lifecycle transition remain explicit deployment prerequisites.
+The script never starts a native checker socket or silently falls back to one.
 
-This drill currently targets a Linux Docker host whose daemon can bind-mount the
-same local scratch paths. Install the backend environment, Go, Rust, Docker and
-`redis-server`. Use the local PostgreSQL/MinIO prerequisites and proof-checker
-publication instructions in the [local agent loop](../docs/engineering/local-agent-loop.md)
-to generate `.local-agent-loop/checker-service.json`, `registry-pre.json` and
-`registry-post.json`. The drill starts its own native API, worker and checker
-processes; it does not use an already-running application database or broker.
-
-From the repository root:
+Build the CLI and generate two exact registration inputs from the already
+installed [incident-summary pilot](../pilots/terminal_systems/mvp/README.md):
 
 ```sh
-(cd cli && go build -trimpath -o ../.local-agent-loop/workstream ./cmd/workstream)
-cargo build --manifest-path external_checkers/Cargo.toml --locked --release \
-  -p workstream-checker-service --jobs 2
-export WORKSTREAM_CLI_EXECUTABLE="$PWD/.local-agent-loop/workstream"
+(cd cli && go build -trimpath -o /tmp/workstream-journey-cli ./cmd/workstream)
+export WORKSTREAM_CLI_EXECUTABLE=/tmp/workstream-journey-cli
+python pilots/terminal_systems/mvp/registry.py \
+  --image-digest "$PINNED_INCIDENT_IMAGE_MANIFEST_SHA256" \
+  --pre "$PRIVATE_ASSETS/registry-pre.json" \
+  --post "$PRIVATE_ASSETS/registry-post.json"
+```
+
+The runner image must already be installed and qualified for its exact
+platform manifest/config and PRE root profile. Supply a locally owned,
+strictly authenticated SSH tunnel to the private runner; the API connects to
+loopback but verifies the runner's TLS server name. The real hardened guide
+parser must also be running at a socket owned by UID 10002/GID 10001 with its
+fixed directory and socket modes. The exclusive source-cleanup worker needs
+a separate MinIO access key with permission on this disposable bucket; its
+private secret file must have mode 0600. The cleanup profile's
+`upload_principal` names the foreground upload access key, so the worker can
+reject accidental reuse of that credential. Export every input below
+before running the drill. No credential or runtime profile is inferred from a
+local Docker installation:
+
+```sh
+export WORKSTREAM_EXTERNAL_RUNNER_HOST=127.0.0.1
+export WORKSTREAM_EXTERNAL_RUNNER_PORT="$OWNED_TUNNEL_PORT"
+export WORKSTREAM_EXTERNAL_RUNNER_SERVER_NAME=runner.workstream.internal
+export WORKSTREAM_EXTERNAL_RUNNER_CA_PATH="$PRIVATE_TLS/ca.crt"
+export WORKSTREAM_EXTERNAL_RUNNER_CERTIFICATE_PATH="$PRIVATE_TLS/app.crt"
+export WORKSTREAM_EXTERNAL_RUNNER_PRIVATE_KEY_PATH="$PRIVATE_TLS/app.key"
+export WORKSTREAM_ARTIFACT_INTAKE_IMAGE_DIGEST="$PINNED_INTAKE_IMAGE_SHA256"
+export WORKSTREAM_ARTIFACT_INTAKE_CONFIG_DIGEST="$PINNED_INTAKE_CONFIG_SHA256"
+export WORKSTREAM_CLI_JOURNEY_CHECKER_IMAGE_DIGEST="$PINNED_INCIDENT_IMAGE_MANIFEST_SHA256"
+export WORKSTREAM_CLI_JOURNEY_PRE_RUNTIME_PROFILE_FILE="$PRIVATE_ASSETS/pre-runtime-profile.json"
+export WORKSTREAM_CLI_JOURNEY_EXECUTION_PROFILE_FILE="$PRIVATE_ASSETS/isolated-execution-profile.json"
+export WORKSTREAM_CLI_JOURNEY_CLEANUP_PROFILE_FILE="$PRIVATE_ASSETS/isolated-cleanup-profile-journey.json"
+export WORKSTREAM_CLI_JOURNEY_CLEANUP_ACCESS_KEY_ID="$OWNED_CLEANUP_ACCESS_KEY"
+export WORKSTREAM_CLI_JOURNEY_CLEANUP_SECRET_FILE="$PRIVATE_ASSETS/cleanup-secret"
+export WORKSTREAM_GUIDE_DOCUMENT_PARSER_SOCKET="$OWNED_PARSER_SOCKET"
+export WORKSTREAM_CLI_JOURNEY_REGISTRY_PRE_FILE="$PRIVATE_ASSETS/registry-pre.json"
+export WORKSTREAM_CLI_JOURNEY_REGISTRY_POST_FILE="$PRIVATE_ASSETS/registry-post.json"
 export WORKSTREAM_CLI_JOURNEY_SETUP=1
 export WORKSTREAM_CLI_JOURNEY_TASKS=1
 export WORKSTREAM_CLI_JOURNEY_SUBMIT=1
-# Optional private raw CLI receipts for independent review; keep outside git.
 export WORKSTREAM_CLI_JOURNEY_EVIDENCE="$(mktemp -d /tmp/workstream-journey-evidence.XXXXXX)"
-# Supply a disposable local PostgreSQL admin URL and the local MinIO endpoint
-# through WORKSTREAM_TEST_ADMIN_DATABASE_URL and WORKSTREAM_TEST_MINIO_ENDPOINT.
+# Supply disposable PostgreSQL and local MinIO prerequisites through
+# WORKSTREAM_TEST_ADMIN_DATABASE_URL and WORKSTREAM_TEST_MINIO_ENDPOINT.
 cd backend
 .venv/bin/python scripts/run_isolated_tests.py \
   --metadata-json /tmp/workstream-cli-journey-isolation.json \
-  --lane cli_full_journey --timeout-seconds 900 -- \
+  --lane cli_full_journey --timeout-seconds 2400 -- \
   .venv/bin/python ../cli/tests/journey/bootstrap.py
 ```
 
-Use the isolated runner's fixed local test MinIO credentials, never production
-credentials. Each run owns a unique database/role and bucket/prefix. Require its
-cleanup metadata as well as exit zero; neither a completed migration nor a
-successful intermediate stage proves the remaining journey. Do not bypass a
-failed prerequisite or substitute a synthetic checker result.
-The optional evidence directory retains command arguments, exit codes and raw
-stdout/stderr after checking for bearer disclosure. It contains local project
-data: keep it private and do not commit it. Use a fresh directory for each run.
-Setup-enabled runs also retain private runtime logs after stopping their owned
-processes. These logs are diagnostic evidence, not proof that a failed stage
-succeeded. To verify an explicitly reviewed checker repair before merge, set
-`WORKSTREAM_CLI_JOURNEY_CHECKER_EXECUTABLE` to its built binary and record that
-binary's SHA-256 and source commit; this is cross-branch integration evidence.
+The bootstrap preflights all TLS files, profiles, parser socket, cleanup
+credential separation, registry schemas and image
+pins before starting its API or workers. The two isolated profiles are
+explicit test envelopes for the small pilot ZIPs, not approved hosted defaults
+or maximum-size qualification. Each run owns a database, role, bucket/prefix,
+broker and worker process groups. Require cleanup metadata as well as exit zero;
+a completed migration or intermediate stage does not prove the journey. The
+private evidence directory contains raw CLI receipts and runtime logs; keep it
+outside Git and do not publish tokens or arbitrary server output.
 
-The scope is manager-authored setup, an explicitly unpaid policy and the locked
-no-human-review acceptance branch. The example checker validates declared proof
-fields, not the truth of remote GitHub work. This is not hosted deployment,
-external Flow issuer, live model inference, human review/revision or compensation
-fulfillment certification. The connected proof also reads the exact submission's
-artifact binding, replica and verification evidence through the Operator CLI,
-and checks non-Operator concealment. The separate signed API test exercises
-retry only on a genuinely exhausted verification job. A successful upload is
-never used as an eligible retry fixture.
+The drill submits a PRE-rejected missing-summary ZIP without a Submission, a
+correct ZIP through immutable Submission, passing POST, automatic
+FinalAcceptance and one unpaid submitter ContributionRecord, and a shaped but
+incorrect ZIP through failed POST and governed revision without contribution.
+It then configures a second project with the default human-review policy and
+observes `review_pending` without a fabricated contribution. The public review
+mutation and human acceptance authority are not mounted, so this drill does not
+claim a live human-review decision or acceptance. It also checks exact replay,
+public retained evidence, Operator custody and non-Operator concealment.
+The real checker validates only the fixed incident-summary exercise; this is
+not hosted deployment, external Flow issuer, model inference, broad ZIP-size
+performance qualification or compensation fulfillment certification.

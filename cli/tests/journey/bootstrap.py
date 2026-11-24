@@ -21,9 +21,9 @@ from uuid import uuid4
 
 from client import JourneyClient
 from public_setup import configure_guide, publish_unpaid_terms, approve_and_activate
-from runtime import durable_runtime
-from task_work import claim_and_read
-from submission_work import submit_and_observe
+from runtime import durable_runtime, load_journey_configuration
+from task_work import claim_and_read, create_claimed_task, issue_submitter
+from submission_work import submit_and_observe, observe_review_pending
 from artifact_work import inspect_submission_custody
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -33,6 +33,49 @@ sys.path.insert(0, str(BACKEND / "scripts"))
 from local_flow_tokens import issue_flow_token  # noqa: E402
 from run_isolated_tests import NAME_RE  # noqa: E402
 from urllib.parse import urlsplit  # noqa: E402
+
+
+def run_default_review_branch(client, tokens, actors, registry_entries):
+    """Use the same public setup but leave required human review untouched."""
+    project = client.call(
+        tokens["manager"],
+        "project",
+        "create",
+        "--name",
+        "CLI incident review branch",
+        "--slug",
+        "cli-review-" + uuid4().hex,
+        "--idempotency-key",
+        str(uuid4()),
+    )
+    project_id = project["id"]
+    for name, role in (
+        ("manager", "project_manager"),
+        ("finance", "finance_authority"),
+    ):
+        client.write_and_replay(
+            tokens["administrator"],
+            "admin",
+            "role-grants",
+            "issue",
+            body={
+                "target_actor_profile_id": actors[name],
+                "role": role,
+                "scope_type": "project",
+                "scope_project_id": project_id,
+                "reason": "Exact-project default review branch",
+            },
+        )
+    publish_unpaid_terms(client, tokens["finance"], project_id)
+    guide_id = configure_guide(client, tokens, project_id, human_review_required=True)
+    approve_and_activate(
+        client, tokens["manager"], project_id, guide_id, registry_entries
+    )
+    issue_submitter(client, tokens["manager"], actors["alice"], project_id)
+    task_id, assignment_id = create_claimed_task(
+        client, tokens, project_id, title="Human review of incident summary"
+    )
+    observe_review_pending(client, tokens, project_id, task_id, assignment_id)
 
 
 def main():
@@ -77,6 +120,7 @@ def main():
         directory = Path(temporary)
         through_setup = os.environ.get("WORKSTREAM_CLI_JOURNEY_SETUP") == "1"
         if through_setup:
+            registries = load_journey_configuration(environment)
             start_workers = stack.enter_context(
                 durable_runtime(ROOT, directory, environment)
             )
@@ -218,6 +262,7 @@ def main():
                         "artifact.binding",
                         "artifact.guide_reader",
                         "artifact.materializer",
+                        "artifact.source_cleanup",
                         "project.setup",
                         "outbox.dispatcher",
                         "checker.pre_submit",
@@ -246,7 +291,7 @@ def main():
                             "registry",
                             "register",
                             "--input",
-                            str(ROOT / f".local-agent-loop/registry-{phase}.json"),
+                            str(registries[phase]),
                             "--idempotency-key",
                             str(uuid4()),
                         )
@@ -305,6 +350,10 @@ def main():
                                 receipt["submission_id"],
                             )
                             client.complete_stage("operator_submission_custody")
+                            run_default_review_branch(
+                                client, tokens, actors, registry_entries
+                            )
+                            client.complete_stage("default_human_review_pending")
                 print(
                     json.dumps(
                         {

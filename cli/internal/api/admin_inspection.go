@@ -171,6 +171,7 @@ func validServiceIdentity(value string) bool {
 	return oneOf(value,
 		"workstream.artifact.verifier", "workstream.artifact.put_resolver",
 		"workstream.artifact.scheduler", "workstream.artifact.binding",
+		"workstream.artifact.source_cleanup",
 		"workstream.artifact.guide_reader", "workstream.artifact.materializer",
 		"workstream.artifact.checker_output", "workstream.task.assignment_reconciler",
 		"workstream.task.revision_expirer", "workstream.task.post_submit_router",

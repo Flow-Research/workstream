@@ -3,6 +3,8 @@
 import hashlib
 from uuid import uuid4
 
+from public_setup import TASK
+
 
 def replay_transition(client, token, *arguments):
     command = (
@@ -44,6 +46,36 @@ def issue_submitter(client, manager, actor_id, project_id):
     )
 
 
+def create_claimed_task(client, tokens, project_id, *, title: str):
+    """Reuse the public manager and contributor lifecycle for each real output."""
+    task = client.write_and_replay(
+        tokens["manager"],
+        "project",
+        "task",
+        "create",
+        project_id,
+        body={
+            "title": title,
+            "description": TASK,
+            "task_type": "evaluation",
+            "difficulty": "medium",
+            "skill_tags": ["analysis"],
+            "estimated_time_minutes": 10,
+            "acceptance_criteria": "The fixed incident input and exact per-service counts pass POST.",
+            "rejection_criteria": "Required files are missing or counts are incorrect.",
+        },
+    )
+    task_id = task["id"]
+    for action in ("screen", "release"):
+        replay_transition(
+            client, tokens["manager"], "project", "task", action, project_id, task_id
+        )
+    claimed = replay_transition(client, tokens["alice"], "task", "claim", task_id)
+    if claimed["task"]["status"] != "in_progress":
+        raise AssertionError("claim did not immediately start work")
+    return task_id, claimed["assignment"]["id"]
+
+
 def claim_and_read(client, tokens, actors, project_id):
     grant = issue_submitter(client, tokens["manager"], actors["alice"], project_id)
     other = client.call(
@@ -60,31 +92,9 @@ def claim_and_read(client, tokens, actors, project_id):
     issue_submitter(client, tokens["manager"], actors["bob"], other["id"])
     if client.call(tokens["bob"], "project", "show", other["id"])["id"] != other["id"]:
         raise AssertionError("foreign-project contributor setup failed")
-    task = client.write_and_replay(
-        tokens["manager"],
-        "project",
-        "task",
-        "create",
-        project_id,
-        body={
-            "title": "Validate declared proof fields",
-            "description": "Prepare proof.json using the locked guide format.",
-            "task_type": "evaluation",
-            "difficulty": "medium",
-            "skill_tags": ["analysis"],
-            "estimated_time_minutes": 10,
-            "acceptance_criteria": "All declared proof fields pass the registered checker.",
-            "rejection_criteria": "Required proof fields are missing or invalid.",
-        },
+    task_id, assignment_id = create_claimed_task(
+        client, tokens, project_id, title="Summarize the fixed incident events"
     )
-    task_id = task["id"]
-    for action in ("screen", "release"):
-        replay_transition(
-            client, tokens["manager"], "project", "task", action, project_id, task_id
-        )
-    claimed = replay_transition(client, tokens["alice"], "task", "claim", task_id)
-    if claimed["task"]["status"] != "in_progress":
-        raise AssertionError("claim did not immediately start work")
     documents = client.call(tokens["alice"], "task", "guide", task_id)
     denied = client.call(tokens["bob"], "task", "guide", task_id, expected_exit=1)
     if denied["error"].get("status") != 404:
@@ -105,4 +115,4 @@ def claim_and_read(client, tokens, actors, project_id):
         raise AssertionError(
             "downloaded originals differ from the locked public manifest"
         )
-    return task_id, claimed["assignment"]["id"], grant
+    return task_id, assignment_id, grant
