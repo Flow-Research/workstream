@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 import time
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from sqlalchemy import select
 
@@ -99,6 +99,27 @@ async def _trial_operation_ids(factory, task):
             SubmissionIntakeOperation.task_id == task)))
 
 
+def _same_public_failure(first, replay):
+    """Compare durable error fields while validating request-scoped IDs."""
+    def stable(value):
+        if type(value) is not dict or set(value) != {'error'}:
+            return None
+        error = value['error']
+        expected = {'code', 'message', 'details', 'correlation_id', 'retryable'}
+        if type(error) is not dict or set(error) != expected:
+            return None
+        correlation = error['correlation_id']
+        try:
+            if type(correlation) is not str or str(UUID(correlation)) != correlation:
+                return None
+        except ValueError:
+            return None
+        return {key: item for key, item in error.items() if key != 'correlation_id'}
+
+    left, right = stable(first), stable(replay)
+    return left is not None and left == right
+
+
 async def _runner_drained(runner):
     observed = await runner.command('drained')
     result = observed['result']
@@ -171,10 +192,13 @@ async def _remote_pre_launch_failure(client, factory, *, task, assignment, token
     replay = await _source_request(client, route, headers, token, key, archive, 503)
     repeated = await _selected(factory, key)
     replay_trace = await runner.snapshot()
-    _require(replay == failure and (repeated.id, repeated.terminal_digest) == (row.id, row.terminal_digest)
-             and replay_trace['cursor'] == failed_trace['cursor']
-             and await _trial_operation_ids(factory, task) == {operation.id},
-             'same-key failure replay changed custody or allocated a native machine')
+    _require(_same_public_failure(failure, replay), 'same-key public failure fields changed')
+    _require((repeated.id, repeated.terminal_digest) == (row.id, row.terminal_digest),
+             'same-key selected PRE identity or digest changed')
+    _require(replay_trace['cursor'] == failed_trace['cursor'],
+             'same-key replay allocated a native machine')
+    _require(await _trial_operation_ids(factory, task) == {operation.id},
+             'same-key replay created another source operation')
     await _assert_source_failure(factory, task, key, len(archive), sealed=True,
                                  code='submission_infrastructure_unavailable')
     fresh_key = str(uuid4())

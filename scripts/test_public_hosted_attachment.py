@@ -1125,6 +1125,7 @@ finally:
 class RemotePreLaunchContracts(unittest.TestCase):
     def exercise(self, *, omit_delete=False, replay_allocates=False, wrong_image=False,
                  unknown=False, missing_create=False, wrong_source=False,
+                 wrong_replay_field=False, bad_replay_correlation=False,
                  first_response_path=None):
         from experiments.pilot04_external_checker_runtime import public_runtime_trials as runtime
         from experiments.pilot04_external_checker_runtime.public_runner_faults import FaultOutcomeUnknown
@@ -1165,9 +1166,15 @@ class RemotePreLaunchContracts(unittest.TestCase):
                 'reservation': {'source': {'location': {'operation_id': 'failed-operation'}}}})
         fresh_row = SimpleNamespace(id='fresh-pre', source_operation_id='fresh-operation', request_json=request)
         operation = SimpleNamespace(id='failed-operation', selected_pre_submit_run_id=None)
-        failure = {'error': {'code': 'submission_infrastructure_unavailable'}}
+        failure = {'error': {'code': 'submission_infrastructure_unavailable',
+            'message': 'submission_infrastructure_unavailable', 'details': {},
+            'correlation_id': str(uuid4()), 'retryable': True}}
+        replay_error = {'error': failure['error'] | {
+            'correlation_id': 'invalid' if bad_replay_correlation else str(uuid4()),
+            'message': 'changed' if wrong_replay_field else failure['error']['message'],
+        }}
         receipt = {'operation_id': 'fresh-operation', 'status': 'accepted', 'replayed': False}
-        source = AsyncMock(side_effect=[failure, failure, receipt])
+        source = AsyncMock(side_effect=[failure, replay_error, receipt])
         accepted = AsyncMock(return_value={'submission_id': 'submission'})
         with patch.object(runtime, '_trial_operation_ids', new=AsyncMock(side_effect=[set(),
                 {'failed-operation'}, {'failed-operation'}, {'failed-operation', 'fresh-operation'}])), \
@@ -1198,9 +1205,11 @@ class RemotePreLaunchContracts(unittest.TestCase):
     def test_remote_first_pre_preserves_known_failure_replay_and_real_t5_observer(self):
         self.exercise()
         for fault, message in (('omit_delete', 'lacks deletion'),
-                ('replay_allocates', 'same-key failure replay changed custody'),
+                ('replay_allocates', 'same-key replay allocated a native machine'),
                 ('wrong_image', 'failed PRE lost exact selected image'),
-                ('wrong_source', 'changed its exact PRE')):
+                ('wrong_source', 'changed its exact PRE'),
+                ('wrong_replay_field', 'same-key public failure fields changed'),
+                ('bad_replay_correlation', 'same-key public failure fields changed')):
             with self.subTest(fault=fault), self.assertRaisesRegex(RuntimeError, message):
                 self.exercise(**{fault: True})
 

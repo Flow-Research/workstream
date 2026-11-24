@@ -10670,3 +10670,27 @@ failure diagnostics. Its bucket wording follows current isolation owner: shared
 lanes create/probe/remove their distinct buckets; only omnicore_sdk retains the
 fixed workstream-artifacts traffic-proof bucket. Historical17-lane receipts in
 reports/roadmap remain historical and unchanged.
+
+The fourth isolated public fault run used clean
+`4b6c42807b7ce25a57573b10d06839dcbb958b92` and one fresh finite
+supervisor. Guide/task setup passed; the first public submission returned the
+expected infrastructure 503, with a finalized failed PRE and exact native
+create/start/delete. The failed source-to-PRE custody assertion now passed.
+The same-key replay returned infrastructure 503, but the trial stopped at a
+compound equality assertion comparing the entire first and replay error
+bodies. That comparison included request-scoped `error.correlation_id`, which
+the API creates for each HTTP request. The independent post-terminal trace
+still has only the original three events, so replay did not allocate another
+native machine. The other equality terms were not individually observed by
+this failed assertion. Isolated database and MinIO cleanup completed; the
+operator restored the original config and verified all owned resource lists
+empty with the exact foreign control removed.
+
+The trial now compares the five closed public error fields while validating
+both correlation IDs as canonical UUID strings, and checks selected PRE ID
+and digest, native trace cursor and singleton source operation separately.
+The fake public replay uses distinct valid correlation IDs; changed stable
+message and malformed correlation cases fail. The entire affected hosted
+attachment module passes `39 passed, 76 subtests passed`; Ruff lint and diff
+checks pass. A fifth connected run is still needed for same-key custody,
+fresh-key accepted T5 and complete end-to-end cleanup proof.
