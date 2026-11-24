@@ -116,8 +116,11 @@ class DeliveryRepository:
         """Bind one owner session."""
         self.session = session
 
-    async def candidates(self, registered, *, after: UUID | None, limit: int) -> DeliveryCandidatePage:
-        """One nonlocking statement includes due supported work and all expired claims."""
+    async def candidates(
+        self, registered, *, after: UUID | None, limit: int,
+        excluded: frozenset[tuple[str, int]] = frozenset(),
+    ) -> DeliveryCandidatePage:
+        """Select due supported work and expired claims within this worker's scope."""
         e = OutboxEvent
         now = func.statement_timestamp()
         query = select(e.event_id, e.project_id, e.event_type).where(or_(
@@ -125,6 +128,8 @@ class DeliveryRepository:
                  tuple_(e.event_type, e.event_version).in_(sorted(registered))),
             and_(e.delivery_state == "claimed", e.claim_expires_at <= now),
         ))
+        if excluded:
+            query = query.where(tuple_(e.event_type, e.event_version).not_in(sorted(excluded)))
         if after is not None:
             query = query.where(e.event_id > after)
         rows = (await self.session.execute(query.order_by(e.event_id).limit(limit + 1))).all()

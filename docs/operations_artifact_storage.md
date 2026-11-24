@@ -5,7 +5,7 @@ storage. These surfaces diagnose Workstream records; they never expose provider
 object references, endpoints, credentials, signed URLs, or raw provider
 responses.
 
-## Activation boundary
+## Authorization and storage boundary
 
 The routes under `/api/v1/operator/artifacts` require a current persisted
 system-scoped human Operator grant. AUTH makes a fresh exact action/resource
@@ -18,147 +18,21 @@ objects or activate S3. WS-XINT-002-03 separately activates the fixed verifier,
 pending-work scanner and put resolver through transaction-bound prepared
 authority; it grants no Operator route by itself.
 
-AWS S3 is activation-gated. Configuration supplies only non-secret exact
-release, namespace, role/policy, reviewed trust-policy digest and bucket-policy
-bindings; Roles Anywhere also binds the exact anchor/profile ARNs and canonical
-state digests. Configuration cannot assert a pass. API, Celery task-process and
-Beat startup load an exact fresh activation after the
-namespace claim and before credential inspection. Every AWS SDK call reloads
-the same activation selected for its logical operation, and ART reloads that ID
-inside any provider-derived terminal transaction.
-
-The deployment runs one fixed command separately under each configured proof
-identity, using one newly generated non-secret UUID nonce. Run runtime proof
-first so its retained challenge object exists, followed by readiness and
-negative-access proof, then run credential-free coordination:
-
-```bash
-python -m scripts.aws_artifact_provider_proof runtime_immutability --group-nonce <uuid>
-python -m scripts.aws_artifact_provider_proof readiness --group-nonce <uuid>
-python -m scripts.aws_artifact_provider_proof negative_access --group-nonce <uuid>
-python -m scripts.aws_artifact_provider_proof coordinate --group-nonce <uuid>
-```
-
-The coordinator and activation-table trigger both require the runtime result's
-completion time to be no later than the readiness and negative result start
-times. An out-of-order group cannot activate even when all three rows otherwise
-match and report pass. This ensures the later denial calls target the object
-that runtime proof actually retained, rather than relying on a missing-key 403.
-
-Each proof process first binds its STS-observed caller to its configured role,
-performs only that mode's fixed calls, and writes one append-only bounded result
-using PostgreSQL time. Coordination has database access and no AWS transport;
-it accepts exactly one passing result of every type in the common group. Run
-the sequence every five minutes. Results and activations expire 15 minutes from
-their individual starts, so overlapping unexpired groups are expected. The
-deployment must complete runtime proof, readiness proof, negative-access proof
-and coordination within the fixed 120-second proof-sequence allowance. Native
-AWS settings reserve that allowance when validating operation deadlines and
-assume successive runtime probes start within 300 seconds. The coordinator and
-activation-table trigger reject insertion when PostgreSQL time minus
-`runtime.started_at` exceeds the allowance. At the maximum permitted budgets,
-equality leaves no scheduling or commit-latency slack: start earlier or configure
-smaller operation deadlines to provide margin. Measure start-to-start cadence,
-full-sequence duration and commit latency during the live drill. These bounds do
-not guarantee continuous eligibility; a late or missed group fails closed.
-
-The command accepts no pass value or caller-authored observation, and product,
-API and configuration inputs cannot create these records. The deployed proof
-process, its database writer credential and database administrators are the
-v0.1 trust root for proof and activation rows. Protect that credential as
-deployment authority. v0.1 does not claim resistance to a malicious holder of
-it; a separate database role or external attestation would be a new security
-design, not evidence supplied by this command.
-
-Every new nonce intentionally leaves one immutable 49-byte challenge in the
-production content-addressed namespace. At a five-minute cadence this is
-105,120 objects and 5,150,880 payload bytes per 365-day year, before provider
-metadata and request charges. They create no product binding or receipt, but
-exercise the exact production resource policy and no-expiry lifecycle; capacity
-monitoring must include them, and orphan cleanup must not delete them.
-
-Each independently deployed executor supplies its own selected workload-identity
-method and identity environment; the common settings contract does not imply
-that the runtime, readiness and negative jobs share one credential method.
-The exact three trust-policy digests are shared non-secret configuration. The
-readiness run compares them with `GetRole`, rejects shared workload subjects,
-and rejects any trust grant that lets one configured workload role assume
-another.
-
-For certificate-based external hosting, follow the
-[Roles Anywhere setup guide](operations_aws_roles_anywhere.md). It supplies the
-provisioning and generated configuration flow, private leaf-certificate mounts,
-renewal/revocation steps and separate proof-job instructions. The CA signing key
-stays under administrator-only custody outside all application mounts, including
-when signing and application execution share a server. Application processes
-receive only the runtime leaf identity.
-
-Readiness and negative roles accept either a closed exact OIDC trust or the
-closed Roles Anywhere certificate trust. Runtime also supports the EC2
-instance-profile shape for independently selected AWS hosting. OIDC trust fixes
-issuer, subject and audience. Roles Anywhere trust fixes source account,
-trust-anchor ARN, issuer CN and the role-specific subject CN. Its shared profile
-contains exactly the three roles. Each certificate proves own-role success,
-explicit denial for both other roles, then own-role success again; a network,
-certificate, timeout or malformed helper failure is not an access-denial proof.
-No broad trust, role chaining or ambient credential fallback is supported.
-
-PostgreSQL retains the three distinct role ARNs and trust-policy digests. For
-Roles Anywhere it additionally binds anchor/profile ARNs and canonical state
-digests on every probe and activation, including runtime and terminal checks.
-The readiness executor compares those values to the actual enabled AWS resources
-and CA material. Changed bindings require a fresh matching group. Retained
-historical evidence is preserved; it does not activate the current proof
-contract. Database custody does not replace ongoing external proof.
-
-Do not supply bootstrap credentials or run all modes under one identity. The
-readiness identity may inspect only the exact three role attachments/inline
-policies and the exact two required managed-policy documents. A failed,
-expired, mixed or drifted group cannot activate AWS. An expired activation
-during a possibly successful write leaves recoverable acknowledgement-unknown
-state; rerun proof and let the existing resolver observe the object.
-
-## Safe activation evidence inspection
-
-Inspect only bounded custody metadata. Filter by the known release, group nonce,
-or activation ID and select record IDs, proof type/result, error code, configured
-digests, and PostgreSQL timestamps. Do not dump raw provider responses, process
-environments, SDK configuration, credential sources, or an unbounded table.
-For example, an operator with the existing read-only database path can inspect
-one group without changing its evidence:
-
-```sql
-SELECT id, probe_type, result, error_code, evidence_sha256,
-       started_at, completed_at, expires_at
-FROM artifact_provider_probe_results
-WHERE group_nonce = '<known-uuid>'
-ORDER BY probe_type
-LIMIT 3;
-
-SELECT id, group_nonce, supersedes_activation_id, activated_at, expires_at
-FROM artifact_provider_activations
-WHERE release_id = 'sha256:<known-release-digest>'
-ORDER BY activated_at DESC, id DESC
-LIMIT 20;
-```
-
-The rows are append-only evidence. Never update, delete, truncate, restamp, or
-copy them to manufacture freshness. An expired or failed row is diagnostic and
-cannot authorize provider I/O.
+AWS S3 uses a dedicated restricted credential. See the
+[S3 credential runbook](operations_aws_s3_credentials.md) for setup, permissions,
+qualification and rotation. Storage access does not depend on an expiring
+PostgreSQL proof or a periodic privileged inspection job. Workstream still
+checks product authorization and exact namespace ownership, and verifies file
+hashes and byte counts before accepting provider results.
 
 ## Backup and restore boundary
 
-Database and S3 backup execution remains environment-owned. A restore must
-preserve retained object bytes, the exact private namespace, and all immutable
-Workstream custody rows together. It must not rebind an object, activation,
-probe result, content record, replica, receipt, or audit fact to a different
-release, bucket, prefix, role, policy, or trust-policy digest. Restored
-activations remain governed by their original PostgreSQL timestamps and will
-normally be expired; run a fresh three-identity proof group before allowing AWS
-provider I/O. There is no Workstream restore-by-rebinding or retained-data
-deletion path in v0.1. Environment backup/restore drill evidence is still a
-hosted release prerequisite and is not supplied by this offline activation
-change.
+Database and S3 backup execution remains environment-owned. Preserve retained
+object bytes, the exact private namespace and immutable product custody rows
+together. Do not rebind a content record, replica, receipt or audit fact to
+another bucket, prefix or artifact. After restore, verify the configured
+credential and real storage reads before admitting new work. A database restore
+does not itself prove that the corresponding S3 bytes remain available.
 
 ## Diagnosis sequence
 
@@ -294,12 +168,16 @@ claim a new generation after the old lease expires. Repeated sweeps do not
 release the same charge again.
 
 For S3-compatible storage, supply separate cleanup credentials to this Celery process
-through its storage settings and put the upload access-key identity in the
+through its storage settings and put the upload principal identity in the
 profile's `upload_principal`. The provider factory rejects the upload principal
-as the cleanup principal. Do not give these deletion credentials to API or
-ordinary Celery processes. Native AWS source cleanup remains unavailable until its
-separate source-capability qualification is implemented and passed; existing
-SHA-object activation and MinIO tests do not qualify it.
+as the cleanup principal. Use the IAM user ARN for native AWS dedicated
+credentials, or the access-key identity for MinIO. Native AWS workload identity
+without an explicit comparable principal is not admitted for cleanup. Do not give these deletion credentials to API or
+ordinary Celery processes. The source path uses the same dedicated static
+credentials as other artifact operations; it does not restore the retired
+expiring provider-proof system. Native AWS source permissions and exact-version
+cleanup still require deployment qualification. MinIO tests alone do not
+establish that evidence.
 
 The sweep covers sealed sources, Local unfinished uploads and recorded MinIO
 multipart handles. Local cleanup retains an abort tombstone to reject late

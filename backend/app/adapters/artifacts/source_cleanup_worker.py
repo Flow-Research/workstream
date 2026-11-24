@@ -20,7 +20,7 @@ from workstream_external_services import ExternalServiceAdapterError
 
 def _configuration(settings):
     profile = SubmissionSourceCleanupProfile.model_validate(settings.submission_source_cleanup_profile)
-    bootstrap = create_artifact_store_bootstrap(settings, activation_guard=None)
+    bootstrap = create_artifact_store_bootstrap(settings)
     try:
         namespace = configured_artifact_storage_namespace(settings, bootstrap)
         claim = ArtifactStoreNamespaceClaim(bootstrap.identity, bootstrap.namespace_identity,

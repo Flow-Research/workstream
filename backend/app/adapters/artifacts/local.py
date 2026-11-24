@@ -38,7 +38,6 @@ from app.interfaces.artifacts import (
     ArtifactObjectHead,
     ArtifactObjectMissingError,
     ArtifactOperationConflictError,
-    ArtifactProviderOperationEvidence,
     ArtifactPutObservation,
     ArtifactPutResult,
     ArtifactRangeInvalidError,
@@ -228,39 +227,32 @@ class LocalStorageAdapter:
         except (OSError, ValueError):
             raise ArtifactStoreUnavailableError("local submission source operation failed") from None
 
-    async def begin_source_upload(self, intent: SubmissionSourceUploadIntent, *,
-                                  operation_evidence: ArtifactProviderOperationEvidence | None = None) -> SubmissionSourceUpload:
+    async def begin_source_upload(self, intent: SubmissionSourceUploadIntent) -> SubmissionSourceUpload:
         return await self._source_io(LocalSubmissionSource(self).begin, intent)
 
     async def upload_source_part(self, upload: SubmissionSourceUpload, number: int,
-                                 data: bytes, *, operation_evidence: ArtifactProviderOperationEvidence | None = None) -> SubmissionSourcePart:
+                                 data: bytes) -> SubmissionSourcePart:
         return await self._source_io(LocalSubmissionSource(self).part, upload, number, data)
 
-    async def complete_source_upload(self, completion: SubmissionSourceCompletion, *,
-                                     operation_evidence: ArtifactProviderOperationEvidence | None = None) -> SealedSubmissionSource:
+    async def complete_source_upload(self, completion: SubmissionSourceCompletion) -> SealedSubmissionSource:
         return await self._source_io(LocalSubmissionSource(self).complete, completion)
 
-    async def observe_sealed_source(self, source: SealedSubmissionSource, *,
-                                    operation_evidence: ArtifactProviderOperationEvidence | None = None) -> SealedSourceObservation | None:
+    async def observe_sealed_source(self, source: SealedSubmissionSource) -> SealedSourceObservation | None:
         return await self._source_io(LocalSubmissionSource(self).observe_sealed, source)
 
-    async def observe_source_upload(self, completion: SubmissionSourceCompletion, *,
-                                    operation_evidence: ArtifactProviderOperationEvidence | None = None) -> SealedSubmissionSource | None:
+    async def observe_source_upload(self, completion: SubmissionSourceCompletion) -> SealedSubmissionSource | None:
         return await self._source_io(LocalSubmissionSource(self).observe, completion)
 
-    async def discover_source_uploads(self, intent: SubmissionSourceUploadIntent, *,
-                                      operation_evidence: ArtifactProviderOperationEvidence | None = None) -> tuple[SubmissionSourceUpload, ...]:
+    async def discover_source_uploads(self, intent: SubmissionSourceUploadIntent) -> tuple[SubmissionSourceUpload, ...]:
         return await self._source_io(LocalSubmissionSource(self).discover, intent)
 
-    async def request_source_abort(self, upload: SubmissionSourceUpload, *,
-                                   operation_evidence: ArtifactProviderOperationEvidence | None = None) -> None:
+    async def request_source_abort(self, upload: SubmissionSourceUpload) -> None:
         await self._source_io(LocalSubmissionSource(self).abort, upload)
 
-    async def source_upload_parts_absent(self, upload: SubmissionSourceUpload, *,
-                                        operation_evidence: ArtifactProviderOperationEvidence | None = None) -> bool:
+    async def source_upload_parts_absent(self, upload: SubmissionSourceUpload) -> bool:
         return await self._source_io(LocalSubmissionSource(self).parts_absent, upload)
 
-    def open_source(self, source: SealedSubmissionSource, *, operation_evidence: ArtifactProviderOperationEvidence | None = None, maximum_chunk_bytes: int = 64 * 1024) -> AsyncGenerator[bytes, None]:
+    def open_source(self, source: SealedSubmissionSource, *, maximum_chunk_bytes: int = 64 * 1024) -> AsyncGenerator[bytes, None]:
         if type(maximum_chunk_bytes) is not int or not 1 <= maximum_chunk_bytes <= 64 * 1024:
             raise ValueError("source read chunk bound is invalid")
         source = SealedSubmissionSource.model_validate(source)
@@ -284,8 +276,6 @@ class LocalStorageAdapter:
     async def put(
         self,
         source: CommittedArtifactSource,
-        *,
-        operation_evidence: ArtifactProviderOperationEvidence | None = None,
     ) -> ArtifactPutResult:
         """Publish sealed bytes exclusively or verify an exact immutable replay."""
         self._require_initialized()
@@ -376,8 +366,6 @@ class LocalStorageAdapter:
     async def observe_put_result(
         self,
         commitment: ArtifactCommitment,
-        *,
-        operation_evidence: ArtifactProviderOperationEvidence | None = None,
     ) -> ArtifactPutObservation:
         """Read and validate the complete deterministic object when it exists."""
         self._require_initialized()
@@ -386,7 +374,6 @@ class LocalStorageAdapter:
         provider_object_ref = artifact_provider_object_ref(commitment)
         observed = await self.head(
             provider_object_ref,
-            operation_evidence=operation_evidence,
         )
         if not observed.exists:
             return ArtifactPutObservation(provider_object_ref, committed=False)
@@ -397,8 +384,6 @@ class LocalStorageAdapter:
         self,
         provider_object_ref: str,
         byte_range: ArtifactByteRange | None = None,
-        *,
-        operation_evidence: ArtifactProviderOperationEvidence | None = None,
     ) -> AsyncIterator[bytes]:
         """Stream a full object or range through bounded off-loop reads."""
         self._require_initialized()
@@ -455,8 +440,6 @@ class LocalStorageAdapter:
     async def head(
         self,
         provider_object_ref: str,
-        *,
-        operation_evidence: ArtifactProviderOperationEvidence | None = None,
     ) -> ArtifactObjectHead:
         """Return an existing or missing observation without exposing paths."""
         self._require_initialized()

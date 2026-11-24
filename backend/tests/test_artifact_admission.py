@@ -884,7 +884,6 @@ async def test_expired_lease_takeover_rejects_stale_terminal_completion(
                     first_claim,
                     first_executor,
                     first_facts,
-                    None,
                 )
                 == "stale"
             )
@@ -1179,7 +1178,6 @@ async def test_verification_claim_takeover_and_scanner_due_order_are_fenced(
                     "verified",
                     "sha256:" + "1" * 64,
                     1,
-                    None,
                 )
                 == "stale"
             )

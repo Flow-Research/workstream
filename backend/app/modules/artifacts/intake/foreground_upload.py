@@ -17,7 +17,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.interfaces.artifacts import (
-    ArtifactIntegrityError, ArtifactProviderOperationEvidence, ArtifactStore,
+    ArtifactIntegrityError, ArtifactStore,
     ArtifactStoreUnavailableError,
 )
 from app.modules.artifacts.api.submission_intake import (
@@ -58,7 +58,6 @@ class ForegroundSourceUpload:
         self, operation_id: UUID, lease_id: UUID, generation: int,
         chunks: AsyncIterator[bytes], *, part_bytes: int, idle_timeout_seconds: float,
         pre_timeout_seconds: float, pre_lease_seconds: float,
-        operation_evidence: ArtifactProviderOperationEvidence | None = None,
     ) -> SealedSubmissionSource:
         """Receive once under the original fence; return only committed source facts."""
         pre_timeout = _duration(pre_timeout_seconds)
@@ -70,13 +69,13 @@ class ForegroundSourceUpload:
                 operation_id, lease_id, generation,
                 part_bytes=part_bytes, idle_timeout_seconds=idle_timeout_seconds,
             )
-        upload = await self._store.begin_source_upload(intent, operation_evidence=operation_evidence)
+        upload = await self._store.begin_source_upload(intent)
         async with self._sessions.begin() as session:
             await self._repository(session).record_upload(
                 operation_id, lease_id, generation, upload=upload,
             )
         completion = await receive_submission_source(
-            self._store, upload, chunks, operation_evidence=operation_evidence,
+            self._store, upload, chunks,
         )
         async with self._sessions.begin() as session:
             await self._repository(session).record_eof(
@@ -84,7 +83,7 @@ class ForegroundSourceUpload:
             )
         try:
             source = await self._store.complete_source_upload(
-                completion, operation_evidence=operation_evidence,
+                completion,
             )
         except ArtifactStoreUnavailableError:
             remaining = (intent.upload_deadline_at - datetime.now(UTC)).total_seconds()
@@ -93,7 +92,7 @@ class ForegroundSourceUpload:
             try:
                 async with asyncio.timeout(remaining):
                     source = await self._store.observe_source_upload(
-                        completion, operation_evidence=operation_evidence,
+                        completion,
                     )
             except TimeoutError:
                 raise ArtifactStoreUnavailableError("submission completion observation expired") from None

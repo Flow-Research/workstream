@@ -5,12 +5,12 @@ from contextlib import asynccontextmanager
 
 from app.adapters.artifacts import (
     artifact_preparation_service,
-    artifact_provider_activation_guard,
     checker_output_binding,
     checker_output_storage,
     configured_artifact_storage_namespace,
     create_artifact_scratch_manager,
     create_artifact_store_bootstrap,
+    verify_artifact_provider_startup,
     setup_model_evidence,
     setup_model_output_binding,
     setup_model_output_storage,
@@ -67,10 +67,7 @@ async def configured_model_proxy_runtime(settings, sessions):
     if settings.checker_model_proxy_socket is None:
         yield
         return
-    bootstrap = create_artifact_store_bootstrap(
-        settings,
-        activation_guard=artifact_provider_activation_guard(settings, sessions),
-    )
+    bootstrap = create_artifact_store_bootstrap(settings)
     manager = None
     try:
         claim = await validate_configured_artifact_storage_namespace(
@@ -78,6 +75,7 @@ async def configured_model_proxy_runtime(settings, sessions):
             settings,
             sessions,
         )
+        await verify_artifact_provider_startup(settings)
         store = bootstrap.initialize_after_namespace_claim(claim)
         namespace = configured_artifact_storage_namespace(settings, bootstrap)
         manager = create_artifact_scratch_manager(settings)

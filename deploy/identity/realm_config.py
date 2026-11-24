@@ -128,6 +128,23 @@ def exchange_policy() -> tuple[dict, dict]:
     return profile, policy
 
 
+def persistent_connection_settings() -> dict:
+    """Bound offline renewal without extending ordinary browser/API sessions."""
+    return {
+        "offlineSessionIdleTimeout": 30 * 24 * 60 * 60,
+        "offlineSessionMaxLifespanEnabled": True,
+        "offlineSessionMaxLifespan": 90 * 24 * 60 * 60,
+    }
+
+
+def offline_access_scope() -> dict:
+    """Request retained access explicitly; no additional product permissions."""
+    scope = client_scope("offline_access", [], include_in_token_scope=True,
+                         display_on_consent_screen=True)
+    scope["attributes"]["consent.screen.text"] = "Keep Workstream connected between visits"
+    return scope
+
+
 def realm() -> dict:
     """Return a credential-free initial realm; never import users or signing keys."""
     identity = client_scope(IDENTITY_SCOPE, [
@@ -153,6 +170,8 @@ def realm() -> dict:
     profiles, policies = exchange_policy()
     return {
         "realm": "flow", "displayName": "Flow Identity", "enabled": True,
+        "loginTheme": "flow", "emailTheme": "flow", "accountTheme": "flow",
+        "eventsListeners": ["jboss-logging", "flow-human-registration"],
         "sslRequired": "all", "registrationAllowed": False,
         "loginWithEmailAllowed": True, "duplicateEmailsAllowed": False,
         "rememberMe": False, "resetPasswordAllowed": False, "verifyEmail": False,
@@ -162,6 +181,7 @@ def realm() -> dict:
         "passwordPolicy": "length(14)", "defaultSignatureAlgorithm": "RS256",
         "ssoSessionIdleTimeout": 1800, "ssoSessionMaxLifespan": 28800,
         "accessTokenLifespan": 300, "revokeRefreshToken": True, "refreshTokenMaxReuse": 0,
+        **persistent_connection_settings(),
         "defaultDefaultClientScopes": ["basic"], "defaultOptionalClientScopes": [],
         "clientScopes": [
             # Explicit scope imports replace the provider's stock scope list.
@@ -172,6 +192,7 @@ def realm() -> dict:
                     "jsonType.label": "long", "id.token.claim": "true",
                 }),
             ]),
+            offline_access_scope(),
             identity, client_scope(ACCESS_SCOPE, [], include_in_token_scope=True,
                                    display_on_consent_screen=True),
             client_scope("workstream-api-audience", [audience_mapper("api", client=API_AUDIENCE)]),
@@ -180,12 +201,71 @@ def realm() -> dict:
                 audience_mapper("mcp-resource", resource=MCP_RESOURCE),
             ], include_in_token_scope=True),
         ],
+        "scopeMappings": [{"clientScope": "offline_access", "roles": ["offline_access"]}],
         "clients": [
             browser_client("workstream-cli-login", "http://127.0.0.1:17843/callback", "workstream-api-audience"),
             browser_client("workstream-mcp-proof", "http://127.0.0.1:17844/callback", "workstream-mcp-audience"),
             swagger_client(), direct_api_client(), exchange, api,
         ],
         "clientProfiles": profiles, "clientPolicies": policies,
+    }
+
+
+def self_service_settings(existing: dict, server_info: dict, profile: dict, required_actions: list[dict]) -> dict:
+    """Render an existing-realm activation patch after operator email-delivery proof."""
+    if existing.get("realm") != "flow":
+        raise ValueError("Self-service configuration belongs only to the Flow realm")
+    providers = server_info.get("providers", {}).get("eventsListener", {}).get("providers", {})
+    if "flow-human-registration" not in providers:
+        raise ValueError("Deploy the Flow registration provider before enabling signup")
+    marker = next((item for item in profile.get("attributes", [])
+                   if item.get("name") == "workstream_subject_kind"), None)
+    if marker is None or marker.get("permissions") != {"view": ["admin"], "edit": ["admin"]}:
+        raise ValueError("Restore the administrator-only human identity profile before signup")
+    verification = next((action for action in required_actions if action.get("alias") == "VERIFY_EMAIL"), None)
+    if verification is None or verification.get("enabled") is not True:
+        raise ValueError("Enable the VERIFY_EMAIL required action before signup")
+    smtp = existing.get("smtpServer", {})
+    if not smtp.get("host") or not smtp.get("from"):
+        raise ValueError("Configure and prove SMTP delivery before enabling signup")
+    if smtp.get("ssl") != "true" and smtp.get("starttls") != "true":
+        raise ValueError("Production email delivery requires TLS")
+    listeners = list(existing.get("eventsListeners", []))
+    if "flow-human-registration" not in listeners:
+        listeners.append("flow-human-registration")
+    return {
+        "registrationAllowed": True, "registrationEmailAsUsername": True,
+        "resetPasswordAllowed": True, "verifyEmail": True,
+        "loginTheme": "flow", "emailTheme": "flow", "accountTheme": "flow", "eventsListeners": listeners,
+        "duplicateEmailsAllowed": False, "loginWithEmailAllowed": True,
+    }
+
+
+def account_console_settings(existing: dict) -> dict:
+    """Render built-in console mappers; attach basic via the client-scope endpoint."""
+    if (existing.get("clientId") != "account-console"
+            or not existing.get("publicClient")
+            or not existing.get("standardFlowEnabled")
+            or existing.get("fullScopeAllowed")
+            or existing.get("directAccessGrantsEnabled")
+            or existing.get("attributes", {}).get("pkce.code.challenge.method") != "S256"
+            or existing.get("redirectUris") != ["/realms/flow/account/*"]):
+        raise ValueError("Inspect the built-in account-console boundary before reconciliation")
+    return {
+        "protocolMappers": [
+            *[claim_mapper("account-console-" + claim, "oidc-usermodel-property-mapper", {
+                "user.attribute": attribute, "claim.name": claim, "jsonType.label": "String",
+                "access.token.claim": "false", "id.token.claim": "true",
+                "userinfo.token.claim": "false", "introspection.token.claim": "false",
+            }) for attribute, claim in (("firstName", "given_name"),
+                ("lastName", "family_name"), ("username", "preferred_username"))],
+            audience_mapper("account-console-audience", client="account"),
+            claim_mapper("account-console-roles", "oidc-usermodel-client-role-mapper", {
+                "usermodel.clientRoleMapping.clientId": "account",
+                "claim.name": "resource_access.account.roles",
+                "jsonType.label": "String", "multivalued": "true",
+            }),
+        ],
     }
 
 
@@ -217,7 +297,9 @@ def garden_client(client_id: str, callback: str) -> dict:
             or parsed.query or parsed.fragment or parsed.path != "/api/oauth/callback"
             or "*" in callback or not client_id.startswith("garden-")):
         raise ValueError("Garden registration requires its exact HTTPS callback and dedicated client ID")
-    return browser_client(client_id, callback, "workstream-mcp-audience")
+    client = browser_client(client_id, callback, "workstream-mcp-audience")
+    client["optionalClientScopes"].append("offline_access")
+    return client
 
 
 def main() -> None:
@@ -229,11 +311,29 @@ def main() -> None:
                         help="Render a restricted profile from an exported stock user profile")
     source.add_argument("--garden-callback",
                         help="Render a Garden client with this exact HTTPS callback")
+    source.add_argument("--self-service-realm-input", type=Path,
+                        help="Render an activation patch from an existing realm after SMTP delivery proof")
+    source.add_argument("--account-console-input", type=Path,
+                        help="Render a bounded patch for the exported built-in account-console client")
+    parser.add_argument("--server-info-input", type=Path)
+    parser.add_argument("--self-service-profile-input", type=Path)
+    parser.add_argument("--required-actions-input", type=Path)
     parser.add_argument("--garden-client-id")
     args = parser.parse_args()
     if bool(args.garden_callback) != bool(args.garden_client_id):
         parser.error("Garden callback and client ID must be provided together")
-    if args.profile_input:
+    if len({bool(args.self_service_realm_input), bool(args.server_info_input), bool(args.self_service_profile_input), bool(args.required_actions_input)}) != 1:
+        parser.error("Self-service activation requires realm, server-info, user-profile and required-actions input")
+    if args.self_service_realm_input:
+        desired = self_service_settings(
+            json.loads(args.self_service_realm_input.read_text(encoding="utf-8")),
+            json.loads(args.server_info_input.read_text(encoding="utf-8")),
+            json.loads(args.self_service_profile_input.read_text(encoding="utf-8")),
+            json.loads(args.required_actions_input.read_text(encoding="utf-8")),
+        )
+    elif args.account_console_input:
+        desired = account_console_settings(json.loads(args.account_console_input.read_text(encoding="utf-8")))
+    elif args.profile_input:
         desired = human_profile(json.loads(args.profile_input.read_text(encoding="utf-8")))
     elif args.garden_callback:
         desired = garden_client(args.garden_client_id, args.garden_callback)

@@ -1,0 +1,20 @@
+x-native-checker-environment: &native-checker-environment
+  WORKSTREAM_ARTIFACT_INTAKE_SERVICE_SOCKET: ${WORKSTREAM_DEPLOYMENT_ROOT:-/var/lib/workstream}/checker-runtime/checker.sock
+  WORKSTREAM_ARTIFACT_INTAKE_IMAGE_DIGEST: ${WORKSTREAM_ARTIFACT_INTAKE_IMAGE_DIGEST:?set the pinned trusted intake image digest}
+  WORKSTREAM_ARTIFACT_INTAKE_CONFIG_DIGEST: ${WORKSTREAM_ARTIFACT_INTAKE_CONFIG_DIGEST:?set the pinned trusted intake config digest}
+  WORKSTREAM_EXTERNAL_CHECKER_MATERIAL_ROOT: ${WORKSTREAM_DEPLOYMENT_ROOT:-/var/lib/workstream}/scratch
+  WORKSTREAM_EXTERNAL_CHECKER_SERVICE_SOCKET: ${WORKSTREAM_DEPLOYMENT_ROOT:-/var/lib/workstream}/checker-runtime/checker.sock
+
+x-native-checker-mount: &native-checker-mount
+  type: bind
+  source: ${WORKSTREAM_DEPLOYMENT_ROOT:-/var/lib/workstream}/checker-runtime
+  target: ${WORKSTREAM_DEPLOYMENT_ROOT:-/var/lib/workstream}/checker-runtime
+  read_only: true
+
+services:
+  api:
+    environment: *native-checker-environment
+    volumes: [*native-checker-mount]
+  worker:
+    environment: *native-checker-environment
+    volumes: [*native-checker-mount]

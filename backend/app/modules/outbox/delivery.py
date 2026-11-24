@@ -162,11 +162,15 @@ class OutboxDelivery:
         registry: HandlerRegistry,
         options: DeliveryOptions,
         event_options: Mapping[tuple[str, int], DeliveryOptions] | None = None,
+        excluded_events: frozenset[tuple[str, int]] = frozenset(),
     ) -> None:
         """Require explicit AUTH composition and bounded handler registration."""
         self._sessions = session_factory
         self._authorization = authorization_factory
         self._registry = registry
+        if not excluded_events.issubset(registry.keys):
+            raise ValueError("outbox exclusions must be explicitly registered")
+        self._excluded_events = excluded_events
         self._options = DeliveryOptions.model_validate(options.model_dump())
         overrides = {}
         for key, value in (event_options or {}).items():
@@ -200,7 +204,9 @@ class OutboxDelivery:
         if (after is not None and type(after) is not UUID) or type(limit) is not int or not 1 <= limit <= 500:
             raise DeliveryUnavailable("outbox_delivery_unavailable")
         async with self._sessions() as session:
-            return await DeliveryRepository(session).candidates(self._registry.keys, after=after, limit=limit)
+            return await DeliveryRepository(session).candidates(
+                self._registry.keys, excluded=self._excluded_events, after=after, limit=limit,
+            )
 
     async def deliver(self, event_id: UUID, project_id: UUID, owner: str, *, registered_only: bool = False) -> DeliveryReceipt | None:
         """Reuse recovery and claim/invoke; duplicate transport cannot bypass custody."""
@@ -227,6 +233,7 @@ class OutboxDelivery:
             )
             if (
                 event is None
+                or (event.event_type, event.event_version) in self._excluded_events
                 or self._registry.get(event.event_type, event.event_version) is None
                 or event.delivery_state not in ("pending", "retryable")
                 or event.next_attempt_at > now
@@ -301,6 +308,7 @@ class OutboxDelivery:
                     or claim_from_attempt(attempt) != claim
                     or attempt.stage != "claimed"
                     or now >= claim.claim_expires_at
+                    or (event.event_type, event.event_version) in self._excluded_events
                     or self._registry.get(event.event_type, event.event_version) is None
                 ):
                     return None
@@ -479,7 +487,12 @@ class OutboxDelivery:
         async with self._sessions() as session:
             event = await DeliveryRepository(session).event(event_id, project_id)
             now = await database_time(session)
-            if event is None or event.delivery_state != "claimed" or event.claim_expires_at > now:
+            if (
+                event is None
+                or (event.event_type, event.event_version) in self._excluded_events
+                or event.delivery_state != "claimed"
+                or event.claim_expires_at > now
+            ):
                 return None
             claim = OutboxClaim(
                 **{

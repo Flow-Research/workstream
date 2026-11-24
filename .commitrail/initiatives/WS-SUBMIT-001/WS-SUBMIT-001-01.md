@@ -8282,3 +8282,37 @@ exited 139; a diagnostic run reproduced SIGSEGV in pytest fixture ordering
 `/tmp/submission-cleanup-collection-diagnostic.log`, Python 3.12.3). The cause is
 not established. Do not substitute the paired collection or focused execution
 for full-head qualification. Hosted CI must run on the repaired pushed head.
+
+Main integration and separate-runner scope (user-directed): integrate d713594eb
+before further implementation, preserving its direct S3 credentials and app-only
+hosting, and all submission custody work. Resolve merge conflicts and affected
+callers/tests/docs; remove retired expiring-proof arguments from new source
+paths, rather than restoring the deleted subsystem. Preserve both deployed
+migration histories using a merge revision. Verification: one Alembic head,
+fresh and retained upgrade paths, source upload/cleanup controls, app-host
+configuration and import checks. Security/architecture and QA review apply.
+Separate runner provisioning lives in worktree workstream_runner on branch
+codex/external-runner-provisioning, initially based on current main; integrate
+its commits into the existing PR708 rather than opening another PR. The local
+AWS profile failed authentication and the user explicitly instructed us not to
+use it; await replacement access before any AWS action. Runtime qualification
+must use the separate runner and existing app server, with PRE and POST linked
+through an authenticated provider capability and no shared filesystem.
+
+Integration verification: fresh PostgreSQL migration through both parents to
+0090 passed with measured fingerprint
+`1ab3f95836accf52887d6e006d0f37ddfd60bf1269bd945255a46c529ac384a2`
+(`/tmp/submission-0090-schema.log/.json`, complete cleanup). The merged graph
+and exact lane-family fingerprint checks passed. Source/cleanup integration
+passed 61 selected tests in 143.36s, with 146 explicitly deselected
+(`/tmp/submission-main-source-integration.log/.json`). These are focused
+MinIO/PostgreSQL proofs, not native AWS qualification. Direct AWS cleanup now
+compares configured IAM user ARNs; unidentified workload identities remain
+refused. Four factory separation/selection controls passed.
+
+Hosted configuration/image checks passed 101 cases plus 319 subtests; two
+secret-loader subcases initially failed because the local backend virtualenv
+lacked the repository external-services package. Installing that local package
+without dependency changes repaired the actual subprocess environment; the
+exact test passed with both subcases (`/tmp/submission-main-hosted-loader-v3.log`).
+No test assertion or deployment process was weakened for that environment issue.

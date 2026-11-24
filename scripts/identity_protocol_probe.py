@@ -111,16 +111,17 @@ class IdentityProtocolProbe:
 
     def login(self, client: str, audience_scope: str, email: str, password: str,
               *, new_password: str | None = None, profile_changes: dict | None = None,
-              scopes: str | None = None) -> dict:
+              scopes: str | None = None, callback: str | None = None) -> dict:
         form = self.authorization_code(client, audience_scope, email, password,
-            new_password=new_password, profile_changes=profile_changes, scopes=scopes)
+            new_password=new_password, profile_changes=profile_changes, scopes=scopes, callback=callback)
         return self.request("/realms/flow/protocol/openid-connect/token", form, form=True)
 
     def authorization_code(self, client: str, audience_scope: str, email: str, password: str,
                            *, new_password: str | None = None,
-                           profile_changes: dict | None = None, scopes: str | None = None) -> dict:
+                           profile_changes: dict | None = None, scopes: str | None = None,
+                           callback: str | None = None) -> dict:
         """Complete login but retain the unredeemed code for binding-failure proofs."""
-        callback = {
+        callback = callback or {
             "workstream-cli-login": "http://127.0.0.1:17843/callback",
             "workstream-mcp-proof": "http://127.0.0.1:17844/callback",
         }[client]
@@ -172,6 +173,8 @@ class IdentityProtocolProbe:
                 data = urlencode(fields, doseq=True).encode()
         except _Callback as callback_result:
             result = parse_qs(urlsplit(callback_result.url).query)
+            if result.get("state") == [state] and result.get("error") == ["invalid_scope"] and "code" not in result:
+                raise ProviderRejected(400) from None
             if result.get("state") != [state] or len(result.get("code", [])) != 1:
                 raise RuntimeError("authorization callback failed validation") from None
             return {

@@ -27,7 +27,7 @@ from app.adapters.artifacts.internal_workers import (
     validate_artifact_internal_runtime_startup,
 )
 from app.adapters.observability import create_observability_export_adapter
-from app.core.config import get_settings
+from app.core.config import ARTIFACT_DIRECT_USER_IDENTITY_TIMEOUT_SECONDS, get_settings
 from app.core.celery_observability import (
     configure_celery_observability,
     initialize_worker_observability,
@@ -82,7 +82,7 @@ def initialize_artifact_runtime_for_process(**_kwargs: object) -> None:
 
 @beat_init.connect
 def validate_artifact_runtime_for_beat(**_kwargs: object) -> None:
-    """Fail Beat startup when the selected AWS provider lacks fresh proof."""
+    """Validate the selected provider namespace before Beat schedules work."""
     run_async_task(validate_artifact_internal_runtime_startup)
 
 
@@ -196,6 +196,14 @@ def create_celery_app() -> Celery:
             },
         },
     )
+    if settings.artifact_s3_credential_mode == "aws_access_key":
+        # Keep the existing allowance for the DB namespace claim and child handshake.
+        celery_app.conf.update(
+            worker_proc_alive_timeout=(
+                celery_app.conf.worker_proc_alive_timeout
+                + ARTIFACT_DIRECT_USER_IDENTITY_TIMEOUT_SECONDS
+            ),
+        )
     configure_celery_observability(
         settings,
         OBSERVED_TASK_NAMES,

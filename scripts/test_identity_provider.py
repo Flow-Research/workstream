@@ -130,6 +130,13 @@ class IdentityProviderTests(unittest.TestCase):
             "password": cls.admin_password,
         }, form=True)["access_token"]
         cls.probe.request("/admin/realms", realm_config.realm(), token=cls.operator)
+        console = cls.probe.request("/admin/realms/flow/clients?clientId=account-console", token=cls.operator)[0]
+        cls.probe.request("/admin/realms/flow/clients/" + console["id"],
+                          realm_config.account_console_settings(console), token=cls.operator, method="PUT")
+        basic = next(scope for scope in cls.probe.request(
+            "/admin/realms/flow/client-scopes", token=cls.operator) if scope["name"] == "basic")
+        cls.probe.request("/admin/realms/flow/clients/" + console["id"]
+                          + "/default-client-scopes/" + basic["id"], token=cls.operator, method="PUT")
         profile = cls.probe.request("/admin/realms/flow/users/profile", token=cls.operator)
         cls.probe.request("/admin/realms/flow/users/profile", realm_config.human_profile(profile),
                           token=cls.operator, method="PUT")
@@ -177,6 +184,83 @@ class IdentityProviderTests(unittest.TestCase):
             "grant_type": "password", "client_id": "admin-cli", "username": "fixture-operator",
             "password": self.admin_password,
         }, form=True)["access_token"]
+
+    def test_garden_offline_refresh_survives_browser_logout_but_not_revocation(self):
+        self.probe = IdentityProtocolProbe(self.origin, self.context)
+        client_id = "garden-fixture-" + secrets.token_hex(4)
+        callback = self.origin + "/api/oauth/callback"
+        self.probe.request("/admin/realms/flow/clients", realm_config.garden_client(client_id, callback),
+                           token=self.operator)
+        email, password = "offline-" + secrets.token_hex(4) + "@example.invalid", secrets.token_urlsafe(24)
+        self.probe.request("/admin/realms/flow/users", {
+            "username": email, "email": email, "emailVerified": True, "enabled": True,
+            "firstName": "Offline", "lastName": "Participant",
+            "attributes": {"workstream_subject_kind": ["human"]},
+            "credentials": [{"type": "password", "value": password, "temporary": False}],
+        }, token=self.operator)
+        user = self.probe.request("/admin/realms/flow/users?username=" + email + "&exact=true",
+                                  token=self.operator)[0]
+        endpoint = "/realms/flow/protocol/openid-connect/token"
+        ordinary = self.probe.request(endpoint, {"grant_type": "password", "client_id": "workstream-api-login",
+            "username": email, "password": password, "scope": "workstream:access workstream-api-audience"}, form=True)
+        self.assertIn("access_token", ordinary)
+        for ordinary_client, audience_scope in (("workstream-cli-login", "workstream-api-audience"),
+                                                ("workstream-mcp-proof", "workstream-mcp-audience")):
+            control = self.probe.login(ordinary_client, audience_scope, email, password)
+            self.assertIn("access_token", control)
+            try:
+                extra = self.probe.login(ordinary_client, audience_scope, email, password,
+                    scopes="workstream:access " + audience_scope + " offline_access")
+            except ProviderRejected as denied:
+                self.assertEqual(denied.status, 400)
+            else:
+                self.assertNotIn("offline_access", extra["scope"].split())
+                self.assertGreater(extra["refresh_expires_in"], 0)
+                self.assertLessEqual(extra["refresh_expires_in"], 1800)
+        tokens = self.probe.login(client_id, "workstream-mcp-audience", email, password,
+                                 scopes="workstream:access workstream-mcp-audience offline_access", callback=callback)
+        keys = self.probe.request("/realms/flow/protocol/openid-connect/certs")["keys"]
+        def verify_access(token):
+            key = next(k for k in keys if k["kid"] == jwt.get_unverified_header(token)["kid"])
+            claims = jwt.decode(token, jwt.PyJWK.from_dict(key).key,
+                algorithms=["RS256"], audience="workstream-mcp", issuer=self.origin + "/realms/flow")
+            self.assertEqual(claims["sub"], user["id"])
+            self.assertEqual(set(claims["aud"]), {"workstream-mcp", realm_config.MCP_RESOURCE})
+            self.assertLessEqual(claims["exp"] - claims["iat"], 300)
+            self.assertEqual(claims["subject_kind"], "human")
+        verify_access(tokens["access_token"])
+        self.assertGreater(tokens["refresh_expires_in"], 0)
+        self.assertLessEqual(tokens["refresh_expires_in"], 90 * 24 * 60 * 60)
+        self.probe.request("/admin/realms/flow/users/" + user["id"] + "/logout", token=self.operator, method="POST")
+        renewed = self.probe.request(endpoint, {"grant_type": "refresh_token", "client_id": client_id,
+            "refresh_token": tokens["refresh_token"]}, form=True)
+        verify_access(renewed["access_token"])
+        self.assertNotEqual(renewed["refresh_token"], tokens["refresh_token"])
+        requester = self.probe.request("/admin/realms/flow/clients?clientId=workstream-mcp", token=self.operator)[0]
+        secret = self.probe.request("/admin/realms/flow/clients/" + requester["id"] + "/client-secret", token=self.operator)["value"]
+        async def exchange_offline_source():
+            async with httpx.AsyncClient(verify=self.context, trust_env=False, timeout=10) as http:
+                provider = KeycloakCredentials(OAuthSettings(self.origin + "/realms/flow",
+                    realm_config.MCP_RESOURCE, self.root / "unused"), http, secret)
+                identity = await provider.verify(renewed["access_token"])
+                authorization = await provider.exchange(identity)
+                token = authorization.removeprefix("Bearer ")
+                key = next(k for k in keys if k["kid"] == jwt.get_unverified_header(token)["kid"])
+                claims = jwt.decode(token, jwt.PyJWK.from_dict(key).key,
+                    algorithms=["RS256"], audience="workstream-api", issuer=self.origin + "/realms/flow")
+                self.assertEqual(claims["sub"], user["id"])
+                self.assertLessEqual(claims["exp"] - claims["iat"], 120)
+        asyncio.run(exchange_offline_source())
+        current = self.probe.request("/admin/realms/flow", token=self.operator)
+        for field, value in realm_config.persistent_connection_settings().items():
+            self.assertEqual(current[field], value)
+        self.probe.request("/realms/flow/protocol/openid-connect/revoke", {
+            "client_id": client_id, "token_type_hint": "refresh_token", "token": tokens["refresh_token"],
+        }, form=True)
+        with self.assertRaises(ProviderRejected) as denied:
+            self.probe.request(endpoint, {"grant_type": "refresh_token", "client_id": client_id,
+                "refresh_token": renewed["refresh_token"]}, form=True)
+        self.assertEqual(denied.exception.status, 400)
 
     def test_direct_api_password_grant_respects_required_actions_and_scope(self):
         email = "direct-participant@example.invalid"

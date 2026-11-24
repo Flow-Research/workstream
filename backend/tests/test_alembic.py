@@ -29,6 +29,48 @@ RECREATE_GUIDANCE = "Workstream v0.1 requires a fresh database; recreate this da
 pytestmark = pytest.mark.postgres_schema_contract
 
 
+def test_retiring_provider_proof_drops_only_its_tables_and_preserves_artifacts(
+    isolated_database_env, migration_lock,
+):
+    from app.core.identifiers import new_record_id
+
+    database_url = isolated_database_env
+    content_id = new_record_id()
+    digest = "sha256:" + "a" * 64
+    config = _alembic_config()
+
+    async def inspect():
+        connection = await asyncpg.connect(database_url.replace("+asyncpg", ""))
+        try:
+            tables = await connection.fetch("SELECT tablename FROM pg_tables WHERE schemaname='public'")
+            artifact = await connection.fetchrow(
+                "SELECT id,sha256,byte_count,ctid::text,xmin::text FROM artifact_contents WHERE id=$1",
+                content_id,
+            )
+            return {row["tablename"] for row in tables}, dict(artifact)
+        finally:
+            await connection.close()
+
+    with migration_lock():
+        asyncio.run(_execute(database_url, "drop schema public cascade; create schema public"))
+        command.upgrade(config, "0068_issuer_profile_email")
+        asyncio.run(_execute(database_url,
+            "INSERT INTO artifact_contents(id,sha256,byte_count) VALUES($1,$2,$3)",
+            content_id, digest, 73,
+        ))
+        before_tables, before_artifact = asyncio.run(inspect())
+        command.upgrade(config, "0069_remove_artifact_proof")
+        after_tables, after_artifact = asyncio.run(inspect())
+        command.upgrade(config, HEAD_REVISION)
+        joined_tables, joined_artifact = asyncio.run(inspect())
+    assert before_tables - after_tables == {"artifact_provider_activations", "artifact_provider_probe_results"}
+    assert after_tables - before_tables == set()
+    assert before_artifact == after_artifact
+    assert joined_artifact == before_artifact
+    assert {"submission_intake_operations", "submission_source_cleanup_claims"} <= joined_tables
+    assert not {"artifact_provider_activations", "artifact_provider_probe_results"} & joined_tables
+
+
 def _alembic_config() -> Config:
     backend = Path(__file__).resolve().parents[1]
     return Config(backend / "alembic.ini")
@@ -381,14 +423,35 @@ async def _audit_validator_custody(database_url: str) -> list[tuple]:
 
 
 def test_v01_graph_has_one_root_and_head() -> None:
-    """Assert one complete linear migration chain from the v0.1 root to the current head."""
+    """Assert one joined migration history with both deployed parents retained."""
     config = _alembic_config()
     script = ScriptDirectory.from_config(config)
     revisions = list(script.walk_revisions())
 
     assert [revision.revision for revision in revisions] == [
         HEAD_REVISION,
+        "0089_observed_upload_cleanup",
+        "0088_unsealed_source_cleanup",
+        "0087_source_cleanup_candidates",
+        "0086_pending_checker_custody",
+        "0085_revision_deadline_error",
+        "0084_submission_source_binding",
+        "0083_accepted_revision",
+        "0082_policy_phase_cardinality",
+        "0081_operation_read_authority",
+        "0080_cleanup_decisions",
+        "0079_cleanup_authority",
+        "0078_submission_cleanup",
+        "0077_submission_recovery",
+        "0076_submission_delivery_retry",
+        "0075_source_post_custody",
+        "0074_submission_finalization",
+        "0073_submission_acceptance",
+        "0072_pre_invocation_receipts",
+        "0071_source_first_pre",
+        "0070_submission_intake_authority",
         "0069_submission_intake_custody",
+        "0069_remove_artifact_proof",
         "0068_issuer_profile_email",
         "0067_canonical_json_restore_path",
         "0066_guide_check_specification",
@@ -458,6 +521,9 @@ def test_v01_graph_has_one_root_and_head() -> None:
         "0002_task_queue_authority",
         BASELINE_REVISION,
     ]
+    assert script.get_revision(HEAD_REVISION).down_revision == (
+        "0089_observed_upload_cleanup", "0069_remove_artifact_proof",
+    )
     assert revisions[-1].down_revision is None
     assert script.get_heads() == [HEAD_REVISION]
 
@@ -1159,217 +1225,6 @@ def test_neutral_runtime_upgrade_refuses_old_predispatch_inference(
     assert retained
 
 
-async def test_roles_anywhere_upgrade_preserves_old_proof_and_refuses_downgrade(
-    tmp_path,
-    isolated_database_env,
-    migration_lock,
-):
-    """Old immutable evidence remains byte-stable but cannot authorize current calls."""
-    from datetime import timedelta
-    from uuid import uuid4
-
-    from sqlalchemy import text
-    from sqlalchemy.exc import DBAPIError
-    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-
-    from app.adapters.artifacts.s3_compatible import aws_s3_namespace_fingerprint
-    from app.core.identifiers import new_record_id
-    from app.interfaces.artifacts import ArtifactProviderLiveProofRequiredError
-    from app.modules.artifacts.provider_activation import (
-        SqlAlchemyArtifactProviderActivationGuard,
-    )
-    from tests.test_artifact_provider_activation_postgresql import _settings
-
-    async def retained(factory):
-        async with factory() as session:
-            rows = {}
-            for table in ("artifact_provider_probe_results", "artifact_provider_activations"):
-                result = await session.execute(
-                    text(
-                        f"SELECT (to_jsonb(t)-ARRAY['roles_anywhere_trust_anchor_arn',"
-                        f"'roles_anywhere_trust_anchor_sha256','roles_anywhere_profile_arn',"
-                        f"'roles_anywhere_profile_sha256'])::text,tableoid::bigint,xmin::text "
-                        f"FROM public.{table} t ORDER BY id"
-                    )
-                )
-                rows[table] = [tuple(row) for row in result]
-            return rows
-
-    async def seed_old_proof(factory, namespace_fingerprint):
-        group_nonce = uuid4()
-        ids = {name: new_record_id() for name in ("runtime", "readiness", "negative")}
-        roles = {
-            "runtime_immutability": "arn:aws:iam::123456789012:role/workstream-runtime",
-            "readiness": "arn:aws:iam::123456789012:role/workstream-readiness",
-            "negative_access": "arn:aws:iam::123456789012:role/workstream-negative",
-        }
-        offsets = {"runtime_immutability": 10, "readiness": 8, "negative_access": 6}
-        async with factory() as session, session.begin():
-            observed_at = await session.scalar(text("select clock_timestamp()"))
-            assert observed_at is not None
-            for key, probe_type in (
-                ("runtime", "runtime_immutability"),
-                ("readiness", "readiness"),
-                ("negative", "negative_access"),
-            ):
-                await session.execute(
-                    text("""
-                    INSERT INTO artifact_provider_probe_results (
-                      id,probe_type,proof_version,result,release_id,namespace_fingerprint,
-                      aws_partition,aws_account_id,region,runtime_role_arn,
-                      runtime_trust_policy_sha256,runtime_policy_arn,readiness_role_arn,
-                      readiness_trust_policy_sha256,readiness_policy_arn,negative_role_arn,
-                      negative_trust_policy_sha256,bootstrap_principal_arn,
-                      expected_principal_arn,observed_principal_arn,bucket_policy_sha256,
-                      group_nonce,evidence_sha256,error_code,started_at,completed_at,expires_at)
-                    VALUES (
-                      :id,:probe_type,'aws-s3-live-v1','pass',:release_id,:namespace,
-                      'aws','123456789012','us-east-1',:runtime_role,
-                      :runtime_trust,:runtime_policy,:readiness_role,
-                      :readiness_trust,:readiness_policy,:negative_role,
-                      :negative_trust,:bootstrap,:expected,:expected,:bucket_policy,
-                      :group_nonce,:evidence,NULL,
-                      :started,:completed,:expires)
-                """),
-                    {
-                        "id": str(ids[key]),
-                        "probe_type": probe_type,
-                        "release_id": "sha256:" + "1" * 64,
-                        "namespace": namespace_fingerprint,
-                        "runtime_role": roles["runtime_immutability"],
-                        "runtime_trust": "sha256:" + "3" * 64,
-                        "runtime_policy": "arn:aws:iam::123456789012:policy/workstream-runtime",
-                        "readiness_role": roles["readiness"],
-                        "readiness_trust": "sha256:" + "4" * 64,
-                        "readiness_policy": "arn:aws:iam::123456789012:policy/workstream-readiness",
-                        "negative_role": roles["negative_access"],
-                        "negative_trust": "sha256:" + "5" * 64,
-                        "bootstrap": "arn:aws:iam::123456789012:role/workstream-bootstrap",
-                        "expected": roles[probe_type],
-                        "bucket_policy": "sha256:" + "2" * 64,
-                        "group_nonce": str(group_nonce),
-                        "evidence": "sha256:" + "7" * 64,
-                        "started": observed_at - timedelta(seconds=offsets[probe_type]),
-                        "completed": observed_at - timedelta(seconds=offsets[probe_type] - 1),
-                        "expires": (
-                            observed_at
-                            - timedelta(seconds=offsets[probe_type])
-                            + timedelta(minutes=15)
-                        ),
-                    },
-                )
-            activation_id = new_record_id()
-            await session.execute(
-                text("""
-                INSERT INTO artifact_provider_activations (
-                  id,readiness_result_id,runtime_result_id,negative_result_id,
-                  supersedes_activation_id,proof_version,release_id,namespace_fingerprint,
-                  aws_partition,aws_account_id,region,runtime_role_arn,
-                  runtime_trust_policy_sha256,runtime_policy_arn,readiness_role_arn,
-                  readiness_trust_policy_sha256,readiness_policy_arn,negative_role_arn,
-                  negative_trust_policy_sha256,bootstrap_principal_arn,bucket_policy_sha256,
-                  group_nonce,activated_at,expires_at)
-                SELECT :activation_id,d.id,r.id,n.id,NULL,d.proof_version,d.release_id,
-                  d.namespace_fingerprint,d.aws_partition,d.aws_account_id,d.region,
-                  d.runtime_role_arn,d.runtime_trust_policy_sha256,d.runtime_policy_arn,
-                  d.readiness_role_arn,d.readiness_trust_policy_sha256,d.readiness_policy_arn,
-                  d.negative_role_arn,d.negative_trust_policy_sha256,
-                  d.bootstrap_principal_arn,d.bucket_policy_sha256,d.group_nonce,
-                  clock_timestamp(),least(d.expires_at,r.expires_at,n.expires_at)
-                FROM artifact_provider_probe_results d,
-                     artifact_provider_probe_results r,
-                     artifact_provider_probe_results n
-                WHERE d.id=:readiness AND r.id=:runtime AND n.id=:negative
-            """),
-                {
-                    "activation_id": str(activation_id),
-                    "readiness": str(ids["readiness"]),
-                    "runtime": str(ids["runtime"]),
-                    "negative": str(ids["negative"]),
-                },
-            )
-        return ids, activation_id
-
-    with migration_lock():
-        await _execute(isolated_database_env, "drop schema public cascade; create schema public")
-        await asyncio.to_thread(command.upgrade, _alembic_config(), "0055_delivery_reconciliation")
-        engine = create_async_engine(isolated_database_env)
-        factory = async_sessionmaker(engine, expire_on_commit=False)
-        try:
-            settings = _settings(tmp_path)
-            namespace = aws_s3_namespace_fingerprint(settings)
-            results, _activation_id = await seed_old_proof(factory, namespace)
-            before = await retained(factory)
-            assert len(before["artifact_provider_probe_results"]) == 3
-            assert len(before["artifact_provider_activations"]) == 1
-            # A separate Alembic invocation must admit the actual predecessor.
-            await asyncio.to_thread(command.upgrade, _alembic_config(), HEAD_REVISION)
-            assert await retained(factory) == before
-            async with factory() as session:
-                assert (
-                    await session.scalar(text("SELECT version_num FROM alembic_version"))
-                    == HEAD_REVISION
-                )
-                guard = await session.scalar(
-                    text(
-                        "SELECT pg_get_functiondef('public.guard_artifact_provider_activation()'::regprocedure)"
-                    )
-                )
-                assert "clock_timestamp()-runtime.started_at" in guard
-                assert "roles_anywhere_profile_sha256" in guard
-                with pytest.raises(DBAPIError, match="probe result is invalid"):
-                    async with session.begin_nested():
-                        await session.execute(
-                            text("""
-                            INSERT INTO artifact_provider_probe_results
-                            SELECT :id,probe_type,proof_version,result,release_id,
-                              namespace_fingerprint,aws_partition,aws_account_id,region,
-                              runtime_role_arn,runtime_trust_policy_sha256,runtime_policy_arn,
-                              readiness_role_arn,readiness_trust_policy_sha256,
-                              readiness_policy_arn,negative_role_arn,
-                              negative_trust_policy_sha256,bootstrap_principal_arn,
-                              expected_principal_arn,observed_principal_arn,
-                              bucket_policy_sha256,:nonce,evidence_sha256,error_code,
-                              clock_timestamp(),clock_timestamp(),
-                              clock_timestamp()+interval '15 minutes',
-                              roles_anywhere_trust_anchor_arn,
-                              roles_anywhere_trust_anchor_sha256,
-                              roles_anywhere_profile_arn,roles_anywhere_profile_sha256
-                            FROM artifact_provider_probe_results WHERE id=:source
-                        """),
-                            {
-                                "id": str(new_record_id()),
-                                "nonce": str(uuid4()),
-                                "source": str(results["readiness"]),
-                            },
-                        )
-            with pytest.raises(
-                ArtifactProviderLiveProofRequiredError,
-                match="requires fresh exact live proof",
-            ):
-                await SqlAlchemyArtifactProviderActivationGuard(factory, settings).select_for_call(
-                    namespace_fingerprint=namespace
-                )
-            with pytest.raises(RuntimeError, match="cannot be downgraded"):
-                await asyncio.to_thread(
-                    command.downgrade, _alembic_config(), "0055_delivery_reconciliation"
-                )
-            assert await retained(factory) == before
-            async with factory() as session:
-                assert (
-                    await session.scalar(text("SELECT version_num FROM alembic_version"))
-                    == HEAD_REVISION
-                )
-                assert (
-                    await session.scalar(
-                        text(
-                            "SELECT pg_get_functiondef('public.guard_artifact_provider_activation()'::regprocedure)"
-                        )
-                    )
-                    == guard
-                )
-        finally:
-            await engine.dispose()
 
 
 async def _assert_upgraded_incompatible_revision_blocked(h, tmp_path, database_url, monkeypatch, *, headers=None):

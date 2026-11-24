@@ -1,22 +1,18 @@
-"""Local transport proof for Roles Anywhere artifact consumers.
-
-This module uses the real signing-helper subprocess boundary and aiobotocore HTTP
-transport.  The loopback S3 protocol endpoint is test-only evidence; it does not
-stand in for AWS trust, role authorization, or bucket-policy enforcement.
-"""
+"""Loopback HTTP signing, artifact readback and scoped access using direct IAM user credentials."""
 
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+import asyncio
 import hashlib
 from pathlib import Path
 import re
 from types import SimpleNamespace
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 from aiobotocore.config import AioConfig
-from aiohttp import web
+from aiohttp import ClientSession, web
 import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
@@ -27,7 +23,6 @@ from app.adapters.artifacts import (
 from app.adapters.artifacts import s3_compatible
 from app.adapters.projects import project_guide_document_scope_port
 from app.interfaces.artifacts import (
-    ArtifactProviderActivationLease,
     ArtifactStoreNamespaceClaim,
 )
 from app.modules.artifacts.guide_document_access import ScopedGuideDocumentGrant
@@ -46,34 +41,11 @@ from tests.projects.guide_compilation.test_hidden_orchestrator_postgresql import
     _authorized_attempt,
     _backend,
 )
-from tests.test_aws_roles_anywhere_credentials import (
-    install_fake_roles_anywhere_helper,
-    make_roles_anywhere_settings,
-)
+from app.adapters.artifacts.aws_direct_user import DIRECT_USER_METHOD
+from tests.test_aws_direct_user_credentials import ACCESS_KEY_ID, USER_ARN, direct_user_settings
 
 
-_ACTIVATION_ID = UUID("0199e648-0b77-7000-8000-000000000002")
 _ACCESS_KEY = re.compile(r"Credential=([^/]+)/")
-
-
-class _ActivationGuard:
-    """Keep native-AWS call ordering intact without forging live proof rows."""
-
-    async def select_for_call(
-        self, *, namespace_fingerprint: str
-    ) -> ArtifactProviderActivationLease:
-        assert namespace_fingerprint.startswith("sha256:")
-        return ArtifactProviderActivationLease(_ACTIVATION_ID)
-
-    async def require_for_call(
-        self,
-        activation_id: UUID,
-        *,
-        namespace_fingerprint: str,
-    ) -> ArtifactProviderActivationLease:
-        assert activation_id == _ACTIVATION_ID
-        assert namespace_fingerprint.startswith("sha256:")
-        return ArtifactProviderActivationLease(activation_id)
 
 
 class _ReadAuthority:
@@ -100,6 +72,9 @@ class _LoopbackS3:
     def __init__(self) -> None:
         self.objects: dict[str, bytes] = {}
         self.requests: list[tuple[str, str, str]] = []
+        self.identity_requests: list[str] = []
+        self.identity_entry_delay = 0.0
+        self.identity_response_delay = 0.0
         self._runner: web.AppRunner | None = None
         self.endpoint_url = ""
 
@@ -122,10 +97,23 @@ class _LoopbackS3:
         access_key = _ACCESS_KEY.search(authorization)
         if access_key is None:
             return web.Response(status=403)
+        if request.method == "POST":
+            action = await request.post()
+            assert action["Action"] == "GetCallerIdentity"
+            self.identity_requests.append(access_key.group(1))
+            await asyncio.sleep(self.identity_response_delay)
+            return web.Response(text=(
+                '<GetCallerIdentityResponse xmlns="https://sts.amazonaws.com/doc/2011-06-15/">'
+                '<GetCallerIdentityResult><Account>123456789012</Account>'
+                f'<Arn>{USER_ARN}</Arn><UserId>AIDA00000000000001</UserId>'
+                '</GetCallerIdentityResult></GetCallerIdentityResponse>'
+            ), content_type="application/xml")
         path = request.match_info["path"]
         self.requests.append((request.method, path, access_key.group(1)))
         if request.method == "PUT":
-            if request.headers.get("If-None-Match") == "*" and path in self.objects:
+            if request.headers.get("If-None-Match") != "*":
+                return web.Response(status=403)
+            if path in self.objects:
                 return web.Response(
                     status=412,
                     body=(
@@ -187,27 +175,26 @@ async def _bytes(content: bytes) -> AsyncIterator[bytes]:
 
 
 @asynccontextmanager
-async def _roles_anywhere_store(
+async def _direct_user_store(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     endpoint: _LoopbackS3,
 ):
     """Compose the production provider and reroute only its test HTTP socket."""
     tmp_path.mkdir(parents=True, exist_ok=True)
-    install_fake_roles_anywhere_helper(monkeypatch, tmp_path, behavior="success")
-    settings = make_roles_anywhere_settings(
+    settings = direct_user_settings(
         tmp_path,
         artifact_stream_buffer_bytes=1024,
         artifact_s3_connect_timeout_seconds=10,
         artifact_s3_read_timeout_seconds=30,
         artifact_s3_write_timeout_seconds=30,
-        artifact_s3_pool_timeout_seconds=10,
+        artifact_s3_pool_timeout_seconds=5,
         artifact_s3_operation_total_timeout_seconds=60,
     )
     assert settings.artifact_s3_endpoint_url is None
 
     sessions = []
-    original_session_factory = s3_compatible.create_isolated_aws_workload_identity_session
+    original_session_factory = s3_compatible.create_isolated_aws_credential_session
 
     def routed_session(configuration):
         session = original_session_factory(
@@ -216,7 +203,15 @@ async def _roles_anywhere_store(
         )
         original_create_client = session.create_client
 
+        @asynccontextmanager
+        async def sts_client(**kwargs: object):
+            await asyncio.sleep(endpoint.identity_entry_delay)
+            async with original_create_client("sts", endpoint_url=endpoint.endpoint_url, **kwargs) as client:
+                yield client
+
         def create_client(service_name: str, **kwargs: object):
+            if service_name == "sts":
+                return sts_client(**kwargs)
             assert service_name == "s3"
             assert kwargs["endpoint_url"] is None
             kwargs["endpoint_url"] = endpoint.endpoint_url
@@ -238,13 +233,10 @@ async def _roles_anywhere_store(
 
     monkeypatch.setattr(
         s3_compatible,
-        "create_isolated_aws_workload_identity_session",
+        "create_isolated_aws_credential_session",
         routed_session,
     )
-    bootstrap = create_artifact_store_bootstrap(
-        settings,
-        activation_guard=_ActivationGuard(),
-    )
+    bootstrap = create_artifact_store_bootstrap(settings)
     namespace = artifact_storage_namespace_spec(settings, bootstrap)
     store = bootstrap.initialize_after_namespace_claim(
         ArtifactStoreNamespaceClaim(
@@ -281,20 +273,19 @@ async def _upload(
 
 
 @pytest.mark.asyncio
-async def test_roles_anywhere_refreshes_across_sealed_upload_and_exact_readback(
+async def test_direct_user_signs_sealed_upload_and_exact_readback(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     loopback_s3: _LoopbackS3,
 ) -> None:
-    """Exercise helper credentials through signing, HTTP, storage, and download."""
+    """Exercise IAM identity, signing, HTTP, storage, and exact download."""
     manager, preparation = _preparation(tmp_path / "preparation")
     try:
-        async with _roles_anywhere_store(monkeypatch, tmp_path / "identity", loopback_s3) as case:
+        async with _direct_user_store(monkeypatch, tmp_path / "identity", loopback_s3) as case:
             provider_ref = await _upload(case.store, preparation, SOURCE_BYTES)
             assert len(case.sessions) == 1
             credentials = await case.sessions[0].get_credentials()
-            assert credentials is not None and credentials.method == "roles-anywhere"
-            await credentials._protected_refresh(is_mandatory=True)  # noqa: SLF001
+            assert credentials is not None and credentials.method == DIRECT_USER_METHOD
 
             downloaded = b"".join([block async for block in case.store.open(provider_ref)])
             assert downloaded == SOURCE_BYTES
@@ -305,16 +296,59 @@ async def test_roles_anywhere_refreshes_across_sealed_upload_and_exact_readback(
     finally:
         manager.close()
 
+    assert loopback_s3.identity_requests == [ACCESS_KEY_ID]
     methods_and_keys = [(method, key) for method, _path, key in loopback_s3.requests]
     assert methods_and_keys == [
-        ("PUT", "ASIA00000000000001"),
-        ("HEAD", "ASIA00000000000002"),
-        ("GET", "ASIA00000000000002"),
+        ("PUT", ACCESS_KEY_ID),
+        ("HEAD", ACCESS_KEY_ID),
+        ("GET", ACCESS_KEY_ID),
     ]
 
 
 @pytest.mark.asyncio
-async def test_setup_agent_grant_reads_only_assigned_roles_anywhere_object(
+async def test_loopback_rejects_unconditional_writes_and_preserves_existing_bytes(
+    loopback_s3: _LoopbackS3,
+) -> None:
+    url = loopback_s3.endpoint_url + "/bucket/object"
+    signed = {"Authorization": f"AWS4-HMAC-SHA256 Credential={ACCESS_KEY_ID}/test"}
+    async with ClientSession() as client:
+        for extra in ({}, {"If-None-Match": "wrong"}):
+            async with client.put(url, headers=signed | extra, data=b"invalid") as response:
+                assert response.status == 403
+            assert loopback_s3.objects == {}
+        conditional = signed | {"If-None-Match": "*"}
+        async with client.put(url, headers=conditional, data=b"original") as response:
+            assert response.status == 200
+        async with client.put(url, headers=conditional, data=b"replacement") as response:
+            assert response.status == 412
+    assert loopback_s3.objects == {"bucket/object": b"original"}
+
+
+@pytest.mark.asyncio
+async def test_first_upload_allows_identity_load_beyond_s3_pool_deadline(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    loopback_s3: _LoopbackS3,
+) -> None:
+    # Two seconds establishing STS plus four receiving its response stay inside
+    # the identity's 10-second bound and each 5-second network bound, but exceed
+    # the hosted S3 pool's 5-second bound. The first PUT must still be sent.
+    loopback_s3.identity_entry_delay = 2.0
+    loopback_s3.identity_response_delay = 4.0
+    manager, preparation = _preparation(tmp_path / "scratch")
+    try:
+        async with _direct_user_store(monkeypatch, tmp_path / "identity", loopback_s3) as case:
+            assert case.settings.artifact_s3_pool_timeout_seconds == 5
+            provider_ref = await _upload(case.store, preparation, SOURCE_BYTES)
+            assert b"".join([chunk async for chunk in case.store.open(provider_ref)]) == SOURCE_BYTES
+            assert loopback_s3.identity_requests == [ACCESS_KEY_ID]
+            assert [method for method, _, _ in loopback_s3.requests].count("PUT") == 1
+    finally:
+        manager.close()
+
+
+@pytest.mark.asyncio
+async def test_setup_agent_grant_reads_only_assigned_direct_user_object(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
     loopback_s3: _LoopbackS3,
@@ -326,7 +360,7 @@ async def test_setup_agent_grant_reads_only_assigned_roles_anywhere_object(
     engine = None
     grant = None
     try:
-        async with _roles_anywhere_store(monkeypatch, tmp_path / "identity", loopback_s3) as case:
+        async with _direct_user_store(monkeypatch, tmp_path / "identity", loopback_s3) as case:
             provider_ref = await _upload(
                 case.store,
                 source_preparation,

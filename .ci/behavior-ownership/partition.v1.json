@@ -2,15 +2,7 @@
   "assignments": [
     {
       "group": "artifacts",
-      "target": "backend/app/adapters/artifacts/aws_live_proof.py"
-    },
-    {
-      "group": "artifacts",
-      "target": "backend/app/adapters/artifacts/aws_roles_anywhere.py"
-    },
-    {
-      "group": "artifacts",
-      "target": "backend/app/adapters/artifacts/aws_roles_anywhere_proof.py"
+      "target": "backend/app/adapters/artifacts/aws_direct_user.py"
     },
     {
       "group": "artifacts",
@@ -23,6 +15,14 @@
     {
       "group": "artifacts",
       "target": "backend/app/adapters/artifacts/local_submission_source.py"
+    },
+    {
+      "group": "artifacts",
+      "target": "backend/app/adapters/artifacts/s3_compatible.py"
+    },
+    {
+      "group": "artifacts",
+      "target": "backend/app/adapters/artifacts/s3_compatible.py"
     },
     {
       "group": "artifacts",
@@ -362,10 +362,6 @@
     },
     {
       "group": "shared",
-      "target": "backend/app/core/aws_roles_anywhere.py"
-    },
-    {
-      "group": "shared",
       "target": "backend/app/core/cancellation.py"
     },
     {
@@ -431,6 +427,14 @@
     {
       "group": "shared",
       "target": "backend/app/interfaces/artifact_operations.py"
+    },
+    {
+      "group": "shared",
+      "target": "backend/app/interfaces/artifacts.py"
+    },
+    {
+      "group": "shared",
+      "target": "backend/app/interfaces/artifacts.py"
     },
     {
       "group": "shared",
@@ -723,10 +727,6 @@
     {
       "group": "artifacts",
       "target": "backend/app/modules/artifacts/preparation_reads.py"
-    },
-    {
-      "group": "artifacts",
-      "target": "backend/app/modules/artifacts/provider_activation.py"
     },
     {
       "group": "artifacts",
@@ -2646,11 +2646,7 @@
     },
     {
       "group": "shared",
-      "target": "backend/scripts/aws_artifact_provider_proof.py"
-    },
-    {
-      "group": "shared",
-      "target": "backend/scripts/aws_roles_anywhere_config.py"
+      "target": "backend/scripts/aws_direct_user_config.py"
     },
     {
       "group": "shared",
@@ -2785,7 +2781,7 @@
       "target": "backend/scripts/validate_test_lane_evidence.py"
     }
   ],
-  "authority_digest": "09e7f0ea136d434065582f1d4709092a27ad1b6f883768f26f055da52ffae5c8",
+  "authority_digest": "2d59facc4e33f68f8b2da6712e6497e91b7cda4c8df13c226842d9841918b084",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }

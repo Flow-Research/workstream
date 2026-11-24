@@ -17,7 +17,6 @@ import hashlib
 from app.interfaces.artifacts import (
     ArtifactInputMismatchError,
     ArtifactLimitExceededError,
-    ArtifactProviderOperationEvidence,
     ArtifactStore,
     ArtifactStoreUnavailableError,
 )
@@ -121,9 +120,7 @@ async def hash_submission_replay(
 
 
 async def receive_submission_source(
-    store: ArtifactStore, upload: SubmissionSourceUpload, chunks: AsyncIterator[bytes], *,
-    operation_evidence: ArtifactProviderOperationEvidence | None = None,
-) -> SubmissionSourceCompletion:
+    store: ArtifactStore, upload: SubmissionSourceUpload, chunks: AsyncIterator[bytes]) -> SubmissionSourceCompletion:
     """Count/hash raw bytes and await every part before reading more input.
 
     Application-owned memory is at most two configured parts (assembly plus
@@ -137,18 +134,16 @@ async def receive_submission_source(
         raise SubmissionUploadTimeout("submission upload deadline expired")
     try:
         async with asyncio.timeout(remaining):
-            return await _receive_parts(store, upload, chunks, operation_evidence)
+            return await _receive_parts(store, upload, chunks)
     except TimeoutError:
         raise SubmissionUploadTimeout("submission upload deadline expired") from None
 
 
 async def _receive_parts(
     store: ArtifactStore, upload: SubmissionSourceUpload, chunks: AsyncIterator[bytes],
-    operation_evidence: ArtifactProviderOperationEvidence | None,
 ) -> SubmissionSourceCompletion:
     """Receive sequential parts inside the caller's immutable total deadline."""
     intent = upload.intent
-    evidence = operation_evidence or ArtifactProviderOperationEvidence()
     receipt = _IngressReceipt()
     pending = bytearray()
     parts = []
@@ -163,13 +158,13 @@ async def _receive_parts(
             if len(pending) == intent.part_bytes:
                 _require_deadline(intent.upload_deadline_at)
                 parts.append(await store.upload_source_part(
-                    upload, len(parts) + 1, bytes(pending), operation_evidence=evidence,
+                    upload, len(parts) + 1, bytes(pending),
                 ))
                 pending.clear()
     if pending:
         _require_deadline(intent.upload_deadline_at)
         parts.append(await store.upload_source_part(
-            upload, len(parts) + 1, bytes(pending), operation_evidence=evidence,
+            upload, len(parts) + 1, bytes(pending),
         ))
     _require_deadline(intent.upload_deadline_at)
     return SubmissionSourceCompletion(

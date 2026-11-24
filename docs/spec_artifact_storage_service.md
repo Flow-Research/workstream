@@ -230,32 +230,6 @@ with a different fingerprint fails before provider access. Replicas and put
 attempts reference the namespace row and fingerprint. A populated deployment
 cannot change it without a separately reviewed maintenance migration.
 
-### ArtifactProviderProbeResult
-
-One append-only result from exactly one AWS proof executor. It records probe
-type, expected and STS-observed caller ARNs, release ID, storage namespace ID
-and fingerprint, AWS account/region, canonical bucket-policy digest, common
-challenge nonce, proof-suite version/result, bounded evidence digest,
-PostgreSQL start/completion times, and expiry. It contains no credential or raw
-provider response. Probe types are `readiness`, `runtime_immutability`, and
-`negative_access`.
-
-### ArtifactProviderActivation
-
-One immutable production-release proof permits AWS S3 provider operations. It
-references one passing result of every probe type and records their shared
-release, storage namespace, AWS account/region, exact role ARNs, policy digest,
-nonce, proof version, PostgreSQL activation time, expiry, and superseded
-activation ID. It contains no credential. LocalStorage and MinIO never create
-probe or activation records.
-
-Only the credential-free activation coordinator writes this record after every
-fixed live proof passes with identical bindings and an overlapping valid time
-window.
-Production startup and every AWS provider operation require one unexpired
-successful record matching the exact release, namespace, roles, policy, and
-proof version. Any mismatch or expiry fails before provider I/O.
-
 ### ArtifactBinding
 
 An immutable relation from content to project, resource type/id, logical role,
@@ -517,69 +491,34 @@ Configuration includes:
 - connect/read/write/pool timeouts;
 - total verification deadline and maximum buffered bytes.
 
-Backend is exactly `disabled`, `local`, or `s3_compatible`. Credential modes are
-`aws_workload_identity` and `local_static`. AWS S3 production uses
-`aws_workload_identity`; MinIO supports `local_static` only in local/CI.
-Production static credentials are forbidden.
+Backend is exactly `disabled`, `local`, or `s3_compatible`. Hosted AWS uses
+`aws_access_key`: one private credential file and exact configured IAM-user ARN.
+The credential resolver rejects ambient credentials and validates the observed
+STS identity before use. Credentials are never retained in product records,
+error output or agent/checker inputs. MinIO uses `local_static` in local/CI.
 
-An AWS S3 deployment selects exactly one workload-identity method:
-`roles-anywhere`, `assume-role-with-web-identity`, `container-role`, or
-`iam-role`. Workstream
-validates the configuration required by the selected method, constrains the
-pinned botocore credential resolver to that provider before any provider is
-loaded, and verifies the resolved method. Explicit credentials, environment
-access keys, shared credential/config files, arbitrary credential processes,
-login/SSO, obsolete EC2/Boto credential sources, and every unselected workload
-provider are rejected. Roles Anywhere invokes only the pinned AWS signing
-helper with fixed arguments and private certificate/key files; its bounded
-output remains in memory and its temporary credentials refresh automatically.
-It does not use an ambient `credential_process` profile or a metadata server.
-Web-identity STS, ECS container metadata, and EC2 instance metadata use
-explicit no-proxy sessions. Web identity also rejects ambient endpoint and CA
-overrides. Tests poison every nonselected source and prove that it is never
-read, executed, or contacted. This is an allowlisted workload-identity
-contract, not authority to use the ambient SDK default chain.
+The independent `aws_workload_identity` mode supports explicit web identity,
+container-role or instance-role providers where those are deliberately
+configured. These are AWS credential mechanisms, not alternative database-proof
+systems. No credential mode requires an expiring activation record. The old
+Roles Anywhere certificate/helper path is removed from the hosted deployment.
 
 The current async S3 SDK pair is pinned to `aiobotocore==3.8.0` and
 `botocore==1.43.3`. The bounded uplift preserves the real MinIO protocol suite
 in the OmniCore dependency environment. An SDK upgrade is a reviewed contract change because
 credential-provider precedence and refresh windows are operational behavior.
 
-### Runtime Eligibility After Chunk 02B1
+### Runtime eligibility
 
-`minio` is the only active `s3_compatible` profile in this chunk. It requires
-an explicit HTTP(S) endpoint, region, dedicated bucket, private prefix,
-`local_static` credentials, and a local/development/test environment. Startup
-still claims the exact `minio-v1` namespace in PostgreSQL before any object
-operation. Local and CI run the real digest-pinned MinIO server and provision
-only the dedicated test bucket; tests do not emulate S3 calls.
+Production AWS uses its native HTTPS endpoint, exact region, dedicated bucket
+and private prefix. Startup claims the namespace before object operations and
+verifies the configured credential identity. No expiring database activation
+record gates SDK calls or terminal artifact transactions.
 
-`local/CI MinIO` names a non-production provider-eligibility class, not a
-literal endpoint-host rule. Repository-managed Compose and CI publish MinIO on
-host loopback only. A separately containerized Workstream process may use an
-operator-controlled private MinIO endpoint in a local, development, or test
-environment. Publicly exposed MinIO and every production-environment MinIO
-configuration are outside v0.1; neither can satisfy native AWS live proof.
-
-`aws_s3` accepts only a native endpoint-less AWS configuration, explicit
-region, exactly one allowlisted workload-identity method, an immutable release
-digest, exact runtime/readiness/negative role ARNs, exact runtime/readiness
-managed-policy ARNs and the expected canonical bucket-policy digest. Startup
-claims the exact namespace, then loads a matching fresh activation before
-credential-environment inspection or provider I/O. The adapter resolves its
-isolated credential session lazily only after the guard succeeds. Every later
-AWS SDK call reloads the same activation ID selected for that logical store
-operation. MinIO conformance is not AWS activation evidence.
-
-Cloudflare R2 has no v0.1 runtime mode, credential issuer, sidecar, secret
-contract, configuration profile, or deployment proof. Any future provider
-initiative must perform current discovery and pass the same `ArtifactStore`
-conformance suite before any runtime configuration is introduced.
-
-Production rejects `local`, plaintext HTTP, loopback/local endpoints, invalid
-credential-mode/profile combinations, and unknown provider profiles.
-Validation errors, resolved credentials, and exception object graphs must not
-retain secrets.
+MinIO remains local/development/test only, with explicit endpoint and isolated
+static credentials. Its conformance tests do not establish successful access
+to a real AWS deployment. Production rejects local storage, plaintext HTTP,
+unknown provider profiles and ambient credential fallback.
 
 ### Object Identity
 
@@ -603,7 +542,7 @@ The dedicated AWS bucket policy also denies `s3:PutObject` when the
 `If-None-Match` header is absent; S3 requires the present value to be `*` for
 this operation. Adapter conformance is not the immutability boundary by itself.
 The production harness attempts an unconditional overwrite
-with the runtime role, requires an explicit denial, and proves the original
+with the runtime identity, requires an explicit denial, and proves the original
 object bytes remain unchanged.
 
 v0.1 uses conditional single-request `PutObject` only and enforces
@@ -617,192 +556,25 @@ object prefix and only the actions required for conditional put, head, get, and
 trustworthy missing-object classification. It has no delete, copy, object-list
 operation in Workstream, bucket administration, lifecycle mutation, public-
 access mutation, or cross-prefix object permission. AWS uses a least-privilege
-role/policy.
+identity policy.
 
-Production activation uses these exact resource templates:
+The hosted deployment uses one dedicated IAM user. Its policy permits
+GetObject and PutObject only in `${PRIVATE_PREFIX}/sha256/*`, and ListBucket
+on the dedicated bucket for trustworthy missing-object classification. The
+bucket policy independently rejects insecure transport, foreign object access,
+deletions and unconditional writes. Runtime credentials have no IAM or bucket
+administration authority and are never supplied to agents or checker guests.
 
-```text
-BUCKET_ARN = arn:${AWS_PARTITION}:s3:::${BUCKET}
-OBJECT_ARN = arn:${AWS_PARTITION}:s3:::${BUCKET}/${PRIVATE_PREFIX}/sha256/*
-RUNTIME_ROLE_ARN = configured Workstream runtime IAM role ARN
-RUNTIME_POLICY_ARN = the one configured customer-managed runtime policy ARN
-```
+Deployment and credential/configuration changes require real storage
+qualification: conditional create, full-byte readback, replay, missing-object
+handling and denied overwrite/delete/foreign-prefix/anonymous access. This is
+operator deployment evidence, not an expiring database permission. Removing the
+old periodic proof removes its bounded detection of out-of-band configuration
+drift; AWS and deployment administrators remain trusted. Per-call AWS
+authentication, namespace ownership, authorization, byte verification and
+recovery fences remain required.
 
-The principal/action matrix is closed:
-
-| Principal | Exact allowed IAM actions | Exact resource |
-|---|---|---|
-| Workstream runtime role | `s3:PutObject`, `s3:GetObject` | `OBJECT_ARN` only |
-| Workstream runtime role | `s3:ListBucket` | `BUCKET_ARN` only |
-| deployment readiness role | `s3:GetBucketPolicy`, `s3:GetBucketPolicyStatus`, `s3:GetBucketAcl`, `s3:GetBucketPublicAccessBlock`, `s3:GetBucketOwnershipControls`, `s3:GetBucketVersioning`, `s3:GetLifecycleConfiguration`, `s3:GetEncryptionConfiguration` | `BUCKET_ARN` only |
-| deployment readiness role | `iam:GetRole`, `iam:ListRolePolicies`, `iam:ListAttachedRolePolicies` | the exact configured runtime, readiness, and negative role ARNs only |
-| deployment readiness role | `iam:GetPolicy`, `iam:GetPolicyVersion` | the exact configured runtime and readiness managed-policy ARNs only |
-| deployment readiness role | `access-analyzer:ValidatePolicy`, `access-analyzer:CheckAccessNotGranted`, `access-analyzer:CheckNoPublicAccess` | `*` because these policy-check APIs do not support a narrower resource in this contract |
-| deployment negative-test role | no S3, IAM, or Access Analyzer action | none |
-| infrastructure bootstrap principal | no Workstream-defined allow statement and no proof credential; environment-owned provisioning only | outside the Workstream runtime/probe policy |
-
-`HeadObject` uses the runtime role's `s3:GetObject` permission. AWS returns 404
-for a missing key only when the caller also has `s3:ListBucket`; without it, a
-missing key is masked as 403. The bucket-level permission therefore exists only
-so `HeadObject` can produce authoritative absence for this dedicated bucket.
-`ArtifactStore` has no list method and Workstream never calls `ListObjects` or
-`ListObjectsV2`. A 403 is always `provider_unavailable`, never `missing`.
-The IAM permission technically permits the runtime principal to enumerate this
-dedicated bucket if that principal is compromised; AWS offers no narrower
-permission that also enables missing-key 404 classification. The bucket and
-opaque hash-only key namespace are therefore mandatory containment boundaries.
-
-`sts:GetCallerIdentity` is called by each proof executor to bind observed
-identity and requires no identity-policy grant. The runtime policy contains
-exactly the three listed S3 actions on their exact resource classes. It contains
-no wildcard S3 action and no `DeleteObject`, `DeleteObjectVersion`,
-`CopyObject`, ACL, tagging, multipart, bucket-administration, lifecycle, or
-public-access action. The readiness role contains no S3 object action. v0.1
-uses bucket-default SSE-S3 (`AES256`), which the readiness probe verifies, and
-grants no KMS action.
-
-The bucket-policy deny matrix is closed:
-
-| Sid | Effect | Exact actions | Exact resources | Exact principal | Exact condition |
-|---|---|---|---|---|---|
-| `DenyInsecureTransport` | Deny | `s3:*` | `BUCKET_ARN`, `OBJECT_ARN` | `*` | `Bool: {"aws:SecureTransport": "false"}` |
-| `DenyNonRuntimeObjectData` | Deny | `s3:*` | `OBJECT_ARN` | `*` | `ArnNotEquals: {"aws:PrincipalArn": RUNTIME_ROLE_ARN}` |
-| `DenyUnconditionalPut` | Deny | `s3:PutObject` | `OBJECT_ARN` | `*` | `Null: {"s3:if-none-match": "true"}` |
-
-No additional statement may weaken, bypass, or create an exception to these
-denies. For `DenyUnconditionalPut`, SigV4 and the S3 API require the present
-`If-None-Match` value to be `*` for this operation.
-
-Identity policies therefore cannot grant an unexpected same-account,
-same-organization, or external role object access. The deployment-only
-readiness proof rejects any extra runtime/readiness allow action, resource, attached
-policy, inline policy, or bucket-policy exception. It validates the canonical
-policy documents, all four Block Public Access flags, bucket-owner-enforced
-object ownership, ACL state, SSE-S3 encryption, lifecycle safety, and the three
-deny statements. Access Analyzer custom checks prove no public access and no
-access outside the exact actions/resources above. Live anonymous,
-negative-test-role, and readiness-role `GetObject`, `PutObject`, and
-`DeleteObject` calls against a known object must all deny. Bootstrap-principal
-denial is proved through policy evaluation only; bootstrap credentials are
-never supplied.
-
-The same deployment proof reads the provider lifecycle configuration and fails
-activation when any enabled rule can delete/expire a completed object under the
-configured private prefix. AWS inspection covers `Expiration` and
-`NoncurrentVersionExpiration` for every rule whose filter can intersect the
-prefix. Storage-class transitions and abort-incomplete-multipart rules are not
-completed-object deletion. These checks use the separate read-only deployment
-identity in the live proof harness; the runtime principal is not granted bucket
-administration merely to inspect policy or lifecycle configuration.
-Provider-readiness inspection is not part of `ArtifactStore` and is not called
-by a product service.
-
-AWS proof uses separate executors and append-only
-`ArtifactProviderProbeResult` records. Each process uses only its own identity.
-Roles Anywhere additionally attempts both other roles and requires explicit
-access denial; obtaining credentials for another role fails the proof:
-
-| Probe | Execution identity and boundary |
-|---|---|
-| readiness | independent deployment job with the short-lived readiness role; policy/ACL/public-access/lifecycle/IAM inspection only |
-| runtime immutability | command executed inside the deployed Workstream runtime workload identity; conditional write, unconditional-overwrite denial, missing-key 404, head/get, and byte-preservation proof only |
-| negative access | independent deployment job with the short-lived negative-test role; known-object read/write/delete denials only |
-
-The readiness role cannot assume the runtime or negative-test role. The
-runtime workload cannot assume either deployment role. Readiness reads each
-exact role trust policy and requires its configured canonical digest and
-three disjoint workload subjects. Supported closed trust shapes are:
-
-- OIDC: one exact `Allow` with `sts:AssumeRoleWithWebIdentity`, exact issuer
-  `sub` and audience `sts.amazonaws.com` under `StringEquals`.
-- EC2: runtime only, one condition-free `sts:AssumeRole` `Allow` for
-  `ec2.amazonaws.com`, with provisioner-owned instance-profile attachment.
-- Roles Anywhere: one exact service trust for `rolesanywhere.amazonaws.com`,
-  the required AssumeRole/TagSession/SetSourceIdentity actions, exact source
-  account and trust-anchor ARN, and exact issuer/role-specific subject CNs.
-  One shared profile permits exactly the three configured roles. Readiness
-  verifies its enabled state and canonical security settings, and the enabled
-  trust anchor's CA material. Each certificate must acquire its own credentials,
-  receive explicit access denial for both other roles, then reacquire its own
-  credentials. Other helper failures cannot stand in for denial.
-
-For Roles Anywhere, both probe and activation records also retain the exact
-anchor/profile ARNs and canonical state digests. The four fields are all
-present for that method or all absent for the other supported methods. Group
-matching and every activation lookup include them. An updated CA or profile
-requires matching fresh proof; retained records are not rewritten. Wildcard or
-broader trust, role chaining and extra trust conditions/statements fail closed.
-The bootstrap principal
-is never supplied to any probe. Each probe asks STS for its observed caller ARN
-and commits one immutable result bound to probe type, expected/observed caller
-ARN, release ID, namespace fingerprint, bucket-policy digest, common challenge
-nonce, proof version/result, bounded evidence digest, PostgreSQL start/completion
-times, and expiry. A probe whose observed ARN differs from its expected ARN
-fails without an activation.
-
-A credential-free activation coordinator has database authority but no AWS
-credentials. It creates one immutable `ArtifactProviderActivation` only after
-loading the three committed probe results and proving identical release,
-namespace, policy digest, nonce, proof version, time window, and unexpired pass
-results. Policy/IAM evaluation of the bootstrap principal is a fourth required
-readiness artifact; bootstrap credentials remain absent.
-
-The runtime result must complete before the readiness and negative results
-start. The coordinator and activation-table trigger both enforce
-`runtime.completed_at <= readiness.started_at` and
-`runtime.completed_at <= negative.started_at`. This makes every known-object
-denial depend on the runtime proof having already retained the common-nonce
-challenge, rather than accepting the 403 that S3 can return for a missing key
-when a principal lacks `ListBucket`.
-
-The proof command accepts no pass value or caller-authored observation, and no
-product/API/configuration input can write proof or activation rows. The trusted
-deployment proof process, its database writer credential and database
-administrators are the v0.1 trust root for those rows. v0.1 does not claim
-resistance to a malicious holder of that credential; a distinct writer role or
-external attestation would require a separately reviewed trust-boundary change.
-
-Each five-minute group retains one immutable 49-byte challenge under the exact
-production content-addressed prefix. These objects create no product binding or
-receipt, but deliberately exercise the production object policy and no-expiry
-lifecycle. At that cadence they add 105,120 objects and 5,150,880 payload bytes
-per 365-day year; hosted capacity monitoring includes them, and orphan cleanup
-does not delete them.
-
-Production startup and every AWS provider I/O load an exact matching unexpired
-activation before calling AWS. v0.1 caps probe/activation validity at 15 minutes
-and schedules all three probes plus coordination every 5 minutes. The complete
-runtime, readiness, negative-access and coordination sequence has a fixed
-120-second v0.1 allowance. Native AWS configuration requires
-`max(operation_total_deadline, complete_read_deadline) + persistence_margin +
-clock_safety_margin + proof_sequence_allowance + refresh_interval <=
-activation_validity`. The coordinator and activation-table trigger require the
-authoritative database clock at activation insertion minus
-`runtime.started_at` to remain within `proof_sequence_allowance`; the live
-deployment also measures that interval, successive runtime start times and
-commit latency. At maximum budgets, 300-second proof starts and a 120-second
-sequence leave no scheduling or commit-latency slack. Deployments must start
-earlier or configure smaller operation deadlines for margin; the arithmetic is
-not a continuous-availability guarantee. A late or missed group fails closed.
-Expiry or any release, namespace, role, policy-digest, or
-proof-version drift fails closed with
-`artifact_provider_live_proof_required` before provider I/O. MinIO protocol
-conformance never activates production AWS.
-
-This bounded proof model treats authorized AWS infrastructure administrators
-as trusted during the maximum 15-minute validity window. v0.1 does not claim
-protection from a malicious cloud administrator and does not require S3 Object
-Lock; changing that threat boundary requires a separate human-approved
-architecture decision.
-
-Before each AWS call, PostgreSQL time must show
-`activation_remaining_ttl >= operation_total_deadline + persistence_margin +
-clock_safety_margin`. The terminal transaction reloads the same activation and
-requires it still to match and remain unexpired before committing any success,
-receipt, replica, verification result, or audit success. If a put may have
-succeeded but activation expires before terminal commit, the durable put
-attempt remains acknowledgement-unknown and can only be resolved after fresh
-activation; no stale proof authorizes a terminal fact.
+See [S3 credential operations](operations_aws_s3_credentials.md).
 
 ### Integrity Rules
 
@@ -1025,29 +797,17 @@ The S3-compatible provider settings use the same prefix:
 | Environment variable | Default | Contract |
 |---|---:|---|
 | `WORKSTREAM_ARTIFACT_STORE_BACKEND` | `disabled` | Set to `s3_compatible` to select the S3 protocol adapter. |
-| `WORKSTREAM_ARTIFACT_S3_PROVIDER_PROFILE` | unset | Closed value: `minio` for local/CI or `aws_s3` for activation-gated native AWS. |
+| `WORKSTREAM_ARTIFACT_S3_PROVIDER_PROFILE` | unset | Closed value: `minio` for local/CI or `aws_s3` for native AWS. |
 | `WORKSTREAM_ARTIFACT_S3_REGION` | unset | Required canonical S3 region. |
 | `WORKSTREAM_ARTIFACT_S3_ENDPOINT_URL` | unset | Required HTTP(S) endpoint for MinIO; forbidden for native AWS. |
 | `WORKSTREAM_ARTIFACT_S3_BUCKET` | unset | Required private bucket name. |
 | `WORKSTREAM_ARTIFACT_S3_PRIVATE_PREFIX` | `workstream/artifacts` | Canonical private key prefix; object references remain server-derived SHA-256 paths. |
 | `WORKSTREAM_ARTIFACT_S3_ADDRESSING_STYLE` | `virtual` | Closed value: `path` or `virtual`; local compose uses `path`. |
-| `WORKSTREAM_ARTIFACT_S3_CREDENTIAL_MODE` | unset | MinIO requires `local_static`; native AWS requires `aws_workload_identity`. |
-| `WORKSTREAM_ARTIFACT_S3_AWS_WORKLOAD_IDENTITY_METHOD` | unset | Native AWS selection: `roles-anywhere`, `assume-role-with-web-identity`, `container-role`, or `iam-role`; never used by MinIO. |
-| `WORKSTREAM_RELEASE_ID` | unset | Native AWS-only immutable deployed image/release digest in `sha256:<64 lowercase hex>` form. |
-| `WORKSTREAM_ARTIFACT_S3_ROLES_ANYWHERE_TRUST_ANCHOR_ARN` / `TRUST_ANCHOR_SHA256` | unset | Exact anchor and canonical CA/state digest, required only for Roles Anywhere. Both names use the full `WORKSTREAM_ARTIFACT_S3_ROLES_ANYWHERE_` prefix. |
-| `WORKSTREAM_ARTIFACT_S3_ROLES_ANYWHERE_PROFILE_ARN` / `PROFILE_SHA256` | unset | Exact shared profile and canonical security-state digest, under the same prefix. |
-| `WORKSTREAM_ARTIFACT_S3_ROLES_ANYWHERE_ROLE_ARN` | unset | This process's exact role; application uses runtime, each proof job uses its own role. |
-| `WORKSTREAM_ARTIFACT_S3_ROLES_ANYWHERE_CERTIFICATE_FILE` / `PRIVATE_KEY_FILE` | unset | Private mounted identity files, under the same prefix; never the CA signing key. |
-| `WORKSTREAM_ARTIFACT_S3_RUNTIME_ROLE_ARN` | unset | Exact runtime IAM role ARN used for product object calls and runtime proof. |
-| `WORKSTREAM_ARTIFACT_S3_RUNTIME_TRUST_POLICY_SHA256` | unset | Canonical digest of the reviewed runtime role trust policy. |
-| `WORKSTREAM_ARTIFACT_S3_RUNTIME_POLICY_ARN` | unset | Exact sole customer-managed runtime policy ARN. |
-| `WORKSTREAM_ARTIFACT_S3_READINESS_ROLE_ARN` | unset | Exact independent readiness-job role ARN. |
-| `WORKSTREAM_ARTIFACT_S3_READINESS_TRUST_POLICY_SHA256` | unset | Canonical digest of the reviewed readiness role trust policy. |
-| `WORKSTREAM_ARTIFACT_S3_READINESS_POLICY_ARN` | unset | Exact sole customer-managed readiness policy ARN. |
-| `WORKSTREAM_ARTIFACT_S3_NEGATIVE_ROLE_ARN` | unset | Exact independent negative-test role ARN; it has no attached or inline policy. |
-| `WORKSTREAM_ARTIFACT_S3_NEGATIVE_TRUST_POLICY_SHA256` | unset | Canonical digest of the reviewed negative-test role trust policy. |
-| `WORKSTREAM_ARTIFACT_S3_BOOTSTRAP_PRINCIPAL_ARN` | unset | Exact environment provisioning principal evaluated without supplying its credentials. |
-| `WORKSTREAM_ARTIFACT_S3_BUCKET_POLICY_SHA256` | unset | Expected canonical bucket-policy digest in `sha256:<64 lowercase hex>` form. |
+| `WORKSTREAM_ARTIFACT_S3_CREDENTIAL_MODE` | unset | MinIO requires `local_static`; native AWS uses `aws_access_key` or explicit `aws_workload_identity`. |
+| `WORKSTREAM_ARTIFACT_S3_RUNTIME_USER_ARN` | unset | Exact dedicated IAM user for `aws_access_key`. |
+| `WORKSTREAM_ARTIFACT_S3_DIRECT_USER_CREDENTIAL_FILE` | unset | Absolute private JSON credential-file path; only used by `aws_access_key`. |
+| `WORKSTREAM_ARTIFACT_S3_AWS_WORKLOAD_IDENTITY_METHOD` | unset | Native AWS selection: `assume-role-with-web-identity`, `container-role`, or `iam-role`; never used by MinIO. |
+| `WORKSTREAM_ARTIFACT_S3_RUNTIME_ROLE_ARN` | unset | Exact runtime IAM role ARN when a workload-role credential method is selected. |
 | `WORKSTREAM_ARTIFACT_S3_ACCESS_KEY_ID` | unset | MinIO local/CI secret only; forbidden for native AWS. |
 | `WORKSTREAM_ARTIFACT_S3_SECRET_ACCESS_KEY` | unset | MinIO local/CI secret only; forbidden for native AWS. |
 | `WORKSTREAM_ARTIFACT_S3_SESSION_TOKEN` | unset | Optional MinIO local/CI secret only; forbidden for native AWS. |
@@ -1059,22 +819,12 @@ The S3-compatible provider settings use the same prefix:
 | `WORKSTREAM_ARTIFACT_S3_MAX_POOL_CONNECTIONS` | `16` | Bounded client connection pool, from 1 through 256. |
 | `WORKSTREAM_ARTIFACT_MAXIMUM_BYTES` | `536870912` | Hard object maximum; configuration cannot exceed 512 MiB. |
 
-MinIO is restricted to local, development, and test environments. Native AWS
-becomes runtime-eligible only while an exact immutable three-probe activation
-remains fresh. Native AWS configuration rejects static credentials, configured
-endpoints, unselected or ambient credential
-sources, arbitrary container credential URLs, and custom instance-metadata
-endpoints. The selected method accepts only its exact closed `AWS_*`
-environment allowlist; every other `AWS_*` or `BOTOCORE_*` SDK behavior control
-fails before SDK session construction. S3 object operations and credential
-metadata operations explicitly ignore ambient HTTP proxy variables. IAM-role
-validation requires IMDSv2 and the isolated fetcher disables IMDSv1. Even valid
-native AWS settings let API, Celery task-process and Beat construct the inert
-typed bootstrap and validate the persisted namespace claim before requiring an activation.
-Absent activation still fails before credential-source probing, SDK session
-construction, resolver loading, or provider I/O. The direct scratch-cleanup
-task uses only `ArtifactScratchManager`; it neither constructs a provider nor
-claims provider activation.
+MinIO is restricted to local, development and test environments. Native AWS
+rejects configured endpoints and ambient credential fallback. Direct-key mode
+requires a private JSON credential file and exact IAM-user ARN. Credential
+values must not appear in validation errors, SDK logs or product records.
+Startup still validates the persisted namespace claim. Scratch cleanup uses
+only `ArtifactScratchManager` and needs no S3 credential.
 
 Every process sharing a scratch root must use the identical complete setting
 set. The root marker binds a canonical fingerprint of those limits and startup
@@ -1858,8 +1608,8 @@ ART identity without provider I/O. Client delivery/export is outside this v0.1
 initiative and requires a separately planned egress capability.
 
 - one conformance suite runs against LocalStorage and real MinIO;
-- offline validation proves the closed AWS S3 configuration and activation
-  contract; actual provider eligibility still requires live deployment proof;
+- offline validation checks the AWS credential and namespace configuration;
+  actual storage readiness still requires live deployment qualification;
 - integration tests use real S3-compatible API calls, not monkeypatching;
 - concurrent puts cannot overwrite existing bytes;
 - acknowledgement loss, exact replay, oversized-object refusal, truncation,

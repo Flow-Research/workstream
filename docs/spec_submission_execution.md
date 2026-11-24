@@ -645,7 +645,7 @@ The current AWS profile requires bucket versioning. Preserve it. Persist the com
 
 A key-only DELETE on a versioned bucket can create a delete marker while retaining the bytes. It must not be reported as physical reclamation or used to release the physical charge. [P3](#p3)
 
-Update provider/readiness/live-proof contracts for exact-version reads and narrowly scoped `DeleteObjectVersion`/multipart cleanup in the new submission namespace. Existing protections on unrelated retained SHA-addressed objects remain.
+Qualify exact-version reads and narrowly scoped `DeleteObjectVersion`/multipart cleanup in the new submission namespace using the current dedicated-credential storage configuration. The expiring database-backed provider-proof subsystem was retired on main; do not restore it. Existing protections on unrelated retained SHA-addressed objects remain.
 
 For that submission prefix, enforce create-only conditions on final object creation (`PutObject` and `CompleteMultipartUpload`). Qualify `s3:ObjectCreationOperation` in the conditional-write policy so multipart initiation and part upload remain permitted without conditional headers. The current missing-header-only deny cannot be carried forward unchanged. Do not remove final-object overwrite protection to make multipart work, and do not enable copy operations. Readiness/live tests must prove ordinary multipart receipt succeeds while unconditional final creation and overwrites are denied. [P6](#p6)
 
@@ -1163,7 +1163,7 @@ All paths below are relative to the pinned repository. They identify inspected c
 | `backend/app/modules/artifacts/preparation.py`; `sources.py` | Remove full API scratch requirement from submission intake only; preserve other consumers and their sealed-source protections. |
 | `backend/app/interfaces/artifacts.py` | Add typed streaming receipt, exact operation source/generation, read and cleanup capabilities. Keep other artifact contracts. |
 | `backend/app/adapters/artifacts/s3_compatible.py`; `local.py` | Implement bounded receive, conditional completion, exact observation/generation/read/abort/delete and strict operation-ref validation. |
-| `backend/app/adapters/artifacts/aws_live_proof.py` | Qualify new controlled namespace permissions, version-aware cleanup, multipart conditions and no-overwrite proofs. Preserve unrelated namespace protection. |
+| `backend/app/adapters/artifacts/aws_direct_user.py`; deployment qualification | Qualify new controlled namespace permissions, version-aware cleanup, multipart conditions and no-overwrite proofs using dedicated credentials. Preserve unrelated namespace protection; do not restore retired expiring proof tables. |
 | `backend/app/modules/artifacts/models.py`; `service.py` | Early operation, physical per-object reservation/charge, exact registration and cleanup fencing; preserve logical content identity. |
 | `backend/app/modules/artifacts/submission_manifest.py` | Reuse canonical representation and change-gate semantics; add exact request/source binding where required. |
 | `backend/app/modules/artifacts/submission_materialization.py` | Replace submission PRE intake/export/close/second-runtime handoff with one-session source execution. Do not delete shared POST/other consumers blindly. |

@@ -112,3 +112,42 @@ def test_registered_foreign_task_cannot_use_cleanup_credentials(monkeypatch, cle
             assert calls == [("put", identifier)]
     finally:
         get_settings.cache_clear()
+
+
+@pytest.mark.parametrize("mode,principal", [
+    ("aws_access_key", "arn:aws:iam::123456789012:user/upload"),
+    ("aws_access_key", None),
+    ("aws_workload_identity", "arn:aws:iam::123456789012:user/cleanup"),
+])
+def test_native_cleanup_requires_distinct_identified_principal(monkeypatch, mode, principal):
+    from app.adapters import artifacts
+    from app.interfaces.artifacts import ArtifactConfigurationError
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("invalid cleanup principal reached provider construction")
+    monkeypatch.setattr(artifacts, "create_artifact_store_bootstrap", forbidden)
+    settings = SimpleNamespace(artifact_store_backend="s3_compatible", artifact_s3_provider_profile="aws_s3",
+        artifact_s3_credential_mode=mode, artifact_s3_runtime_user_arn=principal)
+    with pytest.raises(ArtifactConfigurationError, match="separate provider principal"):
+        artifacts.create_submission_source_cleanup_provider(settings=settings, namespace_claim=None,
+            upload_principal="arn:aws:iam::123456789012:user/upload")
+
+
+def test_native_cleanup_uses_direct_user_bootstrap_without_retired_proof(monkeypatch):
+    from app.adapters import artifacts
+
+    marker, store, calls = object(), SimpleNamespace(close=lambda: None), []
+    def initialize(claim):
+        assert claim is marker
+        calls.append(claim)
+        return store
+    monkeypatch.setattr(artifacts, "create_artifact_store_bootstrap", lambda settings:
+        SimpleNamespace(initialize_after_namespace_claim=initialize))
+    settings = SimpleNamespace(artifact_store_backend="s3_compatible", artifact_s3_provider_profile="aws_s3",
+        artifact_s3_credential_mode="aws_access_key",
+        artifact_s3_runtime_user_arn="arn:aws:iam::123456789012:user/cleanup")
+    provider = artifacts.create_submission_source_cleanup_provider(settings=settings, namespace_claim=marker,
+        upload_principal="arn:aws:iam::123456789012:user/upload")
+    assert provider.identity.provider_key == "s3_compatible"
+    assert calls == [marker]
+    provider.close()

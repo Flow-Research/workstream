@@ -13,6 +13,9 @@ on:
       - 'scripts/identity_browser_runner.py'
       - 'scripts/test_identity_browser_runner.py'
       - 'scripts/test_identity_provider.py'
+      - 'scripts/test_identity_signup.py'
+      - 'scripts/identity_mail_fixture.py'
+      - '.github/requirements/identity-browser.*'
       - 'scripts/test_keycloak_configuration.py'
       - 'scripts/test_identity_bootstrap.py'
       - 'deploy/hosted/bootstrap-identity.py'
@@ -77,6 +80,21 @@ jobs:
         env:
           PYTHONPATH: .:backend:mcp_server
         run: backend/.venv/bin/python scripts/test_identity_provider.py -q
+      - name: Install frozen browser qualification tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y libnss3-tools
+          uv venv "$RUNNER_TEMP/identity-browser" --python 3.12
+          uv pip install --python "$RUNNER_TEMP/identity-browser/bin/python" --require-hashes -r .github/requirements/identity-browser.txt
+          command -v google-chrome
+      - name: Prove verified signup and password recovery through the browser
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PYTHONPATH="$RUNNER_TEMP/identity-browser/lib/python3.12/site-packages:.:backend:mcp_server"
+          backend/.venv/bin/python -m unittest scripts.test_identity_signup.IdentitySignupTests.test_verified_signup_and_password_recovery -q
       - name: Prove public ingress routing with the pinned Caddy binary
         shell: bash
         run: |

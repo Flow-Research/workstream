@@ -72,6 +72,12 @@ satisfy its own runtime requirements.
 
 ## Remaining work, in execution order
 
+The user's current priority is integrating current main and proving the complete
+submission journey using the existing app host and a separate, inexpensive,
+always-on KVM runner. Prepare that infrastructure in the runner worktree while
+integrating the application path. Do not let CI-only repair cycles displace this
+journey. The remaining cleanup and verification requirements below still apply.
+
 | Order | Required outcome | Concrete finishing evidence |
 | --- | --- | --- |
 | 1 | Finish uncertain/unsealed and genuine-orphan reconciliation | Reconcile interrupted multipart and lost acknowledgements; retained/stalled sources survive; actual absence and settled writes release charges once; exercise worker loss/restart. |
@@ -122,7 +128,9 @@ C01–C07 remain open until individually reconciled with the specification and
 actual deployment evidence. Test-only leases/profiles are not approved defaults.
 Native Smol qualification must run on the dedicated execution infrastructure,
 not the API host. The current local environment does not supply that evidence. AWS source
-qualification remains separate from MinIO and existing SHA-object activation.
+qualification remains separate from MinIO and ordinary SHA-object operation.
+Current main's dedicated credentials replace expiring provider activation;
+submission work must not reinstate the retired activation subsystem.
 Request only concrete missing access or decisions after the corresponding drill
 and proposed values are prepared.
 

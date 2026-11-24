@@ -2693,9 +2693,9 @@ def test_revision_ownership_does_not_allow_a_parallel_exhaustion_writer():
         })), trusted)
 
 
-def test_aws_activation_ownership_accepts_only_exact_targets():
+def test_direct_aws_ownership_retires_only_the_exact_proof_targets():
     retained = "backend/app/core/config.py"
-    additions = {
+    retired = {
         "backend/app/adapters/artifacts/aws_live_proof.py",
         "backend/app/adapters/artifacts/aws_roles_anywhere.py",
         "backend/app/adapters/artifacts/aws_roles_anywhere_proof.py",
@@ -2704,30 +2704,25 @@ def test_aws_activation_ownership_accepts_only_exact_targets():
         "backend/scripts/aws_artifact_provider_proof.py",
         "backend/scripts/aws_roles_anywhere_config.py",
     }
-    assert ownership.AWS_ARTIFACT_ACTIVATION_TARGETS == additions
-    trusted = _partition([retained])
-    current = _partition(sorted({retained, *additions}))
+    replacements = {
+        "backend/app/adapters/artifacts/aws_direct_user.py",
+        "backend/scripts/aws_direct_user_config.py",
+    }
+    assert ownership.AWS_ARTIFACT_PROOF_REMOVED_TARGETS == retired
+    assert ownership.AWS_DIRECT_USER_TARGETS == replacements
+    trusted = _partition(sorted({retained, *retired}))
+    current = _partition(sorted({retained, *replacements}))
     ownership._validate_additive_partition_transition(current, trusted)
 
-    for neighbor in (
-        "backend/app/adapters/artifacts/extra_probe.py",
-        "backend/app/modules/artifacts/activation_override.py",
-        "backend/scripts/extra_aws_proof.py",
-    ):
-        with pytest.raises(ownership.BehaviorOwnershipError, match="untrusted_partition_change"):
-            ownership._validate_additive_partition_transition(
-                _partition(sorted({retained, *additions, neighbor})), trusted,
-            )
-
-    for target in (retained, *sorted(additions)):
-        changed = _partition(sorted({retained, *additions}))
-        for assignment in changed["assignments"]:
-            if assignment["target"] == target:
-                assignment["group"] = "auth"
-        authority = {key: value for key, value in changed.items() if key != "authority_digest"}
-        changed["authority_digest"] = ownership._digest(authority)
-        with pytest.raises(ownership.BehaviorOwnershipError, match="untrusted_partition_change"):
-            ownership._validate_additive_partition_transition(changed, trusted)
+    with pytest.raises(ownership.BehaviorOwnershipError, match="untrusted_partition_change"):
+        ownership._validate_additive_partition_transition(_partition([retained]), trusted)
+    with pytest.raises(ownership.BehaviorOwnershipError, match="untrusted_partition_change"):
+        ownership._validate_additive_partition_transition(_partition(sorted(replacements)), trusted)
+    with pytest.raises(ownership.BehaviorOwnershipError, match="untrusted_partition_change"):
+        ownership._validate_additive_partition_transition(
+            _partition(sorted({retained, *replacements, "backend/scripts/extra_aws_proof.py"})),
+            trusted,
+        )
 
 
 def test_art_operator_ownership_accepts_only_exact_new_modules():

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from app.db.session import get_session_factory
+
 from datetime import timedelta
 import logging
 
@@ -43,14 +45,14 @@ from typing import Annotated, cast
 from uuid import UUID
 
 from fastapi import Depends, Request
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
 from app.core.api_controls import request_ids
 from app.api.deps.authorization import get_authorization_actor_identity
 from app.adapters.projects import project_locked_policy_context_port
 from app.adapters.tasks import task_submission_context_port
-from app.db.session import get_db_session, get_session_factory
+from app.db.session import get_db_session
 from app.interfaces.artifact_operations import GuideArtifactIngestCommand
 from app.modules.projects.api.guide_documents import GuideDocumentUploadTargetPort
 from app.modules.model_usage.api import (
@@ -73,8 +75,6 @@ from app.modules.checkers.api.output_custody import (
 from app.interfaces.artifacts import (
     ARTIFACT_STORE_CAPABILITY_KEY,
     ArtifactConfigurationError,
-    ArtifactProviderActivationGuard,
-    ArtifactProviderLiveProofRequiredError,
     ArtifactStoreBootstrap,
     ArtifactStoreNamespaceClaim,
 )
@@ -132,29 +132,7 @@ async def get_submission_bundle_preparation_actor(
     return actor
 
 
-def artifact_provider_activation_guard(
-    settings: Settings,
-    sessions: async_sessionmaker[AsyncSession] | None = None,
-) -> ArtifactProviderActivationGuard | None:
-    """Compose the ART-owned guard and resolve DB state only for native AWS."""
-    if not (
-        settings.artifact_store_backend == "s3_compatible"
-        and settings.artifact_s3_provider_profile == "aws_s3"
-    ):
-        return None
-    from app.modules.artifacts.provider_activation import (
-        SqlAlchemyArtifactProviderActivationGuard,
-    )
-
-    sessions = sessions or get_session_factory()
-    return SqlAlchemyArtifactProviderActivationGuard(sessions, settings)
-
-
-def create_artifact_store_bootstrap(
-    settings: Settings,
-    *,
-    activation_guard: ArtifactProviderActivationGuard | None,
-) -> ArtifactStoreBootstrap:
+def create_artifact_store_bootstrap(settings: Settings) -> ArtifactStoreBootstrap:
     """Construct the selected store bootstrap through one typed factory.
 
     Args:
@@ -166,14 +144,6 @@ def create_artifact_store_bootstrap(
     Raises:
         ExternalServiceConfigurationError: If the provider is not registered.
     """
-    if (
-        settings.artifact_store_backend == "s3_compatible"
-        and settings.artifact_s3_provider_profile == "aws_s3"
-        and activation_guard is None
-    ):
-        raise ArtifactProviderLiveProofRequiredError(
-            "AWS artifact provider requires an activation guard"
-        )
     from app.adapters.artifacts.local import LocalStorageAdapter, LocalStorageBootstrap
     from app.adapters.artifacts.s3_compatible import (
         create_s3_compatible_artifact_store_bootstrap,
@@ -183,8 +153,6 @@ def create_artifact_store_bootstrap(
 
     def create_local_store() -> ArtifactStoreBootstrap:
         """Pin the configured development-only LocalStorage provider root."""
-        if activation_guard is not None:
-            raise ArtifactConfigurationError("local artifact storage cannot use AWS activation")
         if settings.artifact_local_root is None:
             raise ArtifactConfigurationError("local artifact root is not configured")
         return LocalStorageBootstrap(
@@ -198,12 +166,16 @@ def create_artifact_store_bootstrap(
     factory.register("local", create_local_store)
     factory.register(
         "s3_compatible",
-        lambda: create_s3_compatible_artifact_store_bootstrap(
-            settings,
-            activation_guard=activation_guard,
-        ),
+        lambda: create_s3_compatible_artifact_store_bootstrap(settings),
     )
     return factory.create(settings.artifact_store_backend)
+
+
+async def verify_artifact_provider_startup(settings: Settings) -> None:
+    """Verify explicit native AWS credentials for provider processes."""
+    from app.adapters.artifacts.s3_compatible import verify_direct_user_startup
+
+    await verify_direct_user_startup(settings)
 
 
 def artifact_preparation_limits(settings: Settings) -> ArtifactPreparationLimits:
@@ -273,10 +245,7 @@ def _guide_original_runtime(settings: Settings):
 
     @asynccontextmanager
     async def runtime():
-        bootstrap = create_artifact_store_bootstrap(
-            settings,
-            activation_guard=artifact_provider_activation_guard(settings),
-        )
+        bootstrap = create_artifact_store_bootstrap(settings)
         manager = None
         try:
             manager = create_artifact_scratch_manager(settings)
@@ -369,10 +338,7 @@ def get_guide_artifact_ingest_command(
 
     @asynccontextmanager
     async def runtime():
-        bootstrap = create_artifact_store_bootstrap(
-            settings,
-            activation_guard=artifact_provider_activation_guard(settings),
-        )
+        bootstrap = create_artifact_store_bootstrap(settings)
         try:
             manager = create_artifact_scratch_manager(settings)
         except BaseException:
@@ -489,10 +455,7 @@ def get_submission_bundle_preparation_command(
 
     @asynccontextmanager
     async def runtime():
-        bootstrap = create_artifact_store_bootstrap(
-            settings,
-            activation_guard=artifact_provider_activation_guard(settings),
-        )
+        bootstrap = create_artifact_store_bootstrap(settings)
         try:
             manager = create_artifact_scratch_manager(settings)
         except BaseException:
@@ -875,10 +838,7 @@ def task_import_source_commands(session: AsyncSession, *, settings, context):
 
     @asynccontextmanager
     async def runtime():
-        bootstrap = create_artifact_store_bootstrap(
-            settings,
-            activation_guard=artifact_provider_activation_guard(settings),
-        )
+        bootstrap = create_artifact_store_bootstrap(settings)
         manager = None
         authorities = []
         try:
@@ -1125,15 +1085,18 @@ def create_submission_source_cleanup_provider(*, settings, namespace_claim, uplo
 
     if settings.artifact_store_backend == "s3_compatible":
         if settings.artifact_s3_provider_profile == "aws_s3":
-            raise ArtifactProviderLiveProofRequiredError("source cleanup requires native AWS role qualification")
+            principal = (settings.artifact_s3_runtime_user_arn
+                         if settings.artifact_s3_credential_mode == "aws_access_key" else None)
+        else:
+            principal = (settings.artifact_s3_access_key_id.get_secret_value()
+                         if settings.artifact_s3_access_key_id is not None else None)
         if (type(upload_principal) is not str or not upload_principal
-                or settings.artifact_s3_access_key_id is None
-                or settings.artifact_s3_access_key_id.get_secret_value() == upload_principal):
+                or not principal or principal == upload_principal):
             raise ArtifactConfigurationError("source cleanup requires a separate provider principal")
     factory = ExternalServiceAdapterFactory[SubmissionSourceCleanupProvider](SUBMISSION_SOURCE_CLEANUP_CAPABILITY)
 
     def construct(adapter):
-        bootstrap = create_artifact_store_bootstrap(settings, activation_guard=None)
+        bootstrap = create_artifact_store_bootstrap(settings)
         try:
             store = bootstrap.initialize_after_namespace_claim(namespace_claim)
             return adapter(store)
@@ -1209,7 +1172,7 @@ class ConfiguredSubmissionCommand:
             context=source_contracts_context(selected_pre_submit_source_contracts()),
         )
         bootstrap = create_artifact_store_bootstrap(
-            settings, activation_guard=artifact_provider_activation_guard(settings, sessions=sessions))
+            settings)
         try:
             namespace = artifact_storage_namespace_spec(settings, bootstrap)
             store = bootstrap.initialize_after_namespace_claim(ArtifactStoreNamespaceClaim(

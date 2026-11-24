@@ -6,7 +6,6 @@ from collections.abc import AsyncGenerator, AsyncIterator
 from dataclasses import dataclass
 import re
 from typing import Protocol
-from uuid import UUID
 
 from app.core.hashing import canonical_json_hash
 from app.core.s3_validation import validate_s3_namespace_descriptor
@@ -218,59 +217,6 @@ class ArtifactStoreNamespaceClaim:
             raise ValueError("artifact namespace fingerprint is invalid")
 
 
-@dataclass(frozen=True, slots=True)
-class ArtifactProviderActivationLease:
-    """One exact database-time activation admitted for an AWS provider call."""
-
-    activation_id: UUID
-
-    def __post_init__(self) -> None:
-        """Keep a lease bound to one native record identifier."""
-        if type(self.activation_id) is not UUID:
-            raise ValueError("artifact provider activation ID is invalid")
-
-
-class ArtifactProviderOperationEvidence:
-    """Capture the first activation selected for one logical store operation."""
-
-    __slots__ = ("_activation_id",)
-
-    def __init__(self) -> None:
-        self._activation_id: UUID | None = None
-
-    @property
-    def activation_id(self) -> UUID | None:
-        """Return the activation actually used, if this provider requires one."""
-        return self._activation_id
-
-    def bind(self, lease: ArtifactProviderActivationLease) -> None:
-        """Bind once to the first lease; later calls must retain the same ID."""
-        if type(lease) is not ArtifactProviderActivationLease:
-            raise ValueError("artifact provider activation lease is invalid")
-        if self._activation_id not in {None, lease.activation_id}:
-            raise ValueError("artifact provider activation changed within one operation")
-        self._activation_id = lease.activation_id
-
-
-class ArtifactProviderActivationGuard(Protocol):
-    """Load one exact fresh AWS activation without exposing ART persistence."""
-
-    async def select_for_call(
-        self,
-        *,
-        namespace_fingerprint: str,
-    ) -> ArtifactProviderActivationLease:
-        """Select a deterministic activation with sufficient remaining TTL."""
-
-    async def require_for_call(
-        self,
-        activation_id: UUID,
-        *,
-        namespace_fingerprint: str,
-    ) -> ArtifactProviderActivationLease:
-        """Reload one previously selected activation before another AWS call."""
-
-
 class ArtifactStoreError(Exception):
     """Base class for stable, provider-secret-safe artifact failures."""
 
@@ -367,12 +313,6 @@ class ArtifactConfigurationError(ArtifactStoreError):
     category = "configuration"
 
 
-class ArtifactProviderLiveProofRequiredError(ArtifactConfigurationError):
-    """Raised while an AWS profile lacks fresh exact live activation proof."""
-
-    code = "artifact_provider_live_proof_required"
-
-
 @dataclass(frozen=True)
 class SealedSourceObservation:
     """Exact provider metadata, not an independent attestation of content hash."""
@@ -400,57 +340,48 @@ class ArtifactStore(ExternalServiceAdapter, Protocol):
     """Immutable byte-provider capability used only by artifact orchestration."""
 
     async def begin_source_upload(
-        self, intent: SubmissionSourceUploadIntent, *,
-        operation_evidence: ArtifactProviderOperationEvidence | None = None,
+        self, intent: SubmissionSourceUploadIntent,
     ) -> SubmissionSourceUpload:
         """Initiate an owned key; persist returned handle before sending parts."""
 
     async def upload_source_part(
-        self, upload: SubmissionSourceUpload, number: int, data: bytes, *,
-        operation_evidence: ArtifactProviderOperationEvidence | None = None,
+        self, upload: SubmissionSourceUpload, number: int, data: bytes,
     ) -> SubmissionSourcePart:
         """Send one bounded part; the owner serializes parts and enforces total."""
 
     async def complete_source_upload(
-        self, completion: SubmissionSourceCompletion, *,
-        operation_evidence: ArtifactProviderOperationEvidence | None = None,
+        self, completion: SubmissionSourceCompletion,
     ) -> SealedSubmissionSource:
         """Conditionally complete a previously persisted EOF/completion intent."""
 
     def open_source(
         self, source: SealedSubmissionSource, *,
-        operation_evidence: ArtifactProviderOperationEvidence | None = None,
         maximum_chunk_bytes: int = 64 * 1024,
     ) -> AsyncGenerator[bytes, None]:
         """Yield closable exact-version reads, capped by maximum_chunk_bytes (1..64 KiB)."""
 
     async def observe_sealed_source(
-        self, source: SealedSubmissionSource, *,
-        operation_evidence: ArtifactProviderOperationEvidence | None = None,
+        self, source: SealedSubmissionSource,
     ) -> SealedSourceObservation | None:
         """Observe the recorded immutable version without reading its body."""
 
     async def observe_source_upload(
-        self, completion: SubmissionSourceCompletion, *,
-        operation_evidence: ArtifactProviderOperationEvidence | None = None,
+        self, completion: SubmissionSourceCompletion,
     ) -> SealedSubmissionSource | None:
         """Resolve a lost completion acknowledgement by exact provenance and bytes."""
 
     async def discover_source_uploads(
-        self, intent: SubmissionSourceUploadIntent, *,
-        operation_evidence: ArtifactProviderOperationEvidence | None = None,
+        self, intent: SubmissionSourceUploadIntent,
     ) -> tuple[SubmissionSourceUpload, ...]:
         """Find unfinished handles only for one already-owned operation key."""
 
     async def request_source_abort(
-        self, upload: SubmissionSourceUpload, *,
-        operation_evidence: ArtifactProviderOperationEvidence | None = None,
+        self, upload: SubmissionSourceUpload,
     ) -> None:
         """Request scoped abort; acknowledgement alone never releases a charge."""
 
     async def source_upload_parts_absent(
-        self, upload: SubmissionSourceUpload, *,
-        operation_evidence: ArtifactProviderOperationEvidence | None = None,
+        self, upload: SubmissionSourceUpload,
     ) -> bool:
         """Observe exact handle reclamation, not settlement of late calls or objects.
 
@@ -461,16 +392,12 @@ class ArtifactStore(ExternalServiceAdapter, Protocol):
     async def put(
         self,
         source: CommittedArtifactSource,
-        *,
-        operation_evidence: ArtifactProviderOperationEvidence | None = None,
     ) -> ArtifactPutResult:
         """Publish one sealed committed source or prove an exact replay."""
 
     async def observe_put_result(
         self,
         commitment: ArtifactCommitment,
-        *,
-        operation_evidence: ArtifactProviderOperationEvidence | None = None,
     ) -> ArtifactPutObservation:
         """Observe one commitment-derived object without replaying a write."""
 
@@ -478,16 +405,12 @@ class ArtifactStore(ExternalServiceAdapter, Protocol):
         self,
         provider_object_ref: str,
         byte_range: ArtifactByteRange | None = None,
-        *,
-        operation_evidence: ArtifactProviderOperationEvidence | None = None,
     ) -> AsyncIterator[bytes]:
         """Stream one object or bounded range in bounded chunks."""
 
     async def head(
         self,
         provider_object_ref: str,
-        *,
-        operation_evidence: ArtifactProviderOperationEvidence | None = None,
     ) -> ArtifactObjectHead:
         """Return a safe existing or missing object observation."""
 

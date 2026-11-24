@@ -65,9 +65,8 @@ class S3SubmissionSourceCleanup:
     async def _absent(self, source):
         """Prove exact-version absence without treating bucket loss or denial as cleanup."""
         from botocore.exceptions import ClientError
-        from app.interfaces.artifacts import ArtifactProviderOperationEvidence
 
-        async with self._store._source_client(source.location, ArtifactProviderOperationEvidence()) as client:
+        async with self._store._source_client(source.location) as client:
             try:
                 response = await client.head_object(
                     Bucket=self._store._bucket, Key=self._store._source_key(source.location),
@@ -91,7 +90,7 @@ class S3SubmissionSourceCleanup:
 
     async def remove(self, source, upload):
         """Delete only the sealed version and retain unresolved handle or version obligations."""
-        from app.interfaces.artifacts import ArtifactOperationConflictError, ArtifactProviderOperationEvidence
+        from app.interfaces.artifacts import ArtifactOperationConflictError
         from app.modules.artifacts.api.submission_intake import SealedSubmissionSource, SubmissionSourceUpload
 
         source = SealedSubmissionSource.model_validate(source)
@@ -107,7 +106,7 @@ class S3SubmissionSourceCleanup:
         if not parts_absent or handles:
             return SubmissionSourceRemoval(source, False, False, parts_absent)
         if not await self._absent(source):
-            async with self._store._source_client(source.location, ArtifactProviderOperationEvidence()) as client:
+            async with self._store._source_client(source.location) as client:
                 await client.delete_object(
                     Bucket=self._store._bucket, Key=self._store._source_key(source.location),
                     VersionId=source.provider_generation,
@@ -124,8 +123,7 @@ class S3SubmissionSourceCleanup:
 
     async def _versions_absent(self, location):
         """Only a complete empty version listing settles the managed key."""
-        from app.interfaces.artifacts import ArtifactProviderOperationEvidence
-        async with self._store._source_client(location, ArtifactProviderOperationEvidence()) as client:
+        async with self._store._source_client(location) as client:
             versions = await client.list_object_versions(
                 Bucket=self._store._bucket, Prefix=self._store._source_key(location), MaxKeys=1,
             )

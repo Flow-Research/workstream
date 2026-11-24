@@ -1,32 +1,29 @@
-"""PostgreSQL terminal-custody proofs for native AWS artifact activation."""
+"""PostgreSQL artifact put, observation, and verification outcomes."""
 
 from __future__ import annotations
 
-import asyncio
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 from uuid import UUID
 
 import pytest
-from sqlalchemy import func, select, text
+from sqlalchemy import event, func, select, text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.orm import Session
 
-from app.core.config import Settings
 from app.interfaces.artifacts import (
     ArtifactConfigurationError,
     ArtifactIntegrityError,
     ArtifactStoreUnavailableError,
     ArtifactObjectMissingError,
-    ArtifactProviderActivationLease,
-    ArtifactProviderLiveProofRequiredError,
     ArtifactPutObservation,
-    ArtifactPutResult,
     ArtifactStoreError,
 )
 from app.modules.artifacts.models import (
     ArtifactAdmissionCharge,
+    ArtifactContent,
     ArtifactOperationReceipt,
     ArtifactPutAttempt,
     ArtifactPutAttemptCharge,
@@ -52,244 +49,157 @@ from tests.test_artifact_admission import (
     admission_database_env as admission_database_env,
 )
 
-def _aws_activation_settings(settings: Settings) -> Settings:
-    """Overlay the closed native-AWS activation tuple for terminal custody tests."""
-    return settings.model_copy(
-        update={
-            "artifact_s3_provider_profile": "aws_s3",
-            "artifact_s3_region": "us-east-1",
-            "release_id": "sha256:" + "1" * 64,
-            "artifact_s3_runtime_role_arn": "arn:aws:iam::123456789012:role/workstream-runtime",
-            "artifact_s3_runtime_trust_policy_sha256": "sha256:" + "3" * 64,
-            "artifact_s3_runtime_policy_arn": "arn:aws:iam::123456789012:policy/workstream-runtime",
-            "artifact_s3_readiness_role_arn": "arn:aws:iam::123456789012:role/workstream-readiness",
-            "artifact_s3_readiness_trust_policy_sha256": "sha256:" + "4" * 64,
-            "artifact_s3_readiness_policy_arn": "arn:aws:iam::123456789012:policy/workstream-readiness",
-            "artifact_s3_negative_role_arn": "arn:aws:iam::123456789012:role/workstream-negative",
-            "artifact_s3_negative_trust_policy_sha256": "sha256:" + "5" * 64,
-            "artifact_s3_bootstrap_principal_arn": "arn:aws:iam::123456789012:role/workstream-bootstrap",
-            "artifact_s3_bucket_policy_sha256": "sha256:" + "2" * 64,
-            "artifact_s3_operation_total_timeout_seconds": 0.1,
-            "artifact_complete_read_deadline_seconds": 0.1,
-            "artifact_terminal_persistence_margin_seconds": 0.1,
-        }
-    )
 
-async def _insert_current_activation(
-    session,
-    settings: Settings,
-    namespace_fingerprint: str,
-) -> UUID:
-    from uuid import uuid4
-
-    from app.modules.artifacts.provider_activation import (
-        artifact_provider_database_time,
-        coordinate_artifact_provider_activation,
-        record_artifact_provider_probe_result,
-    )
-
-    group_nonce = uuid4()
-    # The runtime challenge must complete before the denial probes start.
-    principals = {
-        "runtime_immutability": settings.artifact_s3_runtime_role_arn,
-        "readiness": settings.artifact_s3_readiness_role_arn,
-        "negative_access": settings.artifact_s3_negative_role_arn,
-    }
-    for probe_type, principal in principals.items():
-        assert principal is not None
-        started_at = await artifact_provider_database_time(session)
-        await record_artifact_provider_probe_result(
-            session,
-            settings,
-            probe_type=probe_type,
-            namespace_fingerprint=namespace_fingerprint,
-            group_nonce=group_nonce,
-            expected_principal_arn=principal,
-            observed_principal_arn=principal,
-            passed=True,
-            evidence={"mode": probe_type, "actual_calls": True},
-            error_code=None,
-            started_at=started_at,
-        )
-    return await coordinate_artifact_provider_activation(
-        session,
-        settings,
-        namespace_fingerprint=namespace_fingerprint,
-        group_nonce=group_nonce,
-    )
-
-async def _age_admitted_activation_near_expiry(factory, activation_id: UUID) -> None:
-    """Simulate elapsed time for one previously valid group in isolated test custody."""
-    async with factory() as session, session.begin():
-        shift = await session.scalar(
-            text("SELECT expires_at-clock_timestamp()-interval '5 seconds' "
-                 "FROM public.artifact_provider_activations WHERE id=:id FOR UPDATE"),
-            {"id": str(activation_id)},
-        )
-        assert shift is not None and shift.total_seconds() > 0
-        # Transactional DDL rolls back if aging fails; successful paths restore
-        # both named immutable triggers before any product code resumes.
-        await session.execute(text(
-            "ALTER TABLE public.artifact_provider_probe_results "
-            "DISABLE TRIGGER artifact_provider_probe_result_immutable"
-        ))
-        await session.execute(text(
-            "ALTER TABLE public.artifact_provider_activations "
-            "DISABLE TRIGGER artifact_provider_activation_immutable"
-        ))
-        try:
-            await session.execute(text(
-                "UPDATE public.artifact_provider_probe_results SET "
-                "started_at=started_at-CAST(:shift AS interval), "
-                "completed_at=completed_at-CAST(:shift AS interval), "
-                "expires_at=expires_at-CAST(:shift AS interval) "
-                "WHERE id IN (SELECT unnest(ARRAY[readiness_result_id,runtime_result_id,"
-                "negative_result_id]) FROM public.artifact_provider_activations WHERE id=:id)"
-            ), {"shift": shift, "id": str(activation_id)})
-            await session.execute(text(
-                "UPDATE public.artifact_provider_activations SET "
-                "activated_at=activated_at-CAST(:shift AS interval), "
-                "expires_at=expires_at-CAST(:shift AS interval) WHERE id=:id"
-            ), {"shift": shift, "id": str(activation_id)})
-        finally:
-            await session.execute(text(
-                "ALTER TABLE public.artifact_provider_probe_results "
-                "ENABLE TRIGGER artifact_provider_probe_result_immutable"
-            ))
-            await session.execute(text(
-                "ALTER TABLE public.artifact_provider_activations "
-                "ENABLE TRIGGER artifact_provider_activation_immutable"
-            ))
-        assert await session.scalar(text(
-            "SELECT a.expires_at=least(r.expires_at,n.expires_at,d.expires_at) "
-            "AND r.expires_at=r.started_at+interval '15 minutes' "
-            "AND n.expires_at=n.started_at+interval '15 minutes' "
-            "AND d.expires_at=d.started_at+interval '15 minutes' "
-            "AND r.completed_at<=n.started_at AND r.completed_at<=d.started_at "
-            "AND a.activated_at-r.started_at<=interval '120 seconds' "
-            "FROM public.artifact_provider_activations a "
-            "JOIN public.artifact_provider_probe_results r ON r.id=a.runtime_result_id "
-            "JOIN public.artifact_provider_probe_results n ON n.id=a.negative_result_id "
-            "JOIN public.artifact_provider_probe_results d ON d.id=a.readiness_result_id "
-            "WHERE a.id=:id"
-        ), {"id": str(activation_id)})
-        for statement in (
-            "UPDATE public.artifact_provider_activations SET expires_at=expires_at WHERE id=:id",
-            "UPDATE public.artifact_provider_probe_results SET expires_at=expires_at "
-            "WHERE id=(SELECT runtime_result_id FROM public.artifact_provider_activations WHERE id=:id)",
-        ):
-            with pytest.raises(DBAPIError, match="immutable"):
-                async with session.begin_nested():
-                    await session.execute(text(statement), {"id": str(activation_id)})
-
-
-async def _assert_recoverable_verification_after_activation_expiry(
-    session,
-    *,
-    job_id: UUID,
-    replica_id: str,
-    prior_replica_state: tuple[object, object, object, object],
-    unrelated_receipt_count: int,
-) -> None:
-    job = await session.get(ArtifactVerificationJob, str(job_id))
-    replica = await session.get(ArtifactReplica, replica_id)
-    assert job is not None and replica is not None
-    assert job.status == "provider_unavailable"
-    assert job.next_run_at is not None
-    assert job.terminal_at is None
-    assert job.terminal_result_code is None
-    assert (
-        replica.verification_state,
-        replica.availability_state,
-        replica.integrity_state,
-        replica.last_reconciled_at,
-    ) == prior_replica_state
-    assert (
-        await session.scalar(
-            select(func.count())
-            .select_from(ArtifactVerificationReceipt)
-            .where(ArtifactVerificationReceipt.verification_job_id == str(job_id))
-        )
-        == 0
-    )
-    assert (
-        await session.scalar(
-            select(func.count())
-            .select_from(ArtifactVerificationReceipt)
-            .where(ArtifactVerificationReceipt.verification_job_id != str(job_id))
-        )
-        == unrelated_receipt_count
-    )
-
-async def test_activation_expiry_during_put_terminal_transaction_rolls_back_to_unknown(
+async def test_database_failure_at_put_commit_rolls_back_terminal_effects(
     admission_database_env: str,
     tmp_path: Path,
 ) -> None:
     settings = _settings(tmp_path)
     namespace = _namespace(settings)
+    bootstrap, store = _local_store(settings, namespace)
     engine = create_async_engine(admission_database_env)
     factory = async_sessionmaker(engine, expire_on_commit=False)
-    activation_id = UUID("0199e648-0b77-7000-8000-000000000001")
-
-    class ActivatedPutStore:
-        identity = SimpleNamespace(provider_key=namespace.adapter)
-
-        async def put(self, source, *, operation_evidence):
-            operation_evidence.bind(ArtifactProviderActivationLease(activation_id))
-            return ArtifactPutResult(
-                f"sha256/{source.commitment.sha256[7:9]}/{source.commitment.sha256[9:]}",
-                replayed=False,
-            )
-
+    policy_bundle = await create_standalone_unified_policy(factory, namespace)
     try:
         async with factory() as session:
-            async with minted_source(tmp_path / "activation-expiry", b"provider wrote") as source:
-                admission = await _admit_guide_source(
-                    session,
-                    settings,
-                    namespace,
-                    _context(),
-                    source,
+            relationships = await seed_checker_output_relationships(session, namespace, policy_bundle=policy_bundle)
+            async with minted_source(
+                tmp_path / "put-commit-failure", b'{"output":"put commit failure"}',
+                media_type="application/json",
+            ) as source:
+                _, _, _, admission = await _admit_checker_output(
+                    session, settings, namespace, source, relationships=relationships,
+                )
+                attempt_id = str(admission.attempt_id)
+                attempt = await session.get(ArtifactPutAttempt, attempt_id)
+                assert attempt is not None
+                provider_object_ref = attempt.canonical_target
+                persisted_models = (
+                    ArtifactContent, ArtifactReplica, ArtifactOperationReceipt, ArtifactVerificationJob,
+                )
+                before = {model: await _count(session, model) for model in persisted_models}
+                charge_state = (
+                    select(ArtifactAdmissionCharge.state, ArtifactAdmissionCharge.completed_at)
+                    .join(ArtifactPutAttemptCharge, ArtifactPutAttemptCharge.charge_id == ArtifactAdmissionCharge.id)
+                    .where(ArtifactPutAttemptCharge.attempt_id == attempt_id)
+                )
+                provisional = (await session.execute(charge_state)).all()
+                assert provisional and set(provisional) == {("provisional", None)}
+                await session.rollback()
+
+                @event.listens_for(session.sync_session, "before_commit")
+                def fail_terminal_commit(transaction: Session) -> None:
+                    transaction.flush()
+                    if transaction.scalar(select(ArtifactPutAttempt.status).where(
+                        ArtifactPutAttempt.id == attempt_id,
+                    )) != "object_confirmed":
+                        return
+                    for model, count in before.items():
+                        assert transaction.scalar(select(func.count()).select_from(model)) == count + 1
+                    completed = transaction.execute(charge_state).all()
+                    assert len(completed) == len(provisional)
+                    assert all(state == "completed" and at is not None for state, at in completed)
+                    transaction.execute(text("SELECT 1 / 0"))
+
+                orchestrator = ArtifactStorageOrchestrator(
+                    session, store, namespace, settings, _AllowArtifactAuthority(),
+                )
+                with pytest.raises(DBAPIError, match="division by zero"):
+                    await orchestrator.execute_committed_put(attempt_id=admission.attempt_id, source=source)
+
+            assert (await store.head(provider_object_ref)).exists
+        async with factory() as session:
+            attempt = await session.get(ArtifactPutAttempt, attempt_id)
+            assert attempt is not None
+            assert attempt.status == "put_in_flight"
+            assert attempt.executor_id is not None and attempt.lease_expires_at is not None
+            assert attempt.terminal_at is None and attempt.terminal_result_code is None
+            assert attempt.receipt_id is None and attempt.replica_id is None
+            assert {model: await _count(session, model) for model in persisted_models} == before
+            assert (await session.execute(charge_state)).all() == provisional
+    finally:
+        bootstrap.close()
+        await engine.dispose()
+
+
+@pytest.mark.parametrize("provider_outcome", ["missing", "integrity_mismatch"])
+async def test_database_failure_at_verification_commit_rolls_back_terminal_effects(
+    admission_database_env: str,
+    tmp_path: Path,
+    provider_outcome: str,
+) -> None:
+    settings = _settings(tmp_path)
+    namespace = _namespace(settings)
+    bootstrap, store = _local_store(settings, namespace)
+    engine = create_async_engine(admission_database_env)
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    policy_bundle = await create_standalone_unified_policy(factory, namespace)
+    try:
+        async with factory() as session:
+            relationships = await seed_checker_output_relationships(session, namespace, policy_bundle=policy_bundle)
+            async with minted_source(
+                tmp_path / "verify-commit-failure", b'{"output":"verify commit failure"}',
+                media_type="application/json",
+            ) as source:
+                _, _, _, admission = await _admit_checker_output(
+                    session, settings, namespace, source, relationships=relationships,
                 )
                 orchestrator = ArtifactStorageOrchestrator(
-                    session,
-                    ActivatedPutStore(),
-                    namespace,
-                    settings,
-                    _AllowArtifactAuthority(),
+                    session, store, namespace, settings, _AllowArtifactAuthority(),
                 )
-                orchestrator._require_terminal_activation = AsyncMock(
-                    side_effect=[
-                        None,
-                        ArtifactProviderLiveProofRequiredError("activation expired"),
-                    ]
-                )
+                assert await orchestrator.execute_committed_put(
+                    attempt_id=admission.attempt_id, source=source,
+                ) == "stored_pending_verification"
 
-                assert (
-                    await orchestrator.execute_committed_put(
-                        attempt_id=admission.attempt_id,
-                        source=source,
-                    )
-                    == "acknowledgement_unknown"
-                )
-                terminal_activation_args = [
-                    call.args
-                    for call in orchestrator._require_terminal_activation.await_args_list
-                ]
-                assert terminal_activation_args == [
-                    (activation_id,),
-                    (activation_id,),
-                ]
-                attempt = await session.get(ArtifactPutAttempt, str(admission.attempt_id))
-                assert attempt is not None
-                assert attempt.status == "acknowledgement_unknown"
-                assert attempt.terminal_at is None
-                assert await _count(session, ArtifactOperationReceipt) == 0
-                assert await _count(session, ArtifactPutObservationReceipt) == 0
-                assert await _count(session, ArtifactReplica) == 0
-                assert await _count(session, ArtifactVerificationJob) == 0
+            job = await session.scalar(select(ArtifactVerificationJob).where(
+                ArtifactVerificationJob.originating_put_attempt_id == str(admission.attempt_id),
+            ))
+            assert job is not None
+            job_id = job.id
+            replica_state = select(
+                ArtifactReplica.verification_state, ArtifactReplica.availability_state,
+                ArtifactReplica.integrity_state, ArtifactReplica.last_reconciled_at,
+            ).where(ArtifactReplica.id == job.replica_id)
+            prior_replica = (await session.execute(replica_state)).one()
+            prior_receipt_count = await _count(session, ArtifactVerificationReceipt)
+            own_receipt = select(ArtifactVerificationReceipt.outcome).where(
+                ArtifactVerificationReceipt.verification_job_id == job_id,
+            )
+            assert await session.scalar(own_receipt) is None
+            await session.rollback()
+
+            @event.listens_for(session.sync_session, "before_commit")
+            def fail_terminal_commit(transaction: Session) -> None:
+                transaction.flush()
+                if transaction.scalar(select(ArtifactVerificationJob.status).where(
+                    ArtifactVerificationJob.id == job_id,
+                )) != provider_outcome:
+                    return
+                assert transaction.execute(replica_state).one().verification_state == provider_outcome
+                assert transaction.scalar(own_receipt) == provider_outcome
+                transaction.execute(text("SELECT 1 / 0"))
+
+            orchestrator._read_complete = (
+                AsyncMock(side_effect=ArtifactObjectMissingError("missing"))
+                if provider_outcome == "missing"
+                else AsyncMock(return_value=("sha256:" + "0" * 64, 1))
+            )
+            with pytest.raises(DBAPIError, match="division by zero"):
+                await orchestrator.verify_object(UUID(job_id))
+
+        async with factory() as session:
+            job = await session.get(ArtifactVerificationJob, job_id)
+            assert job is not None
+            assert job.status == "running" and job.attempt_count == 1
+            assert job.executor_id is not None and job.lease_expires_at is not None
+            assert job.terminal_at is None and job.terminal_result_code is None
+            assert (await session.execute(replica_state)).one() == prior_replica
+            assert await session.scalar(own_receipt) is None
+            assert await _count(session, ArtifactVerificationReceipt) == prior_receipt_count
     finally:
+        bootstrap.close()
         await engine.dispose()
+
 
 @pytest.mark.parametrize(
     ("read_result", "expected_outcome"),
@@ -362,10 +272,8 @@ async def test_checker_output_shared_put_and_verification_lifecycle(
                         {"receipt_id": receipt.id},
                     )
                 await session.rollback()
-                activation_id = UUID("0199e648-0b77-7000-8000-000000000003")
 
-                async def read_complete(_provider_object_ref, *, operation_evidence):
-                    operation_evidence.bind(ArtifactProviderActivationLease(activation_id))
+                async def read_complete(_provider_object_ref):
                     if isinstance(read_result, Exception):
                         raise read_result
                     if read_result is not None:
@@ -373,7 +281,6 @@ async def test_checker_output_shared_put_and_verification_lifecycle(
                     return source.commitment.sha256, source.commitment.byte_count
 
                 orchestrator._read_complete = read_complete
-                orchestrator._require_terminal_activation = AsyncMock()
                 assert await orchestrator.verify_object(job_id) == expected_outcome
                 job = await session.get(ArtifactVerificationJob, str(job_id))
                 assert job is not None
@@ -385,14 +292,10 @@ async def test_checker_output_shared_put_and_verification_lifecycle(
                 )
                 assert verification is not None
                 assert verification.outcome == expected_outcome
-                assert orchestrator._require_terminal_activation.await_count >= 2
-                assert all(
-                    call.args == (activation_id,)
-                    for call in orchestrator._require_terminal_activation.await_args_list
-                )
     finally:
         bootstrap.close()
         await engine.dispose()
+
 
 @pytest.mark.parametrize(
     "expected_outcome", ["integrity_mismatch", "conflict", "existing_replica_conflict"]
@@ -424,10 +327,8 @@ async def test_checker_output_put_observation_terminal_outcomes(
                     await _conflicting_checker_replica(session, attempt, namespace, provider_object_ref)
                 else:
                     await session.rollback()
-                activation_id = UUID("0199e648-0b77-7000-8000-000000000002")
 
-                async def observe(_commitment, *, operation_evidence):
-                    operation_evidence.bind(ArtifactProviderActivationLease(activation_id))
+                async def observe(_commitment):
                     if expected_outcome == "conflict":
                         raise ArtifactStoreError("provider conflict")
                     return ArtifactPutObservation(provider_object_ref, committed=True)
@@ -442,7 +343,6 @@ async def test_checker_output_put_observation_terminal_outcomes(
                 orchestrator._read_complete = AsyncMock(
                     return_value=("sha256:" + "0" * 64, 1)
                 )
-                orchestrator._require_terminal_activation = AsyncMock()
 
                 assert (
                     await orchestrator.resolve_put_attempt(admission.attempt_id)
@@ -497,153 +397,6 @@ async def test_checker_output_put_observation_terminal_outcomes(
                 assert receipt.execution_generation == attempt.execution_generation
                 assert attempt.checker_run_id is None
                 assert attempt.model_call_attempt_id is not None
-                assert orchestrator._require_terminal_activation.await_count >= 2
-                assert all(
-                    call.args == (activation_id,)
-                    for call in orchestrator._require_terminal_activation.await_args_list
-                )
-    finally:
-        await engine.dispose()
-
-@pytest.mark.parametrize("provider_outcome", ["missing", "integrity_mismatch"])
-async def test_expired_activation_rolls_back_provider_verification_facts(
-    admission_database_env: str,
-    tmp_path: Path,
-    provider_outcome: str,
-) -> None:
-    """Real PostgreSQL expiry leaves missing and mismatch observations recoverable."""
-    from app.modules.artifacts.provider_activation import (
-        SqlAlchemyArtifactProviderActivationGuard,
-    )
-
-    local_settings = _settings(tmp_path)
-    activation_settings = _aws_activation_settings(local_settings)
-    namespace = _namespace(local_settings)
-    engine = create_async_engine(admission_database_env)
-    factory = async_sessionmaker(engine, expire_on_commit=False)
-    policy_bundle = await create_standalone_unified_policy(factory, namespace)
-    try:
-        async with factory() as session:
-            relationships = await seed_checker_output_relationships(
-                session,
-                namespace,
-                policy_bundle=policy_bundle,
-            )
-            async with minted_source(
-                tmp_path / f"expired-{provider_outcome}",
-                b'{"output":"provider terminal evidence"}',
-                media_type="application/json",
-            ) as source:
-                _project_id, _task_id, _checker_run_id, admission = await _admit_checker_output(
-                    session,
-                    local_settings,
-                    namespace,
-                    source,
-                    relationships=relationships,
-                )
-
-                class SeedPutStore:
-                    identity = SimpleNamespace(provider_key=namespace.adapter)
-
-                    async def put(self, put_source, *, operation_evidence):
-                        return ArtifactPutResult(
-                            "sha256/"
-                            f"{put_source.commitment.sha256[7:9]}/"
-                            f"{put_source.commitment.sha256[9:]}",
-                            replayed=False,
-                        )
-
-                initial = ArtifactStorageOrchestrator(
-                    session,
-                    SeedPutStore(),
-                    namespace,
-                    local_settings,
-                    _AllowArtifactAuthority(),
-                )
-                assert (
-                    await initial.execute_committed_put(
-                        attempt_id=admission.attempt_id,
-                        source=source,
-                    )
-                    == "stored_pending_verification"
-                )
-                job = await session.scalar(
-                    select(ArtifactVerificationJob).where(
-                        ArtifactVerificationJob.originating_put_attempt_id
-                        == str(admission.attempt_id)
-                    )
-                )
-                assert job is not None
-                replica = await session.get(ArtifactReplica, job.replica_id)
-                assert replica is not None
-                prior_replica_state = (
-                    replica.verification_state,
-                    replica.availability_state,
-                    replica.integrity_state,
-                    replica.last_reconciled_at,
-                )
-                job_id = UUID(job.id)
-                replica_id = job.replica_id
-                assert (
-                    await session.scalar(
-                        select(func.count())
-                        .select_from(ArtifactVerificationReceipt)
-                        .where(
-                            ArtifactVerificationReceipt.verification_job_id
-                            == str(job_id)
-                        )
-                    )
-                    == 0
-                )
-                unrelated_receipt_count = await session.scalar(
-                    select(func.count())
-                    .select_from(ArtifactVerificationReceipt)
-                    .where(
-                        ArtifactVerificationReceipt.verification_job_id != str(job_id)
-                    )
-                )
-                assert unrelated_receipt_count is not None
-                assert unrelated_receipt_count > 0
-                await session.rollback()
-                async with session.begin():
-                    activation_id = await _insert_current_activation(
-                        session,
-                        activation_settings,
-                        namespace.namespace_fingerprint,
-                    )
-
-                orchestrator = ArtifactStorageOrchestrator(
-                    session,
-                    SimpleNamespace(identity=SimpleNamespace(provider_key=namespace.adapter)),
-                    namespace,
-                    activation_settings,
-                    _AllowArtifactAuthority(),
-                )
-
-                async def read_after_expiry(_provider_object_ref, *, operation_evidence):
-                    lease = await SqlAlchemyArtifactProviderActivationGuard(
-                        factory,
-                        activation_settings,
-                    ).select_for_call(
-                        namespace_fingerprint=namespace.namespace_fingerprint,
-                    )
-                    assert lease.activation_id == activation_id
-                    operation_evidence.bind(lease)
-                    await _age_admitted_activation_near_expiry(factory, activation_id)
-                    await asyncio.sleep(5.1)
-                    if provider_outcome == "missing":
-                        raise ArtifactObjectMissingError("missing")
-                    return "sha256:" + "0" * 64, 1
-
-                orchestrator._read_complete = read_after_expiry
-                assert await orchestrator.verify_object(job_id) == "provider_unavailable"
-                await _assert_recoverable_verification_after_activation_expiry(
-                    session,
-                    job_id=job_id,
-                    replica_id=replica_id,
-                    prior_replica_state=prior_replica_state,
-                    unrelated_receipt_count=unrelated_receipt_count,
-                )
     finally:
         await engine.dispose()
 
@@ -730,7 +483,6 @@ async def test_put_observation_unavailable_retries_then_exhausts_without_facts(
                 assert await _count(session, ArtifactVerificationJob) == 0
     finally:
         await engine.dispose()
-
 
 
 @pytest.mark.parametrize(

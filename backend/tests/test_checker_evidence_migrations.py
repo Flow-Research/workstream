@@ -75,7 +75,7 @@ async def _execute(database_url: str, *statements: str) -> None:
 
 
 async def _assert_exact_0062_schema(database_url: str, monkeypatch) -> None:
-    tables = tuple(
+    historical_tables = tuple(
         table
         for table in suite_fixtures.RESETTABLE_TEST_TABLES
         if table not in {
@@ -83,9 +83,9 @@ async def _assert_exact_0062_schema(database_url: str, monkeypatch) -> None:
             "submission_source_capacity_profiles", "submission_source_charges",
             "submission_source_upload_receipts", "submission_source_cleanup_claims",
         }
-    )
+    ) + ("artifact_provider_activations", "artifact_provider_probe_results")
     with monkeypatch.context() as patch:
-        patch.setattr(suite_fixtures, "RESETTABLE_TEST_TABLES", tables)
+        patch.setattr(suite_fixtures, "RESETTABLE_TEST_TABLES", historical_tables)
         patch.setattr(
             suite_fixtures,
             "EXPECTED_PUBLIC_SCHEMA_SHA256",

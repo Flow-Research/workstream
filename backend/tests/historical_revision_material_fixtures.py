@@ -55,8 +55,8 @@ class CapturedArchiveStore:
     def open_source(self, *_args, **_kwargs):
         raise AssertionError("historical material must use its exact retained replica reference")
 
-    async def open(self, reference, byte_range=None, *, operation_evidence=None):
-        assert byte_range is None and operation_evidence is None
+    async def open(self, reference, byte_range=None):
+        assert byte_range is None
         self.opens.append(reference)
         if reference not in self.objects:
             raise ArtifactObjectMissingError()

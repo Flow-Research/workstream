@@ -790,19 +790,12 @@ def artifact_provider_readiness(settings: Settings) -> dict[str, object]:
     """Return configuration-only readiness without constructing a provider adapter."""
     backend = settings.artifact_store_backend
     profile = settings.artifact_s3_provider_profile
-    aws_requires_live_proof = backend == "s3_compatible" and profile == "aws_s3"
     return {
         "backend": backend,
         "provider_profile": profile,
         "configured": backend != "disabled",
         "active": False,
-        "status": (
-            "inactive_live_proof_required"
-            if aws_requires_live_proof
-            else "inactive_disabled"
-            if backend == "disabled"
-            else "configured_inactive"
-        ),
+        "status": "inactive_disabled" if backend == "disabled" else "configured_inactive",
         "prerequisites": {
             "durable_admission_limits_configured": all(
                 value is not None
@@ -814,7 +807,5 @@ def artifact_provider_readiness(settings: Settings) -> dict[str, object]:
                 )
             ),
             "scratch_configured": settings.artifact_scratch_root is not None,
-            "aws_live_proof_required": aws_requires_live_proof,
-            "aws_live_proof_present": False,
         },
     }
