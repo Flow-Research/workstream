@@ -10510,3 +10510,55 @@ guard. Focused supervisor and hosted attachment tests pass
 `54 passed, 77 subtests passed`; changed-file Ruff
 and `git diff --check` pass. A real third trial and supervisor restoration are
 still required before any native launch-failure qualification claim.
+
+### Shrink policy-read file debt while correcting B/G selected-policy oracles
+
+Intent: B/G exact one-checker oracle repairs touch frozen test_projects.py file
+debt. Equal line count still changes its frozen hash, so a hash-only refresh is
+invalid. Move both whole primary tests into a cohesive PostgreSQL policy-read
+module, preserving every body/assertion except the reviewed B/G empty-checker
+corrections. Reuse existing API client/settings/grant fixtures; no decomposition,
+new resolver, compatibility alias or production change. Allowed files are the
+legacy test module, new project policy-read test module, exact catalogue and
+independent family fingerprint, measured debt ledger and this record. Remove
+only imports made unused by the move. Update only the genuinely shrunk FILE debt
+and any unchanged-function span shifts caused by removed imports; preserve every
+limit, scope, debt owner/removal chunk, policy, validator and assertion map.
+
+Acceptance: exact decorated/body preservation, identical fixture/global closure,
+same total collected tests, exact project-family addition with no module moves,
+full unchanged structural validation and adversarial stale/unshrunk checks.
+Root owns actual B/D/G PostgreSQL replay after the native/C/F jobs; no duplicate
+heavy database run. This combined closure supersedes standalone B94bfd3d48;
+G527e7ab5a remains the reviewed current POST policy oracle.
+
+Both complete tests now live in tests/projects/test_policy_read_postgresql.py
+(197lines), with exact decorated/body identity to the reviewed B94/G527 fixes.
+The retained legacy module differs only by whole-node removal and its now-unused
+validator import; it shrinks5492->5321. Actual inventory changes exactly the FILE
+digest/span/count plus two unchanged-function start/end offsets of-1 from that
+import removal. Their hashes, sizes, limits, owners and removal chunks are intact;
+all other debt entries are untouched. No policy, validator or map changed.
+
+Focused collection passed248nodes in11.21s, equal to the original CI canonical
+project-node count. New paths are test_policy_read_postgresql.py::
+ test_submission_artifact_policy_approval_persists_effective_policy_hash and
+ test_active_guide_retrieval_returns_exact_policy_bundle. Exact19fixture/global
+bindings and complete fixture dependency closure were checked without PG setup
+(/tmp/submission-policy-read-collection.log/.json); full-body/source comparison is
+/tmp/submission-policy-read-preservation.py. New project-family membership is an
+exact+1; removing that one module reproduces both prior family and lane-ownership
+fingerprints. Existing modules/assignments are unchanged. The initial catalogue
+run correctly rejected its unrefreshed independent ownership count; the exact
+addition refresh then passed all59tests in2.45s
+(/tmp/submission-policy-read-catalogue-final.log).
+
+Unchanged full structural validation exits0
+(/tmp/submission-policy-read-structure.log). A valid shrink passes the existing
+transition check, while simulated hash-only unshrunk metadata fails with
+structural_debt_changed_without_shrink. Both exact independent family/ownership
+tests reject omission of the new module (/tmp/submission-policy-read-guard-probe
+.log/.json). Ruff, whitespace and links pass; Commitrail checked against527.
+This is whole-node relocation and real debt reduction; prior PG proof is retained
+as inspected custody, with current-path B/D/G replay owned by root. No runtime,
+provider, public capability or roadmap completion claim changes.
