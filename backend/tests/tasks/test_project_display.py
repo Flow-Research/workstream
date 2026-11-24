@@ -203,7 +203,7 @@ async def test_task_display_survives_guide_successor_for_contributor_and_manager
     set_dev_actor(monkeypatch, roles="worker", subject="worker-one")
     summary_key = "locked_post_submit_checker_policy_body_summary"
     original_summary = original_locked["management"][summary_key]
-    assert original_summary["required_checkers"] == []
+    assert original_summary["required_checkers"] == [post_registry_spec().capability_id]
     requirements_url = f"/api/v1/tasks/{task['id']}/submission-requirements"
     first_requirements = await task_client.get(requirements_url, headers=auth_headers())
     assert first_requirements.status_code == 200, first_requirements.text
@@ -224,7 +224,9 @@ async def test_task_display_survives_guide_successor_for_contributor_and_manager
     await create_policy_bundle_for_guide(
         task_client, project["id"], successor.json()["id"],
         task_artifact_proposal().model_copy(update={"required_artifacts": ("v2-answer.md",)}),
-        post_submit_registry_spec=post_registry_spec(),
+        post_submit_registry_spec=post_registry_spec().model_copy(
+            update={"capability_id": "acme.successor_archive"}
+        ),
     )
     await seed_active_guide_for_downstream_test(
         db_session.get_session_factory(), project_id=project["id"], guide_id=successor.json()["id"],
@@ -241,7 +243,7 @@ async def test_task_display_survives_guide_successor_for_contributor_and_manager
             PostSubmitCheckerPolicy.guide_id == active.id,
         ))
         required = [entry["registry"]["capability_id"] for entry in successor_policy.policy_body["entries"]]
-        assert required == [post_registry_spec().capability_id]
+        assert required == ["acme.successor_archive"]
         assert required != original_summary["required_checkers"]
         effective = await session.scalar(select(EffectiveProjectSubmissionArtifactPolicy).where(
             EffectiveProjectSubmissionArtifactPolicy.guide_id == active.id,

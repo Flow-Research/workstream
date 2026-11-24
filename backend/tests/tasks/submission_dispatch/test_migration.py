@@ -49,7 +49,7 @@ async def test_upgrade_preserves_retained_owners_without_backfill(tmp_path, isol
                         "selected_post_submit_policy_sha256", "selected_post_submit_policy_body",
                     },
                     "submission_bundle_admissions": {
-                        "checker_remediation_manifest_id", "selected_pre_submit_run_id",
+                        "checker_remediation_manifest_id", "selected_pre_submit_run_id", "source_operation_id",
                         "guide_id", "guide_version", "source_snapshot_id", "source_snapshot_sha256",
                         "effective_policy_id", "effective_policy_sha256", "pre_submit_policy_id",
                         "pre_submit_policy_sha256", "effective_plan_sha256", "selected_rules_sha256",

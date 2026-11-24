@@ -110,6 +110,7 @@ async def _retained_rows(database_url: str) -> dict[str, str]:
                 "checker_runs": "input_context_custody",
                 "artifact_put_attempts": "checker_trial_evidence_id",
                 "artifact_operation_receipts": "checker_trial_evidence_id",
+                "artifact_replicas": "source_operation_id",
             }.get(table)
             projection = "to_jsonb(value)" + (f" - '{excluded}'" if excluded else "")
             result[table] = await connection.fetchval(
@@ -147,6 +148,9 @@ async def _assert_head_lineage_projection(
             )
             == "completed"
         )
+        assert await connection.fetchval(
+            "select count(*) from artifact_replicas where source_operation_id is not null"
+        ) == 0
         assert (
             await connection.fetchval(
                 "select count(*) from checker_runs where input_context_custody is not null"

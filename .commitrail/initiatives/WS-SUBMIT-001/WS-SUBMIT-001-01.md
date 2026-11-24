@@ -9652,3 +9652,35 @@ bucket call, foreign bucket/prefix denial and failed readback. The production
 versioning guard is unchanged. The diagnostic run's database and bucket
 cleanup completed; it did not reach native PRE or POST. Temporary probe code
 was removed before the next qualification attempt.
+
+### Align retained migration and task-read test expectations
+
+CI at5c29 exposed stale expectations in task detail, locked policy display and
+retained checker-evidence migration tests. Allowed scope: tests/tasks/test_task_detail.py,
+tests/tasks/test_project_display.py, tests/test_tasks.py and
+tests/test_checker_evidence_migrations.py under backend, plus this record.
+Preserve exact audience fields, locked successor isolation and byte-identical
+historical columns; acknowledge the explicit nullable source_operation_id added
+to historical replicas and assert that it remains null. Use distinct valid
+single-image policies for the successor comparison rather than empty selection.
+No product, migration, authorization or data changes. Low-risk test-only repair;
+verify exact failed cases through the isolated PostgreSQL runner after the live
+journey releases the heavy slot, plus Ruff/diff. Root reviews against actual
+DTOs/migration and named CI failures; human review focus is preservation of the
+original historical/audience assertions rather than broader ignored snapshots.
+
+The same additive-column mismatch also affects
+backend/tests/tasks/submission_dispatch/test_migration.py; include that named
+retained-data test in scope, asserting source_operation_id is null alongside
+its existing exact old-column preservation.
+
+The isolated PostgreSQL replay passed all6 database cases in the seven-case
+run, including both historical migrations, both audience projections, guide
+successor lock preservation and worker/manager context. The remaining pure
+contract assertion expected the generic error for the new pending-operation
+field; its exact field-specific message is now checked. The focused pure rerun
+passed1/1 in18.57s. Combined-run log /tmp/submission-task-read-migration.log
+(6pass/1initialfailure,369.60s); final pure log
+/tmp/submission-task-detail-contract.log. Isolated schema0090 database cleanup
+is confirmed in /tmp/submission-task-read-migration.json. Pinned Ruff0.15.22
+and diff checks pass. No production behavior or retained row changed.

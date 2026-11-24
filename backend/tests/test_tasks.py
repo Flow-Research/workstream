@@ -1693,7 +1693,9 @@ async def test_task_context_apis_return_worker_requirements_and_operator_provena
     )
     assert locked_body["locked_pre_submit_checker_bundle_hash"].startswith("sha256:")
     assert locked_body["locked_post_submit_checker_policy_hash"].startswith("sha256:")
-    assert locked_body["locked_post_submit_checker_policy_body_summary"]["required_checkers"] == []
+    assert locked_body["locked_post_submit_checker_policy_body_summary"]["required_checkers"] == [
+        post_registry_spec().capability_id
+    ]
 
 
 async def test_ready_worker_work_context_omits_private_task_source_fields(
