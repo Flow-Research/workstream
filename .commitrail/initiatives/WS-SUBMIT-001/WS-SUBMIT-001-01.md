@@ -9816,3 +9816,41 @@ and expired uninvoked reconciliation recovery under the sole app profile.
 The test preserves generation/owner/state checks and proves discovery/recovery
 does not invoke synthetic payloads; real request execution stays covered by
 the separate production request→completion tests.
+
+The clean public journey at `a51f1acd0` passed the native PRE missing-summary
+rejection, accepted and replayed the correct source, and finalized T5 to one
+Submission. A read-only isolated database observation showed the original
+finalization event acknowledged on its first attempt, while
+`PostSubmissionEvaluationRequested` remained pending, unclaimed and at zero
+attempts; the POST run was queued. A second observation still found the same
+pending event. This matches the profile-based exclusion removed above. The
+canonical isolation runner was signalled only after those observations and
+reported both database and MinIO cleanup complete. That stopped run did not
+observe automatic acceptance, the incorrect POST branch or review-pending
+branch. The repaired production worker composition still needs its focused
+PostgreSQL replay and then a fresh full public journey.
+
+The repaired composition's10 scoped real-PostgreSQL cases passed at0449ed4c9
+in317.77s (/tmp/submission-remote-post-delivery.log and .json), schema0090 and
+owned database cleanup confirmed. Cases cover actual general-worker POST
+request→completion under both review-policy branches, committed reconciliation
+without repeated effects, four substituted child/operator-cause refusals,
+app-worker pagination/claim/expired-uninvoked recovery, and pending/expired POST
+isolation from the finalizer group. No MinIO was provisioned by this run.
+QA-REMOTE-POST-001 is resolved; scoped QA PASS at the exact clean candidate.
+Independent composition control restores the old exclusion and rejects it,
+while retaining finalizer-only registration/options and missing-TLS refusal.
+These are local SQL/controlled execution proofs, not native/AWS qualification.
+
+Read-only live API credential inspection confirms mounted dedicated AWS access
+keys through the canonical direct-user provider, not inline MinIO fields.
+GetBucketVersioning and ListObjectVersions under the actual
+workstream/artifacts/submission-source/v1 prefix return AccessDenied. The
+provisioning identity can read the bucket policy and versioning: versioning is
+already Enabled, while the current policy explicitly confines object access
+to the old sha256 namespace and denies all deletion. Its IAM GetUser/ListUserPolicies
+calls are denied; those are administration limits, not a runtime need for IAM
+administration. Existing API credentials stay on the app side; no keys belong
+in the microVM. Prepared source permissions must preserve retained SHA objects
+and qualify the separate cleanup authority. No bucket/object/config mutation
+was performed by these probes. Actual AWS source qualification remains open.
