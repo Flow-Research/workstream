@@ -9809,3 +9809,10 @@ explicit slot assertions unchanged (/tmp/submission-ts-preservation.json).
 Ruff/whitespace pass. Record/link checks follow this append. Actual native
 composition/recovery remains unexecuted: no live runner, service, configuration,
 deployment or paid-provider mutation occurred while the connected journey ran.
+
+QA-REMOTE-POST-001 identified the old app-hides-POST regression. Replaced
+that obsolete expectation with exact general-worker pagination, POST claim
+and expired uninvoked reconciliation recovery under the sole app profile.
+The test preserves generation/owner/state checks and proves discovery/recovery
+does not invoke synthetic payloads; real request execution stays covered by
+the separate production request→completion tests.

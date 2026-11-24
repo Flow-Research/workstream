@@ -66,15 +66,13 @@ async def test_worker_duplicate_delivery(delivery_harness, worker):
         )
 
 
-async def test_app_host_leaves_checker_work_for_the_full_topology(delivery_harness, monkeypatch):
+async def test_app_worker_discovers_remote_post_and_recovers_expired_custody(delivery_harness, monkeypatch):
     h = delivery_harness
     checker_request = await h.append(event_type=REQUEST_EVENT)
     reconciliation = await h.append(event_type=POST_SUBMIT_DELIVERY_RECONCILIATION_EVENT)
     completion = await h.append(event_type=COMPLETION_EVENT)
-    full_delivery = h.build(HandlerRegistry([
-        (reconciliation.event_type, 1, h.handle),
-    ]))
-    expired = await full_delivery.claim(reconciliation.event_id, h.project, "checker-worker")
+    owner = h.build(HandlerRegistry([(reconciliation.event_type, 1, h.handle)]))
+    expired = await owner.claim(reconciliation.event_id, h.project, "checker-worker")
     assert expired is not None
     async with h.factory() as session:
         await session.execute(text("select pg_sleep(3.05)"))
@@ -82,30 +80,35 @@ async def test_app_host_leaves_checker_work_for_the_full_topology(delivery_harne
     monkeypatch.setenv("WORKSTREAM_HOSTED_PROFILE", "app")
     get_settings.cache_clear()
     try:
-        app_delivery = production_outbox_delivery(h.factory)
+        app_delivery = production_outbox_delivery(h.factory, finalization_worker=False)
         for _ in range(2):
-            page = await app_delivery.candidates(limit=1)
-            assert tuple(item.event_id for item in page.items) == (completion.event_id,)
-            assert page.next_after is None
-        for event in (checker_request, reconciliation):
-            assert await app_delivery.deliver(event.event_id, h.project, "app-worker") is None
-        assert await app_delivery.claim(completion.event_id, h.project, "app-worker") is not None
-        async with h.factory() as session:
-            pending = await session.get(OutboxEvent, checker_request.event_id)
-            retained = await session.get(OutboxEvent, reconciliation.event_id)
-            assert (pending.delivery_state, pending.claim_generation) == ("pending", 0)
-            assert (retained.delivery_state, retained.claim_generation, retained.claim_owner) == (
-                "claimed", expired.claim_generation, expired.claim_owner,
+            page = await app_delivery.candidates(limit=2)
+            assert tuple(item.event_id for item in page.items) == (
+                checker_request.event_id, reconciliation.event_id,
             )
-
-        monkeypatch.setenv("WORKSTREAM_HOSTED_PROFILE", "single-host")
-        get_settings.cache_clear()
-        restored_delivery = production_outbox_delivery(h.factory)
-        restored_page = await restored_delivery.candidates(limit=2)
-        assert tuple(item.event_id for item in restored_page.items) == (
-            checker_request.event_id, reconciliation.event_id,
-        )
-        assert await restored_delivery.recover(reconciliation.event_id, h.project) is not None
+            assert page.next_after == reconciliation.event_id
+            last = await app_delivery.candidates(after=page.next_after, limit=2)
+            assert tuple(item.event_id for item in last.items) == (completion.event_id,)
+            assert last.next_after is None
+        request_claim = await app_delivery.claim(checker_request.event_id, h.project, "app-worker")
+        assert request_claim is not None
+        assert await app_delivery.claim(completion.event_id, h.project, "app-worker") is not None
+        assert await app_delivery.recover(reconciliation.event_id, h.project) is not None
+        async with h.factory() as session:
+            request = await session.get(OutboxEvent, checker_request.event_id)
+            retained = await session.get(OutboxEvent, reconciliation.event_id)
+            assert (request.delivery_state, request.claim_generation, request.claim_owner) == (
+                "claimed", request_claim.claim_generation, "app-worker",
+            )
+            assert (retained.delivery_state, retained.claim_generation, retained.claim_owner) == (
+                "retryable", expired.claim_generation, None,
+            )
+            attempt = await session.scalar(select(OutboxDeliveryAttempt).where(
+                OutboxDeliveryAttempt.event_id == reconciliation.event_id,
+                OutboxDeliveryAttempt.claim_generation == expired.claim_generation,
+            ))
+            assert attempt.stage == "completed" and attempt.invoked_at is None
+        assert h.handled == []  # Discovery/claim/recovery do not execute synthetic payloads.
     finally:
         get_settings.cache_clear()
 
