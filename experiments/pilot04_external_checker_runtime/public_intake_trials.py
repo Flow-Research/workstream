@@ -101,12 +101,20 @@ def _assert_current_pre(row, *, failure=None):
                  and failed == ['high_confidence_secret_detected'] and members == [],
                  'default blocker reached project execution or lost exact feedback')
         return
+    entries = row.request_json['policy']['entries']
+    _require(len(entries) == 1 and entries[0]['stage'] == 'pre_submit',
+             'current PRE lost its exact locked project selection')
+    selected = entries[0]
+    registry = selected['registry']
     _require(value['workstream_default']['eligible'] and value['eligible'] is (failure is None)
              and len(members) == 1 and members[0]['order'] == 0
-             and members[0]['requirement_id'] == 'project.pre_submit',
+             and members[0]['requirement_id'] == selected['requirement_id'],
              'one-project PRE lost its default-before-project boundary')
     member = members[0]
-    _require(member['result']['verdict'] == ('failed' if failure else 'passed')
+    _require(member['registry_entry_id'] == registry['registry_entry_id']
+             and member['registry_entry_digest'] == registry['entry_digest']
+             and member['isolation']['platform_manifest_digest'] == registry['image_digest']
+             and member['result']['verdict'] == ('failed' if failure else 'passed')
              and member['result']['request_digest'] == member['request_digest']
              and member['isolation']['runtime'] == 'smolvm'
              and member['isolation']['isolation_mode'] == 'smol-microvm',

@@ -10694,3 +10694,28 @@ message and malformed correlation cases fail. The entire affected hosted
 attachment module passes `39 passed, 76 subtests passed`; Ruff lint and diff
 checks pass. A fifth connected run is still needed for same-key custody,
 fresh-key accepted T5 and complete end-to-end cleanup proof.
+
+The fifth isolated run used clean `df766fe63b043cae686586373421ba153c735ac7`.
+The initial public 503 and exact failed PRE/source binding passed. The same-key
+public 503 preserved stable error fields, selected PRE ID/digest, the singleton
+source operation and the native trace cursor. A fresh key then returned public
+202 and a second native VM ran through project execution: the independent
+snapshot has two create/start/delete sequences, one `prepare_completed` and
+one `exec`. The trial stopped before accepted T5 because its shared PRE helper
+expected the synthetic `project.pre_submit` requirement, while this locked
+incident-summary policy selects `terminal.pre.incident_summary_layout`. The
+fresh result was not retained before isolated DB teardown, so the precise
+failed helper conjunct is inferred from code and requires replay. Database and
+MinIO cleanup completed; the operator restoration receipt confirms original
+checker config, empty owned resources and exact foreign process removal.
+
+The helper now derives its expected requirement, registry ID/digest and native
+image digest from the independently locked selected request policy. It still
+requires eligible defaults, one ordered project member, the expected verdict,
+request digest and Smol isolation. A private 0600 diagnostic stores only fresh
+selection, policy and outcome identifiers before that assertion, so a future
+failure is observable without retaining source bytes or credentials. An
+incident-summary requirement positive and foreign selection/image negatives
+pass; the full affected hosted attachment module passes
+`40 passed, 78 subtests passed`, with Ruff lint and diff checks. A sixth
+connected run must still prove fresh-key T5 and final cleanup.

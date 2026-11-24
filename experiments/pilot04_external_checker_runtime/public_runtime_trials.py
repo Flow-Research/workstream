@@ -120,6 +120,38 @@ def _same_public_failure(first, replay):
     return left is not None and left == right
 
 
+def _retain_fresh_pre(path, row, receipt):
+    """Keep bounded selection and outcome facts before the recovery assertion."""
+    entries = row.request_json.get('policy', {}).get('entries', [])
+    execution = row.terminal_json.get('execution') or {}
+    members = execution.get('external_members', [])
+    observation = {
+        'receipt': {key: receipt.get(key) for key in ('operation_id', 'status', 'replayed')},
+        'selected': {'id': str(row.id), 'status': row.status,
+                     'source_operation_id': row.source_operation_id,
+                     'terminal_digest': row.terminal_digest},
+        'policy': [{'requirement_id': entry.get('requirement_id'), 'stage': entry.get('stage'),
+                    'registry_entry_id': entry.get('registry', {}).get('registry_entry_id'),
+                    'registry_entry_digest': entry.get('registry', {}).get('entry_digest'),
+                    'image_digest': entry.get('registry', {}).get('image_digest')}
+                   for entry in entries],
+        'execution': {'eligible': execution.get('eligible'),
+                      'required_external_count': execution.get('required_external_count'),
+                      'default_eligible': execution.get('workstream_default', {}).get('eligible'),
+                      'members': [{'order': member.get('order'),
+                                   'requirement_id': member.get('requirement_id'),
+                                   'registry_entry_id': member.get('registry_entry_id'),
+                                   'registry_entry_digest': member.get('registry_entry_digest'),
+                                   'verdict': member.get('result', {}).get('verdict'),
+                                   'runtime': member.get('isolation', {}).get('runtime'),
+                                   'platform_manifest_digest': member.get('isolation', {}).get('platform_manifest_digest')}
+                                  for member in members]},
+    }
+    with path.open('x', encoding='utf-8') as stream:
+        path.chmod(0o600)
+        json.dump(observation, stream, sort_keys=True)
+
+
 async def _runner_drained(runner):
     observed = await runner.command('drained')
     result = observed['result']
@@ -204,6 +236,8 @@ async def _remote_pre_launch_failure(client, factory, *, task, assignment, token
     fresh_key = str(uuid4())
     receipt = await _source_request(client, route, headers, token, fresh_key, archive, 202)
     fresh = await _selected(factory, fresh_key)
+    if first_response_path is not None:
+        _retain_fresh_pre(first_response_path.with_name('remote-pre-launch-fresh-pre.json'), fresh, receipt)
     _assert_current_pre(fresh)
     _require(fresh.id != row.id and fresh.source_operation_id == receipt['operation_id']
              and fresh.request_json['policy']['entries'][0]['registry']['image_digest']

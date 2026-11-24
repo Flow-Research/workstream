@@ -634,13 +634,20 @@ class HostedFixtureContracts(unittest.TestCase):
     def test_source_pre_retains_default_stop_and_exact_one_native_member(self):
         from experiments.pilot04_external_checker_runtime.public_intake_trials import _assert_current_pre
 
-        member = {'order': 0, 'requirement_id': 'project.pre_submit', 'request_digest': 'request',
+        requirement = 'terminal.pre.incident_summary_layout'
+        registry = {'registry_entry_id': 'locked-entry', 'entry_digest': 'locked-digest',
+                    'image_digest': 'sha256:' + 'a' * 64}
+        member = {'order': 0, 'requirement_id': requirement, 'registry_entry_id': 'locked-entry',
+                  'registry_entry_digest': 'locked-digest', 'request_digest': 'request',
                   'result': {'verdict': 'passed', 'request_digest': 'request', 'findings': []},
-                  'isolation': {'runtime': 'smolvm', 'isolation_mode': 'smol-microvm'}}
+                  'isolation': {'runtime': 'smolvm', 'isolation_mode': 'smol-microvm',
+                                'platform_manifest_digest': registry['image_digest']}}
         execution = {'required_external_count': 1, 'eligible': True,
                      'workstream_default': {'eligible': True, 'checks': []}, 'external_members': [member]}
         def row(value):
-            return SimpleNamespace(status='completed', terminal_json={'execution': value})
+            return SimpleNamespace(status='completed', terminal_json={'execution': value},
+                request_json={'policy': {'entries': [{'stage': 'pre_submit',
+                    'requirement_id': requirement, 'registry': registry}]}})
 
         _assert_current_pre(row(execution))
         secret = copy.deepcopy(execution)
@@ -656,11 +663,21 @@ class HostedFixtureContracts(unittest.TestCase):
             invalid[field] = value
             with self.subTest(field=field), self.assertRaises(RuntimeError):
                 _assert_current_pre(row(invalid))
-        for field, value in (('order', 1), ('requirement_id', 'foreign'), ('request_digest', 'foreign')):
+        for field, value in (('order', 1), ('requirement_id', 'foreign'),
+                             ('registry_entry_id', 'foreign'), ('registry_entry_digest', 'foreign'),
+                             ('request_digest', 'foreign')):
             invalid = copy.deepcopy(execution)
             invalid['external_members'][0][field] = value
             with self.subTest(field=field), self.assertRaises(RuntimeError):
                 _assert_current_pre(row(invalid))
+        invalid = copy.deepcopy(execution)
+        invalid['external_members'][0]['isolation']['platform_manifest_digest'] = 'sha256:' + 'b' * 64
+        with self.assertRaisesRegex(RuntimeError, 'exact native request/result custody'):
+            _assert_current_pre(row(invalid))
+        selected = row(execution)
+        selected.request_json['policy']['entries'][0]['requirement_id'] = 'foreign'
+        with self.assertRaisesRegex(RuntimeError, 'default-before-project boundary'):
+            _assert_current_pre(selected)
         secret['external_members'] = [member]
         with self.assertRaisesRegex(RuntimeError, 'default blocker'):
             _assert_current_pre(row(secret), failure='secret')
@@ -1164,7 +1181,10 @@ class RemotePreLaunchContracts(unittest.TestCase):
             status='infrastructure_failed', terminal_json={'execution': None,
                 'infrastructure_failure_code': 'implementation_unavailable',
                 'reservation': {'source': {'location': {'operation_id': 'failed-operation'}}}})
-        fresh_row = SimpleNamespace(id='fresh-pre', source_operation_id='fresh-operation', request_json=request)
+        fresh_row = SimpleNamespace(id='fresh-pre', source_operation_id='fresh-operation', request_json=request,
+            status='completed', terminal_digest='fresh-digest', terminal_json={'execution': {
+                'eligible': True, 'required_external_count': 1,
+                'workstream_default': {'eligible': True}, 'external_members': []}})
         operation = SimpleNamespace(id='failed-operation', selected_pre_submit_run_id=None)
         failure = {'error': {'code': 'submission_infrastructure_unavailable',
             'message': 'submission_infrastructure_unavailable', 'details': {},
@@ -1226,6 +1246,17 @@ class RemotePreLaunchContracts(unittest.TestCase):
                              'implementation_unavailable')
             self.assertEqual(body['runtime_event_count'], 0)
             self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+
+    def test_fresh_pre_selection_is_retained_before_recovery_assertions(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'first-response.json'
+            self.exercise(first_response_path=path)
+            fresh = path.with_name('remote-pre-launch-fresh-pre.json')
+            body = json.loads(fresh.read_text())
+            self.assertEqual(body['receipt']['operation_id'], 'fresh-operation')
+            self.assertEqual(body['selected']['source_operation_id'], 'fresh-operation')
+            self.assertTrue(body['execution']['eligible'])
+            self.assertEqual(fresh.stat().st_mode & 0o777, 0o600)
 
     def test_partial_owned_worker_pause_failure_still_restores_worker(self):
         from experiments.pilot04_external_checker_runtime import public_runtime_trials as runtime
