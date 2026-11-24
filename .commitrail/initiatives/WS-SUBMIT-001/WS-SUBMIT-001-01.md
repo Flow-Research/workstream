@@ -10193,3 +10193,49 @@ Allowed files: `backend/app/modules/artifacts/intake/foreground_admission.py`, `
 Acceptance: a real PostgreSQL T1 under a pinned AWS namespace commits one receiving operation, reserved source charge, exact TASK pointer and AUTH allow before any provider/body I/O; replay returns the same operation. A database-only sealed AWS source (explicitly not a provider qualification) builds `storage_scheme=s3` and passes the current SQL source guard, while a rehashed foreign profile/scheme is refused. An unknown profile cannot form the canonical namespace identity, and the PRE builder continues to refuse an unknown source profile. Verify the exact 0090-to-0091 SQL function delta, current schema fingerprint, focused positive/negative cases and retained existing local/MinIO controls. No broad SDK, native VM, public flow, config default, or cleanup authority change. Risk: admitting T1 without both PRE builder and SQL guard would leave a committed unusable operation; broadening the SQL predicate or accepting a forged scheme would weaken source custody. Human review focus is the three coordinated gates, immutable function delta, AWS namespace binding, and the separate limits of the live adapter versus database-only tests. PostgreSQL execution waits until the shared V14 journey releases its isolated test slot.
 
 After V14 released the shared PostgreSQL slot, the first focused five-case run at schema 0091 passed four cases: AWS T1 exact receiving operation, reserved charge, TASK pointer, AUTH allow and same-key replay; existing local admission/source control; and an actual 0090-to-0091 full-function comparison that found only the two expected profile/scheme edits. The fifth case stopped at a test-only strict UUID decoder call before its SQL assertion. The fixture was corrected to decode the persisted JSON through the model's JSON validator; the single affected PostgreSQL replay then passed, including the AWS `s3` source guard positive and rehashed foreign profile/scheme refusals. Receipts: `/tmp/submission-qualified-aws-admission-v2.log/.json` (4 passed, 1 test-fixture failure, 241.84 seconds) and `/tmp/submission-qualified-aws-pre-source-v3.log/.json` (1 passed, 41.18 seconds). Both isolated databases report cleanup complete and Alembic 0091. The measured current public-schema fingerprint is `7ad79f8771b732cbabdc956cdffae50905b757990b1e5336f44990054967f31b`; Ruff, whitespace and Commitrail checks pass. These tests exercise database custody with a synthetic provider generation; the separate actual AWS adapter drill is the provider evidence. No public AWS submission or native guest journey is claimed by this change.
+
+
+Independent QA scoped review passed for bc4c37acd versus919cb0b92. Runtime AST
+comparison preserved every existing source/packet/policy/lease/deadline/namespace
+and AUTH predicate after removing only the additive AWS profile entries. The
+unknown-profile fail-open control was detected; migration control changed exactly
+two predicates and rejected absent/duplicated predecessor fragments. Author18750
+and integratedbc4 executable paths match the shared five successful PostgreSQL
+cases across two runs; these are not claimed as full-head executions. Actual AWS
+adapter qualification was independently checked through the safe journal envelope
+and exact074 script hash. Evidence `/tmp/submission-aws-gates-qa-probe.json`.
+No deployed AWS public journey or full-CI pass is claimed.
+
+
+### Contributor scale control and interrupted-fixture process cleanup
+
+The contributor scale node passed at clean bc4c37acd / schema0091 in30.76s,
+with complete isolated database cleanup. Slowest-of-three request measurements:
+assignments0.209s/continued0.305s, submissions0.202s/continued0.232s,
+summary0.223s, preparations0.165s, project tasks0.243s; all below the existing1s
+budget. The agent initially mislabeled this as the project scale test; root
+checked the printed endpoint set against both test owners and rejected that
+scope claim. Project scale remains pending its exact named node. Evidence
+`/tmp/submission-project-scale-quiet.log` and matching.json;
+host samples `/tmp/submission-project-scale-quiet-host.txt`. No threshold widened.
+
+Before this measurement, root identified still-running private Celery groups
+from the terminated V11/V13 fixtures by exact process group, executable/cwd,
+stdio paths and database names matching their terminal metadata. Root sent TERM
+only to those two owned groups and verified all members exited. This occurred
+during the scale runner's startup and was recorded in the host context; no test
+restart occurred. The earlier database/bucket cleanup receipts remain true, but
+they did not establish process teardown. The existing journey runtime teardown
+is being repaired and tested before the next fault drill. PRE intervals from V14
+remain actual observed stages under that host context, not quiet-host benchmarks.
+
+Reviewed b23b9be28 fault source and the independently compared root-private
+custody manifest were staged on the dedicated runner with exact bundle/file hash
+checks. Source is clean at the pinned commit. This is staging only; no fault
+supervisor or service restart occurred. Archive nlink2 was resolved as the
+existing immutable native-cache hardlink with exact bytes and0400 owner10001;
+post-V14 leases/workspaces were empty. Local proposal/transfer evidence remains
+in `/tmp/submission-runner-b23b9be28-stage.log` and associated comparison files.
+
+
+The corrected exact project node `tests/project_reads/test_work_scale.py::test_project_pages_and_summary_meet_budget_at_scale` passed at bc4c37acd, schema0091, in47.62s. The actual `project read timings` output includes filtered submissions, import batches and10,000 preparation history rows; slowest endpoint0.414s against the unchanged1s budget. `/tmp/submission-project-work-scale-v1.log` and `.json` show one pass and full isolated database cleanup. This closes the focused project performance replay; the earlier contributor control is not its evidence.
