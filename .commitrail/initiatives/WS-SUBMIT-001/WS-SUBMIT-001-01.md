@@ -9412,3 +9412,80 @@ that names another setup. Eight focused regressions cover the recovered and
 refused cases. This is a journey caller repair; it does not extend the CLI
 deadline or claim a completed PRE/POST run. The diagnostic run's isolated
 database and bucket cleanup completed.
+
+### A19 public upload resource measurement
+
+Intent: measure the remaining maximum-size public upload resource boundary in
+one isolated local qualification, while retaining the existing contract,
+deadline, and small real-MinIO tests as separate evidence. This is a test-only
+probe, not a new upload path or production setting.
+
+Allowed files: this record and one opt-in qualification script at
+`backend/tests/artifacts/qualify_submission_a19.py`. Its non-test basename keeps it outside the regular test
+lane so the 500 MiB drill is never selected in ordinary CI. Prohibited changes:
+production API/ART/provider
+owners, deployment defaults, CLI/MCP journeys, shared service configuration,
+and unscoped object deletion. Use a runner-owned temporary PostgreSQL database
+and versioned MinIO namespace; launch the existing public route through the
+repository's pinned Caddy configuration on loopback. Generate a valid ZIP near
+the 500 MiB compressed limit incrementally without an archive-sized file or
+Python buffer. The public request uses a test-only dev token mapped to the
+fixture's real active identity and must traverse real T1/T2 custody and
+the S3 multipart adapter; the PRE result is outside this resource probe.
+
+Acceptance: record raw bytes and part count, Caddy/API peak RSS and temporary
+disk, and a timeline showing a held provider part prevents unbounded request
+read-ahead. A slow client and a finite provider stall/failure must terminate within
+the explicit measured upload envelope, with no accepted receipt, no PRE
+session, and retained charged ownership until ordinary cleanup. Verify the
+owned bucket/database are cleaned by the isolated runner. Risk is high for
+resource use and test-harness interference; verification starts with a small
+smoke, then one near-limit run, with other heavy local journeys coordinated.
+Architecture/security review focus: no fixture shortcuts around the public
+route or source custody, no whole-body spool, no shared namespace deletion,
+and resource claims limited to measured processes/provider.
+Review tracks: architecture and security inspect public-route ownership,
+provider stall/custody and memory evidence; CI integrity inspects opt-in
+selection and the isolated runner receipt. Human review should check that
+these local measurements support A19 without implying AWS or hosted capacity.
+
+The first public smoke reached both provider holds. Holding the final part
+until the hard upload deadline produced an outcome-unknown response because
+the foreground lease also expired at that deadline; that run is diagnostic,
+not a conclusive terminalization or cleanup proof. The bounded measurement
+now returns a controlled provider failure after an eight-second hold, before
+the hard deadline, so it can verify the committed failed state and retained
+charge. Existing deadline tests remain the hard-deadline evidence.
+
+The finite-stall 6 MiB smoke passed through the pinned Caddy public route,
+real API and isolated MinIO source. One 5 MiB part completed; holding the
+final part for eight seconds then returning a provider error yielded an exact
+503 `submission_infrastructure_unavailable`, a committed failed operation,
+no acceptance, and the reserved 500 MiB charge. The client emitted 6,291,618
+bytes, read-ahead during the first two-second part hold was zero, API peak RSS
+was 248,877,056 bytes (201,003,008 at first sample), Caddy peak RSS was
+47,927,296 bytes, and API scratch peak was 143 bytes. Evidence:
+`/tmp/submission-a19-smoke5.log`, `/tmp/submission-a19-smoke5.json`, and the
+timeline path printed in that log. Isolated database and bucket cleanup were
+confirmed. This small smoke does not establish near-limit memory behavior.
+
+One near-limit run then passed from the same isolated worktree at
+`814f596fc75d83c0e337e6ff3e136707a2d2efe9`: a generated 496 MiB
+ZIP (520,094,278 wire bytes) traversed the pinned Caddy ingress and public
+API. The adapter completed 31 real 16 MiB MinIO parts; the final 582-byte
+part was held for eight seconds and failed before provider I/O. The exact
+response was 503 `submission_infrastructure_unavailable`; DB custody was
+committed failed with no acceptance and its 500 MiB charge remained reserved.
+During the two-second first-part hold, the client emitted only 7 MiB more.
+Across 484 samples over 113.67 seconds, API RSS peaked at 283,742,208 bytes
+(200,982,528 at the first sample); the peak before 100 MiB and after 396 MiB
+was essentially flat (283,742,208 and 283,525,120 bytes). Caddy peaked at
+47,251,456 bytes; API scratch peaked at 143 bytes. Caddy XDG state was
+scoped to the test directory. The explicit test profile used a 300-second
+upload deadline, 30-second idle deadline, 60-second foreground lease and
+16 MiB parts, without changing hosted defaults. Evidence:
+`/tmp/submission-a19-max.log`, `/tmp/submission-a19-max.json`, and
+`/tmp/pytest-of-abiorh/pytest-6701/test_public_a19_near_limit_upl0/a19-timeline.json`.
+The isolated database and versioned bucket were removed by the runner.
+This is local MinIO/Caddy resource evidence for a deliberately failed upload,
+not native AWS, PRE or accepted-submission qualification.
