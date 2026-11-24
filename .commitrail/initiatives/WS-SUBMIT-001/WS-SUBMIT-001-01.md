@@ -8338,3 +8338,12 @@ Metadata confirms 0090 and complete isolated resource cleanup. Structure,
 protected module boundary, record/link, stale-artifact-contract and Ruff gates
 passed on the merge candidate. The repair changes only the exclusion selector
 and extends the existing integration test.
+
+Clean fb041d35c review closure: ARCH/SEC PASS and QA/test-delta PASS WITH LOW
+RISKS; OUTBOX-MERGE-01 resolved. Both reviewers verified matching clean targets,
+registry intersection and the expanded real PostgreSQL cases. Prior scoped
+main-integration review stands. This integrates origin/main d713594eb; it does
+not establish separate-runner or full-system readiness. The user's explicitly
+requested runner worktree now owns infrastructure plus authenticated remote
+PRE/POST execution and removal of shared-host material assumptions. The lead
+retains submission lifecycle/cleanup and final integration in PR708.
