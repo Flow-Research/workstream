@@ -8422,3 +8422,10 @@ Finalized replay must not reread the provider. Verify real PostgreSQL, child
 cleanup, existing structure/lane checks. Human focus: real process death and
 committed-state assertions, without fabricated expired timestamps. This does
 not replace the distinct lost-ACK tests or prove broker outage behavior.
+
+Initial crash receipt: both processes reached SIGKILL; after-commit passed,
+before-observation recovery returned not-ready after a client-clock sleep.
+Use a bounded PostgreSQL-clock expiry wait rather than a fixed 50ms margin,
+without retrying or weakening the recovery assertion. Switch fork to spawn so
+the child cannot inherit pytest threads. Rerun both cases for these harness
+changes; no production timing changes.

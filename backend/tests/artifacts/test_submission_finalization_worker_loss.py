@@ -75,6 +75,17 @@ def _crash_worker(database_url, path, event_id, project_id, kill_at):
     asyncio.run(run())
 
 
+async def _wait_until_database_time(factory, target):
+    """The lease uses PostgreSQL wall time, not the test process's sleep clock."""
+    async with asyncio.timeout(30):
+        while True:
+            async with factory() as session:
+                now = await session.scalar(select(func.clock_timestamp()))
+            if now >= target:
+                return
+            await asyncio.sleep(min(0.1, (target - now).total_seconds()))
+
+
 @pytest.mark.parametrize("kill_at", ["before_observation", "after_commit"])
 async def test_sigkill_finalizer_recovers_exact_accepted_operation(admission_intake, tmp_path, kill_at):
     f = admission_intake
@@ -86,7 +97,7 @@ async def test_sigkill_finalizer_recovers_exact_accepted_operation(admission_int
     async with f.factory() as session:
         row = await session.get(SubmissionIntakeOperation, str(owner.operation_id))
         event_id = UUID(row.finalization_event_id)
-    process = multiprocessing.get_context("fork").Process(target=_crash_worker, args=(
+    process = multiprocessing.get_context("spawn").Process(target=_crash_worker, args=(
         f.factory.kw["bind"].url, tmp_path, event_id, f.project, kill_at))
     observations = []
     delivery, store = _delivery(f.factory, tmp_path, observations=observations,
@@ -103,14 +114,13 @@ async def test_sigkill_finalizer_recovers_exact_accepted_operation(admission_int
             assert row.state == ("finalized" if kill_at == "after_commit" else "finalization_pending")
             original_submission = row.finalized_submission_id
             ready_at = max(event.claim_expires_at, row.continuation_expires_at)
-            remaining = (ready_at - await session.scalar(select(func.clock_timestamp()))).total_seconds()
-        await asyncio.sleep(max(0, remaining) + 0.05)
+        await _wait_until_database_time(f.factory, ready_at)
         assert await delivery.recover(event_id, f.project) is not None
         async with f.factory() as session:
             event = await session.get(OutboxEvent, event_id)
             assert event.delivery_state == "retryable"
-            remaining = (event.next_attempt_at - await session.scalar(select(func.clock_timestamp()))).total_seconds()
-        await asyncio.sleep(max(0, remaining) + 0.05)
+            ready_at = event.next_attempt_at
+        await _wait_until_database_time(f.factory, ready_at)
         assert await delivery.deliver(event_id, f.project, "replacement-finalizer") is not None
         async with f.factory() as session:
             row = await session.get(SubmissionIntakeOperation, str(owner.operation_id))
