@@ -205,6 +205,51 @@ class PrivateFaultControls(unittest.TestCase):
         self.assertEqual(os.getuid(), original_getuid())
         self.assertEqual(os.getgid(), original_getgid())
 
+    def test_hosted_wrapper_exec_requires_traversable_sibling_parent(self):
+        """A real user process must read wrapper settings and exec through ancestry."""
+        source = (
+            ROOT
+            / "experiments/pilot04_external_checker_runtime/public_runtime_wrapper.py"
+        )
+        binary = self.root / "smol-version"
+        binary.write_text('#!/bin/sh\nprintf "smolvm 1.31.4\\n"\n')
+        binary.chmod(0o700)
+
+        def prepare(parent):
+            runtime = parent / "workstream-pre-launch-fault-runtime"
+            runtime.mkdir(mode=0o700)
+            wrapper = runtime / "runtime-wrapper"
+            wrapper.write_bytes(source.read_bytes())
+            wrapper.chmod(0o700)
+            wrapper.with_suffix(".json").write_text(
+                json.dumps(
+                    {
+                        "binary": str(binary),
+                        "project_archive": "/unused",
+                        "mode": "/unused",
+                        "trace": "/unused",
+                        "unit": "unused",
+                        "socket": "/unused",
+                    }
+                )
+            )
+            return wrapper
+
+        old_parent = self.root / "operator-private"
+        old_parent.mkdir(mode=0o700)
+        new_wrapper = prepare(self.root)
+        old_wrapper = prepare(old_parent)
+        with patch.object(faults, "_runtime_user", return_value={}):
+            self.assertIsNone(
+                faults._check_hosted_wrapper_execution(new_wrapper, str(self.root))
+            )
+            old_parent.chmod(0o000)
+            try:
+                with self.assertRaises((OSError, subprocess.CalledProcessError)):
+                    faults._check_hosted_wrapper_execution(old_wrapper, str(self.root))
+            finally:
+                old_parent.chmod(0o700)
+
     def test_launch_trace_rejects_extra_execution_and_reset_deadline(self):
         trace = self.root / 'runtime-trace.jsonl'
         lease = {'epoch': 'original', 'expires_ms': 1000}

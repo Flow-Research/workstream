@@ -69,6 +69,21 @@ def _runtime_user(identity):
     return {'user': identity[0], 'group': identity[1], 'extra_groups': []}
 
 
+def _check_hosted_wrapper_execution(wrapper, home):
+    """Prove checker-UID traversal, settings read and real binary exec before rewrite."""
+    probe = subprocess.run(
+        [str(wrapper), "--version"],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=5,
+        env={"HOME": home, "PATH": "/usr/bin:/bin"},
+        **_runtime_user(HOSTED_IDENTITY),
+    )
+    if not probe.stdout.startswith("smolvm ") or probe.stderr:
+        raise ValueError("hosted runtime wrapper execution differs")
+
+
 def runtime(config, *args, identity=None):
     smol = config['smol']
     return json.loads(subprocess.check_output(
@@ -486,6 +501,8 @@ def serve(config_path, root, unit, manifest_path, *, hosted_runtime=False, run_i
         'mode': str(state), 'trace': str(trace), 'unit': unit,
         'socket': config['socket_path'],
     })
+    if hosted_runtime:
+        _check_hosted_wrapper_execution(wrapper, config['smol']['home'])
     changed = json.loads(original)
     changed['smol']['binary'] = str(wrapper)
     changed['smol']['binary_sha256'] = 'sha256:' + hashlib.sha256(wrapper.read_bytes()).hexdigest()

@@ -58,7 +58,7 @@ After owner review, choose one reviewed commit (`REVIEWED_COMMIT`, full hex), on
 new canonical run UUID (`RUN_ID`), and the following fresh runner-only paths:
 
 - Source: `/opt/workstream/operator-fault-source/$REVIEWED_COMMIT`.
-- Control: `/var/lib/workstream-operator/pre-launch-$RUN_ID` (created by supervisor).
+- Control: `/var/lib/workstream-pre-launch-$RUN_ID` (root-owned `0700`, created by supervisor). Its existing sibling runtime is checker-owned `0700` under the already traversable, root-owned `/var/lib` `0755` parent.
 - Independent custody: `/var/lib/workstream-operator/pre-launch-$RUN_ID-custody.json`.
 - Finite operator unit: `workstream-operator-pre-launch-$RUN_ID.service`.
 
@@ -104,7 +104,7 @@ Once the manifest is independently reviewed and staged, start only this runner
 supervisor, under a distinct finite root-owned unit:
 
 ```sh
-sudo -n systemd-run --unit="workstream-operator-pre-launch-$RUN_ID" --property=Type=exec --property=RuntimeMaxSec=1200 --property=TimeoutStopSec=90 --property=KillSignal=SIGTERM --property=KillMode=process --property=SendSIGKILL=no /usr/bin/env "PYTHONPATH=/opt/workstream/operator-fault-source/$REVIEWED_COMMIT" /usr/bin/python3 -m experiments.pilot04_external_checker_runtime.public_node_faults --node-config /etc/workstream/checker-service.json --unit workstream-checker.service --root "/var/lib/workstream-operator/pre-launch-$RUN_ID" --owner-manifest "/var/lib/workstream-operator/pre-launch-$RUN_ID-custody.json" --hosted-runtime --run-id "$RUN_ID" --maximum-seconds 900 --image-digest sha256:b4d1877fabfeacb24c6830469d1d1f057eacb64daecea7b5328f08431fc65721
+sudo -n systemd-run --unit="workstream-operator-pre-launch-$RUN_ID" --property=Type=exec --property=RuntimeMaxSec=1200 --property=TimeoutStopSec=90 --property=KillSignal=SIGTERM --property=KillMode=process --property=SendSIGKILL=no /usr/bin/env "PYTHONPATH=/opt/workstream/operator-fault-source/$REVIEWED_COMMIT" /usr/bin/python3 -m experiments.pilot04_external_checker_runtime.public_node_faults --node-config /etc/workstream/checker-service.json --unit workstream-checker.service --root "/var/lib/workstream-pre-launch-$RUN_ID" --owner-manifest "/var/lib/workstream-operator/pre-launch-$RUN_ID-custody.json" --hosted-runtime --run-id "$RUN_ID" --maximum-seconds 900 --image-digest sha256:b4d1877fabfeacb24c6830469d1d1f057eacb64daecea7b5328f08431fc65721
 ```
 
 The supervisor validates custody, a drained node and exact cached image before

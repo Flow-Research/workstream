@@ -10394,3 +10394,19 @@ only the documented plugin-disabled asyncio-mode warning. Ruff, whitespace and
 Markdown links pass. No workflow, debt baseline, limits, assertion-map, skip or
 product capability changed; roadmap scope is unchanged. Hosted lane reruns remain
 root-owned rather than inferred from these local checks.
+
+The smallest repair leaves the existing exact sibling resolver and root-private
+controls unchanged. A fresh control root `/var/lib/workstream-pre-launch-$RUN_ID`
+is root-owned0700 directly under the existing root-owned0755 `/var/lib` parent;
+the supervisor-created sibling runtime remains checker-owned0700 and UID10001
+can traverse the parent. The independent custody manifest stays inside the
+existing root-private `/var/lib/workstream-operator` directory. No parent mode,
+service configuration or production binary is changed to make the fixture pass.
+Before config rewrite, the supervisor now runs the reviewed wrapper `--version`
+as UID/GID10001 with empty supplemental groups and requires the real pinned
+Smol response, proving path traversal, wrapper settings read and original-binary
+exec. A portable real-subprocess old-parent denial/new-sibling success test and
+the unchanged exact sibling-binding control pass. Pinned read-only runner checks
+also showed UID10001 can traverse `/var/lib` and execute original Smol. The new
+run path and preflight remain to be staged and exercised; pre1 is still failed
+evidence, not an injected-launch proof.
