@@ -49,7 +49,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
 from app.core.api_controls import request_ids
-from app.api.deps.authorization import get_authorization_actor_identity
 from app.adapters.projects import project_locked_policy_context_port
 from app.adapters.tasks import task_submission_context_port
 from app.db.session import get_db_session
@@ -96,7 +95,6 @@ from app.modules.artifacts.authorization import (
     get_guide_artifact_prepared_authorization,
 )
 from app.modules.actors.api import ServiceIdentity
-from app.modules.authorization.api import ActorIdentityFacts
 from app.modules.tasks.api.guide_documents import TaskGuideDocumentsPort
 from app.modules.projects.api.guide_reads import ProjectGuideDocumentContentPort
 
@@ -126,16 +124,6 @@ def trusted_submission_intake(settings: Settings) -> TrustedSubmissionIntakeAdap
         config_digest=settings.artifact_intake_config_digest,
     ))
     return factory.create(PROVIDER)
-
-
-async def get_submission_bundle_preparation_actor(
-    actor: Annotated[
-        ActorIdentityFacts,
-        Depends(get_authorization_actor_identity),
-    ],
-) -> ActorIdentityFacts:
-    """Return dependency-safe AUTH facts to the route-facing ART command."""
-    return actor
 
 
 def create_artifact_store_bootstrap(settings: Settings) -> ArtifactStoreBootstrap:
@@ -387,21 +375,6 @@ def get_guide_artifact_ingest_command(
         ),
         maximum_total_bytes=settings.project_agent_max_total_document_bytes,
     )
-
-
-def get_submission_bundle_preparation_authorization(
-    session: Annotated[AsyncSession, Depends(get_db_session)],
-    context: Annotated[
-        object,
-        Depends(get_artifact_authorization_context),
-    ],
-):
-    """Compose the active contributor PREP adapter from canonical AUTH context."""
-    from app.modules.artifacts.authorization import (
-        PreparedSubmissionBundlePreparationAuthorization,
-    )
-
-    return PreparedSubmissionBundlePreparationAuthorization(session, context)
 
 
 def submission_admission_consumption_port(

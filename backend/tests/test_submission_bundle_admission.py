@@ -12,100 +12,14 @@ import app.adapters.artifacts as artifact_adapters
 from app.core.config import Settings
 from app.modules.artifacts.api import (
     SubmissionBundlePreparationRejected,
-    SubmissionBundlePreparationRequest,
-)
-from app.modules.artifacts.schemas import (
-    ArtifactAuthorityDeniedError,
 )
 from app.interfaces.artifacts import (
     ArtifactConfigurationError,
 )
-from app.modules.artifacts.submission_authorization import (
-    DenySubmissionBundlePreparedAuthorization,
-    DenySubmissionBundlePreparationAuthorization,
-)
-from app.modules.authorization.api import ActorIdentityFacts, ActorKind
-from app.modules.authorization.prepared import PreparedAuthorizationHandle
 from tests.artifact_store_helpers import artifact_admission_limit_settings
 from app.main import create_app
 from app.api.routes.artifact_submissions import router as submission_router
 from app.modules.artifacts.submission_admission import validate_submission_packet_headers
-
-
-def _actor() -> ActorIdentityFacts:
-    return ActorIdentityFacts(
-        actor_profile_id=new_record_id(),
-        identity_link_id=new_record_id(),
-        actor_kind=ActorKind.HUMAN,
-    )
-
-
-def _preparation_request(
-    *, byte_source, media_type: str = "application/zip", summary: str = "summary"
-):
-    return SubmissionBundlePreparationRequest(
-        actor=_actor(),
-        request_id=new_record_id(),
-        correlation_id=new_record_id(),
-        task_id=new_record_id(),
-        assignment_id=new_record_id(),
-        predecessor_submission_id=None,
-        idempotency_key=new_record_id(),
-        summary=summary,
-        contributor_attestation="attestation",
-        media_type=media_type,
-        byte_source=byte_source,
-    )
-
-
-@pytest.mark.asyncio
-async def test_artifact_adapter_preserves_public_actor_facts() -> None:
-    actor = _actor()
-
-    assert await artifact_adapters.get_submission_bundle_preparation_actor(actor) is actor
-
-
-@pytest.mark.asyncio
-async def test_explicit_deny_preparation_authority_denies() -> None:
-
-    authority = DenySubmissionBundlePreparationAuthorization()
-    request = _preparation_request(byte_source=object())
-
-    with pytest.raises(ArtifactAuthorityDeniedError):
-        await authority.preflight(request=request)
-    with pytest.raises(ArtifactAuthorityDeniedError):
-        await authority.lock_actor(request=request)
-    with pytest.raises(ArtifactAuthorityDeniedError):
-        await authority.revalidate(request=request, project_id=new_record_id())
-    with pytest.raises(ArtifactAuthorityDeniedError):
-        authority.transaction()
-    with pytest.raises(ArtifactAuthorityDeniedError):
-        await authority.prepare_final(request=request)
-    authority.close()
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize("active,nested", ((False, False), (True, True)))
-async def test_actor_prelock_requires_a_root_transaction(active, nested) -> None:
-    from app.modules.artifacts.authorization import PreparedSubmissionBundlePreparationAuthorization
-
-    authority = object.__new__(PreparedSubmissionBundlePreparationAuthorization)
-    authority._session = SimpleNamespace(
-        in_transaction=lambda: active,
-        in_nested_transaction=lambda: nested,
-    )
-    authority._repository = SimpleNamespace(lock_request_actor=AsyncMock())
-    with pytest.raises(ArtifactAuthorityDeniedError):
-        await authority.lock_actor(request=object())
-    authority._repository.lock_request_actor.assert_not_awaited()
-
-
-@pytest.mark.asyncio
-async def test_explicit_deny_durable_authority_denies_final_preparation() -> None:
-    authority = DenySubmissionBundlePreparedAuthorization()
-
-    with pytest.raises(ArtifactAuthorityDeniedError):
-        await authority.prepare_final(facts=object())  # type: ignore[arg-type]
 
 
 @pytest.mark.asyncio
@@ -204,12 +118,3 @@ def test_submission_packet_headers_reject_non_ascii() -> None:
         match="submission_bundle_packet_header_encoding_invalid",
     ):
         validate_submission_packet_headers("caf\N{LATIN SMALL LETTER E WITH ACUTE}", "ok")
-
-
-@pytest.mark.asyncio
-async def test_deny_submission_authority_fails_closed() -> None:
-    with pytest.raises(ArtifactAuthorityDeniedError):
-        await DenySubmissionBundlePreparedAuthorization().consume(
-            prepared_authorization=object.__new__(PreparedAuthorizationHandle),
-            facts=object(),
-        )

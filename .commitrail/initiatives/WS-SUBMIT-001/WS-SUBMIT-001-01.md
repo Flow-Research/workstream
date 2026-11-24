@@ -8941,3 +8941,26 @@ orchestrator and every surviving admission method except admit/request-boundary
 are unchanged. Removed DTO/custody names are now forbidden by the existing retired
 intake architecture check. Old authorization and materialization-only code still
 needs cleanup; no full-suite/deployment completion claim.
+
+Next remove exclusively old preparation authorization: ART
+PreparedSubmissionBundlePreparationAuthorization, its two adapter dependencies
+(actor/get-authority), submission_authorization.py protocols/deny types, obsolete
+adapter/deny tests and unused prepared_submitter_authority fixture. Allowed:
+ART authorization.py, adapter __init__, submission_authorization.py, corresponding
+test_submission_preparation_adapter.py/test_submission_bundle_admission.py,
+submission_preparation_auth_helpers.py, catalogue/fingerprint and this record.
+Keep install_submitter_grant and historical AUTH parsers/binding validation;
+keep current source-read issuer PreparedPreSubmitMaterializationAuthorization
+and current intake authority. API DTO/old materialization cleanup remains next.
+Medium authorization risk; retained shared tests, current intake AUTH tests,
+imports/structure/auth boundary and scoped ARCH/QA review. No schema/data/deploy.
+
+Authorization retirement checks passed:8 retained shared/catalogue checks22.22s
+(/tmp/submission-auth-retirement-pure.log); current intake exact audit/rollback/
+single-use PostgreSQL case1/1 in5.02s, schema0090/fullcleanup
+(/tmp/submission-auth-retirement.json). Imports, structure, AUTH boundary,
+Ruff/diff passed. Fresh designated-provisioner IAM read still returns AccessDenied
+for ListUserPolicies; no policy mutation or credential change was attempted.
+Runner owner is preparing the app connection/deployment delta read-only while
+root finishes remaining API/materialization retirement. Hosted qualification
+still requires the prepared administrative IAM grant/policies.
