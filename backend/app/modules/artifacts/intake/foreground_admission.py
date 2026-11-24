@@ -202,7 +202,7 @@ class ForegroundIntakeAdmission:
         namespace = await session.get(ArtifactStorageNamespace, "primary")
         if namespace is None or any(getattr(namespace, name) != value for name, value in asdict(self._namespace).items()):
             raise IntakeCustodyConflict("intake_namespace_unavailable")
-        if namespace.provider_profile not in {"local-v2", "minio-v1"}:
+        if namespace.provider_profile not in {"local-v2", "minio-v1", "aws-s3-v1"}:
             raise IntakeCustodyConflict("intake_source_provider_unqualified")
         return task, project
 

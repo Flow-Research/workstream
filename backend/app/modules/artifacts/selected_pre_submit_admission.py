@@ -136,7 +136,7 @@ def build_selected_pre_submit_reservation(
             or selected.rules_sha256 != expected_rules
             or selected.default_context.current_rules_sha256 != expected_rules):
         raise ValueError("selected PRE policy context differs")
-    storage_scheme = {"local-v2": "local", "minio-v1": "s3"}.get(
+    storage_scheme = {"local-v2": "local", "minio-v1": "s3", "aws-s3-v1": "s3"}.get(
         source.source.location.provider_profile
     )
     if storage_scheme is None:

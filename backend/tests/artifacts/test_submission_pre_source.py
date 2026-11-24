@@ -42,7 +42,7 @@ def _assert_pre_reservation_rejects_substitution(build_values, guarded, metadata
             build_selected_pre_submit_reservation(**(build_values | replacement))
     from app.modules.artifacts.api.submission_intake import SealedSubmissionSource, SubmissionIntakePreSourceFacts
     unsupported_source = SealedSubmissionSource.model_validate(guarded.source.model_copy(update={
-        "location": guarded.source.location.model_copy(update={"provider_profile": "aws-s3-v1"}),
+        "location": guarded.source.location.model_copy(update={"provider_profile": "unqualified-v1"}),
     }))
     unsupported_facts = SubmissionIntakePreSourceFacts.model_validate(
         guarded.model_copy(update={"source": unsupported_source})

@@ -430,6 +430,7 @@ def test_v01_graph_has_one_root_and_head() -> None:
 
     assert [revision.revision for revision in revisions] == [
         HEAD_REVISION,
+        "0090_merge_direct_storage",
         "0089_observed_upload_cleanup",
         "0088_unsealed_source_cleanup",
         "0087_source_cleanup_candidates",
@@ -521,11 +522,54 @@ def test_v01_graph_has_one_root_and_head() -> None:
         "0002_task_queue_authority",
         BASELINE_REVISION,
     ]
-    assert script.get_revision(HEAD_REVISION).down_revision == (
+    assert script.get_revision("0090_merge_direct_storage").down_revision == (
         "0089_observed_upload_cleanup", "0069_remove_artifact_proof",
     )
+    assert script.get_revision(HEAD_REVISION).down_revision == "0090_merge_direct_storage"
     assert revisions[-1].down_revision is None
     assert script.get_heads() == [HEAD_REVISION]
+
+
+async def test_qualified_aws_source_upgrade_only_changes_pre_profile_predicate(
+    isolated_database_env, migration_lock,
+) -> None:
+    """Compare the complete SQL guard across 0090 to 0091; retain other custody."""
+    from app.db import session as db_session
+    from tests.conftest import _drop_test_database_schema
+
+    signature = "public.require_selected_pre_source(public.selected_pre_submit_runs)"
+    url = isolated_database_env.replace("+asyncpg", "")
+
+    async def definition():
+        connection = await asyncpg.connect(url)
+        try:
+            return await connection.fetchval(
+                "SELECT pg_catalog.pg_get_functiondef(CAST($1 AS regprocedure))", signature,
+            )
+        finally:
+            await connection.close()
+
+    with migration_lock():
+        await db_session.dispose_engine()
+        await _drop_test_database_schema(isolated_database_env)
+        try:
+            await asyncio.to_thread(command.upgrade, _alembic_config(), "0090_merge_direct_storage")
+            before = await definition()
+            assert before.count("o.provider_profile NOT IN ('local-v2','minio-v1')") == 1
+            assert before.count("WHEN 'minio-v1' THEN 's3' END") == 1
+            await asyncio.to_thread(command.upgrade, _alembic_config(), HEAD_REVISION)
+            after = await definition()
+            expected = before.replace(
+                "o.provider_profile NOT IN ('local-v2','minio-v1')",
+                "o.provider_profile NOT IN ('local-v2','minio-v1','aws-s3-v1')",
+            ).replace(
+                "WHEN 'minio-v1' THEN 's3' END",
+                "WHEN 'minio-v1' THEN 's3' WHEN 'aws-s3-v1' THEN 's3' END",
+            )
+            assert expected != before and after == expected
+        finally:
+            await _drop_test_database_schema(isolated_database_env)
+            await asyncio.to_thread(command.upgrade, _alembic_config(), HEAD_REVISION)
 
 
 async def test_guide_read_upgrade_targets_public_audit_with_shadow_search_path(
