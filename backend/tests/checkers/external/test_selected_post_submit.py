@@ -165,6 +165,21 @@ def _request(identity, policy):
     )
 
 
+class _UnopenedMaterialSource:
+    """These processor tests observe a grant, not its ART-backed file stream."""
+
+    @property
+    def manifest(self):
+        raise AssertionError("mock execution must not read project material")
+
+    @property
+    def files(self):
+        raise AssertionError("mock execution must not read project material")
+
+    def open_file(self, _item):
+        raise AssertionError("mock execution must not read project material")
+
+
 class _MaterialView:
     def __init__(self, material, *, events=None, cleanup_failure=False) -> None:
         self.external_checker_material = material
@@ -184,6 +199,7 @@ class _MaterialView:
             yield ExternalCheckerMaterialGrant(
                 grant_id="extract_" + "a" * 32,
                 binding_digest="sha256:" + "b" * 64,
+                source=_UnopenedMaterialSource(),
             )
         finally:
             if self.events is not None:
@@ -687,6 +703,7 @@ class _SelectorView(_MaterialView):
         grant = ExternalCheckerMaterialGrant(
             grant_id="extract_" + uuid4().hex,
             binding_digest=request.request_digest,
+            source=_UnopenedMaterialSource(),
         )
         self.grants.append(grant)
         yield grant

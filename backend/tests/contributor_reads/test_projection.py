@@ -2,6 +2,7 @@
 
 from app.adapters.artifacts import selected_pre_submit_source_contracts
 
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from types import SimpleNamespace
@@ -17,13 +18,17 @@ from app.modules.artifacts.preparation_reads import SubmissionBundlePreparationR
 from app.modules.checkers.api.default_checker import (
     WORKSTREAM_DEFAULT_BEHAVIOR_SHA256, WORKSTREAM_DEFAULT_CHECK_IDS, WorkstreamDefaultCheckerResult,
 )
-from app.modules.checkers.api.selected_pre_submit import SelectedPreSubmitExecutionFacts, SelectedPreSubmitRunView
+from app.modules.checkers.api.selected_pre_submit import SelectedPreSubmitRunView
 from app.modules.checkers.models import SelectedPreSubmitRun
 from app.modules.compensation.api.award_reads import ContributorAwardTotal
 from app.modules.compensation.awards.read_repository import ContributionAwardReadRepository
 from tests.submission_fixtures import route_retained_checker_remediation, seed_retained_checker_run
 from tests.test_tasks import set_dev_actor
 from .support import ME, OWNER, as_actor, get_ok, preparations_path, submitted_case
+from tests.checkers.external.test_selected_pre_submit_coordination import (
+    _source_completed_execution,
+    _source_reservation,
+)
 
 
 def _present(view):
@@ -137,18 +142,22 @@ async def test_summary_reports_nonempty_award_totals_as_exact_decimal_strings(ta
 
 
 def _execution(eligible):
+    current = _source_completed_execution(_source_reservation())
+    if eligible:
+        return current
     checks = tuple({
         "check_id": check_id,
-        "status": "passed" if eligible or index < 2 else "failed" if index == 2 else "not_run",
-        "failure_code": None if eligible or index != 2 else "high_confidence_secret_detected",
-        "finding_count": 0 if eligible or index != 2 else 1,
+        "status": "passed" if index < 2 else "failed" if index == 2 else "not_run",
+        "failure_code": "high_confidence_secret_detected" if index == 2 else None,
+        "finding_count": 1 if index == 2 else 0,
     } for index, check_id in enumerate(WORKSTREAM_DEFAULT_CHECK_IDS))
-    return SelectedPreSubmitExecutionFacts(
-        policy_sha256="sha256:" + "1" * 64, required_external_count=0, external_members=(), eligible=eligible,
+    return replace(
+        current, external_members=(), eligible=False,
         workstream_default=WorkstreamDefaultCheckerResult(
-            behavior_sha256=WORKSTREAM_DEFAULT_BEHAVIOR_SHA256, eligible=eligible, checks=checks, warnings=(),
+            behavior_sha256=WORKSTREAM_DEFAULT_BEHAVIOR_SHA256, eligible=False, checks=checks, warnings=(),
         ),
-     source_contracts=selected_pre_submit_source_contracts())
+        source_contracts=selected_pre_submit_source_contracts(),
+    )
 
 
 _ADMISSION, _SUBMISSION = uuid4(), uuid4()
