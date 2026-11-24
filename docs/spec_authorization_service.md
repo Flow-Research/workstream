@@ -696,6 +696,8 @@ remain planned and unavailable, and add no migration.
 | `artifact.guide_source.read` | `artifact.guide_source.read` | fixed guide-reader service | exact committed document version and fenced compilation attempt | `03` |
 | `artifact.submission_bundle.prepare` | `submission.create` | assigned contributor | exact task/admission context | `04C2` |
 | `artifact.submission.binding.create` | `artifact.binding.create` | fixed binding service | submission | `05` |
+| `artifact.submission.finalize` | `artifact.binding.create` | fixed binding service | exact accepted source operation, acceptance receipt and current continuation lease; source-bound consumed admission | `WS-AUTH-001-ART-05` |
+| `artifact.submission_source.cleanup` | `artifact.submission_source.cleanup` | fixed cleanup service | exact namespace, operation, retained charge and cleanup generation with provider-bound authorization | `WS-AUTH-001-ART-02D-INTERNAL` |
 | `artifact.checker_output.binding.create` | `artifact.binding.create` | fixed binding service | exact setup or POST paid model-call attempt, private request/response slot and verified content | `06B`, model runtime |
 | `artifact.verification.execute` | `artifact.verification.execute` | fixed verifier service | verification job | `02D` |
 | `artifact.pending_work.scan` | `artifact.pending_work.scan` | fixed scheduler service | system pending-work scope | `02D` |

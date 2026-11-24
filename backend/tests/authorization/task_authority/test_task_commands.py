@@ -48,7 +48,7 @@ async def test_client_owned_packet_cannot_mutate_an_authorized_assignment(
         f"/api/v1/tasks/{task['id']}/submissions", headers=auth_headers(), json=payload,
     )
     assert response.status_code == 422, response.text
-    assert response.json()["error"]["code"] == "invalid_request"
+    assert response.json()["error"]["code"] == "submission_packet_invalid"
     assert await _read_task_contributor_race_snapshot(task_database_env, task["id"]) == before
     retained_read = await task_client.get(
         f"/api/v1/tasks/{task['id']}/submissions", headers=auth_headers(),

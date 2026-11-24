@@ -20,7 +20,18 @@ def assert_no_live_finalization(paths):
         if path == ROOT / "app/workers/project_setup.py":
             assert "setup_finalization_authorization" in imports
             imports.remove("setup_finalization_authorization")
-        assert not any("finalization" in name.lower() for name in imports | calls)
+        topology = {
+            ROOT / "app/workers/outbox.py": {"FINALIZATION_HARD_LIMIT_SECONDS"},
+            ROOT / "app/workers/celery_app.py": {
+                "FINALIZATION_DELIVERY_TASK", "FINALIZATION_QUEUE", "is_finalization_worker_process",
+            },
+            ROOT / "app/workers/outbox_topology.py": {
+                "SUBMISSION_FINALIZATION_DELIVERY_LEASE_SECONDS",
+                "app.modules.artifacts.api.submission_finalization",
+            },
+        }
+        assert not any("finalization" in name.lower()
+                       for name in (imports | calls) - topology.get(path, set()))
         assert "finalize" not in calls
 
 
@@ -117,11 +128,12 @@ def test_finalization_partition_additions_are_exact_and_fail_closed():
         "from app.adapters.auth import setup_finalization_authorization\nordinary: object = setup_finalization_authorization\nordinary(session)\n",
     ],
 )
-def test_exact_worker_cannot_call_aliased_finalization_factory(tmp_path, monkeypatch, source):
+@pytest.mark.parametrize("worker", ["project_setup", "outbox", "celery_app", "outbox_topology"])
+def test_exact_worker_cannot_call_aliased_finalization_factory(tmp_path, monkeypatch, source, worker):
     import sys
 
     monkeypatch.setattr(sys.modules[__name__], "ROOT", tmp_path)
-    path = tmp_path / "app/workers/project_setup.py"
+    path = tmp_path / f"app/workers/{worker}.py"
     path.parent.mkdir(parents=True)
     path.write_text(source)
     with pytest.raises(AssertionError):

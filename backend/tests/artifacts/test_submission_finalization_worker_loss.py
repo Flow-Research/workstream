@@ -307,10 +307,13 @@ async def _public_broker_case(f, tmp_path, monkeypatch, *, kill_at=None):
     from urllib.parse import urlsplit
     import redis
     from app.core.identifiers import new_record_id
-    from app.workers import outbox as worker
+    from app.core.config import get_settings
 
     broker = urlsplit(os.environ["WORKSTREAM_TEST_BROKER_URL"])
     assert broker.scheme == "redis" and broker.hostname and broker.port
+    monkeypatch.setenv("WORKSTREAM_CELERY_BROKER_URL", broker.geturl())
+    get_settings.cache_clear()
+    from app.workers import outbox as worker
     case = SimpleNamespace(connection=redis.Redis.from_url(broker.geturl(), socket_timeout=2),
         prefix=f"finalizer-proof-{new_record_id()}:", hostname=f"finalizer-{new_record_id()}@localhost",
         endpoint=socket.socket(), proxy=None, connections=set(), process=None,

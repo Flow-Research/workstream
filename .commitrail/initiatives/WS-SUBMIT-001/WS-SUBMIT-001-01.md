@@ -10751,3 +10751,101 @@ Verification: all five identifier metadata tests passed in 0.61 seconds; pinned
 Ruff and diff checks passed. ARCH inspected the final exact exception and found
 no further scoped issue. Metadata inventory confirms this is the sole current
 representation difference and cleanup claims the sole omitted referenced key.
+
+### First fresh shared-lane CI fixture corrections (2026-11-24)
+
+Intent: run45465160851 for PRhead65a176a69 executes mergeac81fefb7987569ba15414bb8130bf1433a52a1a.
+Its shared_foundations_i artifact14953584341 reports3failed/706passed in410.89s,
+709/709 completed, zero skips/deselections, schema0091 and complete DB/MinIO
+cleanup. New immediate failure blocks expose exact causes. Allowed scope only
+the broker finalizer fixture, exact active-action test inventory, client packet
+refusal oracle, and this record. No production/config defaults, authorization
+policy, timeout, skip, selection or completeness gate changes.
+
+The real broker helper imports the production Celery app before configuring its
+explicit test broker; cold CI has no production broker setting. Bind the existing
+required WORKSTREAM_TEST_BROKER_URL before import, clear settings cache, retain
+real isolated endpoint/prefix/prefork worker and all outage/duplicate assertions.
+Exact catalogue expectation must include the four activated source cleanup,
+accepted finalization, PM operation-read and gate-repair actions. The empty JSON
+packet reaches current ART input refusal submission_packet_invalid, while full
+and forged old packets retain invalid_request; preserve status, complete state
+snapshot and foreign/concealment assertions.
+
+Acceptance: focused exact catalogue check and actual four PG cases (real broker
+plus all three packet variants), cold broker configuration with no ambient
+production URL, no public/runtime change, Ruff/structure/record/diff checks. Risk
+is test-fixture/contract custody; QA/CI review checks meaningful exact refusal
+and retained durable graph assertions. Human focus is unchanged production
+guards and exact approved inventory. Full CI remains running; no full-head or
+provider/native completion claim. Roadmap capability claims unchanged.
+
+Scope extension from the next exact CI failure: shared_d completed1failed/739passed
+in523.97s. Its pre_submit/test_contracts.py shared reservation still constructs
+retired prepared fields before reaching decision/audit/parser assertions. Port
+only that fixture to the existing current _source_reservation and supply required
+source contracts to dataclass replacement; all assertions and substitutions stay.
+No production compatibility or new source fixture. Exercise the complete pure
+contract module so failures in other shards from the same cause are covered.
+
+The full pure PRE contract module also requires explicit invocation_receipt=None
+for its existing no-runtime infrastructure finalization; no synthetic provider
+receipt is introduced. All parser/digest/phase/audit assertions remain. Next
+shared_f failure is exact admin permission surface94 versus current95. Extend
+allowed scope to that one cardinality oracle after canonical catalogue inspection;
+retain HTTP200, exact total/items equality and every role/grant isolation check.
+
+Fresh A/E reports confirm the same packet refusal for all three JSON variants;
+use exact submission_packet_invalid throughout, retaining all no-mutation and
+concealment assertions. A second admin permission oracle has the same94->95
+canonical correction. Extend scoped files to that existing parameter value.
+ART custody documentation test needs only the two current action/permission
+rows missing from spec_authorization_service.md; both independent custody
+tables and their historical counts already pass and remain unchanged.
+
+The setup-finalization reachability test fails on unrelated accepted-submission
+worker topology symbols sharing the word finalization, not an authority path.
+Extend only that test file: allow exact topology constant/module/process-role
+symbols on exact outbox/celery_app/outbox_topology paths. Preserve the generic
+rejection of every other finalization import/call, exact project_setup authority
+exception, and no direct finalize invocation. Extend existing four aliased setup
+authority mutations across all four affected worker paths; no whole-file bypass.
+
+Shared_g exposes a second PRE test from the same repaired fixture and an obsolete
+public201 assertion. Extend only task_authority/test_public_surface.py: require
+current202 and exact sole application/zip content; preserve authentication/action
+metadata, forbidden self-activation/start routes, required body and all claim
+key/UUID/closed-DTO limits. No mounted route or schema change.
+
+Final scoped evidence: exact pure batch33passed in41.60s
+(/tmp/submission-fresh-ci-pure-batch-v2.log): current PRE source/phase/digest/audit
+contracts, exact active action inventory, both ART custody documents, exact
+worker-path topology exceptions with sixteen aliased authority mutants, and
+public202/soleZIP schema. The initial pure fixture replay exposed missing required
+invocation_receipt; explicitNone fixed the no-runtime branch. No original
+assertion was removed. Canonical permission IDs are exactly95.
+
+Cold composition probe removes ambient production broker configuration. Omitting
+only before-import binding reproduces exact CeleryConfigurationError; final
+fixture reaches the public acceptance boundary then intentionally stops, cleaning
+its owned endpoint/queue/Redis connection (/tmp/submission-cold-broker-before-v2
+.log and -after-v2.log). An initial standalone probe missed pytest's test import
+path and is excluded from behavior proof. This proves import configuration, not
+new worker/broker recovery behavior; existing integration remains required and
+is coordinated with the separate scanner isolation repair. No expensive child
+death cases were repeated.
+
+Five actual PG cases passed102.36s: all three client packet JSON refusals, admin
+permission catalogue, and auditor permission read. Each retains its snapshot,
+identity, confidentiality, audit and exact total/item assertions. Receipt
+/tmp/submission-fresh-ci-packet-admin.json records launcher65a176a69 with final
+modified test bytes, schema0091 and all database/MinIO cleanup true; this is
+precommit execution, not clean-commit or complete-head qualification.
+
+Full unchanged structural validator exits0
+(/tmp/submission-fresh-ci-structure.log); Ruff and whitespace pass. No production
+file, policy, ledger, provider guard, workflow or test budget changed. The two
+identifier-schema failures from shared_h are separately routed to root/ARCH and
+are not claimed fixed here. Remaining lanes are still being observed. Historical
+shared receipts prove completed tests/cleanup and newly retained failure details;
+they do not turn failing CI green or qualify the full submission goal.
