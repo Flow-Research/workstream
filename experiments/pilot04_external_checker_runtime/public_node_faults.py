@@ -4,18 +4,39 @@ import argparse
 import asyncio
 import hashlib
 import json
+import math
 import os
+import re
 from pathlib import Path
 import signal
 import stat
 import subprocess
+import sys
 import time
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from experiments.pilot04_external_checker_runtime.public_fault_files import PrivateControlDirectory, private_path
 
 
 HOSTED_IDENTITY = (10001, 10001)
+CONTROL_PROTOCOL = 'workstream.operator_fault.v1'
+ACTIONS = frozenset({'project_fail_once', 'project_fail_all', 'project_kill', 'clear', 'drained', 'restarted'})
+_COMMAND_ID = re.compile(r'[0-9a-f]{32}\Z')
+
+
+def _run_id(value):
+    if type(value) is not str or str(UUID(value)) != value:
+        raise ValueError('fault run ID differs')
+    return value
+
+
+def _unique_object(pairs):
+    value = {}
+    for key, item in pairs:
+        if key in value:
+            raise ValueError('duplicate fault JSON field')
+        value[key] = item
+    return value
 
 
 def _operator_controls(root):
@@ -113,12 +134,23 @@ def assert_launches(root, start, *, creates, executions, project=True, shared_de
     return made
 
 
-async def node_command(root, action):
-    """Send only a closed fixture command to the separately owned host supervisor."""
-    identifier = uuid4().hex
+async def node_command(root, action, *, identifier=None):
+    """Send one stable closed command; an uncertain ACK never changes its ID."""
+    if action not in ACTIONS:
+        raise ValueError('unknown fixture action')
+    identifier = uuid4().hex if identifier is None else identifier
+    if type(identifier) is not str or _COMMAND_ID.fullmatch(identifier) is None:
+        raise ValueError('fault command ID differs')
     control = _operator_controls(root)
     try:
-        control.write(identifier + '.request', {'action': action})
+        request = {'action': action}
+        try:
+            retained = control.read(identifier + '.request')
+        except FileNotFoundError:
+            control.write(identifier + '.request', request)
+        else:
+            if retained != request:
+                raise ValueError('fault command ID/action changed')
     finally:
         control.close()
     response = root / (identifier + '.response')
@@ -136,6 +168,103 @@ async def node_command(root, action):
         await asyncio.sleep(.1)
     raise RuntimeError('owned node fault command timed out: ' + action)
 
+
+
+def _read_run(root, expected):
+    """Bind all operator observations to the same private finite supervisor run."""
+    _run_id(expected)
+    control = _operator_controls(root)
+    try:
+        run = control.read('supervisor-run.json')
+    finally:
+        control.close()
+    if (type(run) is not dict or run.get('protocol_version') != CONTROL_PROTOCOL
+            or run.get('run_id') != expected or type(run.get('deadline_monotonic')) not in {int, float}
+            or not math.isfinite(run['deadline_monotonic']) or run['deadline_monotonic'] <= 0
+            or type(run.get('maximum_seconds')) is not int or not 1 <= run['maximum_seconds'] <= 1800
+            or type(run.get('binding_sha256')) is not str
+            or re.fullmatch(r'sha256:[0-9a-f]{64}', run['binding_sha256']) is None
+            or type(run.get('image_digest')) is not str
+            or re.fullmatch(r'sha256:[0-9a-f]{64}', run['image_digest']) is None):
+        raise ValueError('fault supervisor run differs')
+    return run
+
+
+def _command_observation(root, identifier, action):
+    if type(identifier) is not str or _COMMAND_ID.fullmatch(identifier) is None or type(action) is not str or action not in ACTIONS:
+        raise ValueError('fault command selector differs')
+    control = _operator_controls(root)
+    try:
+        try:
+            request = control.read(identifier + '.request')
+        except FileNotFoundError:
+            return {'state': 'unknown', 'result': None}
+        if request != {'action': action}:
+            raise ValueError('fault command ID/action changed')
+        try:
+            result = control.read(identifier + '.response')
+        except FileNotFoundError:
+            return {'state': 'unknown', 'result': None}
+        if type(result) is not dict or result.get('action') != action or type(result.get('ok')) is not bool:
+            raise ValueError('fault command response differs')
+        return {'state': 'completed', 'result': result}
+    finally:
+        control.close()
+
+
+async def control_request(root, request):
+    """SSH-only operator entry point; no deployment or arbitrary filesystem API."""
+    if type(request) is not dict or request.get('protocol_version') != CONTROL_PROTOCOL:
+        raise ValueError('fault control protocol differs')
+    operation = request.get('operation')
+    expected = {'protocol_version', 'run_id', 'operation', 'binding_sha256', 'image_digest'}
+    if operation in {'command', 'query'}:
+        expected |= {'command_id', 'action'}
+    if set(request) != expected or operation not in {'command', 'query', 'snapshot'}:
+        raise ValueError('fault control request differs')
+    run = _read_run(root, request['run_id'])
+    if request['binding_sha256'] != run['binding_sha256'] or request['image_digest'] != run['image_digest']:
+        raise ValueError('fault custody pin differs')
+    response = {'protocol_version': CONTROL_PROTOCOL, 'run_id': run['run_id'],
+                'operation': operation, 'binding_sha256': run['binding_sha256'], 'image_digest': run['image_digest']}
+    if operation == 'snapshot':
+        runtime_root = runtime_control_root(root)
+        identity = HOSTED_IDENTITY if runtime_root != root else (os.getuid(), os.getgid())
+        trace = PrivateControlDirectory(runtime_root, uid=identity[0], gid=identity[1])
+        try:
+            data = trace.trace_bytes()
+        finally:
+            trace.close()
+        events = [json.loads(line) for line in data.splitlines()]
+        if len(events) > 4096 or any(type(event) is not dict for event in events):
+            raise ValueError('fault trace record bound differs')
+        control = _operator_controls(root)
+        try:
+            try:
+                cleanup = control.read('supervisor-cleanup.json')
+            except FileNotFoundError:
+                cleanup = None
+        finally:
+            control.close()
+        if cleanup is not None and (type(cleanup) is not dict
+                or cleanup.get('protocol_version') != CONTROL_PROTOCOL
+                or cleanup.get('run_id') != run['run_id']
+                or cleanup.get('binding_sha256') != run['binding_sha256']
+                or cleanup.get('image_digest') != run['image_digest']):
+            raise ValueError('fault cleanup receipt differs')
+        response.update(events=events, cursor=len(events), trace_sha256='sha256:' + hashlib.sha256(data).hexdigest(),
+                        cleanup=cleanup)
+        return response
+    identifier, action = request['command_id'], request['action']
+    observed = _command_observation(root, identifier, action)
+    if operation == 'command' and observed['state'] != 'completed':
+        if time.monotonic() >= run['deadline_monotonic'] or (root / 'supervisor-cleanup.json').exists():
+            raise RuntimeError('fault supervisor is not available')
+        private_path(root / 'supervisor-ready', 0o600)
+        await node_command(root, action, identifier=identifier)
+        observed = _command_observation(root, identifier, action)
+    response.update(command_id=identifier, action=action, **observed)
+    return response
 
 
 def _config_identity(hosted_runtime):
@@ -278,13 +407,22 @@ class ForeignControl:
         return {'name': self.name, 'machine_absent': True, 'disk_absent': True,
                 'cgroup_absent': True, 'process_reaped': True}
 
-def serve(config_path, root, unit, manifest_path, *, hosted_runtime=False):
+def serve(config_path, root, unit, manifest_path, *, hosted_runtime=False, run_id, maximum_seconds, image_digest):
     """Inject only project-start faults on a dedicated empty node and restore on exit."""
     from shutil import copyfile
 
+    _run_id(run_id)
+    if type(maximum_seconds) is not int or not 1 <= maximum_seconds <= 1800:
+        raise ValueError('fault supervisor requires a finite <=1800s budget')
     os.umask(0o077)
     original, config_identity = _read_config(config_path, hosted_runtime)
     config = json.loads(original)
+    if type(image_digest) is not str or re.fullmatch(r'sha256:[0-9a-f]{64}', image_digest) is None:
+        raise ValueError('fault image digest differs')
+    matching = [entry for entry in config['cache'] if entry['platform_manifest_digest'] == image_digest]
+    if len(matching) != 1:
+        raise ValueError('fault image cache selection is absent or ambiguous')
+    project = matching[0]
     binding = validate_node(config_path, config, unit, manifest_path, hosted_runtime=hosted_runtime)
     identity = HOSTED_IDENTITY if hosted_runtime else None
     if any(owned_resources(config, identity=identity).values()):
@@ -294,6 +432,12 @@ def serve(config_path, root, unit, manifest_path, *, hosted_runtime=False):
     if list(root.iterdir()):
         raise ValueError('fault root must be fresh and empty')
     control.write('node-binding.json', binding)
+    run_deadline = time.monotonic() + maximum_seconds
+    binding_sha256 = 'sha256:' + hashlib.sha256(json.dumps(binding, sort_keys=True,
+        separators=(',', ':'), allow_nan=False).encode()).hexdigest()
+    control.write('supervisor-run.json', {'protocol_version': CONTROL_PROTOCOL, 'run_id': run_id,
+        'maximum_seconds': maximum_seconds, 'deadline_monotonic': run_deadline, 'image_digest': image_digest,
+        'binding_sha256': binding_sha256})
     runtime_root = root
     runtime_control = control
     if hosted_runtime:
@@ -307,7 +451,6 @@ def serve(config_path, root, unit, manifest_path, *, hosted_runtime=False):
     wrapper.chmod(0o700)
     if hosted_runtime:
         os.chown(wrapper, *HOSTED_IDENTITY)
-    project = next(c for c in config['cache'] if c['repository'] == 'workstream-test/public-journey')
     state = runtime_root / 'runtime-mode.json'
     runtime_control.write(state.name, {'failures': 0, 'kill': False})
     trace = runtime_root / 'runtime-trace.jsonl'
@@ -330,15 +473,19 @@ def serve(config_path, root, unit, manifest_path, *, hosted_runtime=False):
         raise KeyboardInterrupt
 
     foreign = ForeignControl(config, project, identity=identity)
+    previous_handlers = {item: signal.getsignal(item) for item in (signal.SIGTERM, signal.SIGHUP)}
     signal.signal(signal.SIGTERM, stop)
+    signal.signal(signal.SIGHUP, stop)
     try:
         foreign.start()
         write_node_config(config_path, json.dumps(changed).encode(), config_identity,
                           hosted_runtime=hosted_runtime)
         restart()
         (root / 'supervisor-ready').write_text('ready')
-        while True:
+        while time.monotonic() < run_deadline:
             for request in sorted(root.glob('*.request')):
+                if time.monotonic() >= run_deadline:
+                    break
                 response = request.with_suffix('.response')
                 if response.exists():
                     continue
@@ -351,7 +498,7 @@ def serve(config_path, root, unit, manifest_path, *, hosted_runtime=False):
                         runtime_control.write(state.name, {'failures': failures, 'kill': action == 'project_kill'})
                         if action == 'project_kill':
                             result['controller_pid'] = int(subprocess.check_output(
-                                ['systemctl', 'show', unit, '-p', 'MainPID', '--value'], text=True))
+                                ['systemctl', 'show', unit, '-p', 'MainPID', '--value'], text=True, timeout=15))
                     elif action == 'drained':
                         deadline = time.monotonic() + 25
                         while any(owned_resources(config, root, identity=identity).values()):
@@ -365,7 +512,7 @@ def serve(config_path, root, unit, manifest_path, *, hosted_runtime=False):
                         deadline = time.monotonic() + 25
                         while True:
                             pid = int(subprocess.check_output(
-                                ['systemctl', 'show', unit, '-p', 'MainPID', '--value'], text=True))
+                                ['systemctl', 'show', unit, '-p', 'MainPID', '--value'], text=True, timeout=15))
                             # A new owned VM after restart is the health/epoch proof; the
                             # caller compares this PID to the durably recorded kill target.
                             if pid and Path(f'/proc/{pid}/exe').resolve() == Path(binding['executable']):
@@ -383,6 +530,9 @@ def serve(config_path, root, unit, manifest_path, *, hosted_runtime=False):
     except KeyboardInterrupt:
         pass
     finally:
+        # Repeated disconnect/termination cannot interrupt bounded restoration.
+        signal.signal(signal.SIGTERM, signal.SIG_IGN)
+        signal.signal(signal.SIGHUP, signal.SIG_IGN)
         try:
             write_node_config(config_path, original, config_identity, hosted_runtime=hosted_runtime)
             restart()
@@ -395,23 +545,47 @@ def serve(config_path, root, unit, manifest_path, *, hosted_runtime=False):
                 if any(resources.values()) or config_path.read_bytes() != original:
                     raise RuntimeError('supervisor restore or owned cleanup is incomplete')
                 control.write('supervisor-cleanup.json', {
+                    'protocol_version': CONTROL_PROTOCOL, 'run_id': run_id,
+                    'binding_sha256': binding_sha256, 'image_digest': image_digest,
                     'config_sha256': 'sha256:' + hashlib.sha256(original).hexdigest(),
                     'resources': resources, 'foreign': foreign_cleanup,
                 })
                 (root / 'supervisor-ready').unlink(missing_ok=True)
             finally:
-                if runtime_control is not control:
-                    runtime_control.close()
-                control.close()
+                try:
+                    if runtime_control is not control:
+                        runtime_control.close()
+                    control.close()
+                finally:
+                    for item, previous in previous_handlers.items():
+                        signal.signal(item, previous)
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--node-config', type=Path, required=True)
+    parser.add_argument('--node-config', type=Path)
     parser.add_argument('--root', type=Path, required=True)
-    parser.add_argument('--unit', required=True)
-    parser.add_argument('--owner-manifest', type=Path, required=True)
+    parser.add_argument('--unit')
+    parser.add_argument('--owner-manifest', type=Path)
+    parser.add_argument('--request', action='store_true', help='process one bounded SSH operator request on stdin')
+    parser.add_argument('--run-id')
+    parser.add_argument('--maximum-seconds', type=int)
+    parser.add_argument('--image-digest')
     parser.add_argument('--hosted-runtime', action='store_true',
                         help='root operator with the fixed runtime identity 10001:10001')
     args = parser.parse_args()
-    serve(args.node_config, args.root, args.unit, args.owner_manifest, hosted_runtime=args.hosted_runtime)
+    if args.request:
+        raw = sys.stdin.buffer.read(65537)
+        if len(raw) > 65536:
+            parser.error('fault request exceeds bound')
+        result = asyncio.run(control_request(args.root, json.loads(raw, object_pairs_hook=_unique_object,
+            parse_constant=lambda _: (_ for _ in ()).throw(ValueError('JSON constant')))))
+        encoded = json.dumps(result, separators=(',', ':'), allow_nan=False).encode()
+        if len(encoded) > 2 * 1024 * 1024:
+            parser.error('fault response exceeds bound')
+        sys.stdout.buffer.write(encoded + b'\n')
+    else:
+        if not all((args.node_config, args.unit, args.owner_manifest, args.run_id, args.maximum_seconds, args.image_digest)):
+            parser.error('supervisor requires node config, unit, manifest, run ID and finite budget')
+        serve(args.node_config, args.root, args.unit, args.owner_manifest, hosted_runtime=args.hosted_runtime,
+              run_id=args.run_id, maximum_seconds=args.maximum_seconds, image_digest=args.image_digest)

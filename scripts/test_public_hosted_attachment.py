@@ -732,5 +732,322 @@ class HostedFixtureContracts(unittest.TestCase):
                     setattr(target, field, original)
 
 
+class RunnerFaultBridgeContracts(unittest.TestCase):
+    def profile(self, root):
+        from experiments.pilot04_external_checker_runtime.public_runner_faults import RunnerFaultProfile
+        key, known = root / 'identity', root / 'known-hosts'
+        key.write_text('dummy-private-key-never-read')
+        known.write_text('pinned-public-host-key-fixture')
+        key.chmod(0o600)
+        known.chmod(0o600)
+        return RunnerFaultProfile('13.61.148.238', key, known, '/opt/workstream/reviewed-source',
+            '/var/lib/workstream-operator/fault-run', str(uuid4()), 'sha256:' + 'a' * 64, 'sha256:' + 'b' * 64)
+
+    def root(self, directory, profile):
+        import time
+        from experiments.pilot04_external_checker_runtime.public_fault_files import PrivateControlDirectory
+        from experiments.pilot04_external_checker_runtime.public_node_faults import CONTROL_PROTOCOL
+        control = PrivateControlDirectory(directory)
+        control.write('supervisor-run.json', {'protocol_version': CONTROL_PROTOCOL,
+            'run_id': profile.run_id, 'maximum_seconds': 30, 'deadline_monotonic': time.monotonic() + 30,
+            'binding_sha256': profile.binding_sha256, 'image_digest': profile.image_digest})
+        (directory / 'runtime-trace.jsonl').write_bytes(b'')
+        (directory / 'runtime-trace.jsonl').chmod(0o600)
+        (directory / 'supervisor-ready').write_text('ready')
+        (directory / 'supervisor-ready').chmod(0o600)
+        return control
+
+    def response(self, profile, operation, **fields):
+        if operation == 'snapshot':
+            fields = {'cleanup': None} | fields
+        from experiments.pilot04_external_checker_runtime.public_node_faults import CONTROL_PROTOCOL
+        return {'protocol_version': CONTROL_PROTOCOL, 'run_id': profile.run_id,
+                'operation': operation, 'binding_sha256': profile.binding_sha256,
+                'image_digest': profile.image_digest, **fields}
+
+    def test_pinned_ssh_uses_fixed_module_and_never_reads_identity_bytes(self):
+        import shlex
+        with tempfile.TemporaryDirectory() as temporary:
+            profile = self.profile(Path(temporary))
+            with patch.object(Path, 'read_bytes', side_effect=AssertionError('must not read key')), \
+                    patch.object(Path, 'read_text', side_effect=AssertionError('must not read key')):
+                command = profile.command()
+            self.assertEqual(command[:3], ['ssh', '-F', '/dev/null'])
+            self.assertEqual(command[-2], 'ubuntu@13.61.148.238')
+            for option in ('IdentitiesOnly=yes', 'IdentityAgent=none', 'BatchMode=yes',
+                           'StrictHostKeyChecking=yes', 'GlobalKnownHostsFile=/dev/null', 'UpdateHostKeys=no',
+                           'UserKnownHostsFile=' + str(profile.known_hosts_file)):
+                self.assertIn(option, command)
+            remote = shlex.split(command[-1])
+            self.assertEqual(remote[-3:], ['--root', profile.control_root, '--request'])
+            self.assertIn('experiments.pilot04_external_checker_runtime.public_node_faults', remote)
+            profile.identity_file.chmod(0o644)
+            with self.assertRaisesRegex(ValueError, 'ownership/mode'):
+                profile.command()
+
+    def test_runner_commands_have_stable_id_and_refuse_action_or_run_substitution(self):
+        from experiments.pilot04_external_checker_runtime.public_node_faults import control_request
+        async def exercise():
+            with tempfile.TemporaryDirectory() as temporary:
+                directory = Path(temporary)
+                profile = self.profile(directory)
+                control = self.root(directory, profile)
+                request = self.response(profile, 'command', command_id='b' * 32, action='clear')
+                async def respond():
+                    while not (directory / ('b' * 32 + '.request')).exists():
+                        await asyncio.sleep(.001)
+                    self.assertEqual(control.read('b' * 32 + '.request'), {'action': 'clear'})
+                    control.write('b' * 32 + '.response', {'action': 'clear', 'ok': True})
+                try:
+                    result, _ = await asyncio.gather(control_request(directory, request), respond())
+                    self.assertEqual(result['state'], 'completed')
+                    with patch('experiments.pilot04_external_checker_runtime.public_node_faults.node_command',
+                               new=AsyncMock(side_effect=AssertionError('duplicate mutation'))):
+                        self.assertEqual(await control_request(directory, request), result)
+                    for change in ({'run_id': str(uuid4())}, {'binding_sha256': 'sha256:' + 'f' * 64},
+                                   {'image_digest': 'sha256:' + 'f' * 64},
+                                   {'action': 'project_kill'}, {'action': 'arbitrary'}):
+                        with self.subTest(change=change), self.assertRaises(ValueError):
+                            await control_request(directory, request | change)
+                    with patch('experiments.pilot04_external_checker_runtime.public_node_faults.node_command',
+                               new=AsyncMock(side_effect=AssertionError('custody checked after dispatch'))) as dispatch:
+                        with self.assertRaisesRegex(ValueError, 'custody pin'):
+                            await control_request(directory, request | {'command_id': 'f' * 32,
+                                'binding_sha256': 'sha256:' + 'f' * 64})
+                        dispatch.assert_not_awaited()
+                    self.assertFalse((directory / ('f' * 32 + '.request')).exists())
+                    before = {item.name for item in directory.iterdir()}
+                    unknown = await control_request(directory, request | {'operation': 'query', 'command_id': 'c' * 32})
+                    self.assertEqual((unknown['state'], unknown['result']), ('unknown', None))
+                    self.assertEqual({item.name for item in directory.iterdir()}, before)
+                finally:
+                    control.close()
+        asyncio.run(exercise())
+
+    def test_snapshot_binds_run_and_rejects_aliased_or_incomplete_trace(self):
+        from experiments.pilot04_external_checker_runtime.public_node_faults import control_request
+        async def exercise():
+            with tempfile.TemporaryDirectory() as temporary:
+                directory = Path(temporary)
+                profile = self.profile(directory)
+                control = self.root(directory, profile)
+                request = self.response(profile, 'snapshot')
+                request.pop('cleanup')
+                trace = directory / 'runtime-trace.jsonl'
+                data = b'{"operation":"create","name":"owned"}\n'
+                try:
+                    trace.write_bytes(data)
+                    result = await control_request(directory, request)
+                    self.assertEqual(result['cursor'], 1)
+                    self.assertEqual(result['events'], [{'operation': 'create', 'name': 'owned'}])
+                    self.assertEqual(result['trace_sha256'], 'sha256:' + hashlib.sha256(data).hexdigest())
+                    trace.write_bytes(data[:-1])
+                    with self.assertRaisesRegex(ValueError, 'incomplete'):
+                        await control_request(directory, request)
+                    trace.write_bytes(data)
+                    trace.chmod(0o644)
+                    with self.assertRaisesRegex(ValueError, 'ownership/mode'):
+                        await control_request(directory, request)
+                    trace.chmod(0o600)
+                    retained = directory / 'retained-trace'
+                    trace.rename(retained)
+                    trace.symlink_to(retained)
+                    with self.assertRaises(OSError):
+                        await control_request(directory, request)
+                finally:
+                    control.close()
+        asyncio.run(exercise())
+
+    def test_trace_snapshot_refuses_held_writer_lock_without_waiting(self):
+        import fcntl
+        code = """import sys
+from pathlib import Path
+from experiments.pilot04_external_checker_runtime.public_fault_files import PrivateControlDirectory
+control = PrivateControlDirectory(Path(sys.argv[1]))
+try:
+    try:
+        control.trace_bytes()
+    except BlockingIOError:
+        print('unavailable')
+    else:
+        print('available')
+finally:
+    control.close()
+"""
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            trace = directory / 'runtime-trace.jsonl'
+            trace.write_bytes(b'{}\n')
+            trace.chmod(0o600)
+            def read():
+                try:
+                    result = subprocess.run([sys.executable, '-c', code, str(directory)],
+                        capture_output=True, text=True, timeout=5, check=True, cwd=ROOT)
+                except subprocess.TimeoutExpired:
+                    self.fail('trace snapshot blocked behind the held writer lock')
+                return result.stdout.strip()
+            self.assertEqual(read(), 'available')
+            with trace.open('a') as writer:
+                fcntl.flock(writer, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                self.assertEqual(read(), 'unavailable')
+            self.assertEqual(read(), 'available')
+
+    def test_ssh_lost_ack_is_observed_by_same_id_without_repeating_mutation(self):
+        from experiments.pilot04_external_checker_runtime.public_runner_faults import RunnerFaults, FaultOutcomeUnknown
+        async def exercise():
+            with tempfile.TemporaryDirectory() as temporary:
+                profile = self.profile(Path(temporary))
+                client = RunnerFaults(profile)
+                identifier = 'd' * 32
+                response = self.response(profile, 'query', command_id=identifier, action='clear',
+                    state='completed', result={'action': 'clear', 'ok': True})
+                written = []
+                def process(body, *, lost=False):
+                    output, errors = asyncio.StreamReader(), asyncio.StreamReader()
+                    output.feed_data(json.dumps(body).encode())
+                    output.feed_eof()
+                    errors.feed_eof()
+                    if lost:
+                        output.read = AsyncMock(side_effect=TimeoutError('lost ACK after input'))
+                    return SimpleNamespace(stdin=SimpleNamespace(write=lambda data: written.append(json.loads(data)),
+                        drain=AsyncMock(), close=lambda: None), stdout=output, stderr=errors,
+                        returncode=None if lost else 0, wait=AsyncMock(return_value=0),
+                        kill=unittest.mock.Mock(side_effect=ProcessLookupError()) if lost else unittest.mock.Mock())
+                with patch('asyncio.create_subprocess_exec', new=AsyncMock(side_effect=[process({}, lost=True), process(response)])) as execute:
+                    with self.assertRaises(FaultOutcomeUnknown) as unknown:
+                        await client.command('clear', command_id=identifier)
+                    self.assertEqual(unknown.exception.command_id, identifier)
+                    observed = await client.query(identifier, 'clear')
+                    self.assertEqual(observed['state'], 'completed')
+                    self.assertEqual(execute.await_count, 2)
+                self.assertEqual([item['operation'] for item in written], ['command', 'query'])
+                for change in ({'run_id': str(uuid4())}, {'binding_sha256': 'sha256:' + 'f' * 64}):
+                    with patch('asyncio.create_subprocess_exec', new=AsyncMock(return_value=process(response | change))):
+                        with self.assertRaisesRegex(RuntimeError, 'observation unavailable'):
+                            await client.query(identifier, 'clear')
+                self.assertEqual(sum(item['operation'] == 'command' for item in written), 1)
+                self.assertTrue(all(item['command_id'] == identifier for item in written))
+        asyncio.run(exercise())
+
+    def test_remote_snapshot_cannot_rewind_or_rebind_existing_prefix(self):
+        from experiments.pilot04_external_checker_runtime.public_runner_faults import RunnerFaults
+        async def exercise():
+            with tempfile.TemporaryDirectory() as temporary:
+                profile = self.profile(Path(temporary))
+                client = RunnerFaults(profile)
+                first = self.response(profile, 'snapshot', events=[{'name': 'exact'}], cursor=1,
+                                      trace_sha256='sha256:' + 'b' * 64)
+                with patch.object(client, '_exchange', new=AsyncMock(return_value=first)):
+                    await client.snapshot()
+                for changed in (dict(first, events=[], cursor=0),
+                        dict(first, events=[{'name': 'foreign'}]), dict(first, trace_sha256='sha256:' + 'c' * 64)):
+                    with self.subTest(changed=changed), patch.object(client, '_exchange', new=AsyncMock(return_value=changed)):
+                        with self.assertRaisesRegex(RuntimeError, 'trace changed'):
+                            await client.snapshot()
+        asyncio.run(exercise())
+
+    def test_same_run_cleanup_receipt_requires_exact_absence_and_foreign_cleanup(self):
+        from experiments.pilot04_external_checker_runtime.public_runner_faults import RunnerFaults
+        async def exercise():
+            with tempfile.TemporaryDirectory() as temporary:
+                profile = self.profile(Path(temporary))
+                client = RunnerFaults(profile)
+                cleanup = self.response(profile, 'snapshot')
+                cleanup.pop('operation')
+                cleanup.pop('cleanup')
+                cleanup.update(config_sha256='sha256:' + 'c' * 64,
+                    resources={'disks': [], 'leases': [], 'machines': [], 'cgroups': []},
+                    foreign={'name': 'exact-foreign', 'machine_absent': True, 'disk_absent': True,
+                             'cgroup_absent': True, 'process_reaped': True})
+                reply = self.response(profile, 'snapshot', events=[], cursor=0,
+                                      trace_sha256='sha256:' + 'd' * 64, cleanup=cleanup)
+                with patch.object(client, '_exchange', new=AsyncMock(return_value=reply)):
+                    self.assertEqual((await client.snapshot())['cleanup'], cleanup)
+                for change in ({'run_id': str(uuid4())}, {'image_digest': 'sha256:' + 'f' * 64},
+                        {'resources': dict(cleanup['resources'], leases=None)},
+                        {'resources': dict(cleanup['resources'], machines=['owned-remains'])},
+                        {'foreign': dict(cleanup['foreign'], process_reaped=False)}):
+                    invalid = reply | {'cleanup': cleanup | change}
+                    with self.subTest(change=change), patch.object(client, '_exchange', new=AsyncMock(return_value=invalid)):
+                        with self.assertRaisesRegex(RuntimeError, 'cleanup is incomplete'):
+                            await client.snapshot()
+        asyncio.run(exercise())
+
+    def test_finite_supervisor_and_hup_restore_only_owned_config(self):
+        from experiments.pilot04_external_checker_runtime import public_node_faults as owner
+        import signal
+        for hup in (False, True):
+            with self.subTest(hup=hup), tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary)
+                config = root / 'node.json'
+                original = json.dumps({'socket_path': '/unused/native.sock', 'smol': {'binary': '/unused/smol', 'binary_sha256': 'sha256:' + 'a' * 64},
+                    'cache': [{'repository': 'independent-real-registry', 'platform_manifest_digest': 'sha256:' + 'b' * 64, 'smol': {'archive': '/unused/image'}}]}).encode()
+                config.write_bytes(original)
+                config.chmod(0o600)
+                states, handlers, clock = [], {}, [0.0]
+                def monotonic():
+                    clock[0] += .1
+                    return clock[0]
+                def sleep(_seconds):
+                    if hup:
+                        handlers[signal.SIGHUP](signal.SIGHUP, None)
+                class Foreign:
+                    created = False
+                    process = None
+                    def __init__(self, *args, **kwargs):
+                        pass
+                    def start(self):
+                        self.created, self.process = True, object()
+                        states.append('foreign_started')
+                        self.check()
+                    def check(self):
+                        states.append('foreign_preserved')
+                    def close(self):
+                        self_test.assertEqual(handlers[signal.SIGTERM], signal.SIG_IGN)
+                        self_test.assertEqual(handlers[signal.SIGHUP], signal.SIG_IGN)
+                        states.append('foreign_removed')
+                        return {'name': 'foreign-fixture', 'machine_absent': True, 'disk_absent': True,
+                                'cgroup_absent': True, 'process_reaped': True}
+                self_test = self
+                control_root = root / 'control'
+                with patch.object(owner, 'validate_node', return_value={'verified': True}), \
+                        patch.object(owner, 'owned_resources', return_value={'machines': [], 'disks': [], 'leases': [], 'cgroups': []}), \
+                        patch.object(owner, 'ForeignControl', Foreign), \
+                        patch.object(owner.subprocess, 'run') as restart, \
+                        patch.object(owner.time, 'monotonic', side_effect=monotonic), \
+                        patch.object(owner.time, 'sleep', side_effect=sleep), \
+                        patch.object(owner.signal, 'getsignal', return_value=signal.SIG_DFL), \
+                        patch.object(owner.signal, 'signal', side_effect=lambda item, handler: handlers.update({item: handler})):
+                    owner.serve(config, control_root, 'owned-unit', root / 'not-read-manifest',
+                                run_id=str(uuid4()), maximum_seconds=1, image_digest='sha256:' + 'b' * 64)
+                self.assertEqual(config.read_bytes(), original)
+                self.assertEqual(restart.call_count, 2)
+                self.assertTrue(all(call.args[0] == ['sudo', 'systemctl', 'restart', 'owned-unit']
+                                    for call in restart.call_args_list))
+                receipt = json.loads((control_root / 'supervisor-cleanup.json').read_text())
+                self.assertEqual(receipt['config_sha256'], 'sha256:' + hashlib.sha256(original).hexdigest())
+                self.assertTrue(receipt['foreign']['machine_absent'])
+                self.assertEqual(receipt['image_digest'], 'sha256:' + 'b' * 64)
+                self.assertEqual(receipt['protocol_version'], owner.CONTROL_PROTOCOL)
+                self.assertFalse((control_root / 'supervisor-ready').exists())
+                self.assertEqual(states, ['foreign_started', 'foreign_preserved', 'foreign_preserved', 'foreign_removed'])
+                self.assertEqual(handlers[signal.SIGTERM], signal.SIG_DFL)
+                self.assertEqual(handlers[signal.SIGHUP], signal.SIG_DFL)
+
+    def test_bounded_ssh_reader_refuses_oversized_output(self):
+        from experiments.pilot04_external_checker_runtime.public_runner_faults import _bounded_read
+        async def exercise():
+            stream = asyncio.StreamReader()
+            stream.feed_data(b'1234')
+            stream.feed_eof()
+            self.assertEqual(await _bounded_read(stream, 4), b'1234')
+            stream = asyncio.StreamReader()
+            stream.feed_data(b'12345')
+            stream.feed_eof()
+            with self.assertRaisesRegex(ValueError, 'output exceeds'):
+                await _bounded_read(stream, 4)
+        asyncio.run(exercise())
+
+
 if __name__ == '__main__':
     unittest.main()

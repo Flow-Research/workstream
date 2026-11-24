@@ -107,7 +107,8 @@ configuration and checks both typed adapter identities before starting services.
 
 The public drill deliberately injects faults. Start `public_node_faults.py` on
 the host against **only the dedicated drill unit**, with `--node-config`, `--unit`
-and `--root <work-dir>/node-control`, plus `--owner-manifest <custody.json>`.
+and `--root <work-dir>/node-control`, plus `--owner-manifest <custody.json>`,
+`--run-id <fresh-UUID>`, `--image-digest <locked-platform-digest>` and a finite `--maximum-seconds` no greater than1800.
 Run it with the repository root on `PYTHONPATH`. The fresh control directory
 must be mode `0700` with no symlink or writable ancestor; control files are
 mode `0600` and accessed relative to its retained directory descriptor. It installs a pinned test-only Smol wrapper,
@@ -175,8 +176,9 @@ production Flow, live model quality, native AWS S3 activation or hosted deployme
 
 The fault supervisor is an operator-local harness: it reads the owned node's
 lease/cgroup/Smol state and exchanges private command/trace files. It currently
-has no authenticated remote fault-control/trace transport. The application's
-production TLS connection to a separate runner does not supply that transport.
+now has an attach-only operator SSH bridge, but its actual remote fault-control
+and restoration sequence is not yet qualified. The application's production TLS
+connection to a separate runner does not itself supply fault transport.
 Do not mount runner paths into the API host or move KVM to the API to make these
 vectors run. For the requested two-host deployment these fault vectors remain
 unqualified until an operator can address and collect exact evidence from the
@@ -191,3 +193,37 @@ marker deadline is distinct from the aggregate VM envelope. An actual aggregate
 expiry receipt with unchanged epoch/deadline and exact deletion/foreign-resource
 checks is still required; a pure expiry guard or inner checker timeout does not
 qualify it.
+
+`public_runner_faults.py` attaches to an already verified, independently
+supervised runner run. `RunnerFaultProfile` contains explicit runner IPv4 address,
+operator identity/known-hosts paths, immutable source root, remote private control
+root, run UUID, independently obtained native binding SHA and exact locked image digest.
+The binding SHA hashes the canonical `node-binding.json` value (`sort_keys=True`,
+compact separators, ASCII JSON); it is not the pretty-printed file's byte hash. Identity files
+are stat-validated and passed only to OpenSSH; their bytes never enter this code,
+API/worker settings or evidence. The approved SSH pattern uses `-F /dev/null`,
+explicit identity, no agent, batch mode, strict checking, only the pinned known-
+host file and no automatic host-key update. JSON requests travel on stdin to the
+fixed existing operator module; no application endpoint is exposed.
+
+`RunnerFaults.command(action, command_id=...)` permits only the six existing
+fixture actions. Run ID, custody SHA and selected image digest are checked on the runner before
+any command dispatch. On uncertain transport, retain the exception's original
+command ID and use `query(id, action)`; an absent response means unknown, never
+permission to submit a new mutation. Snapshots include the same-run cleanup receipt when present and are bounded,
+run-bound append-only observations; their timestamps stay on the runner and must not be compared to
+application monotonic clocks. The bridge does not start/deploy a supervisor or
+install its wrapper, and it does not wire the current filesystem-based trial
+loops into a two-host run automatically.
+
+Before a live fault, an operator must stage reviewed source and independent
+binary/config custody, verify compatible private ownership/modes and exact image
+selection, obtain an exclusive drained-node window, and start the supervisor
+under an independent finite operator-owned process/unit. The supervisor checks
+its run budget between bounded commands, refuses late commands and routes HUP/
+TERM through its existing restore/foreign-resource cleanup; cleanup ignores
+repeated HUP/TERM until it finishes. This is not a host-reboot/SIGKILL guarantee.
+Require the same-run cleanup receipt, original config hash, removed owned
+resources and exact foreign preservation/removal after disconnect. Missing or
+failed restoration stops qualification and requires owner recovery. No live SSH
+or native disconnect qualification is claimed by the local bridge guard tests.

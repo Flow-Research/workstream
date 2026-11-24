@@ -1,5 +1,6 @@
 """Private, no-follow control files for the destructive node proof only."""
 
+import fcntl
 import json
 import os
 from pathlib import Path
@@ -64,6 +65,21 @@ class PrivateControlDirectory:
                     or stat.S_IMODE(info.st_mode) != 0o600 or info.st_nlink != 1 or info.st_size > 65536):
                 raise ValueError('control file ownership/mode/size differs')
             return json.loads(source.read(65537))
+
+    def trace_bytes(self):
+        """Read only a complete bounded trace under the writer's advisory lock."""
+        descriptor = os.open('runtime-trace.jsonl', os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC,
+                             dir_fd=self.fd)
+        with os.fdopen(descriptor, 'rb') as source:
+            fcntl.flock(source, fcntl.LOCK_SH | fcntl.LOCK_NB)
+            info = os.fstat(source.fileno())
+            if (not stat.S_ISREG(info.st_mode) or info.st_uid != self.uid or info.st_gid != self.gid
+                    or stat.S_IMODE(info.st_mode) != 0o600 or info.st_nlink != 1 or info.st_size > 1024 * 1024):
+                raise ValueError('trace ownership/mode/size differs')
+            data = source.read(1024 * 1024 + 1)
+            if len(data) > 1024 * 1024 or data and not data.endswith(b'\n'):
+                raise ValueError('trace is oversized or incomplete')
+            return data
 
     def write(self, name, value):
         if Path(name).name != name:

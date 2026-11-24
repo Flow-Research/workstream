@@ -9915,3 +9915,85 @@ These two successful reads close the previous read-permission failures only;
 actual multipart, exact-version, restricted cleanup and lost-acknowledgement
 AWS qualification remain unproved. No service, policy or deployment was changed
 by these checks.
+
+### Prepare attach-only operator SSH fault bridge
+
+Bounded intent over5f3599d73: extend existing public_node_faults/private control
+owner with run-ID-bound command/query/snapshot input and bounded trace reads;
+add one thin public_runner_faults operator client using the approved pinned SSH
+argv pattern, never a production endpoint. Allowed files: public_node_faults.py,
+public_fault_files.py, new public_runner_faults.py, existing public fixture guard
+module, the experiment README and this record. No CLI journey overlap.
+
+Commands retain one stable ID/action and query that same ID after lost ACK;
+unknown transport never means safe to resend under a new ID. Snapshots bind exact
+run/custody and bounded trace prefix. Reject wrong run/custody, mutable or aliased
+private files, arbitrary actions, oversized/truncated output and malformed IDs.
+SSH must use -F /dev/null, explicit identity, no agent, BatchMode and strict pinned
+known-host checking. Keys stay operator-side and are never read/printed or passed
+to API/workers. Application TLS source execution remains unchanged.
+
+Supervisor preparation must be finite and handle HUP/TERM through existing
+restore/foreign-resource cleanup; independent operator-owned finite lifetime is
+a prerequisite for future SSH disconnect qualification. The bridge attaches to
+an already prepared verified run and does not start or deploy a remote service.
+No remote connection, service/configuration mutation, native fault or paid call
+will run while the connected journey owns the runner. The next live vector and
+caller wiring remain separately qualified; no shared runner filesystem, API-side
+KVM, cross-host monotonic comparison or aggregate-expiry inference is permitted.
+
+Read-only tracing identified that hardcoded fixture repository selection would
+block the actual pinned runner cache. Within the same bridge files, require an
+explicit locked image digest at supervisor startup and in every operator
+request/response, resolve exactly one cache entry and bind it into the private
+run metadata. Preserve original node-binding bytes/custody; no cache population,
+image replacement, app caller or production configuration change is introduced.
+
+Implemented the attach-only bridge in the allowed six files. Every request
+requires exact run ID, canonical node-binding SHA and explicit cached image
+digest before command dispatch. Cached image selection is exact/unique and no
+longer depends on the retired fixture repository name. The client reuses the
+approved pinned SSH argument pattern and additionally disables global host-key
+fallback and automatic pin updates. It never reads key bytes, starts a remote
+supervisor or forwards credentials to API/workers. Requests/results and SSH
+stdout/stderr have finite byte/time limits, and a dead local SSH PID during
+cleanup cannot lose the original command ID. Unknown ACKs only query that same
+ID; no automatic resend/new-ID path exists.
+
+Snapshots bind an append-only trace prefix and include a same-run/image/custody
+cleanup receipt when present. Invalid IDs/pins, mutable private modes, symlinked
+or incomplete traces, oversized output, rewound traces and incomplete cleanup
+are refused. Cleanup observation requires empty typed resource lists and exact
+foreign cleanup flags; the caller still compares the original config hash with
+its independent preparation custody. The supervisor accepts a finite <=1800s
+run budget, checks it before queued commands, uses bounded command subprocesses,
+and preserves existing config/foreign cleanup under controlled HUP/TERM. This
+is a bounded run loop plus restoration, not a host reboot/SIGKILL guarantee.
+Actual launch must use an independently finite operator-owned supervisor/unit.
+
+Root review identified that O_NONBLOCK does not bound flock. Repaired new trace
+reads to LOCK_SH|LOCK_NB; a held writer now means unavailable observation with
+no polling. The named guard runs real local reader children under a five-second
+failure bound: available control, held writer returns unavailable, available
+again after release. Native/service operations remain mocked in the lifecycle
+guard. Final bridge class passed9 in2.347s at
+/tmp/submission-runner-bridge-guards-lock.log. Earlier lifecycle fixture errors
+were a missing dummy socket_path; an intermediate request fixture accidentally
+included response-only cleanup metadata and was correctly rejected. Neither
+was a product/native failure or reason to relax the protocol.
+
+A bounded in-memory omission of only the before-dispatch custody/image check
+makes the named stable-command/refusal guard fail after its valid control
+(/tmp/submission-runner-bridge-custody-probe.json and
+/tmp/submission-runner-bridge-custody-probe-current.log). No source file, SSH or
+native state was mutated by the probe. AST checks show validate_node,
+write_node_config, ForeignControl, runtime, owned_resources and
+runtime_control_root unchanged (/tmp/submission-runner-bridge-owner-preservation.json).
+Ruff/whitespace pass; final record/link checks follow this append.
+
+No live SSH connection, native fault, service/configuration/deployment change or
+paid request occurred. Physical node custody checks and actual foreign VM
+preservation are not proved by mocked lifecycle tests. Existing filesystem-based
+trial callers are not yet wired to this bridge, no two-host fault drill has run,
+and independent supervisor disconnect/restoration, API/runner separation,
+aggregate native expiry and source/execution cancellation remain required.
