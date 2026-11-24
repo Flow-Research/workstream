@@ -8436,3 +8436,12 @@ prefork test approach (matching durable worker topology), whose first run
 reached both SIGKILL boundaries. Keep the database-clock gate and fresh child
 engine. Record the fork/thread warning as a harness limitation, not production
 qualification. No extra retries or enlarged startup bound.
+
+V3: before-observation SIGKILL/recovery passed; after-commit child returned
+normally instead of reaching SIGKILL (test correctly failed). Host observed
+4 CPUs/load16.23; the harness's 14-second handler deadline can terminate the
+real T5 transaction before the kill hook under this load. Use bounded 60-second
+custody/55-second handler window (production unchanged), 90-second process
+supervision and 75-second DB-clock wait. An unexpected child delivery return
+now fails with its delivery receipt for diagnosis. Run the two cases again;
+do not credit the failed after-commit run or retry it inside the test.

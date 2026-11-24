@@ -46,7 +46,7 @@ def _delivery(factory, path, *, kill_at=None, observations=None, forbid_observat
             return await store.observe_sealed_source(source)
 
     handler = submission_finalization_handler(sessions=factory, settings=_settings(path),
-        store=ObservedStore(), lease_duration=timedelta(seconds=15))
+        store=ObservedStore(), lease_duration=timedelta(seconds=60))
 
     async def invoke(envelope):
         result = await handler(envelope)
@@ -58,7 +58,7 @@ def _delivery(factory, path, *, kill_at=None, observations=None, forbid_observat
     event = ("SubmissionFinalizationRequested", 1)
     return outbox_delivery(factory, authorization_factory=outbox_dispatch_authorization,
         registry=HandlerRegistry([(*event, invoke)], replay_safe=frozenset({event})),
-        options=DeliveryOptions(lease_seconds=15, handler_timeout_seconds=14,
+        options=DeliveryOptions(lease_seconds=60, handler_timeout_seconds=55,
             retry_base_seconds=1, retry_cap_seconds=1)), store
 
 
@@ -68,7 +68,8 @@ def _crash_worker(database_url, path, event_id, project_id, kill_at):
         engine = create_async_engine(database_url)
         delivery, store = _delivery(async_sessionmaker(engine, expire_on_commit=False), path, kill_at=kill_at)
         try:
-            await delivery.deliver(event_id, project_id, "killed-finalizer")
+            result = await delivery.deliver(event_id, project_id, "killed-finalizer")
+            raise AssertionError(f"worker returned before SIGKILL: {result}")
         finally:
             store.close()
             await engine.dispose()
@@ -77,7 +78,7 @@ def _crash_worker(database_url, path, event_id, project_id, kill_at):
 
 async def _wait_until_database_time(factory, target):
     """The lease uses PostgreSQL wall time, not the test process's sleep clock."""
-    async with asyncio.timeout(30):
+    async with asyncio.timeout(75):
         while True:
             async with factory() as session:
                 now = await session.scalar(select(func.clock_timestamp()))
@@ -104,7 +105,7 @@ async def test_sigkill_finalizer_recovers_exact_accepted_operation(admission_int
         forbid_observation=kill_at == "after_commit")
     process.start()
     try:
-        await asyncio.to_thread(process.join, 45)
+        await asyncio.to_thread(process.join, 90)
         assert not process.is_alive(), "finalizer did not reach crash boundary"
         assert process.exitcode == -signal.SIGKILL
         async with f.factory() as session:
