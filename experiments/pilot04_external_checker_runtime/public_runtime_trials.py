@@ -5,6 +5,9 @@ from pathlib import Path
 import time
 from uuid import uuid4
 
+from sqlalchemy import select
+
+from app.modules.artifacts.intake.models import SubmissionIntakeOperation
 from app.modules.checkers.api.execution import CheckerRetryPublicResult
 from app.modules.checkers.models import CheckerRun
 from app.modules.tasks.models import SubmissionDispatch
@@ -12,11 +15,14 @@ from experiments.pilot04_external_checker_runtime.public_intake_trials import (
     _assert_current_pre, _assert_source_failure, _drain_source_trial_posts,
     _observe_accepted_source, _selected, _source_request,
 )
-from experiments.pilot04_external_checker_runtime.public_node_faults import assert_launches, node_command, trace_events
+from experiments.pilot04_external_checker_runtime.public_node_faults import (
+    assert_launches, assert_trace_launches, node_command, trace_events,
+)
 from experiments.pilot04_external_checker_runtime.public_probe_support import (
     _assert_task_has_no_effects, _json, _public_project, _require, _started_public_task,
     _wait_outbox_acknowledged, _with_fixture_file,
 )
+from experiments.pilot04_external_checker_runtime.public_runner_faults import RunnerFaults
 from tests.post_submit_materialization_helpers import archive_with_modes
 
 
@@ -85,6 +91,101 @@ async def _recover_failed_source(client, factory, route, headers, token, content
         _require(new_leases and all(lease['epoch'] != leases[0]['epoch'] for lease in new_leases),
                  'fresh execution did not use the restarted controller epoch')
     return await _observe_accepted_source(client, factory, task, assignment, token, archive, fresh_key, accepted)
+
+
+async def _trial_operation_ids(factory, task):
+    async with factory() as session:
+        return set(await session.scalars(select(SubmissionIntakeOperation.id).where(
+            SubmissionIntakeOperation.task_id == task)))
+
+
+async def _runner_drained(runner):
+    observed = await runner.command('drained')
+    result = observed['result']
+    _require(type(result.get('foreign_preserved')) is str and bool(result['foreign_preserved'])
+             and type(result.get('resources')) is dict
+             and set(result['resources']) == {'disks', 'leases', 'machines', 'cgroups'}
+             and all(type(value) is list and not value for value in result['resources'].values()),
+             'remote cleanup or exact foreign preservation is absent')
+    return observed
+
+
+async def public_pre_launch_failure(client, factory, *, task, assignment, token, archive,
+                                    runner: RunnerFaults, stop_worker, start_worker):
+    """Pause/restore only the isolated fixture's owned general POST consumer."""
+    try:
+        stop_worker()
+        return await _remote_pre_launch_failure(client, factory, task=task, assignment=assignment,
+            token=token, archive=archive, runner=runner)
+    finally:
+        await start_worker()
+
+
+async def _remote_pre_launch_failure(client, factory, *, task, assignment, token, archive, runner):
+    """One remote launch fault on an already approved/claimed current public task.
+
+    The actual locked-image-compatible ZIP is supplied by the caller. The general
+    POST worker must be paused for this exclusive trace window; the production
+    finalization worker remains live. Unknown command outcome propagates without
+    replaying that command or submitting a fresh candidate.
+    """
+    _require(not await _trial_operation_ids(factory, task), 'launch trial task already has intake custody')
+    route = f'/api/v1/tasks/{task}/submissions'
+    headers = {'Content-Type': 'application/zip', 'X-Task-Assignment-Id': assignment,
+               'X-Submission-Summary': 'Completed task evidence.',
+               'X-Contributor-Attestation': 'rights_confirmed; no confidential data or credentials.'}
+    installed = await runner.command('project_fail_once')
+    before = await runner.snapshot()
+    key = str(uuid4())
+    failure = await _source_request(client, route, headers, token, key, archive, 503)
+    _require(failure['error']['code'] == 'submission_infrastructure_unavailable',
+             'remote launch failure was not a known infrastructure refusal')
+    failed_cleanup = await _runner_drained(runner)
+    failed_trace = await runner.snapshot()
+    records = failed_trace['events'][before['cursor']:]
+    machines = assert_trace_launches(records, creates=1, executions=0)
+    assert_trace_launches(records, creates=0, executions=0, project=False)
+    row = await _selected(factory, key)
+    _require(row.status == 'infrastructure_failed' and row.terminal_json['execution'] is None
+             and row.terminal_json['infrastructure_failure_code'] == 'implementation_unavailable'
+             and row.request_json['policy']['entries'][0]['registry']['image_digest'] == runner.profile.image_digest,
+             'remote failed PRE lost exact selected image or terminal infrastructure custody')
+    operation = await _assert_source_failure(factory, task, key, len(archive), sealed=True,
+                                             code='submission_infrastructure_unavailable')
+    _require(operation.selected_pre_submit_run_id == row.id
+             and await _trial_operation_ids(factory, task) == {operation.id},
+             'launch failure created another operation or changed its exact PRE')
+    await runner.command('clear')
+    replay = await _source_request(client, route, headers, token, key, archive, 503)
+    repeated = await _selected(factory, key)
+    replay_trace = await runner.snapshot()
+    _require(replay == failure and (repeated.id, repeated.terminal_digest) == (row.id, row.terminal_digest)
+             and replay_trace['cursor'] == failed_trace['cursor']
+             and await _trial_operation_ids(factory, task) == {operation.id},
+             'same-key failure replay changed custody or allocated a native machine')
+    await _assert_source_failure(factory, task, key, len(archive), sealed=True,
+                                 code='submission_infrastructure_unavailable')
+    fresh_key = str(uuid4())
+    receipt = await _source_request(client, route, headers, token, fresh_key, archive, 202)
+    fresh = await _selected(factory, fresh_key)
+    _assert_current_pre(fresh)
+    _require(fresh.id != row.id and fresh.request_json['policy']['entries'][0]['registry']['image_digest']
+             == runner.profile.image_digest, 'recovery changed the exact selected image or reused failed PRE')
+    recovered_cleanup = await _runner_drained(runner)
+    recovered_trace = await runner.snapshot()
+    records = recovered_trace['events'][replay_trace['cursor']:]
+    assert_trace_launches(records, creates=1, executions=1)
+    assert_trace_launches(records, creates=0, executions=0, project=False)
+    saved = await _observe_accepted_source(client, factory, task, assignment, token, archive, fresh_key, receipt)
+    _require(await _trial_operation_ids(factory, task) == {operation.id, receipt['operation_id']},
+             'fresh-key recovery created extra operations')
+    return {'case': 'remote_pre_launch_failure', 'run_id': runner.profile.run_id,
+            'command': installed, 'failed_operation_id': operation.id, 'failed_pre_id': row.id,
+            'failure_key': key, 'recovery_key': fresh_key, 'recovery_receipt': receipt,
+            'failed_machines': machines, 'recovered_submission': saved,
+            'trace_before': before, 'trace_failed': failed_trace,
+            'trace_replay': replay_trace, 'trace_recovered': recovered_trace,
+            'failed_cleanup': failed_cleanup, 'recovered_cleanup': recovered_cleanup}
 
 
 async def public_runtime_trials(client, factory, env, root: Path, *, stop_worker, start_worker, operator_token):

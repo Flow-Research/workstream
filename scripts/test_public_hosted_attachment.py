@@ -1049,5 +1049,98 @@ finally:
         asyncio.run(exercise())
 
 
+class RemotePreLaunchContracts(unittest.TestCase):
+    def exercise(self, *, omit_delete=False, replay_allocates=False, wrong_image=False, unknown=False):
+        from experiments.pilot04_external_checker_runtime import public_runtime_trials as runtime
+        from experiments.pilot04_external_checker_runtime.public_runner_faults import FaultOutcomeUnknown
+
+        image = 'sha256:' + 'b' * 64
+        def events(name, operations):
+            lease = {'name': name, 'epoch': 'epoch', 'expires_ms': 100, 'lifetime_ms': 10}
+            return [{'operation': operation, 'name': name, 'project': True, 'lease': lease}
+                    for operation in operations]
+        failed = events('failed-vm', ['create', 'start'] + ([] if omit_delete else ['delete']))
+        replay = failed + (events('unexpected', ['create']) if replay_allocates else [])
+        recovered = replay + events('recovered-vm', ['create', 'start', 'exec', 'delete'])
+        traces = [{'cursor': len(records), 'events': records}
+                  for records in ([], failed, replay, recovered)]
+        cleanup = {'result': {'foreign_preserved': 'foreign-vm',
+                             'resources': {name: [] for name in ('disks', 'leases', 'machines', 'cgroups')}}}
+        commands, worker_events = [], []
+        async def resume():
+            worker_events.append('start')
+        class Runner:
+            profile = SimpleNamespace(image_digest=image, run_id='run')
+            async def command(self, action):
+                commands.append(action)
+                if unknown:
+                    raise FaultOutcomeUnknown('c' * 32)
+                return cleanup if action == 'drained' else {'command_id': 'c' * 32}
+            async def snapshot(self):
+                return traces.pop(0)
+        registry = {'image_digest': 'sha256:' + 'a' * 64 if wrong_image else image}
+        request = {'policy': {'entries': [{'registry': registry}]}}
+        failed_row = SimpleNamespace(id='failed-pre', terminal_digest='digest', request_json=request,
+            status='infrastructure_failed', terminal_json={'execution': None,
+                'infrastructure_failure_code': 'implementation_unavailable'})
+        fresh_row = SimpleNamespace(id='fresh-pre', request_json=request)
+        operation = SimpleNamespace(id='failed-operation', selected_pre_submit_run_id='failed-pre')
+        failure = {'error': {'code': 'submission_infrastructure_unavailable'}}
+        receipt = {'operation_id': 'fresh-operation', 'status': 'accepted', 'replayed': False}
+        source = AsyncMock(side_effect=[failure, failure, receipt])
+        accepted = AsyncMock(return_value={'submission_id': 'submission'})
+        with patch.object(runtime, '_trial_operation_ids', new=AsyncMock(side_effect=[set(),
+                {'failed-operation'}, {'failed-operation'}, {'failed-operation', 'fresh-operation'}])), \
+                patch.object(runtime, '_source_request', new=source), \
+                patch.object(runtime, '_selected', new=AsyncMock(side_effect=[failed_row, failed_row, fresh_row])), \
+                patch.object(runtime, '_assert_source_failure', new=AsyncMock(return_value=operation)) as failed_custody, \
+                patch.object(runtime, '_assert_current_pre') as current_pre, \
+                patch.object(runtime, '_observe_accepted_source', new=accepted):
+            try:
+                result = asyncio.run(runtime.public_pre_launch_failure(None, None, task='task', assignment='assignment',
+                    token='private-token', archive=b'actual-zip', runner=Runner(),
+                    stop_worker=lambda: worker_events.append('stop'), start_worker=resume))
+            finally:
+                self.assertEqual(worker_events, ['stop', 'start'])
+        self.assertEqual([call.args[-1] for call in source.await_args_list], [503, 503, 202])
+        self.assertEqual(source.await_args_list[0].args[4], source.await_args_list[1].args[4])
+        self.assertNotEqual(source.await_args_list[0].args[4], source.await_args_list[2].args[4])
+        self.assertEqual(failed_custody.await_args.kwargs, {'sealed': True, 'code': 'submission_infrastructure_unavailable'})
+        self.assertEqual(current_pre.call_args.args, (fresh_row,))
+        self.assertEqual(accepted.await_args.args[2:7], ('task', 'assignment', 'private-token', b'actual-zip',
+                                                      source.await_args_list[2].args[4]))
+        self.assertEqual(commands, ['project_fail_once', 'drained', 'clear', 'drained'])
+        self.assertEqual(result['failed_operation_id'], 'failed-operation')
+        self.assertEqual(result['recovered_submission'], {'submission_id': 'submission'})
+        return result
+
+    def test_remote_first_pre_preserves_known_failure_replay_and_real_t5_observer(self):
+        self.exercise()
+        for fault, message in (('omit_delete', 'lacks deletion'),
+                ('replay_allocates', 'same-key failure replay changed custody'),
+                ('wrong_image', 'failed PRE lost exact selected image')):
+            with self.subTest(fault=fault), self.assertRaisesRegex(RuntimeError, message):
+                self.exercise(**{fault: True})
+
+    def test_partial_owned_worker_pause_failure_still_restores_worker(self):
+        from experiments.pilot04_external_checker_runtime import public_runtime_trials as runtime
+        def failed_pause():
+            raise RuntimeError('owned pause failed')
+        resume = AsyncMock()
+        with patch.object(runtime, '_remote_pre_launch_failure', new=AsyncMock()) as vector:
+            with self.assertRaisesRegex(RuntimeError, 'owned pause failed'):
+                asyncio.run(runtime.public_pre_launch_failure(None, None, task='task', assignment='assignment',
+                    token='private-token', archive=b'actual-zip', runner=None,
+                    stop_worker=failed_pause, start_worker=resume))
+        resume.assert_awaited_once_with()
+        vector.assert_not_awaited()
+
+    def test_unknown_fault_command_stops_before_any_public_submission(self):
+        from experiments.pilot04_external_checker_runtime.public_runner_faults import FaultOutcomeUnknown
+        with self.assertRaises(FaultOutcomeUnknown) as error:
+            self.exercise(unknown=True)
+        self.assertEqual(error.exception.command_id, 'c' * 32)
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -10078,3 +10078,77 @@ This qualifies the actual native AWS source adapter/policies for this pilot;
 it does not prove deployed worker wiring, public hosted journey or C01–C07 limits.
 The hard-coded native-AWS admission exclusion can now be replaced with the
 qualified profile, followed by its focused T1 test and actual hosted activation.
+
+### Wire the first remote PRE launch-failure trial
+
+Intent: connect only the existing first project_fail_once public PRE vector to
+RunnerFaults. Allowed files are the existing runtime trial, native trace assertion
+owner, fixture guard module, this record and experiment documentation. The caller
+must supply an already approved/claimed current task, exact assignment/actor and
+actual locked-image-compatible ZIP. Reuse real public raw-ZIP intake, SQL custody
+reads and durable OUTBOX T5; do not create another setup or product fault endpoint.
+
+Acceptance: one failed operation with sealed exact charge/no accepted handoff,
+one native create/start/delete and no exec, same-key replay with unchanged terminal
+custody and no new remote trace events, then a fresh key accepted202 and real T5.
+Use acknowledged remote snapshots/cursors only; never compare local and runner
+monotonic values. Unknown SSH command/transport stops the trial without resend or
+fresh submission. Preserve actual lease and exact foreign-resource assertions.
+
+Risk: operator qualification code mutates an owned runner only when explicitly
+launched later. Prepare pinned runner-only source staging/start/restore commands
+for owner review. No SSH, service/configuration mutation, native run or paid call
+is authorized during the current V14 runner window. Verification here is focused
+caller/trace guard testing, static gates and root review, not live qualification.
+No roadmap capability is completed by this wiring. Other runtime vectors,
+remote disconnect restoration and original aggregate expiry remain unqualified.
+
+Implemented the isolated first-vector caller in public_runtime_trials. It accepts
+only a fresh existing task plus its exact assignment/token/compatible ZIP and the
+reviewed RunnerFaults profile; it does not repeat project setup or select a new
+image. The general POST consumer must be paused by its existing launcher owner,
+with the exclusive production finalizer still running. Existing local trial loops
+and CLI bootstrap are unchanged; the latter exposes worker startup only and is
+not silently treated as a fault launcher.
+
+The caller records acknowledged remote cursor snapshots around failure, replay
+and recovery, binds the persisted failed/fresh PRE to the exact profile image,
+requires the known infrastructure failure, sealed exact positive charge and one
+failed operation, then unchanged terminal replay with no trace growth. Only after
+conclusive failure and acknowledged clear does it submit a fresh key and delegate
+to existing real OUTBOX T5 observation. It rechecks failed custody after replay
+and requires exactly the failed and accepted operation IDs afterward. Unknown
+command ACKs propagate with the retained ID and no fresh source submission.
+
+Extracted the existing native launch/lease/deletion assertions into a pure trace
+assertion used unchanged by both filesystem and snapshot callers. AST comparison
+confirmed all original assertion statements unchanged after the input filter.
+The new guard valid control delegates the existing T5 observer and preserves exact
+503/503/202 selectors; independent missing-delete, replay-allocation and wrong-image
+controls fail their intended exact messages. An uncertain command retains its ID
+and prevents submission. These are mocked HTTP/SQL/SSH caller guards, not live
+fault/provider evidence. Final2guards passed33.404s at
+/tmp/submission-remote-pre-caller-v2.log (initial2passed78.049s before final
+replay-custody recheck and precise negative-message assertions).
+
+REMOTE_PRE_LAUNCH.md contains the runner-only reviewed source bundle/staging,
+independent manifest fields, exact current image/unit/config candidates, finite
+systemd supervisor and TERM restoration commands. The saved setup config has old
+cache pins and is explicitly insufficient current custody. No owner manifest or
+live source staging root was invented, and no permissions/cache are changed to
+fit a test. Missing independent custody blocks the live run. Roadmap scope is
+unchanged: this prepares qualification, not a new delivered product capability.
+No SSH connection, runner/app service mutation, native VM, paid request or live
+fault occurred. Actual remote launch failure/restoration remain unqualified.
+
+Root required explicit worker lifecycle ownership before live scheduling. The
+entry now requires the existing isolated fixture stop_worker/start_worker
+callbacks and restores that general worker in finally, including partial pause
+failure and unknown fault-command outcome. It never stops arbitrary deployed
+services. The final3caller guards passed26.830s at
+/tmp/submission-remote-pre-caller-final.log with these exact executable bytes;
+valid/negative vector controls and the owned-worker restoration paths ran.
+Structure validation exited0 (/tmp/submission-remote-pre-structure.log); after the
+small callback/test addition, a bounded AST check confirmed all added functions
+remain below120lines and the guard module remains below1200 without ledger edits.
+Ruff, links and whitespace pass. Commitrail is checked against the bridge base.

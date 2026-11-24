@@ -102,7 +102,13 @@ def trace_events(root):
 
 
 def assert_launches(root, start, *, creates, executions, project=True, shared_deadline=True):
-    events = [event for event in trace_events(root)[start:] if event['project'] is project]
+    return assert_trace_launches(trace_events(root)[start:], creates=creates, executions=executions,
+                                 project=project, shared_deadline=shared_deadline)
+
+
+def assert_trace_launches(records, *, creates, executions, project=True, shared_deadline=True):
+    """Check the same native custody sequence from a local or remote snapshot."""
+    events = [event for event in records if event['project'] is project]
     made = [event['name'] for event in events if event['operation'] == 'create']
     _trace_require(len(made) == creates and len(set(made)) == creates,
              'runtime retry did not allocate the expected fresh machines')

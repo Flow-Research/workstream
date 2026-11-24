@@ -227,3 +227,8 @@ Require the same-run cleanup receipt, original config hash, removed owned
 resources and exact foreign preservation/removal after disconnect. Missing or
 failed restoration stops qualification and requires owner recovery. No live SSH
 or native disconnect qualification is claimed by the local bridge guard tests.
+
+The first PRE launch-failure caller can now attach to `RunnerFaults` with an
+already approved/claimed current task and its real ZIP. See the bounded
+[runner staging and restore recipe](REMOTE_PRE_LAUNCH.md). Other trial loops
+remain operator-local; caller guards do not qualify an actual remote fault.
