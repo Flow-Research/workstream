@@ -60,3 +60,38 @@ def test_owned_worker_group_reaps_leader_and_term_resistant_child(tmp_path, canc
         leader.wait(timeout=5)
         if leader.stdout is not None:
             leader.stdout.close()
+
+
+def test_group_exit_between_snapshot_and_signal_is_already_drained(monkeypatch):
+    class Exited:
+        pid = 424242
+
+        def poll(self):
+            return 0
+
+        def wait(self, *, timeout):
+            return 0
+
+    observations = iter(({Exited.pid}, set(), set()))
+    monkeypatch.setattr(MODULE, "_live_group_members", lambda _: next(observations))
+    monkeypatch.setattr(
+        MODULE.os,
+        "killpg",
+        lambda *_: (_ for _ in ()).throw(ProcessLookupError()),
+    )
+    MODULE._stop_owned_group(Exited(), graceful_seconds=0, force_seconds=0)
+
+
+def test_failed_group_does_not_skip_other_owned_group(monkeypatch):
+    first, second = object(), object()
+    expected = RuntimeError("first group refused to drain")
+    observed = []
+
+    def stop(process):
+        observed.append(process)
+        if process is second:
+            raise expected
+
+    monkeypatch.setattr(MODULE, "_stop_owned_group", stop)
+    assert MODULE._stop_owned_groups([first, second]) is expected
+    assert observed == [second, first]

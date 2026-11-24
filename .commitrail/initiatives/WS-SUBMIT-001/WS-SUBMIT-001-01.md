@@ -10273,3 +10273,11 @@ grace. Real leader plus TERM-resistant child controls passed both normal and
 cancellation paths (2 cases); an in-memory predecessor leader-only stop failed
 the regression. Focused bucket/cleanup checks: 6 passed; Ruff and diff check
 passed. These are fixture checks, not a live runner-fault result.
+
+Root review found three teardown edges before integration. Exact group signals
+now accept a group exiting between observation and `killpg`; shutdown attempts
+every owned group and retains its first failure through log capture; a stopped
+general worker is removed from the active ownership list before restart so a
+stale process-group ID is never signalled later. Added focused race and
+attempt-all controls. Eight local fixture checks pass, including the two real
+process-group cases; the remote supervisor is still unstarted.

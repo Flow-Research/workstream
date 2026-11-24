@@ -42,8 +42,12 @@ def _stop_owned_group(
 ) -> None:
     """Stop and reap every live member of this start_new_session process group."""
     group_id = process.pid
-    if process.poll() is None and os.getpgid(group_id) != group_id:
-        raise RuntimeError("owned process is not its own group leader")
+    if process.poll() is None:
+        try:
+            if os.getpgid(group_id) != group_id:
+                raise RuntimeError("owned process is not its own group leader")
+        except ProcessLookupError:
+            pass
 
     def wait_until_empty(seconds: float) -> bool:
         deadline = time.monotonic() + seconds
@@ -56,9 +60,15 @@ def _stop_owned_group(
         return not _live_group_members(group_id)
 
     if _live_group_members(group_id):
-        os.killpg(group_id, signal.SIGTERM)
+        try:
+            os.killpg(group_id, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
     if not wait_until_empty(graceful_seconds):
-        os.killpg(group_id, signal.SIGKILL)
+        try:
+            os.killpg(group_id, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
         if not wait_until_empty(force_seconds):
             raise RuntimeError("owned process group retained live members")
     process.wait(timeout=1)
@@ -68,7 +78,10 @@ def _interrupt_owned_groups(processes: list[subprocess.Popen]) -> None:
     """Fan out cancellation before the isolation runner's two-second KILL grace."""
     for process in reversed(processes):
         if _live_group_members(process.pid):
-            os.killpg(process.pid, signal.SIGTERM)
+            try:
+                os.killpg(process.pid, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
     deadline = time.monotonic() + 1
     while time.monotonic() < deadline and any(
         _live_group_members(process.pid) for process in processes
@@ -76,7 +89,22 @@ def _interrupt_owned_groups(processes: list[subprocess.Popen]) -> None:
         time.sleep(0.05)
     for process in reversed(processes):
         if _live_group_members(process.pid):
-            os.killpg(process.pid, signal.SIGKILL)
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+
+
+def _stop_owned_groups(processes: list[subprocess.Popen]) -> BaseException | None:
+    """Attempt every owned group even when an earlier group refuses to drain."""
+    first_error = None
+    for process in reversed(processes):
+        try:
+            _stop_owned_group(process)
+        except BaseException as exc:
+            if first_error is None:
+                first_error = exc
+    return first_error
 
 
 def _required_file(environment: dict[str, str], name: str, *, limit: int) -> Path:
@@ -409,6 +437,7 @@ def durable_runtime(root: Path, directory: Path, environment: dict[str, str]):
                 if general_worker.poll() is not None:
                     raise RuntimeError("owned general worker already exited")
                 _stop_owned_group(general_worker)
+                processes.remove(general_worker)
 
             async def start_general_worker():
                 nonlocal general_worker
@@ -427,19 +456,22 @@ def durable_runtime(root: Path, directory: Path, environment: dict[str, str]):
 
         yield start_workers
     finally:
+        shutdown_error = _stop_owned_groups(processes)
         try:
-            for process in reversed(processes):
-                _stop_owned_group(process)
-        finally:
             signal.signal(signal.SIGTERM, previous_sigterm)
             for log in logs:
                 log.close()
-        if location := os.environ.get("WORKSTREAM_CLI_JOURNEY_EVIDENCE"):
-            retained = Path(location) / "runtime-logs"
-            retained.mkdir(mode=0o700, parents=True)
-            for source in directory.glob("*.log"):
-                target = retained / source.name
-                with target.open("xb") as destination:
-                    target.chmod(0o600)
-                    with source.open("rb") as incoming:
-                        shutil.copyfileobj(incoming, destination)
+            if location := os.environ.get("WORKSTREAM_CLI_JOURNEY_EVIDENCE"):
+                retained = Path(location) / "runtime-logs"
+                retained.mkdir(mode=0o700, parents=True)
+                for source in directory.glob("*.log"):
+                    target = retained / source.name
+                    with target.open("xb") as destination:
+                        target.chmod(0o600)
+                        with source.open("rb") as incoming:
+                            shutil.copyfileobj(incoming, destination)
+        except BaseException as exc:
+            if shutdown_error is None:
+                shutdown_error = exc
+        if shutdown_error is not None:
+            raise shutdown_error
