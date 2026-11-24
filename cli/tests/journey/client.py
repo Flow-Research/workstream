@@ -26,7 +26,7 @@ class JourneyClient:
         self.completed_stages.append(stage)
         print(json.dumps({"stage": stage, "result": "passed"}), flush=True)
 
-    def call(self, token: str, *arguments: str, expected_exit: int = 0):
+    def call(self, token: str, *arguments: str, expected_exit: int | None = 0):
         environment = {
             key: value
             for key, value in os.environ.items()
@@ -59,7 +59,9 @@ class JourneyClient:
                     },
                     stream,
                 )
-        if result.returncode != expected_exit:
+        if result.returncode not in (
+            {0, 1} if expected_exit is None else {expected_exit}
+        ):
             evidence = Path(tempfile.mkdtemp(prefix="workstream-cli-failure-"))
             (evidence / "stdout.json").write_text(result.stdout)
             (evidence / "stderr.json").write_text(result.stderr)

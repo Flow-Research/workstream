@@ -9286,6 +9286,7 @@ fresh migrated isolated database; the deliberately absent operation yielded
 the expected missing-graph assertion, and that database was cleaned. A
 successful live graph is still pending the next end-to-end run.
 
+
 ### Retire qualification-script preparation callers
 
 Release image guards exposed an import of removed preparation composition from
@@ -9399,3 +9400,15 @@ exactly one sheet named WorkStream RoadMap and gitignore exclusion. Markdown
 links, stale authorization/review scans and diff checks pass. Full Go CLI
 suite also passed on4652f39bd (/tmp/submission-cli-go-current.log); later changes
 touch qualification scripts/docs only. Latest main fetch found0missing commits.
+
+The next isolated public drill exposed a guide dispatch transport uncertainty:
+the CLI's ordinary 12-second HTTP deadline returned `service_unavailable` with
+`outcome_unknown=true` after the request entered the API. The journey now
+reads the public setup before dispatch, observes the same setup after such an
+unknown response, and replays only the identical compile command and
+idempotency key within three bounded attempts. It refuses changed setup
+identity, generation or source, failed setup, conclusive errors, and a receipt
+that names another setup. Eight focused regressions cover the recovered and
+refused cases. This is a journey caller repair; it does not extend the CLI
+deadline or claim a completed PRE/POST run. The diagnostic run's isolated
+database and bucket cleanup completed.

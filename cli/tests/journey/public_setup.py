@@ -274,6 +274,58 @@ def publish_unpaid_terms(client, token, project_id):
     return policy
 
 
+def _request_compilation_with_unknown_recovery(client, token, command, setup_selector):
+    """Observe same-setup custody before replaying one lost dispatch response."""
+    project_id, guide_id = setup_selector[-2:]
+    before = client.call(token, *setup_selector)
+    if before["project_id"] != project_id or before["guide_id"] != guide_id:
+        raise AssertionError("public setup identity differs before compilation")
+    # A short JSON client deadline may lose only the dispatch acknowledgement.
+    # Read the retained setup first, then replay the identical command/key.
+    # The original failure remains in the CLI receipt evidence.
+    for attempt in range(3):
+        candidate = client.call(token, *command, expected_exit=None)
+        if "error" not in candidate:
+            if (
+                candidate["setup_run_id"] != before["id"]
+                or candidate["setup_generation"] != before["setup_generation"]
+            ):
+                raise AssertionError("guide dispatch acknowledgement changed setup")
+            requested = candidate
+            break
+        if candidate["error"] != {
+            "code": "service_unavailable",
+            "outcome_unknown": True,
+        }:
+            raise AssertionError("guide dispatch failed conclusively")
+        observed = client.call(token, *setup_selector)
+        if any(
+            observed[field] != before[field]
+            for field in (
+                "id",
+                "project_id",
+                "guide_id",
+                "source_snapshot_id",
+                "setup_generation",
+            )
+        ):
+            raise AssertionError("guide setup changed during unknown dispatch")
+        if observed["status"] in {
+            "failed",
+            "guide_blocked",
+            "compilation_invalid_terminal",
+        }:
+            raise AssertionError("unknown guide dispatch reached failed terminal state")
+        if attempt == 2:
+            raise AssertionError(
+                "guide dispatch remained outcome-unknown after observation"
+            )
+        time.sleep(1)
+    else:
+        raise AssertionError("guide dispatch produced no acknowledged receipt")
+    return requested
+
+
 def approve_and_activate(client, token, project_id, guide_id, registry_entries):
     command = (
         "project",
@@ -284,7 +336,10 @@ def approve_and_activate(client, token, project_id, guide_id, registry_entries):
         "--idempotency-key",
         str(uuid4()),
     )
-    requested = client.call(token, *command)
+    setup_selector = ("project", "guide", "setup", project_id, guide_id)
+    requested = _request_compilation_with_unknown_recovery(
+        client, token, command, setup_selector
+    )
     replay = client.call(token, *command)
     # Dispatch status may advance while the same durable request is replayed.
     for field in ("operation_id", "setup_run_id", "setup_generation"):
@@ -293,7 +348,7 @@ def approve_and_activate(client, token, project_id, guide_id, registry_entries):
     setup = poll(
         client,
         token,
-        ("project", "guide", "setup", project_id, guide_id),
+        setup_selector,
         lambda value: value["finalized_compilation_id"] is not None,
     )
     if (
