@@ -67,6 +67,7 @@ REMOTE_RUNNER_KEYS = (
     "WORKSTREAM_EXTERNAL_RUNNER_PRIVATE_KEY_FILE",
     *INTAKE_DIGEST_KEYS,
 )
+REMOTE_RUNNER_SECRET_FILE_KEYS = REMOTE_RUNNER_KEYS[3:6]
 REMOTE_RUNNER_ENVIRONMENT_KEYS = (
     "WORKSTREAM_EXTERNAL_RUNNER_HOST",
     "WORKSTREAM_EXTERNAL_RUNNER_PORT",
@@ -221,12 +222,7 @@ ROLE_SECRET_FILE_KEYS = {
         "WORKSTREAM_DATABASE_URL_FILE",
         "WORKSTREAM_CELERY_BROKER_URL_FILE",
     ),
-    "model-proxy": (
-        "WORKSTREAM_DATABASE_URL_FILE",
-        "WORKSTREAM_EXTERNAL_RUNNER_CA_FILE",
-        "WORKSTREAM_EXTERNAL_RUNNER_CERTIFICATE_FILE",
-        "WORKSTREAM_EXTERNAL_RUNNER_PRIVATE_KEY_FILE",
-    ),
+    "model-proxy": ("WORKSTREAM_DATABASE_URL_FILE",),
 }
 FORBIDDEN_RELEASE_KEYS = (
     "WORKSTREAM_GITHUB_APP_PRIVATE_KEY",
@@ -1731,6 +1727,12 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
             )
         required_file_keys = set(_role_secret_file_keys(role, values))
         for key, (_, target) in SECRET_FILE_TARGETS.items():
+            if key in REMOTE_RUNNER_SECRET_FILE_KEYS:
+                if key in environment:
+                    raise PreflightError(
+                        f"{role} contains a host-only secret selector: {key}"
+                    )
+                continue
             if key in required_file_keys:
                 if environment.get(key) != target:
                     raise PreflightError(
@@ -1840,7 +1842,7 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
                     else {}
                 ),
             }
-            if name in {"api", "worker"} or (name == "model-proxy" and model_proxy_enabled)
+            if name in {"api", "worker"}
             else {}
         )
         if {

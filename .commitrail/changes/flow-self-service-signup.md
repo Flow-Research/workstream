@@ -443,3 +443,10 @@ Smol leases empty. Focused local remote transport/intake coverage passed 85
 tests. Successful-checker public acceptance and a real model-callback provider
 journey remain explicit integration qualifications, not claims from the
 transport smoke tests.
+
+The hosted regression profile now contains 58 app-only/remote-runner cases. It
+proves that only API and worker receive runner TLS identity, while only the
+worker receives the read-only app-local model callback socket. Foreground PRE
+uses `execute_pre`, whose contract prohibits model, trial and build grants;
+POST and setup/trial callback execution remains worker-owned. The profile
+contains no app-host native checker/socket readiness fallback.
