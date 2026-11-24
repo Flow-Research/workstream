@@ -3,11 +3,18 @@
 import json
 import secrets
 import time
+from dataclasses import replace
 from datetime import timedelta
+from uuid import UUID
 
 import asyncpg
 
 from app.core.identifiers import new_record_id
+from app.modules.checkers.api.historical_selected_pre_submit import (
+    HistoricalSelectedPreSubmitReservation,
+    HistoricalSelectedPreSubmitTerminal,
+)
+from tests.checkers.external.test_selected_pre_submit_coordination import _retained_v1
 from tests.test_tasks import set_dev_actor
 from .support import ME, MANAGER, OWNER, get_ok, preparations_path, submitted_case
 
@@ -33,8 +40,79 @@ async def _clone(connection, table, template, varying, constant=None):
     )
 
 
+async def _retained_preparation_clones(connection, template, start, *, preparations):
+    """Scale-only canonical v1 history; borrow real audit FKs, never claim owner issuance."""
+    captured = _retained_v1("selected_pre_v1_completed")
+    request = HistoricalSelectedPreSubmitReservation.from_canonical_body(captured["request"])
+    terminal = HistoricalSelectedPreSubmitTerminal.from_canonical_body(captured["terminal"])
+    owner = await connection.fetchrow(
+        "SELECT actor_profile_id, identity_link_id, project_id, task_id, assignment_id "
+        "FROM public.selected_pre_submit_runs WHERE id=$1", template,
+    )
+    assert owner is not None
+    identifiers = {
+        "actor_profile_id": UUID(str(owner["actor_profile_id"])),
+        "identity_link_id": UUID(str(owner["identity_link_id"])),
+        "project_id": UUID(str(owner["project_id"])),
+        "task_id": UUID(str(owner["task_id"])),
+        "assignment_id": UUID(str(owner["assignment_id"])),
+    }
+    runs = [new_record_id() for _ in range(preparations)]
+    constant = {
+        "source_operation_id": "NULL", "status": "'completed'", "eligible": "TRUE",
+        "lease_generation": "1", "policy_sha256": f"'{request.policy_sha256}'",
+        "default_behavior_sha256": f"'{request.default_behavior_sha256}'",
+        "default_input_sha256": f"'{request.default_input_sha256}'",
+        "archive_sha256": f"'{request.archive_sha256}'",
+        "archive_byte_count": str(request.archive_byte_count),
+        "semantic_manifest_sha256": f"'{request.semantic_manifest_sha256}'",
+        "execution_budget_ms": str(request.execution_budget_ms),
+    }
+    for offset in range(0, preparations, 500):
+        batch = runs[offset:offset + 500]
+        values = {name: [] for name in (
+            "id", "idempotency_key", "prepared_generation_id", "request_json",
+            "request_digest", "terminal_json", "terminal_digest", "lease_id",
+            "queued_at", "started_at", "completed_at", "lease_expires_at",
+        )}
+        for index, run_id in enumerate(batch, start=offset):
+            queued_at = start - timedelta(seconds=preparations - index)
+            started_at, completed_at = queued_at + timedelta(milliseconds=10), queued_at + timedelta(milliseconds=20)
+            current = replace(
+                request, **identifiers, attempt_id=run_id, idempotency_key=new_record_id(),
+                prepared_generation_id=new_record_id(), admission_lineage=None,
+                attempt_request_digest="sha256:" + secrets.token_hex(32),
+            )
+            lease = replace(
+                terminal.lease, reservation=current, lease_id=new_record_id(),
+                lease_expires_at=queued_at + timedelta(seconds=60),
+            )
+            completed = replace(
+                terminal, lease=lease, queued_at=queued_at, started_at=started_at,
+                completed_at=completed_at,
+            )
+            for name, value in (
+                ("id", run_id), ("idempotency_key", current.idempotency_key),
+                ("prepared_generation_id", current.prepared_generation_id),
+                ("request_json", json.dumps(current.canonical_body())),
+                ("request_digest", current.request_digest),
+                ("terminal_json", json.dumps(completed.canonical_body())),
+                ("terminal_digest", completed.terminal_digest),
+                ("lease_id", lease.lease_id), ("queued_at", queued_at),
+                ("started_at", started_at), ("completed_at", completed_at),
+                ("lease_expires_at", lease.lease_expires_at),
+            ):
+                values[name].append(value)
+        await _clone(connection, "selected_pre_submit_runs", template, {
+            name: ("jsonb" if name.endswith("_json") else "timestamptz" if name.endswith("_at")
+                   else "text" if name.endswith("_digest") else "uuid", entries)
+            for name, entries in values.items()
+        }, constant)
+    return runs
+
+
 async def _seed(database_url, task, submission, *, preparations=PREPARATIONS):
-    """Clone the real claimed task, assignment, attempt and ``preparations`` runs under bulk restore."""
+    """Bulk-restore 10k tasks, 20k submissions and canonical v1 read-history rows."""
     connection = await asyncpg.connect(database_url.replace("+asyncpg", ""))
     try:
         start = await connection.fetchval("SELECT updated_at FROM public.workstream_tasks WHERE id=$1", task)
@@ -64,15 +142,7 @@ async def _seed(database_url, task, submission, *, preparations=PREPARATIONS):
                     "submission_bundle_admission_id", "artifact_binding_id", "artifact_content_id",
                     "supersedes_submission_id",
                 ), "NULL")})
-            runs = [new_record_id() for _ in range(preparations)]
-            await _clone(connection, "selected_pre_submit_runs", run, {
-                "id": ("uuid", runs), "idempotency_key": ("uuid", [new_record_id() for _ in runs]),
-                "request_digest": ("text", ["sha256:" + secrets.token_hex(32) for _ in runs]),
-                "queued_at": ("timestamptz", [start + timedelta(seconds=index + 1) for index in range(preparations)]),
-            }, {"status": "'queued'", "lease_generation": "0", **dict.fromkeys((
-                "terminal_json", "terminal_digest", "eligible", "lease_id", "lease_expires_at", "started_at",
-                "completed_at", "execute_evidence_id", "finalize_evidence_id",
-            ), "NULL")})
+            runs = await _retained_preparation_clones(connection, run, start, preparations=preparations)
             # Settle deferred foreign keys (including the nullable intake pointer)
             # before ALTER TABLE; none are disabled during this fixture restore.
             await connection.execute("SET CONSTRAINTS ALL IMMEDIATE")
@@ -120,7 +190,7 @@ async def test_pages_and_summary_meet_budget_at_scale(task_client, monkeypatch, 
         walked += [item["preparation_id"] for item in step["items"]]
         if (cursor := step["next_cursor"]) is None:
             break
-    assert walked[:PREPARATIONS] == [str(run) for run in reversed(runs)] and len(set(walked)) == PREPARATIONS + 1
+    assert walked == [str(run) for run in reversed(runs)]
     summary = await get_ok(task_client, f"{ME}/summary")
     assert summary["assignments"]["active"] == TASKS + 1
     assert sum(summary["submissions"].values()) == TASKS * SUBMISSIONS_PER_TASK + 1

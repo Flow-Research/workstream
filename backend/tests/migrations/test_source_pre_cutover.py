@@ -5,6 +5,7 @@ import gzip
 import hashlib
 import json
 from pathlib import Path
+from uuid import UUID
 
 import asyncpg
 import pytest
@@ -194,7 +195,7 @@ async def _upgrade_admission_guard_behind_writer(url):
     try:
         async with writer.transaction():
             await writer.execute('LOCK TABLE public.submission_bundle_admissions IN ROW EXCLUSIVE MODE')
-            migration = asyncio.create_task(asyncio.to_thread(command.upgrade, _config(), current_schema_revision()))
+            migration = asyncio.create_task(asyncio.to_thread(command.upgrade, _config(), '0084_submission_source_binding'))
 
             async def wait_for_lock():
                 while True:
@@ -235,17 +236,52 @@ async def test_source_binding_cutover_preserves_history_and_closes_old_consumpti
             if state == 'ready':
                 await _upgrade_admission_guard_behind_writer(isolated_database_env)
             else:
-                await asyncio.to_thread(command.upgrade, _config(), current_schema_revision())
+                await asyncio.to_thread(command.upgrade, _config(), '0084_submission_source_binding')
             after, new_functions = await _retained_rows_and_functions(isolated_database_env, snapshot['tables'])
-            await asyncio.to_thread(command.upgrade, _config(), current_schema_revision())
-            assert await _retained_rows_and_functions(isolated_database_env, snapshot['tables']) == (after, new_functions)
             assert after == before
             assert set(old_functions) == set(new_functions)
             assert {k for k in old_functions if old_functions[k] != new_functions[k]} == {'guard_submission_bundle_admission_lineage()'}
+            await asyncio.to_thread(command.upgrade, _config(), current_schema_revision())
+            current_rows, _ = await _retained_rows_and_functions(isolated_database_env, snapshot['tables'])
+            assert current_rows == after
             if state == 'ready':
                 await _refuse_old_consumption_and_allow_stale(
                     isolated_database_env, snapshots['consumed']['tables']['submission_bundle_admissions'][0],
                 )
+            else:
+                from app.adapters.artifacts import submission_bundle_preparation_reader
+                from app.core.identifiers import new_record_id
+
+                run = snapshot['tables']['selected_pre_submit_runs'][0]
+                admission = snapshot['tables']['submission_bundle_admissions'][0]
+                async with db_session.get_session_factory()() as session:
+                    reader = submission_bundle_preparation_reader(session)
+                    (detail,), more = await reader.read(
+                        actor_profile_id=UUID(run['actor_profile_id']), task_id=UUID(run['task_id']),
+                        preparation_id=UUID(run['id']), limit=2, before=None,
+                    )
+                    (project_item,), project_more = await reader.read_project(
+                        project_id=UUID(run['project_id']), outcome='passed', limit=2, before=None,
+                    )
+                    foreign, foreign_more = await reader.read(
+                        actor_profile_id=new_record_id(), task_id=UUID(run['task_id']),
+                        preparation_id=UUID(run['id']), limit=2, before=None,
+                    )
+                assert not more and not project_more
+                assert foreign == () and not foreign_more
+                assert detail.preparation_id == UUID(run['id'])
+                assert (detail.outcome, detail.state, detail.submission_id) == (
+                    'passed', 'submitted', UUID(admission['consumed_by_submission_id']),
+                )
+                assert detail.archive_sha256 == run['archive_sha256']
+                assert detail.archive_byte_count == run['archive_byte_count']
+                assert detail.findings and {item['source'] for item in detail.findings} >= {'workstream_default'}
+                assert project_item.preparation_id == detail.preparation_id
+                assert project_item.actor_profile_id == UUID(run['actor_profile_id'])
+                assert (project_item.outcome, project_item.state, project_item.submission_id) == (
+                    detail.outcome, detail.state, detail.submission_id,
+                )
+                assert 'findings' not in project_item.model_dump()
         finally:
             await _drop_test_database_schema(isolated_database_env)
             await asyncio.to_thread(command.upgrade, _config(), current_schema_revision())

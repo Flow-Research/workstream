@@ -16,7 +16,7 @@ from app.modules.checkers.api.selected_pre_submit import SelectedPreSubmitUnavai
 
 
 class ProjectPreparationReads:
-    """C8: a project's ZIP preparations across contributors, newest first, with finding counts only."""
+    """C8: historical project ZIP preparations, newest first, with counts only."""
 
     def __init__(self, runner: ProjectManagementReadRunner, preparations: SubmissionBundlePreparationReadPort):
         """Compose the read runner with the ART preparation projection."""

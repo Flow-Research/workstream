@@ -72,7 +72,7 @@ def _view(row: SelectedPreSubmitRun, *, source_contracts: SelectedPreSubmitSourc
 
 
 class SelectedPreSubmitRunReader:
-    """Fixed columns and revalidated terminal bodies, newest first by ``(queued_at, id)``."""
+    """Retained preparation history, newest first by ``(queued_at, id)``."""
 
     def __init__(self, session: AsyncSession, *, source_contracts: SelectedPreSubmitSourceContracts) -> None:
         """Read in the caller's response transaction."""
@@ -90,10 +90,13 @@ class SelectedPreSubmitRunReader:
         return tuple(_view(row, source_contracts=self._source_contracts) for row in rows[:limit]), len(rows) > limit
 
     async def read_contributor_runs(self, *, actor_profile_id, task_id, run_id, limit, before):
-        """One contributor's runs for one task, optionally one exact run."""
+        """One contributor's retained v1 runs; source-v2 uses operation progress."""
         run = SelectedPreSubmitRun
+        # A v1 body on a source-linked row is excluded; _view validates the
+        # remaining body's schema and indexed identity before disclosure.
         statement = select(run).where(
             run.actor_profile_id == str(actor_profile_id), run.task_id == str(task_id),
+            run.source_operation_id.is_(None),
         )
         if run_id is not None:
             statement = statement.where(run.id == str(run_id))
@@ -103,9 +106,10 @@ class SelectedPreSubmitRunReader:
         self, *, project_id: UUID, statuses: tuple[SelectedPreSubmitRunStatus, ...] | None,
         eligible: bool | None, limit: int, before,
     ):
-        """Every contributor's runs in one project, filtered by stored status and eligibility."""
+        """Retained v1 runs in one project, filtered by stored outcome facts."""
         run = SelectedPreSubmitRun
         statement = select(run).where(run.project_id == str(project_id))
+        statement = statement.where(run.source_operation_id.is_(None))
         if statuses is not None:
             statement = statement.where(run.status.in_(statuses))
         if eligible is not None:

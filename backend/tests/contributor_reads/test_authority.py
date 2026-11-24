@@ -19,7 +19,7 @@ LISTS = ("assignments", "submissions")
 
 async def _preparation(task):
     async with db_session.get_session_factory()() as session:
-        return await session.scalar(select(SelectedPreSubmitRun.id).where(SelectedPreSubmitRun.task_id == task))
+        return await session.scalar(select(SelectedPreSubmitRun).where(SelectedPreSubmitRun.task_id == task))
 
 
 async def test_another_contributor_never_receives_the_owners_records(task_client, monkeypatch):
@@ -32,7 +32,7 @@ async def test_another_contributor_never_receives_the_owners_records(task_client
     summary = await get_ok(task_client, f"{ME}/summary", project_id=project)
     assert summary["assignments"] == {"active": 0, "closed": 0} and not any(summary["submissions"].values())
     assert await status_of(task_client, preparations_path(task)) == 404
-    assert await status_of(task_client, f"{preparations_path(task)}/{preparation}") == 404
+    assert await status_of(task_client, f"{preparations_path(task)}/{preparation.id}") == 404
 
 
 async def test_project_filter_without_a_submitter_grant_is_not_found(task_client, monkeypatch):
@@ -70,7 +70,7 @@ async def test_revoked_submitter_loses_every_own_work_read(task_client, monkeypa
         assert (await get_ok(task_client, f"{ME}/{name}"))["items"] == []
         assert await status_of(task_client, f"{ME}/{name}", project_id=project) == 404
     assert await status_of(task_client, preparations_path(task)) == 404
-    assert await status_of(task_client, f"{preparations_path(task)}/{preparation}") == 404
+    assert await status_of(task_client, f"{preparations_path(task)}/{preparation.id}") == 404
     assert (await get_ok(task_client, f"{ME}/projects"))["items"] == []
 
 
@@ -81,11 +81,17 @@ async def test_preparation_of_another_contributor_is_not_found(task_client, monk
     foreign = await _preparation(foreign_task)
     set_dev_actor(monkeypatch, roles="", subject=OWNER)
     assert await status_of(task_client, preparations_path(foreign_task)) == 404
-    assert await status_of(task_client, f"{preparations_path(foreign_task)}/{foreign}") == 404
-    assert await status_of(task_client, f"{preparations_path(own_task)}/{foreign}") == 404
+    assert await status_of(task_client, f"{preparations_path(foreign_task)}/{foreign.id}") == 404
+    assert await status_of(task_client, f"{preparations_path(own_task)}/{foreign.id}") == 404
     assert await status_of(task_client, f"{preparations_path(own_task)}/{new_record_id()}") == 404
     set_dev_actor(monkeypatch, roles="", subject=OTHER)
-    assert (await get_ok(task_client, f"{preparations_path(foreign_task)}/{foreign}"))["preparation_id"] == foreign
+    assert await status_of(task_client, f"{preparations_path(foreign_task)}/{foreign.id}") == 404
+    assert foreign.source_operation_id is not None
+    progress = await get_ok(
+        task_client, f"/api/v1/tasks/{foreign_task}/submission-operations",
+        operation_id=foreign.source_operation_id,
+    )
+    assert progress["operation_id"] == foreign.source_operation_id
 
 
 async def test_each_read_commits_its_exact_decision_and_denials(task_client, monkeypatch):

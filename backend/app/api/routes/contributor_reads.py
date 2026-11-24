@@ -82,7 +82,7 @@ async def read_my_summary(reads: Reads, project_id: UUID | None = None) -> Contr
 async def list_my_preparations(
     task_id: UUID, reads: Reads, limit: PageLimit = 25, cursor: PageCursor = None,
 ) -> SubmissionBundlePreparationPage:
-    """Your ZIP preparations for one task you hold or held, newest first."""
+    """Your historical ZIP preparations for one task, newest first."""
     return await reads.preparations(task_id=task_id, limit=limit, cursor=cursor)
 
 
@@ -94,5 +94,5 @@ async def list_my_preparations(
 async def read_my_preparation(
     task_id: UUID, preparation_id: UUID, reads: Reads,
 ) -> SubmissionBundlePreparationDetail:
-    """One of your preparations with every intake finding; others are not found."""
+    """One historical preparation with its intake findings; others are not found."""
     return await reads.preparation(task_id=task_id, preparation_id=preparation_id)

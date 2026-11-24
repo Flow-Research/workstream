@@ -1,4 +1,4 @@
-"""A Project Manager reads a project's ZIP preparations across contributors."""
+"""A Project Manager reads historical ZIP preparations across contributors."""
 
 from typing import Annotated
 from uuid import UUID
@@ -27,7 +27,7 @@ async def list_project_preparations(
     limit: Annotated[int, Query(ge=1, le=100)] = 50,
     cursor: Annotated[str | None, Query(min_length=1, max_length=512)] = None,
 ) -> ProjectSubmissionBundlePreparationPage:
-    """Every contributor's ZIP preparations, newest first, with finding counts and no findings or files.
+    """Historical ZIP preparations, newest first, with counts and no findings or files.
 
     ``outcome=failed`` lists completed intake checks that blocked the ZIP.
     """
