@@ -8731,3 +8731,31 @@ cases then passed in45.39s; /tmp/submission-public-nonremediation-repair.json
 records schema0090 and complete database/MinIO cleanup (launcher02920f9ff with
 final test edits). Structure, Ruff and diff checks passed. This is controlled
 storage failure plus real HTTP/SQL authority proof, not live provider acceptance.
+
+QA closed b976a7d2d PASS WITH LOW RISKS; no lost refusal/infrastructure assertions.
+Next bounded retirement migrates the upload-time superseded revision cause test
+onto public raw-ZIP intake. Allowed: predecessor custody test and this record.
+Preserve real checker-fence advancement during body consumption, refusal before
+PRE/admission/Submission, and current-context denial. Unlike obsolete scratch
+preparation, the new source upload has durable cleanup custody: assert sealed
+charged source survives failed intake without acceptance/finalization. Remove
+only now-unused local preparation helper/imports. No production/schema changes.
+Medium workflow-test risk; isolated PostgreSQL race test, Ruff/structure and
+focused QA review. Human focus: no late acceptance or false quota release.
+
+The upload-fence race passed in42.64s with schema0090 and full PostgreSQL/MinIO
+cleanup (/tmp/submission-public-upload-fence-sized.json; launcher8fa9ae12c with
+final test edits). The first request hit429 before the race because an unknown
+stream length reserved the configured maximum; supplying the exact content
+length exercises the intended race without weakening quota. Actual body read
+advances the checker fence; fresh context refuses before any PRE reservation,
+operation ends failed and its sealed source stays fully charged for cleanup.
+One existing POST fixture Pydantic serialization warning was emitted. Ruff/diff
+passed. Removed the now-unused local preparation helper and its dependencies.
+
+Runner repair a64729edc integrated as8fa9ae12c. Scoped ARCH/SEC replay passed:
+callback connection ownership, proxy cancellation and known workspace residue
+reconciliation findings closed. The initially suspected missing worker model
+socket was retracted after checking the selected inference Compose overlay.
+Agent reports112 focused tests; real provider callbacks and complete public
+acceptance remain unqualified. No app deployment or restart occurred.

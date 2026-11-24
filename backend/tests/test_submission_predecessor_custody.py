@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-from unittest.mock import patch
-from tests.trusted_intake_fixtures import LocalIntakeAdapter
 
 from dataclasses import replace
 from io import BytesIO
@@ -14,25 +12,17 @@ from uuid import UUID
 from zipfile import ZipFile
 
 import pytest
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.exc import DBAPIError, IntegrityError
-from starlette.requests import Request
 
 from app.adapters.checkers import evaluation_coordinator
-from app.adapters.artifacts import get_submission_bundle_preparation_command
 from app.adapters.tasks import task_post_submit_outcome
 from app.adapters.artifacts.local import LocalStorageAdapter
 from app.core.identifiers import new_record_id
 from app.core.hashing import canonical_json_hash
-from app.modules.actors.api.service_identities import ServiceIdentity
 from app.interfaces.artifacts import ArtifactStoreUnavailableError
 from app.modules.artifacts.api import (
-    SubmissionBundlePreparationRejected,
     SubmissionBundlePreparationRequest,
-)
-from app.modules.artifacts.authorization import (
-    PreparedArtifactInternalAuthority,
-    PreparedSubmissionBundlePreparationAuthorization,
 )
 from app.modules.checkers.models import CheckerRun, SelectedPreSubmitRun
 from app.modules.artifacts.models import (
@@ -74,18 +64,6 @@ def _trace_provider_writes(monkeypatch: pytest.MonkeyPatch, *, operations=("put"
     return calls
 
 
-def _http_request(settings) -> Request:
-    return Request(
-        {
-            "type": "http",
-            "headers": [],
-            "app": SimpleNamespace(
-                state=SimpleNamespace(
-                    settings=settings,
-                )
-            ),
-        }
-    )
 
 
 def _replacement_request(h, data: bytes, *, predecessor_id: UUID, idempotency_key: UUID):
@@ -111,22 +89,6 @@ def _replacement_request(h, data: bytes, *, predecessor_id: UUID, idempotency_ke
     )
 
 
-async def _prepare(h, request: SubmissionBundlePreparationRequest):
-    http = _http_request(h.settings)
-    async with h.factory() as session:
-        internal = PreparedArtifactInternalAuthority(
-            session,
-            service_identity=ServiceIdentity.ARTIFACT_PUT_RESOLVER,
-            request_id=new_record_id(),
-            correlation_id=new_record_id(),
-        )
-        with patch("app.adapters.artifacts.trusted_submission_intake", return_value=LocalIntakeAdapter()):
-            return await get_submission_bundle_preparation_command(
-                http,
-                session,
-                internal,
-                PreparedSubmissionBundlePreparationAuthorization(session, h.actor_context),
-            ).prepare(request)
 
 
 async def _fixture_revision_context(h):
@@ -892,45 +854,53 @@ async def test_nonremediation_outcome_cannot_authorize_replacement_before_bytes(
             await no_economic_effects(session)
 
 
-async def test_source_superseded_during_zip_read_stops_before_art_effects(
+async def test_source_superseded_during_zip_read_refuses_acceptance(
     tmp_path, isolated_database_env, monkeypatch,
 ):
+    from app.modules.artifacts.intake.models import SubmissionIntakeOperation, SubmissionSourceCharge
+    from tests.tasks.submission_dispatch.test_revision_capacity import _revision_http_runtime, _revision_upload_headers
+    from tests.tasks.test_public_submission_intake import _client
+
     provider_writes = _trace_provider_writes(monkeypatch)
     async with remediation_source(tmp_path, isolated_database_env) as h:
         source_id = await _fixture_revision_context(h)
         async with h.factory.begin() as session:
-            current = await task_submission_context_port(session).lock_submission_context(
-                _context_request(h)
-            )
+            current = await task_submission_context_port(session).lock_submission_context(_context_request(h))
             assert current.checker_remediation_manifest_id == source_id
         before = await _snapshot(h)
         provider_writes.clear()
         opened = []
+        data = revision_archive(h.data)
 
         async def superseding_bytes():
             opened.append(True)
             await reserve(h, await next_request(h))
-            yield revision_archive(h.data)
+            yield data
 
-        with pytest.raises(
-            SubmissionBundlePreparationRejected,
-            match="submission_bundle_preparation_context_changed",
-        ):
-            await _prepare(h, replace(
-                _replacement_request(
-                    h, revision_archive(h.data), predecessor_id=h.created.submission_id,
-                    idempotency_key=new_record_id(),
-                ),
-                byte_source=superseding_bytes(),
-            ))
+        async with _client(h, monkeypatch, isolated_database_env) as client:
+            _, errors, calls = await _revision_http_runtime(h, client, tmp_path, monkeypatch, data)
+            headers = _revision_upload_headers(h) | {"Content-Length": str(len(data))}
+            response = await client.post(
+                f"/api/v1/tasks/{h.request.task_id}/submissions",
+                headers=headers, content=superseding_bytes())
+        assert response.status_code == 404, response.text
+        assert response.json()["error"]["code"] == "submission_unavailable"
         assert opened == [True]
+        assert calls == [] and not errors
         assert await _snapshot(h) == before
         assert provider_writes == []
         async with h.factory.begin() as session:
+            operation = (await session.scalars(select(SubmissionIntakeOperation).where(
+                SubmissionIntakeOperation.idempotency_key == headers["Idempotency-Key"]))).one()
+            assert operation.state == "failed" and operation.acceptance_receipt is None
+            assert operation.finalization_event_id is None and operation.finalized_submission_id is None
+            charge = await session.get(SubmissionSourceCharge, operation.id)
+            assert charge.state == "sealed" and charge.accounted_bytes == len(data)
+            assert operation.raw_byte_count == len(data)
+            assert await session.scalar(text("SELECT count(*) FROM submissions")) == 1
+            await no_economic_effects(session)
             with pytest.raises(TaskSubmissionContextUnavailable):
-                await task_submission_context_port(session).lock_submission_context(
-                    _context_request(h)
-                )
+                await task_submission_context_port(session).lock_submission_context(_context_request(h))
 
 
 async def _predecessor_fence_snapshot(h, source_id):
