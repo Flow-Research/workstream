@@ -51,6 +51,7 @@ async def _snapshot(h) -> tuple[tuple[str, int], ...]:
 async def assert_public_revision_rejection(h, response, key, data, before, code):
     """Keep rejected source custody without changing retained submission facts."""
     from app.modules.artifacts.intake.models import SubmissionIntakeOperation, SubmissionSourceCharge
+    from app.modules.artifacts.api.submission_preparation import public_pre_submission_results
     assert response.status_code == 422, response.text
     error = response.json()['error']
     assert error['code'] == 'pre_submission_checker_failed'
@@ -77,6 +78,7 @@ async def assert_public_revision_rejection(h, response, key, data, before, code)
         reservation = terminal.lease.reservation
         assert run.status == terminal.outcome == 'completed' and run.eligible is False
         assert terminal.execution.eligible is False and terminal.execution.external_members == ()
+        assert public_pre_submission_results(terminal.execution) == results
         assert terminal.terminal_digest == run.terminal_digest
         assert reservation.request_digest == run.request_digest
         assert reservation.task_id == h.request.task_id
