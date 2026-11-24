@@ -62,7 +62,11 @@ def test_conditional_completion_is_required_without_blocking_multipart_parts():
     denials = {row["Sid"]: row for row in statements}
     assert denials["DenyUnconditionalPut"] == {
         "Sid": "DenyUnconditionalPut", "Effect": "Deny", "Principal": "*", "Action": "s3:PutObject",
-        "Resource": BUCKET + "/*", "Condition": {"Null": {"s3:if-none-match": "true"},
+        "Resource": ARTIFACTS, "Condition": {"Null": {"s3:if-none-match": "true"}},
+    }
+    assert denials["DenyUnconditionalSourceCompletion"] == {
+        "Sid": "DenyUnconditionalSourceCompletion", "Effect": "Deny", "Principal": "*", "Action": "s3:PutObject",
+        "Resource": SOURCES, "Condition": {"Null": {"s3:if-none-match": "true"},
             "Bool": {"s3:ObjectCreationOperation": "true"}},
     }
     assert denials["DenyInsecureTransport"]["Condition"] == {"Bool": {"aws:SecureTransport": "false"}}

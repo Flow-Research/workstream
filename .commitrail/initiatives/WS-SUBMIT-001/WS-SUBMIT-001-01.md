@@ -9854,3 +9854,28 @@ administration. Existing API credentials stay on the app side; no keys belong
 in the microVM. Prepared source permissions must preserve retained SHA objects
 and qualify the separate cleanup authority. No bucket/object/config mutation
 was performed by these probes. Actual AWS source qualification remains open.
+
+### Preserve SHA put guards while enabling source multipart uploads
+
+Read-only live policy comparison shows the existing SHA namespace denies every
+PutObject operation without If-None-Match. Restrict the multipart API exemption
+to the new submission-source bundle keys rather than broadening legacy SHA
+behavior. Allowed files: backend/scripts/aws_direct_user_config.py and its
+existing test_aws_direct_user_config.py, this record and regenerated local
+permission handoff JSON. No live AWS mutation or credential handling change.
+Medium storage-policy risk; ARCH/SEC reviewed prepared policy against the live
+five-statement snapshot and found no blocker, subject to exact generator parity
+and actual later AWS positive/negative qualification. Retain metadata-listing
+scope limitation in the handoff; no object read/delete authority outside exact
+sources is added. Verify existing focused policy tests and generated JSON equality.
+AWS conditional multipart reference:
+https://docs.aws.amazon.com/AmazonS3/latest/userguide/conditional-writes-enforce.html
+
+All15 existing policy guards passed2.02s, including separate runtime/cleanup
+rights, retained SHA protection, conditional completion/part rules and refusal
+of foreign/unbounded identities (/tmp/submission-aws-policy-scope.log).
+All three prepared JSON files compare exactly to canonical generator output
+for the actual bucket, namespace and same-account IAM users. ARCH/SEC review
+found no blocker to administrator application; metadata-list scope is explicit
+in administrator-handoff.txt. Live policy application, credentials provisioning
+and actual AWS source qualification remain unperformed. Pinned Ruff/diff pass.

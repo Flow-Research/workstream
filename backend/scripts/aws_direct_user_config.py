@@ -62,7 +62,9 @@ def generate_policies(*, bucket: str, private_prefix: str, user_arn: str, cleanu
             {"Sid": "DenyArtifactDeletion", "Effect": "Deny", "Principal": "*",
              "Action": ["s3:DeleteObject", "s3:DeleteObjectVersion"], "Resource": artifacts},
             {"Sid": "DenyUnconditionalPut", "Effect": "Deny", "Principal": "*", "Action": "s3:PutObject",
-             "Resource": all_objects, "Condition": {"Null": {"s3:if-none-match": "true"},
+             "Resource": artifacts, "Condition": {"Null": {"s3:if-none-match": "true"}}},
+            {"Sid": "DenyUnconditionalSourceCompletion", "Effect": "Deny", "Principal": "*", "Action": "s3:PutObject",
+             "Resource": sources, "Condition": {"Null": {"s3:if-none-match": "true"},
                  "Bool": {"s3:ObjectCreationOperation": "true"}}},
         ]},
     }
