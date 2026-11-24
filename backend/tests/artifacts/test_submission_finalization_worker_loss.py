@@ -1,5 +1,6 @@
 """Actual process death retains accepted custody before and after T5 commit."""
 import asyncio
+from contextlib import asynccontextmanager
 from datetime import timedelta
 import multiprocessing
 import os
@@ -224,7 +225,7 @@ async def _accepted_broker_facts(f, operation_id):
                 event.attempt_count, charge.state, charge.accounted_bytes, pointer)
 
 
-async def _assert_broker_finalized_once(f, operation_id, accepted):
+async def _assert_broker_finalized_once(f, operation_id, accepted, *, attempts=1, generation=1):
     """Require one durable graph after original and duplicate tasks return."""
     from app.modules.artifacts.intake.models import SubmissionSourceCharge
     from app.modules.outbox.models import OutboxDeliveryAttempt
@@ -234,11 +235,11 @@ async def _assert_broker_finalized_once(f, operation_id, accepted):
         event = await session.get(OutboxEvent, UUID(operation.finalization_event_id))
         charge = await session.get(SubmissionSourceCharge, operation_id)
         assert operation.state == "finalized" and operation.finalized_submission_id is not None
-        assert operation.acceptance_receipt == accepted and operation.continuation_generation == 1
-        assert event.delivery_state == "acknowledged" and event.attempt_count == 1
-        attempts = (await session.scalars(select(OutboxDeliveryAttempt).where(
+        assert operation.acceptance_receipt == accepted and operation.continuation_generation == generation
+        assert event.delivery_state == "acknowledged" and event.attempt_count == attempts
+        rows = (await session.scalars(select(OutboxDeliveryAttempt).where(
             OutboxDeliveryAttempt.event_id == event.event_id))).all()
-        assert len(attempts) == 1 and attempts[0].stage == "completed"
+        assert len(rows) == attempts and all(row.stage == "completed" for row in rows)
         assert charge.state == "sealed" and charge.accounted_bytes == operation.raw_byte_count > 0
         for table in ("submissions", "submission_dispatches", "checker_runs"):
             assert await session.scalar(text(
@@ -259,7 +260,7 @@ async def _assert_broker_finalized_once(f, operation_id, accepted):
 
 async def _stop_broker_worker(process, completed):
     """Stop only the owned worker group before removing this test's keys."""
-    if process.pid is not None:
+    if process is not None and process.pid is not None:
         if process.is_alive():
             os.killpg(process.pid, signal.SIGTERM)
         await asyncio.to_thread(process.join, 10)
@@ -272,109 +273,315 @@ async def _stop_broker_worker(process, completed):
     completed.join_thread()
 
 
+async def _accept_public_broker_source(case, f, tmp_path, monkeypatch):
+    """Use signed HTTP and current owners; only the PRE transport is controlled."""
+    from app.core.identifiers import new_record_id
+    from tests.artifacts.test_submission_foreground_command import configure_source_http
+    from tests.test_trusted_intake import _archive
+
+    case.payload = _archive()
+    case.client, settings, case.errors, case.calls = await configure_source_http(
+        f.factory, f.access.signed.client, tmp_path, monkeypatch, case.payload, "completed")
+    case.headers = f.access.target.headers | {
+        "Content-Type": "application/zip", "X-Task-Assignment-Id": str(f.assignment),
+        "Idempotency-Key": str(new_record_id()), "Content-Length": str(len(case.payload)),
+    }
+    case.url = f"/api/v1/tasks/{f.task}/submissions"
+    response = await case.client.post(case.url, headers=case.headers, content=case.payload)
+    assert response.status_code == 202, response.text
+    assert len(case.calls) == 1 and not case.errors, case.errors
+    case.accepted = response.json()
+    case.operation_id = UUID(case.accepted["operation_id"])
+    for identity in (ServiceIdentity.ARTIFACT_BINDING, ServiceIdentity.OUTBOX_DISPATCHER):
+        await provision_post_submit_service(f.factory, identity)
+    _broker_settings(settings, monkeypatch)
+    case.before = await _accepted_broker_facts(f, case.operation_id)
+    assert case.before[0] == "finalization_pending" and case.before[5:7] == ("pending", 0)
+
+
+@asynccontextmanager
+async def _public_broker_case(f, tmp_path, monkeypatch, *, kill_at=None):
+    """Own one isolated endpoint, worker group and Redis prefix for a public T4."""
+    import socket
+    from types import SimpleNamespace
+    from urllib.parse import urlsplit
+    import redis
+    from app.core.identifiers import new_record_id
+    from app.workers import outbox as worker
+
+    broker = urlsplit(os.environ["WORKSTREAM_TEST_BROKER_URL"])
+    assert broker.scheme == "redis" and broker.hostname and broker.port
+    case = SimpleNamespace(connection=redis.Redis.from_url(broker.geturl(), socket_timeout=2),
+        prefix=f"finalizer-proof-{new_record_id()}:", hostname=f"finalizer-{new_record_id()}@localhost",
+        endpoint=socket.socket(), proxy=None, connections=set(), process=None,
+        completed=multiprocessing.get_context("fork").Queue(), app=worker.celery_app,
+        destination=(broker.hostname, broker.port), worker=worker,
+        marker=tmp_path / "broker-child-kill.json", trace=tmp_path / "broker-delivery.jsonl")
+    try:
+        assert case.connection.ping()
+        case.endpoint.bind(("127.0.0.1", 0))  # No listener: real connection refusal.
+        case.port = case.endpoint.getsockname()[1]
+        monkeypatch.setattr(case.app, "_pool", None)
+        monkeypatch.setattr(case.app.amqp, "_producer_pool", None)
+        monkeypatch.setitem(case.app.conf, "broker_url", f"redis://127.0.0.1:{case.port}/{broker.path.lstrip('/')}")
+        monkeypatch.setitem(case.app.conf, "broker_transport_options", {
+            **case.app.conf.broker_transport_options, "global_keyprefix": case.prefix,
+            "socket_connect_timeout": 0.25, "socket_timeout": 5, "max_retries": 0,
+        })
+        monkeypatch.setitem(case.app.conf, "task_publish_retry", False)
+        monkeypatch.setitem(case.app.conf, "task_always_eager", False)
+        await _accept_public_broker_source(case, f, tmp_path, monkeypatch)
+        target = _broker_finalizer if kill_at is None else _crashing_broker_finalizer
+        arguments = (case.app, case.hostname, case.completed)
+        if kill_at is not None:
+            arguments += (str(case.operation_id), kill_at, case.marker, case.trace)
+        case.process = multiprocessing.get_context("fork").Process(target=target, args=arguments)
+        yield case
+    finally:
+        await _close_broker_case(case)
+
+
+async def _close_broker_case(case):
+    """Drain only owned processes, sockets and keys; preserve the shared Redis."""
+    from app.core.config import get_settings
+
+    case.endpoint.close()
+    await _stop_broker_worker(case.process, case.completed)
+    for pool in (case.app.amqp._producer_pool, case.app._pool):
+        if pool is not None:
+            pool.force_close_all()
+    if case.proxy is not None:
+        case.proxy.close()
+        await case.proxy.wait_closed()
+    for pending in tuple(case.connections):
+        pending.cancel()
+    await asyncio.gather(*tuple(case.connections), return_exceptions=True)
+    keys = list(case.connection.scan_iter(match=case.prefix + "*"))
+    if keys:
+        case.connection.delete(*keys)
+    assert list(case.connection.scan_iter(match=case.prefix + "*")) == []
+    case.connection.close()
+    get_settings.cache_clear()
+
+
+async def _restore_broker_endpoint(case):
+    """Make the unchanged producer endpoint forward to real Redis again."""
+    case.endpoint.close()
+    case.proxy = await asyncio.start_server(
+        lambda reader, writer: _redis_forwarder(reader, writer, case.destination, case.connections),
+        "127.0.0.1", case.port)
+
+
+async def _next_broker_result(case):
+    """Observe a real task return while the proxy event loop remains live."""
+    import queue
+    import time
+
+    deadline = time.monotonic() + 120
+    while time.monotonic() < deadline:
+        assert case.process.is_alive(), f"finalization worker exited: {case.process.exitcode}"
+        try:
+            result = await asyncio.to_thread(case.completed.get, True, 0.2)
+        except queue.Empty:
+            continue
+        from app.workers.outbox_topology import FINALIZATION_QUEUE
+        assert result[1] == "SUCCESS" and result[3] not in {os.getpid(), case.process.pid}, result
+        assert result[4:] == (False, FINALIZATION_QUEUE), result
+        return result
+    raise AssertionError("production finalization task did not return")
+
+
+async def _assert_public_broker_replay(case):
+    """Exact accepted replay never uploads again or invokes PRE again."""
+    response = await case.client.post(case.url, headers=case.headers, content=case.payload)
+    assert response.status_code == 202, response.text
+    assert response.json() == dict(case.accepted, replayed=True)
+    assert len(case.calls) == 1 and not case.errors
+
+
 async def test_real_broker_recovers_public_acceptance_and_deduplicates_finalization(
     admission_intake, tmp_path, monkeypatch,
 ):
     """Controlled public PRE, real outage/scanner, Redis and production prefork T5."""
-    import queue
-    import socket
-    import time
-    from urllib.parse import urlsplit
-    import redis
-    from app.core.config import get_settings
-    from app.core.identifiers import new_record_id
-    from app.workers import outbox as worker
     from app.workers.outbox_topology import FINALIZATION_QUEUE
-    from tests.artifacts.test_submission_foreground_command import configure_source_http
-    from tests.test_trusted_intake import _archive
 
     f = admission_intake
-    broker = urlsplit(os.environ["WORKSTREAM_TEST_BROKER_URL"])
-    assert broker.scheme == "redis" and broker.hostname and broker.port
-    connection = redis.Redis.from_url(broker.geturl())
-    assert connection.ping()
-    prefix, hostname = f"finalizer-proof-{new_record_id()}:", f"finalizer-{new_record_id()}@localhost"
-    closed_endpoint = socket.socket()
-    closed_endpoint.bind(("127.0.0.1", 0))
-    port = closed_endpoint.getsockname()[1]
-    app = worker.celery_app
-    monkeypatch.setattr(app, "_pool", None)
-    monkeypatch.setattr(app.amqp, "_producer_pool", None)
-    monkeypatch.setitem(app.conf, "broker_url", f"redis://127.0.0.1:{port}/{broker.path.lstrip('/')}")
-    monkeypatch.setitem(app.conf, "broker_transport_options", {
-        **app.conf.broker_transport_options, "global_keyprefix": prefix,
-        "socket_connect_timeout": 0.25, "socket_timeout": 5, "max_retries": 0,
-    })
-    monkeypatch.setitem(app.conf, "task_publish_retry", False)
-    monkeypatch.setitem(app.conf, "task_always_eager", False)
-    completed = multiprocessing.get_context("fork").Queue()
-    process = multiprocessing.get_context("fork").Process(target=_broker_finalizer, args=(app, hostname, completed))
-    proxy, connections = None, set()
-    try:
-        payload, key = _archive(), new_record_id()
-        client, settings, errors, calls = await configure_source_http(
-            f.factory, f.access.signed.client, tmp_path, monkeypatch, payload, "completed")
-        headers = f.access.target.headers | {
-            "Content-Type": "application/zip", "X-Task-Assignment-Id": str(f.assignment),
-            "Idempotency-Key": str(key), "Content-Length": str(len(payload)),
-        }
-        url = f"/api/v1/tasks/{f.task}/submissions"
-        accepted = await client.post(url, headers=headers, content=payload)
-        assert accepted.status_code == 202, accepted.text
-        assert len(calls) == 1 and not errors, errors
-        operation_id = UUID(accepted.json()["operation_id"])
-        for identity in (ServiceIdentity.ARTIFACT_BINDING, ServiceIdentity.OUTBOX_DISPATCHER):
-            await provision_post_submit_service(f.factory, identity)
-        _broker_settings(settings, monkeypatch)
-        before = await _accepted_broker_facts(f, operation_id)
-        assert before[0] == "finalization_pending" and before[5:7] == ("pending", 0)
-        failed = await asyncio.to_thread(worker.scan_pending.run)
+    async with _public_broker_case(f, tmp_path, monkeypatch) as case:
+        failed = await asyncio.to_thread(case.worker.scan_pending.run)
         assert failed == {"selected": 1, "published": 0}
-        assert await _accepted_broker_facts(f, operation_id) == before
-        assert list(connection.scan_iter(match=prefix + "*")) == []
-        closed_endpoint.close()
-        proxy = await asyncio.start_server(
-            lambda reader, writer: _redis_forwarder(reader, writer, (broker.hostname, broker.port), connections),
-            "127.0.0.1", port)
-        published = await asyncio.to_thread(worker.scan_pending.run)
-        assert published == {"selected": 1, "published": 1}
+        assert await _accepted_broker_facts(f, case.operation_id) == case.before
+        assert list(case.connection.scan_iter(match=case.prefix + "*")) == []
+        await _restore_broker_endpoint(case)
+        assert await asyncio.to_thread(case.worker.scan_pending.run) == {"selected": 1, "published": 1}
         for _ in range(2):
-            await asyncio.to_thread(worker.finalize_submission.apply_async, args=(str(before[4]), str(f.project)))
-        assert connection.llen(prefix + FINALIZATION_QUEUE) == 3
-        process.start()
-        deadline, observations = time.monotonic() + 120, []
-        while len(observations) < 3 and time.monotonic() < deadline:
-            assert process.is_alive(), f"finalization worker exited: {process.exitcode}"
-            try:
-                observations.append(await asyncio.to_thread(completed.get, True, 0.2))
-            except queue.Empty:
-                pass
-        assert len(observations) == 3, observations
+            await asyncio.to_thread(case.worker.finalize_submission.apply_async,
+                args=(str(case.before[4]), str(f.project)))
+        assert case.connection.llen(case.prefix + FINALIZATION_QUEUE) == 3
+        case.process.start()
+        observations = [await _next_broker_result(case) for _ in range(3)]
         assert len({item[0] for item in observations}) == 3
-        assert all(item[1] == "SUCCESS" and item[3] not in {os.getpid(), process.pid}
-                   and item[4:] == (False, FINALIZATION_QUEUE) for item in observations), observations
         assert sorted(item[2]["status"] for item in observations) == [
             "delivery_recorded", "delivery_unavailable", "delivery_unavailable"]
-        await _assert_broker_finalized_once(f, operation_id, before[1])
-        replay = await client.post(url, headers=headers, content=payload)
-        assert replay.status_code == 202 and replay.json() == dict(accepted.json(), replayed=True), replay.text
-        assert len(calls) == 1 and not errors
-        await _assert_broker_finalized_once(f, operation_id, before[1])
+        await _assert_broker_finalized_once(f, case.operation_id, case.before[1])
+        await _assert_public_broker_replay(case)
+        await _assert_broker_finalized_once(f, case.operation_id, case.before[1])
+
+
+def _record_broker_trace(path, body):
+    """Make each observed boundary durable before its process can be killed."""
+    import json
+
+    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o600)
+    try:
+        os.write(descriptor, (json.dumps(body) + "\n").encode())
+        os.fsync(descriptor)
     finally:
-        closed_endpoint.close()
-        await _stop_broker_worker(process, completed)
-        for pool in (app.amqp._producer_pool, app._pool):
-            if pool is not None:
-                pool.force_close_all()
-        if proxy is not None:
-            proxy.close()
-            await proxy.wait_closed()
-        for pending in tuple(connections):
-            pending.cancel()
-        await asyncio.gather(*tuple(connections), return_exceptions=True)
-        keys = list(connection.scan_iter(match=prefix + "*"))
-        if keys:
-            connection.delete(*keys)
-        assert list(connection.scan_iter(match=prefix + "*")) == []
-        connection.close()
-        get_settings.cache_clear()
+        os.close(descriptor)
+
+
+def _kill_broker_child_once(marker, operation_id, boundary, result=None):
+    """Kill the actual child exactly once, never synthesize a finalizer result."""
+    import json
+
+    try:
+        descriptor = os.open(marker, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    except FileExistsError:
+        return
+    try:
+        os.write(descriptor, json.dumps({"pid": os.getpid(), "operation_id": operation_id,
+            "boundary": boundary, "submission_id": str(result.submission_id) if result else None}).encode())
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+    os.kill(os.getpid(), signal.SIGKILL)
+    raise AssertionError("SIGKILL unexpectedly returned")
+
+
+def _crashing_broker_finalizer(app, hostname, completed, operation_id, kill_at, marker, trace):
+    """Install observation-only hooks around real production T5 and broker delivery."""
+    from celery.signals import task_prerun
+    from app.adapters.artifacts import _WorkerSourceObservation
+    from app.modules.artifacts.intake.finalization import AcceptedSubmissionFinalization
+    from app.workers.outbox_topology import FINALIZATION_DELIVERY_TASK
+
+    original_observe = _WorkerSourceObservation.observe_sealed_source
+    original_run = AcceptedSubmissionFinalization.run
+
+    async def observe(store, source):
+        if str(source.location.operation_id) == operation_id:
+            if kill_at == "before_observation":
+                _kill_broker_child_once(marker, operation_id, kill_at)
+            _record_broker_trace(trace, {"kind": "source_observation", "pid": os.getpid()})
+        return await original_observe(store, source)
+
+    async def run(finalizer, actual_id):
+        result = await original_run(finalizer, actual_id)
+        if str(actual_id) == operation_id and kill_at == "after_commit":
+            _kill_broker_child_once(marker, operation_id, kill_at, result)
+        return result
+
+    def record(task_id, task, args, **_kwargs):
+        if task.name == FINALIZATION_DELIVERY_TASK:
+            _record_broker_trace(trace, {"kind": "delivery", "task_id": task_id,
+                "event_id": args[0], "pid": os.getpid(),
+                "redelivered": bool(task.request.delivery_info.get("redelivered"))})
+
+    _WorkerSourceObservation.observe_sealed_source = observe
+    AcceptedSubmissionFinalization.run = run
+    task_prerun.connect(record, weak=False)
+    _broker_finalizer(app, hostname, completed)
+
+
+async def _assert_broker_redelivery(case, f, kill_at, result):
+    """Require broker requeue of the same message while the owner lease stays live."""
+    import json
+
+    marker = json.loads(case.marker.read_text())
+    deliveries = [json.loads(line) for line in case.trace.read_text().splitlines()
+                  if json.loads(line)["kind"] == "delivery"]
+    assert marker["operation_id"] == str(case.operation_id) and marker["boundary"] == kill_at
+    assert len(deliveries) == 2 and deliveries[0]["task_id"] == deliveries[1]["task_id"] == result[0]
+    assert [item["redelivered"] for item in deliveries] == [False, True]
+    assert all(item["event_id"] == str(case.before[4]) for item in deliveries)
+    assert deliveries[0]["pid"] == marker["pid"] and deliveries[1]["pid"] == result[3] != marker["pid"]
+    with pytest.raises(ProcessLookupError):
+        os.kill(marker["pid"], 0)
+    assert result[2] == {"status": "delivery_unavailable"}
+    async with f.factory() as session:
+        operation = await session.get(SubmissionIntakeOperation, case.operation_id)
+        event = await session.get(OutboxEvent, case.before[4])
+        now = await session.scalar(select(func.clock_timestamp()))
+        assert event.delivery_state == "claimed" and event.attempt_count == 1
+        assert now < event.claim_expires_at
+        assert (event.claim_expires_at - event.claimed_at).total_seconds() == 300
+        assert operation.continuation_generation == 1
+        assert operation.state == ("finalized" if kill_at == "after_commit" else "finalization_pending")
+        assert operation.acceptance_receipt == case.before[1]
+        assert operation.finalized_submission_id == marker["submission_id"]
+        return max(event.claim_expires_at, operation.continuation_expires_at), marker["submission_id"]
+
+
+async def _wait_for_broker_database_time(factory, target):
+    """Wait through the unchanged production lease/backoff on PostgreSQL time."""
+    async with asyncio.timeout(360):
+        while True:
+            async with factory() as session:
+                now = await session.scalar(select(func.clock_timestamp()))
+            if now >= target:
+                return
+            await asyncio.sleep(min(1, (target - now).total_seconds()))
+
+
+async def _assert_broker_recovered_unknown(case, f):
+    """The real worker records uncertainty before any new handler claim."""
+    import json
+    from datetime import datetime
+    from app.modules.outbox.models import OutboxDeliveryAttempt
+
+    async with f.factory() as session:
+        event = await session.get(OutboxEvent, case.before[4])
+        attempts = (await session.scalars(select(OutboxDeliveryAttempt).where(
+            OutboxDeliveryAttempt.event_id == event.event_id))).all()
+        assert event.delivery_state == "retryable" and event.attempt_count == 1
+        assert len(attempts) == 1 and attempts[0].stage == "completed"
+        outcome = json.loads(attempts[0].outcome_json)
+        assert outcome["invocation_unknown"] is True and outcome["error_code"] == "INVOKE_OUTCOME_UNKNOWN"
+        assert (event.next_attempt_at - datetime.fromisoformat(outcome["receipt_completed_at"])).total_seconds() == 5
+        return event.next_attempt_at
+
+
+@pytest.mark.parametrize("kill_at", ["before_observation", "after_commit"])
+async def test_real_broker_redelivers_killed_finalizer_and_recovers_owner_lease(
+    admission_intake, tmp_path, monkeypatch, kill_at,
+):
+    """Actual Redis redelivery plus expired-invocation recovery preserves one T5."""
+    import json
+
+    f = admission_intake
+    async with _public_broker_case(f, tmp_path, monkeypatch, kill_at=kill_at) as case:
+        await _restore_broker_endpoint(case)
+        assert await asyncio.to_thread(case.worker.scan_pending.run) == {"selected": 1, "published": 1}
+        case.process.start()
+        redelivery = await _next_broker_result(case)
+        due, original_submission = await _assert_broker_redelivery(case, f, kill_at, redelivery)
+        await _wait_for_broker_database_time(f.factory, due)
+        assert await asyncio.to_thread(case.worker.scan_pending.run) == {"selected": 1, "published": 1}
+        recovered = await _next_broker_result(case)
+        assert recovered[2] == {"status": "delivery_recorded"}
+        due = await _assert_broker_recovered_unknown(case, f)
+        await _wait_for_broker_database_time(f.factory, due)
+        assert await asyncio.to_thread(case.worker.scan_pending.run) == {"selected": 1, "published": 1}
+        finalized = await _next_broker_result(case)
+        assert finalized[2] == {"status": "delivery_recorded"}
+        submission = await _assert_broker_finalized_once(f, case.operation_id, case.before[1],
+            attempts=2, generation=1 if kill_at == "after_commit" else 2)
+        if original_submission is not None:
+            assert submission == original_submission
+        trace = [json.loads(line) for line in case.trace.read_text().splitlines()]
+        deliveries = [item for item in trace if item["kind"] == "delivery"]
+        assert len(deliveries) == 4 and len({item["task_id"] for item in deliveries}) == 3
+        assert [item["redelivered"] for item in deliveries] == [False, True, False, False]
+        assert len([item for item in trace if item["kind"] == "source_observation"]) == 1
+        await _assert_public_broker_replay(case)
+        assert await _assert_broker_finalized_once(f, case.operation_id, case.before[1],
+            attempts=2, generation=1 if kill_at == "after_commit" else 2) == submission

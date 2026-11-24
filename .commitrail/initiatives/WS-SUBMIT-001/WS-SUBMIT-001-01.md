@@ -9089,3 +9089,58 @@ collected 12080 cases but ended with eight unrelated optional-agent import
 errors because that environment lacks `httpx2`; it is not counted as a pass.
 The repository-wide Markdown-link checker also fails unchanged on two links to
 the missing `deploy/hosted/SINGLE_HOST.md` in untouched documents.
+
+### Qualify actual broker redelivery after finalization child death
+
+Allowed: existing test_submission_finalization_worker_loss.py and this record.
+Reuse its owned Redis endpoint/public ZIP setup and process cleanup for two
+production exclusive-prefork cases. A test-only one-shot hook sends SIGKILL to
+the actual Celery child immediately before source observation or after the real
+T5 run commits and before handler acknowledgement. Never replace finalizer
+results, registry, authority, SQL guards or provider observations. Fsync an owned
+crash marker and record Celery task-prerun delivery metadata so actual broker
+redelivery must preserve the task ID, set redelivered and run in a replacement
+child. No manual duplicate publication may satisfy this criterion.
+
+Preserve the real300s ownership lease and database clock. Immediate broker
+redelivery must not steal live custody. After PostgreSQL observes expiry, the
+production scanner/worker must recover the uncertain invocation, respect its
+actual backoff and finalize under a new claim. Require one exact retained graph,
+source charge and accepted receipt, generation2 only when T5 had not committed;
+committed T5 must replay its original submission without another provider read.
+Existing direct SIGKILL tests remain unchanged. Risk: medium test-process/broker
+proof; final isolated run covers prior outage plus both crash cases, with exact
+worker/proxy/prefix cleanup and scoped review. No production, schema, remote or
+shared-container changes. Beat scheduling and deployed/native execution remain
+outside qualification.
+
+The first combined death-proof run passed3/3 in838.60s (two unchanged direct
+SIGKILL cases deselected). /tmp/submission-finalizer-broker-death-v1.{log,json}
+records launcheraaee53f6c, schema0090 and complete PostgreSQL/MinIO cleanup.
+Executable test blob8d299d5e52a940b610b5dfc364300a3d5459c0f1 stayed unchanged during
+execution; the final evidence append changes only this record. The prior
+publication-outage case also passed after factoring its setup/cleanup.
+
+Both actual Celery child kills produced automatic Redis redelivery of the same
+task ID with redelivered=True in a different prefork child. Immediate redelivery
+returned unavailable while the original300s owner lease remained live. After
+PostgreSQL time passed that original deadline, the production scanner and task
+recorded INVOKE_OUTCOME_UNKNOWN with the real5s backoff; the next scanner pass
+claimed generation2 and acknowledged. Each trace has flags
+[False,True,False,False]: original, broker redelivery, owner recovery and final
+claim. The before-observation case advances continuation to2; after-commit keeps
+continuation1 and the exact original Submission. Both finish with one graph,
+one POST event, exactly two completed outbox attempts, sealed charged source,
+stable accepted receipt and no second PRE. The committed case performs only its
+original provider observation; replay does not reopen source metadata.
+
+/tmp/submission-finalizer-broker-death-observations.json retains the fsynced
+boundary/PID and real Celery delivery metadata beside the terminal receipt. All
+observed child PIDs are dead afterward; test finally blocks stop their owned
+worker groups, drain proxy connections and delete only the unique Redis prefixes.
+The Python fork-with-threads warning remains unsuppressed for each case. This
+qualifies child loss with a surviving consumer parent and broker, not parent
+loss/Redis visibility-timeout reclamation, Beat scheduling, native PRE or AWS.
+Ruff/structure/diff pass (structure log
+/tmp/submission-finalizer-broker-death-structure.log); final Commitrail check
+runs after this append. No production or lane changes, no remote mutation.
