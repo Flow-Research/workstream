@@ -8548,3 +8548,13 @@ no Review/reviewer contribution; finalized replay does not duplicate effects.
 Verify the added real-PostgreSQL case and default-true control, structure/Ruff;
 scoped QA/ARCH review. This joins an owner path, not the pending deployed
 public-API/runner proof. Keep other required work in the unchanged goal.
+
+Verification closure at 521898c4f: the automatic-acceptance case and default
+human-review control passed together (2 passed in 90.00s); isolated receipt
+/tmp/submission-source-autoaccept.json confirms schema0090 and complete database
+and MinIO cleanup. The launcher recorded precommit631ece311 with the final test
+worktree, so this is compatible evidence, not an exact-head launch. Structure,
+scoped Ruff and diff checks passed. ARCH/SEC PASS and QA PASS WITH LOW RISKS
+reported no findings; independent QA probes rejected substituted source hash
+and award quantity. This proves the source-backed owner path and public progress
+read, not public ZIP/native/AWS execution or the aggregate four-case matrix.
