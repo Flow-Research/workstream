@@ -13,7 +13,7 @@ from sqlalchemy import select, func, text
 from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-from app.modules.artifacts.api import SubmissionBundlePreparationRequest, SubmissionAdmissionConsumptionError
+from app.modules.artifacts.api import SubmissionAdmissionConsumptionError
 from app.modules.artifacts.models import (
     SubmissionBundleAdmission,
     ArtifactBinding,
@@ -26,9 +26,7 @@ from app.modules.artifacts.service import ArtifactStorageOrchestrator
 from app.modules.artifacts.repository import ArtifactRepository
 from app.modules.artifacts.submission_admission import SubmissionBundleAdmissionPublisher
 from app.modules.actors.api.service_identities import ServiceIdentity
-from app.modules.authorization.api import ActorIdentityFacts, ActorKind
 from app.modules.tasks.api import (
-    SubmissionCreationRequest,
     TaskRetainedSubmissionParentsRequest,
     TaskSubmissionContextUnavailable,
 )
@@ -44,13 +42,13 @@ from tests.test_artifact_admission import (
     _context,
     _seed_human_actor,
 )
-from tests.archive_fixtures import byte_source as _bytes, submission_archive as _archive
+from tests.archive_fixtures import submission_archive as _archive
 
+
+from tests.historical_pending_verification import retained_pending_verification
 
 from tests.tasks.submission_lineage_support import (
-    _prepare_put_attempt,
     _seed_services,
-    _verified_admission,
     _verify_put_attempt,
 )
 
@@ -97,63 +95,6 @@ async def _submission_task(
         await engine.dispose()
 
 
-@asynccontextmanager
-async def _prepared_packet(
-    isolated_database_env, tmp_path, *, verify=True, pre_submit_registry_spec=pre_registry_spec(),
-):
-    async with _submission_task(
-        isolated_database_env, tmp_path, pre_submit_registry_spec=pre_submit_registry_spec,
-    ) as task:
-        factory, context = task.factory, task.context
-        task_id, assignment_id = task.task_id, task.assignment_id
-        store, namespace, settings = task.store, task.namespace, task.settings
-        archive_bytes, policy = task.archive_bytes, task.policy
-        request = SubmissionBundlePreparationRequest(
-            actor=ActorIdentityFacts(
-                context.actor_profile_id, context.identity_link_id, ActorKind.HUMAN
-            ),
-            request_id=context.request_id,
-            correlation_id=context.correlation_id,
-            task_id=task_id,
-            assignment_id=assignment_id,
-            predecessor_submission_id=None,
-            idempotency_key=new_record_id(),
-            summary='Completed the "required" project work in folder \\results with evidence.',
-            contributor_attestation="I confirm no confidential client data, credentials, or copied source material is included in this submission; rights_confirmed. "
-            + " ".join(policy["attestation_terms"]),
-            media_type="application/zip",
-            byte_source=_bytes(archive_bytes),
-        )
-        if verify:
-            admission_id = await _verified_admission(
-                factory, store, namespace, settings, context, request
-            )
-            put_attempt_id = None
-            creation = SubmissionCreationRequest(
-                task_id=task_id,
-                assignment_id=assignment_id,
-                contributor_id=context.actor_profile_id,
-                predecessor_submission_id=None,
-                admission_id=admission_id,
-                summary=request.summary,
-                contributor_attestation=request.contributor_attestation,
-            )
-        else:
-            put_attempt_id = await _prepare_put_attempt(
-                factory, settings, context, request
-            )
-            admission_id = None
-            creation = None
-        yield SimpleNamespace(
-            factory=factory, context=context, task_id=task_id, assignment_id=assignment_id,
-            project_id=task.project_id,
-            admission_id=admission_id, creation=creation,
-            preparation_request=request, archive_bytes=archive_bytes, settings=settings,
-            store=store, namespace=namespace,
-            put_attempt_id=put_attempt_id,
-        )
-
-
 @pytest.mark.parametrize("changed_owner", ("project", "task", "assignment", "contributor"))
 async def test_retained_submission_parent_lock_rejects_identity_substitution(
     isolated_database_env,
@@ -186,12 +127,14 @@ async def test_retained_submission_parent_lock_rejects_identity_substitution(
 
 
 @pytest.mark.parametrize("lifecycle_owner", ("profile", "identity_link"))
+@pytest.mark.postgres_schema_contract
 async def test_retained_verification_does_not_reauthorize_contributor_lifecycle(
     isolated_database_env,
+    migration_lock,
     tmp_path,
     lifecycle_owner,
 ):
-    async with _prepared_packet(isolated_database_env, tmp_path, verify=False) as h:
+    async with retained_pending_verification(isolated_database_env, tmp_path, migration_lock) as h:
         async with h.factory.begin() as session:
             if lifecycle_owner == "profile":
                 await session.execute(
@@ -228,11 +171,13 @@ async def test_retained_verification_does_not_reauthorize_contributor_lifecycle(
             assert admission is not None and admission.status == "ready"
 
 
+@pytest.mark.postgres_schema_contract
 async def test_submission_verifier_missing_task_port_rolls_back_terminal_effects(
     isolated_database_env,
+    migration_lock,
     tmp_path,
 ):
-    async with _prepared_packet(isolated_database_env, tmp_path, verify=False) as h:
+    async with retained_pending_verification(isolated_database_env, tmp_path, migration_lock) as h:
         async with h.factory() as session:
             job = await session.scalar(
                 select(ArtifactVerificationJob).where(
@@ -311,8 +256,10 @@ async def test_retained_submission_parent_port_holds_task_and_assignment_locks(
                 ) is not None
 
 
+@pytest.mark.postgres_schema_contract
 async def test_submission_verifier_locks_task_parents_before_terminal_art(
     isolated_database_env,
+    migration_lock,
     tmp_path,
     monkeypatch,
 ):
@@ -330,7 +277,7 @@ async def test_submission_verifier_locks_task_parents_before_terminal_art(
         events.append("artifact_job")
         return result
 
-    async with _prepared_packet(isolated_database_env, tmp_path, verify=False) as h:
+    async with retained_pending_verification(isolated_database_env, tmp_path, migration_lock) as h:
         monkeypatch.setattr(
             SubmissionBundleAdmissionPublisher,
             "lock_retained_submission_parents",

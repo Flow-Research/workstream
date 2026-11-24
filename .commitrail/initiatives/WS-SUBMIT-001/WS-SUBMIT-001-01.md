@@ -8594,3 +8594,18 @@ instead from clean detached e2b926288, schema0065, in the separate local
 worktree /tmp/workstream-pending-verifier-capture; preserve source provenance
 and then exercise real upgrades before current verifier assertions. The failed
 capture produced no retained fixture and is not acceptance evidence.
+
+Historical capture V3 passed on clean writer e2b926288/schema0065 (36.76s,
+isolated cleanup complete): 55 tables and exactly the pending job's replica
+bytes. Archive SHA2561305eaa9de3083d2ca4188f3cdba40a42fa912f211fc90c99ea36989d45e3e38;
+capture source retained as tests/fixtures/retained_pending_capture.py.txt.
+The initial historical run refused invalid terminal timing; the diagnostic
+rerun preserved the timing validator and reached pending verification, then
+revealed synthetic guide references cannot be read through the real local
+provider. V3 captures only the actual pending job's object; all DB rows remain
+literal. No timestamp or authority guards were changed. Retained setup now
+restores exact schema0065 rows through the existing validator, performs the real
+upgrade, and checks object hash before yielding current verifier tests. Removed
+the old _prepared_packet producer from test_submission_lineage.py; preserve its
+four lifecycle/rollback/locking cases and mark their actual schema operations.
+This does not yet retire other callers of the old preparation command.

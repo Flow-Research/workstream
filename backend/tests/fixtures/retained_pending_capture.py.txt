@@ -1,0 +1,65 @@
+"""One-time guarded capture; removed after recording its source and receipt."""
+import base64
+import gzip
+import json
+from pathlib import Path
+
+import asyncpg
+
+from tests.tasks.test_submission_lineage import _prepared_packet
+from tests.historical_submission_fixtures import (
+    _assert_database_guards_enabled, _identifier,
+)
+
+
+async def test_capture_pending_verification(isolated_database_env, tmp_path, monkeypatch):
+    from app.modules.checkers.api.selected_pre_submit import SelectedPreSubmitTerminalFacts
+    validate = SelectedPreSubmitTerminalFacts.__post_init__
+    def observe(self):
+        print("PRE_TIMES", self.queued_at, self.started_at, self.completed_at)
+        return validate(self)
+    monkeypatch.setattr(SelectedPreSubmitTerminalFacts, '__post_init__', observe)
+    async with _prepared_packet(isolated_database_env, tmp_path, verify=False) as h:
+        connection = await asyncpg.connect(isolated_database_env.replace('+asyncpg', ''))
+        try:
+            async with connection.transaction(isolation='repeatable_read', readonly=True):
+                await _assert_database_guards_enabled(connection)
+                revision = await connection.fetchval('SELECT version_num FROM alembic_version')
+                assert revision == '0065_claim_starts_work'
+                tables = {}
+                for name in await connection.fetch('SELECT tablename FROM pg_tables WHERE schemaname=$1 ORDER BY tablename', 'public'):
+                    table = name['tablename']
+                    rows = json.loads(await connection.fetchval(
+                        f"SELECT coalesce(jsonb_agg(to_jsonb(r) ORDER BY to_jsonb(r)::text),'[]')::text FROM public.{_identifier(table)} r"
+                    ))
+                    if rows:
+                        tables[table] = rows
+                assert len(tables['artifact_verification_jobs']) == 1
+                assert not tables.get('submission_bundle_admissions')
+                assert not tables.get('submissions')
+        finally:
+            await connection.close()
+        objects = {}
+        pending = tables['artifact_verification_jobs'][0]['replica_id']
+        for replica in tables['artifact_replicas']:
+            if replica['id'] != pending:
+                continue
+            ref = replica['provider_object_ref']
+            data = b''.join([part async for part in h.store.open(ref)])
+            objects[ref] = base64.b64encode(data).decode()
+        assert len(objects) == 1
+        seed = {
+            'context': h.context.model_dump(mode='json'),
+            'task_id': str(h.task_id), 'assignment_id': str(h.assignment_id),
+            'project_id': str(h.project_id), 'put_attempt_id': str(h.put_attempt_id),
+            'objects': objects,
+        }
+        body = {
+            'schema_version': 'workstream.retained_pending_verification.v1',
+            'source_revision': 'e2b926288899bcd9b05e1a560ec19b6bca8cfcfc',
+            'source_fixture': 'tests/tasks/test_submission_lineage.py::_prepared_packet(verify=False)',
+            'snapshot': {'revision': revision, 'tables': tables, 'seed': seed},
+        }
+        Path('/tmp/retained-pending-verification.json.gz').write_bytes(
+            gzip.compress(json.dumps(body, sort_keys=True).encode(), mtime=0)
+        )
