@@ -10479,3 +10479,5 @@ Ruff/diff/Commitrail pass. The combined structural check separately exposes the
 B/G edits' stale frozen test_projects file hash; this D module introduces no
 structural change. That debt must shrink through honest behavior relocation,
 not a hash-only rebaseline. Actual D PostgreSQL replay remains root-batched.
+
+Retained revision-race replay passed all3 cases in96.24s at a3d6178dc, schema0091: both variants of test_dispatch_commit_requires_current_predecessor_checker_fence plus test_replacement_holds_task_custody_against_successor_generation. `/tmp/submission-retained-revision-races.log` and `.json` confirm complete isolated database cleanup. This verifies the preserved stronger SQL/race coverage after retiring the impossible duplicate. No constraints, product guards or time budgets changed.
