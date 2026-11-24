@@ -142,7 +142,10 @@ def run_pre_launch_fault(
     if not evidence.is_absolute() or evidence.is_symlink():
         raise RuntimeError("fault evidence directory differs")
     evidence.mkdir(mode=0o700, parents=True, exist_ok=True)
-    if not stat.S_ISDIR(evidence.lstat().st_mode) or evidence.stat().st_uid != os.getuid():
+    if (
+        not stat.S_ISDIR(evidence.lstat().st_mode)
+        or evidence.stat().st_uid != os.getuid()
+    ):
         raise RuntimeError("fault evidence directory owner differs")
     evidence.chmod(0o700)
     result = asyncio.run(
