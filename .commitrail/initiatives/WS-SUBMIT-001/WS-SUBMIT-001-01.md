@@ -10455,3 +10455,27 @@ claim of exact committed-head execution. They retain the real publication,
 verification, binding, model proxy and selected POST owner paths; no native
 runner qualification follows from the controlled selected response in the
 operator reconciliation case.
+
+### Match the selected POST materialization oracle to current approval
+
+Intent: project_lifecycle_d artifact14949234050 from the same PR run records
+1failure/480passes, schema0091 and complete cleanup. Only
+ test_selected_post_materializes_actual_submission_and_replays fails: the current
+material fixture has one required registered POST, while the oracle expects no
+external members. Correct that assertion only in test_selected_post_submit.py
+and this record. Require the exact one-member order/requirement, pinned locked
+registry ID/digest and completed/passed phase, preserving original result identity,
+replay equality and exactly-one provider read assertions. No production, fixture,
+policy, timer or file-line growth. Pure exact-oracle discrimination and static
+gates now; root owns B/D/G PostgreSQL batch after C/F and native ownership finish.
+
+The replacement binds exactly order0/project.post_evidence to the locked request's
+registry ID/digest and post_submit/completed/passed result. The old empty oracle
+fails on the real registry_entry fixture; the new assertion accepts that control
+and rejects9member-count/order/identity/result substitutions
+(/tmp/submission-project-d-oracle-probe.log/.json). Every other AST and all1084
+file lines are unchanged; replay equality and provider read count remain intact.
+Ruff/diff/Commitrail pass. The combined structural check separately exposes the
+B/G edits' stale frozen test_projects file hash; this D module introduces no
+structural change. That debt must shrink through honest behavior relocation,
+not a hash-only rebaseline. Actual D PostgreSQL replay remains root-batched.

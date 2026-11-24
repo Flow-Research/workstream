@@ -339,7 +339,7 @@ async def test_selected_post_materializes_actual_submission_and_replays(
         assert result.outcome == "completed"
         assert result.attempt_id == reservation.attempt_id
         assert result.execution is not None
-        assert result.execution.external_members == ()
+        assert [(m.order, m.requirement_id, m.registry_entry_id, m.registry_entry_digest, m.result.phase, m.result.outcome, m.result.verdict) for m in result.execution.external_members] == [(0, "project.post_evidence", h.request.policy.entries[0].registry.registry_entry_id, h.request.policy.entries[0].registry.entry_digest, "post_submit", "completed", "passed")]
         assert await executor.evaluate_post_submission(h.request) == result
         assert len(h.store.opens) == 1
 
