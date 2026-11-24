@@ -8651,3 +8651,14 @@ warning and a corrected fresh-key acceptance. New source uploads are expected
 and remain charged/cleanup-owned; no SHA-artifact put is permitted. No production,
 schema, runner or broader test deletion. Risk: medium workflow-test migration;
 run both cases on PostgreSQL, structure/Ruff, then scoped QA/ARCH review.
+
+Both migrated cases passed initially (112.31s). QA-REVISION-REJECTION-001 found
+that expected HTTP feedback was not compared with the persisted typed terminal.
+Added exact public projection equality; the repeated pair passed in106.66s at
+abe88c0d2, schema0090, complete database/MinIO cleanup
+(/tmp/submission-public-revision-feedback.json). QA's bounded mutation probe
+rejects substituted persisted failure code, warning code and finding count.
+Structure, Ruff, diff and Commitrail checks passed; scoped ARCH/SEC reported no
+finding. These are real HTTP/SQL with controlled guest transport, not native
+provider or full deployed journey qualification. Other obsolete preparation
+callers remain outside this two-case retirement.
