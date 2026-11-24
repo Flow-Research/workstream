@@ -8568,3 +8568,29 @@ parameters, across separate runs rather than a single final-head aggregate.
 Reconcile the overview/index to these completed boundaries; remaining native,
 AWS, broker, preparation-writer and orphan requirements stay open. This is an
 evidence update, not a deployed-capability claim or goal completion.
+
+### Preserve retained verifier setup before preparation-writer retirement
+
+The retained-verification tests still manufacture historical SHA admissions
+through the superseded preparation command. Capture its pending-verification
+rows and exact bytes once, then replace that test setup with checksum-bound
+restore using the existing isolated snapshot validator. Allowed: lineage test
+fixtures, a bounded historical archive/provenance, and this record. Preserve
+the actual verifier, parent locks, rollback, and contributor-lifecycle tests;
+do not claim restore executes the old writer. No production, migration, runner,
+or retained-data deletion changes. First capture must verify enabled database
+guards and exact schema in a read-only consistent transaction. Subsequent
+restore must verify row/column/FK custody before running the unchanged verifier
+contracts. Risk: medium test-custody change; scoped ARCH/QA review required
+before retiring the old fixture. This removes a concrete test dependency, not
+the shared preparation service used by guide/import/POST consumers.
+
+Current-head capture diagnosed the stale dependency rather than producing an
+archive: old PreSubmitMaterializationPreparationFacts no longer matches current
+source-read authorization (AttributeError before pending verification). Receipt
+/tmp/submission-pending-capture.json confirms complete cleanup. Do not repair
+the obsolete production authorization path to manufacture test setup. Capture
+instead from clean detached e2b926288, schema0065, in the separate local
+worktree /tmp/workstream-pending-verifier-capture; preserve source provenance
+and then exercise real upgrades before current verifier assertions. The failed
+capture produced no retained fixture and is not acceptance evidence.
