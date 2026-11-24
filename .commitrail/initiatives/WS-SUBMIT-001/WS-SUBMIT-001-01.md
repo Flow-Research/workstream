@@ -10239,3 +10239,37 @@ in `/tmp/submission-runner-b23b9be28-stage.log` and associated comparison files.
 
 
 The corrected exact project node `tests/project_reads/test_work_scale.py::test_project_pages_and_summary_meet_budget_at_scale` passed at bc4c37acd, schema0091, in47.62s. The actual `project read timings` output includes filtered submissions, import batches and10,000 preparation history rows; slowest endpoint0.414s against the unchanged1s budget. `/tmp/submission-project-work-scale-v1.log` and `.json` show one pass and full isolated database cleanup. This closes the focused project performance replay; the earlier contributor control is not its evidence.
+
+### Focused remote PRE launch-failure fixture
+
+Intent: run only the existing `public_pre_launch_failure` vector after the
+connected CLI journey's public guide, task creation and claim. This bounded
+fixture may change `cli/tests/journey/bootstrap.py`, `runtime.py`, add its
+single adapter module and focused cleanup tests, plus this record. It must
+reuse the actual incident-summary ZIP, isolated database and bucket, exact
+runner profile and owned general-worker callbacks. The dedicated finalizer
+remains live. No product route, provider policy, runner configuration or
+human-review behavior changes are allowed. The lead owns reviewed runner
+staging, supervisor start and restoration; this fixture cannot perform them.
+
+Acceptance is a real public 503 with one failed source/PRE and no accepted
+handoff, one remote create/start/delete without execution, unchanged same-key
+failure replay without new allocation, then fresh-key 202 and durable T5.
+The runner cleanup receipt must bind the original config and show no owned
+resources after the supervisor stops. Unknown remote command outcomes retain
+their original ID and stop the sequence. Verification uses a private isolated
+launcher and focused process-group regression; the complete V14 journey is not
+repeated. Risk is high because the fault supervisor temporarily changes the
+owned remote runner and interrupted local workers must be reaped.
+
+The fixture now selects this one branch only after existing public setup. A
+private runner profile is validated before local API startup, with exact image
+pin and no credentials in output. It pauses only the fixture-owned general
+worker and restores it in `finally`; the finalizer continues T5. A new exact
+process-group shutdown helper observes every live group member rather than
+waiting solely for the Celery leader. Cancellation sends TERM to all owned
+separate sessions and kills survivors within the isolation runner's two-second
+grace. Real leader plus TERM-resistant child controls passed both normal and
+cancellation paths (2 cases); an in-memory predecessor leader-only stop failed
+the regression. Focused bucket/cleanup checks: 6 passed; Ruff and diff check
+passed. These are fixture checks, not a live runner-fault result.

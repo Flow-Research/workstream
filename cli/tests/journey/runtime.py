@@ -22,6 +22,63 @@ PILOT_CHECKS = {
 }
 
 
+def _live_group_members(group_id: int) -> set[int]:
+    """Observe live members of one process group created by this fixture."""
+    members = set()
+    for entry in Path("/proc").iterdir():
+        if not entry.name.isdecimal():
+            continue
+        try:
+            fields = (entry / "stat").read_text().rsplit(") ", 1)[1].split()
+            if int(fields[2]) == group_id and fields[0] not in {"Z", "X"}:
+                members.add(int(entry.name))
+        except (IndexError, OSError, ValueError):
+            continue
+    return members
+
+
+def _stop_owned_group(
+    process: subprocess.Popen, *, graceful_seconds: float = 20, force_seconds: float = 10
+) -> None:
+    """Stop and reap every live member of this start_new_session process group."""
+    group_id = process.pid
+    if process.poll() is None and os.getpgid(group_id) != group_id:
+        raise RuntimeError("owned process is not its own group leader")
+
+    def wait_until_empty(seconds: float) -> bool:
+        deadline = time.monotonic() + seconds
+        while time.monotonic() < deadline:
+            process.poll()
+            if not _live_group_members(group_id):
+                return True
+            time.sleep(0.1)
+        process.poll()
+        return not _live_group_members(group_id)
+
+    if _live_group_members(group_id):
+        os.killpg(group_id, signal.SIGTERM)
+    if not wait_until_empty(graceful_seconds):
+        os.killpg(group_id, signal.SIGKILL)
+        if not wait_until_empty(force_seconds):
+            raise RuntimeError("owned process group retained live members")
+    process.wait(timeout=1)
+
+
+def _interrupt_owned_groups(processes: list[subprocess.Popen]) -> None:
+    """Fan out cancellation before the isolation runner's two-second KILL grace."""
+    for process in reversed(processes):
+        if _live_group_members(process.pid):
+            os.killpg(process.pid, signal.SIGTERM)
+    deadline = time.monotonic() + 1
+    while time.monotonic() < deadline and any(
+        _live_group_members(process.pid) for process in processes
+    ):
+        time.sleep(0.05)
+    for process in reversed(processes):
+        if _live_group_members(process.pid):
+            os.killpg(process.pid, signal.SIGKILL)
+
+
 def _required_file(environment: dict[str, str], name: str, *, limit: int) -> Path:
     raw = environment.get(name)
     if not raw:
@@ -201,6 +258,13 @@ def durable_runtime(root: Path, directory: Path, environment: dict[str, str]):
     """Start only owned local broker/worker groups; runner lives outside this host."""
     processes, logs = [], []
 
+    def interrupt_owned(_signum, _frame):
+        # The isolation runner gives its child only two seconds after TERM.
+        # These workers are separate sessions, so the runner's process-group
+        # signal does not reach them without this exact-owned fanout.
+        _interrupt_owned_groups(processes)
+        raise KeyboardInterrupt
+
     def start(arguments: list[str], label: str, *, extra_environment=None):
         log = (directory / (label + ".log")).open("wb")
         logs.append(log)
@@ -249,6 +313,7 @@ def durable_runtime(root: Path, directory: Path, environment: dict[str, str]):
     redis_binary = shutil.which("redis-server")
     if redis_binary is None:
         raise RuntimeError("journey requires redis-server")
+    previous_sigterm = signal.signal(signal.SIGTERM, interrupt_owned)
     try:
         redis = start(
             [
@@ -282,28 +347,28 @@ def durable_runtime(root: Path, directory: Path, environment: dict[str, str]):
             def worker(
                 label: str, queues: str, concurrency: int, *, extra_environment=None
             ):
-                required.append(
-                    start(
-                        [
-                            sys.executable,
-                            "-m",
-                            "celery",
-                            "-A",
-                            "app.workers.celery_app",
-                            "worker",
-                            "--pool=prefork",
-                            f"--concurrency={concurrency}",
-                            "--queues",
-                            queues,
-                            f"--hostname={label}@localhost",
-                            "--loglevel=WARNING",
-                        ],
-                        label,
-                        extra_environment=extra_environment,
-                    )
+                process = start(
+                    [
+                        sys.executable,
+                        "-m",
+                        "celery",
+                        "-A",
+                        "app.workers.celery_app",
+                        "worker",
+                        "--pool=prefork",
+                        f"--concurrency={concurrency}",
+                        "--queues",
+                        queues,
+                        f"--hostname={label}@localhost",
+                        "--loglevel=WARNING",
+                    ],
+                    label,
+                    extra_environment=extra_environment,
                 )
+                required.append(process)
+                return process
 
-            worker("worker", "celery,workstream.outbox", 2)
+            general_worker = worker("worker", "celery,workstream.outbox", 2)
             worker("finalizer", "workstream.submission_finalization", 1)
             worker(
                 "source-cleanup",
@@ -340,18 +405,35 @@ def durable_runtime(root: Path, directory: Path, environment: dict[str, str]):
                     raise RuntimeError("required journey worker exited during startup")
                 time.sleep(0.2)
 
+            def stop_general_worker():
+                if general_worker.poll() is not None:
+                    raise RuntimeError("owned general worker already exited")
+                _stop_owned_group(general_worker)
+
+            async def start_general_worker():
+                nonlocal general_worker
+                if general_worker.poll() is None:
+                    raise RuntimeError("owned general worker was not stopped")
+                general_worker = worker(
+                    "worker-restarted", "celery,workstream.outbox", 2
+                )
+                deadline = time.monotonic() + 15
+                while time.monotonic() < deadline:
+                    if general_worker.poll() is not None:
+                        raise RuntimeError("owned general worker restart exited")
+                    await asyncio.sleep(0.2)
+
+            return stop_general_worker, start_general_worker
+
         yield start_workers
     finally:
-        for process in reversed(processes):
-            if process.poll() is None:
-                os.killpg(process.pid, signal.SIGTERM)
-                try:
-                    process.wait(timeout=20)
-                except subprocess.TimeoutExpired:
-                    os.killpg(process.pid, signal.SIGKILL)
-                    process.wait(timeout=10)
-        for log in logs:
-            log.close()
+        try:
+            for process in reversed(processes):
+                _stop_owned_group(process)
+        finally:
+            signal.signal(signal.SIGTERM, previous_sigterm)
+            for log in logs:
+                log.close()
         if location := os.environ.get("WORKSTREAM_CLI_JOURNEY_EVIDENCE"):
             retained = Path(location) / "runtime-logs"
             retained.mkdir(mode=0o700, parents=True)

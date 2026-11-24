@@ -32,6 +32,7 @@ from artifact_work import inspect_submission_custody
 
 ROOT = Path(__file__).resolve().parents[3]
 BACKEND = ROOT / "backend"
+sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(BACKEND))
 sys.path.insert(0, str(BACKEND / "scripts"))
 from local_flow_tokens import issue_flow_token  # noqa: E402
@@ -123,6 +124,19 @@ def main():
     ):
         directory = Path(temporary)
         through_setup = os.environ.get("WORKSTREAM_CLI_JOURNEY_SETUP") == "1"
+        fault_mode = os.environ.get("WORKSTREAM_CLI_JOURNEY_PRE_LAUNCH_FAULT") == "1"
+        if fault_mode and (
+            not through_setup
+            or os.environ.get("WORKSTREAM_CLI_JOURNEY_TASKS") != "1"
+            or os.environ.get("WORKSTREAM_CLI_JOURNEY_SUBMIT") == "1"
+            or not os.environ.get("WORKSTREAM_CLI_JOURNEY_EVIDENCE")
+        ):
+            raise RuntimeError("PRE launch fault requires the isolated setup and task path")
+        fault_profile = None
+        if fault_mode:
+            from pre_launch_fault import load_fault_profile
+
+            fault_profile = load_fault_profile(environment)
         if through_setup:
             registries = load_journey_configuration(environment)
             prepare_versioned_source_bucket(environment)
@@ -301,7 +315,7 @@ def main():
                             str(uuid4()),
                         )
                     project_id = project["id"]
-                    start_workers()
+                    worker_controls = start_workers()
                     publish_unpaid_terms(client, tokens["finance"], project_id)
                     guide_id = configure_guide(client, tokens, project_id)
                     approve_and_activate(
@@ -334,7 +348,20 @@ def main():
                             client, tokens, actors, project_id
                         )
                         client.complete_stage("task_claim_and_guide")
-                        if os.environ.get("WORKSTREAM_CLI_JOURNEY_SUBMIT") == "1":
+                        if fault_mode:
+                            from pre_launch_fault import run_pre_launch_fault
+
+                            run_pre_launch_fault(
+                                client,
+                                origin,
+                                environment,
+                                task_id,
+                                assignment_id,
+                                tokens["alice"],
+                                worker_controls,
+                                fault_profile,
+                            )
+                        elif os.environ.get("WORKSTREAM_CLI_JOURNEY_SUBMIT") == "1":
                             receipt = submit_and_observe(
                                 client,
                                 tokens,
