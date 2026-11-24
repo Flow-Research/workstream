@@ -10024,3 +10024,17 @@ live-d0dad07781b744538b4a46b1fce9802c.jsonl; synthetic targets remain explicitly
 owned for reconciliation. The drill now records traceback locations (no locals
 or SDK messages) and its own static AssertionError text to diagnose the exact
 failure. This is diagnostic-only; no acceptance assertion is removed or widened.
+
+
+### Conclusive retained-artifact permission control
+
+The diagnostic replay isolated the failure to the cleanup GET of an invented
+all-zero SHA key. AWS returned NoSuchKey/404, not a conclusive permission denial.
+ARCH/SEC reviewed a narrow correction: require an operator-selected existing
+canonical SHA key, prove its existence with runtime HEAD, then require cleanup
+HEAD to fail with403/AccessDenied. HEAD exercises GetObject permission without
+reading retained user bytes. Run this control before synthetic source creation.
+Keep all source multipart/overwrite/deletion/abort and lost-ack checks unchanged;
+never accept404 as permission-denial proof and never create an undeletable SHA
+fixture. Allowed changes are the operator drill, its operations instructions and
+this record. Real AWS replay provides verification; no product policy changes.

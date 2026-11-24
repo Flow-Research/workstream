@@ -96,8 +96,14 @@ time-limited permission record required by ordinary storage operations.
 The reviewed pilot drill is [qualify_submission_source.py](../scripts/qualify_submission_source.py).
 It is deliberately pinned to the current pilot bucket, prefix and two principal
 ARNs; it is not a generic cleanup command. Run from the repository root with
-`PYTHONPATH=backend`, explicit `--runtime-key-file`, `--cleanup-key-file` and a
-new private `--report` JSONL path. Both key files must have mode `0400`.
+`PYTHONPATH=backend`, explicit `--runtime-key-file`, `--cleanup-key-file`,
+`--retained-artifact-key` and a new private `--report` JSONL path. Select an
+existing current SHA artifact key for the runtime HEAD existence control and
+cleanup HEAD denial check; neither check reads its body. A nonexistent key's
+404 is not evidence of denied read permission. Both key files must have mode `0400`.
+Use an isolated runtime without ambient AWS configuration or credential files;
+the production adapter rejects those files even when SDK environment variables
+are cleared. The drill supplies its own private temporary scratch directory.
 It creates only new synthetic operation keys, journals each target before
 provider I/O, and cleans only their exact handles/versions. A failed run retains
 its journal and uncertain targets for reconciliation. It does not test product

@@ -12,6 +12,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import tempfile
 import traceback
@@ -98,9 +99,15 @@ async def denied(store, operation, **kwargs):
     raise AssertionError("restricted operation unexpectedly permitted")
 
 
-async def qualify(runtime, cleanup_store, emit):
+async def qualify(runtime, cleanup_store, emit, *, retained_artifact_key):
     cleanup = S3SubmissionSourceCleanup(cleanup_store)
     owned = set()
+    # A missing key is not a permission-denial control. HEAD checks the same
+    # GetObject permission without retrieving retained user bytes.
+    async with runtime._client() as client:
+        await client.head_object(Bucket=BUCKET, Key=retained_artifact_key)
+    await denied(cleanup_store, "head_object", Key=retained_artifact_key)
+    emit("passed", check="existing_retained_artifact_cleanup_read_denied")
 
     def intent():
         location = SubmissionSourceLocation(operation_id=new_record_id(), namespace_id="primary",
@@ -162,7 +169,6 @@ async def qualify(runtime, cleanup_store, emit):
     await cleanup_store.request_source_abort(competitor.upload)
     assert await cleanup_store.source_upload_parts_absent(competitor.upload)
     await denied(cleanup_store, "put_object", Key=key, Body=b"forbidden", IfNoneMatch="*")
-    await denied(cleanup_store, "get_object", Key=PREFIX + "/sha256/00/" + "0" * 62)
     emit("passed", check="conditional_versioned_multipart_and_separate_principals")
     async with lose_ack(cleanup_store, "delete_object", emit) as delete_effect:
         try:
@@ -220,7 +226,10 @@ def main():
     parser.add_argument("--runtime-key-file", required=True, type=Path)
     parser.add_argument("--cleanup-key-file", required=True, type=Path)
     parser.add_argument("--report", required=True, type=Path)
+    parser.add_argument("--retained-artifact-key", required=True)
     args = parser.parse_args()
+    if re.fullmatch(re.escape(PREFIX) + r"/sha256/[0-9a-f]{2}/[0-9a-f]{62}", args.retained_artifact_key) is None:
+        parser.error("retained artifact key must be an existing canonical SHA key")
     if not __debug__:
         parser.error("qualification requires Python assertions enabled; do not use -O")
     # Never load the invalid default AWS profile or ambient credentials.
@@ -240,7 +249,8 @@ def main():
                  script_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest())
             runtime = store_for(args.runtime_key_file.resolve(), RUNTIME, scratch_root=Path(scratch))
             cleanup_store = store_for(args.cleanup_key_file.resolve(), CLEANUP, scratch_root=Path(scratch))
-            asyncio.run(asyncio.wait_for(qualify(runtime, cleanup_store, emit), timeout=900))
+            asyncio.run(asyncio.wait_for(qualify(runtime, cleanup_store, emit,
+                retained_artifact_key=args.retained_artifact_key), timeout=900))
             emit("completed", result="passed")
             print("AWS source adapter qualification passed; see private report")
         except BaseException as error:
