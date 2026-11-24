@@ -9733,3 +9733,79 @@ the existing request→completion regression for both policy branches. The
 existing finalization-worker isolation test retains pending/expired cases
 under the sole supported app profile; remove its obsolete single-host variant.
 These tests directly exercise the two worker groups affected by this fix.
+
+### Repair retained Terminal Systems Smol qualification callers
+
+Bounded intent over83ee3bacb: terminal_systems_smol_composition.py and recovery
+reuse the production RemoteTls adapters through existing remote_adapter_endpoint,
+without restoring removed Unix adapters. Extend that existing test endpoint only
+with explicit finite session/material/callback socket parameters; ordinary10s
+callers keep their current envelope. The native Rust service must see the edge's
+runner callback socket while the adapter routes callbacks to actual application
+model/trial proxies. Preserve exact ART material roots and cleanup inventories.
+
+Split author and runtime POST approval into independent one-image pytest cases,
+with separate fixture roots, two model effects and one retained trial receipt per
+case. Preserve the original combined four effects/two receipts, all17 trial-slot
+outcomes, replay and full binding/economic checks in aggregate qualification
+admission; recovery explicitly selects the runtime case. Update existing native
+wrapper/evidence guards to require both cases, refusing missing/duplicate/skipped
+branches instead of lowering the total. Allowed files: composition, recovery,
+existing test_remote_node endpoint helper, native qualifier and its existing guard
+module, and this record. No product code or schema changes planned.
+
+Use scoped imports/collection and actual loopback production-TLS helper guards,
+plus native evidence-admission negatives and source checks. No live native,
+service, runner configuration or deployment mutation while the connected journey
+uses the remote node; local guards/collection do not qualify native composition.
+
+Implemented the bounded harness cutover. Both POST cases are explicit pytest
+parameters, each approving exactly one registered image/configuration. Recovery
+calls the same runtime-case helper directly. Each case gets an independent
+composition root and short child-HOME leaf, refusing reuse; the configured child
+HOME parent must therefore fit <=16 bytes so each existing native leaf bound
+stays <=18. Each result requires two completed model effects with UUIDv7 request/
+response bindings, one retained trial evidence binding/content/put/verification
+join and its exact receipt digest. Native qualifier admission requires both exact
+JUnit case IDs and both one-image summaries; flattened totals must equal those
+summaries and remain the original four model effects/two receipts. Per-case
+raw summary hashes are retained alongside the aggregate, with separate authority
+manifest digests rather than pretending authority is shared.
+
+Both adapters use the production RemoteTls implementations and canonical
+selected_pre_submit_source_contracts(). The existing loopback test edge now
+accepts explicit finite720s sessions and independently pinned material/callback
+roots, keeping default10s behavior unchanged. Application post-scratch stays
+separate from runner-materials to prevent extract-ID collisions. Rust callbacks
+target the runner edge socket; the adapter routes the owning connection back to
+actual application model/trial proxies in native qualification. The helper
+cleans its socket root even if explicit-root validation fails. No Unix adapter
+or compatibility layer was restored.
+
+Executed scoped evidence (modified content over83ee3bacb): exact hosted CI
+collection command collected author, runtime and recovery (three nodes) in4.09s
+at /tmp/submission-ts-harness-collection-v1.log, exit0; its pre-existing unknown
+postgres_schema_contract mark warning is retained. Native evidence-admission
+and inventory guards passed14 in0.543s at
+/tmp/submission-ts-qualification-guards-v1.log. Actual loopback production-TLS
+endpoint guards plus the existing model-selector control passed3 in5.31s at
+/tmp/submission-ts-tls-helper-final.log. Those native peer replies and model/
+trial-labelled callback frames are controlled plumbing facts, not real Smol,
+SQL model/trial custody, paid inference or deployed two-host qualification.
+
+The first TLS plumbing guard failed due to its fake native peer using the wrong
+wire key material_grant instead of grant; a wrong-cwd edit did not apply before
+the second run, which honestly repeated that fixture failure. Final bytes fixed
+that field; assertions were retained. No product failure was inferred. A pure
+in-memory mutant retained count2 and fatal-result checks but omitted exact JUnit
+image-case identities: the named duplicate-author/missing-runtime test failed
+ValueError-not-raised after its valid control, with no source mutation
+(/tmp/submission-ts-case-omission-probe.json and .log).
+
+AST comparison confirms _provider_output, _manifest,
+_runtime_configuration_digest, _assert_idle_trial_roots and
+_retained_trial_summary unchanged, plus original17-slot cardinality/all11
+explicit slot assertions unchanged (/tmp/submission-ts-preservation.json).
+Ruff/whitespace pass. Record/link checks follow this append. Actual native
+composition/recovery remains unexecuted: no live runner, service, configuration,
+deployment or paid-provider mutation occurred while the connected journey ran.

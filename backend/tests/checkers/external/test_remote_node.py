@@ -102,33 +102,38 @@ async def remote_adapter_endpoint(
     native_socket_path: Path,
     *,
     model_proxy_socket_path: Path | None = None,
+    material_root: Path | None = None,
+    native_model_proxy_socket_path: Path | None = None,
+    session_timeout_seconds: float = 10.0,
 ):
-    """Expose one test-native Unix service through the production TLS edge."""
+    """Expose one test-native service with explicit finite owner roots/windows."""
     certificates = _certificate_files(tmp_path)
-    material_root = tmp_path / f"runner-materials-{uuid4().hex}"
-    material_root.mkdir(mode=0o700)
+    if material_root is None:
+        material_root = tmp_path / f"runner-materials-{uuid4().hex}"
+        material_root.mkdir(mode=0o700)
     runner_proxy_root = Path("/tmp") / f"ws-rm-{uuid4().hex[:12]}"
     runner_proxy_root.mkdir(mode=0o700)
-    runner_proxy_path = runner_proxy_root / "model.sock"
-    node = _REMOTE.RemoteNode(
-        {
-            "listen_host": "127.0.0.1",
-            "listen_port": 1,
-            "client_name": "app.test",
-            "socket_path": str(native_socket_path),
-            "model_proxy_socket_path": str(runner_proxy_path),
-            "material_root": str(material_root),
-            "tls_certificate_path": str(certificates["server_certificate"]),
-            "tls_private_key_path": str(certificates["server_key"]),
-            "tls_ca_path": str(certificates["ca"]),
-            "session_timeout_seconds": 10,
-        }
-    )
-    await node.start_model_proxy()
-    remote = await asyncio.start_server(
-        node.handle, "127.0.0.1", 0, ssl=node.ssl_context
-    )
+    runner_proxy_path = native_model_proxy_socket_path or runner_proxy_root / "model.sock"
+    node, remote = None, None
     try:
+        node = _REMOTE.RemoteNode(
+            {
+                "listen_host": "127.0.0.1",
+                "listen_port": 1,
+                "client_name": "app.test",
+                "socket_path": str(native_socket_path),
+                "model_proxy_socket_path": str(runner_proxy_path),
+                "material_root": str(material_root),
+                "tls_certificate_path": str(certificates["server_certificate"]),
+                "tls_private_key_path": str(certificates["server_key"]),
+                "tls_ca_path": str(certificates["ca"]),
+                "session_timeout_seconds": session_timeout_seconds,
+            }
+        )
+        await node.start_model_proxy()
+        remote = await asyncio.start_server(
+            node.handle, "127.0.0.1", 0, ssl=node.ssl_context
+        )
         yield {
             "host": "127.0.0.1",
             "port": remote.sockets[0].getsockname()[1],
@@ -139,10 +144,116 @@ async def remote_adapter_endpoint(
             "model_proxy_socket_path": model_proxy_socket_path,
         }
     finally:
-        remote.close()
-        await remote.wait_closed()
-        await node.close()
+        if remote is not None:
+            remote.close()
+            await remote.wait_closed()
+        if node is not None:
+            await node.close()
         runner_proxy_root.rmdir()
+
+
+@pytest.mark.asyncio
+async def test_remote_adapter_endpoint_preserves_explicit_roots_and_callback_routes(tmp_path, monkeypatch):
+    """Actual production TLS forwards both callback frames on the owning execute."""
+    import tempfile
+    from app.adapters.artifacts import selected_pre_submit_source_contracts
+    from app.adapters.checkers.external_service import RemoteTlsExternalCheckerAdapter
+    from app.interfaces.external_checker_execution import ExternalCheckerModelGrant
+    from app.modules.checkers.api.external import make_external_checker_execution_result
+    from tests.checkers.external.support import empty_external_material_grant
+    from tests.checkers.external.test_model_transport import request
+
+    value = request()
+    result = make_external_checker_execution_result(
+        request_digest=value.request_digest, registry_entry_id=value.registry.registry_entry_id,
+        registry_entry_digest=value.registry.entry_digest, phase="post_submit", outcome="infrastructure_failed",
+        verdict=None, findings=(), infrastructure_failure_code="implementation_unavailable",
+    )
+    material = tmp_path / "runner-material"
+    material.mkdir(mode=0o700)
+    captured, callbacks, failures = [], [], []
+    original_node = _REMOTE.RemoteNode
+    def node(config):
+        instance = original_node(config)
+        captured.append(instance)
+        return instance
+    monkeypatch.setattr(_REMOTE, "RemoteNode", node)
+    with tempfile.TemporaryDirectory(prefix="ws-ts-tls-") as temporary:
+        sockets = Path(temporary)
+        app_proxy, native_proxy, native_socket = (sockets / name for name in ("app", "runner", "native"))
+        async def app(reader, writer):
+            try:
+                payload = await _read_frame(reader)
+                callbacks.append(payload)
+                writer.write(_frame(payload))
+                await writer.drain()
+            finally:
+                writer.close()
+                await writer.wait_closed()
+        async def native(reader, writer):
+            try:
+                wire = json.loads(await _read_frame(reader))
+                grant_id = wire["grant"]["grant_id"]
+                assert (material / "workspaces" / grant_id).is_dir()
+                assert wire["model_grant"]["grant_id"] == "model_" + "a" * 32
+                for payload in (b'{"callback":"model"}', b'{"callback":"trial"}'):
+                    callback_reader, callback_writer = await asyncio.open_unix_connection(native_proxy)
+                    callback_writer.write(_frame(payload))
+                    await callback_writer.drain()
+                    assert await _read_frame(callback_reader) == payload
+                    callback_writer.close()
+                    await callback_writer.wait_closed()
+                writer.write(_frame(json.dumps({"protocol_version": "external_checker_service.v1",
+                    "result": result.model_dump(mode="json"), "isolation": None}).encode()))
+                await writer.drain()
+            except BaseException as error:
+                failures.append(error)
+            finally:
+                writer.close()
+                await writer.wait_closed()
+        native_server = await asyncio.start_unix_server(native, native_socket)
+        app_server = await asyncio.start_unix_server(app, app_proxy)
+        try:
+            async with remote_adapter_endpoint(tmp_path, native_socket, model_proxy_socket_path=app_proxy,
+                    material_root=material, native_model_proxy_socket_path=native_proxy,
+                    session_timeout_seconds=720.0) as endpoint:
+                assert captured[0].timeout == 720.0
+                assert captured[0].material_root == material
+                assert captured[0].model_proxy_socket_path == native_proxy
+                adapter = RemoteTlsExternalCheckerAdapter(**endpoint, timeout_seconds=90.0,
+                    source_contracts=selected_pre_submit_source_contracts())
+                observed = await adapter.execute(value, empty_external_material_grant(value, suffix="c"),
+                    model_grant=ExternalCheckerModelGrant("model_" + "a" * 32, value.request_digest))
+                assert observed.result == result
+            assert not native_proxy.exists()
+            assert list((material / "workspaces").iterdir()) == []
+            assert callbacks == [b'{"callback":"model"}', b'{"callback":"trial"}']
+            assert failures == []
+        finally:
+            native_server.close()
+            app_server.close()
+            await native_server.wait_closed()
+            await app_server.wait_closed()
+
+
+@pytest.mark.asyncio
+async def test_remote_adapter_endpoint_invalid_explicit_root_cleans_helper_socket_root(tmp_path, monkeypatch):
+    """Fail before native contact and leave no helper-owned directory on rejection."""
+    identity = uuid4()
+    monkeypatch.setitem(remote_adapter_endpoint.__wrapped__.__globals__, "uuid4", lambda: identity)
+    material = tmp_path / "public-material"
+    material.mkdir(mode=0o755)
+    root = Path("/tmp") / f"ws-rm-{identity.hex[:12]}"
+    assert not root.exists()
+    private = tmp_path / "private-material"
+    private.mkdir(mode=0o700)
+    async with remote_adapter_endpoint(tmp_path, tmp_path / "no-native.sock", material_root=private):
+        assert root.is_dir()
+    assert not root.exists()
+    with pytest.raises(ValueError, match="material root is not private"):
+        async with remote_adapter_endpoint(tmp_path, tmp_path / "no-native.sock", material_root=material):
+            raise AssertionError("invalid material root entered native execution")
+    assert not root.exists()
 
 
 @pytest.mark.asyncio
