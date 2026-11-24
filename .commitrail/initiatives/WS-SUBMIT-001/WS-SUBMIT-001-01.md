@@ -8558,3 +8558,13 @@ scoped Ruff and diff checks passed. ARCH/SEC PASS and QA PASS WITH LOW RISKS
 reported no findings; independent QA probes rejected substituted source hash
 and award quantity. This proves the source-backed owner path and public progress
 read, not public ZIP/native/AWS execution or the aggregate four-case matrix.
+
+Recovery controls at f3e83e200 also passed: expired finalization ownership and
+POST infrastructure failure/retry (2 passed in53.58s). Receipt
+/tmp/submission-source-recovery-controls.json confirms schema0090 and complete
+database/MinIO cleanup. One existing Pydantic serialization warning remains in
+the retry fixture. Together with the prior two-case run this covers all four
+parameters, across separate runs rather than a single final-head aggregate.
+Reconcile the overview/index to these completed boundaries; remaining native,
+AWS, broker, preparation-writer and orphan requirements stay open. This is an
+evidence update, not a deployed-capability claim or goal completion.

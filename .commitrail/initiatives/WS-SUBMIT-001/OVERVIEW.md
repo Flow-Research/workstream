@@ -22,6 +22,10 @@ limits are in [the change record](WS-SUBMIT-001-01.md).
 - [x] Production sealed-source sweep wiring: explicit profile, dedicated worker/task isolation, 12-hour schedule, indexed discovery and focused real-storage retry/retention proof.
 - [x] Expired receiving/PRE recovery through the sweep: current authority and task-lock recheck, old-owner fencing, exact pointer release, retained source charge and separate time for sealed cleanup.
 - [x] Historical cap fixture no longer depends on the old writer; capture, restore/recovery and neighboring upgrade controls passed.
+- [x] Unsealed cleanup and discovered multipart handles use durable cleanup ownership; ambiguous empty discovery retains its charge.
+- [x] Admission-only TASK writer removed; accepted-source finalization remains the sole Submission writer.
+- [x] Source-backed POST reaches both default human review and automatic acceptance with exact contribution/award lineage and replay checks.
+- [x] Actual finalizer process death before source observation and after commit has separate recovery receipts; real broker qualification remains open.
 
 Recent focused evidence includes atomic invalidation (`8a854f7a6`), public
 ZIP/T5 lineage (`168e5268f`), and policy-error translation (`d31a45773`). These and the cleanup/recovery runs recorded below are bounded results, not
@@ -80,19 +84,18 @@ journey. The remaining cleanup and verification requirements below still apply.
 
 | Order | Required outcome | Concrete finishing evidence |
 | --- | --- | --- |
-| 1 | Finish uncertain/unsealed and genuine-orphan reconciliation | Reconcile interrupted multipart and lost acknowledgements; retained/stalled sources survive; actual absence and settled writes release charges once; exercise worker loss/restart. |
-| 2 | Remove superseded preparation/submission writers and remaining consumers | Trace all remaining callers, preserve their distinct authority/history contracts, then delete obsolete implementation. Current T5 `create_accepted` remains. |
+| 1 | Finish remaining uncertain/orphan reconciliation | Reconcile interrupted multipart and lost acknowledgements; retained/stalled sources survive; actual absence and settled writes release charges once; exercise worker loss/restart. |
+| 2 | Retire remaining superseded preparation writers and consumers | Trace all remaining callers, preserve their distinct authority/history contracts, then delete obsolete implementation. Current T5 `create_accepted` remains. |
 | 3 | Complete separate-runner integration and runtime/provider/resource qualification | Authenticated remote execution replacing the current API-side Unix-socket coupling; actual Smol one-session/isolation proof on runner infrastructure; representative maxima, cold paths, concurrency and timing measurements; applicable AWS exact-version/uncertain multipart proof. Portable/MinIO evidence is insufficient for these claims. |
 | 4 | Execute final full-system verification and close the acceptance matrix | Full backend lanes, CLI/MCP contracts and CI at the final head; every A01–A35 row linked to an executed, scope-matching result. Fix actual failures without weakening requirements. |
 | 5 | Reconcile configuration and delivery documentation | Resolve C01–C07 using measured/approved values; update affected roadmap/overview/index and local spreadsheet exports; preserve the distinction between implemented, exposed and deployed. |
 
-The concrete next runtime gap is order 1. Sealed-source scheduling and task
-isolation passed scoped implementation review at `8928f3924`; focused integration
-cases passed across two runs. This is not deployed-provider or broker-crash
-qualification. Expired-foreground recovery passed scoped review at `81d69a207`,
-including blocked-task progress and after-lock service revocation. Unsealed/
-uncertain and genuine-orphan reconciliation remain unfinished. Further optional test
-migration must not displace closing this integration.
+The next integration boundary is the separate runner and live source provider,
+in parallel with the remaining writer audit. Ordinary unsealed cleanup is
+implemented; genuine-orphan reconciliation remains open. AWS policy and adapter
+drill preparation are reviewed, but IAM administration access is pending and no
+live source qualification has run. Do not repeat completed local proofs as a
+substitute for connecting and testing the deployed journey.
 
 The current unsealed change extends that same cleanup owner: Local incomplete
 uploads can be reclaimed, and an observed late completion is retained until a
@@ -103,8 +106,10 @@ lost-abort/replay case proves conservative charge retention then one release.
 Remote initiation without a recorded handle now retains discovered IDs before
 abort and binds them to a fresh cleanup authorization. Focused PostgreSQL/MinIO
 checks cover growing observations and lost-abort replay. Empty ambiguous
-discovery remains charged; genuine-orphan reconciliation and operational crash
-drills remain open. This partial implementation does not complete order 1.
+discovery remains charged; genuine-orphan reconciliation and deployed operational
+drills remain open. Actual local finalizer SIGKILL recovery has separate passing
+before-observation and after-commit receipts, not a real broker crash proof.
+This partial implementation does not complete order 1.
 
 ## Acceptance evidence still to close
 
@@ -115,11 +120,11 @@ This is the final qualification queue, not a claim that all listed code is absen
 | --- | --- | --- |
 | A01–A03 | Public ZIP flow, default/project PRE and formal finalization tests | Complete API/CLI journey with required real runtime and POST evidence. |
 | A04–A08 | Metadata/body replay, competing custody, interruption and T4 uncertainty tests | Reconcile exact cases and execute integrated final-head failure/retry matrix. |
-| A09–A13 | T5 rollback/redelivery, accepted authority, pending reads and old-POST guard | Real worker crash/broker-unavailable drill and final-head reconciliation. |
+| A09–A13 | T5 rollback/redelivery, actual local SIGKILL recovery, accepted authority, pending reads and old-POST guard | Real Celery/broker-unavailable drill and final-head reconciliation. |
 | A14–A18 | Cleanup lock/retention/charge owners and Local/MinIO provider tests | Production sweeps, accepted-source survival, AWS versions and uncertain multipart ownership. |
 | A19–A23 | Streaming/framing, safe archives, semantic identity and bounded findings code/tests | Measured permitted maxima/slow-provider memory bounds and complete safety matrix. |
 | A24–A30 | Source/result/fence contracts and runtime/capacity/substitution tests | Actual native isolation/failure/cleanup, multiple replicas/nodes, saturation and adapter qualification. |
-| A31–A32 | Existing governed POST/revision/acceptance owners preserved with focused journeys | Final combined downstream tests, exact ContributionRecord/award facts, both review branches. |
+| A31–A32 | Source-backed POST reaches review_pending or shared automatic FinalAcceptance with exact contribution/awards and replay checks | Complete public-API/native journey and final combined downstream tests, including human acceptance. |
 | A33–A35 | Retained migrations, cardinality guards and API/CLI/MCP cutover | Finish old-writer retirement and full current-head migration/client convergence proof. |
 
 ## Configuration and external evidence
