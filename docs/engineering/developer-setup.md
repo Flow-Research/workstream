@@ -217,11 +217,11 @@ and the same private bucket.
 The repository-managed MinIO port is bound to host loopback. A Workstream
 process running on a separate non-production container network may instead use
 an operator-controlled private MinIO endpoint; that remains development/test
-protocol proof and never qualifies as hosted-provider activation evidence.
-Native AWS S3 accepts workload-identity configuration but remains
-runtime-ineligible until live deployment proof is approved; startup fails with
-`artifact_provider_live_proof_required` before credential probing or provider
-I/O.
+protocol verification and does not establish hosted AWS readiness.
+Hosted AWS uses the [dedicated S3 credential](../operations_aws_s3_credentials.md).
+Storage does not depend on an expiring database proof. Deployment qualification,
+namespace ownership, AWS authentication and complete-byte verification remain
+required.
 
 The local development URL uses the password and PostgreSQL host port selected
 in the ignored environment files:

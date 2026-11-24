@@ -669,7 +669,7 @@ async def output_custody_harness(
     engine = create_async_engine(database_url)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     settings = _output_storage_settings(tmp_path, provider, storage_settings)
-    bootstrap = create_artifact_store_bootstrap(settings, activation_guard=None)
+    bootstrap = create_artifact_store_bootstrap(settings)
     namespace = artifact_storage_namespace_spec(settings, bootstrap)
     raw_store = bootstrap.initialize_after_namespace_claim(
         ArtifactStoreNamespaceClaim(

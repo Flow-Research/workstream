@@ -8,8 +8,10 @@ import pytest
 from sqlalchemy import select, text
 
 from app.adapters.auth import outbox_dispatch_authorization
-from app.adapters.outbox import outbox_delivery
+from app.adapters.outbox import outbox_delivery, production_outbox_delivery
 from app.core.config import get_settings
+from app.modules.checkers.api.delivery_reconciliation import POST_SUBMIT_DELIVERY_RECONCILIATION_EVENT
+from app.modules.checkers.api.execution import COMPLETION_EVENT, REQUEST_EVENT
 from app.modules.outbox.models import OutboxDeliveryAttempt, OutboxEvent
 from app.modules.outbox.registry import HandlerRegistry
 
@@ -62,6 +64,50 @@ async def test_worker_duplicate_delivery(delivery_harness, worker):
                 attempts[0].finalize_decision_event_id,
             )
         )
+
+
+async def test_app_host_leaves_checker_work_for_the_full_topology(delivery_harness, monkeypatch):
+    h = delivery_harness
+    checker_request = await h.append(event_type=REQUEST_EVENT)
+    reconciliation = await h.append(event_type=POST_SUBMIT_DELIVERY_RECONCILIATION_EVENT)
+    completion = await h.append(event_type=COMPLETION_EVENT)
+    full_delivery = h.build(HandlerRegistry([
+        (reconciliation.event_type, 1, h.handle),
+    ]))
+    expired = await full_delivery.claim(reconciliation.event_id, h.project, "checker-worker")
+    assert expired is not None
+    async with h.factory() as session:
+        await session.execute(text("select pg_sleep(3.05)"))
+
+    monkeypatch.setenv("WORKSTREAM_HOSTED_PROFILE", "app")
+    get_settings.cache_clear()
+    try:
+        app_delivery = production_outbox_delivery(h.factory)
+        for _ in range(2):
+            page = await app_delivery.candidates(limit=1)
+            assert tuple(item.event_id for item in page.items) == (completion.event_id,)
+            assert page.next_after is None
+        for event in (checker_request, reconciliation):
+            assert await app_delivery.deliver(event.event_id, h.project, "app-worker") is None
+        assert await app_delivery.claim(completion.event_id, h.project, "app-worker") is not None
+        async with h.factory() as session:
+            pending = await session.get(OutboxEvent, checker_request.event_id)
+            retained = await session.get(OutboxEvent, reconciliation.event_id)
+            assert (pending.delivery_state, pending.claim_generation) == ("pending", 0)
+            assert (retained.delivery_state, retained.claim_generation, retained.claim_owner) == (
+                "claimed", expired.claim_generation, expired.claim_owner,
+            )
+
+        monkeypatch.setenv("WORKSTREAM_HOSTED_PROFILE", "single-host")
+        get_settings.cache_clear()
+        restored_delivery = production_outbox_delivery(h.factory)
+        restored_page = await restored_delivery.candidates(limit=2)
+        assert tuple(item.event_id for item in restored_page.items) == (
+            checker_request.event_id, reconciliation.event_id,
+        )
+        assert await restored_delivery.recover(reconciliation.event_id, h.project) is not None
+    finally:
+        get_settings.cache_clear()
 
 
 @pytest.mark.parametrize("invoked", [False, True])

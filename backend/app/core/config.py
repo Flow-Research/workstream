@@ -24,11 +24,6 @@ from pydantic_settings import (
     SettingsConfigDict,
 )
 
-from app.core.aws_roles_anywhere import (
-    iam_principal_scope,
-    roles_anywhere_region_matches_partition,
-    roles_anywhere_resource_scope,
-)
 from app.core.s3_validation import (
     canonical_minio_endpoint,
     is_canonical_s3_bucket,
@@ -62,16 +57,9 @@ _EMPTY_ARTIFACT_S3_SECRETS: tuple[SecretStr | None, SecretStr | None, SecretStr 
 _MISSING_SECRET = object()
 _INVALID_OBSERVABILITY_ENDPOINT = object()
 PRODUCTION_LIKE_ENVIRONMENTS = frozenset({"staging", "preview", "prod", "production"})
-ARTIFACT_AWS_ACTIVATION_VALIDITY_SECONDS = 900
-ARTIFACT_AWS_ACTIVATION_REFRESH_SECONDS = 300
-ARTIFACT_AWS_CLOCK_SAFETY_MARGIN_SECONDS = 30
-ARTIFACT_AWS_PROOF_SEQUENCE_ALLOWANCE_SECONDS = 120
-_SHA256_IDENTITY = re.compile(r"^sha256:[0-9a-f]{64}$")
-_AWS_IAM_ROLE_ARN = re.compile(
-    r"^arn:(?:aws|aws-us-gov|aws-cn):iam::[0-9]{12}:role/[A-Za-z0-9+=,.@_/-]{1,512}$"
-)
-_AWS_IAM_POLICY_ARN = re.compile(
-    r"^arn:(?:aws|aws-us-gov|aws-cn):iam::[0-9]{12}:policy/[A-Za-z0-9+=,.@_/-]{1,512}$"
+ARTIFACT_DIRECT_USER_IDENTITY_TIMEOUT_SECONDS = 10.0
+_AWS_IAM_USER_ARN = re.compile(
+    r"arn:(?:aws|aws-us-gov|aws-cn):iam::[0-9]{12}:user/[A-Za-z0-9+=,.@_/-]{1,512}\Z"
 )
 _ALTERNATE_VALIDATION_RESTORES_SECRETS: ContextVar[bool] = ContextVar(
     "alternate_validation_restores_secrets",
@@ -155,6 +143,7 @@ class Settings(BaseSettings):
     )
     guide_document_parser_socket: Path = Path("/var/lib/workstream/guide-runtime/guide.sock")
     celery_broker_url: str | None = None
+    hosted_profile: Literal["single-host", "app"] = "single-host"
     celery_result_backend_url: str | None = None
     celery_task_always_eager: bool = False
     observability_log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
@@ -180,6 +169,7 @@ class Settings(BaseSettings):
     artifact_s3_credential_mode: (
         Literal[
             "aws_workload_identity",
+            "aws_access_key",
             "local_static",
         ]
         | None
@@ -189,28 +179,11 @@ class Settings(BaseSettings):
             "assume-role-with-web-identity",
             "container-role",
             "iam-role",
-            "roles-anywhere",
         ]
         | None
     ) = None
-    release_id: str | None = None
-    artifact_s3_runtime_role_arn: str | None = None
-    artifact_s3_runtime_trust_policy_sha256: str | None = None
-    artifact_s3_runtime_policy_arn: str | None = None
-    artifact_s3_readiness_role_arn: str | None = None
-    artifact_s3_readiness_trust_policy_sha256: str | None = None
-    artifact_s3_readiness_policy_arn: str | None = None
-    artifact_s3_negative_role_arn: str | None = None
-    artifact_s3_negative_trust_policy_sha256: str | None = None
-    artifact_s3_bootstrap_principal_arn: str | None = None
-    artifact_s3_bucket_policy_sha256: str | None = None
-    artifact_s3_roles_anywhere_trust_anchor_arn: str | None = None
-    artifact_s3_roles_anywhere_trust_anchor_sha256: str | None = None
-    artifact_s3_roles_anywhere_profile_arn: str | None = None
-    artifact_s3_roles_anywhere_profile_sha256: str | None = None
-    artifact_s3_roles_anywhere_role_arn: str | None = None
-    artifact_s3_roles_anywhere_certificate_file: Path | None = None
-    artifact_s3_roles_anywhere_private_key_file: Path | None = None
+    artifact_s3_runtime_user_arn: str | None = None
+    artifact_s3_direct_user_credential_file: Path | None = None
     artifact_s3_connect_timeout_seconds: float = Field(default=5.0, gt=0.0, le=60.0)
     artifact_s3_read_timeout_seconds: float = Field(default=60.0, gt=0.0, le=1800.0)
     artifact_s3_write_timeout_seconds: float = Field(default=1800.0, gt=0.0, le=3600.0)
@@ -665,29 +638,16 @@ class Settings(BaseSettings):
         Raises:
             ValueError: If enabled artifact storage is unsafe or incomplete.
         """
-        roles_anywhere_values = (
-            self.artifact_s3_roles_anywhere_trust_anchor_arn,
-            self.artifact_s3_roles_anywhere_trust_anchor_sha256,
-            self.artifact_s3_roles_anywhere_profile_arn,
-            self.artifact_s3_roles_anywhere_profile_sha256,
-            self.artifact_s3_roles_anywhere_role_arn,
-            self.artifact_s3_roles_anywhere_certificate_file,
-            self.artifact_s3_roles_anywhere_private_key_file,
-        )
-        roles_anywhere_selected = (
-            self.artifact_s3_aws_workload_identity_method == "roles-anywhere"
-        )
-        if not roles_anywhere_selected and any(
-            value is not None for value in roles_anywhere_values
-        ):
-            raise ValueError(
-                "Roles Anywhere settings require the Roles Anywhere workload method"
-            )
-        if roles_anywhere_selected and (
+        direct_user_selected = self.artifact_s3_credential_mode == "aws_access_key"
+        if direct_user_selected and (
             self.artifact_store_backend != "s3_compatible"
             or self.artifact_s3_provider_profile != "aws_s3"
         ):
-            raise ValueError("Roles Anywhere requires native AWS S3 storage")
+            raise ValueError("AWS access-key authentication requires native AWS S3 storage")
+        if not direct_user_selected and any(value is not None for value in (
+            self.artifact_s3_runtime_user_arn, self.artifact_s3_direct_user_credential_file,
+        )):
+            raise ValueError("direct IAM user settings require AWS access-key authentication")
         if self.artifact_scratch_maximum_concurrency > self.artifact_scratch_maximum_files:
             raise ValueError("artifact scratch concurrency cannot exceed its file limit")
         if (
@@ -738,6 +698,15 @@ class Settings(BaseSettings):
             self.external_checker_service_socket,
             self.external_checker_material_root,
         )
+        if self.hosted_profile == "app" and any(value is not None for value in (
+            *external_values,
+            self.artifact_intake_service_socket,
+            self.artifact_intake_image_digest,
+            self.artifact_intake_config_digest,
+            self.checker_trial_authority_manifest_path,
+            self.checker_trial_authority_manifest_digest,
+        )):
+            raise ValueError("the hosted app profile cannot configure native checker execution")
         if any(value is not None for value in external_values):
             if any(value is None for value in external_values):
                 raise ValueError("external checker service settings must be complete")
@@ -821,151 +790,24 @@ class Settings(BaseSettings):
         """Validate native AWS configuration without activating its runtime."""
         if self.artifact_s3_endpoint_url is not None:
             raise ValueError("native AWS S3 does not accept a configured endpoint")
+        if self.artifact_s3_credential_mode == "aws_access_key":
+            self._validate_direct_aws_user_storage()
+            return
         if self.artifact_s3_credential_mode != "aws_workload_identity":
             raise ValueError("native AWS S3 requires workload identity")
         if self.artifact_s3_aws_workload_identity_method is None:
             raise ValueError("native AWS S3 requires one workload identity method")
-        if self.release_id is None or _SHA256_IDENTITY.fullmatch(self.release_id) is None:
-            raise ValueError("native AWS S3 requires an immutable release digest")
-        role_arns = (
-            self.artifact_s3_runtime_role_arn,
-            self.artifact_s3_readiness_role_arn,
-            self.artifact_s3_negative_role_arn,
-        )
-        if any(value is None or _AWS_IAM_ROLE_ARN.fullmatch(value) is None for value in role_arns):
-            raise ValueError("native AWS S3 requires exact workload role ARNs")
-        if len(set(role_arns)) != len(role_arns):
-            raise ValueError("native AWS S3 workload roles must be distinct")
-        self._validate_roles_anywhere_storage(role_arns)
-        trust_policy_digests = (
-            self.artifact_s3_runtime_trust_policy_sha256,
-            self.artifact_s3_readiness_trust_policy_sha256,
-            self.artifact_s3_negative_trust_policy_sha256,
-        )
-        if any(
-            value is None or _SHA256_IDENTITY.fullmatch(value) is None
-            for value in trust_policy_digests
-        ):
-            raise ValueError("native AWS S3 requires exact workload trust policy digests")
-        if len(set(trust_policy_digests)) != len(trust_policy_digests):
-            raise ValueError("native AWS S3 workload trust policies must be distinct")
-        policy_arns = (
-            self.artifact_s3_runtime_policy_arn,
-            self.artifact_s3_readiness_policy_arn,
-        )
-        if any(
-            value is None or _AWS_IAM_POLICY_ARN.fullmatch(value) is None
-            for value in policy_arns
-        ):
-            raise ValueError("native AWS S3 requires exact managed policy ARNs")
-        if len(set(policy_arns)) != len(policy_arns):
-            raise ValueError("native AWS S3 managed policies must be distinct")
-        if (
-            self.artifact_s3_bootstrap_principal_arn is None
-            or iam_principal_scope(self.artifact_s3_bootstrap_principal_arn) is None
-        ):
-            raise ValueError("native AWS S3 requires an exact bootstrap principal ARN")
-        exact_arns = (*role_arns, *policy_arns, self.artifact_s3_bootstrap_principal_arn)
-        arn_scopes = {
-            (value.split(":", 5)[1], value.split(":", 5)[4])
-            for value in exact_arns
-            if value is not None
-        }
-        if len(arn_scopes) != 1:
-            raise ValueError(
-                "native AWS S3 role and policy ARNs must share one partition and account"
-            )
-        if (
-            self.artifact_s3_bucket_policy_sha256 is None
-            or _SHA256_IDENTITY.fullmatch(self.artifact_s3_bucket_policy_sha256) is None
-        ):
-            raise ValueError("native AWS S3 requires an exact bucket policy digest")
-        operation_bound = max(
-            self.artifact_s3_operation_total_timeout_seconds,
-            self.artifact_complete_read_deadline_seconds,
-        ) + self.artifact_terminal_persistence_margin_seconds
-        usable_window = (
-            ARTIFACT_AWS_ACTIVATION_VALIDITY_SECONDS
-            - ARTIFACT_AWS_ACTIVATION_REFRESH_SECONDS
-            - ARTIFACT_AWS_PROOF_SEQUENCE_ALLOWANCE_SECONDS
-            - ARTIFACT_AWS_CLOCK_SAFETY_MARGIN_SECONDS
-        )
-        if operation_bound > usable_window:
-            raise ValueError(
-                "native AWS S3 operation and persistence deadlines exceed activation window"
-            )
 
-    def _validate_roles_anywhere_storage(
-        self,
-        role_arns: tuple[str | None, str | None, str | None],
-    ) -> None:
-        """Bind the selected certificate identity to exact AWS resources."""
-        shared_values = (
-            self.artifact_s3_roles_anywhere_trust_anchor_arn,
-            self.artifact_s3_roles_anywhere_trust_anchor_sha256,
-            self.artifact_s3_roles_anywhere_profile_arn,
-            self.artifact_s3_roles_anywhere_profile_sha256,
-        )
-        execution_values = (
-            self.artifact_s3_roles_anywhere_role_arn,
-            self.artifact_s3_roles_anywhere_certificate_file,
-            self.artifact_s3_roles_anywhere_private_key_file,
-        )
-        selected = self.artifact_s3_aws_workload_identity_method == "roles-anywhere"
-        if not selected:
-            if any(value is not None for value in (*shared_values, *execution_values)):
-                raise ValueError(
-                    "Roles Anywhere settings require the Roles Anywhere workload method"
-                )
-            return
-        if any(value is None for value in shared_values):
-            raise ValueError("Roles Anywhere shared custody settings must be complete")
-        if any(value is None for value in execution_values):
-            raise ValueError("Roles Anywhere execution identity settings must be complete")
-
-        trust_anchor_scope = roles_anywhere_resource_scope(
-            self.artifact_s3_roles_anywhere_trust_anchor_arn,
-            resource_type="trust-anchor",
-        )
-        profile_scope = roles_anywhere_resource_scope(
-            self.artifact_s3_roles_anywhere_profile_arn,
-            resource_type="profile",
-        )
-        if trust_anchor_scope is None or profile_scope is None:
-            raise ValueError("Roles Anywhere resource ARN is invalid")
-        if trust_anchor_scope != profile_scope:
-            raise ValueError(
-                "Roles Anywhere resources must share one partition, region and account"
-            )
-        partition, region, account = trust_anchor_scope
-        if region != self.artifact_s3_region or not roles_anywhere_region_matches_partition(
-            region,
-            partition,
-        ):
-            raise ValueError("Roles Anywhere resources do not match the configured region")
-        role_arn = self.artifact_s3_roles_anywhere_role_arn
-        if role_arn not in role_arns:
-            raise ValueError("Roles Anywhere selected role must be one configured workload role")
-        assert role_arn is not None
-        role_parts = role_arn.split(":", 5)
-        if (role_parts[1], role_parts[4]) != (partition, account):
-            raise ValueError(
-                "Roles Anywhere selected role must share the resource partition and account"
-            )
-        if any(
-            value is None or _SHA256_IDENTITY.fullmatch(value) is None
-            for value in (
-                self.artifact_s3_roles_anywhere_trust_anchor_sha256,
-                self.artifact_s3_roles_anywhere_profile_sha256,
-            )
-        ):
-            raise ValueError("Roles Anywhere resource digests are invalid")
-        certificate_file = self.artifact_s3_roles_anywhere_certificate_file
-        private_key_file = self.artifact_s3_roles_anywhere_private_key_file
-        assert certificate_file is not None and private_key_file is not None
-        if not certificate_file.is_absolute() or not private_key_file.is_absolute():
-            raise ValueError("Roles Anywhere identity paths must be absolute")
-
+    def _validate_direct_aws_user_storage(self) -> None:
+        """Keep direct-user and role credential selectors disjoint."""
+        if self.artifact_s3_aws_workload_identity_method is not None:
+            raise ValueError("AWS access-key authentication cannot configure role credentials")
+        user_arn = self.artifact_s3_runtime_user_arn
+        if user_arn is None or _AWS_IAM_USER_ARN.fullmatch(user_arn) is None:
+            raise ValueError("AWS access-key authentication requires an exact IAM user ARN")
+        path = self.artifact_s3_direct_user_credential_file
+        if path is not None and not path.is_absolute():
+            raise ValueError("direct IAM user credential file must use an absolute path")
 
 @lru_cache
 def get_settings() -> Settings:

@@ -21,7 +21,6 @@ import app.modules.artifacts.service as artifact_service
 from app.adapters.artifacts.local import LocalStorageAdapter, LocalStorageBootstrap
 from app.core.config import Settings, get_settings
 from app.interfaces.artifacts import (
-    ArtifactProviderOperationEvidence,
     ArtifactStoreNamespaceClaim,
 )
 from app.modules.actors.api import ServiceIdentity
@@ -433,6 +432,7 @@ async def test_process_runtime_shutdown_waits_for_active_lease(
             return_value=SimpleNamespace(
                 artifact_store_backend="local",
                 artifact_s3_provider_profile=None,
+                artifact_s3_credential_mode=None,
             )
         ),
     )
@@ -489,6 +489,7 @@ async def test_process_runtime_closes_bootstrap_when_namespace_claim_fails(
             return_value=SimpleNamespace(
                 artifact_store_backend="local",
                 artifact_s3_provider_profile=None,
+                artifact_s3_credential_mode=None,
             )
         ),
     )
@@ -546,6 +547,7 @@ async def test_process_runtime_closes_losing_concurrent_bootstrap(
             return_value=SimpleNamespace(
                 artifact_store_backend="local",
                 artifact_s3_provider_profile=None,
+                artifact_s3_credential_mode=None,
             )
         ),
     )
@@ -760,7 +762,6 @@ async def test_complete_read_uses_total_deadline_for_progressing_stream() -> Non
     with pytest.raises(TimeoutError):
         await orchestrator._read_complete(
             "sha256/" + "a" * 64,
-            operation_evidence=ArtifactProviderOperationEvidence(),
         )
 
 

@@ -74,11 +74,11 @@
     },
     {
       "capability": "oversized_authorization_structure",
-      "content_sha256": "508b934117c60535e2bf3aa1e6db8d516e90d98312e427340f2f63206a7601f5",
-      "end_line": 2453,
+      "content_sha256": "c24025c7846502b54375c9a554851a14598d4d43c2a17debd508930fca1fb012",
+      "end_line": 2451,
       "hard_limit": 1200,
       "kind": "test_file",
-      "observed_lines": 2453,
+      "observed_lines": 2451,
       "path": "backend/tests/test_artifact_admission.py",
       "qualified_symbol": null,
       "removal_chunk": "WS-AUTH-003-CLOSE",
@@ -123,26 +123,26 @@
     {
       "capability": "oversized_authorization_structure",
       "content_sha256": "2fac78c747fd82908991bde192ba874d3847b3ad105a827575dfc6afd73614be",
-      "end_line": 2090,
+      "end_line": 2088,
       "hard_limit": 120,
       "kind": "test_function",
       "observed_lines": 194,
       "path": "backend/tests/test_artifact_admission.py",
       "qualified_symbol": "test_guide_admission_consumes_real_project_manager_prep_atomically",
       "removal_chunk": "WS-AUTH-003-CLOSE",
-      "start_line": 1897
+      "start_line": 1895
     },
     {
       "capability": "oversized_authorization_structure",
       "content_sha256": "12f1dd1e0632ec3e5fb80ea19eb01bcce2b9a14015a04e120fb304f9b343b828",
-      "end_line": 1894,
+      "end_line": 1892,
       "hard_limit": 120,
       "kind": "test_function",
       "observed_lines": 132,
       "path": "backend/tests/test_artifact_admission.py",
       "qualified_symbol": "test_guide_admission_derives_three_scopes_without_provider_evidence",
       "removal_chunk": "WS-AUTH-003-CLOSE",
-      "start_line": 1763
+      "start_line": 1761
     },
     {
       "capability": "oversized_authorization_structure",

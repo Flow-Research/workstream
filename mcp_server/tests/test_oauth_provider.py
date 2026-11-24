@@ -100,11 +100,12 @@ async def test_exchange_preserves_subject_and_uses_fixed_target(signing_key):
         {"typ": "ID"},
         {"exp": 1},
         {"iat": True},
-        {"exp": int(time.time()) + 900},
+        {"exp": lambda: int(time.time()) + 900},
         {"azp": ""},
     ],
 )
 async def test_source_substitutions_never_exchange(signing_key, change):
+    change = {key: value() if callable(value) else value for key, value in change.items()}
     calls = []
 
     def handle(request):
@@ -127,10 +128,11 @@ async def test_source_substitutions_never_exchange(signing_key, change):
         {"aud": ["workstream-api", RESOURCE]},
         {"azp": "another-client"},
         {"scope": "workstream:access admin"},
-        {"exp": int(time.time()) + 900},
+        {"exp": lambda: int(time.time()) + 900},
     ],
 )
 async def test_exchanged_substitutions_never_reach_api(signing_key, change):
+    change = {key: value() if callable(value) else value for key, value in change.items()}
     target_claims = dict(
         aud="workstream-api",
         azp="workstream-mcp",

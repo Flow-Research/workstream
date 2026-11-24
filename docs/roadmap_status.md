@@ -381,6 +381,12 @@ retained the same facts after host reboot and automatic service reconciliation.
 This is bounded operator-demo evidence, not a concurrency benchmark, all-tool
 coverage or public DNS/TLS qualification.
 
+The [app-only hosted profile](../deploy/hosted/README.md#app-host-without-kvm)
+can run core services and guide setup while checker execution is offline. ZIP
+preparation returns retryable unavailability, POST requests and reconciliation
+remain in PostgreSQL, and ordinary Celery delivery continues. Assembled split-host
+checker operation remains unqualified. The operator app-only host is deployed; public identity login, API profile access, browser OAuth/PKCE and the MCP profile tool passed after migration.
+
 The [independent MCP package](../mcp_server/README.md) implements 132
 self-service, administrative access, actor/identity-lifecycle, project-shell,
 project-participation, guide-metadata, draft-policy, contributor-workspace,
@@ -554,28 +560,25 @@ never supplies product authority. Collector deployment, diagnostic-store access
 and finite-retention controls, and an operational end-to-end drill remain
 release work; diagnostics do not establish lifecycle truth.
 
-The first hosted release configuration now separates immutable API/Celery/Beat
-from the development stack, requires real Flow verification and AWS workload
-identity, and binds project execution and trusted intake to the existing native
-Smol node with exact private material paths and pinned cached image identities.
-Compose starts no checker controller; credential-owning model proxy and native
-node use the same host-visible socket path under one numeric identity. Cold
-startup explicitly orders migrations, AWS activation, proxy, native readiness
-and API/Celery worker release. It carries the required release digest and exact AWS
-role/policy/trust/bucket-policy identities into every long-running process
-environment. The external-host credential integration uses AWS Roles Anywhere
-with dedicated certificate identities, preserving the same S3 adapter and
-activation guards; it does not require EC2 or interactive login. The integrated
-canonical S3 Settings owner validates their format
-and relationships at startup; image proof first exercises that owner directly.
-Its preflight proves
-local configuration and host prerequisites only. Real certificate-role diagnostics
-have passed immutable upload/readback, bucket controls and access isolation.
-Persisted activation proof jobs and deployment have exact-release evidence.
-Controlled drain/restart and ordinary isolated database restore preserved the
-accepted pilot facts. Representative limits, diagnostic privacy and abrupt
-interruption/recovery retain their separately scoped evidence requirements for
-#583 and the parent release drill.
+The hosted release separates API/Celery/Beat from the development stack and
+requires real Flow verification. Storage uses one dedicated restricted IAM-user
+credential, with private mounts only for artifact consumers. It does not depend
+on certificate renewal or expiring database proof jobs. Namespace ownership,
+conditional writes, complete-byte verification and recovery remain mandatory.
+See [S3 credential operations](operations_aws_s3_credentials.md).
+
+The single-host checker deployment binds trusted intake and project execution
+to the existing native Smol node with private material paths and pinned image
+identities. Preflight establishes configuration and host prerequisites, not a
+completed live drill. Earlier certificate-based drills remain historical
+observations. The 2026-11-23 app-host cutover preserved existing accounts and
+databases, retained the public URLs/Elastic IP, and verified dedicated-key
+S3 create/readback and overwrite/delete/foreign-prefix/anonymous denials from
+the deployed API container. The old compute instance is stopped. External
+checker execution is intentionally unavailable until a separate execution host
+is connected; this is not a new live contribution-journey qualification. Controlled drain/restart and ordinary isolated database
+restore previously preserved accepted pilot facts. Broader interruption and
+recovery scenarios remain separate release checks.
 
 Checker startup recovery is deployment-scoped through persistent owner custody
 in the locked private socket directory, exact container labels/names and inspected
@@ -732,24 +735,12 @@ cannot be reused as post-submission review-gate evidence. See the
   development and CI, and all storage access stays behind `ArtifactStore`.
   Development/CI MinIO uses a shared pinned-source build; existing artifact
   volumes and real S3-protocol tests remain unchanged. Native AWS composition
-  is guarded by immutable, exact three-probe activations bound to reviewed role
-  trust-policy digests and distinct workload subjects at startup, each SDK call
-  and provider-derived terminal commit. Certificate-based external hosting also
-  binds the exact Roles Anywhere trust-anchor and profile state. The
-  [setup guide](operations_aws_roles_anywhere.md) covers generated configuration,
-  private certificate custody and renewal. Real AWS connection diagnostics passed
-  immutable upload/readback and role/anonymous isolation. The current hosted
-  rehearsal also passed exact-release database activation, public guide custody
-  and immutable Submission creation after artifact verification. Ordinary final-data database restore passed with all 134 tables preserved. Broader failure and interruption scenarios remain.
-  Proof clients use the configured region;
-  settings reserve a fixed 120-second proof sequence, and ART/PostgreSQL reject
-  overlong activation using database time. Lazy configuration outages remain
-  recoverable instead of becoming false integrity conflicts. The
-  [timing correction](../.commitrail/changes/aws-activation-failure-and-timing-corrections.md)
-  preserves retained evidence; cadence and commit-latency margin still need
-  representative measurement. Recorded readiness is bound to its exact release
-  and probe freshness; these partial hosted observations are not a complete
-  operational or release qualification.
+  uses isolated credentials and per-operation byte verification. The hosted
+  direct-key path removes the periodic database-proof dependency without
+  relaxing product authorization or namespace custody. Earlier AWS drills
+  established guide custody and immutable Submission creation under the old
+  deployment. Qualify the new credential and host before claiming the migrated
+  deployment is operational; broader interruption scenarios remain outstanding.
 - Private extraction scratch is bounded by `ArtifactScratchManager`; it is not
   durable artifact storage.
 - Cross-module behavior is moving through explicit public ports under the
@@ -773,17 +764,28 @@ cannot be reused as post-submission review-gate evidence. See the
 - Workstream verifies external Flow identity tokens but owns no login,
   password, or primary authentication session.
 - The [Keycloak provider](../deploy/identity/README.md) replaces the Rust demo
-  issuer with stock browser code/PKCE login and administrator-provisioned accounts.
+  issuer with stock browser code/PKCE login, administrator-provisioned accounts
+  and conditional verified self-registration.
   A temporary password must be changed before issuing participant credentials.
-  Email remains an unverified identifier; SMTP and public registration are not
-  required. The hosted provider has its own database role, authenticated HTTPS administrator
+  Invited-only deployments do not require SMTP. The Flow-branded self-service
+  flow adds email verification, password recovery and an account-only personal
+  information/password-management page with Flow branding; its account tokens
+  cannot authenticate to Workstream. Fresh deployments keep public registration
+  disabled until the operator configures and proves SMTP delivery. The hosted
+  Flow provider has completed real email delivery, signup verification and
+  password-recovery checks and has public registration enabled. Existing
+  unverified invited accounts must verify through email when that mode is enabled. The hosted provider has its own database role, authenticated HTTPS administrator
   console on the identity hostname, pinned image and bounded resources. Its regular container holds no
-  bootstrap credential.
+  bootstrap credential. Dedicated Garden MCP registrations support a separate
+  offline grant with a 30-day idle limit and 90-day maximum. Hosted activation
+  requires Garden renewal and revocation qualification; it does not extend normal
+  API access-token lifetimes.
 - Direct API users can exchange email/password at Flow Identity using the
   dedicated `workstream-api-login` client after issuer-required browser actions.
   It issues only API credentials, preserves brute-force protection and does not
-  grant Workstream roles. Public signup remains deferred; the token flow does
-  not depend on invitation state.
+  grant Workstream roles. The token flow does not depend on invitation state. Verified
+  self-registration assigns human identity inside Flow Identity and never grants
+  Workstream roles; see the [signup contract](../.commitrail/changes/flow-self-service-signup.md).
 - The native CLI uses browser login and the OS credential store for API credentials;
   `auth token` explicitly exports a bearer. Swagger offers code/PKCE Authorize
   through its exact callback. These client paths preserve existing API authority

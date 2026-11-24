@@ -11,7 +11,7 @@ from aiobotocore.credentials import (
 )
 from botocore.exceptions import MetadataRetrievalError, ReadTimeoutError
 
-from app.adapters.artifacts import aws_roles_anywhere, s3_compatible
+from app.adapters.artifacts import s3_compatible
 from app.core.config import Settings
 from tests.artifact_store_helpers import artifact_admission_limit_settings
 from app.interfaces.artifacts import ArtifactConfigurationError
@@ -31,51 +31,10 @@ def _aws_settings(tmp_path: Path, method: str = "container-role") -> Settings:
         artifact_s3_addressing_style="virtual",
         artifact_s3_credential_mode="aws_workload_identity",
         artifact_s3_aws_workload_identity_method=method,  # type: ignore[arg-type]
-        release_id="sha256:" + "1" * 64,
-        artifact_s3_runtime_role_arn=(
-            "arn:aws:iam::123456789012:role/workstream-runtime"
-        ),
-        artifact_s3_runtime_trust_policy_sha256="sha256:" + "2" * 64,
-        artifact_s3_runtime_policy_arn=(
-            "arn:aws:iam::123456789012:policy/workstream-runtime"
-        ),
-        artifact_s3_readiness_role_arn=(
-            "arn:aws:iam::123456789012:role/workstream-readiness"
-        ),
-        artifact_s3_readiness_trust_policy_sha256="sha256:" + "3" * 64,
-        artifact_s3_readiness_policy_arn=(
-            "arn:aws:iam::123456789012:policy/workstream-readiness"
-        ),
-        artifact_s3_negative_role_arn=(
-            "arn:aws:iam::123456789012:role/workstream-negative"
-        ),
-        artifact_s3_negative_trust_policy_sha256="sha256:" + "4" * 64,
-        artifact_s3_bootstrap_principal_arn=(
-            "arn:aws:iam::123456789012:role/workstream-bootstrap"
-        ),
-        artifact_s3_bucket_policy_sha256="sha256:" + "5" * 64,
         artifact_s3_operation_total_timeout_seconds=300,
         artifact_complete_read_deadline_seconds=300,
         artifact_terminal_persistence_margin_seconds=120,
     )
-    if method == "roles-anywhere":
-        values.update(
-            artifact_s3_roles_anywhere_trust_anchor_arn=(
-                "arn:aws:rolesanywhere:us-east-1:123456789012:"
-                "trust-anchor/11111111-1111-4111-8111-111111111111"
-            ),
-            artifact_s3_roles_anywhere_trust_anchor_sha256="sha256:" + "6" * 64,
-            artifact_s3_roles_anywhere_profile_arn=(
-                "arn:aws:rolesanywhere:us-east-1:123456789012:"
-                "profile/22222222-2222-4222-8222-222222222222"
-            ),
-            artifact_s3_roles_anywhere_profile_sha256="sha256:" + "7" * 64,
-            artifact_s3_roles_anywhere_role_arn=(
-                "arn:aws:iam::123456789012:role/workstream-runtime"
-            ),
-            artifact_s3_roles_anywhere_certificate_file=tmp_path / "certificate.pem",
-            artifact_s3_roles_anywhere_private_key_file=tmp_path / "private-key.pem",
-        )
     return Settings(**values)
 
 
@@ -110,15 +69,6 @@ def _iam_environment(tmp_path: Path, **overrides: str) -> dict[str, str]:
     return environment
 
 
-def _roles_anywhere_environment(
-    tmp_path: Path,
-    **overrides: str,
-) -> dict[str, str]:
-    environment = {"HOME": str(tmp_path)}
-    environment.update(overrides)
-    return environment
-
-
 def _assert_rejects_before_session_construction(
     monkeypatch: pytest.MonkeyPatch,
     settings: Settings,
@@ -134,7 +84,7 @@ def _assert_rejects_before_session_construction(
     monkeypatch.setattr(s3_compatible, "AioSession", session_must_not_construct)
 
     with pytest.raises(ArtifactConfigurationError, match=match):
-        s3_compatible.create_isolated_aws_workload_identity_session(
+        s3_compatible.create_isolated_aws_credential_session(
             settings,
             environ=environment,
         )
@@ -235,7 +185,6 @@ def test_service_specific_endpoint_override_fails_before_session_construction(
         ("assume-role-with-web-identity", _web_identity_environment),
         ("container-role", _container_environment),
         ("iam-role", _iam_environment),
-        ("roles-anywhere", _roles_anywhere_environment),
     ],
 )
 def test_unapproved_sdk_environment_controls_fail_before_session_construction(
@@ -305,13 +254,6 @@ def test_default_credential_files_fail_before_resolver_loading(
                 AWS_CONTAINER_CREDENTIALS_FULL_URI="http://127.0.0.1:9/credentials",
             ),
         ),
-        (
-            "roles-anywhere",
-            lambda tmp_path: {
-                "HOME": str(tmp_path),
-                "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI": "/v2/credentials/poison",
-            },
-        ),
     ],
 )
 def test_unselected_workload_identity_sources_fail_before_resolver_loading(
@@ -349,12 +291,6 @@ def test_unselected_workload_identity_sources_fail_before_resolver_loading(
             s3_compatible._SanitizedInstanceMetadataProvider,  # noqa: SLF001
             "iam-role",
         ),
-        (
-            "roles-anywhere",
-            _roles_anywhere_environment,
-            aws_roles_anywhere.RolesAnywhereCredentialProvider,
-            "roles-anywhere",
-        ),
     ],
 )
 def test_isolated_session_contains_exactly_one_selected_provider(
@@ -364,7 +300,7 @@ def test_isolated_session_contains_exactly_one_selected_provider(
     provider_type: type[object],
     sdk_method: str,
 ) -> None:
-    session = s3_compatible.create_isolated_aws_workload_identity_session(
+    session = s3_compatible.create_isolated_aws_credential_session(
         _aws_settings(tmp_path, method),
         environ=environment(tmp_path),
     )
@@ -556,7 +492,7 @@ def test_container_role_rejects_noncanonical_relative_uri(
 
 
 def test_iam_metadata_session_ignores_ambient_proxy_environment(tmp_path: Path) -> None:
-    session = s3_compatible.create_isolated_aws_workload_identity_session(
+    session = s3_compatible.create_isolated_aws_credential_session(
         _aws_settings(tmp_path, "iam-role"),
         environ=_iam_environment(
             tmp_path,
@@ -578,7 +514,7 @@ def test_iam_metadata_session_ignores_ambient_proxy_environment(tmp_path: Path) 
 def test_container_metadata_session_ignores_ambient_proxy_environment(
     tmp_path: Path,
 ) -> None:
-    session = s3_compatible.create_isolated_aws_workload_identity_session(
+    session = s3_compatible.create_isolated_aws_credential_session(
         _aws_settings(tmp_path, "container-role"),
         environ=_container_environment(
             tmp_path,
@@ -605,7 +541,7 @@ def test_container_metadata_session_ignores_ambient_proxy_environment(
 def test_web_identity_sts_client_ignores_ambient_proxy_environment(
     tmp_path: Path,
 ) -> None:
-    session = s3_compatible.create_isolated_aws_workload_identity_session(
+    session = s3_compatible.create_isolated_aws_credential_session(
         _aws_settings(tmp_path, "assume-role-with-web-identity"),
         environ=_web_identity_environment(
             tmp_path,
@@ -658,23 +594,23 @@ async def test_resolved_workload_identity_method_must_match() -> None:
 
     with pytest.raises(
         ArtifactConfigurationError,
-        match="AWS workload identity method did not match",
+        match="AWS credential method did not match",
     ):
-        await s3_compatible.resolve_isolated_aws_workload_credentials(
+        await s3_compatible.resolve_isolated_aws_credentials(
             FakeSession("iam-role"),  # type: ignore[arg-type]
             expected_method="container-role",
         )
 
     with pytest.raises(
         ArtifactConfigurationError,
-        match="AWS workload identity method did not match",
+        match="AWS credential method did not match",
     ):
-        await s3_compatible.resolve_isolated_aws_workload_credentials(
+        await s3_compatible.resolve_isolated_aws_credentials(
             FakeSession(None),  # type: ignore[arg-type]
             expected_method="container-role",
         )
 
-    resolved = await s3_compatible.resolve_isolated_aws_workload_credentials(
+    resolved = await s3_compatible.resolve_isolated_aws_credentials(
         FakeSession("container-role"),  # type: ignore[arg-type]
         expected_method="container-role",
     )
@@ -697,9 +633,9 @@ async def test_workload_identity_materialization_failure_is_sanitized() -> None:
 
     with pytest.raises(
         ArtifactConfigurationError,
-        match="AWS workload identity credentials could not be resolved",
+        match="AWS credentials could not be resolved",
     ) as caught:
-        await s3_compatible.resolve_isolated_aws_workload_credentials(
+        await s3_compatible.resolve_isolated_aws_credentials(
             FakeSession(),  # type: ignore[arg-type]
             expected_method="container-role",
         )
@@ -722,9 +658,9 @@ async def test_credential_resolution_failure_is_sanitized() -> None:
 
     with pytest.raises(
         ArtifactConfigurationError,
-        match="AWS workload identity credentials could not be resolved",
+        match="AWS credentials could not be resolved",
     ) as caught:
-        await s3_compatible.resolve_isolated_aws_workload_credentials(
+        await s3_compatible.resolve_isolated_aws_credentials(
             FakeSession(),  # type: ignore[arg-type]
             expected_method="container-role",
         )
@@ -783,7 +719,7 @@ async def test_container_metadata_error_body_is_never_logged_or_retained(
 
     caplog.set_level("DEBUG")
     with pytest.raises(ArtifactConfigurationError) as caught:
-        await s3_compatible.resolve_isolated_aws_workload_credentials(
+        await s3_compatible.resolve_isolated_aws_credentials(
             FakeSession(),  # type: ignore[arg-type]
             expected_method="container-role",
         )

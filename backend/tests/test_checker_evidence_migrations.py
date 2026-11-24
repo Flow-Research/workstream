@@ -75,13 +75,16 @@ async def _execute(database_url: str, *statements: str) -> None:
 
 
 async def _assert_exact_0062_schema(database_url: str, monkeypatch) -> None:
-    tables = tuple(
+    historical_tables = tuple(
         table
         for table in suite_fixtures.RESETTABLE_TEST_TABLES
         if table != "checker_trial_evidence"
+    ) + (
+        "artifact_provider_activations",
+        "artifact_provider_probe_results",
     )
     with monkeypatch.context() as patch:
-        patch.setattr(suite_fixtures, "RESETTABLE_TEST_TABLES", tables)
+        patch.setattr(suite_fixtures, "RESETTABLE_TEST_TABLES", historical_tables)
         patch.setattr(
             suite_fixtures,
             "EXPECTED_PUBLIC_SCHEMA_SHA256",

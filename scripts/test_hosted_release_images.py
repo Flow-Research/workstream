@@ -57,6 +57,21 @@ class ReleaseImageProofTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "source inventory differs"):
                     proof.verify_backend(changed, expected, self.packages, self.loader, "agents")
 
+    def test_release_workflow_selected_backend_tests_exist(self):
+        workflow = Path(".github/workflows/release-images.yml").read_text()
+        selections = re.findall(r"tests/[\w/]+\.py(?:::[\w]+)?", workflow)
+        self.assertTrue(selections)
+        for selection in selections:
+            filename, _, function = selection.partition("::")
+            path = Path("backend") / filename
+            self.assertTrue(path.is_file(), selection)
+            if function:
+                definitions = {
+                    node.name for node in ast.parse(path.read_text()).body
+                    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+                }
+                self.assertIn(function, definitions, selection)
+
     def test_release_workflow_builds_and_verifies_both_sdk_environments(self):
         workflow = Path(".github/workflows/release-images.yml").read_text(
             encoding="utf-8"
@@ -96,40 +111,16 @@ class ReleaseImageProofTests(unittest.TestCase):
         self.assertIsNotNone(parser_image)
         self.assertIn(parser_image.group(1), built_backend_tags)
 
-    def test_helper_pins_match_runtime_download_and_image_verification(self):
+    def test_backend_image_omits_obsolete_roles_anywhere_helper(self):
         root = Path(__file__).resolve().parents[1]
-        runtime = ast.parse(
-            (root / "backend/app/adapters/artifacts/aws_roles_anywhere.py").read_text()
-        )
-        pins = [
-            ast.literal_eval(node.value)
-            for node in runtime.body
-            if isinstance(node, ast.Assign)
-            and any(
-                isinstance(target, ast.Name)
-                and target.id == "_AWS_SIGNING_HELPER_SHA256_BY_MACHINE"
-                for target in node.targets
-            )
-        ]
-        self.assertEqual(pins, [proof.ROLES_ANYWHERE_HELPER_SHA256])
         dockerfile = (root / "docker/backend/Dockerfile.release").read_text()
         self.assertIn("ARG WORKSTREAM_PROJECT_AGENT_SDK_ENVIRONMENT", dockerfile)
         self.assertIn(
             '--extra "${WORKSTREAM_PROJECT_AGENT_SDK_ENVIRONMENT}"', dockerfile
         )
         self.assertIn("/etc/workstream/project-agent-sdk-environment", dockerfile)
-        downloads = re.findall(
-            r"ADD --checksum=sha256:([0-9a-f]{64})\s+\\\n\s+"
-            r"https://rolesanywhere\.amazonaws\.com/releases/[^/]+/"
-            r"(X86_64|Aarch64)/Linux/Amzn2023/aws_signing_helper",
-            dockerfile,
-        )
-        self.assertEqual(len(downloads), 2)
-        machines = {"X86_64": "x86_64", "Aarch64": "aarch64"}
-        self.assertEqual(
-            {machines[architecture]: digest for digest, architecture in downloads},
-            proof.ROLES_ANYWHERE_HELPER_SHA256,
-        )
+        self.assertNotIn("rolesanywhere", dockerfile.casefold())
+        self.assertNotIn("aws_signing_helper", dockerfile)
 
     def setUp(self):
         self.source = {"app/main.py": "a" * 64, "uv.lock": "b" * 64}
@@ -139,10 +130,6 @@ class ReleaseImageProofTests(unittest.TestCase):
             "source": self.source,
             "packages": self.packages,
             "loader": self.loader,
-            "roles_anywhere_helper": next(
-                iter(proof.ROLES_ANYWHERE_HELPER_SHA256.values())
-            ),
-            "proof_command_timeout": True,
             "sdk_environment": "agents",
         }
         self.checker = {
@@ -174,18 +161,6 @@ class ReleaseImageProofTests(unittest.TestCase):
         altered = copy.deepcopy(self.backend)
         altered["loader"] = "e" * 64
         with self.assertRaisesRegex(ValueError, "secret loader"):
-            proof.verify_backend(
-                altered, self.source, self.packages, self.loader, "agents"
-            )
-        altered = copy.deepcopy(self.backend)
-        altered["roles_anywhere_helper"] = "0" * 64
-        with self.assertRaisesRegex(ValueError, "Roles Anywhere helper"):
-            proof.verify_backend(
-                altered, self.source, self.packages, self.loader, "agents"
-            )
-        altered = copy.deepcopy(self.backend)
-        altered["proof_command_timeout"] = False
-        with self.assertRaisesRegex(ValueError, "proof timeout command"):
             proof.verify_backend(
                 altered, self.source, self.packages, self.loader, "agents"
             )
@@ -334,13 +309,6 @@ class ReleaseImageProofTests(unittest.TestCase):
             loader.write_text("loader")
             with (
                 patch.object(proof, "LOADER", str(loader)),
-                patch.object(proof, "ROLES_ANYWHERE_HELPER", str(loader)),
-                patch.object(proof.platform, "machine", return_value="x86_64"),
-                patch.dict(
-                    proof.ROLES_ANYWHERE_HELPER_SHA256,
-                    {"x86_64": proof.file_hash(loader)},
-                    clear=True,
-                ),
                 patch.object(proof.os, "getuid", return_value=10001),
                 patch.object(proof, "checked", return_value=b""),
                 patch.object(proof, "source_inventory", return_value={}),
@@ -349,6 +317,13 @@ class ReleaseImageProofTests(unittest.TestCase):
                 ),
                 patch.object(
                     proof.importlib.metadata, "distributions", return_value=[]
+                ),
+                patch.object(
+                    proof.importlib.metadata,
+                    "distribution",
+                    return_value=SimpleNamespace(
+                        locate_file=lambda _path: Path(directory)
+                    ),
                 ),
             ):
                 loader.chmod(0o555)
@@ -362,75 +337,6 @@ class ReleaseImageProofTests(unittest.TestCase):
                         self.assertRaisesRegex(ValueError, "loader mode"),
                     ):
                         proof.inside_backend()
-
-    def test_helper_must_have_pinned_identity_and_nonwritable_mode(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            loader = root / "loader"
-            helper = root / "aws_signing_helper"
-            loader.write_bytes(b"loader")
-            helper.write_bytes(b"helper")
-            loader.chmod(0o555)
-            helper.chmod(0o555)
-            digest = proof.file_hash(helper)
-            with (
-                patch.object(proof, "LOADER", str(loader)),
-                patch.object(proof, "ROLES_ANYWHERE_HELPER", str(helper)),
-                patch.object(proof.platform, "machine", return_value="x86_64"),
-                patch.dict(
-                    proof.ROLES_ANYWHERE_HELPER_SHA256,
-                    {"x86_64": digest},
-                    clear=True,
-                ),
-                patch.object(proof.os, "getuid", return_value=10001),
-                patch.object(proof, "checked", return_value=b""),
-                patch.object(proof, "source_inventory", return_value={}),
-                patch.object(
-                    proof, "read_sdk_environment_marker", return_value="agents"
-                ),
-                patch.object(
-                    proof.importlib.metadata, "distributions", return_value=[]
-                ),
-            ):
-                self.assertEqual(
-                    proof.inside_backend()["roles_anywhere_helper"], digest
-                )
-                helper.chmod(0o755)
-                with self.assertRaisesRegex(ValueError, "helper mode"):
-                    proof.inside_backend()
-                helper.chmod(0o555)
-                replacement = root / "replacement"
-                replacement.write_bytes(b"HELPER")
-                replacement.chmod(helper.stat().st_mode & 0o777)
-                replacement.replace(helper)
-                self.assertEqual(helper.stat().st_mode & 0o777, 0o555)
-                self.assertNotEqual(proof.file_hash(helper), digest)
-                with self.assertRaisesRegex(ValueError, "^helper identity changed$"):
-                    proof.inside_backend()
-
-    def test_backend_manifest_requires_the_proof_timeout_command(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            loader = root / "loader"
-            helper = root / "aws_signing_helper"
-            loader.write_bytes(b"loader")
-            helper.write_bytes(b"helper")
-            loader.chmod(0o555)
-            helper.chmod(0o555)
-            with (
-                patch.object(proof, "LOADER", str(loader)),
-                patch.object(proof, "ROLES_ANYWHERE_HELPER", str(helper)),
-                patch.object(proof, "PROOF_COMMAND_TIMEOUT", str(root / "missing")),
-                patch.object(proof.platform, "machine", return_value="x86_64"),
-                patch.dict(
-                    proof.ROLES_ANYWHERE_HELPER_SHA256,
-                    {"x86_64": proof.file_hash(helper)},
-                    clear=True,
-                ),
-                patch.object(proof.os, "getuid", return_value=10001),
-                self.assertRaisesRegex(ValueError, "proof timeout command"),
-            ):
-                proof.inside_backend()
 
     def test_checker_failure_must_be_exact_not_timeout_or_arbitrary_error(self):
         proof.verify_checker(self.checker)
@@ -518,7 +424,6 @@ class ReleaseImageProofTests(unittest.TestCase):
                 "checker_lock_sha256",
                 "loader_sha256",
                 "checker_binary_sha256",
-                "roles_anywhere_helper_sha256",
             )
         }
         evidence.update(
@@ -619,7 +524,6 @@ class ReleaseImageProofTests(unittest.TestCase):
                     "backend_source_sha256",
                     "backend_lock_sha256",
                     "loader_sha256",
-                    "roles_anywhere_helper_sha256",
                 )
             },
         }
