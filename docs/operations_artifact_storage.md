@@ -193,5 +193,8 @@ saved on the existing cleanup claim before abort. A fresh authorization binds
 that retained set; newly discovered IDs invalidate the previous authorization.
 Retries check every retained handle even when discovery no longer lists it.
 Empty discovery cannot prove that an uncertain initiation never happened, so
-that case remains charged. Genuine orphan reconciliation remains unfinished.
+that case remains charged. Inventory of objects whose operation record is
+genuinely absent is an optional future enhancement under submission spec §17.4;
+this sweep does not discover or delete those objects. Reconciliation of uncertain
+writes belonging to known operations remains required.
 Do not treat this schedule as proof that every abandoned byte is reclaimed.

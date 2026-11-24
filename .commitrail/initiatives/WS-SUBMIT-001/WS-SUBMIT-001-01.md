@@ -9144,3 +9144,20 @@ loss/Redis visibility-timeout reclamation, Beat scheduling, native PRE or AWS.
 Ruff/structure/diff pass (structure log
 /tmp/submission-finalizer-broker-death-structure.log); final Commitrail check
 runs after this append. No production or lane changes, no remote mutation.
+
+### Genuine-orphan scope clarification
+
+Read-only ARCH/SEC assessment at08fd205d0 confirms that spec17.4 makes
+managed-prefix inventory for genuinely absent operation records optional.
+Earlier notes listing that scanner as required remaining work are superseded
+by this clarification. D05 and A14–A17 still require durable ownership before
+bytes, exact indexed cleanup, accepted/retained protection and reconciliation
+of uncertain known-operation writes, including conservative charges.
+Only operations-guide wording changes; no owner, deletion authority, test or
+provider gate changes. No orphan discovery/deletion or backlog metric is claimed.
+The persistent local checklist now excludes this optional expansion.
+
+The AWS credential guide also names the dedicated Celery process explicitly
+and links the canonical source-key specification instead of duplicating its
+versioned key example. This resolves stale-vocabulary scan false positives
+without changing the scanner, IAM policy, runtime behavior or key format.

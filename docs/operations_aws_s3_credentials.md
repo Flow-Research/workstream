@@ -5,7 +5,7 @@ metadata and ownership used to authorize access. Contributors, reviewers,
 setup agents and external checker guests do not receive the bucket credential.
 
 The hosted application uses a dedicated IAM user's access key. Source cleanup
-uses a separate IAM user and private key file in its dedicated worker. This works
+uses a separate IAM user and private key file in its dedicated Celery worker. This works
 on AWS or another hosting provider. No certificate authority, certificate
 renewal, three-identity verification job or expiring database activation is
 required.
@@ -14,7 +14,7 @@ required.
 
 Create two distinct IAM users in the bucket owner’s AWS account, without console
 access, group membership or other attached policies: the runtime uploader/reader
-and the source-cleanup worker. The generator rejects cross-account or identical
+and the source-cleanup service. The generator rejects cross-account or identical
 principals. Generate their restricted policies and the bucket policy using
 the deployment's actual bucket and existing private prefix:
 
@@ -34,7 +34,8 @@ Review existing bucket users before replacing a bucket policy. Do not change
 the prefix of an existing deployment: retained objects must remain readable.
 
 The runtime can read and conditionally create content-addressed artifacts and
-operation-owned `submission-source/v1/<operation-id>/bundle.zip` objects. It can
+operation-owned submission source objects at the exact keys defined in the
+[submission specification](spec_submission_execution.md#101-object-layout-and-access). It can
 read exact source versions, but cannot delete versions or abort multipart uploads.
 Cleanup can read, abort and delete exact versions only in the managed source
 prefix; it cannot write sources or access content-addressed artifact bytes.
@@ -51,7 +52,7 @@ Never interpret access denial as absence.
 Failed and retained submission sources share the same prefix. IAM cannot tell
 which source is accepted: the ART owner's committed cleanup claim, retention
 checks and exact-version confirmation remain the deletion authority. Never
-expose a general delete-by-key operation or cleanup credentials to API workers.
+expose a general delete-by-key operation or cleanup credentials to API processes.
 
 Keep S3 Block Public Access enabled, bucket-owner-enforced ownership,
 versioning and default SSE-S3 (`AES256`) encryption enabled. This policy does
@@ -76,7 +77,7 @@ Git, logs or chat. Mount the file read-only only into services performing
 artifact operations. Beat, MCP, the document parser and checker guests do not
 need it. Configure the exact IAM user ARN alongside the private file path;
 startup must reject an unexpected identity or an ambient credential source.
-The cleanup worker uses its own credential-file and IAM-ARN settings and an
+The cleanup service uses its own credential-file and IAM-ARN settings and an
 explicit upload-principal ARN; composition rejects identical principals.
 
 ## Verify and rotate
