@@ -21,7 +21,11 @@ from uuid import uuid4
 
 from client import JourneyClient
 from public_setup import configure_guide, publish_unpaid_terms, approve_and_activate
-from runtime import durable_runtime, load_journey_configuration
+from runtime import (
+    durable_runtime,
+    load_journey_configuration,
+    prepare_versioned_source_bucket,
+)
 from task_work import claim_and_read, create_claimed_task, issue_submitter
 from submission_work import submit_and_observe, observe_review_pending
 from artifact_work import inspect_submission_custody
@@ -121,6 +125,7 @@ def main():
         through_setup = os.environ.get("WORKSTREAM_CLI_JOURNEY_SETUP") == "1"
         if through_setup:
             registries = load_journey_configuration(environment)
+            prepare_versioned_source_bucket(environment)
             start_workers = stack.enter_context(
                 durable_runtime(ROOT, directory, environment)
             )

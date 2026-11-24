@@ -9638,3 +9638,17 @@ probe is controlled in-memory evidence only. Actual two-host fault transport,
 aggregate VM expiry, native PRE source/execution cancellation and real native
 fault execution remain mandatory open qualification, without API-side KVM or
 shared runner paths.
+
+A later diagnostic run passed guide activation and reached the first public
+raw-ZIP submission, then failed before a source upload was begun. A bounded
+exception-class/line probe located `ArtifactConfigurationError` at the
+production S3 adapter's required bucket-versioning check; the public operation
+reported failed infrastructure. The canonical isolation launcher creates a
+fresh bucket without versioning because other test lanes configure it in
+their own fixtures. The CLI journey now validates that its runner-owned bucket
+and prefix match, enables versioning on only that bucket, and reads the state
+back before starting the API or workers. Four focused tests cover the exact
+bucket call, foreign bucket/prefix denial and failed readback. The production
+versioning guard is unchanged. The diagnostic run's database and bucket
+cleanup completed; it did not reach native PRE or POST. Temporary probe code
+was removed before the next qualification attempt.

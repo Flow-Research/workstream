@@ -1,5 +1,6 @@
 """Owned Redis and dedicated workers for the remote-runner CLI drill."""
 
+import asyncio
 from contextlib import contextmanager
 import json
 import os
@@ -165,6 +166,34 @@ def load_journey_configuration(environment: dict[str, str]) -> dict[str, Path]:
     environment.pop("WORKSTREAM_EXTERNAL_CHECKER_SERVICE_SOCKET", None)
     validate_authored_rules_template()
     return registry_files
+
+
+def prepare_versioned_source_bucket(
+    environment: dict[str, str], *, client_factory=None
+):
+    """Enable required source versioning on this runner-owned isolated bucket."""
+    bucket = environment.get("WORKSTREAM_TEST_MINIO_BUCKET", "")
+    prefix = environment.get("WORKSTREAM_TEST_MINIO_PREFIX", "")
+    match = re.fullmatch(r"workstream-ci-cli-full-journey-([a-f0-9]{12})", bucket)
+    if match is None or prefix != f"ci/cli_full_journey/{match.group(1)}":
+        raise RuntimeError("journey source bucket is not runner-owned")
+    if client_factory is None:
+        from run_isolated_tests import _minio_client
+
+        client_factory = _minio_client
+
+    async def enable():
+        async with client_factory(
+            environment["WORKSTREAM_TEST_MINIO_ENDPOINT"]
+        ) as client:
+            await client.put_bucket_versioning(
+                Bucket=bucket, VersioningConfiguration={"Status": "Enabled"}
+            )
+            state = await client.get_bucket_versioning(Bucket=bucket)
+            if state.get("Status") != "Enabled":
+                raise RuntimeError("journey source bucket versioning is not enabled")
+
+    asyncio.run(enable())
 
 
 @contextmanager
