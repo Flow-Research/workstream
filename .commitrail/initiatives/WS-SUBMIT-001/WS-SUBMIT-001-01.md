@@ -8622,3 +8622,18 @@ job fence under fresh authority with one immutable conflict receipt. Preserve
 trigger immutability, bytes and retained parent locks; add a focused publication
 failure regression. ARCH/SEC and QA review remain required; the red run is not
 successful historical-continuation evidence.
+
+Repair verification at0f80e0135: profile suspension + forced late publication
+failure passed2/2 in170.70s (/tmp/submission-retained-verifier-repair.json;
+precommit launcher c982e19ee with final repair bytes). Identity-link revocation
+and original lock ordering passed2/2 in184.04s at exact0f80e0135
+(/tmp/submission-retained-verifier-remaining.json). Both receipts confirm
+schema0090 and complete database/MinIO cleanup. Missing-TASK rollback passed in
+the earlier four-case run. Structure, authorization boundary, Ruff and diff
+checks passed. ARCH/SEC PASS at clean0f80e0135; no guard weakening or live v1
+execution restored. QA inspected unchanged original assertion bodies, archive
+checksum/byte identity, and the unrelated-integrity-error propagation control.
+These separate runs close the retained verifier regression scope, not a single
+aggregate final-head run. Spec20.2 still requires deployed old unsubmitted work
+to be drained or explicitly stale before cutover; restored historical test
+inputs do not authorize deploying with pending old submissions.
