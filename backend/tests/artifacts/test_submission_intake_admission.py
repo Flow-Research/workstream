@@ -69,6 +69,7 @@ async def admission_intake(tmp_path, isolated_database_env, admin_access, reques
     factory = async_sessionmaker(engine, expire_on_commit=False)
     namespace = _namespace(_settings(tmp_path))
     source_store_factory = None
+    automatic_acceptance = getattr(request, "param", None) == "automatic_acceptance"
     if getattr(request, "param", None) == "minio":
         from tests.artifacts.intake_post_support import minio_source_fixture
         namespace, source_store_factory = await minio_source_fixture()
@@ -89,9 +90,16 @@ async def admission_intake(tmp_path, isolated_database_env, admin_access, reques
         from tests.checkers.external.support import pre_registry_spec, post_registry_spec
         plan, _ = await approved_selected_policy_fixture(
             factory, namespace, guide_version="v1",
+            human_review_required=not automatic_acceptance,
+            contribution_awards=("money", "project_points") if automatic_acceptance else (),
             pre_submit_registry_spec=pre_registry_spec(),
             post_submit_registry_spec=post_registry_spec(),
         )
+        if automatic_acceptance:
+            from tests.reviews.lifecycle.transition_support import command_for, transition
+            await admin_access.signed.grant(admin_access.admin, admin_access.target)
+            await transition(await command_for(admin_access.target.id, "shadow"))
+            await transition(await command_for(admin_access.target.id, "live"))
         project = plan.lineage.project_id
         manager = await project_manager(admin_access, project)
         grant_id = await grant(admin_access, manager, project)
@@ -109,7 +117,7 @@ async def admission_intake(tmp_path, isolated_database_env, admin_access, reques
         yield SimpleNamespace(factory=factory, actor=actor, task=task, assignment=assignment,
                               admission=admission, project=project, namespace=namespace,
                               access=admin_access, manager=manager, grant_id=grant_id,
-                              source_store_factory=source_store_factory)
+                              source_store_factory=source_store_factory, automatic_acceptance=automatic_acceptance)
     finally:
         await engine.dispose()
 

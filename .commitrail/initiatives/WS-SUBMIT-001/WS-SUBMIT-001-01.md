@@ -8530,3 +8530,21 @@ identical copy as scripts/qualify_submission_source.py in this same PR, with
 pilot-specific invocation/limits in operations_aws_s3_credentials.md; these two
 paths extend this preparation scope for reproducibility. IAM admin action is
 still pending. Runtime file permissions were inspected only and are already0400.
+
+
+### Join source-preserving finalization to automatic acceptance proof
+
+Concrete gap: source T5/POST integration currently ends at review_pending;
+automatic acceptance/award tests use a separate routing source fixture. Extend
+the existing source integration with one approved human_review_required=false
+policy and money/project_points definitions, using real Operator lifecycle
+transitions. Allowed: intake admission fixture, source progress integration test
+and this record. Prohibited: production/schema changes, changing default-true
+policy behavior, test timestamps/fences, real payments, native/AWS/public-ZIP
+qualification claims. Acceptance: the exact source-backed Submission reaches
+shared FinalAcceptance, one accepted_submission ContributionRecord with exact
+contributor/assignment/source hash/policy, exact configured award definitions,
+no Review/reviewer contribution; finalized replay does not duplicate effects.
+Verify the added real-PostgreSQL case and default-true control, structure/Ruff;
+scoped QA/ARCH review. This joins an owner path, not the pending deployed
+public-API/runner proof. Keep other required work in the unchanged goal.

@@ -129,7 +129,10 @@ async def _assert_retained_custody(f, owner, request, result, expired_claim):
                            selectors=selectors, evaluation_selectors=evaluation_selectors)
 
 
-@pytest.mark.parametrize("expired_claim,post_failure", [(False, False), (True, False), (False, True)])
+@pytest.mark.parametrize("admission_intake,expired_claim,post_failure", [
+    (None, False, False), (None, True, False), (None, False, True),
+    ("automatic_acceptance", False, False),
+], indirect=["admission_intake"])
 async def test_t5_finalizes_same_source_with_one_submission_and_post_dispatch(admission_intake, tmp_path, monkeypatch, expired_claim, post_failure):
 
     f = admission_intake
@@ -242,8 +245,49 @@ async def test_t5_finalizes_same_source_with_one_submission_and_post_dispatch(ad
             assert delivery_outcome(delivered)["delivery_state"] == "acknowledged", delivery_outcome(delivered)
             async with f.factory.begin() as session:
                 governed = await submission_history_repository(session).read_operation_outcome(**selectors)
-                assert governed.status == "review_pending"
-            await public_progress("review_pending", result.evaluation_request_id, governed=True)
+                assert governed.status == ("accepted" if f.automatic_acceptance else "review_pending")
+            assert await finalizer.run(owner.operation_id) == result
+            if f.automatic_acceptance:
+                await _assert_automatic_acceptance(f, result, request.source)
+            await public_progress(governed.status, result.evaluation_request_id, governed=True)
 
     finally:
         store.close()
+
+
+async def _assert_automatic_acceptance(f, result, source):
+    from sqlalchemy import select, func
+    from app.modules.tasks.models import Submission
+    from app.modules.reviews.acceptance.models import FinalAcceptance
+    from app.modules.contributions.records.models import ContributionRecord
+    from app.modules.contributions.models import ContributionAwardDefinition
+    from app.modules.compensation.awards.models import CompensationAward
+
+    async with f.factory() as session:
+        acceptance = (await session.scalars(select(FinalAcceptance).where(
+            FinalAcceptance.task_id == str(f.task)))).one()
+        record = (await session.scalars(select(ContributionRecord).where(
+            ContributionRecord.task_id == str(f.task)))).one()
+        submission = await session.get(Submission, str(result.submission_id))
+        assert acceptance.submission_id == record.submission_id == submission.id
+        assert record.contribution_type == "accepted_submission"
+        assert record.contributor_id == str(f.actor.actor_profile_id)
+        assert record.source_task_assignment_id == str(f.assignment)
+        assert record.source_final_acceptance_id == acceptance.id
+        assert record.source_review_id is record.source_review_lease_id is None
+        assert record.artifact_hash == source.raw_sha256
+        assert record.contribution_policy_version_id == submission.contribution_policy_version_id
+        assert await session.scalar(text("SELECT count(*) FROM reviews WHERE task_id=:id"), {"id": f.task}) == 0
+        awards = (await session.scalars(select(CompensationAward).where(
+            CompensationAward.contribution_record_id == record.id))).all()
+        definitions = (await session.scalars(select(ContributionAwardDefinition).where(
+            ContributionAwardDefinition.contribution_policy_version_id == record.contribution_policy_version_id,
+            ContributionAwardDefinition.contribution_type == record.contribution_type))).all()
+        assert len(awards) == len(definitions) == 2
+        assert {a.instrument_type for a in awards} == {"money", "project_points"}
+        actual = {(a.award_definition_id, a.adapter_binding_id, a.instrument_type, a.unit_code, a.quantity) for a in awards}
+        expected = {(d.id, d.adapter_binding_id, d.instrument_type, d.unit_code, d.quantity) for d in definitions}
+        assert actual == expected
+        assert all(a.contributor_id == record.contributor_id and a.project_id == record.project_id
+                   and a.contribution_policy_version_id == record.contribution_policy_version_id for a in awards)
+        assert await session.scalar(select(func.count()).select_from(ContributionRecord)) == 1
