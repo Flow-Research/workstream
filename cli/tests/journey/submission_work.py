@@ -62,8 +62,34 @@ def _progress(client, token, task_id, key, operation_id=None):
             "--operation-id",
             operation_id,
         )
-        if by_key != by_id or by_id["operation_id"] != operation_id:
-            raise AssertionError("key and operation reads differ")
+        immutable = (
+            "operation_id",
+            "task_id",
+            "assignment_id",
+            "idempotency_key",
+            "accepted_at",
+            "task_status_at_acceptance",
+            "pre_submission_results",
+        )
+        if (
+            by_key["operation_id"] != operation_id
+            or any(by_key[field] != by_id[field] for field in immutable)
+            or by_key["operation_state"] not in {"finalization_pending", "finalized"}
+            or by_id["operation_state"] not in {"finalization_pending", "finalized"}
+            or (
+                by_key["operation_state"] == "finalized"
+                and by_id["operation_state"] != "finalized"
+            )
+            or any(
+                by_key[field] is not None and by_key[field] != by_id[field]
+                for field in (
+                    "submission_id",
+                    "submission_version",
+                    "evaluation_request_id",
+                )
+            )
+        ):
+            raise AssertionError("key and operation reads differ in durable identity")
     return by_key
 
 

@@ -9684,3 +9684,18 @@ passed1/1 in18.57s. Combined-run log /tmp/submission-task-read-migration.log
 /tmp/submission-task-detail-contract.log. Isolated schema0090 database cleanup
 is confirmed in /tmp/submission-task-read-migration.json. Pinned Ruff0.15.22
 and diff checks pass. No production behavior or retained row changed.
+
+The first clean run with that bucket setup passed the real pre-submit
+negative: the missing-summary ZIP produced `pre_submission_checker_failed`,
+the public operation was rejected, and no Submission appeared. The correct
+ZIP then received T4 acceptance and exact command replay. Its subsequent
+public progress reads crossed the T5 commit: the key selector read
+`finalization_pending`, while the operation-ID selector read
+`finalized/evaluation_pending`. Both named the same durable operation. The
+journey had incorrectly required the entire two responses to be equal. It now
+compares immutable operation, task, assignment, key, acceptance time and PRE
+feedback, refuses state regression and any changed populated Submission
+identity, and permits the forward commit between separate reads. Eight focused
+tests cover that observed transition and identity substitutions. The run's
+isolated database and bucket were cleaned; the automatic POST outcome was not
+yet observed in this run.
