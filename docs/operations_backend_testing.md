@@ -273,7 +273,7 @@ SHA, lane and numeric run attempt, containing its manifest, lane evidence,
 isolation record, and coverage data. On complete runs, the `full-suite` job
 runs with a fail-closed dependency guard, downloads available diagnostic
 bundles, then rejects any failed, cancelled, or skipped matrix result before
-fan-in. Fan-in selects the highest numeric attempt available for each of the sixteen declared
+fan-in. Fan-in selects the highest numeric attempt available for each of the 23 declared
 lanes from separately downloaded artifact directories. It rejects malformed,
 foreign or future attempt names and never falls back from an incomplete or
 corrupt latest bundle to an older passing one. For the selected bundles it
