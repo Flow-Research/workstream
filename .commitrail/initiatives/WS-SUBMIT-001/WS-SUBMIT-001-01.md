@@ -10050,3 +10050,31 @@ The implementation filters the historical reader by `source_operation_id IS NULL
 The first isolated PostgreSQL pass at schema 0090 ran six selected cases: four passed, including the current-source public selector controls and contributor scale. The archived consumed-history case stopped before the added read assertions because its older 0083-to-current function-set equality now spans the merged main and later cleanup migrations. The test now compares exact function definitions only across 0083-to-0084, where the admission guard is the intended sole change, then separately requires all captured rows to survive through current schema before reading archived history. Project scale reached the historical preparation page within its unchanged one-second budget (0.707 and 0.499 seconds), but an unrelated submission continuation took 1.008 seconds and failed the same inherited budget. No budget was widened or performance result credited. The first runner's database cleanup completed; the two affected cases await a focused replay.
 
 Focused replay at schema 0090 passed the archived consumed-v1 read after the corrected exact migration comparison. The project scale case remained red on the unchanged one-second gate: submissions filtered took 1.905 seconds, assignments 1.316 seconds, and preparation pages 1.889/1.129 seconds under the shared host's load. Those broad overruns do not isolate a preparation-query regression, and this commit does not claim the scale gate passed. The two-case run had one pass and one failure in 462.90 seconds, with full isolated database cleanup. A later controlled performance measurement remains necessary before crediting the one-second project scale requirement.
+
+
+### Live AWS source qualification passed
+
+At clean script candidate074cade5e, the pilot bucket and both independently
+STS-verified runtime/cleanup IAM users passed the complete operator source drill.
+Private journal: aws-source-qualification-20261124/live-612605b1732644d189ad0c5257328c5c.jsonl.
+Actual checks: runtime HEAD confirms an existing retained artifact and cleanup
+HEAD is403; two-part conditional source completion and pinned-version byte/hash
+readback; conflicting overwrite refusal; runtime DeleteObjectVersion/Abort
+refusal; cleanup Put refusal; cleanup abort and exact NoSuchUpload; lost delete
+ACK reconciliation while an independent equal-byte retained source survives;
+lost begin ACK exact-handle discovery/abort; lost complete ACK exact-version
+recovery and substituted hash refusal. Four new owned operation keys were used:
+three completed sources removed with confirmed absence, one unsealed multipart
+handle discovered and aborted with confirmed absence. Final event completed/passed.
+No user artifact body was read by the retained-object permission control.
+
+The two earlier synthetic runs each had two source keys. Exact recorded versions
+and upload handles were reconciled with the cleanup principal, and independent
+exact-key listings confirmed no versions, delete markers or multipart uploads.
+Their adjacent .cleanup.json receipts are retained. No product SQL rows, current
+API/worker configuration or existing retained keys were mutated. Temporary local
+credential files and isolated drill container were removed on process exit.
+This qualifies the actual native AWS source adapter/policies for this pilot;
+it does not prove deployed worker wiring, public hosted journey or C01–C07 limits.
+The hard-coded native-AWS admission exclusion can now be replaced with the
+qualified profile, followed by its focused T1 test and actual hosted activation.
