@@ -8393,3 +8393,15 @@ accepted_operation_id, so it would reject before reaching concurrency. Preserve
 that exact identity with dataclasses.replace. This isolated ART schema proves
 binding concurrency/rollback only; real accepted-source SQL custody remains
 covered by the full-schema T5 cases, not this narrow fixture.
+
+Writer-retirement review closure at clean 91116d97b: ARCH/SEC PASS and QA
+PASS WITH LOW RISKS; QA-RETIRE-001 resolved. Original PostgreSQL receipt finished
+8 passed/1 failed in 306.10s; only the obsolete binding fixture failed. Exact
+repaired fixture passed in 3.55s at 91116d97b. Both metadata receipts show schema
+0090 and complete cleanup. These are eight precommit integration passes plus
+one exact-head repair pass, not a full-suite final-head result. QA independently
+omitted authority closure and the replacement denial test failed as intended.
+Commitrail, changed Markdown links, stale artifact contracts and diff checks
+passed. This closes the admission-only TASK writer retirement; genuine-orphan
+cleanup, remote execution/AWS qualification, operational crash evidence and
+full end-to-end acceptance remain open under the unchanged goal.
