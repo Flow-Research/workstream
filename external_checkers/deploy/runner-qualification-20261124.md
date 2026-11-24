@@ -31,6 +31,10 @@ with source `sg-015b341d9f8d39117`. No public 9443 ingress is required.
   `sha256:b87e18c8713f2a80f03b0f358ef44338aaa5e851d5570573d31ee979b5cc6509`
 - installed service config:
   `sha256:c35de5c4f38db8c5b9d003e47d4bf9e4310f22549c6e8dde65bdd27d57ecf5a6`
+- repaired authenticated edge from reviewed commit `a64729edc`:
+  `sha256:4c487d108b33f4a30bef220c95eb2b9d9483874e0a6e0ac9a5887fec1c68af6d`
+- retained pre-repair rollback edge:
+  `/opt/workstream/bin/workstream-remote-node.rollback-20261124-7fb81d74`
 
 ## Live receipts
 
@@ -57,22 +61,87 @@ After POST and PRE, the material workspace, model relay and Smol lease roots wer
 empty. Both `workstream-remote-node.service` and
 `workstream-checker.service` remained active with one task each.
 
-The follow-up crash-recovery guard admits no new session when `workspaces`
-contains residue. Reconciliation is a separate stopped-native operation:
+The repaired edge was qualified again after the crash-recovery and
+same-connection callback changes. The request-bound POST completed through the
+pinned checker image with the expected deliberately-empty-material result:
+
+- request: `sha256:336944f608f0933300666e28e3087bf0b4b31d670ef07853f81cfd18ee97018f`
+- outcome/verdict: `completed` / `failed`
+- expected finding: `harnessy.proof.missing`
+- isolation: `smolvm` / `smol-microvm`
+
+The repaired streamed-ZIP PRE also completed and destroyed its cleanup
+obligation:
+
+- source: 261 bytes,
+  `sha256:0359882cbc4c194551d439d227e606f6c4d1783c5061e6474d3f8cee2f6654ea`
+- request: `sha256:da14d383a6162a3019eb4af296453882e289535a3123f8a3207f133892a51a71`
+- outcome/cleanup: `completed` / `destroyed`
+- selected checker: `completed` / `failed`, expected
+  `harnessy.proof.missing`
+- timings in milliseconds: admission 0, preparation 3377, execution 79922,
+  cleanup 123, total 83424
+
+The final check found zero children in `materials/workspaces`, `model-relay` and
+`smol-leases`. Both services were loaded, enabled and active. The restored unit
+files matched their retained root-private backups exactly:
+
+- `workstream-remote-node.service`:
+  `sha256:6e0854001756bb359907479b5b33bd51554031de7f05209ee980c507299968d0`
+- `workstream-checker.service`:
+  `sha256:6dc65ad632417984b1add1788b41553305f9cea879ed4c26bc29dc27e54eef8a`
+- backups: `/etc/workstream/maintenance-backups/20261124-a64729edc/`
+
+## Stale-workspace maintenance qualification
+
+The crash-recovery guard admits no new session when `workspaces` contains
+residue. Ordinary startup remains fail closed on any existing native socket;
+connection refusal alone is not evidence that the native owner is stopped.
+Reconciliation is an operator-only stopped-native procedure, not a product
+startup fallback.
+
+The live maintenance qualification used this bounded sequence:
+
+1. Stop both runner units. Preserve the exact two local unit files, modes and
+   hashes under a unique root-private, same-filesystem backup directory.
+2. Apply runtime masks. Because local unit files in `/etc/systemd/system` take
+   precedence over `/run` masks, atomically move only those two verified unit
+   files outside systemd search paths, reload, and require both effective
+   `LoadState=masked` and inactive state.
+3. Require the exact private runtime parent (uid/gid 10001, mode 0700), exact
+   known checker socket (uid/gid 10001, mode 0600, one link, socket type), no
+   listener, no owning process and `ECONNREFUSED`. Only then unlink that one
+   verified inode. Do not infer this permission from `ECONNREFUSED` alone.
+4. Run the unchanged bounded reconciler as uid 10001. Abort without deleting
+   anything on any identity, ownership, type, link-count, state or bound
+   mismatch.
+5. Restore the byte-identical unit files and metadata, reload, remove the
+   runtime masks, and start the edge before the checker. Recheck hashes, loaded
+   state, enabled state and active state. Keep the backups.
+
+The observed stale checker socket was inode 303586 with uid/gid 10001, mode
+0600, one link and no listener or owner. After its exact removal the clean
+reconciler reported zero removals. A controlled
+`.incoming-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa` directory containing one 4096-byte
+regular file then proved that normal edge startup refused with `workspace root
+requires reconciliation`. With both units stopped and effectively masked, the
+reconciler removed exactly one owned residue; the workspace was empty before
+the unit files were restored and the services restarted.
+
+The underlying bounded reconciliation command is:
 
 ```sh
-sudo systemctl stop workstream-checker.service workstream-remote-node.service
 sudo -u '#10001' /usr/bin/python3 /opt/workstream/bin/workstream-remote-node \
   --config /etc/workstream/remote-node.json --reconcile-stale-workspaces
-sudo systemctl start workstream-remote-node.service workstream-checker.service
 ```
 
+It must only be invoked after the preceding stopped-and-masked ownership checks.
 The command refuses an existing native socket, a non-private or foreign-owned
 root, more than one residue, unknown names, links, special files, foreign-owned
 members, more than 14,000 members or more than 1 GiB plus the bounded control
-envelope. It never deletes an active or uncertain grant. The focused restart
-proof covers both `.incoming-*` and renamed `extract_*` residue, refusal while
-the native socket exists, exact removal after confirmed stop, and clean restart.
+envelope. It never deletes an active or uncertain grant. Focused tests cover
+both `.incoming-*` and renamed `extract_*` residue, refusal while the native
+socket exists, exact removal after confirmed stop, and clean restart.
 
 ## Evidence and secret locations
 

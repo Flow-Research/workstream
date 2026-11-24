@@ -452,3 +452,16 @@ worker receives the read-only app-local model callback socket. Foreground PRE
 uses `execute_pre`, whose contract prohibits model, trial and build grants;
 POST and setup/trial callback execution remains worker-owned. The profile
 contains no app-host native checker/socket readiness fallback.
+
+The repaired edge was installed on the dedicated runner without changing the
+app host, network or IAM. Operator-only recovery first stopped both runner
+units, preserved their exact bytes and modes, made runtime masks effective by
+moving only the two verified local unit files outside systemd search paths,
+and required inactive/masked state before touching the stale socket. Exact
+private ownership, type, mode, link count, refusal, listener and process-owner
+checks preceded removal of only that socket inode. The unchanged bounded
+reconciler removed one controlled `.incoming-*` residue after normal startup
+refused it. Byte-identical units were restored and remain loaded, enabled and
+active; retained backup hashes match. Repaired POST and streamed-ZIP PRE both
+completed with pinned Smol isolation, PRE cleanup was destroyed, and all
+material, model-relay and Smol-lease roots were empty afterward.
