@@ -502,3 +502,13 @@ general/outbox queues, and Beat can no longer silently omit cleanup scheduling.
 Focused hosted tests passed 61 cases; compile, Ruff, whitespace and current
 hosted documentation-link checks passed. No app service, container, active
 release file, database, IAM policy or source-admission gate changed.
+
+Coordinated runner-only maintenance then added the exact incident-summary image
+as a third cache entry for the successful-checker public journey. Its manifest,
+config and canonical USTAR are pinned in the runner receipt. The prior two-entry
+config remains byte-identical in a root-private rollback backup, both existing
+entries remain first and unchanged, and only the runner edge/native units were
+stopped. App-origin TLS 1.3 health returned ready with three manifests; both
+units are active and material/model-relay roots are empty. This installed a
+test image only: it did not activate project policy or change the app, IAM,
+database, release environment or AWS source gate.

@@ -152,6 +152,34 @@ envelope. It never deletes an active or uncertain grant. Focused tests cover
 both `.incoming-*` and renamed `extract_*` residue, refusal while the native
 socket exists, exact removal after confirmed stop, and clean restart.
 
+## Incident-summary qualification cache
+
+After the hosted profile repair was frozen and integrated, coordinated
+runner-only maintenance installed one additive successful-checker image for the
+governed public journey. The two existing checker/intake entries remained first
+and byte-identical. The new closed cache entry is:
+
+- repository: `docker.io/library/workstream-incident-summary`
+- platform manifest: `sha256:b4d1877fabfeacb24c6830469d1d1f057eacb64daecea7b5328f08431fc65721`
+- image config: `sha256:ad76a4e619ec4a72db898650d01b789a0144c765676af2189f144c36e8db4939`
+- canonical USTAR: 129,095,680 bytes,
+  `sha256:c71509d7bc9771a6205429267ec911407913e70a4b33b6f0376eca580fac3ff2`
+
+The archive/config are owned by uid/gid 10001, regular single-link files with
+mode 0400. Active checker config is
+`sha256:c3f8fb85ab2cc3b27ddf8da6db1e483aae9880b23918822c241d6864322a3dcd`.
+The byte-identical prior two-entry config remains mode 0400 at
+`/etc/workstream/maintenance-backups/20261124-incident-summary-cache/checker-service.json`
+with digest
+`sha256:c35de5c4f38db8c5b9d003e47d4bf9e4310f22549c6e8dde65bdd27d57ecf5a6`.
+
+Only the runner edge/native units stopped during the install. Both returned
+active with no error-priority journal entry. An app-origin TLS 1.3 health
+exchange reported ready Linux/amd64 `smolvm`/`smol-microvm`, sandbox uid/gid
+10001 and three cached manifests. Material workspaces and model-relay roots were
+empty afterward. Installation is cache readiness, not project policy activation
+or proof of the later public acceptance journey.
+
 ## App deployment handoff
 
 The read-only app inspection found instance `i-000b0c090ddc142bd` healthy on
