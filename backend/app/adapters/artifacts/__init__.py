@@ -60,7 +60,6 @@ from app.modules.model_usage.api import (
     SetupModelOutputBindingPort,
     SetupModelUsageOwnerPort,
 )
-from app.modules.artifacts.api import SubmissionBundlePreparationCommand
 from app.modules.artifacts.api.task_import_source import TaskImportSourceCommandPort
 from app.modules.checkers.api.materialization import PostSubmissionMaterializationPort
 from app.modules.checkers.api.materialization import (
@@ -89,12 +88,7 @@ from app.modules.artifacts.preparation import (
 from app.modules.artifacts.api.submission_archive import (
     SubmissionArchiveLimits,
 )
-from app.modules.artifacts.submission_authorization import (
-    SubmissionBundlePreparationAuthorization,
-)
-from app.modules.artifacts.schemas import (
-    ArtifactInternalAuthority,
-)
+from app.modules.artifacts.schemas import ArtifactInternalAuthority as ArtifactInternalAuthority
 from app.modules.artifacts.authorization import (
     GuideArtifactPreparedAuthorization,
     PreparedArtifactInternalAuthority,
@@ -427,147 +421,6 @@ def submission_admission_consumption_port(
             request_id=request_id,
             correlation_id=correlation_id,
         ),
-    )
-
-
-def get_submission_bundle_preparation_command(
-    request: Request,
-    session: Annotated[AsyncSession, Depends(get_db_session)],
-    internal_authority: Annotated[
-        ArtifactInternalAuthority,
-        Depends(get_artifact_internal_authority),
-    ],
-    authority: Annotated[
-        SubmissionBundlePreparationAuthorization,
-        Depends(get_submission_bundle_preparation_authorization),
-    ],
-) -> SubmissionBundlePreparationCommand:
-    """Compose the sole hidden contributor preparation path from closed ART ports."""
-    from app.modules.artifacts.authorization import (
-        PreparedPreSubmitMaterializationAuthorization,
-    )
-    from app.modules.artifacts.service import (
-        ArtifactAdmissionService,
-        ArtifactStorageOrchestrator,
-        artifact_storage_namespace_spec,
-    )
-    from app.modules.artifacts.submission_admission import SubmissionBundleDurablePutService
-    from app.modules.artifacts.submission_materialization import (
-        PreparedBundleMaterializationService,
-    )
-    from app.modules.artifacts.submission_admission import (
-        PreparedSubmissionBundlePreparationCommand,
-        SubmissionBundlePreparationRuntime,
-    )
-
-    settings = request.app.state.settings
-    request_id, correlation_id = (UUID(value) for value in request_ids(request))
-    task_contexts = task_submission_context_port(session)
-    project_contexts = project_locked_policy_context_port(session)
-
-    @asynccontextmanager
-    async def runtime():
-        bootstrap = create_artifact_store_bootstrap(settings)
-        try:
-            manager = create_artifact_scratch_manager(settings)
-        except BaseException:
-            bootstrap.close()
-            raise
-        try:
-            materialization_authority = PreparedPreSubmitMaterializationAuthorization(
-                session,
-                request_id=request_id,
-                correlation_id=correlation_id,
-            )
-        except BaseException:
-            manager.close()
-            bootstrap.close()
-            raise
-        try:
-            namespace = artifact_storage_namespace_spec(settings, bootstrap)
-            store = bootstrap.initialize_after_namespace_claim(
-                ArtifactStoreNamespaceClaim(
-                    adapter_identity=bootstrap.identity,
-                    namespace_identity=bootstrap.namespace_identity,
-                    namespace_fingerprint=namespace.namespace_fingerprint,
-                )
-            )
-            preparation = ArtifactPreparationService(manager)
-            intake = trusted_submission_intake(settings)
-            archive_limits = submission_archive_limits(settings)
-            from app.adapters.auth import selected_pre_submit_authority
-            from app.adapters.checkers import selected_pre_submit_checker_execution
-            from app.modules.artifacts.selected_pre_submit_execution import (
-                SelectedPreSubmitExecutionService, SelectedPreSubmitSourceReads,
-            )
-            from app.adapters.checkers import selected_pre_submit_coordinator
-
-            checker_execution = selected_pre_submit_checker_execution(
-                settings=settings,
-            )
-            storage_schemes = {"local": "local", "s3_compatible": "s3"}
-            try:
-                storage_scheme = storage_schemes[settings.artifact_store_backend]
-            except KeyError as exc:
-                raise RuntimeError("unsupported artifact store backend") from exc
-            materialization = PreparedBundleMaterializationService(
-                session=session,
-                authorization=materialization_authority,
-                preparation=preparation,
-                checker_execution=checker_execution,
-                storage_scheme=storage_scheme,
-                archive_limits=archive_limits,
-            )
-            admission = ArtifactAdmissionService(session, settings, namespace)
-            storage = ArtifactStorageOrchestrator(
-                session,
-                store,
-                namespace,
-                settings,
-                internal_authority,
-            )
-            selected_coordinator = selected_pre_submit_coordinator(session)
-
-            yield SubmissionBundlePreparationRuntime(
-                preparation=preparation,
-                intake=intake,
-                archive_limits=archive_limits,
-                materialization=materialization,
-                selected_coordinator=selected_coordinator,
-                selected_execution=SelectedPreSubmitExecutionService(
-                    session=session,
-                    coordinator=selected_coordinator,
-                    authority=selected_pre_submit_authority(session),
-                    source_reads=SelectedPreSubmitSourceReads(
-                        session=session, sources=submission_intake_pre_source_port(session),
-                        authority=materialization_authority, store=store,
-                    ),
-                    execution=checker_execution,
-                ),
-                storage_scheme=storage_scheme,
-                artifact_deadline_ms=int(
-                    settings.artifact_preparation_total_deadline_seconds * 1000
-                ),
-                durable_put=SubmissionBundleDurablePutService(
-                    session=session,
-                    admission=admission,
-                    storage=storage,
-                    authorization=authority,
-                    task_contexts=task_contexts,
-                    project_contexts=project_contexts,
-                ),
-            )
-        finally:
-            materialization_authority.close()
-            manager.close()
-            bootstrap.close()
-
-    return PreparedSubmissionBundlePreparationCommand(
-        session=session,
-        authority=authority,
-        task_contexts=task_contexts,
-        project_contexts=project_contexts,
-        runtime_factory=runtime,
     )
 
 

@@ -272,11 +272,21 @@ def test_revision_acknowledgement_requires_exact_current_preparation() -> None:
         )
 
 
+def _retained_admission_reservation():
+    from app.modules.checkers.api.historical_selected_pre_submit import HistoricalSelectedPreSubmitReservation
+    from tests.checkers.external.test_selected_pre_submit_coordination import _retained_v1
+
+    selected = HistoricalSelectedPreSubmitReservation.from_canonical_body(
+        _retained_v1("selected_pre_v1_completed")["request"])
+    lineage = selected.admission_lineage
+    return lineage.semantic_manifest_body, lineage.post_submit_policy_body, selected
+
+
 def _selected_admission_publisher_fixture(selected):
-    terminal = {
-        "request_digest": selected.request_digest,
-        "outcome": "completed",
-        "execution": {"eligible": True},
+    from tests.checkers.external.test_selected_pre_submit_coordination import _retained_v1
+
+    terminal = _retained_v1("selected_pre_v1_completed")["terminal"] | {
+        "reservation": selected.canonical_body(), "request_digest": selected.request_digest,
     }
     attempt = SimpleNamespace(
         id=str(new_record_id()),
@@ -781,7 +791,7 @@ async def test_selected_pre_only_requires_project_runtime_for_locked_external_im
 async def test_selected_pre_terminal_publishes_self_contained_ready_admission(
     replacement: bool,
 ) -> None:
-    manifest, post_policy, selected = _selected_admission_reservation()
+    manifest, post_policy, selected = _retained_admission_reservation()
     if replacement:
         selected = replace(
             selected,
@@ -794,7 +804,7 @@ async def test_selected_pre_terminal_publishes_self_contained_ready_admission(
         )
     lineage = selected.admission_lineage
     assert (
-        SelectedPreSubmitAdmissionLineage.from_canonical_body(lineage.canonical_body()) == lineage
+        type(lineage).from_canonical_body(lineage.canonical_body()) == lineage
     )
     session, job, verification, _ = _selected_admission_publisher_fixture(selected)
     task_contexts = SimpleNamespace(lock_retained_submission_parents=AsyncMock())
@@ -834,7 +844,7 @@ async def test_selected_pre_terminal_publishes_self_contained_ready_admission(
 
 @pytest.mark.asyncio
 async def test_selected_pre_publication_requires_exact_retained_task_identity() -> None:
-    _, _, selected = _selected_admission_reservation()
+    _, _, selected = _retained_admission_reservation()
     session, job, verification, intent = _selected_admission_publisher_fixture(selected)
     task_contexts = SimpleNamespace(lock_retained_submission_parents=AsyncMock())
     publisher = SubmissionBundleAdmissionPublisher(session)
@@ -863,7 +873,7 @@ async def test_selected_pre_publication_requires_exact_retained_task_identity() 
 
 @pytest.mark.asyncio
 async def test_selected_pre_publication_requires_task_port_before_terminal_reads() -> None:
-    _, _, selected = _selected_admission_reservation()
+    _, _, selected = _retained_admission_reservation()
     session, job, _, _ = _selected_admission_publisher_fixture(selected)
 
     with pytest.raises(RuntimeError, match="TASK composition is unavailable"):
@@ -880,7 +890,7 @@ async def test_selected_pre_publication_requires_task_port_before_terminal_reads
 
 @pytest.mark.asyncio
 async def test_selected_pre_task_lock_failure_propagates_before_terminal_reads() -> None:
-    _, _, selected = _selected_admission_reservation()
+    _, _, selected = _retained_admission_reservation()
     session, job, _, _ = _selected_admission_publisher_fixture(selected)
     task_contexts = SimpleNamespace(
         lock_retained_submission_parents=AsyncMock(

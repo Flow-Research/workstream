@@ -8879,3 +8879,35 @@ one launcher typo used a shortened MinIO host and was rejected before provisioni
 Structure, Ruff and diff passed. No testcaller of the obsolete preparation
 factory/command remains. Historical _verify_put_attempt and its real retained
 publisher tests remain; exclusively unused old preparation helpers were removed.
+
+QA/ARCH closed2bb68b49e PASS. Remove the uncalled high-level preparation writer
+now: adapter get_submission_bundle_preparation_command; ART durable-put request/
+result/service, current_submission_bundle_admission_id, preparation runtime and
+command. Allowed files: adapters/artifacts/__init__.py, submission_admission.py,
+this record, and affected exact architecture inventory if required. Preserve
+historical publisher/error byte-for-byte, packet validation still tested, and
+shared ART producers/current foreground source execution. Medium architecture
+risk; import app/outbox with explicit test broker, focused retained publisher
+contracts, structure/import boundaries, Ruff/diff and ARCH/QA review. Remaining
+old low-level ArtifactAdmissionService branch, authorization/request and old
+materialization classes are the next coherent deletion, not declared retired yet.
+No database migration, retained data deletion, app deployment or new fallback.
+Focused publisher checks exposed pre-existing stale pure fixtures constructing
+v1 fields through the live v2 type. Add test_selected_pre_submit.py to scope only
+for retained publisher fixtures: decode the committed v1 completed capture with
+the read-only historical decoder and use its actual terminal shape, preserving
+publisher assertions and current live types. Old live materialization tests in
+that module remain for the next deletion batch. App import also identified the
+shared ArtifactInternalAuthority adapter export; retained it explicitly for
+current project routes. No compatibility writer or historical fixture rewrite.
+
+High-level writer retirement verification: app/outbox imports pass with explicit
+memory broker (imports only, not broker qualification);5 focused retained-publisher
+cases pass9.57s after historical fixture repair; real retained publication-failure
+rollback case passes82.65s, schema0090/fullcleanup
+(/tmp/submission-writer-retirement-retained.json; launcherf9db6febb with final
+production deletion). Publisher/error class ASTs are identical to baseline.
+Structure and authorization boundaries, scoped Ruff/diff passed. Fresh origin/main
+remainsd713594eb and has0 commits absent from this branch. Low-level old admission
+branch/authorization/materialization remain explicitly pending; no complete
+writer-retirement or full-suite qualification claim is made yet.
