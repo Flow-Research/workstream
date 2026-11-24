@@ -88,7 +88,8 @@ sudo -n install -d -m 0700 /var/lib/workstream-operator
 ```
 
 Before any config write, compare the actual unit MainPID/ControlGroup, process
-executable/argv, UID/GID10001, private config0400, private runtime parent0700,
+executable/argv, UID/GID10001, runtime-owned config0400 under root-owned ancestry without
+group/other write (or the existing runtime-private0700 anchor), private runtime parent0700,
 owner file0600, single slot, exact image cache entry and original config bytes
 against independent deployment custody. Hash service, Smol, guest and the
 reviewed wrapper against their independently approved artifacts. The root-owned

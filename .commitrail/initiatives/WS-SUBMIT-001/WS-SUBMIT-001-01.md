@@ -10281,3 +10281,52 @@ general worker is removed from the active ownership list before restart so a
 stale process-group ID is never signalled later. Added focused race and
 attempt-all controls. Eight local fixture checks pass, including the two real
 process-group cases; the remote supervisor is still unstarted.
+
+### Validate hosted config custody under its root-owned directory
+
+Intent: actual read-only staged validate_node failed before any supervisor start
+because the shared private-control path check required the config parent to be
+owned by runtime UID10001/mode0700. The approved hosted configuration is instead
+UID/GID10001/mode0400 under root-owned nonwritable /etc/workstream. Repair only
+that configuration-file validation; never chmod/move the deployed config to fit
+the operator fixture. Allowed files are public_node_faults.py, the existing
+public fixture guard module, its affected experiment docs and this record.
+
+Acceptance: root-owned nonwritable hosted config ancestry is allowed while its
+file stays exact UID/GID10001,0400,regular,single-link,canonical and inode-bound.
+Writable or foreign-owned ancestry, symlink aliases, wrong file mode/owner and
+extra links refuse. Keep local config and every private control/runtime directory
+on their existing strict private checks. Add a discriminating root-parent control
+and denials, retain the same-fd read and exact-inode write checks, then run focused
+guards/static gates. Local tests may model root ownership because the host user
+has no sudo; actual runner read-only validation follows reviewed incremental
+source staging. No runner file writes, restart or supervisor start in this task.
+
+Read-only parent audit confirmed /etc/workstream, /etc and / are UID/GID0 mode0755;
+config inode303569 remains UID/GID10001 mode0400 with one link. Evidence is
+/tmp/submission-runner-config-parents.json. No runner permissions, files or
+services changed. The config-only helper now accepts that root-owned ancestry
+without group/other write, retaining the existing runtime-private0700 hosted
+layout and local config branch through unchanged private_path checks. Mutable
+private controls were not generalized.
+
+Final bridge class passed10 in0.494s at
+/tmp/submission-runner-config-parent-final.log. The new named guard uses modeled
+root/runtime stat identities with a real FD read and a real foreign-inode denial;
+local sudo is unavailable, so it is not a physical root-ownership drill. It
+includes both valid config-anchor layouts plus writable/foreign ancestry,
+file UID/GID/mode/link, symlink, canonical-alias and inode denials; root0755 is
+still refused as a mutable private control directory. The same named guard
+fails against the pre-repair read at the actual private-anchor error and kills
+an in-memory omission of the new ancestry checks:
+/tmp/submission-runner-config-parent-probe-final.json and matching.log. The first
+probe replay reached its existing O_EXCL evidence filename; the unique final
+artifact rerun completed. No source was mutated by either probe.
+
+AST/byte comparison confirms validate_node, ForeignControl, native resource
+custody, private_path/PrivateControlDirectory and all same-FD/exact-inode I/O
+checks unchanged. New helper/test stay below120lines, and the guard module is
+1197lines without ledger changes. Ruff, local links and whitespace pass;
+Commitrail is checked against bc4c37acd. Actual hosted validate_node remains a
+separate read-only check after review and incremental source staging. No
+supervisor start or native fault proof is claimed here; roadmap scope unchanged.

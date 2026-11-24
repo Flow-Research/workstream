@@ -1034,6 +1034,57 @@ finally:
                 self.assertEqual(handlers[signal.SIGTERM], signal.SIG_DFL)
                 self.assertEqual(handlers[signal.SIGHUP], signal.SIG_DFL)
 
+    def test_hosted_config_root_parent_keeps_file_and_control_custody(self):
+        import os
+        import stat
+        from experiments.pilot04_external_checker_runtime import public_node_faults as owner
+        from experiments.pilot04_external_checker_runtime.public_fault_files import PrivateControlDirectory
+        config = Path('/etc/workstream/checker-service.json')
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / 'actual-fd'
+            source.write_bytes(b'{"owned":true}')
+            actual = source.stat()
+            def info(mode, uid, gid, links=1):
+                return os.stat_result((mode, actual.st_ino, actual.st_dev, links, uid, gid,
+                                       actual.st_size, 0, 0, 0))
+            baseline = {path: info(stat.S_IFDIR | 0o755, 0, 0) for path in config.parents}
+            baseline[config] = info(stat.S_IFREG | 0o400, 10001, 10001)
+            observed = dict(baseline)
+            original_open, opened, resolved = os.open, source, config
+            def read():
+                with patch.object(owner.os, 'getuid', return_value=0), \
+                        patch.object(Path, 'lstat', side_effect=lambda path: observed[path], autospec=True), \
+                        patch.object(Path, 'resolve', autospec=True, side_effect=lambda path: resolved), \
+                        patch.object(owner.os, 'open', side_effect=lambda *args: original_open(opened, os.O_RDONLY)):
+                    return owner._read_config(config, True)
+            self.assertEqual(read(), (b'{"owned":true}', (actual.st_dev, actual.st_ino)))
+            observed[config.parent] = info(stat.S_IFDIR | 0o700, 10001, 10001)
+            self.assertEqual(read()[0], b'{"owned":true}')
+            observed = dict(baseline)
+            changes = [(config.parent, info(stat.S_IFDIR | mode, 0, 0)) for mode in (0o775, 0o777, 0o1777)]
+            changes += [(config.parent, info(stat.S_IFDIR | 0o755, uid, 0)) for uid in (1000, 10001)]
+            changes += [(Path('/etc'), info(stat.S_IFDIR | 0o755, 10001, 0)),
+                        (config, info(stat.S_IFREG | 0o600, 10001, 10001)),
+                        (config, info(stat.S_IFREG | 0o400, 0, 10001)),
+                        (config, info(stat.S_IFREG | 0o400, 10001, 0)),
+                        (config, info(stat.S_IFREG | 0o400, 10001, 10001, 2)),
+                        (config, info(stat.S_IFLNK | 0o400, 10001, 10001))]
+            for path, value in changes:
+                observed = dict(baseline) | {path: value}
+                with self.subTest(path=path, mode=value.st_mode), self.assertRaises(ValueError):
+                    read()
+            observed, resolved = dict(baseline), source
+            with self.assertRaisesRegex(ValueError, 'canonical'):
+                read()
+            resolved, opened = config, Path(directory) / 'other-fd'
+            opened.write_bytes(b'foreign inode')
+            with self.assertRaisesRegex(ValueError, 'identity/size'):
+                read()
+            with patch.object(Path, 'lstat', side_effect=lambda path: baseline[path], autospec=True), \
+                    patch.object(Path, 'resolve', autospec=True, side_effect=lambda path: path):
+                with self.assertRaises(ValueError):
+                    PrivateControlDirectory(config.parent, uid=0, gid=0)
+
     def test_bounded_ssh_reader_refuses_oversized_output(self):
         from experiments.pilot04_external_checker_runtime.public_runner_faults import _bounded_read
         async def exercise():

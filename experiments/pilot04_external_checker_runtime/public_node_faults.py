@@ -281,9 +281,28 @@ def _config_identity(hosted_runtime):
     return os.getuid(), os.getgid(), 0o600
 
 
-def _read_config(config_path, hosted_runtime):
+def _validate_config_path(config_path, hosted_runtime):
+    """Validate config custody separately from private mutable control files."""
     uid, gid, mode = _config_identity(hosted_runtime)
-    private_path(config_path, mode, uid=uid, gid=gid)
+    if not hosted_runtime or Path(config_path).parent.lstat().st_uid != 0:
+        private_path(config_path, mode, uid=uid, gid=gid)
+        return uid, gid, mode
+    path = Path(config_path)
+    if not path.is_absolute() or path.resolve() != path:
+        raise ValueError('hosted config path is not absolute and canonical')
+    info = path.lstat()
+    if (not stat.S_ISREG(info.st_mode) or (info.st_uid, info.st_gid) != (uid, gid)
+            or stat.S_IMODE(info.st_mode) != mode or info.st_nlink != 1):
+        raise ValueError('hosted config file ownership/mode/link differs')
+    for parent in path.parents:
+        info = parent.lstat()
+        if not stat.S_ISDIR(info.st_mode) or info.st_uid != 0 or info.st_mode & 0o022:
+            raise ValueError('hosted config ancestor ownership/mode differs')
+    return uid, gid, mode
+
+
+def _read_config(config_path, hosted_runtime):
+    _validate_config_path(config_path, hosted_runtime)
     before = config_path.lstat()
     descriptor = os.open(config_path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
     with os.fdopen(descriptor, 'rb') as source:
@@ -299,8 +318,7 @@ def write_node_config(config_path, data, identity, *, hosted_runtime=False):
     """Write only the validated existing inode, preserving its owner and mode."""
     if len(data) > 1024 * 1024:
         raise ValueError('node config exceeds bound')
-    uid, gid, mode = _config_identity(hosted_runtime)
-    private_path(config_path, mode, uid=uid, gid=gid)
+    uid, gid, mode = _validate_config_path(config_path, hosted_runtime)
     descriptor = os.open(config_path, os.O_WRONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC)
     with os.fdopen(descriptor, 'wb') as target:
         info = os.fstat(target.fileno())
