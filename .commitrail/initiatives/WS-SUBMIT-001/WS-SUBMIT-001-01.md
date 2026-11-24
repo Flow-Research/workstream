@@ -8686,3 +8686,12 @@ ART facts, and successful fresh-key acceptance/finalization after the real
 routing owner creates revision context, with exact remediation lineage. No
 production or runner edits. Verify the one real PostgreSQL case, Ruff/diff,
 and focused QA review; existing authority checks remain unchanged.
+
+The public no-route control and routed positive continuation passed together
+in30.30s on the integrated runner code; isolated metadata
+/tmp/submission-public-unrouted-revision.json confirms schema0090 and complete
+cleanup. The launcher recorded9defe33b2 with the final test worktree before
+commit2b318e914. The positive path reaches consumed admission through T5 with
+the exact routing manifest, not an old ready-only preparation. Ruff/diff and
+Commitrail checks passed. This remains controlled runtime evidence, not live
+AWS/native public acceptance.
