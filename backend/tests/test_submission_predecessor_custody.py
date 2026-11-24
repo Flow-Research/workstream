@@ -21,14 +21,10 @@ from app.adapters.artifacts.local import LocalStorageAdapter
 from app.core.identifiers import new_record_id
 from app.core.hashing import canonical_json_hash
 from app.interfaces.artifacts import ArtifactStoreUnavailableError
-from app.modules.artifacts.api import (
-    SubmissionBundlePreparationRequest,
-)
 from app.modules.checkers.models import CheckerRun, SelectedPreSubmitRun
 from app.modules.artifacts.models import (
     SubmissionBundleAdmission,
 )
-from app.modules.authorization.api import ActorIdentityFacts, ActorKind
 from app.modules.checkers.api.execution import CheckerExecutionUnavailable
 from app.modules.tasks.api.submission_context import (
     TaskSubmissionContextRequest,
@@ -37,7 +33,6 @@ from app.modules.tasks.api.submission_context import (
 from app.modules.tasks.models import SubmissionDispatch
 from app.adapters.tasks import task_submission_context_port
 from tests.auth_concurrency_support import wait_for_named_database_lock
-from tests.artifact_store_helpers import artifact_byte_stream
 from tests.checkers.execution.support import live_executor, reserve
 from tests.post_submit_materialization_helpers import material_fixture
 from tests.tasks.post_submit_routing.remediation_support import (
@@ -45,9 +40,8 @@ from tests.tasks.post_submit_routing.remediation_support import (
     remediation_source,
 )
 from tests.tasks.post_submit_routing.support import next_request, revision_archive
-from tests.tasks.submission_lineage_support import _verified_admission
 from tests.selected_predecessor_fixtures import (
-    _snapshot, _secret_archive, _queued_selected_body, _insert_selected_reservation,
+    _snapshot, _secret_archive,
 )
 
 
@@ -62,33 +56,6 @@ def _trace_provider_writes(monkeypatch: pytest.MonkeyPatch, *, operations=("put"
 
         monkeypatch.setattr(LocalStorageAdapter, operation, traced)
     return calls
-
-
-
-
-def _replacement_request(h, data: bytes, *, predecessor_id: UUID, idempotency_key: UUID):
-    return SubmissionBundlePreparationRequest(
-        actor=ActorIdentityFacts(
-            h.actor_context.actor_profile_id,
-            h.actor_context.identity_link_id,
-            ActorKind.HUMAN,
-        ),
-        request_id=new_record_id(),
-        correlation_id=new_record_id(),
-        task_id=h.request.task_id,
-        assignment_id=h.request.assignment_id,
-        predecessor_submission_id=predecessor_id,
-        revision_preparation_id=(str(h.revision_preparation_id)
-                                 if getattr(h, "revision_preparation_id", None) else None),
-        revision_preparation_sha256=getattr(h, "revision_preparation_sha256", None),
-        idempotency_key=idempotency_key,
-        summary=h.creation_request.summary,
-        contributor_attestation=h.creation_request.contributor_attestation,
-        media_type="application/zip",
-        byte_source=artifact_byte_stream(data),
-    )
-
-
 
 
 async def _fixture_revision_context(h):
@@ -579,136 +546,112 @@ async def test_sql_selected_pre_reservation_rejects_superseded_checker_cause(
                 assert selected.eligible and selected.request_json["admission_lineage"]["checker_remediation_manifest_id"] == str(source_id)
 
 
-async def _assert_foreign_verified_admission_rejected(local, foreign, admission_id, before):
-    # Keep current preparation/cause binding intact, then substitute
-    # a real foreign verified PRE run to reach the original byte guard.
-    async with local.factory() as session:
-        foreign_run_id = await session.scalar(text("""
-            SELECT a.selected_pre_submit_run_id
-            FROM public.submission_bundle_admissions a
-            JOIN public.submissions s ON s.submission_bundle_admission_id=a.id
-            WHERE s.id=:submission
-        """), {"submission": foreign.created.submission_id})
-        assert foreign_run_id is not None
-    with pytest.raises(
-        IntegrityError, match="submission bundle admission verified lineage mismatch"
-    ) as verified_mismatch:
-        async with local.factory.begin() as session:
-            await session.execute(text("""
-                INSERT INTO public.submission_bundle_admissions
-                SELECT (pg_catalog.jsonb_populate_record(
-                    NULL::public.submission_bundle_admissions, to_jsonb(a)
-                    || pg_catalog.jsonb_build_object(
-                        'id',CAST(:new_id AS uuid),
-                        'selected_pre_submit_run_id',CAST(:run AS uuid)
-                    )
-                )).* FROM public.submission_bundle_admissions a WHERE a.id=:id
-            """), {"new_id": new_record_id(), "run": foreign_run_id, "id": admission_id})
-    assert verified_mismatch.value.orig.sqlstate == "23514"
-    assert await _snapshot(local) == before
-
-
 async def test_sql_selected_pre_reservation_and_admission_reject_foreign_routed_cause(
-    tmp_path,
-    isolated_database_env,
+    tmp_path, isolated_database_env, monkeypatch,
 ):
+    from sqlalchemy import event
+    from sqlalchemy.ext.asyncio import AsyncSession
+    from app.modules.artifacts.intake.models import SubmissionIntakeOperation, SubmissionSourceCharge
+    from tests.retained_material_fixtures import finalize_retained_intake
+    from tests.tasks.submission_dispatch.test_revision_capacity import _revision_http_runtime, _revision_upload_headers
+    from tests.tasks.test_public_submission_intake import _client
+
     async with remediation_source(tmp_path / "local", isolated_database_env) as local:
-        async with remediation_source(
-            tmp_path / "foreign",
-            isolated_database_env,
-            provision_services=False,
-            storage_settings=local.settings,
-        ) as foreign:
+        async with remediation_source(tmp_path / "foreign", isolated_database_env,
+                provision_services=False, storage_settings=local.settings) as foreign:
             local_source = await _fixture_revision_context(local)
             foreign_source = await _fixture_revision_context(foreign)
-            admission_id = await _verified_admission(
-                local.factory,
-                local.store,
-                local.namespace,
-                local.settings,
-                local.actor_context,
-                _replacement_request(
-                    local,
-                    revision_archive(local.data),
-                    predecessor_id=local.created.submission_id,
-                    idempotency_key=new_record_id(),
-                ),
-            )
-            positive = await _queued_selected_body(local, admission_id)
-            assert positive["request_json"]["admission_lineage"][
-                "checker_remediation_manifest_id"
-            ] == str(local_source)
-            await _insert_selected_reservation(local, positive)
-            rejected = await _queued_selected_body(local, admission_id, cause=foreign_source)
-            before = await _snapshot(local)
-            with pytest.raises(
-                IntegrityError, match="selected PRE reservation routed cause is foreign"
-            ) as denied:
-                await _insert_selected_reservation(local, rejected)
-            assert denied.value.orig.sqlstate == "23514"
-            assert await _snapshot(local) == before
-            with pytest.raises(
-                DBAPIError, match="selected PRE request custody is immutable"
-            ) as immutable:
-                async with local.factory.begin() as session:
-                    await session.execute(
-                        text("""
-                        UPDATE public.selected_pre_submit_runs
-                        SET request_json=CAST(:request AS jsonb), request_digest=:digest WHERE id=:id
-                    """),
-                        {
-                            "id": positive["id"],
-                            "request": json.dumps(
-                                positive["request_json"]
-                                | {
-                                    "admission_lineage": rejected["request_json"][
-                                        "admission_lineage"
-                                    ]
-                                }
-                            ),
-                            "digest": canonical_json_hash(
-                                positive["request_json"]
-                                | {
-                                    "admission_lineage": rejected["request_json"][
-                                        "admission_lineage"
-                                    ]
-                                }
-                            ),
-                        },
-                    )
-            assert immutable.value.orig.sqlstate == "55000"
-            assert await _snapshot(local) == before
-            with pytest.raises(
-                IntegrityError, match="revision admission context unavailable"
-            ) as mismatch:
-                async with local.factory.begin() as session:
-                    await session.execute(
-                        text("""
-                        INSERT INTO public.submission_bundle_admissions
-                        SELECT (pg_catalog.jsonb_populate_record(
-                            NULL::public.submission_bundle_admissions, to_jsonb(a)
-                            || pg_catalog.jsonb_build_object(
-                                'id',CAST(:new_id AS uuid),
-                                'checker_remediation_manifest_id',CAST(:cause AS uuid)
-                            )
-                        )).* FROM public.submission_bundle_admissions a WHERE a.id=:id
-                    """),
-                        {"new_id": new_record_id(), "cause": foreign_source, "id": admission_id},
-                    )
-            assert mismatch.value.orig.sqlstate == "23514"
-            assert await _snapshot(local) == before
-            await _assert_foreign_verified_admission_rejected(
-                local, foreign, admission_id, before,
-            )
+            foreign_history = await _replacement_history(foreign, foreign_source, foreign.created.submission_id)
             async with local.factory() as session:
-                admission = await session.get(SubmissionBundleAdmission, str(admission_id))
-                assert (
-                    admission.status == "ready" and admission.selected_pre_submit_run_id is not None
-                )
-                assert admission.pre_submit_evidence_set_id is None
+                foreign_run = await session.scalar(text(
+                    "SELECT selected_pre_submit_run_id FROM submission_bundle_admissions WHERE consumed_by_submission_id=:id"
+                ), {"id": foreign.created.submission_id})
+            assert foreign_run is not None and local_source != foreign_source
+            data, sql_errors = revision_archive(local.data), []
+            original_flush = AsyncSession.flush
+
+            async def observed_flush(session, *args, **kwargs):
+                try:
+                    return await original_flush(session, *args, **kwargs)
+                except IntegrityError as exc:
+                    sql_errors.append((exc.orig.sqlstate, str(exc.orig)))
+                    raise
+
+            def foreign_reservation(_mapper, _connection, row):
+                assert row.task_id == str(local.request.task_id)
+                body = row.request_json
+                assert body["admission_lineage"]["checker_remediation_manifest_id"] == str(local_source)
+                row.request_json = body | {"admission_lineage": body["admission_lineage"] | {
+                    "checker_remediation_manifest_id": str(foreign_source)}}
+                row.request_digest = canonical_json_hash(row.request_json)
+
+            before = await _snapshot(local)
+            async with _client(local, monkeypatch, isolated_database_env) as client:
+                settings, errors, calls = await _revision_http_runtime(local, client, tmp_path / "local", monkeypatch, data)
+                route = f"/api/v1/tasks/{local.request.task_id}/submissions"
+                refused_headers = _revision_upload_headers(local)
+                monkeypatch.setattr(AsyncSession, "flush", observed_flush)
+                event.listen(SelectedPreSubmitRun, "before_insert", foreign_reservation)
+                try:
+                    refused = await client.post(route, headers=refused_headers, content=data)
+                finally:
+                    event.remove(SelectedPreSubmitRun, "before_insert", foreign_reservation)
+                assert refused.status_code == 503, refused.text
+                assert refused.json()["error"]["code"] == "submission_infrastructure_unavailable"
+                assert len(sql_errors) == 1 and sql_errors[0][0] == "23514"
+                assert "selected PRE reservation routed cause is foreign" in sql_errors[0][1]
+                assert calls == [] and not errors and await _snapshot(local) == before
+                async with local.factory() as session:
+                    refused_operation = (await session.scalars(select(SubmissionIntakeOperation).where(
+                        SubmissionIntakeOperation.idempotency_key == refused_headers["Idempotency-Key"]))).one()
+                    charge = await session.get(SubmissionSourceCharge, refused_operation.id)
+                    assert refused_operation.state == "failed" and refused_operation.acceptance_receipt is None
+                    assert refused_operation.finalization_event_id is None
+                    assert charge.state == "sealed" and charge.accounted_bytes == len(data)
+                accepted = await client.post(route, headers=_revision_upload_headers(local), content=data)
+                assert accepted.status_code == 202, accepted.text
+                assert len(calls) == 1 and not errors
+            operation_id = UUID(accepted.json()["operation_id"])
+            async with local.factory() as session:
+                selected = (await session.scalars(select(SelectedPreSubmitRun).where(
+                    SelectedPreSubmitRun.source_operation_id == str(operation_id)))).one()
+                substituted = selected.request_json | {"admission_lineage": selected.request_json["admission_lineage"] | {
+                    "checker_remediation_manifest_id": str(foreign_source)}}
+            with pytest.raises(DBAPIError, match="selected PRE request custody is immutable") as immutable:
+                async with local.factory.begin() as session:
+                    await session.execute(text("UPDATE selected_pre_submit_runs SET request_json=CAST(:body AS jsonb), "
+                        "request_digest=:digest WHERE id=:id"), {"id": selected.id,
+                        "body": json.dumps(substituted), "digest": canonical_json_hash(substituted)})
+            assert immutable.value.orig.sqlstate == "55000"
+
+            submission_id = await finalize_retained_intake(local.factory, SimpleNamespace(
+                operation_id=operation_id, store=local.store.wrapped, namespace=local.namespace, settings=settings))
+            async with local.factory() as session:
+                admission = (await session.scalars(select(SubmissionBundleAdmission).where(
+                    SubmissionBundleAdmission.consumed_by_submission_id == submission_id))).one()
+                assert admission.status == "consumed" and admission.selected_pre_submit_run_id == selected.id
                 assert admission.checker_remediation_manifest_id == local_source
-                assert await session.scalar(text("SELECT count(*) FROM public.submissions")) == 2
+                assert admission.source_operation_id == str(operation_id) and admission.pre_submit_evidence_set_id is None
+                assert await session.scalar(text("SELECT count(*) FROM submissions")) == 3
                 await no_economic_effects(session)
+            before_invalid_insert = await _snapshot(local)
+            for field, replacement, message in (
+                ("checker_remediation_manifest_id", foreign_source, "source admission locked lineage mismatch"),
+                ("selected_pre_submit_run_id", foreign_run, "source admission provenance mismatch"),
+            ):
+                with pytest.raises(IntegrityError, match=message) as denied:
+                    async with local.factory.begin() as session:
+                        await session.execute(text("""
+                            INSERT INTO submission_bundle_admissions
+                            SELECT (jsonb_populate_record(NULL::submission_bundle_admissions,
+                              to_jsonb(a) || jsonb_build_object('id',CAST(:new_id AS uuid),
+                                CAST(:field AS text),CAST(:replacement AS uuid)))).*
+                            FROM submission_bundle_admissions a WHERE a.id=:id
+                        """), {"new_id": new_record_id(), "field": field,
+                               "replacement": replacement, "id": admission.id})
+                assert denied.value.orig.sqlstate == "23514"
+                assert await _snapshot(local) == before_invalid_insert
+            assert await _replacement_history(foreign, foreign_source, foreign.created.submission_id) == foreign_history
 
 
 @pytest.mark.parametrize("advance_fence", [False, True])

@@ -8848,3 +8848,34 @@ aggregate. The intermittent fixture timing cause remains unresolved; a100000
 sample database-clock probe observed no backwards samples and does not establish
 that no clock adjustment occurred. Retain diagnostic notes for recurrence.
 Structure passed before exception-note-only addition; Ruff/diff checked final.
+
+QA/ARCH approved565704c3a within its split-run evidence limits. Final old SQL
+fixture migration covers foreign cause at native PRE INSERT, immutable PRE
+request, and foreign cause/run at native source-admission INSERT during real T5.
+Allowed: predecessor custody test, exclusively unused predecessor/lineage fixture
+helpers and this record. Use real local/foreign routed histories; mutate only new
+INSERT values. Admission negative probes use transaction savepoints then valid
+registration in the same T5 root; retained rows and triggers remain unchanged.
+Assert exact SQLSTATE/messages, rollback counts, current source charge, one valid
+consumed successor, unchanged foreign history and no economics. Medium workflow/
+authority-test risk; isolated PostgreSQL case, Ruff/structure plus QA/ARCH review.
+Preserve historical verifier helper and any other shared consumers. No production
+writer deletion until this final old fixture dependency is removed and reviewed.
+The first new run correctly stopped at namespace validation: HTTP used parent
+scratch/root instead of the local fixture's exact root. Corrected that test setup.
+The next run reached all SQL probes but T5 then refused PostgreSQL subtransaction
+state from the probe savepoints. Keep the real T5 root free of savepoints: first
+finalize normally, then probe invalid admission INSERT copies in independent
+rolled-back transactions using the actual current source-bound admission. This
+preserves exact foreign provenance/lineage guard proof without weakening root
+transaction enforcement. No production change or retained-row mutation.
+
+Final foreign-cause case passed in54.97s with full schema0090 database/MinIO
+cleanup (/tmp/submission-current-foreign-sql-roots-valid.json; launcher565704c3a
+with final test/helper edits). It reaches exact foreign PRE23514, immutable
+request55000, and both current source-admission23514 guards, plus valid T5 and
+unchanged foreign history. Prior failed setup/savepoint runs remain recorded;
+one launcher typo used a shortened MinIO host and was rejected before provisioning.
+Structure, Ruff and diff passed. No testcaller of the obsolete preparation
+factory/command remains. Historical _verify_put_attempt and its real retained
+publisher tests remain; exclusively unused old preparation helpers were removed.

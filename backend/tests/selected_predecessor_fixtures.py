@@ -2,21 +2,14 @@
 
 from app.adapters.artifacts import selected_pre_submit_source_contracts
 
-from dataclasses import replace
 from io import BytesIO
 from uuid import UUID
-import json
 from zipfile import ZipFile
 
 from sqlalchemy import select, text
 
-from app.core.identifiers import new_record_id
-from app.modules.artifacts.selected_pre_submit_admission import (
-    selected_pre_submit_attempt_request_digest,
-)
 from app.modules.checkers.models import SelectedPreSubmitRun
 from app.modules.checkers.api.selected_pre_submit import (
-    SelectedPreSubmitReservationFacts,
     SelectedPreSubmitTerminalFacts,
 )
 
@@ -102,123 +95,3 @@ def _secret_archive(data: bytes) -> bytes:
     with ZipFile(output, "a") as archive:
         archive.writestr("probe.txt", b"-----BEGIN OPENSSH PRIVATE KEY-----\nprobe\n")
     return output.getvalue()
-
-
-async def _assert_default_failure(h, request, failure, before, code: str) -> None:
-    """Allow only the exact terminal selected run while ART remains untouched."""
-    assert failure.facts.eligible is False
-    failed = tuple(
-        check for check in failure.facts.workstream_default.checks if check.status == "failed"
-    )
-    assert tuple(check.failure_code for check in failed) == (code,)
-    assert failure.facts.external_members == ()
-    after = dict(await _snapshot(h))
-    expected = dict(before)
-    expected["selected_pre_submit_runs"] += 1
-    assert after == expected
-    async with h.factory() as session:
-        run = (
-            await session.scalars(
-                select(SelectedPreSubmitRun).where(
-                    SelectedPreSubmitRun.actor_profile_id == str(request.actor.actor_profile_id),
-                    SelectedPreSubmitRun.idempotency_key == str(request.idempotency_key),
-                )
-            )
-        ).one()
-        terminal = SelectedPreSubmitTerminalFacts.from_canonical_body(run.terminal_json, source_contracts=selected_pre_submit_source_contracts())
-        reservation = terminal.lease.reservation
-        assert run.status == terminal.outcome == "completed"
-        assert run.eligible is False and terminal.execution == failure.facts
-        assert terminal.terminal_digest == run.terminal_digest
-        assert reservation.request_digest == run.request_digest
-        assert reservation.task_id == request.task_id
-        assert reservation.assignment_id == request.assignment_id
-        assert reservation.actor_profile_id == request.actor.actor_profile_id
-        assert (
-            reservation.admission_lineage.predecessor_submission_id
-            == request.predecessor_submission_id
-        )
-        assert (
-            await session.scalar(
-                text("""
-            SELECT public.selected_pre_submit_receipt_valid(r,'execute',false)
-               AND public.selected_pre_submit_receipt_valid(r,'finalize',false)
-            FROM public.selected_pre_submit_runs r WHERE id=:id
-        """),
-                {"id": run.id},
-            )
-            is True
-        )
-
-
-async def _queued_selected_body(h, admission_id, *, cause=None) -> dict:
-    """Build a valid fresh reservation from one actual selected admission."""
-    async with h.factory() as session:
-        body = await session.scalar(
-            text("""
-            SELECT to_jsonb(r) FROM public.selected_pre_submit_runs r
-            JOIN public.submission_bundle_admissions a ON a.selected_pre_submit_run_id=r.id
-            WHERE a.id=:id
-        """),
-            {"id": admission_id},
-        )
-    assert body is not None and body["status"] == "completed" and body["eligible"] is True
-    facts = SelectedPreSubmitReservationFacts.from_canonical_body(body["request_json"], source_contracts=selected_pre_submit_source_contracts())
-    lineage = facts.admission_lineage
-    assert lineage is not None
-    key = new_record_id()
-    facts = replace(
-        facts,
-        attempt_id=new_record_id(),
-        idempotency_key=key,
-        prepared_generation_id=new_record_id(),
-        admission_lineage=(
-            replace(lineage, checker_remediation_manifest_id=UUID(str(cause)))
-            if cause is not None
-            else lineage
-        ),
-        attempt_request_digest=selected_pre_submit_attempt_request_digest(
-            actor_profile_id=facts.actor_profile_id,
-            identity_link_id=facts.identity_link_id,
-            task_id=facts.task_id,
-            assignment_id=facts.assignment_id,
-            predecessor_submission_id=lineage.predecessor_submission_id,
-            idempotency_key=key,
-            archive_sha256=facts.archive_sha256,
-            archive_byte_count=facts.archive_byte_count,
-            packet_sha256=lineage.packet_sha256,
-        ),
-    )
-    return body | {
-        "id": str(facts.attempt_id),
-        "idempotency_key": str(key),
-        "prepared_generation_id": str(facts.prepared_generation_id),
-        "request_json": facts.canonical_body(),
-        "request_digest": facts.request_digest,
-        "status": "queued",
-        "lease_id": None,
-        "lease_generation": 0,
-        "lease_expires_at": None,
-        "execute_evidence_id": None,
-        "finalize_evidence_id": None,
-        "terminal_json": None,
-        "terminal_digest": None,
-        "eligible": None,
-        "started_at": None,
-        "completed_at": None,
-    }
-
-
-async def _insert_selected_reservation(h, body) -> None:
-    """Exercise installed native INSERT guards without disabling any custody."""
-    async with h.factory.begin() as session:
-        await session.execute(
-            text("""
-            INSERT INTO public.selected_pre_submit_runs
-            SELECT (pg_catalog.jsonb_populate_record(
-                NULL::public.selected_pre_submit_runs, CAST(:body AS jsonb)
-                || pg_catalog.jsonb_build_object('queued_at',clock_timestamp())
-            )).*
-        """),
-            {"body": json.dumps(body)},
-        )

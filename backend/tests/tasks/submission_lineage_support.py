@@ -1,22 +1,16 @@
 """Shared real ART preparation and verifier fixture for TASK integration proofs."""
 
-from unittest.mock import patch
-from tests.trusted_intake_fixtures import LocalIntakeAdapter
 
-from types import SimpleNamespace
 from uuid import UUID
 from app.core.identifiers import new_record_id
 
 from sqlalchemy import select
-from starlette.requests import Request
 
-from app.adapters.artifacts import get_submission_bundle_preparation_command
 from app.adapters.tasks import task_submission_context_port
 from app.modules.actors.models import ActorIdentityLink, ActorProfile
 from app.modules.actors.api.service_identities import ServiceIdentity
 from app.modules.artifacts.authorization import (
     PreparedArtifactInternalAuthority,
-    PreparedSubmissionBundlePreparationAuthorization,
 )
 from app.modules.artifacts.models import (
     ArtifactVerificationJob,
@@ -56,41 +50,6 @@ async def _seed_services(factory):
                     linked_by="cp08-test",
                 )
             )
-
-
-async def _verified_admission(factory, store, namespace, settings, context, request):
-    """Run the real ART command and independent verifier, returning its ready admission."""
-    put_attempt_id = await _prepare_put_attempt(factory, settings, context, request)
-    return await _verify_put_attempt(
-        factory, store, namespace, settings, put_attempt_id
-    )
-
-
-async def _prepare_put_attempt(factory, settings, context, request):
-    """Run ART authority/storage with explicit in-process intake; leave verification pending."""
-    http = Request(
-        {
-            "type": "http",
-            "headers": [],
-            "app": SimpleNamespace(state=SimpleNamespace(settings=settings)),
-        }
-    )
-    async with factory() as session:
-        put_authority = PreparedArtifactInternalAuthority(
-            session,
-            service_identity=ServiceIdentity.ARTIFACT_PUT_RESOLVER,
-            request_id=new_record_id(),
-            correlation_id=new_record_id(),
-        )
-        with patch("app.adapters.artifacts.trusted_submission_intake", return_value=LocalIntakeAdapter()):
-            result = await get_submission_bundle_preparation_command(
-                http,
-                session,
-                put_authority,
-                PreparedSubmissionBundlePreparationAuthorization(session, context),
-            ).prepare(request)
-        assert result.put_attempt_id is not None
-    return result.put_attempt_id
 
 
 async def _verify_put_attempt(factory, store, namespace, settings, put_attempt_id):
