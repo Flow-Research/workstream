@@ -8445,3 +8445,40 @@ custody/55-second handler window (production unchanged), 90-second process
 supervision and 75-second DB-clock wait. An unexpected child delivery return
 now fails with its delivery receipt for diagnosis. Run the two cases again;
 do not credit the failed after-commit run or retry it inside the test.
+
+
+### AWS source policy preparation
+
+Intent: extend the existing direct-user policy generator for the managed
+submission-source prefix and a distinct cleanup principal. The current sha256
+only policy cannot support the source adapter. Allowed: aws_direct_user_config,
+its focused tests, operations_aws_s3_credentials.md and this record. Risk: high
+(storage authority/retention). Prohibited: applying IAM/bucket policies or
+reading credentials in this change, app deployment, enabling the AWS intake
+gate before actual qualification, deleting retained sources, generic policy
+frameworks or expiring activation. Acceptance: runtime has conditional source
+writes/exact-version reads but no delete/abort; cleanup has exact-version delete
+and multipart abort only inside managed source namespace, no writes or retained
+sha256 artifact access; foreign principals and insecure transport denied.
+Multipart initiation/parts must be exempt from conditional-header enforcement,
+while PutObject and completion still require If-None-Match (AWS official
+conditional-writes-enforce documentation). Preserve existing artifact runtime
+access. Both principal ARNs must be distinct exact IAM users in the same account
+and partition. Verify focused policy controls; ARCH/SEC and QA review before
+any actual AWS policy application. Static tests do not establish deployed IAM
+behavior; actual AWS qualification remains separately required.
+
+AWS policy candidate checks: 15 focused policy boundary tests passed in 0.83s;
+Ruff and diff checks passed. Official AWS action reference confirms multipart
+LIST has no s3:prefix condition key: bucket metadata listing is explicit, while
+object reads/abort/deletion are source-scoped and version listing is prefix
+restricted. No policies applied or source qualification claimed.
+
+Process-loss evidence update: V4 targeted after-commit test passed in 172.42s
+at 221f14e85, schema0090, complete cleanup. V3 before-observation case passed
+separately at the shorter fixture timing. These results prove local direct
+worker process loss, not real broker/native execution or production timing.
+The final test file has not been run as an aggregate at one final head. Keep
+fork/thread warning and all failed preliminary receipts explicit. Later work
+in this candidate only changes AWS policy generation/docs; crash-test code is
+unchanged from the exact-head V4 launch.
