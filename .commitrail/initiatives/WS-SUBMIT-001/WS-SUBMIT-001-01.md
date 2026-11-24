@@ -10348,3 +10348,49 @@ Focused remote pre1 finished exit1: public setup and claimed task succeeded; the
 Post-restoration independent SSH verified checker PID11966 active/running and exact original config hash. Read-only snapshot has zero trace events, so pre1 did not reach the intended native launch fault. Root reproduced a concrete harness path defect: `/var/lib/workstream-operator` is root:root0700, while its runtime child is10001:10001/0700; `sudo -u '#10001' test -x` on the wrapper fails. Runtime-only files must live beneath an accessible service-owned anchor; operator controls must remain private. Do not relax launch-count assertions or shared parent permissions.
 
 The exact six-module release configuration unittest command that failed in CI was rerun atd67eddfd6 after the busy-node fixture repair:119 tests passed in49.978s (`/tmp/submission-release-config-repair.log`). Whole cli/tests lint and all105 formatting checks also pass; AST comparison confirmed the four formatted files preserve behavior. These local repairs do not claim the final CI or native fault qualification passed.
+
+### Restore the structural gate by relocating AWS source tests
+
+Intent: hosted auth preflight877c06c81 passed92boundary guards, then correctly
+failed structural_debt_mismatch. Exact inventory comparison found only one new
+item: backend/tests/artifacts/test_submission_intake_admission.py at1249lines
+against hard1200; all33 frozen entries and policy digest remain identical.
+Do not regenerate or relax the debt ledger. The added AWS profile contract tests
+belong in a small cohesive artifact module using their unchanged shared fixture.
+
+Allowed files: the original admission test module, new
+backend/tests/artifacts/test_submission_aws_source.py, existing test lane catalogue
+and independent family fingerprint test, and this record. Relocate the three AWS
+profile tests byte/AST-identically, retain their signed AUTH/namespace fixture
+closure and real-SQL assertions, and assign the new module to the same shared
+family without moving/deleting existing modules. No production, workflow, policy,
+ledger, skip, threshold or runtime deadline changes. Verification: exact inventory
+parity, complete structural validation, old/new test and fixture identity checks,
+focused collection and catalogue negatives. Reuse prior executed PG proof only
+for identical test bodies/context; do not claim a fresh PG or deployed AWS run.
+
+Implemented the relocation without changing policy or ledger: original admission
+module is1120lines and new AWS source module145. All three decorated function ASTs
+and exact function source segments match877c06c81, and every remaining original
+module AST is unchanged (/tmp/submission-structural-877-preservation.py). The new
+module imports the identical signed AUTH/admission fixtures and helpers; focused
+collection passed39nodes in7.33s, including all three relocated nodes, complete
+fixture closure and exact identity of13fixture/global bindings
+(/tmp/submission-structural-877-collection.log/.json). Collection executes no
+PostgreSQL setup. Existing PG component proof remains pre-relocation custody;
+no new transaction/provider/native execution is claimed.
+
+Full unchanged structural validation exits0 at
+/tmp/submission-structural-877-after.log. Its exact repository guard passes on
+current source and rejects the original1249line source restored only in memory
+with structural_debt_mismatch. Omitting only the new AWS module makes the exact
+independent family test fail; no source files were mutated by these probes
+(/tmp/submission-structural-877-discriminator.log/.json). The shared family adds
+exactly one module, retaining all previous modules/order and lane topology;
+removing only that addition reproduces the prior276-module fingerprint. The
+new277-module fingerprint is7d5683912037886633519322314c8fdc3c89855dc2408b2ffc629c842e3ad8fc.
+All59catalogue tests pass7.54s (/tmp/submission-structural-877-catalogue.log), with
+only the documented plugin-disabled asyncio-mode warning. Ruff, whitespace and
+Markdown links pass. No workflow, debt baseline, limits, assertion-map, skip or
+product capability changed; roadmap scope is unchanged. Hosted lane reruns remain
+root-owned rather than inferred from these local checks.

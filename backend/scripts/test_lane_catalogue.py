@@ -60,6 +60,7 @@ SHARED_FOUNDATION_MODULES = (
     "tests/artifacts/test_source_cleanup_topology.py",
     "tests/artifacts/test_submission_pre_source.py",
     "tests/artifacts/test_submission_intake_admission.py",
+    "tests/artifacts/test_submission_aws_source.py",
     "tests/artifacts/test_submission_intake_progress.py",
     "tests/artifacts/test_submission_finalization_worker_loss.py",
     "tests/artifacts/test_submission_foreground_command.py",
