@@ -885,6 +885,10 @@ fn serve_connection(
         {
             return match smol::serve_pre(config, stream, bytes) {
                 Err(error) if error == UNSETTLED_RESOURCE_ERROR => Err(error),
+                Err(error) => {
+                    eprintln!("PRE request rejected: {error}");
+                    Ok(())
+                }
                 _ => Ok(()),
             };
         }

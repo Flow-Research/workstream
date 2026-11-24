@@ -19,7 +19,7 @@ import zipfile
 
 import pytest
 
-from app.adapters.artifacts.trusted_intake import UnixSocketTrustedIntakeAdapter
+from app.adapters.artifacts.trusted_intake import RemoteTlsTrustedIntakeAdapter
 from app.core.identifiers import new_record_id
 from workstream_external_services import ExternalServiceProtocolError
 from app.interfaces.trusted_submission_intake import TrustedIntakePreparation
@@ -46,6 +46,43 @@ _POLICY = "sha256:" + "a" * 64
 _LEASE = "b" * 128
 _IMAGE = "sha256:" + "c" * 64
 _CONFIG = "sha256:" + "d" * 64
+
+
+async def _remote_adapter(tmp_path: Path, socket_path: Path):
+    from tests.checkers.external.test_remote_node import _certificate_files, _REMOTE
+
+    certificates = _certificate_files(tmp_path)
+    materials = tmp_path / "runner-materials"
+    materials.mkdir(mode=0o700, exist_ok=True)
+    node = _REMOTE.RemoteNode({
+        "listen_host": "127.0.0.1", "listen_port": 1, "client_name": "app.test",
+        "socket_path": str(socket_path), "material_root": str(materials),
+        "model_proxy_socket_path": str(tmp_path / "runner-model.sock"),
+        "tls_certificate_path": str(certificates["server_certificate"]),
+        "tls_private_key_path": str(certificates["server_key"]),
+        "tls_ca_path": str(certificates["ca"]), "session_timeout_seconds": 60,
+    })
+    server = await asyncio.start_server(node.handle, "127.0.0.1", 0, ssl=node.ssl_context)
+    adapter = RemoteTlsTrustedIntakeAdapter(
+        host="127.0.0.1", port=server.sockets[0].getsockname()[1],
+        server_name="runner.test", ca_path=certificates["ca"],
+        certificate_path=certificates["client_certificate"],
+        private_key_path=certificates["client_key"], image_digest=_IMAGE,
+        config_digest=_CONFIG,
+    )
+    return server, adapter
+
+
+def _unconnected_adapter(tmp_path: Path) -> RemoteTlsTrustedIntakeAdapter:
+    from tests.checkers.external.test_remote_node import _certificate_files
+
+    certificates = _certificate_files(tmp_path)
+    return RemoteTlsTrustedIntakeAdapter(
+        host="127.0.0.1", port=1, server_name="runner.test",
+        ca_path=certificates["ca"], certificate_path=certificates["client_certificate"],
+        private_key_path=certificates["client_key"], image_digest=_IMAGE,
+        config_digest=_CONFIG,
+    )
 
 
 def _frame(value: dict) -> bytes:
@@ -159,9 +196,7 @@ async def test_cancelled_prepare_closes_connection_and_drains_blocking_io(tmp_pa
 
     thread = threading.Thread(target=node)
     thread.start()
-    adapter = UnixSocketTrustedIntakeAdapter(
-        socket_path=path, image_digest=_IMAGE, config_digest=_CONFIG
-    )
+    remote, adapter = await _remote_adapter(tmp_path, path)
     pending = asyncio.create_task(adapter.prepare(_request()))
     assert await asyncio.to_thread(entered.wait, 3)
     pending.cancel()
@@ -169,6 +204,8 @@ async def test_cancelled_prepare_closes_connection_and_drains_blocking_io(tmp_pa
         await asyncio.wait_for(pending, 2)
     assert await asyncio.to_thread(disconnected.wait, 2)
     thread.join(2)
+    remote.close()
+    await remote.wait_closed()
     assert not thread.is_alive()
 
 
@@ -215,12 +252,12 @@ async def test_health_rejects_other_engine_or_trusted_identity(tmp_path, field, 
 
     thread = threading.Thread(target=node)
     thread.start()
-    adapter = UnixSocketTrustedIntakeAdapter(
-        socket_path=path, image_digest=_IMAGE, config_digest=_CONFIG
-    )
+    remote, adapter = await _remote_adapter(tmp_path, path)
     with pytest.raises(ExternalServiceProtocolError):
         await adapter.health()
     thread.join(2)
+    remote.close()
+    await remote.wait_closed()
     assert not thread.is_alive()
 
 
@@ -274,7 +311,12 @@ def test_raw_guest_export_requires_exact_inventory_and_content(tmp_path, failure
 @pytest.mark.parametrize(
     "missing",
     [
-        "artifact_intake_service_socket",
+        "external_runner_host",
+        "external_runner_port",
+        "external_runner_server_name",
+        "external_runner_ca_path",
+        "external_runner_certificate_path",
+        "external_runner_private_key_path",
         "artifact_intake_image_digest",
         "artifact_intake_config_digest",
     ],
@@ -285,7 +327,12 @@ def test_composition_requires_every_trusted_intake_identity(tmp_path, missing):
     from workstream_external_services import ExternalServiceConfigurationError
 
     settings = Settings(
-        artifact_intake_service_socket=tmp_path / "intake.sock",
+        external_runner_host="runner.internal",
+        external_runner_port=9443,
+        external_runner_server_name="runner.internal",
+        external_runner_ca_path=tmp_path / "ca.crt",
+        external_runner_certificate_path=tmp_path / "app.crt",
+        external_runner_private_key_path=tmp_path / "app.key",
         artifact_intake_image_digest=_IMAGE,
         artifact_intake_config_digest=_CONFIG,
     )
@@ -299,16 +346,18 @@ def test_intake_factory_is_independent_of_project_engine(tmp_path):
 
     adapter = trusted_submission_intake(
         Settings(
-            artifact_intake_service_socket=tmp_path / "intake.sock",
+            external_runner_host="runner.internal",
+            external_runner_port=9443,
+            external_runner_server_name="runner.internal",
+            external_runner_ca_path=tmp_path / "ca.crt",
+            external_runner_certificate_path=tmp_path / "app.crt",
+            external_runner_private_key_path=tmp_path / "app.key",
             artifact_intake_image_digest=_IMAGE,
             artifact_intake_config_digest=_CONFIG,
-            external_checker_service_socket=tmp_path / "project.sock",
-            external_checker_material_root=tmp_path / "material",
-            artifact_scratch_root=tmp_path / "material",
         )
     )
     assert adapter.identity.capability_key == "trusted_submission_intake"
-    assert adapter.identity.provider_key == "unix_socket"
+    assert adapter.identity.provider_key == "remote_tls"
 
 
 @pytest.mark.asyncio
@@ -322,8 +371,7 @@ async def test_interrupted_export_disconnects_before_cleanup_can_read_raw_bytes(
     inspection = SubmissionArchiveInspector(SubmissionArchiveLimits()).inspect(
         BytesIO(_archive(content=content)))
     entry = inspection.entries[0]
-    adapter = UnixSocketTrustedIntakeAdapter(
-        socket_path=tmp_path / "unused.sock", image_digest=_IMAGE, config_digest=_CONFIG)
+    adapter = _unconnected_adapter(tmp_path)
     session = _Session(adapter, time.monotonic() + 60, _request())
     session._socket.close()
     session._socket, peer = socket.socketpair()
@@ -371,7 +419,7 @@ def test_inspect_size_substitution_is_rejected_before_command_or_archive_bytes(t
     from app.adapters.artifacts.trusted_intake import _Session
 
     data = _archive()
-    adapter = UnixSocketTrustedIntakeAdapter(socket_path=tmp_path / "unused.sock", image_digest=_IMAGE, config_digest=_CONFIG)
+    adapter = _unconnected_adapter(tmp_path)
     session = _Session(adapter, time.monotonic() + 10, _request(archive_byte_count=len(data)))
     session._state = "prepared"
     commands = []

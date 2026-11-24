@@ -1,7 +1,7 @@
 name: ${COMPOSE_PROJECT_NAME:?set COMPOSE_PROJECT_NAME in the release environment file}
 
 x-backend-environment: &backend-environment
-  WORKSTREAM_HOSTED_PROFILE: ${WORKSTREAM_HOSTED_PROFILE:-single-host}
+  WORKSTREAM_HOSTED_PROFILE: app
   WORKSTREAM_ARTIFACT_ADMISSION_DEPLOYMENT_MAXIMUM_BYTES: "4294967296"
   WORKSTREAM_ARTIFACT_ADMISSION_PRODUCER_MAXIMUM_BYTES: "268435456"
   WORKSTREAM_ARTIFACT_ADMISSION_PROJECT_MAXIMUM_BYTES: "1073741824"
@@ -113,6 +113,14 @@ services:
       WORKSTREAM_API_RATE_LIMIT_KEY_SECRET_FILE: /run/secrets/api_rate_limit_key
       WORKSTREAM_PAGINATION_CURSOR_HMAC_SECRET_FILE: /run/secrets/pagination_cursor_hmac
       WORKSTREAM_ARTIFACT_S3_DIRECT_USER_CREDENTIAL_FILE: /run/workstream-artifact-credentials/aws-access-key.json
+      WORKSTREAM_EXTERNAL_RUNNER_HOST: ${WORKSTREAM_EXTERNAL_RUNNER_HOST:?set the private runner address}
+      WORKSTREAM_EXTERNAL_RUNNER_PORT: ${WORKSTREAM_EXTERNAL_RUNNER_PORT:-9443}
+      WORKSTREAM_EXTERNAL_RUNNER_SERVER_NAME: ${WORKSTREAM_EXTERNAL_RUNNER_SERVER_NAME:?set the runner certificate name}
+      WORKSTREAM_EXTERNAL_RUNNER_CA_PATH: /run/secrets/external_runner_ca
+      WORKSTREAM_EXTERNAL_RUNNER_CERTIFICATE_PATH: /run/secrets/external_runner_certificate
+      WORKSTREAM_EXTERNAL_RUNNER_PRIVATE_KEY_PATH: /run/secrets/external_runner_private_key
+      WORKSTREAM_ARTIFACT_INTAKE_IMAGE_DIGEST: ${WORKSTREAM_ARTIFACT_INTAKE_IMAGE_DIGEST:?set the pinned trusted intake image digest}
+      WORKSTREAM_ARTIFACT_INTAKE_CONFIG_DIGEST: ${WORKSTREAM_ARTIFACT_INTAKE_CONFIG_DIGEST:?set the pinned trusted intake config digest}
     secrets:
       - source: database_url
         target: database_url
@@ -131,6 +139,21 @@ services:
         mode: 0400
       - source: pagination_cursor_hmac
         target: pagination_cursor_hmac
+        uid: "${WORKSTREAM_RUNTIME_UID}"
+        gid: "${WORKSTREAM_RUNTIME_GID}"
+        mode: 0400
+      - source: external_runner_ca
+        target: external_runner_ca
+        uid: "${WORKSTREAM_RUNTIME_UID}"
+        gid: "${WORKSTREAM_RUNTIME_GID}"
+        mode: 0400
+      - source: external_runner_certificate
+        target: external_runner_certificate
+        uid: "${WORKSTREAM_RUNTIME_UID}"
+        gid: "${WORKSTREAM_RUNTIME_GID}"
+        mode: 0400
+      - source: external_runner_private_key
+        target: external_runner_private_key
         uid: "${WORKSTREAM_RUNTIME_UID}"
         gid: "${WORKSTREAM_RUNTIME_GID}"
         mode: 0400
@@ -171,6 +194,14 @@ services:
       WORKSTREAM_CELERY_BROKER_URL_FILE: /run/secrets/celery_broker_url
       WORKSTREAM_GUIDE_DOCUMENT_PARSER_SOCKET: ${WORKSTREAM_DEPLOYMENT_ROOT:-/var/lib/workstream}/guide-runtime/guide.sock
       WORKSTREAM_ARTIFACT_S3_DIRECT_USER_CREDENTIAL_FILE: /run/workstream-artifact-credentials/aws-access-key.json
+      WORKSTREAM_EXTERNAL_RUNNER_HOST: ${WORKSTREAM_EXTERNAL_RUNNER_HOST:?set the private runner address}
+      WORKSTREAM_EXTERNAL_RUNNER_PORT: ${WORKSTREAM_EXTERNAL_RUNNER_PORT:-9443}
+      WORKSTREAM_EXTERNAL_RUNNER_SERVER_NAME: ${WORKSTREAM_EXTERNAL_RUNNER_SERVER_NAME:?set the runner certificate name}
+      WORKSTREAM_EXTERNAL_RUNNER_CA_PATH: /run/secrets/external_runner_ca
+      WORKSTREAM_EXTERNAL_RUNNER_CERTIFICATE_PATH: /run/secrets/external_runner_certificate
+      WORKSTREAM_EXTERNAL_RUNNER_PRIVATE_KEY_PATH: /run/secrets/external_runner_private_key
+      WORKSTREAM_ARTIFACT_INTAKE_IMAGE_DIGEST: ${WORKSTREAM_ARTIFACT_INTAKE_IMAGE_DIGEST:?set the pinned trusted intake image digest}
+      WORKSTREAM_ARTIFACT_INTAKE_CONFIG_DIGEST: ${WORKSTREAM_ARTIFACT_INTAKE_CONFIG_DIGEST:?set the pinned trusted intake config digest}
     secrets:
       - source: database_url
         target: database_url
@@ -179,6 +210,21 @@ services:
         mode: 0400
       - source: celery_broker_url
         target: celery_broker_url
+        uid: "${WORKSTREAM_RUNTIME_UID}"
+        gid: "${WORKSTREAM_RUNTIME_GID}"
+        mode: 0400
+      - source: external_runner_ca
+        target: external_runner_ca
+        uid: "${WORKSTREAM_RUNTIME_UID}"
+        gid: "${WORKSTREAM_RUNTIME_GID}"
+        mode: 0400
+      - source: external_runner_certificate
+        target: external_runner_certificate
+        uid: "${WORKSTREAM_RUNTIME_UID}"
+        gid: "${WORKSTREAM_RUNTIME_GID}"
+        mode: 0400
+      - source: external_runner_private_key
+        target: external_runner_private_key
         uid: "${WORKSTREAM_RUNTIME_UID}"
         gid: "${WORKSTREAM_RUNTIME_GID}"
         mode: 0400
@@ -231,9 +277,30 @@ services:
       WORKSTREAM_DATABASE_URL_FILE: /run/secrets/database_url
       WORKSTREAM_CHECKER_MODEL_PROXY_SOCKET: ${WORKSTREAM_DEPLOYMENT_ROOT:-/var/lib/workstream}/model-runtime/model.sock
       WORKSTREAM_ARTIFACT_S3_DIRECT_USER_CREDENTIAL_FILE: /run/workstream-artifact-credentials/aws-access-key.json
+      WORKSTREAM_EXTERNAL_RUNNER_HOST: ${WORKSTREAM_EXTERNAL_RUNNER_HOST:?set the private runner address}
+      WORKSTREAM_EXTERNAL_RUNNER_PORT: ${WORKSTREAM_EXTERNAL_RUNNER_PORT:-9443}
+      WORKSTREAM_EXTERNAL_RUNNER_SERVER_NAME: ${WORKSTREAM_EXTERNAL_RUNNER_SERVER_NAME:?set the runner certificate name}
+      WORKSTREAM_EXTERNAL_RUNNER_CA_PATH: /run/secrets/external_runner_ca
+      WORKSTREAM_EXTERNAL_RUNNER_CERTIFICATE_PATH: /run/secrets/external_runner_certificate
+      WORKSTREAM_EXTERNAL_RUNNER_PRIVATE_KEY_PATH: /run/secrets/external_runner_private_key
     secrets:
       - source: database_url
         target: database_url
+        uid: "${WORKSTREAM_RUNTIME_UID}"
+        gid: "${WORKSTREAM_RUNTIME_GID}"
+        mode: 0400
+      - source: external_runner_ca
+        target: external_runner_ca
+        uid: "${WORKSTREAM_RUNTIME_UID}"
+        gid: "${WORKSTREAM_RUNTIME_GID}"
+        mode: 0400
+      - source: external_runner_certificate
+        target: external_runner_certificate
+        uid: "${WORKSTREAM_RUNTIME_UID}"
+        gid: "${WORKSTREAM_RUNTIME_GID}"
+        mode: 0400
+      - source: external_runner_private_key
+        target: external_runner_private_key
         uid: "${WORKSTREAM_RUNTIME_UID}"
         gid: "${WORKSTREAM_RUNTIME_GID}"
         mode: 0400
@@ -307,3 +374,9 @@ secrets:
     file: ${WORKSTREAM_API_RATE_LIMIT_KEY_SECRET_FILE:?set the private rate-limit key file}
   pagination_cursor_hmac:
     file: ${WORKSTREAM_PAGINATION_CURSOR_HMAC_SECRET_FILE:?set the private cursor key file}
+  external_runner_ca:
+    file: ${WORKSTREAM_EXTERNAL_RUNNER_CA_FILE:?set the runner CA certificate file}
+  external_runner_certificate:
+    file: ${WORKSTREAM_EXTERNAL_RUNNER_CERTIFICATE_FILE:?set the app runner client certificate file}
+  external_runner_private_key:
+    file: ${WORKSTREAM_EXTERNAL_RUNNER_PRIVATE_KEY_FILE:?set the app runner client key file}

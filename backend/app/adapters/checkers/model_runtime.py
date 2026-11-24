@@ -30,6 +30,7 @@ from app.adapters.checkers import (
     trial_evidence_reservations,
 )
 from app.adapters.checkers.model_proxy_transport import ModelProxyTransport
+from app.adapters.checkers.remote_model_bridge import RemoteModelProxyBridge
 from app.adapters.checkers.trial_proxy import CheckerTrialProxy
 from app.modules.checkers.api.trial_profiles import load_trial_authority_manifest
 from app.adapters.model_usage import setup_model_usage_service
@@ -160,7 +161,18 @@ async def configured_model_proxy_runtime(settings, sessions):
             trial_handler=trial_proxy.handle if trial_proxy is not None else None,
             shutdown_timeout_seconds=7200.0,
         ):
-            yield
+            if settings.external_runner_host is None:
+                raise ValueError("model proxy requires the configured external runner")
+            async with RemoteModelProxyBridge(
+                host=settings.external_runner_host,
+                port=settings.external_runner_port,
+                server_name=settings.external_runner_server_name,
+                ca_path=settings.external_runner_ca_path,
+                certificate_path=settings.external_runner_certificate_path,
+                private_key_path=settings.external_runner_private_key_path,
+                socket_path=settings.checker_model_proxy_socket,
+            ):
+                yield
     finally:
         if manager is not None:
             manager.close()

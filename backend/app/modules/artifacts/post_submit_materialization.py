@@ -327,7 +327,9 @@ class _MaterialView:
         ) as grant:
             self._issued_requests[checked.request_digest] = checked
             yield ExternalCheckerMaterialGrant(
-                grant_id=grant.grant_id, binding_digest=grant.binding_digest
+                grant_id=grant.grant_id,
+                binding_digest=grant.binding_digest,
+                source=grant,
             )
 
     def __reduce__(self):

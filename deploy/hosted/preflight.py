@@ -23,7 +23,6 @@ from urllib.parse import urlsplit
 
 
 COMPOSE_PATH = Path(__file__).with_name("compose.yml")
-NATIVE_CHECKER_COMPOSE_PATH = Path(__file__).with_name("compose.native-checker.yml")
 INFERENCE_COMPOSE_PATH = Path(__file__).with_name("compose.inference.yml")
 TRIAL_COMPOSE_PATH = Path(__file__).with_name("compose.trials.yml")
 TRIAL_MANIFEST_TARGET = Path("/etc/workstream/trial-authority.json")
@@ -56,27 +55,29 @@ GITHUB_APP_KEYS = (
     "WORKSTREAM_GITHUB_APP_INSTALLATION_ID",
 )
 DEFAULT_DEPLOYMENT_ROOT = Path("/var/lib/workstream")
-DEFAULT_CHECKER_SERVICE_BINARY = Path("/opt/workstream/bin/workstream-checker-service")
 INTAKE_DIGEST_KEYS = (
     "WORKSTREAM_ARTIFACT_INTAKE_IMAGE_DIGEST",
     "WORKSTREAM_ARTIFACT_INTAKE_CONFIG_DIGEST",
 )
 HOSTED_PROFILE_KEY = "WORKSTREAM_HOSTED_PROFILE"
-NATIVE_REQUIRED_KEYS = (
-    "WORKSTREAM_CHECKER_CONFIG_FILE",
-    "WORKSTREAM_CHECKER_SERVICE_BINARY_SHA256",
+REMOTE_RUNNER_KEYS = (
+    "WORKSTREAM_EXTERNAL_RUNNER_HOST",
+    "WORKSTREAM_EXTERNAL_RUNNER_PORT",
+    "WORKSTREAM_EXTERNAL_RUNNER_SERVER_NAME",
+    "WORKSTREAM_EXTERNAL_RUNNER_CA_FILE",
+    "WORKSTREAM_EXTERNAL_RUNNER_CERTIFICATE_FILE",
+    "WORKSTREAM_EXTERNAL_RUNNER_PRIVATE_KEY_FILE",
     *INTAKE_DIGEST_KEYS,
 )
-NATIVE_ENVIRONMENT_KEYS = (
-    "WORKSTREAM_EXTERNAL_CHECKER_MATERIAL_ROOT",
-    "WORKSTREAM_EXTERNAL_CHECKER_SERVICE_SOCKET",
-    "WORKSTREAM_ARTIFACT_INTAKE_SERVICE_SOCKET",
+REMOTE_RUNNER_ENVIRONMENT_KEYS = (
+    "WORKSTREAM_EXTERNAL_RUNNER_HOST",
+    "WORKSTREAM_EXTERNAL_RUNNER_PORT",
+    "WORKSTREAM_EXTERNAL_RUNNER_SERVER_NAME",
+    "WORKSTREAM_EXTERNAL_RUNNER_CA_PATH",
+    "WORKSTREAM_EXTERNAL_RUNNER_CERTIFICATE_PATH",
+    "WORKSTREAM_EXTERNAL_RUNNER_PRIVATE_KEY_PATH",
     *INTAKE_DIGEST_KEYS,
 )
-
-
-def local_checker_enabled(values: dict[str, str]) -> bool:
-    return values.get(HOSTED_PROFILE_KEY, "single-host") == "single-host"
 
 
 @dataclass(frozen=True)
@@ -122,14 +123,6 @@ def deployment_paths(values: dict[str, str]) -> HostedPaths:
     )
 
 
-def checker_service_binary(values: dict[str, str]) -> Path:
-    return Path(
-        values.get(
-            "WORKSTREAM_CHECKER_SERVICE_BINARY", str(DEFAULT_CHECKER_SERVICE_BINARY)
-        )
-    )
-
-
 GUIDE_PARSER_UID = 10002
 GUIDE_PARSER_GID = 10001
 DOCKER_SOCKET = Path("/var/run/docker.sock")
@@ -152,6 +145,9 @@ BASE_SECRET_FILE_KEYS = (
     "WORKSTREAM_CELERY_BROKER_URL_FILE",
     "WORKSTREAM_API_RATE_LIMIT_KEY_SECRET_FILE",
     "WORKSTREAM_PAGINATION_CURSOR_HMAC_SECRET_FILE",
+    "WORKSTREAM_EXTERNAL_RUNNER_CA_FILE",
+    "WORKSTREAM_EXTERNAL_RUNNER_CERTIFICATE_FILE",
+    "WORKSTREAM_EXTERNAL_RUNNER_PRIVATE_KEY_FILE",
 )
 MODEL_PROXY_SECRET_FILE_KEYS = (
     "WORKSTREAM_MODEL_PROXY_OPENAI_API_KEY_FILE",
@@ -188,6 +184,15 @@ SECRET_FILE_TARGETS = {
         "pagination_cursor_hmac",
         "/run/secrets/pagination_cursor_hmac",
     ),
+    "WORKSTREAM_EXTERNAL_RUNNER_CA_FILE": (
+        "external_runner_ca", "/run/secrets/external_runner_ca",
+    ),
+    "WORKSTREAM_EXTERNAL_RUNNER_CERTIFICATE_FILE": (
+        "external_runner_certificate", "/run/secrets/external_runner_certificate",
+    ),
+    "WORKSTREAM_EXTERNAL_RUNNER_PRIVATE_KEY_FILE": (
+        "external_runner_private_key", "/run/secrets/external_runner_private_key",
+    ),
     "WORKSTREAM_MODEL_PROXY_OPENAI_API_KEY_FILE": (
         "model_proxy_openai_api_key",
         "/run/secrets/model_proxy_openai_api_key",
@@ -203,16 +208,27 @@ ROLE_SECRET_FILE_KEYS = {
         "WORKSTREAM_CELERY_BROKER_URL_FILE",
         "WORKSTREAM_API_RATE_LIMIT_KEY_SECRET_FILE",
         "WORKSTREAM_PAGINATION_CURSOR_HMAC_SECRET_FILE",
+        "WORKSTREAM_EXTERNAL_RUNNER_CA_FILE",
+        "WORKSTREAM_EXTERNAL_RUNNER_CERTIFICATE_FILE",
+        "WORKSTREAM_EXTERNAL_RUNNER_PRIVATE_KEY_FILE",
     ),
     "worker": (
         "WORKSTREAM_DATABASE_URL_FILE",
         "WORKSTREAM_CELERY_BROKER_URL_FILE",
+        "WORKSTREAM_EXTERNAL_RUNNER_CA_FILE",
+        "WORKSTREAM_EXTERNAL_RUNNER_CERTIFICATE_FILE",
+        "WORKSTREAM_EXTERNAL_RUNNER_PRIVATE_KEY_FILE",
     ),
     "beat": (
         "WORKSTREAM_DATABASE_URL_FILE",
         "WORKSTREAM_CELERY_BROKER_URL_FILE",
     ),
-    "model-proxy": ("WORKSTREAM_DATABASE_URL_FILE",),
+    "model-proxy": (
+        "WORKSTREAM_DATABASE_URL_FILE",
+        "WORKSTREAM_EXTERNAL_RUNNER_CA_FILE",
+        "WORKSTREAM_EXTERNAL_RUNNER_CERTIFICATE_FILE",
+        "WORKSTREAM_EXTERNAL_RUNNER_PRIVATE_KEY_FILE",
+    ),
 }
 FORBIDDEN_RELEASE_KEYS = (
     "WORKSTREAM_GITHUB_APP_PRIVATE_KEY",
@@ -316,17 +332,16 @@ REQUIRED_RELEASE_KEYS = (
     *AWS_S3_IDENTITY_KEYS,
     *TIMEOUT_KEYS,
     *BASE_SECRET_FILE_KEYS,
+    *REMOTE_RUNNER_KEYS,
 )
 OPTIONAL_RELEASE_KEYS = (
     HOSTED_PROFILE_KEY,
-    *NATIVE_REQUIRED_KEYS,
     *LOCAL_DATA_KEYS,
     "WORKSTREAM_MCP_IMAGE",
     *IDENTITY_KEYS,
     *MCP_OAUTH_KEYS,
     *GITHUB_APP_KEYS,
     "WORKSTREAM_DEPLOYMENT_ROOT",
-    "WORKSTREAM_CHECKER_SERVICE_BINARY",
     *TRIAL_KEYS,
     "WORKSTREAM_API_HOST_PORT",
     "WORKSTREAM_CELERY_WORKER_CONCURRENCY",
@@ -487,13 +502,8 @@ def validate_environment(values: dict[str, str]) -> None:
         raise PreflightError(
             f"release environment contains an unsupported key: {unknown[0]}"
         )
-    if values.get(HOSTED_PROFILE_KEY, "single-host") not in {"single-host", "app"}:
-        raise PreflightError("unsupported hosted profile")
-    local_checker = local_checker_enabled(values)
-    if not local_checker and any(values.get(key) for key in (
-        *NATIVE_REQUIRED_KEYS, "WORKSTREAM_CHECKER_SERVICE_BINARY", *TRIAL_KEYS,
-    )):
-        raise PreflightError("app profile cannot configure a native checker or trial authority")
+    if values.get(HOSTED_PROFILE_KEY, "app") != "app":
+        raise PreflightError("hosted releases require the external-runner app profile")
     if "WORKSTREAM_MCP_IMAGE" in values and not IMAGE_REFERENCE.fullmatch(values["WORKSTREAM_MCP_IMAGE"]):
         raise PreflightError("MCP image must be digest-qualified")
     validate_identity_environment(values)
@@ -520,12 +530,9 @@ def validate_environment(values: dict[str, str]) -> None:
         ):
             raise PreflightError("GitHub App key file must use a canonical absolute path")
     root = deployment_paths(values).root
-    binary = checker_service_binary(values)
-    if values.get("WORKSTREAM_DEPLOYMENT_ROOT", str(root)) != str(root) or (
-        local_checker and values.get("WORKSTREAM_CHECKER_SERVICE_BINARY", str(binary)) != str(binary)
-    ):
+    if values.get("WORKSTREAM_DEPLOYMENT_ROOT", str(root)) != str(root):
         raise PreflightError("deployment paths must use canonical spelling")
-    for path in (root, binary) if local_checker else (root,):
+    for path in (root,):
         if (
             not path.is_absolute()
             or path != path.resolve(strict=False)
@@ -533,8 +540,6 @@ def validate_environment(values: dict[str, str]) -> None:
             or len(path.parts) < 3
         ):
             raise PreflightError("deployment paths must be canonical absolute paths")
-    if local_checker and (root == binary or binary.is_relative_to(root) or root.is_relative_to(binary)):
-        raise PreflightError("native service asset overlaps deployment data")
     for key in REQUIRED_RELEASE_KEYS:
         _required(values, key)
     for key in (
@@ -548,11 +553,23 @@ def validate_environment(values: dict[str, str]) -> None:
         "WORKSTREAM_RUNTIME_GID",
     ):
         _positive_id(values, key)
-    if local_checker:
-        for key in NATIVE_REQUIRED_KEYS:
-            value = _required(values, key)
-            if key != "WORKSTREAM_CHECKER_CONFIG_FILE" and not DIGEST.fullmatch(value):
-                raise PreflightError(f"trusted intake requires a pinned digest: {key}")
+    for key in INTAKE_DIGEST_KEYS:
+        if not DIGEST.fullmatch(_required(values, key)):
+            raise PreflightError(f"trusted intake requires a pinned digest: {key}")
+    runner_host = _required(values, "WORKSTREAM_EXTERNAL_RUNNER_HOST")
+    runner_name = _required(values, "WORKSTREAM_EXTERNAL_RUNNER_SERVER_NAME")
+    if (
+        len(runner_host) > 255
+        or len(runner_name) > 255
+        or any(character.isspace() for character in runner_host + runner_name)
+    ):
+        raise PreflightError("external runner endpoint is invalid")
+    try:
+        runner_port = int(_required(values, "WORKSTREAM_EXTERNAL_RUNNER_PORT"))
+    except ValueError as exc:
+        raise PreflightError("external runner port is invalid") from exc
+    if not 1 <= runner_port <= 65_535:
+        raise PreflightError("external runner port is invalid")
     for key in FORBIDDEN_RELEASE_KEYS:
         if values.get(key):
             raise PreflightError(
@@ -1111,20 +1128,11 @@ def validate_private_host_inputs(
     gid = _positive_id(values, "WORKSTREAM_RUNTIME_GID")
     _private_metadata(paths.root, kind="directory", uid=uid, gid=gid, mode=0o700)
     _private_metadata(paths.scratch, kind="directory", uid=uid, gid=gid, mode=0o700)
-    local_checker = local_checker_enabled(values)
-    if local_checker:
-        _private_metadata(paths.socket_root, kind="directory", uid=uid, gid=gid, mode=0o700)
-        if require_node:
-            _validate_native_socket(paths.socket, uid, gid)
     model_proxy_enabled = values["WORKSTREAM_MODEL_PROXY_ENABLED"] == "true"
     if model_proxy_enabled:
         _private_metadata(
             paths.model_root, kind="directory", uid=uid, gid=gid, mode=0o700
         )
-        if local_checker:
-            _private_metadata(
-                paths.model_relays, kind="directory", uid=uid, gid=gid, mode=0o700
-            )
     _private_metadata(
         paths.guide_root,
         kind="directory",
@@ -1164,7 +1172,6 @@ def validate_private_host_inputs(
         ):
             raise PreflightError("model proxy socket has unsafe retained state")
     private_paths = [
-        *((Path(values["WORKSTREAM_CHECKER_CONFIG_FILE"]),) if local_checker else ()),
         *((Path(values[TRIAL_KEYS[0]]),) if values.get(TRIAL_KEYS[0]) else ()),
         *(Path(values[key]) for key in _secret_file_keys(values)),
         Path(values[DIRECT_USER_CREDENTIAL_HOST_FILE_KEY]),
@@ -1176,12 +1183,8 @@ def validate_private_host_inputs(
             paths.scratch.resolve(strict=True),
             paths.guide_root.resolve(strict=True),
         ]
-        if local_checker:
-            shared_roots.append(paths.socket_root.resolve(strict=True))
         if model_proxy_enabled:
             shared_roots.append(paths.model_root.resolve(strict=True))
-            if local_checker:
-                shared_roots.append(paths.model_relays.resolve(strict=True))
         resolved_paths = [path.resolve(strict=True) for path in private_paths]
     except (OSError, RuntimeError) as exc:
         raise PreflightError("private host input identity is unavailable") from exc
@@ -1235,8 +1238,6 @@ def _run_json(
 
 def _compose_file_arguments(values: dict[str, str]) -> list[str]:
     arguments = ["--file", str(COMPOSE_PATH)]
-    if local_checker_enabled(values):
-        arguments.extend(("--file", str(NATIVE_CHECKER_COMPOSE_PATH)))
     if values.get("WORKSTREAM_POSTGRES_IMAGE"):
         arguments.extend(("--file", str(LOCAL_DATA_COMPOSE_PATH)))
     if values.get("WORKSTREAM_MCP_IMAGE"):
@@ -1833,8 +1834,6 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
     shared_backend_mounts = {
         str(paths.scratch): (str(paths.scratch), False),
     }
-    if local_checker_enabled(values):
-        shared_backend_mounts[str(paths.socket_root)] = (str(paths.socket_root), True)
     expected_mounts = {
         "api": shared_backend_mounts | direct_user_credential_mount,
         "worker": shared_backend_mounts
@@ -2062,7 +2061,7 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
                     "WORKSTREAM_GUIDE_DOCUMENT_PARSER_SOCKET",
                     "WORKSTREAM_CHECKER_MODEL_PROXY_SOCKET",
                     DIRECT_USER_CREDENTIAL_FILE_KEY,
-                    *NATIVE_ENVIRONMENT_KEYS,
+                    *REMOTE_RUNNER_ENVIRONMENT_KEYS,
                     *TRIAL_KEYS,
                     *GITHUB_APP_KEYS,
                 }
@@ -2083,7 +2082,7 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
         "WORKSTREAM_ARTIFACT_S3_ADDRESSING_STYLE": "virtual",
         DIRECT_USER_CREDENTIAL_FILE_KEY: str(DIRECT_USER_CREDENTIAL_TARGET),
         "WORKSTREAM_ARTIFACT_SCRATCH_ROOT": str(paths.scratch),
-        HOSTED_PROFILE_KEY: values.get(HOSTED_PROFILE_KEY, "single-host"),
+        HOSTED_PROFILE_KEY: "app",
     }
     for key, value in exact.items():
         if str(environment.get(key, "")).lower() != value:
@@ -2110,18 +2109,35 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
                 )
     for name, service in services.items():
         environment = service.get("environment") or {}
-        expected_native = (
+        expected_remote = (
             {
-                "WORKSTREAM_EXTERNAL_CHECKER_MATERIAL_ROOT": str(paths.scratch),
-                "WORKSTREAM_EXTERNAL_CHECKER_SERVICE_SOCKET": str(paths.socket),
-                "WORKSTREAM_ARTIFACT_INTAKE_SERVICE_SOCKET": str(paths.socket),
-                **{key: values[key] for key in INTAKE_DIGEST_KEYS},
+                "WORKSTREAM_EXTERNAL_RUNNER_HOST": values["WORKSTREAM_EXTERNAL_RUNNER_HOST"],
+                "WORKSTREAM_EXTERNAL_RUNNER_PORT": values["WORKSTREAM_EXTERNAL_RUNNER_PORT"],
+                "WORKSTREAM_EXTERNAL_RUNNER_SERVER_NAME": values[
+                    "WORKSTREAM_EXTERNAL_RUNNER_SERVER_NAME"
+                ],
+                "WORKSTREAM_EXTERNAL_RUNNER_CA_PATH": "/run/secrets/external_runner_ca",
+                "WORKSTREAM_EXTERNAL_RUNNER_CERTIFICATE_PATH": (
+                    "/run/secrets/external_runner_certificate"
+                ),
+                "WORKSTREAM_EXTERNAL_RUNNER_PRIVATE_KEY_PATH": (
+                    "/run/secrets/external_runner_private_key"
+                ),
+                **(
+                    {key: values[key] for key in INTAKE_DIGEST_KEYS}
+                    if name in {"api", "worker"}
+                    else {}
+                ),
             }
-            if local_checker_enabled(values) and name in {"api", "worker"}
+            if name in {"api", "worker"} or (name == "model-proxy" and model_proxy_enabled)
             else {}
         )
-        if {key: environment[key] for key in NATIVE_ENVIRONMENT_KEYS if key in environment} != expected_native:
-            raise PreflightError(f"rendered native checker environment is unsafe: {name}")
+        if {
+            key: environment[key]
+            for key in REMOTE_RUNNER_ENVIRONMENT_KEYS
+            if key in environment
+        } != expected_remote:
+            raise PreflightError(f"rendered external runner environment is unsafe: {name}")
         expected_trial = (
             {
                 TRIAL_KEYS[0]: str(TRIAL_MANIFEST_TARGET),
@@ -2440,10 +2456,6 @@ def main() -> int:
     try:
         values = parse_environment(args.env_file)
         validate_environment(values)
-        checker_config = None
-        if local_checker_enabled(values):
-            checker_config = load_checker_config(Path(values["WORKSTREAM_CHECKER_CONFIG_FILE"]))
-            validate_checker_config(checker_config, values)
         validate_compose(render_compose(args.env_file, values), values)
         if args.configuration_only:
             print(
@@ -2451,9 +2463,6 @@ def main() -> int:
             )
             return 0
         validate_private_host_inputs(values)
-        if checker_config is not None:
-            validate_smol_runtime(checker_config, values)
-            validate_trusted_intake(values)
     except PreflightError as exc:
         print(f"hosted release preflight failed: {exc}", file=sys.stderr)
         return 1

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, AsyncIterator
 import re
 from typing import Literal, Protocol
 
@@ -35,6 +35,7 @@ class ExternalCheckerMaterialGrant:
 
     grant_id: Identifier
     binding_digest: Sha256
+    source: ExternalCheckerMaterialSource = field(repr=False, compare=False)
 
     def __post_init__(self) -> None:
         """Reject path-like identifiers and malformed binding digests."""
@@ -43,6 +44,25 @@ class ExternalCheckerMaterialGrant:
             or re.fullmatch(r"sha256:[0-9a-f]{64}", self.binding_digest) is None
         ):
             raise ValueError("external checker material grant is invalid")
+
+
+class ExternalCheckerMaterialFile(Protocol):
+    """One immutable file descriptor supplied by ART without a host path."""
+
+    relative_path: str
+    byte_count: int
+    sha256: Sha256
+    executable: bool
+
+
+class ExternalCheckerMaterialSource(Protocol):
+    """Callback-scoped export of one manifest-bound material grant."""
+
+    manifest: bytes
+    files: tuple[ExternalCheckerMaterialFile, ...]
+
+    def open_file(self, item: ExternalCheckerMaterialFile) -> AsyncIterator[bytes]:
+        """Yield the exact sealed member in bounded nonempty chunks."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -204,6 +224,7 @@ __all__ = (
     "ExternalCheckerExecutionResponse",
     "ExternalCheckerIsolationReceipt",
     "ExternalCheckerMaterialGrant",
+    "ExternalCheckerMaterialSource",
     "ExternalCheckerModelGrant",
     "ExternalCheckerServiceHealth",
 )

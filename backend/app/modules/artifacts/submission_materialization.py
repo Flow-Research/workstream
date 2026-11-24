@@ -209,6 +209,7 @@ class _PreSubmitExternalGrantIssuer:
             yield ExternalCheckerMaterialGrant(
                 grant_id=grant.grant_id,
                 binding_digest=grant.binding_digest,
+                source=grant,
             )
 
 

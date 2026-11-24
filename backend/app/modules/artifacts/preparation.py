@@ -434,11 +434,94 @@ class PostExternalMaterialGrantRequest:
 
 
 @dataclass(frozen=True, slots=True)
+class ExternalMaterialExportFile:
+    """One sealed regular file in a callback-scoped material export."""
+
+    relative_path: str
+    byte_count: int
+    sha256: str
+    executable: bool
+
+
+@dataclass(frozen=True, slots=True)
 class ExternalMaterialGrant:
-    """Opaque grant identity safe to send across the checker service boundary."""
+    """Opaque grant plus a process-local, bounded export source."""
 
     grant_id: str
     binding_digest: str
+    manifest: bytes = field(repr=False)
+    files: tuple[ExternalMaterialExportFile, ...] = field(repr=False)
+    _root: Path = field(repr=False, compare=False)
+
+    def open_file(self, item: ExternalMaterialExportFile) -> AsyncIterator[bytes]:
+        """Read one already-sealed member without exposing its host path."""
+        if type(item) is not ExternalMaterialExportFile or item not in self.files:
+            raise ArtifactScratchIntegrityError("external material export file is invalid")
+
+        async def stream() -> AsyncIterator[bytes]:
+            parts = Path(item.relative_path).parts
+            if (
+                not parts
+                or Path(item.relative_path).is_absolute()
+                or any(part in {"", ".", ".."} for part in parts)
+            ):
+                raise ArtifactScratchIntegrityError("external material export path is invalid")
+            descriptors: list[int] = []
+            try:
+                descriptor = os.open(
+                    self._root,
+                    os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0),
+                )
+                descriptors.append(descriptor)
+                for part in parts[:-1]:
+                    descriptor = os.open(
+                        part,
+                        os.O_RDONLY
+                        | getattr(os, "O_DIRECTORY", 0)
+                        | getattr(os, "O_NOFOLLOW", 0),
+                        dir_fd=descriptor,
+                    )
+                    descriptors.append(descriptor)
+                file_descriptor = os.open(
+                    parts[-1],
+                    os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0),
+                    dir_fd=descriptor,
+                )
+                descriptors.append(file_descriptor)
+                metadata = os.fstat(file_descriptor)
+                expected_mode = 0o500 if item.executable else 0o400
+                if (
+                    not stat_module.S_ISREG(metadata.st_mode)
+                    or metadata.st_mode & 0o777 != expected_mode
+                    or metadata.st_size != item.byte_count
+                ):
+                    raise ArtifactScratchIntegrityError(
+                        "external material export identity differs"
+                    )
+                digest, count = hashlib.sha256(), 0
+                while True:
+                    chunk = await asyncio.to_thread(os.read, file_descriptor, 64 * 1024)
+                    if not chunk:
+                        break
+                    count += len(chunk)
+                    digest.update(chunk)
+                    yield chunk
+                if (
+                    count != item.byte_count
+                    or "sha256:" + digest.hexdigest() != item.sha256
+                ):
+                    raise ArtifactScratchIntegrityError(
+                        "external material export content differs"
+                    )
+            except OSError as exc:
+                raise ArtifactScratchIntegrityError(
+                    "external material export unavailable"
+                ) from exc
+            finally:
+                for descriptor in reversed(descriptors):
+                    os.close(descriptor)
+
+        return stream()
 
 
 @dataclass(frozen=True, slots=True)
@@ -997,7 +1080,22 @@ class ArtifactScratchManager:
                 os.close(workspace_fd)
         finally:
             os.close(root_fd)
-        return ExternalMaterialGrant(grant_id=grant_id, binding_digest=binding_digest)
+        export_files = tuple(
+            ExternalMaterialExportFile(
+                relative_path=f"workspace/{item.normalized_path}",
+                byte_count=item.byte_count,
+                sha256=item.sha256,
+                executable=item.executable,
+            )
+            for item in request.files
+        )
+        return ExternalMaterialGrant(
+            grant_id=grant_id,
+            binding_digest=binding_digest,
+            manifest=payload,
+            files=export_files,
+            _root=self._root / "workspaces" / grant_id,
+        )
 
     def _publish_external_post_grant_sync(
         self,
@@ -1110,7 +1208,23 @@ class ArtifactScratchManager:
             finally:
                 os.close(descriptor)
             os.fsync(root_fd)
-            return ExternalMaterialGrant(grant_id=grant_id, binding_digest=binding_digest)
+            export_files = tuple(
+                ExternalMaterialExportFile(
+                    relative_path=f"materials/{item.role}/{entry.normalized_path}",
+                    byte_count=entry.byte_count,
+                    sha256=entry.sha256,
+                    executable=entry.executable,
+                )
+                for item in request.materials
+                for entry in item.files
+            )
+            return ExternalMaterialGrant(
+                grant_id=grant_id,
+                binding_digest=binding_digest,
+                manifest=payload,
+                files=export_files,
+                _root=self._root / "workspaces" / grant_id,
+            )
         except (OSError, ValueError) as exc:
             raise ArtifactScratchIntegrityError(
                 "external POST material publication failed"

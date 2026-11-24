@@ -138,8 +138,8 @@ hosting and storage contracts remain in the bounded sections below; they
 are implementation scopes within this delivery, not separate merge gates.
 Preserve identity accounts, database state and public URLs during migration.
 Verify login/API/MCP and unavailable checker behavior before moving the Elastic
-IP and stopping the old host. Separate KVM execution qualification remains an
-explicit follow-up boundary, not a claim made by app-only startup.
+IP and stopping the old host. KVM execution runs on the separately qualified,
+always-on runner described below; the app host remains KVM-free.
 
 ## App-only hosting scope
 
@@ -159,11 +159,12 @@ delivery owner as ordinary assignment, revision and completion effects.
 ## Bounded change
 
 - Add an explicit hosted app profile in `deploy/hosted/{compose.py,preflight.py,compose.yml,release.env.example}`
-  and an overlay for native-only configuration if needed. The app profile
+  and a mutually authenticated remote-runner boundary. The app profile
   preserves existing API, parser, inference proxy, storage qualification, database,
   broker, and identity validation and activates without local checker files,
   mounts, native systemd start, or KVM readiness. Reject conflicting native or
-  trial configuration in this profile. Keep the existing single-host mode.
+  trial configuration in this profile. Remove the superseded single-host
+  API-plus-microVM deployment rather than retaining a fallback mode.
 - Compose a fixed checker-delivery exclusion in `backend/app/core/config.py`,
   `backend/app/adapters/outbox/__init__.py`,
   `backend/app/modules/outbox/delivery.py` and `delivery_repository.py`. Filter
@@ -409,3 +410,33 @@ service. PRE remains unavailable and POST requests are excluded from ordinary
 delivery, as proved by the focused API/outbox tests. Live ZIP intake and checker
 execution require a qualified checker host. The complete public OAuth and MCP
 drill passed on a clean Chrome rerun after a startup crash.
+
+## Dedicated remote runner scope — 2026-11-24
+
+Replace the unreleased shared-host checker wiring with one provider-neutral
+typed capability whose hosted provider is an always-on, on-demand AWS runner.
+Allowed implementation paths are `external_checkers/**`, the CHECKERS and
+trusted-intake adapters/interfaces, ART's descriptor-relative material export,
+hosted configuration/composition/preflight, their focused tests, and affected
+operator documentation. Submission lifecycle, TASK state, S3 source admission,
+intake cleanup ownership, and alternate managed-provider claims remain outside
+this scope.
+
+The app opens TLS 1.3 connections authenticated by a dedicated client
+certificate. PRE source and POST material bytes cross that boundary in bounded
+frames; no API-host filesystem path crosses it. The runner verifies exact
+request/source/grant bindings, stages one private runner-local workspace, invokes
+the existing native Unix service, and removes the exact session on success,
+failure, timeout or disconnect. A persistent outbound app model-proxy bridge
+preserves request-bound model callbacks without opening inbound access to the
+app host. Future managed providers must implement the same typed task/source/
+result contract; no E2B, Daytona or other vendor is claimed supported here.
+
+Live evidence on instance `i-0936c305f8f67d835` proves m7i.large nested KVM,
+Smol health with two pinned manifests, a completed request-bound remote POST,
+and a completed streamed-ZIP PRE. PRE reported native Smol isolation and
+`cleanup=destroyed`; POST and PRE left material workspaces, model relays and
+Smol leases empty. Focused local remote transport/intake coverage passed 85
+tests. Successful-checker public acceptance and a real model-callback provider
+journey remain explicit integration qualifications, not claims from the
+transport smoke tests.

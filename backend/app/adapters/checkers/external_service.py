@@ -1,4 +1,4 @@
-"""Unix-socket adapter for the privileged external checker service."""
+"""Mutually authenticated remote adapter for the dedicated checker node."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ import json
 import hashlib
 from datetime import datetime, timezone
 from pathlib import Path
+import ssl
 import struct
 from typing import Literal
 
@@ -51,26 +52,50 @@ from app.modules.checkers.api.forge_locator import (
 )
 
 EXTERNAL_CHECKER_CAPABILITY_KEY = "external_checker_execution"
-EXTERNAL_CHECKER_PROVIDER_KEY = "unix_socket"
+EXTERNAL_CHECKER_PROVIDER_KEY = "remote_tls"
 _PROTOCOL = "external_checker_service.v1"
+_REMOTE_PROTOCOL = "workstream.remote_runner.v1"
 _MAXIMUM_RESPONSE_BYTES = MAX_RESULT_BYTES + 16_384
 _EXECUTION_OVERHEAD_SECONDS = EXTERNAL_CHECKER_EXECUTION_CLEANUP_MARGIN_MS / 1000
 
 
-class UnixSocketExternalCheckerAdapter:
-    """Speak one length-framed strict request over a private Unix socket."""
+class RemoteTlsExternalCheckerAdapter:
+    """Speak the existing service protocol through one authenticated remote node."""
 
-    def __init__(self, *, socket_path: Path, timeout_seconds: float, source_contracts: SelectedPreSubmitSourceContracts) -> None:
-        """Validate immutable local transport settings without opening the socket."""
+    def __init__(
+        self,
+        *,
+        host: str,
+        port: int,
+        server_name: str,
+        ca_path: Path,
+        certificate_path: Path,
+        private_key_path: Path,
+        timeout_seconds: float,
+        source_contracts: SelectedPreSubmitSourceContracts,
+    ) -> None:
+        """Validate immutable endpoint settings without opening a connection."""
         if (
-            not socket_path.is_absolute()
-            or socket_path.is_symlink()
+            type(host) is not str
+            or not host
+            or len(host) > 255
+            or type(port) is not int
+            or not 1 <= port <= 65_535
+            or type(server_name) is not str
+            or not server_name
+            or len(server_name) > 255
+            or any(not path.is_absolute() or path.is_symlink() for path in (
+                ca_path, certificate_path, private_key_path
+            ))
             or type(timeout_seconds) is not float
             or not 0.1 <= timeout_seconds <= 3_700.0
         ):
             raise ValueError("external checker service configuration is invalid")
         self._source_contracts = source_contracts
-        self._socket_path = socket_path
+        self._host, self._port, self._server_name = host, port, server_name
+        self._ca_path = ca_path
+        self._certificate_path = certificate_path
+        self._private_key_path = private_key_path
         self._timeout_seconds = timeout_seconds
         self._identity = ExternalServiceAdapterIdentity(
             EXTERNAL_CHECKER_CAPABILITY_KEY,
@@ -84,8 +109,49 @@ class UnixSocketExternalCheckerAdapter:
 
     @property
     def pre_runtime_provider(self) -> Literal["smolvm"]:
-        """The native socket factory accepts only Smol runtime evidence."""
+        """The dedicated native node accepts only Smol runtime evidence."""
         return "smolvm"
+
+    def _tls_context(self) -> ssl.SSLContext:
+        context = ssl.create_default_context(
+            ssl.Purpose.SERVER_AUTH,
+            cafile=str(self._ca_path),
+        )
+        context.minimum_version = ssl.TLSVersion.TLSv1_3
+        context.check_hostname = True
+        context.load_cert_chain(
+            certfile=str(self._certificate_path),
+            keyfile=str(self._private_key_path),
+        )
+        return context
+
+    async def _open(self) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
+        return await asyncio.open_connection(
+            self._host,
+            self._port,
+            ssl=self._tls_context(),
+            server_hostname=self._server_name,
+        )
+
+    @staticmethod
+    async def _send_frame(writer: asyncio.StreamWriter, payload: bytes) -> None:
+        if not payload or len(payload) > 64 * 1024 * 1024:
+            raise ValueError("remote runner frame is invalid")
+        writer.write(struct.pack(">I", len(payload)) + payload)
+        await writer.drain()
+
+    async def _proxy_connection(self) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
+        reader, writer = await self._open()
+        control = json.dumps(
+            {
+                "protocol_version": _REMOTE_PROTOCOL,
+                "operation": "proxy",
+                "capability": EXTERNAL_CHECKER_CAPABILITY_KEY,
+            },
+            separators=(",", ":"),
+        ).encode()
+        await self._send_frame(writer, control)
+        return reader, writer
 
     async def execute_pre(
         self, lease: SelectedPreSubmitLeaseFacts, grant: ExternalPreSubmitSourceGrant,
@@ -110,7 +176,7 @@ class UnixSocketExternalCheckerAdapter:
                 raise SelectedPreSubmitInfrastructureUnavailable("deadline_exceeded")
             deadline = asyncio.get_running_loop().time() + timeout
             async with asyncio.timeout_at(deadline):
-                reader, writer = await asyncio.open_unix_connection(self._socket_path)
+                reader, writer = await self._proxy_connection()
                 try:
                     writer.write(struct.pack(">I", len(payload)) + payload)
                     await writer.drain()
@@ -223,10 +289,46 @@ class UnixSocketExternalCheckerAdapter:
             if self._timeout_seconds < required_timeout:
                 raise ExternalServiceUnavailableError(self._identity)
             async with asyncio.timeout(self._timeout_seconds):
-                reader, writer = await asyncio.open_unix_connection(self._socket_path)
+                reader, writer = await self._open()
                 try:
-                    writer.write(struct.pack(">I", len(payload)) + payload)
-                    await writer.drain()
+                    manifest = grant.source.manifest
+                    files = grant.source.files
+                    if (
+                        type(manifest) is not bytes
+                        or not 0 < len(manifest) <= 2 * 1024 * 1024
+                        or len(files) > 4_000
+                    ):
+                        raise ValueError("external material export is invalid")
+                    total_bytes = sum(item.byte_count for item in files)
+                    if total_bytes > 1024 * 1024 * 1024:
+                        raise ValueError("external material export is too large")
+                    control = json.dumps(
+                        {
+                            "protocol_version": _REMOTE_PROTOCOL,
+                            "operation": "execute",
+                            "capability": EXTERNAL_CHECKER_CAPABILITY_KEY,
+                            "service_request": json.loads(payload),
+                            "manifest_byte_count": len(manifest),
+                            "file_count": len(files),
+                            "total_byte_count": total_bytes,
+                        },
+                        ensure_ascii=False,
+                        allow_nan=False,
+                        separators=(",", ":"),
+                    ).encode()
+                    await self._send_frame(writer, control)
+                    await self._send_frame(writer, manifest)
+                    for item in files:
+                        stream = grant.source.open_file(item)
+                        try:
+                            async for chunk in stream:
+                                if type(chunk) is not bytes or not 0 < len(chunk) <= 64 * 1024:
+                                    raise ValueError("external material export chunk is invalid")
+                                await self._send_frame(writer, chunk)
+                        finally:
+                            await await_cancellation_resistant(stream.aclose())
+                        writer.write(struct.pack(">I", 0))
+                        await writer.drain()
                     size = struct.unpack(">I", await reader.readexactly(4))[0]
                     if size == 0 or size > _MAXIMUM_RESPONSE_BYTES:
                         raise ExternalServiceProtocolError(self._identity)
@@ -289,7 +391,7 @@ class UnixSocketExternalCheckerAdapter:
         ).encode("utf-8")
         try:
             async with asyncio.timeout(self._timeout_seconds):
-                reader, writer = await asyncio.open_unix_connection(self._socket_path)
+                reader, writer = await self._proxy_connection()
                 try:
                     writer.write(struct.pack(">I", len(payload)) + payload)
                     await writer.drain()
@@ -344,5 +446,5 @@ class UnixSocketExternalCheckerAdapter:
 __all__ = (
     "EXTERNAL_CHECKER_CAPABILITY_KEY",
     "EXTERNAL_CHECKER_PROVIDER_KEY",
-    "UnixSocketExternalCheckerAdapter",
+    "RemoteTlsExternalCheckerAdapter",
 )

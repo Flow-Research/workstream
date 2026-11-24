@@ -6,12 +6,12 @@ from pathlib import Path
 import time
 from uuid import uuid4
 
-from app.adapters.artifacts.trusted_intake import UnixSocketTrustedIntakeAdapter
-from app.adapters.checkers.external_service import UnixSocketExternalCheckerAdapter
+from app.adapters.artifacts.trusted_intake import RemoteTlsTrustedIntakeAdapter
+from app.adapters.checkers.external_service import RemoteTlsExternalCheckerAdapter
 
 _TRACE = Path(os.environ["WORKSTREAM_PROBE_INTAKE_TRACE"])
-_prepare = UnixSocketTrustedIntakeAdapter.prepare
-_execute = UnixSocketExternalCheckerAdapter.execute
+_prepare = RemoteTlsTrustedIntakeAdapter.prepare
+_execute = RemoteTlsExternalCheckerAdapter.execute
 
 
 def _record(event, identifier, **facts):
@@ -52,6 +52,6 @@ async def _observe_execute(self, request, grant, *, model_grant=None):
 
 # This explicitly selected proof entry point delegates all work to the original
 # typed adapter. Production app imports and ordinary workers never install it.
-UnixSocketTrustedIntakeAdapter.prepare = _observe_prepare
-UnixSocketExternalCheckerAdapter.execute = _observe_execute
+RemoteTlsTrustedIntakeAdapter.prepare = _observe_prepare
+RemoteTlsExternalCheckerAdapter.execute = _observe_execute
 from app.main import app as app  # noqa: E402

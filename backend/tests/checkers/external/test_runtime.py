@@ -22,23 +22,20 @@ from pydantic import ValidationError
 
 from app.adapters.checkers import (
     configured_external_checker_execution,
-    external_checker_execution_factory,
 )
 from app.adapters.checkers.external_service import (
     EXTERNAL_CHECKER_CAPABILITY_KEY,
     EXTERNAL_CHECKER_PROVIDER_KEY,
-    UnixSocketExternalCheckerAdapter,
+    RemoteTlsExternalCheckerAdapter,
 )
 from app.core.config import Settings
 from app.core.hashing import canonical_json_hash
 from app.interfaces.external_checker_execution import (
     ExternalCheckerIsolationReceipt,
-    ExternalCheckerMaterialGrant,
     ExternalCheckerServiceHealth,
 )
 from workstream_external_services import (
     ExternalServiceUnavailableError,
-    UnknownExternalServiceProviderError,
 )
 from app.modules.artifacts.preparation import (
     HARD_MAXIMUM_ARTIFACT_BYTES,
@@ -73,7 +70,6 @@ from app.modules.checkers.api.external import (
     PreSubmitExternalCheckerMaterial,
     external_checker_json_hash,
     make_external_checker_execution_request,
-    make_external_checker_execution_result,
 )
 from tests.checkers.external.support import SHA, execution_identity, registry_entry
 
@@ -133,23 +129,19 @@ def test_shared_rust_fixtures_preserve_python_contract_and_derived_digests():
         )
 
 
-def test_external_service_settings_share_the_art_scratch_root(tmp_path: Path):
-    scratch = tmp_path / "scratch"
+def test_external_service_settings_require_one_complete_remote_identity(tmp_path: Path):
     settings = Settings(
-        artifact_scratch_root=scratch,
-        external_checker_service_socket=tmp_path / "service" / "checker.sock",
-        external_checker_material_root=scratch,
+        external_runner_host="runner.internal",
+        external_runner_port=9443,
+        external_runner_server_name="runner.internal",
+        external_runner_ca_path=tmp_path / "ca.crt",
+        external_runner_certificate_path=tmp_path / "app.crt",
+        external_runner_private_key_path=tmp_path / "app.key",
     )
-    assert settings.external_checker_material_root == scratch
+    assert settings.external_runner_host == "runner.internal"
     assert settings.external_checker_service_timeout_seconds == 3660.0
     with pytest.raises(ValidationError, match="must be complete"):
-        Settings(external_checker_service_socket=tmp_path / "checker.sock")
-    with pytest.raises(ValidationError, match="must equal"):
-        Settings(
-            artifact_scratch_root=scratch,
-            external_checker_service_socket=tmp_path / "service" / "checker.sock",
-            external_checker_material_root=tmp_path / "other",
-        )
+        Settings(external_runner_host="runner.internal")
     with pytest.raises(ValueError, match="isolation receipt"):
         ExternalCheckerIsolationReceipt(
             repository="--network/host",
@@ -238,155 +230,6 @@ def test_receipts_cannot_misrepresent_an_engine_as_another_isolation(runtime, is
             config_image_id=SHA,
             **shared,
         )
-
-
-@pytest.mark.parametrize(
-    "runtime,isolation_mode",
-    [("runsc", "gvisor"), ("runc", "docker-dev"), ("smolvm", "smol-microvm")],
-)
-@pytest.mark.asyncio
-async def test_unix_adapter_revalidates_exact_result_and_factory_is_closed(
-    tmp_path: Path,
-    runtime: str,
-    isolation_mode: str,
-):
-    request = _request()
-    result = make_external_checker_execution_result(
-        request_digest=request.request_digest,
-        registry_entry_id=request.registry.registry_entry_id,
-        registry_entry_digest=request.registry.entry_digest,
-        phase="pre_submit",
-        outcome="completed",
-        verdict="passed",
-        findings=(),
-        infrastructure_failure_code=None,
-    )
-    socket = tmp_path / "checker.sock"
-
-    async def handle(reader, writer):
-        size = struct.unpack(">I", await reader.readexactly(4))[0]
-        received = json.loads(await reader.readexactly(size))
-        if received["operation"] == "health":
-            body = json.dumps(
-                {
-                    "protocol_version": "external_checker_service.v1",
-                    "operation": "health",
-                    "status": "ready",
-                    "operating_system": "linux",
-                    "architecture": "amd64",
-                    "runtime": runtime,
-                    "isolation_mode": isolation_mode,
-                    "cached_platform_manifests": 1,
-                    "sandbox_uid": 65532,
-                    "sandbox_gid": 65532,
-                },
-                separators=(",", ":"),
-            ).encode()
-            writer.write(struct.pack(">I", len(body)) + body)
-            await writer.drain()
-            writer.close()
-            return
-        assert received["request"]["request_digest"] == request.request_digest
-        assert received["model_grant"] is None
-        body = json.dumps(
-            {
-                "protocol_version": "external_checker_service.v1",
-                "result": result.model_dump(mode="json"),
-                "isolation": {
-                    "repository": "registry.example/workstream/checker",
-                    "platform_manifest_digest": request.registry.image_digest,
-                    "platform_manifest_media_type": ("application/vnd.oci.image.manifest.v1+json"),
-                    "platform_manifest_byte_count": 1367,
-                    "operating_system": "linux",
-                    "architecture": "amd64",
-                    "config_image_id": "sha256:" + "b" * 64,
-                    "runtime": runtime,
-                    "isolation_mode": isolation_mode,
-                    "sandbox_uid": 65532,
-                    "sandbox_gid": 65532,
-                },
-            },
-            separators=(",", ":"),
-        ).encode()
-        writer.write(struct.pack(">I", len(body)) + body)
-        await writer.drain()
-        writer.close()
-
-    server = await asyncio.start_unix_server(handle, socket)
-    try:
-        factory = external_checker_execution_factory(socket_path=socket, timeout_seconds=90.0)
-        adapter = factory.create("unix_socket")
-        health = await adapter.health()
-        assert health.runtime == runtime
-        assert health.isolation_mode == isolation_mode
-        assert health.cached_platform_manifests == 1
-        response = await adapter.execute(
-            request,
-            ExternalCheckerMaterialGrant(
-                grant_id="extract_" + "a" * 32,
-                binding_digest="sha256:" + "c" * 64,
-            ),
-        )
-        assert response.result == result
-        assert response.isolation is not None
-        assert response.isolation.runtime == runtime
-        assert response.isolation.isolation_mode == isolation_mode
-        with pytest.raises(UnknownExternalServiceProviderError):
-            factory.create("docker")
-        short = external_checker_execution_factory(socket_path=socket, timeout_seconds=2.0).create(
-            "unix_socket"
-        )
-        with pytest.raises(ExternalServiceUnavailableError):
-            await short.execute(
-                request,
-                ExternalCheckerMaterialGrant(
-                    grant_id="extract_" + "a" * 32,
-                    binding_digest="sha256:" + "c" * 64,
-                ),
-            )
-    finally:
-        server.close()
-        await server.wait_closed()
-
-
-@pytest.mark.asyncio
-async def test_unix_adapter_cancellation_closes_the_service_connection(tmp_path: Path):
-    socket = tmp_path / "checker.sock"
-    received = asyncio.Event()
-    disconnected = asyncio.Event()
-
-    async def handle(reader, writer):
-        try:
-            size = struct.unpack(">I", await reader.readexactly(4))[0]
-            await reader.readexactly(size)
-            received.set()
-            assert await reader.read() == b""
-        finally:
-            disconnected.set()
-            writer.close()
-
-    server = await asyncio.start_unix_server(handle, socket)
-    try:
-        adapter = external_checker_execution_factory(
-            socket_path=socket, timeout_seconds=90.0
-        ).create("unix_socket")
-        task = asyncio.create_task(
-            adapter.execute(
-                _request(),
-                ExternalCheckerMaterialGrant(
-                    grant_id="extract_" + "a" * 32,
-                    binding_digest="sha256:" + "c" * 64,
-                ),
-            )
-        )
-        await asyncio.wait_for(received.wait(), 2)
-        task.cancel()
-        with pytest.raises(asyncio.CancelledError):
-            await task
-        await asyncio.wait_for(disconnected.wait(), 2)
-    finally:
-        server.close()
-        await server.wait_closed()
 
 
 @pytest.mark.asyncio
@@ -1099,22 +942,22 @@ async def test_public_trace_preserves_execution_arguments(monkeypatch, tmp_path,
     from types import SimpleNamespace
     from unittest.mock import AsyncMock
 
-    from app.adapters.artifacts.trusted_intake import UnixSocketTrustedIntakeAdapter
-    from app.adapters.checkers.external_service import UnixSocketExternalCheckerAdapter
+    from app.adapters.artifacts.trusted_intake import RemoteTlsTrustedIntakeAdapter
+    from app.adapters.checkers.external_service import RemoteTlsExternalCheckerAdapter
 
     trace = tmp_path / "trace.jsonl"
     monkeypatch.setenv("WORKSTREAM_PROBE_INTAKE_TRACE", str(trace))
-    original_prepare = UnixSocketTrustedIntakeAdapter.prepare
-    monkeypatch.setattr(UnixSocketTrustedIntakeAdapter, "prepare", original_prepare)
+    original_prepare = RemoteTlsTrustedIntakeAdapter.prepare
+    monkeypatch.setattr(RemoteTlsTrustedIntakeAdapter, "prepare", original_prepare)
     expected = object()
     execute = AsyncMock(return_value=expected)
-    monkeypatch.setattr(UnixSocketExternalCheckerAdapter, "execute", execute)
+    monkeypatch.setattr(RemoteTlsExternalCheckerAdapter, "execute", execute)
     probe = Path(__file__).resolve().parents[4] / "experiments/pilot04_external_checker_runtime/public_intake_observer.py"
     runpy.run_path(str(probe))
     adapter, grant = object(), object()
     model_grant = object() if with_model_grant else None
     request = SimpleNamespace(request_digest="sha256:" + "a" * 64)
-    actual = await UnixSocketExternalCheckerAdapter.execute(
+    actual = await RemoteTlsExternalCheckerAdapter.execute(
         adapter, request, grant, model_grant=model_grant,
     )
     assert actual is expected
@@ -1124,21 +967,26 @@ async def test_public_trace_preserves_execution_arguments(monkeypatch, tmp_path,
     ]
 
 
-def _pre_transport_processor(lease, socket, changed):
+def _pre_transport_processor(lease, endpoint, changed):
     """Exercise direct transport and both real production composition wrappers."""
     from app.modules.checkers.selected_pre_submit_execution import SelectedPreSubmitProcessor
-    adapter = UnixSocketExternalCheckerAdapter(
-        socket_path=socket, timeout_seconds=0.2 if changed == "slow_decode" else 5.0,
-     source_contracts=selected_pre_submit_source_contracts())
+    adapter = RemoteTlsExternalCheckerAdapter(
+        **endpoint,
+        timeout_seconds=0.2 if changed == "slow_decode" else 5.0,
+        source_contracts=selected_pre_submit_source_contracts(),
+    )
     if changed in {"configured", "model_wrapper"}:
         from app.adapters.checkers import (
             selected_pre_submit_checker_execution, configured_post_submit_external_execution,
             SelectedPreSubmitCheckerExecutionAdapter,
         )
         settings = Settings(
-            external_checker_service_socket=socket,
-            external_checker_material_root=socket.parent / "scratch",
-            artifact_scratch_root=socket.parent / "scratch",
+            external_runner_host=endpoint["host"],
+            external_runner_port=endpoint["port"],
+            external_runner_server_name=endpoint["server_name"],
+            external_runner_ca_path=endpoint["ca_path"],
+            external_runner_certificate_path=endpoint["certificate_path"],
+            external_runner_private_key_path=endpoint["private_key_path"],
         )
         if changed == "configured":
             processor = selected_pre_submit_checker_execution(settings=settings).build(lease)
@@ -1240,7 +1088,26 @@ async def test_single_pre_transport_streams_source_and_validates_combined_result
     grant = Grant()
     socket = tmp_path / "pre.sock"
     server = await asyncio.start_unix_server(handle, socket)
-    processor = _pre_transport_processor(lease, socket, changed)
+    from tests.checkers.external.test_remote_node import _certificate_files, _REMOTE
+    certificates = _certificate_files(tmp_path)
+    materials = tmp_path / "runner-materials"
+    materials.mkdir(mode=0o700)
+    node = _REMOTE.RemoteNode({
+        "listen_host": "127.0.0.1", "listen_port": 1, "client_name": "app.test",
+        "socket_path": str(socket), "material_root": str(materials),
+        "model_proxy_socket_path": str(tmp_path / "runner-model.sock"),
+        "tls_certificate_path": str(certificates["server_certificate"]),
+        "tls_private_key_path": str(certificates["server_key"]),
+        "tls_ca_path": str(certificates["ca"]), "session_timeout_seconds": 10,
+    })
+    remote = await asyncio.start_server(node.handle, "127.0.0.1", 0, ssl=node.ssl_context)
+    endpoint = {
+        "host": "127.0.0.1", "port": remote.sockets[0].getsockname()[1],
+        "server_name": "runner.test", "ca_path": certificates["ca"],
+        "certificate_path": certificates["client_certificate"],
+        "private_key_path": certificates["client_key"],
+    }
+    processor = _pre_transport_processor(lease, endpoint, changed)
     try:
         if changed in {None, "configured", "model_wrapper"}:
             assert (await processor.process(grant)).execution == execution
@@ -1263,7 +1130,9 @@ async def test_single_pre_transport_streams_source_and_validates_combined_result
         assert "grant" not in requests[0] and "prepared_generation_id" not in requests[0]
     finally:
         server.close()
+        remote.close()
         await server.wait_closed()
+        await remote.wait_closed()
 
 
 @pytest.mark.asyncio
@@ -1281,7 +1150,14 @@ async def test_single_pre_expired_lease_does_not_open_source_or_runtime(tmp_path
         def open_source(self, **kwargs):
             raise AssertionError("expired execution opened source")
 
-    adapter = UnixSocketExternalCheckerAdapter(socket_path=tmp_path / "absent.sock", timeout_seconds=5.0, source_contracts=selected_pre_submit_source_contracts())
+    from tests.checkers.external.test_remote_node import _certificate_files
+    certificates = _certificate_files(tmp_path)
+    adapter = RemoteTlsExternalCheckerAdapter(
+        host="127.0.0.1", port=1, server_name="runner.test",
+        ca_path=certificates["ca"], certificate_path=certificates["client_certificate"],
+        private_key_path=certificates["client_key"], timeout_seconds=5.0,
+        source_contracts=selected_pre_submit_source_contracts(),
+    )
     with pytest.raises(SelectedPreSubmitInfrastructureUnavailable, match="deadline_exceeded"):
         await adapter.execute_pre(lease, NoSource())
 
@@ -1314,7 +1190,25 @@ async def test_single_pre_cancellation_closes_source_and_transport(tmp_path):
 
     socket = tmp_path / "cancel.sock"
     server = await asyncio.start_unix_server(handle, socket)
-    adapter = UnixSocketExternalCheckerAdapter(socket_path=socket, timeout_seconds=5.0, source_contracts=selected_pre_submit_source_contracts())
+    from tests.checkers.external.test_remote_node import _certificate_files, _REMOTE
+    certificates = _certificate_files(tmp_path)
+    materials = tmp_path / "runner-materials"
+    materials.mkdir(mode=0o700)
+    node = _REMOTE.RemoteNode({
+        "listen_host": "127.0.0.1", "listen_port": 1, "client_name": "app.test",
+        "socket_path": str(socket), "material_root": str(materials),
+        "model_proxy_socket_path": str(tmp_path / "runner-model.sock"),
+        "tls_certificate_path": str(certificates["server_certificate"]),
+        "tls_private_key_path": str(certificates["server_key"]),
+        "tls_ca_path": str(certificates["ca"]), "session_timeout_seconds": 10,
+    })
+    remote = await asyncio.start_server(node.handle, "127.0.0.1", 0, ssl=node.ssl_context)
+    adapter = RemoteTlsExternalCheckerAdapter(
+        host="127.0.0.1", port=remote.sockets[0].getsockname()[1], server_name="runner.test",
+        ca_path=certificates["ca"], certificate_path=certificates["client_certificate"],
+        private_key_path=certificates["client_key"], timeout_seconds=5.0,
+        source_contracts=selected_pre_submit_source_contracts(),
+    )
     processor = SelectedPreSubmitProcessor(lease=lease, execution=adapter, source_contracts=selected_pre_submit_source_contracts())
     task = asyncio.create_task(processor.process(Grant()))
     try:
@@ -1329,4 +1223,6 @@ async def test_single_pre_cancellation_closes_source_and_transport(tmp_path):
             task.cancel()
             await asyncio.gather(task, return_exceptions=True)
         server.close()
+        remote.close()
         await server.wait_closed()
+        await remote.wait_closed()

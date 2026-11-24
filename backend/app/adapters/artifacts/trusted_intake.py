@@ -10,6 +10,7 @@ import json
 from pathlib import Path
 import re
 import socket
+import ssl
 import struct
 import threading
 import time
@@ -42,8 +43,9 @@ from app.modules.checkers.api.default_checker import (
 )
 
 CAPABILITY = "trusted_submission_intake"
-PROVIDER = "unix_socket"
+PROVIDER = "remote_tls"
 _PROTOCOL = "trusted_submission_intake.v1"
+_REMOTE_PROTOCOL = "workstream.remote_runner.v1"
 _MAX_FRAME = 64 * 1024 * 1024
 _MAX_COMMAND = 4 * 1024 * 1024
 _MAX_ARCHIVE = 512 * 1024 * 1024
@@ -85,23 +87,59 @@ def _entry(value: object) -> SubmissionArchiveEntry:
     )
 
 
-class UnixSocketTrustedIntakeAdapter:
-    """Construct one local session; the node owns all preparation retry decisions."""
+class RemoteTlsTrustedIntakeAdapter:
+    """Construct one authenticated remote session owned by the dedicated node."""
 
-    def __init__(self, *, socket_path: Path, image_digest: str, config_digest: str) -> None:
-        """Bind an absolute private socket to operator-pinned image and config identities."""
+    def __init__(
+        self,
+        *,
+        host: str,
+        port: int,
+        server_name: str,
+        ca_path: Path,
+        certificate_path: Path,
+        private_key_path: Path,
+        image_digest: str,
+        config_digest: str,
+    ) -> None:
+        """Bind a pinned TLS identity to operator-pinned image and config identities."""
         if (
-            not socket_path.is_absolute()
-            or socket_path.is_symlink()
+            type(host) is not str
+            or not host
+            or len(host) > 255
+            or type(port) is not int
+            or not 1 <= port <= 65_535
+            or type(server_name) is not str
+            or not server_name
+            or len(server_name) > 255
+            or any(not path.is_absolute() or path.is_symlink() for path in (
+                ca_path, certificate_path, private_key_path
+            ))
             or any(
                 type(v) is not str or re.fullmatch(r"sha256:[0-9a-f]{64}", v) is None
                 for v in (image_digest, config_digest)
             )
         ):
             raise ValueError("trusted intake configuration invalid")
-        self._path = socket_path
+        self._host, self._port, self._server_name = host, port, server_name
+        self._ca_path = ca_path
+        self._certificate_path = certificate_path
+        self._private_key_path = private_key_path
         self._image = image_digest
         self._config = config_digest
+
+    def _tls_context(self) -> ssl.SSLContext:
+        context = ssl.create_default_context(
+            ssl.Purpose.SERVER_AUTH,
+            cafile=str(self._ca_path),
+        )
+        context.minimum_version = ssl.TLSVersion.TLSv1_3
+        context.check_hostname = True
+        context.load_cert_chain(
+            certfile=str(self._certificate_path),
+            keyfile=str(self._private_key_path),
+        )
+        return context
 
     @property
     def identity(self) -> ExternalServiceAdapterIdentity:
@@ -149,7 +187,7 @@ class _Session:
 
     def __init__(
         self,
-        adapter: UnixSocketTrustedIntakeAdapter,
+        adapter: RemoteTlsTrustedIntakeAdapter,
         deadline: float,
         request: TrustedIntakePreparation | None = None,
     ) -> None:
@@ -157,7 +195,7 @@ class _Session:
         self._adapter = adapter
         self._deadline = deadline
         self._request = request
-        self._socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._lock = threading.Lock()
         self._aborted = threading.Event()
         self._state = "new"
@@ -280,11 +318,24 @@ class _Session:
         return body["payload"]
 
     def _connect(self) -> None:
-        """Connect only to the configured private socket within the lease deadline."""
+        """Connect only to the authenticated runner within the lease deadline."""
         self._timeout()
         try:
-            self._socket.connect(str(self._adapter._path))
-        except OSError as exc:
+            self._socket.connect((self._adapter._host, self._adapter._port))
+            self._socket = self._adapter._tls_context().wrap_socket(
+                self._socket,
+                server_hostname=self._adapter._server_name,
+            )
+            control = json.dumps(
+                {
+                    "protocol_version": _REMOTE_PROTOCOL,
+                    "operation": "proxy",
+                    "capability": CAPABILITY,
+                },
+                separators=(",", ":"),
+            ).encode()
+            self._send(struct.pack(">I", len(control)) + control)
+        except (OSError, ssl.SSLError) as exc:
             raise ExternalServiceUnavailableError(self._adapter.identity) from exc
 
     def _health(self) -> TrustedIntakeIdentity:

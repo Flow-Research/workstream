@@ -5,7 +5,7 @@ from typing import Literal
 from app.adapters.checkers.external_service import (
     EXTERNAL_CHECKER_CAPABILITY_KEY,
     EXTERNAL_CHECKER_PROVIDER_KEY,
-    UnixSocketExternalCheckerAdapter,
+    RemoteTlsExternalCheckerAdapter,
 )
 from app.interfaces.external_checker_execution import (
     ExternalCheckerExecutionAdapter,
@@ -54,17 +54,29 @@ def revision_feedback_port(session) -> RevisionFeedbackPort:
 
 
 def external_checker_execution_factory(
-    *, socket_path: Path, timeout_seconds: float
-) -> ExternalServiceAdapterFactory[UnixSocketExternalCheckerAdapter]:
-    """Compose the sole instance-local external checker adapter factory."""
+    *,
+    host: str,
+    port: int,
+    server_name: str,
+    ca_path: Path,
+    certificate_path: Path,
+    private_key_path: Path,
+    timeout_seconds: float,
+) -> ExternalServiceAdapterFactory[RemoteTlsExternalCheckerAdapter]:
+    """Compose the sole dedicated-node external checker adapter factory."""
     from app.adapters.artifacts import selected_pre_submit_source_contracts
-    factory = ExternalServiceAdapterFactory[UnixSocketExternalCheckerAdapter](
+    factory = ExternalServiceAdapterFactory[RemoteTlsExternalCheckerAdapter](
         EXTERNAL_CHECKER_CAPABILITY_KEY
     )
     factory.register(
         EXTERNAL_CHECKER_PROVIDER_KEY,
-        lambda: UnixSocketExternalCheckerAdapter(
-            socket_path=socket_path,
+        lambda: RemoteTlsExternalCheckerAdapter(
+            host=host,
+            port=port,
+            server_name=server_name,
+            ca_path=ca_path,
+            certificate_path=certificate_path,
+            private_key_path=private_key_path,
             timeout_seconds=timeout_seconds,
             source_contracts=selected_pre_submit_source_contracts(),
         ),
@@ -146,12 +158,21 @@ def create_checker_model_provider(
 def configured_external_checker_execution_factory(settings):
     """Map configured image-execution settings into the sole adapter factory."""
     if (
-        settings.external_checker_service_socket is None
-        or settings.external_checker_material_root is None
+        settings.external_runner_host is None
+        or settings.external_runner_port is None
+        or settings.external_runner_server_name is None
+        or settings.external_runner_ca_path is None
+        or settings.external_runner_certificate_path is None
+        or settings.external_runner_private_key_path is None
     ):
         raise ValueError("external checker service is not configured")
     return external_checker_execution_factory(
-        socket_path=settings.external_checker_service_socket,
+        host=settings.external_runner_host,
+        port=settings.external_runner_port,
+        server_name=settings.external_runner_server_name,
+        ca_path=settings.external_runner_ca_path,
+        certificate_path=settings.external_runner_certificate_path,
+        private_key_path=settings.external_runner_private_key_path,
         timeout_seconds=float(settings.external_checker_service_timeout_seconds),
     )
 
@@ -179,8 +200,8 @@ class _ConfiguredExternalCheckerExecution:
     def _resolve(self) -> ExternalCheckerExecutionAdapter:
         """Create the fixed provider or report absent runtime configuration."""
         if (
-            self._settings.external_checker_service_socket is None
-            and self._settings.external_checker_material_root is None
+            self._settings.external_runner_host is None
+            and self._settings.external_runner_port is None
         ):
             raise ExternalServiceUnavailableError(self._identity)
         return configured_external_checker_execution_factory(self._settings).create(

@@ -80,7 +80,7 @@ from app.interfaces.artifacts import (
 )
 from workstream_external_services import ExternalServiceAdapterFactory, ExternalServiceConfigurationError
 from app.interfaces.trusted_submission_intake import TrustedSubmissionIntakeAdapter
-from app.adapters.artifacts.trusted_intake import CAPABILITY, PROVIDER, UnixSocketTrustedIntakeAdapter
+from app.adapters.artifacts.trusted_intake import CAPABILITY, PROVIDER, RemoteTlsTrustedIntakeAdapter
 from app.modules.artifacts.preparation import (
     ArtifactPreparationLimits,
     ArtifactPreparationService,
@@ -109,13 +109,25 @@ from app.modules.projects.api.guide_reads import ProjectGuideDocumentContentPort
 
 def trusted_submission_intake(settings: Settings) -> TrustedSubmissionIntakeAdapter:
     """Register the sole ART capability provider with explicit pinned identity."""
-    if any(value is None for value in (settings.artifact_intake_service_socket,
-                                       settings.artifact_intake_image_digest,
-                                       settings.artifact_intake_config_digest)):
+    if any(value is None for value in (
+        settings.external_runner_host,
+        settings.external_runner_port,
+        settings.external_runner_server_name,
+        settings.external_runner_ca_path,
+        settings.external_runner_certificate_path,
+        settings.external_runner_private_key_path,
+        settings.artifact_intake_image_digest,
+        settings.artifact_intake_config_digest,
+    )):
         raise ExternalServiceConfigurationError()
     factory = ExternalServiceAdapterFactory[TrustedSubmissionIntakeAdapter](CAPABILITY)
-    factory.register(PROVIDER, lambda: UnixSocketTrustedIntakeAdapter(
-        socket_path=settings.artifact_intake_service_socket,
+    factory.register(PROVIDER, lambda: RemoteTlsTrustedIntakeAdapter(
+        host=settings.external_runner_host,
+        port=settings.external_runner_port,
+        server_name=settings.external_runner_server_name,
+        ca_path=settings.external_runner_ca_path,
+        certificate_path=settings.external_runner_certificate_path,
+        private_key_path=settings.external_runner_private_key_path,
         image_digest=settings.artifact_intake_image_digest,
         config_digest=settings.artifact_intake_config_digest,
     ))
