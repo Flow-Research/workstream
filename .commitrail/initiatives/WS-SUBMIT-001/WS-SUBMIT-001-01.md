@@ -10012,3 +10012,15 @@ credential policy, source ownership, retention or cleanup rule changes.
 Verification uses the real AWS drill after the prerequisite repair. The bucket
 policy now exactly matches the reviewed guard; the cleanup credential is
 installed on the API host with0400 ownership10001 and its exact IAM ARN verified.
+
+
+The workstation correctly rejects ambient ~/.aws files; the failed second
+attempt's two exact keys were independently confirmed to have no versions or
+multipart uploads. A clean isolated container using the production dependencies,
+read-only current source and two private selected keys reached real multipart
+upload, conditional completion and exact source readback, then AssertionError
+before the permission/cleanup checkpoint. Its journal is
+live-d0dad07781b744538b4a46b1fce9802c.jsonl; synthetic targets remain explicitly
+owned for reconciliation. The drill now records traceback locations (no locals
+or SDK messages) and its own static AssertionError text to diagnose the exact
+failure. This is diagnostic-only; no acceptance assertion is removed or widened.

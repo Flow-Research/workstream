@@ -14,6 +14,7 @@ import os
 from pathlib import Path
 import subprocess
 import tempfile
+import traceback
 
 from botocore.exceptions import ClientError
 from app.adapters.artifacts import create_artifact_store_bootstrap
@@ -243,7 +244,10 @@ def main():
             emit("completed", result="passed")
             print("AWS source adapter qualification passed; see private report")
         except BaseException as error:
-            emit("failed", error_type=type(error).__name__)
+            emit("failed", error_type=type(error).__name__,
+                 assertion=str(error) if type(error) is AssertionError else None,
+                 frames=[{"file": Path(frame.filename).name, "line": frame.lineno,
+                          "function": frame.name} for frame in traceback.extract_tb(error.__traceback__)])
             print("AWS source adapter qualification failed; retain journal and owned targets")
             raise SystemExit(1) from None
         finally:
