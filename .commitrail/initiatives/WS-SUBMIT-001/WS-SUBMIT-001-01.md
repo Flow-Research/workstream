@@ -10590,3 +10590,5 @@ NULL field and reject a foreign source binding; the entire affected hosted
 attachment module passes `39 passed, 74 subtests passed`. The retained native
 trace-count assertion remains unchanged. A fourth connected run is still
 required to prove same-key replay, fresh-key accepted T5 and full cleanup.
+
+Integrated B/D/G repair replay atc897ad192 passed all3 exact PostgreSQL cases in89.42s, schema0091, complete isolated database cleanup (`/tmp/submission-policy-and-post-repairs.log` and `.json`). These cover persisted required PRE selection, public active-guide POST selection, and selected POST materialization/replay with the exact locked member. The unchanged structural validator and Commitrail check passed on integrated source before this replay.
