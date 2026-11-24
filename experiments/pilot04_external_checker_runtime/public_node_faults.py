@@ -84,6 +84,27 @@ def _check_hosted_wrapper_execution(wrapper, home):
         raise ValueError("hosted runtime wrapper execution differs")
 
 
+def _require_pre_runtime_binary_pins(config):
+    smol, pre = config.get('smol'), config.get('pre')
+    if (type(smol) is not dict or (pre is not None and
+            (type(pre) is not dict or type(smol.get('binary_sha256')) is not str
+             or pre.get('smol_binary_sha256') != smol['binary_sha256']))):
+        raise ValueError('PRE and runtime binary pins differ before fault setup')
+
+
+def _bound_wrapper_config(original, wrapper):
+    """Keep the temporary PRE pin aligned with the verified wrapper binary."""
+    changed = json.loads(original)
+    _require_pre_runtime_binary_pins(changed)
+    smol, pre = changed['smol'], changed.get('pre')
+    digest = 'sha256:' + hashlib.sha256(wrapper.read_bytes()).hexdigest()
+    smol['binary'] = str(wrapper)
+    smol['binary_sha256'] = digest
+    if pre is not None:
+        pre['smol_binary_sha256'] = digest
+    return changed
+
+
 def runtime(config, *args, identity=None):
     smol = config['smol']
     return json.loads(subprocess.check_output(
@@ -463,6 +484,7 @@ def serve(config_path, root, unit, manifest_path, *, hosted_runtime=False, run_i
         raise ValueError('fault image cache selection is absent or ambiguous')
     project = matching[0]
     binding = validate_node(config_path, config, unit, manifest_path, hosted_runtime=hosted_runtime)
+    _require_pre_runtime_binary_pins(config)
     identity = HOSTED_IDENTITY if hosted_runtime else None
     if any(owned_resources(config, identity=identity).values()):
         raise RuntimeError('node must be drained')
@@ -503,9 +525,7 @@ def serve(config_path, root, unit, manifest_path, *, hosted_runtime=False, run_i
     })
     if hosted_runtime:
         _check_hosted_wrapper_execution(wrapper, config['smol']['home'])
-    changed = json.loads(original)
-    changed['smol']['binary'] = str(wrapper)
-    changed['smol']['binary_sha256'] = 'sha256:' + hashlib.sha256(wrapper.read_bytes()).hexdigest()
+    changed = _bound_wrapper_config(original, wrapper)
 
     def restart():
         subprocess.run(['sudo', 'systemctl', 'restart', unit], check=True, timeout=30)

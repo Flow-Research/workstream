@@ -111,17 +111,19 @@ async def _runner_drained(runner):
 
 
 async def public_pre_launch_failure(client, factory, *, task, assignment, token, archive,
-                                    runner: RunnerFaults, stop_worker, start_worker):
+                                    runner: RunnerFaults, stop_worker, start_worker,
+                                    first_response_path: Path | None = None):
     """Pause/restore only the isolated fixture's owned general POST consumer."""
     try:
         stop_worker()
         return await _remote_pre_launch_failure(client, factory, task=task, assignment=assignment,
-            token=token, archive=archive, runner=runner)
+            token=token, archive=archive, runner=runner, first_response_path=first_response_path)
     finally:
         await start_worker()
 
 
-async def _remote_pre_launch_failure(client, factory, *, task, assignment, token, archive, runner):
+async def _remote_pre_launch_failure(client, factory, *, task, assignment, token, archive, runner,
+                                     first_response_path=None):
     """One remote launch fault on an already approved/claimed current public task.
 
     The actual locked-image-compatible ZIP is supplied by the caller. The general
@@ -143,9 +145,16 @@ async def _remote_pre_launch_failure(client, factory, *, task, assignment, token
     failed_cleanup = await _runner_drained(runner)
     failed_trace = await runner.snapshot()
     records = failed_trace['events'][before['cursor']:]
+    row = await _selected(factory, key)
+    if first_response_path is not None:
+        with first_response_path.open('x', encoding='utf-8') as stream:
+            first_response_path.chmod(0o600)
+            json.dump({'public_failure': failure, 'selected_pre': {'id': str(row.id),
+                       'status': row.status, 'terminal_digest': row.terminal_digest,
+                       'terminal': row.terminal_json}, 'runtime_event_count': len(records)},
+                      stream, default=str, sort_keys=True)
     machines = assert_trace_launches(records, creates=1, executions=0)
     assert_trace_launches(records, creates=0, executions=0, project=False)
-    row = await _selected(factory, key)
     _require(row.status == 'infrastructure_failed' and row.terminal_json['execution'] is None
              and row.terminal_json['infrastructure_failure_code'] == 'implementation_unavailable'
              and row.request_json['policy']['entries'][0]['registry']['image_digest'] == runner.profile.image_digest,

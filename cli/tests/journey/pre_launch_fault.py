@@ -83,6 +83,7 @@ async def _run(
     profile: RunnerFaultProfile,
     stop_worker,
     start_worker,
+    first_response_path: Path,
 ):
     root = Path(__file__).resolve().parents[3]
     sys.path.insert(0, str(root / "backend" / "tests"))
@@ -119,6 +120,7 @@ async def _run(
                 runner=RunnerFaults(profile),
                 stop_worker=stop_worker,
                 start_worker=start_worker,
+                first_response_path=first_response_path,
             )
     finally:
         await engine.dispose()
@@ -136,6 +138,13 @@ def run_pre_launch_fault(
 ) -> None:
     """Keep remote evidence private; report only the bounded case completion."""
     archive = _package(client, "correct").read_bytes()
+    evidence = Path(os.environ["WORKSTREAM_CLI_JOURNEY_EVIDENCE"])
+    if not evidence.is_absolute() or evidence.is_symlink():
+        raise RuntimeError("fault evidence directory differs")
+    evidence.mkdir(mode=0o700, parents=True, exist_ok=True)
+    if not stat.S_ISDIR(evidence.lstat().st_mode) or evidence.stat().st_uid != os.getuid():
+        raise RuntimeError("fault evidence directory owner differs")
+    evidence.chmod(0o700)
     result = asyncio.run(
         _run(
             origin,
@@ -146,10 +155,9 @@ def run_pre_launch_fault(
             archive,
             profile,
             *controls,
+            evidence / "remote-pre-launch-first-response.json",
         )
     )
-    evidence = Path(os.environ["WORKSTREAM_CLI_JOURNEY_EVIDENCE"])
-    evidence.mkdir(mode=0o700, parents=True, exist_ok=True)
     path = evidence / "remote-pre-launch-fault.json"
     with path.open("x", encoding="utf-8") as stream:
         path.chmod(0o600)

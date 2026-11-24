@@ -250,6 +250,29 @@ class PrivateFaultControls(unittest.TestCase):
             finally:
                 old_parent.chmod(0o700)
 
+    def test_fault_wrapper_rebinds_exact_runtime_and_pre_binary_pins(self):
+        wrapper = self.root / 'runtime-wrapper'
+        wrapper.write_bytes(b'qualified temporary wrapper')
+        old_digest = 'sha256:' + 'a' * 64
+        original = {'smol': {'binary': '/qualified/smolvm', 'binary_sha256': old_digest},
+                    'pre': {'smol_binary_sha256': old_digest, 'platform_root_sha256': 'root-pin'},
+                    'unrelated': {'retained': True}}
+        encoded = json.dumps(original).encode()
+        changed = faults._bound_wrapper_config(encoded, wrapper)
+        self.assertEqual(changed['smol']['binary'], str(wrapper))
+        self.assertEqual(changed['smol']['binary_sha256'], digest(wrapper))
+        self.assertEqual(changed['pre']['smol_binary_sha256'], digest(wrapper))
+        self.assertEqual(changed['pre']['platform_root_sha256'], 'root-pin')
+        self.assertEqual(changed['unrelated'], original['unrelated'])
+        self.assertEqual(json.loads(encoded), original)
+        original['pre']['smol_binary_sha256'] = 'sha256:' + 'b' * 64
+        with self.assertRaisesRegex(ValueError, 'pins differ'):
+            faults._bound_wrapper_config(json.dumps(original).encode(), wrapper)
+        del original['pre']
+        legacy = faults._bound_wrapper_config(json.dumps(original).encode(), wrapper)
+        self.assertNotIn('pre', legacy)
+        self.assertEqual(legacy['smol']['binary_sha256'], digest(wrapper))
+
     def test_launch_trace_rejects_extra_execution_and_reset_deadline(self):
         trace = self.root / 'runtime-trace.jsonl'
         lease = {'epoch': 'original', 'expires_ms': 1000}
@@ -310,7 +333,8 @@ class PrivateFaultControls(unittest.TestCase):
     def test_busy_node_refused_before_control_or_config_mutation(self):
         config_path = self.root / 'service.json'
         image_digest = 'sha256:' + 'a' * 64
-        original = json.dumps({'cache': [{'platform_manifest_digest': image_digest}]}).encode()
+        original = json.dumps({'smol': {'binary_sha256': 'sha256:' + 'b' * 64},
+                               'cache': [{'platform_manifest_digest': image_digest}]}).encode()
         config_path.write_bytes(original)
         config_path.chmod(0o600)
         control_root = self.root / 'control'

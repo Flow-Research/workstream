@@ -973,6 +973,28 @@ finally:
                             await client.snapshot()
         asyncio.run(exercise())
 
+    def test_mismatched_pre_pin_refuses_before_fault_setup(self):
+        from experiments.pilot04_external_checker_runtime import public_node_faults as owner
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            config = directory / 'node.json'
+            original = json.dumps({'smol': {'binary_sha256': 'sha256:' + 'a' * 64},
+                'pre': {'smol_binary_sha256': 'sha256:' + 'b' * 64},
+                'cache': [{'platform_manifest_digest': 'sha256:' + 'c' * 64}]}).encode()
+            config.write_bytes(original)
+            control_root = directory / 'control'
+            with patch.object(owner, 'validate_node', return_value={'verified': True}), \
+                    patch.object(owner, 'owned_resources') as resources, \
+                    patch.object(owner, 'ForeignControl') as foreign:
+                with self.assertRaisesRegex(ValueError, 'pins differ before fault setup'):
+                    owner.serve(config, control_root, 'owned-unit', directory / 'manifest',
+                                run_id=str(uuid4()), maximum_seconds=1,
+                                image_digest='sha256:' + 'c' * 64)
+            self.assertFalse(control_root.exists())
+            self.assertEqual(config.read_bytes(), original)
+            resources.assert_not_called()
+            foreign.assert_not_called()
+
     def test_finite_supervisor_and_hup_restore_only_owned_config(self):
         from experiments.pilot04_external_checker_runtime import public_node_faults as owner
         import signal
@@ -1101,7 +1123,8 @@ finally:
 
 
 class RemotePreLaunchContracts(unittest.TestCase):
-    def exercise(self, *, omit_delete=False, replay_allocates=False, wrong_image=False, unknown=False):
+    def exercise(self, *, omit_delete=False, replay_allocates=False, wrong_image=False,
+                 unknown=False, missing_create=False, first_response_path=None):
         from experiments.pilot04_external_checker_runtime import public_runtime_trials as runtime
         from experiments.pilot04_external_checker_runtime.public_runner_faults import FaultOutcomeUnknown
 
@@ -1110,7 +1133,8 @@ class RemotePreLaunchContracts(unittest.TestCase):
             lease = {'name': name, 'epoch': 'epoch', 'expires_ms': 100, 'lifetime_ms': 10}
             return [{'operation': operation, 'name': name, 'project': True, 'lease': lease}
                     for operation in operations]
-        failed = events('failed-vm', ['create', 'start'] + ([] if omit_delete else ['delete']))
+        failed = ([] if missing_create else events('failed-vm',
+                  ['create', 'start'] + ([] if omit_delete else ['delete'])))
         replay = failed + (events('unexpected', ['create']) if replay_allocates else [])
         recovered = replay + events('recovered-vm', ['create', 'start', 'exec', 'delete'])
         traces = [{'cursor': len(records), 'events': records}
@@ -1150,7 +1174,8 @@ class RemotePreLaunchContracts(unittest.TestCase):
             try:
                 result = asyncio.run(runtime.public_pre_launch_failure(None, None, task='task', assignment='assignment',
                     token='private-token', archive=b'actual-zip', runner=Runner(),
-                    stop_worker=lambda: worker_events.append('stop'), start_worker=resume))
+                    stop_worker=lambda: worker_events.append('stop'), start_worker=resume,
+                    first_response_path=first_response_path))
             finally:
                 self.assertEqual(worker_events, ['stop', 'start'])
         self.assertEqual([call.args[-1] for call in source.await_args_list], [503, 503, 202])
@@ -1172,6 +1197,20 @@ class RemotePreLaunchContracts(unittest.TestCase):
                 ('wrong_image', 'failed PRE lost exact selected image')):
             with self.subTest(fault=fault), self.assertRaisesRegex(RuntimeError, message):
                 self.exercise(**{fault: True})
+
+    def test_first_response_is_retained_before_native_count_refusal(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'first-response.json'
+            with self.assertRaisesRegex(RuntimeError, 'expected fresh machines'):
+                self.exercise(missing_create=True, first_response_path=path)
+            body = json.loads(path.read_text())
+            self.assertEqual(body['public_failure']['error']['code'],
+                             'submission_infrastructure_unavailable')
+            self.assertEqual(body['selected_pre']['status'], 'infrastructure_failed')
+            self.assertEqual(body['selected_pre']['terminal']['infrastructure_failure_code'],
+                             'implementation_unavailable')
+            self.assertEqual(body['runtime_event_count'], 0)
+            self.assertEqual(path.stat().st_mode & 0o777, 0o600)
 
     def test_partial_owned_worker_pause_failure_still_restores_worker(self):
         from experiments.pilot04_external_checker_runtime import public_runtime_trials as runtime

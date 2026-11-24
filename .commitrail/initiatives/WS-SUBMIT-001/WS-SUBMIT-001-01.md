@@ -10481,3 +10481,32 @@ structural change. That debt must shrink through honest behavior relocation,
 not a hash-only rebaseline. Actual D PostgreSQL replay remains root-batched.
 
 Retained revision-race replay passed all3 cases in96.24s at a3d6178dc, schema0091: both variants of test_dispatch_commit_requires_current_predecessor_checker_fence plus test_replacement_holds_task_custody_against_successor_generation. `/tmp/submission-retained-revision-races.log` and `.json` confirm complete isolated database cleanup. This verifies the preserved stronger SQL/race coverage after retiring the impossible duplicate. No constraints, product guards or time budgets changed.
+
+The next isolated pre2 trial used clean `9e8ab8130a73a1c86566908c09f8528bc2ed645d`
+and the staged `18e8adc0-48ae-406e-8f7e-edcb80e345bc` supervisor. The real
+checker-UID wrapper preflight and public guide/task claim passed, but the public
+request returned infrastructure 503 before any native create. The unchanged
+launch-count assertion failed; the read-only runner snapshot recorded zero
+runtime events and drained owned resources. The isolated database and MinIO
+bucket cleaned successfully. The runner journal identified the exact refusal:
+PRE configured binary identity differed because the temporary fault config
+changed `smol.binary_sha256` to the wrapper digest but retained the original
+`pre.smol_binary_sha256`. This is failed fixture evidence, not the required
+injected native launch proof.
+
+The narrow fixture repair requires an existing PRE binary pin to match the
+original Smol pin, then sets both temporary pins to the exact wrapper digest.
+That original-pin check runs before creating fault controls or foreign node
+resources, and a negative fixture confirms rejection leaves both absent.
+The original config bytes remain available for the existing restore. A config
+without PRE retains its older POST-only fault path. A focused test checks both
+new pins, old-pin mismatch refusal, unchanged unrelated fields and the legacy
+path. The next attempt also stores the first public failure and selected PRE
+terminal in a private local receipt before the native count assertion, so an
+early refusal cannot disappear with isolated database cleanup. The evidence
+directory is made owner-private before this write. The existing busy-node
+fixture now includes a valid Smol pin so it still reaches the busy-resource
+guard. Focused supervisor and hosted attachment tests pass
+`54 passed, 77 subtests passed`; changed-file Ruff
+and `git diff --check` pass. A real third trial and supervisor restoration are
+still required before any native launch-failure qualification claim.
