@@ -8662,3 +8662,19 @@ Structure, Ruff, diff and Commitrail checks passed; scoped ARCH/SEC reported no
 finding. These are real HTTP/SQL with controlled guest transport, not native
 provider or full deployed journey qualification. Other obsolete preparation
 callers remain outside this two-case retirement.
+
+The two-case QA/test-delta review closed PASS WITH LOW RISKS at clean59abae501;
+QA-REVISION-REJECTION-001 is resolved. Runner commitdc7fe4b4a was integrated as
+179395685 without conflicts. Import-only application/worker checks passed with
+an explicit memory broker URL (not broker delivery qualification). The runner
+owner reports real mTLS health, native POST and streamed ZIP PRE with exact
+bindings and empty workspaces afterward; expected checker failures in those
+smokes are not successful governed acceptance.
+
+Frozen runner ARCH/SEC review requires three repairs before app deployment:
+REMOTE-MODEL-01 binds callbacks to the issuing connection instead of a global
+replaceable app bridge; REMOTE-PROXY-02 drains copy tasks and closes the native
+socket on cancellation/timeout; REMOTE-STAGE-03 reconciles or safely quarantines
+staged files left by process death before admitting work. The runner owner owns
+the batch repair and regression tests. No app configuration or restart occurred.
+These are concrete runtime findings; no native production-ready claim is made.
