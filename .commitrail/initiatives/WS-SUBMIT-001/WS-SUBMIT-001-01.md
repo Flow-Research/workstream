@@ -9161,3 +9161,42 @@ The AWS credential guide also names the dedicated Celery process explicitly
 and links the canonical source-key specification instead of duplicating its
 versioned key example. This resolves stale-vocabulary scan false positives
 without changing the scanner, IAM policy, runtime behavior or key format.
+
+### Refresh pending-operation MCP schema descriptions
+
+Configured backend OpenAPI comparison atc853743b6 passed142 and failed2
+in150.95s. Recursive comparison isolates the entire drift to the existing
+PendingSubmissionOperation description missing from task_get,
+task_work_context_get, management_task_work_context_get and management_task_get
+snapshots. Allowed change: those four descriptions, canonical hashes and source
+SHA provenance, plus this evidence. No schema properties, routes, validation,
+authorization or product behavior changes. Low-risk contract metadata refresh;
+root review and existing configured drift/tamper-evidence checks verify exact
+backend equality. Human review focus: only description/hash/provenance differs.
+The current full MCP run remains untouched until terminal. Clean wheel startup
+passed1/15.91s with isolated installed wheels and no backend import availability
+(/tmp/submission-mcp-wheel-current.log); this is package independence only.
+
+The native journey V3 stopped before PRE because its local runtime omitted the
+existing isolated guide parser, and its cleanup profile had no distinct upload
+principal. Its isolated PostgreSQL/MinIO cleanup completed. Root started the
+existing parser image39fda85bf137cac056f0e04b1f59bb5ce908135ffb3899f568fd518b5c3be706
+with network disabled, read-only root, bounded RAM/CPU/process/tmp resources and
+only KILL/SETGID/SETUID capabilities. Parser source is unchanged since609f59ed7.
+An exact local client ACL permits host UID1000 access; socket10002:10001/0660
+and parent10002:10001/0750 remain enforced. A canonical client read of a
+source-bound Markdown document passed; receipts are
+/tmp/submission-guide-parser-{runtime,proof}.json. This local dependency repair
+is not hosted activation or public submission acceptance evidence.
+
+Full non-integration MCP suite completed before the snapshot edit:955passed,
+6environment-selected skips,1dependency deprecation warning in3563.09s
+(/tmp/submission-mcp-current.log). Separately configured OpenAPI checks exposed
+the two failures above; all other configured checks passed. After the exact
+four-snapshot refresh, both affected modules passed45/34.62s, including live
+backend OpenAPI equality, canonical hashes and current claim HTTP validation
+(/tmp/submission-mcp-snapshot-repair.log). Together with the clean-wheel check,
+these exercise the six environment-selected checks. Root compared parsed JSON
+before/after: only the description, canonical hash and repository SHA differ.
+No integration/deployed acceptance claim. Markdown links, Commitrail and diff
+checks pass.

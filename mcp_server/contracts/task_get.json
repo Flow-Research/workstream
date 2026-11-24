@@ -1,5 +1,5 @@
 {
-  "canonical_sha256": "2974bc5e8d6c4c78b634000fcf5d39971b61c544d4aa7096d695db4552ab23ee",
+  "canonical_sha256": "410f10c19f0e2277cbca604cad4a80232d2c9a9f736a446111392945e1475d74",
   "components": {
     "schemas": {
       "ApiError": {
@@ -234,6 +234,7 @@
         "type": "object"
       },
       "PendingSubmissionOperation": {
+        "description": "Narrow current intake identity and stage, separate from Submission history.",
         "properties": {
           "operation_id": {
             "format": "uuid",
@@ -655,6 +656,6 @@
     "method": "GET",
     "openapi_version": "3.1.0",
     "path": "/api/v1/tasks/{task_id}",
-    "repository_sha": "f0431385573eb53353c5ffc3c6cdb6a93d206b73"
+    "repository_sha": "c853743b689a46711c13e1d800cdd27ab8230ac2"
   }
 }
