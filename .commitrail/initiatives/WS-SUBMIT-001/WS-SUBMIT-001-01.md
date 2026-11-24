@@ -8823,3 +8823,28 @@ Retained module checks passed26/26 in19.19s. Current remote PRE cancellation
 checks passed6/6 in7.56s. Unused private fixture helpers/imports were removed
 afterward; executable retained test bodies are unchanged. Ruff/diff passed.
 No production factory or retained-data reader has been removed in this batch.
+
+QA approved c4873cc36 test retirement. Next replace the old superseded-cause SQL
+fixture with current public source intake, valid/superseded controls. Allowed:
+predecessor custody test and this record only. During upload advance the real
+checker fence; freeze only application TASK context/selected-scope reads to the
+previous allowed facts so the actual selected PRE INSERT guard is exercised.
+Keep all native SQL guards and writes real. Require exact23514 routed-cause
+failure, no PRE execution/admission/Submission, retained sealed source charge;
+positive control must insert/run PRE and accept202. Medium authority-test risk;
+isolated PostgreSQL pair, Ruff/structure and focused QA/ARCH review. No production,
+schema or retained-data edits. Foreign-cause SQL fixture remains next.
+
+The valid control passed in the first pair run. Its negative parameter and an
+isolated retry failed earlier in fixture creation at the unchanged selected PRE
+timestamp ordering guard, before the tested upload. Added exception-only clock
+value notes (no timestamp/guard substitution); the targeted negative then passed
+in31.11s with exact23514 routed-cause error, zero PRE calls and charged failed
+source. Receipts: /tmp/submission-current-pre-sql-fence.json (mixed result),
+/tmp/submission-current-pre-sql-fence-retry.json (fixture failure), and
+/tmp/submission-pre-clock-diagnostic.json (negative pass); all cleanup complete,
+schema0090. Positive and negative evidence is from separate runs, not one clean
+aggregate. The intermittent fixture timing cause remains unresolved; a100000
+sample database-clock probe observed no backwards samples and does not establish
+that no clock adjustment occurred. Retain diagnostic notes for recurrence.
+Structure passed before exception-note-only addition; Ruff/diff checked final.

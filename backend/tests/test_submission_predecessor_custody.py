@@ -483,59 +483,100 @@ async def test_replacement_dispatch_sql_rejects_cause_and_receipt_substitution(
                 ) is False, field
 
 
+@pytest.mark.parametrize("advance_fence", [False, True])
 async def test_sql_selected_pre_reservation_rejects_superseded_checker_cause(
-    tmp_path,
-    isolated_database_env,
+    tmp_path, isolated_database_env, monkeypatch, advance_fence,
 ):
+    from sqlalchemy.ext.asyncio import AsyncSession
+    from app.modules.artifacts.intake.foreground_admission import ForegroundIntakeAdmission
+    from app.modules.artifacts.intake.models import SubmissionIntakeOperation, SubmissionSourceCharge
+    from app.modules.checkers.selected_pre_submit_coordination import SelectedPreSubmitCoordinator
+    from tests.tasks.submission_dispatch.test_revision_capacity import _revision_http_runtime, _revision_upload_headers
+    from tests.tasks.test_public_submission_intake import _client
+
+    from app.modules.checkers.api.selected_pre_submit import SelectedPreSubmitTerminalFacts
+    original_terminal_check = SelectedPreSubmitTerminalFacts.__post_init__
+
+    def diagnose_terminal_clock(terminal, source_contracts):
+        try:
+            return original_terminal_check(terminal, source_contracts)
+        except ValueError as exc:
+            exc.add_note(f"PRE clock values: queued={terminal.queued_at.isoformat()} "
+                         f"started={terminal.started_at.isoformat()} completed={terminal.completed_at.isoformat()}")
+            raise
+
+    monkeypatch.setattr(SelectedPreSubmitTerminalFacts, "__post_init__", diagnose_terminal_clock)
     async with remediation_source(tmp_path, isolated_database_env) as h:
         source_id = await _fixture_revision_context(h)
-        admission_id = await _verified_admission(
-            h.factory,
-            h.store,
-            h.namespace,
-            h.settings,
-            h.actor_context,
-            _replacement_request(
-                h,
-                revision_archive(h.data),
-                predecessor_id=h.created.submission_id,
-                idempotency_key=new_record_id(),
-            ),
-        )
-        positive = await _queued_selected_body(h, admission_id)
-        assert positive["request_json"]["admission_lineage"][
-            "checker_remediation_manifest_id"
-        ] == str(source_id)
-        await _insert_selected_reservation(h, positive)
-        rejected = await _queued_selected_body(h, admission_id)
-        await reserve(h, await next_request(h))
+        data, frozen, sql_errors, opened = revision_archive(h.data), [], [], []
         before = await _snapshot(h)
+        original_context = ForegroundIntakeAdmission._validate_context
+        original_scope = SelectedPreSubmitCoordinator._lock_source
+        original_flush = AsyncSession.flush
+
+        async def stale_context(owner, *args):
+            if advance_fence and frozen:
+                return frozen[0]
+            value = await original_context(owner, *args)
+            frozen.append(value)
+            assert value[0].checker_remediation_manifest_id == source_id
+            return value
+
+        async def stale_selected_scope(owner, facts):
+            if advance_fence:
+                assert facts.admission_lineage.checker_remediation_manifest_id == source_id
+                return
+            await original_scope(owner, facts)
+
+        async def observed_flush(session, *args, **kwargs):
+            try:
+                return await original_flush(session, *args, **kwargs)
+            except IntegrityError as exc:
+                sql_errors.append((exc.orig.sqlstate, str(exc.orig)))
+                raise
+
+        async def body():
+            opened.append(True)
+            if advance_fence:
+                await reserve(h, await next_request(h))
+                async with h.factory.begin() as session:
+                    with pytest.raises(TaskSubmissionContextUnavailable):
+                        await task_submission_context_port(session).lock_submission_context(_context_request(h))
+            yield data
+
+        async with _client(h, monkeypatch, isolated_database_env) as client:
+            _, errors, calls = await _revision_http_runtime(h, client, tmp_path, monkeypatch, data)
+            headers = _revision_upload_headers(h) | {"Content-Length": str(len(data))}
+            monkeypatch.setattr(ForegroundIntakeAdmission, "_validate_context", stale_context)
+            monkeypatch.setattr(SelectedPreSubmitCoordinator, "_lock_source", stale_selected_scope)
+            monkeypatch.setattr(AsyncSession, "flush", observed_flush)
+            response = await client.post(f"/api/v1/tasks/{h.request.task_id}/submissions",
+                                         headers=headers, content=body())
+        assert opened == [True] and frozen
+        assert not errors, errors
         async with h.factory() as session:
-            current = await session.scalar(
-                text(
-                    "SELECT current_run_id FROM public.checker_submission_fences WHERE submission_id=:id"
-                ),
-                {"id": h.created.submission_id},
-            )
-            routed = await session.scalar(
-                text(
-                    "SELECT checker_run_id FROM public.task_post_submit_routing_manifests WHERE id=:id"
-                ),
-                {"id": source_id},
-            )
-            assert current != routed
-        with pytest.raises(
-            IntegrityError, match="selected PRE reservation routed cause is not current"
-        ) as denied:
-            await _insert_selected_reservation(h, rejected)
-        assert denied.value.orig.sqlstate == "23514"
-        assert await _snapshot(h) == before
-        async with h.factory() as session:
-            admission = await session.get(SubmissionBundleAdmission, str(admission_id))
-            assert admission.status == "ready"
-            assert admission.checker_remediation_manifest_id == source_id
-            assert await session.scalar(text("SELECT count(*) FROM public.submissions")) == 1
+            operation = (await session.scalars(select(SubmissionIntakeOperation).where(
+                SubmissionIntakeOperation.idempotency_key == headers["Idempotency-Key"]))).one()
+            charge = await session.get(SubmissionSourceCharge, operation.id)
+            assert charge.state == "sealed" and charge.accounted_bytes == len(data)
+            assert operation.finalized_submission_id is None
+            assert await session.scalar(text("SELECT count(*) FROM submissions")) == 1
             await no_economic_effects(session)
+            if advance_fence:
+                assert response.status_code == 503, response.text
+                assert response.json()["error"]["code"] == "submission_infrastructure_unavailable"
+                assert len(sql_errors) == 1 and sql_errors[0][0] == "23514"
+                assert "selected PRE reservation routed cause is not current" in sql_errors[0][1]
+                assert calls == [] and await _snapshot(h) == before
+                assert operation.state == "failed" and operation.acceptance_receipt is None
+                assert operation.finalization_event_id is None
+            else:
+                assert response.status_code == 202, response.text
+                assert sql_errors == [] and len(calls) == 1
+                assert operation.state == "finalization_pending"
+                selected = (await session.scalars(select(SelectedPreSubmitRun).where(
+                    SelectedPreSubmitRun.source_operation_id == operation.id))).one()
+                assert selected.eligible and selected.request_json["admission_lineage"]["checker_remediation_manifest_id"] == str(source_id)
 
 
 async def _assert_foreign_verified_admission_rejected(local, foreign, admission_id, before):
