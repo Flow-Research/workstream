@@ -100,11 +100,11 @@ def _revision_upload_headers(h):
     }
 
 
-async def _revision_http_runtime(h, client, tmp_path, monkeypatch, data):
+async def _revision_http_runtime(h, client, tmp_path, monkeypatch, data, *, outcome="completed"):
     """Use controlled PRE with the already claimed source namespace capacity."""
     from tests.artifacts.test_submission_foreground_command import configure_source_http
     _, settings, errors, calls = await configure_source_http(
-        h.factory, client, tmp_path, monkeypatch, data, "completed")
+        h.factory, client, tmp_path, monkeypatch, data, outcome)
     settings = settings.model_copy(update={"submission_execution_profile": {
         **settings.submission_execution_profile,
         "capacity": {"maximum_total_bytes": 16 * 1024**2},

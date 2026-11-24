@@ -332,99 +332,73 @@ async def test_replacement_without_routed_cause_denied_before_bytes(
 async def test_unchanged_replacement_archive_or_manifest_denied(
     tmp_path, isolated_database_env, monkeypatch,
 ):
+    from tests.selected_predecessor_fixtures import assert_public_revision_rejection
+    from tests.tasks.submission_dispatch.test_revision_capacity import _revision_http_runtime, _revision_upload_headers
+    from tests.tasks.test_public_submission_intake import _client
+
     provider_writes = _trace_provider_writes(monkeypatch)
     async with remediation_source(tmp_path, isolated_database_env) as h:
-        await _fixture_revision_context(h)
-        baseline = await _snapshot(h)
+        source_id = await _fixture_revision_context(h)
+        retained = await _replacement_history(h, source_id, h.created.submission_id)
         provider_writes.clear()
-        predecessor_id = h.created.submission_id
-        for data, expected in (
-            (h.data, "submission_archive_unchanged"),
-            (
-                _same_semantics_different_archive(h.data),
-                "submission_manifest_unchanged",
-            ),
-        ):
-            request = _replacement_request(
-                h, data, predecessor_id=predecessor_id, idempotency_key=new_record_id(),
-            )
-            with pytest.raises(SubmissionBundlePreparationCheckFailed) as failure:
-                await _prepare(h, request)
-            await _assert_default_failure(h, request, failure.value, baseline, expected)
-            baseline = await _snapshot(h)
+        async with _client(h, monkeypatch, isolated_database_env) as client:
+            route = f"/api/v1/tasks/{h.request.task_id}/submissions"
+            for data, expected in (
+                (h.data, "submission_archive_unchanged"),
+                (_same_semantics_different_archive(h.data), "submission_manifest_unchanged"),
+            ):
+                before = await _snapshot(h)
+                _, errors, calls = await _revision_http_runtime(
+                    h, client, tmp_path, monkeypatch, data, outcome="rejected")
+                headers = _revision_upload_headers(h)
+                response = await client.post(route, headers=headers, content=data)
+                await assert_public_revision_rejection(
+                    h, response, UUID(headers['Idempotency-Key']), data, before, expected)
+                assert len(calls) == 1 and not errors, errors
+                assert provider_writes == []
+                assert await _replacement_history(h, source_id, h.created.submission_id) == retained
+            corrected = revision_archive(h.data)
+            _, errors, calls = await _revision_http_runtime(h, client, tmp_path, monkeypatch, corrected)
+            accepted = await client.post(route, headers=_revision_upload_headers(h), content=corrected)
+            assert accepted.status_code == 202, accepted.text
+            assert accepted.json()['status'] == 'accepted' and accepted.json()['replayed'] is False
+            assert len(calls) == 1 and not errors, errors
             assert provider_writes == []
-
-        admission_id = await _verified_admission(
-            h.factory, h.store, h.namespace, h.settings, h.actor_context,
-            _replacement_request(
-                h, revision_archive(h.data), predecessor_id=predecessor_id,
-                idempotency_key=new_record_id(),
-            ),
-        )
-        async with h.factory() as session:
-            admission = await session.get(SubmissionBundleAdmission, str(admission_id))
-            assert admission.status == "ready"
 
 
 async def test_blocked_replacement_precheck_preserves_revision_state(
-    tmp_path,
-    isolated_database_env,
-    monkeypatch,
+    tmp_path, isolated_database_env, monkeypatch,
 ):
+    from tests.selected_predecessor_fixtures import assert_public_revision_rejection
+    from tests.tasks.submission_dispatch.test_revision_capacity import _revision_http_runtime, _revision_upload_headers
+    from tests.tasks.test_public_submission_intake import _client
+
     provider_writes = _trace_provider_writes(monkeypatch)
     async with remediation_source(tmp_path, isolated_database_env) as h:
-        await _fixture_revision_context(h)
+        source_id = await _fixture_revision_context(h)
+        retained = await _replacement_history(h, source_id, h.created.submission_id)
         provider_writes.clear()
         changed_data = revision_archive(h.data)
-        baseline = await _snapshot(h)
-        request = replace(
-            _replacement_request(
-                h,
-                _secret_archive(changed_data),
-                predecessor_id=h.created.submission_id,
-                idempotency_key=new_record_id(),
-            ),
-            contributor_attestation="",
-        )
-        with pytest.raises(SubmissionBundlePreparationCheckFailed) as blocked:
-            await _prepare(h, request)
-        await _assert_default_failure(
-            h,
-            request,
-            blocked.value,
-            baseline,
-            "high_confidence_secret_detected",
-        )
-        assert tuple(
-            warning.code for warning in blocked.value.facts.workstream_default.warnings
-        ) == ("submission_attestation_missing",)
-        assert provider_writes == []
-        async with h.factory() as session:
-            assert await session.scalar(text("SELECT count(*) FROM public.submissions")) == 1
-            assert (
-                await session.scalar(
-                    text("SELECT status FROM public.workstream_tasks WHERE id=:id"),
-                    {"id": h.request.task_id},
-                )
-                == "needs_revision"
-            )
-
-        admission_id = await _verified_admission(
-            h.factory,
-            h.store,
-            h.namespace,
-            h.settings,
-            h.actor_context,
-            _replacement_request(
-                h,
-                changed_data,
-                predecessor_id=h.created.submission_id,
-                idempotency_key=new_record_id(),
-            ),
-        )
-        async with h.factory() as session:
-            admission = await session.get(SubmissionBundleAdmission, str(admission_id))
-            assert admission.status == "ready"
+        data = _secret_archive(changed_data)
+        before = await _snapshot(h)
+        async with _client(h, monkeypatch, isolated_database_env) as client:
+            route = f"/api/v1/tasks/{h.request.task_id}/submissions"
+            _, errors, calls = await _revision_http_runtime(
+                h, client, tmp_path, monkeypatch, data, outcome="rejected")
+            headers = _revision_upload_headers(h) | {'X-Contributor-Attestation': ''}
+            response = await client.post(route, headers=headers, content=data)
+            results = await assert_public_revision_rejection(
+                h, response, UUID(headers['Idempotency-Key']), data, before, 'high_confidence_secret_detected')
+            assert [r['warning_code'] for r in results if r['status'] == 'warning'] == ['submission_attestation_missing']
+            assert len(calls) == 1 and not errors, errors
+            assert provider_writes == []
+            assert await _replacement_history(h, source_id, h.created.submission_id) == retained
+            _, errors, calls = await _revision_http_runtime(h, client, tmp_path, monkeypatch, changed_data)
+            accepted = await client.post(route, headers=_revision_upload_headers(h), content=changed_data)
+            assert accepted.status_code == 202, accepted.text
+            assert accepted.json()['status'] == 'accepted' and accepted.json()['replayed'] is False
+            assert len(calls) == 1 and not errors, errors
+            assert provider_writes == []
 
 
 async def test_replacement_loads_exact_consumed_predecessor(

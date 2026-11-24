@@ -8637,3 +8637,17 @@ These separate runs close the retained verifier regression scope, not a single
 aggregate final-head run. Spec20.2 still requires deployed old unsubmitted work
 to be drained or explicitly stale before cutover; restored historical test
 inputs do not authorize deploying with pending old submissions.
+
+### Move revision rejection controls to the raw-ZIP command
+
+Allowed: the unchanged-archive/semantic-manifest and secret-rejection cases in
+test_submission_predecessor_custody.py, their selected_predecessor_fixtures
+assertions, the existing revision HTTP runtime helper, and this record. Replace
+their old prepare/ready-admission calls with public raw-ZIP requests and current
+operation receipts. Preserve exact rejection codes, no project execution after
+default failure, persisted terminal/authority/source binding, unchanged retained
+artifact/Submission/POST facts, needs_revision task state, missing-attestation
+warning and a corrected fresh-key acceptance. New source uploads are expected
+and remain charged/cleanup-owned; no SHA-artifact put is permitted. No production,
+schema, runner or broader test deletion. Risk: medium workflow-test migration;
+run both cases on PostgreSQL, structure/Ruff, then scoped QA/ARCH review.
