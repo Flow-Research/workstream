@@ -131,7 +131,9 @@ def main():
             or os.environ.get("WORKSTREAM_CLI_JOURNEY_SUBMIT") == "1"
             or not os.environ.get("WORKSTREAM_CLI_JOURNEY_EVIDENCE")
         ):
-            raise RuntimeError("PRE launch fault requires the isolated setup and task path")
+            raise RuntimeError(
+                "PRE launch fault requires the isolated setup and task path"
+            )
         fault_profile = None
         if fault_mode:
             from pre_launch_fault import load_fault_profile

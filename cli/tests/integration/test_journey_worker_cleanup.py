@@ -37,7 +37,14 @@ def test_owned_worker_group_reaps_leader_and_term_resistant_child(tmp_path, canc
         "print(child.pid,flush=True); time.sleep(360)"
     )
     leader = subprocess.Popen(
-        [sys.executable, "-c", leader_code, str(ready), str(int(cancelled)), child_code],
+        [
+            sys.executable,
+            "-c",
+            leader_code,
+            str(ready),
+            str(int(cancelled)),
+            child_code,
+        ],
         start_new_session=True,
         stdout=subprocess.PIPE,
         text=True,

@@ -38,7 +38,10 @@ def _live_group_members(group_id: int) -> set[int]:
 
 
 def _stop_owned_group(
-    process: subprocess.Popen, *, graceful_seconds: float = 20, force_seconds: float = 10
+    process: subprocess.Popen,
+    *,
+    graceful_seconds: float = 20,
+    force_seconds: float = 10,
 ) -> None:
     """Stop and reap every live member of this start_new_session process group."""
     group_id = process.pid

@@ -57,13 +57,18 @@ def load_fault_profile(environment: dict[str, str]) -> RunnerFaultProfile:
     if type(body) is not dict or set(body) != PROFILE_FIELDS:
         raise RuntimeError("fault profile fields differ")
     profile = RunnerFaultProfile(
-        **(body | {
-            "identity_file": Path(body["identity_file"]),
-            "known_hosts_file": Path(body["known_hosts_file"]),
-        })
+        **(
+            body
+            | {
+                "identity_file": Path(body["identity_file"]),
+                "known_hosts_file": Path(body["known_hosts_file"]),
+            }
+        )
     )
     profile.validate()
-    if profile.image_digest != environment.get("WORKSTREAM_CLI_JOURNEY_CHECKER_IMAGE_DIGEST"):
+    if profile.image_digest != environment.get(
+        "WORKSTREAM_CLI_JOURNEY_CHECKER_IMAGE_DIGEST"
+    ):
         raise RuntimeError("fault profile image differs from approved guide")
     return profile
 
@@ -101,7 +106,9 @@ async def _run(
     engine = create_async_engine(database_url)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     try:
-        async with httpx.AsyncClient(base_url=origin, timeout=timeout, trust_env=False) as client:
+        async with httpx.AsyncClient(
+            base_url=origin, timeout=timeout, trust_env=False
+        ) as client:
             return await public_pre_launch_failure(
                 client,
                 factory,
