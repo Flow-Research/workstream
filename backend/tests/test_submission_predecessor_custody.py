@@ -836,18 +836,26 @@ async def test_nonremediation_outcome_cannot_authorize_replacement_before_bytes(
     monkeypatch,
     outcome,
 ):
-    provider_writes = _trace_provider_writes(monkeypatch)
+    from app.modules.artifacts.intake.foreground_upload import ForegroundSourceUpload
+    from tests.tasks.submission_dispatch.test_revision_capacity import _revision_http_runtime
+    from tests.tasks.test_public_submission_intake import _client
+
+    provider_writes = _trace_provider_writes(monkeypatch, operations=(
+        "begin_source_upload", "upload_source_part", "complete_source_upload", "put", "observe_put_result"))
     async with material_fixture(tmp_path, isolated_database_env) as h:
         await reserve(h)
+        failed_reads = []
         with monkeypatch.context() as failure:
             if outcome == "infrastructure_failed":
 
                 async def unavailable(*_args, **_kwargs):
+                    failed_reads.append(True)
                     raise ArtifactStoreUnavailableError("selected input unavailable")
                     yield b""  # Preserve ArtifactStore.open's async-iterator port.
 
-                failure.setattr(h.store, "open", unavailable)
+                failure.setattr(h.store, "open_source", unavailable)
             result = await live_executor(h).evaluate_post_submission(h.request)
+        assert bool(failed_reads) == (outcome == "infrastructure_failed")
         assert result.outcome == outcome
         async with h.factory() as session:
             run = await session.get(CheckerRun, str(result.attempt_id))
@@ -857,24 +865,31 @@ async def test_nonremediation_outcome_cannot_authorize_replacement_before_bytes(
             )
         before = await _snapshot(h)
         provider_writes.clear()
-        with pytest.raises(
-            SubmissionBundlePreparationRejected,
-            match="submission_bundle_preparation_context_changed",
-        ):
-            await _prepare(
-                h,
-                replace(
-                    _replacement_request(
-                        h,
-                        revision_archive(h.data),
-                        predecessor_id=h.created.submission_id,
-                        idempotency_key=new_record_id(),
-                    ),
-                    byte_source=_forbidden_bytes(),
-                ),
-            )
+        async with h.factory() as session:
+            before_operations = await session.scalar(text("SELECT count(*) FROM submission_intake_operations"))
+
+        async def forbidden_upload(*_args, **_kwargs):
+            pytest.fail("nonremediation replacement reached source upload")
+
+        async with _client(h, monkeypatch, isolated_database_env) as client:
+            _, errors, calls = await _revision_http_runtime(
+                h, client, tmp_path, monkeypatch, revision_archive(h.data))
+            monkeypatch.setattr(ForegroundSourceUpload, "receive", forbidden_upload)
+            refused = await client.post(
+                f"/api/v1/tasks/{h.request.task_id}/submissions",
+                headers={
+                    "Content-Type": "application/zip", "Idempotency-Key": str(new_record_id()),
+                    "X-Task-Assignment-Id": str(h.request.assignment_id),
+                    "X-Predecessor-Submission-Id": str(h.created.submission_id),
+                }, content=_forbidden_bytes())
+            assert refused.status_code == 404, refused.text
+            assert refused.json()["error"]["code"] == "submission_unavailable"
+            assert calls == [] and not errors
         assert await _snapshot(h) == before
         assert provider_writes == []
+        async with h.factory() as session:
+            assert await session.scalar(text("SELECT count(*) FROM submission_intake_operations")) == before_operations
+            await no_economic_effects(session)
 
 
 async def test_source_superseded_during_zip_read_stops_before_art_effects(

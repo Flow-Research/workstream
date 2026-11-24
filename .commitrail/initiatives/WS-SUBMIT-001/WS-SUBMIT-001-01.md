@@ -8713,3 +8713,21 @@ explicit predecessor context assertions. Receipt
 PostgreSQL/MinIO cleanup; its launcher HEAD was9836bfcd5 with these test edits.
 This removes only the duplicated private-method probe; the remaining old SQL
 reservation/admission fixtures still require migration before writer retirement.
+
+Next bounded test migration: the infrastructure-failed/allow-review POST cases
+must still refuse a replacement before reading bytes. Allowed files: predecessor
+custody test and this record. Replace their obsolete preparation call with public
+raw-ZIP HTTP; retain real POST outcomes, exact public refusal, unchanged ART and
+intake counts, no source upload or PRE execution. No production, schema or runner
+changes. Medium workflow-test risk; run both parameters on isolated PostgreSQL,
+Ruff/diff and focused QA review. Human focus is authority before body consumption.
+
+QA closed the preceding private-probe retirement PASS WITH LOW RISKS at02920f9ff:
+all four predecessor-field substitutions fail the new public assertion.
+The nonremediation pair first exposed a stale fixture: failing ArtifactStore.open
+no longer fails POST because current retained inputs use open_source. Moved the
+injected failure to that port and asserted it was reached. Both public refusal
+cases then passed in45.39s; /tmp/submission-public-nonremediation-repair.json
+records schema0090 and complete database/MinIO cleanup (launcher02920f9ff with
+final test edits). Structure, Ruff and diff checks passed. This is controlled
+storage failure plus real HTTP/SQL authority proof, not live provider acceptance.
