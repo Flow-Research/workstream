@@ -1124,7 +1124,8 @@ finally:
 
 class RemotePreLaunchContracts(unittest.TestCase):
     def exercise(self, *, omit_delete=False, replay_allocates=False, wrong_image=False,
-                 unknown=False, missing_create=False, first_response_path=None):
+                 unknown=False, missing_create=False, wrong_source=False,
+                 first_response_path=None):
         from experiments.pilot04_external_checker_runtime import public_runtime_trials as runtime
         from experiments.pilot04_external_checker_runtime.public_runner_faults import FaultOutcomeUnknown
 
@@ -1154,12 +1155,16 @@ class RemotePreLaunchContracts(unittest.TestCase):
             async def snapshot(self):
                 return traces.pop(0)
         registry = {'image_digest': 'sha256:' + 'a' * 64 if wrong_image else image}
-        request = {'policy': {'entries': [{'registry': registry}]}}
+        source_id = 'foreign-operation' if wrong_source else 'failed-operation'
+        request = {'policy': {'entries': [{'registry': registry}]},
+                   'source': {'location': {'operation_id': source_id}}}
         failed_row = SimpleNamespace(id='failed-pre', terminal_digest='digest', request_json=request,
+            task_id='task', source_operation_id='failed-operation',
             status='infrastructure_failed', terminal_json={'execution': None,
-                'infrastructure_failure_code': 'implementation_unavailable'})
-        fresh_row = SimpleNamespace(id='fresh-pre', request_json=request)
-        operation = SimpleNamespace(id='failed-operation', selected_pre_submit_run_id='failed-pre')
+                'infrastructure_failure_code': 'implementation_unavailable',
+                'reservation': {'source': {'location': {'operation_id': 'failed-operation'}}}})
+        fresh_row = SimpleNamespace(id='fresh-pre', source_operation_id='fresh-operation', request_json=request)
+        operation = SimpleNamespace(id='failed-operation', selected_pre_submit_run_id=None)
         failure = {'error': {'code': 'submission_infrastructure_unavailable'}}
         receipt = {'operation_id': 'fresh-operation', 'status': 'accepted', 'replayed': False}
         source = AsyncMock(side_effect=[failure, failure, receipt])
@@ -1194,7 +1199,8 @@ class RemotePreLaunchContracts(unittest.TestCase):
         self.exercise()
         for fault, message in (('omit_delete', 'lacks deletion'),
                 ('replay_allocates', 'same-key failure replay changed custody'),
-                ('wrong_image', 'failed PRE lost exact selected image')):
+                ('wrong_image', 'failed PRE lost exact selected image'),
+                ('wrong_source', 'changed its exact PRE')):
             with self.subTest(fault=fault), self.assertRaisesRegex(RuntimeError, message):
                 self.exercise(**{fault: True})
 

@@ -161,7 +161,10 @@ async def _remote_pre_launch_failure(client, factory, *, task, assignment, token
              'remote failed PRE lost exact selected image or terminal infrastructure custody')
     operation = await _assert_source_failure(factory, task, key, len(archive), sealed=True,
                                              code='submission_infrastructure_unavailable')
-    _require(operation.selected_pre_submit_run_id == row.id
+    _require(operation.selected_pre_submit_run_id is None
+             and row.task_id == task and row.source_operation_id == operation.id
+             and row.request_json['source']['location']['operation_id'] == operation.id
+             and row.terminal_json['reservation']['source']['location']['operation_id'] == operation.id
              and await _trial_operation_ids(factory, task) == {operation.id},
              'launch failure created another operation or changed its exact PRE')
     await runner.command('clear')
@@ -178,7 +181,8 @@ async def _remote_pre_launch_failure(client, factory, *, task, assignment, token
     receipt = await _source_request(client, route, headers, token, fresh_key, archive, 202)
     fresh = await _selected(factory, fresh_key)
     _assert_current_pre(fresh)
-    _require(fresh.id != row.id and fresh.request_json['policy']['entries'][0]['registry']['image_digest']
+    _require(fresh.id != row.id and fresh.source_operation_id == receipt['operation_id']
+             and fresh.request_json['policy']['entries'][0]['registry']['image_digest']
              == runner.profile.image_digest, 'recovery changed the exact selected image or reused failed PRE')
     recovered_cleanup = await _runner_drained(runner)
     recovered_trace = await runner.snapshot()

@@ -10566,3 +10566,27 @@ provider, public capability or roadmap completion claim changes.
 Pre3 at9c489adbe reached the intended native launch fault: first-response receipt reports3trace events (create/start/delete), exact infrastructure_failed/implementation_unavailable PRE, expected public503, and failed-source assertions passed (sealed physical charge, no acceptance/Submission, task eligible). It then stopped before replay/recovery on an incorrect fixture expectation that failed intake carries acceptance-only selected_pre_submit_run_id. Production stage_acceptance alone fills that field; the real failed binding is SelectedPreSubmitRun.source_operation_id with its unique FK. Correct the fixture to require the failed operation pointerNULL, the exact reverse binding, and the same singleton operation set; do not change production custody.
 
 The run is not a passing full fault/recovery result. Isolated DB/MinIO cleanup completed; root restored exact run09ebccf4-d1d2-49c3-8804-32d647e43d17 once. `/tmp/submission-runner-pre3-restoration.json` confirms original config hash, all four owned resource lists empty, and exact foreign fixture removal. The first response remains private in `/tmp/submission-pre-launch-evidence-pre3/remote-pre-launch-first-response.json`. Next attempt can reuse unchanged staged9c supervisor source with fresh run identity; only the local caller assertion changes.
+
+The third isolated run used clean `9c489adbed12387fc4cc9b5101ab4176094abceb`
+with one finite supervisor and the corrected temporary PRE/Smol binary pins.
+Public guide activation and task claim passed. The first public submission
+returned the expected infrastructure 503 and retained a finalized failed PRE
+terminal with `implementation_unavailable`. The private first-response receipt
+and independent runner snapshot show exactly one project machine create, start
+and delete, no exec, and drained owned resources. The run then failed a later
+trial assertion before replay/recovery: it expected a failed intake operation's
+`selected_pre_submit_run_id` to equal that PRE. That field belongs only to an
+accepted operation and must be NULL on failure. Isolated database and MinIO
+cleanup both completed; the operator restored the original checker config and
+empty resources. This is real first-failure native evidence, not the full
+same-key/fresh-key recovery qualification.
+
+The trial now requires the failed operation's acceptance pointer to be NULL
+and binds the exact failed PRE through its durable `source_operation_id`,
+canonical request and terminal source location operation ID, and the singleton
+task operation set. Fresh recovery also requires its PRE source-operation ID to
+equal the public accepted receipt operation. Controlled tests model the real
+NULL field and reject a foreign source binding; the entire affected hosted
+attachment module passes `39 passed, 74 subtests passed`. The retained native
+trace-count assertion remains unchanged. A fourth connected run is still
+required to prove same-key replay, fresh-key accepted T5 and full cleanup.
