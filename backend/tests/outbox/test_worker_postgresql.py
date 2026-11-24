@@ -401,7 +401,8 @@ def test_delivery_task_has_independent_hard_limit(worker):
 
 
 @pytest.mark.parametrize("expired", [False, True])
-async def test_finalization_worker_cannot_deliver_or_recover_post_event(delivery_harness, expired):
+@pytest.mark.parametrize("profile", ["single-host", "app"])
+async def test_finalization_worker_cannot_deliver_or_recover_post_event(delivery_harness, monkeypatch, expired, profile):
     from app.adapters.outbox import production_outbox_delivery
     h = delivery_harness
     kind = "PostSubmissionEvaluationRequested"
@@ -411,14 +412,19 @@ async def test_finalization_worker_cannot_deliver_or_recover_post_event(delivery
         assert await owner.claim(event.event_id, h.project, "post-worker") is not None
         async with h.factory() as session:
             await session.execute(text("select pg_sleep(3.05)"))
-    finalization = production_outbox_delivery(h.factory, finalization_worker=True)
-    assert finalization._registry.keys == (("SubmissionFinalizationRequested", 1), ("SubmissionFinalizationRecoveryRequested", 1))
-    assert await finalization.deliver(event.event_id, h.project, "wrong-worker", registered_only=True) is None
-    async with h.factory() as session:
-        stored = await session.get(OutboxEvent, event.event_id)
-        assert stored.delivery_state == ("claimed" if expired else "pending")
-        attempts = list(await session.scalars(select(OutboxDeliveryAttempt)))
-        assert len(attempts) == int(expired)
-        if expired:
-            assert attempts[0].stage == "claimed"
-    assert h.handled == []
+    monkeypatch.setenv("WORKSTREAM_HOSTED_PROFILE", profile)
+    get_settings.cache_clear()
+    try:
+        finalization = production_outbox_delivery(h.factory, finalization_worker=True)
+        assert finalization._registry.keys == (("SubmissionFinalizationRequested", 1), ("SubmissionFinalizationRecoveryRequested", 1))
+        assert await finalization.deliver(event.event_id, h.project, "wrong-worker", registered_only=True) is None
+        async with h.factory() as session:
+            stored = await session.get(OutboxEvent, event.event_id)
+            assert stored.delivery_state == ("claimed" if expired else "pending")
+            attempts = list(await session.scalars(select(OutboxDeliveryAttempt)))
+            assert len(attempts) == int(expired)
+            if expired:
+                assert attempts[0].stage == "claimed"
+        assert h.handled == []
+    finally:
+        get_settings.cache_clear()

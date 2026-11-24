@@ -8316,3 +8316,25 @@ lacked the repository external-services package. Installing that local package
 without dependency changes repaired the actual subprocess environment; the
 exact test passed with both subcases (`/tmp/submission-main-hosted-loader-v3.log`).
 No test assertion or deployment process was weakened for that environment issue.
+
+Merge review found OUTBOX-MERGE-01 (High): app-profile POST exclusions were
+passed to the finalization-only registry, so construction raised before T5.
+Both reviewers reproduced the same composition failure. Repair intersects the
+exclusions with the already selected registry and extends the existing real
+PostgreSQL finalization-worker isolation test across app/single-host profiles.
+Retain the existing app-host POST deferral/completion test as the general-worker
+control. Allowed repair: outbox composition, that worker test and this record;
+no delivery guard relaxation or new registry path.
+
+OUTBOX-MERGE-01 repair passed all five real PostgreSQL controls in 27.63s
+(`/tmp/submission-main-app-finalization.log/.json`): the finalization worker
+rejects both pending and already-claimed POST events under both app and
+single-host profiles; the existing app general-worker case retains POST work
+while allowing completion delivery. Constructor exclusion validation is intact.
+The two retained-upgrade nodes passed in 231.72s:
+`tests/test_alembic.py::test_retiring_provider_proof_drops_only_its_tables_and_preserves_artifacts`
+and `tests/migrations/test_unsealed_source_cleanup_migration.py::test_upgrade_preserves_sealed_claims_charges_and_audit_decisions[0088_unsealed_source_cleanup]`.
+Metadata confirms 0090 and complete isolated resource cleanup. Structure,
+protected module boundary, record/link, stale-artifact-contract and Ruff gates
+passed on the merge candidate. The repair changes only the exclusion selector
+and extends the existing integration test.
