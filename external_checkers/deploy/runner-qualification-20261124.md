@@ -233,10 +233,55 @@ The bounded activation sequence is:
    success should the hosted systemd unit be repointed to the new immutable
    release and reconciled.
 
-The deployed API has no submission execution or source-cleanup profile. The
-candidate `Settings` values therefore remain `None`, and the hosted release
-environment/Compose/preflight do not yet expose approved values. C01-C06 remain
-unresolved; do not invent them or claim public source execution ready.
+The deployed API has no submission execution or source-cleanup profile and was
+not changed. Candidate hosted configuration now requires both JSON profiles,
+runs their canonical strict validators from the pinned backend image before
+full preflight, `up` or reboot reconciliation, and refuses missing/malformed
+values. It supplies dedicated exclusive finalization and source-cleanup workers;
+the latter alone receives the distinct cleanup IAM credential. No profile value
+was invented or installed. C01-C06 remain unresolved deployment decisions; do
+not claim public source execution ready until approved values and the AWS source
+qualification exist.
+
+## Hosted submission topology preparation
+
+The candidate app release now exposes
+`WORKSTREAM_SUBMISSION_EXECUTION_PROFILE` and
+`WORKSTREAM_SUBMISSION_SOURCE_CLEANUP_PROFILE` to backend Settings. The release
+template contains explicit replacement sentinels, not operational defaults.
+Static preflight requires bounded JSON objects, a distinct exact cleanup IAM
+user ARN and credential path, and a cleanup `upload_principal` equal to the
+normal runtime/upload ARN. Full preflight and activation additionally run
+`SubmissionExecutionProfile` with the selected PRE source-contract context and
+`SubmissionSourceCleanupProfile` inside the pinned backend image; validation
+output is suppressed and the failing profile is named without disclosing its
+body.
+
+The general worker remains limited to `celery,workstream.outbox`. A one-process
+prefork worker consumes only `workstream.submission_finalization` with the
+normal runtime S3 credential. A second one-process prefork worker consumes only
+`workstream.source_cleanup`, substitutes the distinct cleanup IAM ARN and is
+the only service mounting its credential. Beat receives the required cleanup
+profile, so omission can no longer silently remove the 12-hour cleanup schedule.
+The consumer-first shutdown drains the general worker and both bounded exclusive
+workers before their dependencies. The app host was not activated or restarted.
+
+Focused hosted configuration verification passed 61 tests in 91.66 seconds.
+It covers required/malformed profile refusal, upload/cleanup identity separation,
+one-queue worker commands, credential confinement, fixed image-owned validation,
+rendered topology, shutdown order and every prior hosted regression. Python
+compilation, Ruff and whitespace checks also passed. The two remaining links to
+the retired single-host guide were replaced with the current app-host release
+sequence.
+
+Remaining approval/measurement decisions are unchanged:
+
+- C01: aggregate PRE hard deadline and public HTTP envelope.
+- C02: default PRE/POST CPU, memory, disk, process, output and log profiles.
+- C03: upload total/idle, part size and related transport bounds.
+- C04: API/PRE/POST/finalization concurrency and physical capacity allocation.
+- C05: retry/backoff/lease/heartbeat/stall and operator retry authority.
+- C06: runtime lifetime/reaper plus cleanup batch, retry and retention envelope.
 
 ## App connection preparation receipt
 

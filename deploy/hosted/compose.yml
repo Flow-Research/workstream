@@ -51,6 +51,8 @@ x-backend-environment: &backend-environment
   WORKSTREAM_TOKEN_INTROSPECTION_MODE: ${WORKSTREAM_TOKEN_INTROSPECTION_MODE:?set the Flow introspection policy}
   WORKSTREAM_TOKEN_ISSUER: ${WORKSTREAM_TOKEN_ISSUER:?set the Flow issuer}
   WORKSTREAM_TOKEN_JWKS_URL: ${WORKSTREAM_TOKEN_JWKS_URL:?set the Flow JWKS URL}
+  WORKSTREAM_SUBMISSION_EXECUTION_PROFILE: ${WORKSTREAM_SUBMISSION_EXECUTION_PROFILE:?set the approved finite submission execution profile JSON}
+  WORKSTREAM_SUBMISSION_SOURCE_CLEANUP_PROFILE: ${WORKSTREAM_SUBMISSION_SOURCE_CLEANUP_PROFILE:?set the approved finite submission source-cleanup profile JSON}
 
 x-backend-runtime: &backend-runtime
   image: ${WORKSTREAM_BACKEND_IMAGE:?set a digest-qualified backend image}
@@ -262,6 +264,99 @@ services:
     stop_grace_period: 7320s
     healthcheck:
       test: [CMD-SHELL, "test -s /tmp/celery-worker.pid && kill -0 $$(cat /tmp/celery-worker.pid)"]
+      interval: 20s
+      timeout: 10s
+      retries: 6
+      start_period: 30s
+
+  submission-finalization-worker:
+    <<: *backend-runtime
+    environment:
+      <<: *backend-environment
+      WORKSTREAM_RELEASE_ROLE: worker
+      WORKSTREAM_DATABASE_URL_FILE: /run/secrets/database_url
+      WORKSTREAM_CELERY_BROKER_URL_FILE: /run/secrets/celery_broker_url
+      WORKSTREAM_ARTIFACT_S3_DIRECT_USER_CREDENTIAL_FILE: /run/workstream-artifact-credentials/aws-access-key.json
+    secrets:
+      - source: database_url
+        target: database_url
+        uid: "${WORKSTREAM_RUNTIME_UID}"
+        gid: "${WORKSTREAM_RUNTIME_GID}"
+        mode: 0400
+      - source: celery_broker_url
+        target: celery_broker_url
+        uid: "${WORKSTREAM_RUNTIME_UID}"
+        gid: "${WORKSTREAM_RUNTIME_GID}"
+        mode: 0400
+    command:
+      - python
+      - -m
+      - celery
+      - -A
+      - app.workers.celery_app
+      - worker
+      - --pool=prefork
+      - --concurrency=1
+      - --hostname=submission-finalization@%h
+      - --queues=workstream.submission_finalization
+      - --pidfile=/tmp/celery-submission-finalization.pid
+      - --loglevel=INFO
+    volumes:
+      - type: bind
+        source: ${WORKSTREAM_ARTIFACT_S3_DIRECT_USER_CREDENTIAL_HOST_FILE:?set the private AWS access-key file path}
+        target: /run/workstream-artifact-credentials/aws-access-key.json
+        read_only: true
+    restart: on-failure:5
+    stop_grace_period: 420s
+    healthcheck:
+      test: [CMD-SHELL, "test -s /tmp/celery-submission-finalization.pid && kill -0 $$(cat /tmp/celery-submission-finalization.pid)"]
+      interval: 20s
+      timeout: 10s
+      retries: 6
+      start_period: 30s
+
+  submission-source-cleanup-worker:
+    <<: *backend-runtime
+    environment:
+      <<: *backend-environment
+      WORKSTREAM_RELEASE_ROLE: worker
+      WORKSTREAM_DATABASE_URL_FILE: /run/secrets/database_url
+      WORKSTREAM_CELERY_BROKER_URL_FILE: /run/secrets/celery_broker_url
+      WORKSTREAM_ARTIFACT_S3_RUNTIME_USER_ARN: ${WORKSTREAM_ARTIFACT_S3_CLEANUP_USER_ARN:?set the exact source-cleanup IAM user ARN}
+      WORKSTREAM_ARTIFACT_S3_DIRECT_USER_CREDENTIAL_FILE: /run/workstream-artifact-credentials/aws-access-key.json
+    secrets:
+      - source: database_url
+        target: database_url
+        uid: "${WORKSTREAM_RUNTIME_UID}"
+        gid: "${WORKSTREAM_RUNTIME_GID}"
+        mode: 0400
+      - source: celery_broker_url
+        target: celery_broker_url
+        uid: "${WORKSTREAM_RUNTIME_UID}"
+        gid: "${WORKSTREAM_RUNTIME_GID}"
+        mode: 0400
+    command:
+      - python
+      - -m
+      - celery
+      - -A
+      - app.workers.celery_app
+      - worker
+      - --pool=prefork
+      - --concurrency=1
+      - --hostname=submission-source-cleanup@%h
+      - --queues=workstream.source_cleanup
+      - --pidfile=/tmp/celery-submission-source-cleanup.pid
+      - --loglevel=INFO
+    volumes:
+      - type: bind
+        source: ${WORKSTREAM_ARTIFACT_S3_CLEANUP_USER_CREDENTIAL_HOST_FILE:?set the private source-cleanup AWS access-key file path}
+        target: /run/workstream-artifact-credentials/aws-access-key.json
+        read_only: true
+    restart: on-failure:5
+    stop_grace_period: 420s
+    healthcheck:
+      test: [CMD-SHELL, "test -s /tmp/celery-submission-source-cleanup.pid && kill -0 $$(cat /tmp/celery-submission-source-cleanup.pid)"]
       interval: 20s
       timeout: 10s
       retries: 6

@@ -421,7 +421,7 @@ Access Administrator authority to an already admitted actor; it does not create
 a login account. If using the [Keycloak identity provider](../deploy/identity/README.md),
 initialize its administrator separately, complete browser code/PKCE login for
 the direct Workstream API audience, and call `GET /api/v1/actors/me` first.
-A Keycloak administration token cannot authorize Workstream API calls. See the [hosted sequence](../deploy/hosted/SINGLE_HOST.md#identity-storage-and-application-activation).
+A Keycloak administration token cannot authorize Workstream API calls. See the [hosted sequence](../deploy/hosted/README.md#start-and-inspect).
 
 Before execution:
 

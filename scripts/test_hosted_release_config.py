@@ -58,6 +58,55 @@ class HostedReleaseConfigTests(unittest.TestCase):
             encoding="utf-8",
         )
         self.direct_user_credentials.chmod(0o400)
+        self.cleanup_user_credentials = self.root / "cleanup-aws-access-key.json"
+        self.cleanup_user_credentials.write_text(
+            json.dumps(
+                {
+                    "access_key_id": "AKIAEXAMPLE987654321",
+                    "secret_access_key": "synthetic-cleanup-test-secret-key",
+                }
+            ),
+            encoding="utf-8",
+        )
+        self.cleanup_user_credentials.chmod(0o400)
+        execution_profile = {
+            "capacity": {"maximum_total_bytes": 1_000_000},
+            "runtime": {
+                "profile_id": "hosted-test-only",
+                "platform_root_sha256": "sha256:" + "3" * 64,
+                "cpu_millis": 2000,
+                "memory_bytes": 2 * 1024**3,
+                "temporary_disk_bytes": 4 * 1024**3,
+                "maximum_processes": 64,
+                "maximum_output_bytes": 1024 * 1024,
+                "maximum_log_bytes": 1024 * 1024,
+                "aggregate_deadline_ms": 120_000,
+                "archive_limits": {
+                    "maximum_entries": 2_000,
+                    "maximum_path_bytes": 1024,
+                    "maximum_path_depth": 32,
+                    "maximum_central_directory_bytes": 8 * 1024 * 1024,
+                    "maximum_entry_bytes": 128 * 1024 * 1024,
+                    "maximum_expanded_bytes": 512 * 1024 * 1024,
+                    "maximum_compression_ratio": 100,
+                    "maximum_inspection_seconds": 60.0,
+                },
+            },
+            "upload_total_seconds": 300.0,
+            "upload_idle_seconds": 10.0,
+            "foreground_lease_seconds": 60.0,
+            "heartbeat_seconds": 10.0,
+            "replay_total_seconds": 30.0,
+            "part_bytes": 5 * 1024**2,
+        }
+        cleanup_profile = {
+            "maximum_candidates": 10,
+            "run_seconds": 60,
+            "lease_seconds": 30,
+            "upload_principal": (
+                "arn:aws:iam::123456789012:user/workstream-artifact-runtime"
+            ),
+        }
         environment_text = ENV_EXAMPLE.read_text(encoding="utf-8")
         environment_text = (
             environment_text.replace(
@@ -71,6 +120,18 @@ class HostedReleaseConfigTests(unittest.TestCase):
             .replace(
                 "/etc/workstream/aws/direct-user-credentials.json",
                 str(self.direct_user_credentials),
+            )
+            .replace(
+                "/etc/workstream/aws/source-cleanup-user-credentials.json",
+                str(self.cleanup_user_credentials),
+            )
+            .replace(
+                "REPLACE_WITH_APPROVED_SUBMISSION_EXECUTION_PROFILE_JSON",
+                json.dumps(execution_profile, separators=(",", ":")),
+            )
+            .replace(
+                "REPLACE_WITH_APPROVED_SUBMISSION_SOURCE_CLEANUP_PROFILE_JSON",
+                json.dumps(cleanup_profile, separators=(",", ":")),
             )
         )
         self.environment_path = self.root / "release.env"
@@ -170,14 +231,124 @@ class HostedReleaseConfigTests(unittest.TestCase):
         self.checker_path.unlink()
         with (
             patch.object(compose, "validate_private_host_inputs") as private,
+            patch.object(compose, "validate_typed_submission_profiles") as profiles,
             patch.object(compose, "run_compose", return_value=0) as run,
         ):
             result, error = self._compose_main("up", "--detach")
             self.assertEqual((result, error), (0, ""))
             private.assert_called_once_with(values)
             self.assertEqual(compose.resume_release(self.environment_path, values), 0)
+        self.assertEqual(profiles.call_count, 2)
         self.assertEqual(run.call_args_list[-2].args[2][-1], "model-proxy")
         self.assertEqual(run.call_args_list[-1].args[2], ["up", "--detach", "--wait", "--wait-timeout", "120"])
+
+    def test_submission_profiles_are_required_and_bound_to_distinct_cleanup_identity(self):
+        preflight.validate_environment(self.environment)
+        for key in preflight.SUBMISSION_PROFILE_KEYS:
+            for value in (None, "", "not-json", "[]"):
+                changed = dict(self.environment)
+                if value is None:
+                    changed.pop(key)
+                else:
+                    changed[key] = value
+                with self.subTest(key=key, value=value), self.assertRaises(
+                    preflight.PreflightError
+                ):
+                    preflight.validate_environment(changed)
+        cleanup = json.loads(
+            self.environment["WORKSTREAM_SUBMISSION_SOURCE_CLEANUP_PROFILE"]
+        )
+        cleanup["upload_principal"] = self.environment[
+            preflight.CLEANUP_USER_ARN_KEY
+        ]
+        with self.assertRaisesRegex(
+            preflight.PreflightError, "runtime upload principal"
+        ):
+            preflight.validate_environment(
+                self.environment
+                | {
+                    "WORKSTREAM_SUBMISSION_SOURCE_CLEANUP_PROFILE": json.dumps(
+                        cleanup
+                    )
+                }
+            )
+        with self.assertRaisesRegex(preflight.PreflightError, "distinct IAM user"):
+            preflight.validate_environment(
+                self.environment
+                | {
+                    preflight.CLEANUP_USER_ARN_KEY: self.environment[
+                        "WORKSTREAM_ARTIFACT_S3_RUNTIME_USER_ARN"
+                    ]
+                }
+            )
+
+    def test_exclusive_submission_workers_have_one_queue_and_separate_credentials(self):
+        values = self.app_environment()
+        rendered = preflight.render_compose(self.environment_path, values)
+        preflight.validate_compose(rendered, values)
+        services = rendered["services"]
+        expected = {
+            "submission-finalization-worker": (
+                "--queues=workstream.submission_finalization",
+                str(self.direct_user_credentials),
+            ),
+            "submission-source-cleanup-worker": (
+                "--queues=workstream.source_cleanup",
+                str(self.cleanup_user_credentials),
+            ),
+        }
+        for name, (queue, credential) in expected.items():
+            service = services[name]
+            self.assertIn(queue, service["command"])
+            self.assertEqual(
+                preflight._service_mounts(service)[
+                    str(preflight.DIRECT_USER_CREDENTIAL_TARGET)
+                ]["source"],
+                credential,
+            )
+            self.assertEqual(
+                {secret["source"] for secret in service["secrets"]},
+                {"database_url", "celery_broker_url"},
+            )
+            self.assertFalse(
+                set(preflight.REMOTE_RUNNER_ENVIRONMENT_KEYS)
+                & set(service["environment"])
+            )
+        for name, service in services.items():
+            mounts = preflight._service_mounts(service)
+            if name != "submission-source-cleanup-worker":
+                self.assertNotIn(
+                    str(self.cleanup_user_credentials),
+                    {str(mount.get("source")) for mount in mounts.values()},
+                )
+        changed = copy.deepcopy(rendered)
+        changed["services"]["submission-finalization-worker"]["command"].append(
+            "--queues=celery"
+        )
+        with self.assertRaisesRegex(preflight.PreflightError, "exclusive worker"):
+            preflight.validate_compose(changed, values)
+
+    def test_image_owned_profile_validation_is_fixed_and_fail_closed(self):
+        completed = subprocess.CompletedProcess([], 0)
+        with patch.object(preflight.subprocess, "run", return_value=completed) as run:
+            preflight.validate_typed_submission_profiles(
+                self.environment_path, self.environment, cached_images=True
+            )
+        command = run.call_args.args[0]
+        self.assertIn("--pull", command)
+        self.assertIn("never", command)
+        self.assertIn("SubmissionExecutionProfile.model_validate", command[-1])
+        self.assertIn("SubmissionSourceCleanupProfile.model_validate", command[-1])
+        self.assertIs(run.call_args.kwargs["stdout"], subprocess.DEVNULL)
+        self.assertIs(run.call_args.kwargs["stderr"], subprocess.DEVNULL)
+        with patch.object(
+            preflight.subprocess,
+            "run",
+            return_value=subprocess.CompletedProcess([], 20),
+        ), self.assertRaisesRegex(preflight.PreflightError, "execution profile failed"):
+            preflight.validate_typed_submission_profiles(
+                self.environment_path, self.environment
+            )
 
     def test_local_data_shutdown_preserves_dependencies_until_consumers_stop(self):
         values = self.local_data_environment()
@@ -813,20 +984,30 @@ class HostedReleaseConfigTests(unittest.TestCase):
         self.assertEqual(commands[0][-3:], ["stop", "beat", "api"])
         self.assertEqual(commands[1][-4:], ["stop", "--timeout", "7320", "worker"])
         self.assertEqual(
-            commands[2][-4:],
+            commands[2][-5:],
+            [
+                "stop",
+                "--timeout",
+                "420",
+                "submission-finalization-worker",
+                "submission-source-cleanup-worker",
+            ],
+        )
+        self.assertEqual(
+            commands[3][-4:],
             ["stop", "--timeout", "7320", "model-proxy"],
         )
         self.assertEqual(
-            commands[3][-2:],
+            commands[4][-2:],
             ["stop", "guide-document-parser"],
         )
 
     def test_shutdown_failure_keeps_later_dependencies_running(self) -> None:
-        for failed_phase in (0, 1, 2):
+        for failed_phase in (0, 1, 2, 3):
             with self.subTest(failed_phase=failed_phase):
                 results = [
                     subprocess.CompletedProcess([], 17 if index == failed_phase else 0)
-                    for index in range(4)
+                    for index in range(5)
                 ]
                 with patch.object(
                     preflight.subprocess, "run", side_effect=results

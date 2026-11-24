@@ -487,3 +487,18 @@ release directory, while the active unit, environment and containers remained
 unchanged. The deployed image records the `agents` SDK selection. It has no
 submission execution or cleanup profile, exposing a separate fail-closed hosted
 configuration gap before activation.
+
+Hosted submission activation preparation closes that configuration/wiring gap
+without choosing C01-C06 values or changing the live app. Both execution and
+source-cleanup profiles are now required JSON inputs and pass canonical strict
+typed validation in the pinned backend image before full preflight, `up` and
+reboot reconciliation. The template retains replacement sentinels rather than
+invented operational numbers. Static preflight binds the cleanup profile's
+upload principal to the runtime IAM ARN and requires a distinct cleanup IAM ARN,
+path and private credential inode. A dedicated one-queue finalization worker
+uses the runtime credential; a dedicated one-queue source-cleanup worker alone
+uses the cleanup credential. The general worker retains only its existing
+general/outbox queues, and Beat can no longer silently omit cleanup scheduling.
+Focused hosted tests passed 61 cases; compile, Ruff, whitespace and current
+hosted documentation-link checks passed. No app service, container, active
+release file, database, IAM policy or source-admission gate changed.

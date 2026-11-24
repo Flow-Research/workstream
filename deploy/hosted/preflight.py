@@ -132,6 +132,14 @@ DIRECT_USER_CREDENTIAL_HOST_FILE_KEY = (
     "WORKSTREAM_ARTIFACT_S3_DIRECT_USER_CREDENTIAL_HOST_FILE"
 )
 DIRECT_USER_CREDENTIAL_FILE_KEY = "WORKSTREAM_ARTIFACT_S3_DIRECT_USER_CREDENTIAL_FILE"
+CLEANUP_USER_ARN_KEY = "WORKSTREAM_ARTIFACT_S3_CLEANUP_USER_ARN"
+CLEANUP_USER_CREDENTIAL_HOST_FILE_KEY = (
+    "WORKSTREAM_ARTIFACT_S3_CLEANUP_USER_CREDENTIAL_HOST_FILE"
+)
+SUBMISSION_PROFILE_KEYS = (
+    "WORKSTREAM_SUBMISSION_EXECUTION_PROFILE",
+    "WORKSTREAM_SUBMISSION_SOURCE_CLEANUP_PROFILE",
+)
 DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
 IMAGE_REFERENCE = re.compile(r"[^\s@]+@sha256:[0-9a-f]{64}\Z")
 ENVIRONMENT_KEY = re.compile(r"[A-Z][A-Z0-9_]*\Z")
@@ -322,6 +330,9 @@ REQUIRED_RELEASE_KEYS = (
     "WORKSTREAM_ARTIFACT_S3_BUCKET",
     "WORKSTREAM_ARTIFACT_S3_PRIVATE_PREFIX",
     DIRECT_USER_CREDENTIAL_HOST_FILE_KEY,
+    CLEANUP_USER_ARN_KEY,
+    CLEANUP_USER_CREDENTIAL_HOST_FILE_KEY,
+    *SUBMISSION_PROFILE_KEYS,
     *PROJECT_AGENT_CONFIGURATION_KEYS,
     *AWS_S3_IDENTITY_KEYS,
     *TIMEOUT_KEYS,
@@ -536,6 +547,20 @@ def validate_environment(values: dict[str, str]) -> None:
             raise PreflightError("deployment paths must be canonical absolute paths")
     for key in REQUIRED_RELEASE_KEYS:
         _required(values, key)
+    parsed_profiles: dict[str, dict[str, Any]] = {}
+    for key in SUBMISSION_PROFILE_KEYS:
+        raw = values[key]
+        if len(raw.encode("utf-8")) > 65_536:
+            raise PreflightError(f"submission profile is unbounded: {key}")
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise PreflightError(
+                f"submission profile must be a JSON object: {key}"
+            ) from exc
+        if not isinstance(parsed, dict):
+            raise PreflightError(f"submission profile must be a JSON object: {key}")
+        parsed_profiles[key] = parsed
     for key in (
         "WORKSTREAM_BACKEND_IMAGE",
         "WORKSTREAM_MODEL_PROXY_IMAGE",
@@ -694,17 +719,40 @@ def validate_environment(values: dict[str, str]) -> None:
         raise PreflightError("production observability endpoint must use HTTPS")
     if IAM_USER_ARN.fullmatch(values["WORKSTREAM_ARTIFACT_S3_RUNTIME_USER_ARN"]) is None:
         raise PreflightError("artifact runtime user must use an exact IAM user ARN")
-    credential_path = Path(values[DIRECT_USER_CREDENTIAL_HOST_FILE_KEY])
-    if (
-        not credential_path.is_absolute()
-        or credential_path != credential_path.resolve(strict=False)
-        or any(character.isspace() or character in ",:" for character in str(credential_path))
-        or credential_path.is_relative_to(root)
-        or root.is_relative_to(credential_path)
-    ):
+    cleanup_arn = values[CLEANUP_USER_ARN_KEY]
+    if IAM_USER_ARN.fullmatch(cleanup_arn) is None:
+        raise PreflightError("source-cleanup user must use an exact IAM user ARN")
+    if cleanup_arn == values["WORKSTREAM_ARTIFACT_S3_RUNTIME_USER_ARN"]:
+        raise PreflightError("source cleanup requires a distinct IAM user")
+    cleanup_profile = parsed_profiles[
+        "WORKSTREAM_SUBMISSION_SOURCE_CLEANUP_PROFILE"
+    ]
+    if cleanup_profile.get("upload_principal") != values[
+        "WORKSTREAM_ARTIFACT_S3_RUNTIME_USER_ARN"
+    ]:
         raise PreflightError(
-            "direct IAM user credentials require one canonical private host path"
+            "source-cleanup profile must pin the runtime upload principal"
         )
+    credential_paths = (
+        Path(values[DIRECT_USER_CREDENTIAL_HOST_FILE_KEY]),
+        Path(values[CLEANUP_USER_CREDENTIAL_HOST_FILE_KEY]),
+    )
+    for credential_path in credential_paths:
+        if (
+            not credential_path.is_absolute()
+            or credential_path != credential_path.resolve(strict=False)
+            or any(
+                character.isspace() or character in ",:"
+                for character in str(credential_path)
+            )
+            or credential_path.is_relative_to(root)
+            or root.is_relative_to(credential_path)
+        ):
+            raise PreflightError(
+                "direct IAM user credentials require canonical private host paths"
+            )
+    if credential_paths[0] == credential_paths[1]:
+        raise PreflightError("runtime and source-cleanup credentials must be distinct")
 
 
 def validate_local_data_environment(values: dict[str, str]) -> None:
@@ -882,6 +930,7 @@ def validate_private_host_inputs(
         *((Path(values[TRIAL_KEYS[0]]),) if values.get(TRIAL_KEYS[0]) else ()),
         *(Path(values[key]) for key in _secret_file_keys(values)),
         Path(values[DIRECT_USER_CREDENTIAL_HOST_FILE_KEY]),
+        Path(values[CLEANUP_USER_CREDENTIAL_HOST_FILE_KEY]),
     ]
     for path in private_paths:
         _private_metadata(path, kind="file", uid=uid, gid=gid, mode=0o400)
@@ -1051,7 +1100,8 @@ def run_compose(
     # MCP attached to a retired API namespace after a Compose-managed update.
     selected_services = set(compose_arguments) & {
         "postgres", "redis",
-        "api", "mcp", "worker", "beat", "model-proxy", "identity",
+        "api", "mcp", "worker", "submission-finalization-worker",
+        "submission-source-cleanup-worker", "beat", "model-proxy", "identity",
         "guide-document-parser",
     }
     targets_api = not selected_services or "api" in selected_services or (
@@ -1065,8 +1115,15 @@ def run_compose(
         # Do not restart an existing MCP container into a discarded namespace
         # while waiting for API health. Release it only in the phase below.
         if not selected_services:
-            compose_arguments = [*compose_arguments, "api", "worker", "beat",
-                                 "guide-document-parser"]
+            compose_arguments = [
+                *compose_arguments,
+                "api",
+                "worker",
+                "submission-finalization-worker",
+                "submission-source-cleanup-worker",
+                "beat",
+                "guide-document-parser",
+            ]
             if values.get("WORKSTREAM_POSTGRES_IMAGE"):
                 compose_arguments.extend(("postgres", "redis"))
             if values.get("FLOW_IDENTITY_IMAGE"):
@@ -1235,6 +1292,10 @@ def run_shutdown(environment_path: Path, values: dict[str, str]) -> int:
     phases = [
         ["stop", "beat", "api"],
         ["stop", "--timeout", "7320", "worker"],
+        [
+            "stop", "--timeout", "420",
+            "submission-finalization-worker", "submission-source-cleanup-worker",
+        ],
     ]
     if values.get("WORKSTREAM_MCP_IMAGE"):
         phases.insert(0, ["stop", "mcp"])
@@ -1264,6 +1325,65 @@ def run_shutdown(environment_path: Path, values: dict[str, str]) -> int:
         if completed.returncode != 0:
             return completed.returncode
     return 0
+
+
+TYPED_SUBMISSION_PROFILE_VALIDATION = """
+from app.adapters.artifacts import selected_pre_submit_source_contracts
+from app.core.config import get_settings
+from app.modules.artifacts.api.submission_cleanup import SubmissionSourceCleanupProfile
+from app.modules.artifacts.api.submission_command import SubmissionExecutionProfile
+from app.modules.checkers.api.source_contracts import source_contracts_context
+
+settings = get_settings()
+try:
+    SubmissionExecutionProfile.model_validate(
+        settings.submission_execution_profile,
+        context=source_contracts_context(selected_pre_submit_source_contracts()),
+    )
+except Exception:
+    raise SystemExit(20) from None
+try:
+    SubmissionSourceCleanupProfile.model_validate(
+        settings.submission_source_cleanup_profile
+    )
+except Exception:
+    raise SystemExit(21) from None
+""".strip()
+
+
+def validate_typed_submission_profiles(
+    environment_path: Path, values: dict[str, str], *, cached_images: bool = False
+) -> None:
+    """Run canonical image-owned profile validators before service activation."""
+    command = [
+        "docker", "compose", "--env-file", str(environment_path),
+        *_compose_file_arguments(values),
+        "run", "--rm", "--no-deps", "-T",
+        *(("--pull", "never") if cached_images else ()),
+        "api", "python", "-c", TYPED_SUBMISSION_PROFILE_VALIDATION,
+    ]
+    try:
+        completed = subprocess.run(
+            command,
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            env=compose_environment(values),
+            timeout=90,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise PreflightError(
+            "image-owned submission profile validation could not complete"
+        ) from exc
+    failures = {
+        20: "submission execution profile failed image-owned typed validation",
+        21: "submission source-cleanup profile failed image-owned typed validation",
+    }
+    if completed.returncode:
+        raise PreflightError(failures.get(
+            completed.returncode,
+            "image-owned submission profile validation could not initialize",
+        ))
 
 
 def _service_mounts(service: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -1443,6 +1563,8 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
     expected_services = {
         "api",
         "worker",
+        "submission-finalization-worker",
+        "submission-source-cleanup-worker",
         "beat",
         "guide-document-parser",
     }
@@ -1498,6 +1620,8 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
     backend_runtime_services = {
         "api",
         "worker",
+        "submission-finalization-worker",
+        "submission-source-cleanup-worker",
         "beat",
     }
     if model_proxy_enabled:
@@ -1512,11 +1636,13 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
     backend_image = services["api"]["image"]
     if (
         services["worker"]["image"] != backend_image
+        or services["submission-finalization-worker"]["image"] != backend_image
+        or services["submission-source-cleanup-worker"]["image"] != backend_image
         or services["beat"]["image"] != backend_image
         or services["guide-document-parser"]["image"] != backend_image
     ):
         raise PreflightError(
-            "API, worker, Beat and guide parser must use one exact backend image"
+            "API, workers, Beat and guide parser must use one exact backend image"
         )
     if (
         model_proxy_enabled
@@ -1526,6 +1652,8 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
     for name in (
         "api",
         "worker",
+        "submission-finalization-worker",
+        "submission-source-cleanup-worker",
         "beat",
         "guide-document-parser",
         *({"model-proxy"} if model_proxy_enabled else set()),
@@ -1551,6 +1679,13 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
             else {}
         )
         | direct_user_credential_mount,
+        "submission-finalization-worker": direct_user_credential_mount,
+        "submission-source-cleanup-worker": {
+            str(DIRECT_USER_CREDENTIAL_TARGET): (
+                values[CLEANUP_USER_CREDENTIAL_HOST_FILE_KEY],
+                True,
+            ),
+        },
         "beat": {},
         "guide-document-parser": {
             str(paths.guide_root): (str(paths.guide_root), False),
@@ -1688,6 +1823,33 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
         != ["--queues=celery,workstream.outbox"]
     ):
         raise PreflightError("project guide worker delivery profile is invalid")
+    bounded_worker_profiles = {
+        "submission-finalization-worker": (
+            "--queues=workstream.submission_finalization",
+            "--hostname=submission-finalization@%h",
+            "--pidfile=/tmp/celery-submission-finalization.pid",
+        ),
+        "submission-source-cleanup-worker": (
+            "--queues=workstream.source_cleanup",
+            "--hostname=submission-source-cleanup@%h",
+            "--pidfile=/tmp/celery-submission-source-cleanup.pid",
+        ),
+    }
+    for name, required_arguments in bounded_worker_profiles.items():
+        bounded_worker = services[name]
+        command = bounded_worker.get("command")
+        if (
+            bounded_worker.get("stop_grace_period") not in {"420s", "7m0s"}
+            or not isinstance(command, list)
+            or "--pool=prefork" not in command
+            or "--concurrency=1" not in command
+            or any(argument not in command for argument in required_arguments)
+            or len(
+                [value for value in command if str(value).startswith(("-Q", "--queues"))]
+            )
+            != 1
+        ):
+            raise PreflightError(f"exclusive worker delivery profile is invalid: {name}")
     if model_proxy_enabled:
         proxy = services["model-proxy"]
         if (
@@ -1707,25 +1869,43 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
         ):
             raise PreflightError("model proxy delivery profile is invalid")
     environments: dict[str, dict[str, Any]] = {}
-    active_roles = ("api", "worker", "beat") + (
+    active_roles = (
+        "api",
+        "worker",
+        "submission-finalization-worker",
+        "submission-source-cleanup-worker",
+        "beat",
+    ) + (
         ("model-proxy",) if model_proxy_enabled else ()
     )
     for role in active_roles:
         environment = services[role].get("environment")
         if not isinstance(environment, dict):
             raise PreflightError(f"{role} release environment is unavailable")
-        if environment.get("WORKSTREAM_RELEASE_ROLE") != role:
+        expected_release_role = (
+            "worker" if role.startswith("submission-") else role
+        )
+        if environment.get("WORKSTREAM_RELEASE_ROLE") != expected_release_role:
             raise PreflightError(f"{role} has an unsafe release role")
         expected_direct_credential = (
             str(DIRECT_USER_CREDENTIAL_TARGET)
-            if role in {"api", "worker", "model-proxy"}
+            if role in {
+                "api", "worker", "model-proxy",
+                "submission-finalization-worker",
+                "submission-source-cleanup-worker",
+            }
             else None
         )
         if environment.get(DIRECT_USER_CREDENTIAL_FILE_KEY) != expected_direct_credential:
             raise PreflightError(
                 f"{role} direct IAM user credential selector differs from its release role"
             )
-        required_file_keys = set(_role_secret_file_keys(role, values))
+        policy_role = "bounded-worker" if role.startswith("submission-") else role
+        required_file_keys = (
+            {"WORKSTREAM_DATABASE_URL_FILE", "WORKSTREAM_CELERY_BROKER_URL_FILE"}
+            if policy_role == "bounded-worker"
+            else set(_role_secret_file_keys(policy_role, values))
+        )
         for key, (_, target) in SECRET_FILE_TARGETS.items():
             if key in REMOTE_RUNNER_SECRET_FILE_KEYS:
                 if key in environment:
@@ -1746,7 +1926,7 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
         if not isinstance(mounted, list):
             raise PreflightError(f"{role} release secrets are unavailable")
         expected_sources = {
-            SECRET_FILE_TARGETS[key][0] for key in _role_secret_file_keys(role, values)
+            SECRET_FILE_TARGETS[key][0] for key in required_file_keys
         }
         service_uid, service_gid = services[role]["user"].split(":", maxsplit=1)
         if len(mounted) != len(expected_sources) or any(
@@ -1762,7 +1942,9 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
             raise PreflightError(f"{role} mounted secrets differ from its release role")
         environments[role] = environment
     common_environments = []
-    for environment in environments.values():
+    for role, environment in environments.items():
+        if role == "submission-source-cleanup-worker":
+            continue
         common_environments.append(
             {
                 key: value
@@ -1783,7 +1965,31 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
     if any(
         environment != common_environments[0] for environment in common_environments[1:]
     ):
-        raise PreflightError("backend roles must share the same non-secret environment")
+        raise PreflightError(
+            "backend roles must share the same non-secret environment, including "
+            "WORKSTREAM_ARTIFACT_PREPARATION_TOTAL_DEADLINE_SECONDS"
+        )
+    cleanup_environment = environments["submission-source-cleanup-worker"]
+    cleanup_common = {
+        key: value
+        for key, value in cleanup_environment.items()
+        if key not in SECRET_FILE_KEYS
+        and key not in {
+            "WORKSTREAM_RELEASE_ROLE",
+            DIRECT_USER_CREDENTIAL_FILE_KEY,
+            "WORKSTREAM_ARTIFACT_S3_RUNTIME_USER_ARN",
+        }
+    }
+    runtime_common = dict(common_environments[0])
+    runtime_common.pop("WORKSTREAM_ARTIFACT_S3_RUNTIME_USER_ARN", None)
+    if cleanup_common != runtime_common:
+        raise PreflightError(
+            "source-cleanup worker must share the bounded non-secret environment"
+        )
+    if cleanup_environment.get("WORKSTREAM_ARTIFACT_S3_RUNTIME_USER_ARN") != values[
+        CLEANUP_USER_ARN_KEY
+    ]:
+        raise PreflightError("source-cleanup worker lacks its dedicated IAM identity")
     environment = environments["api"]
     exact = {
         "WORKSTREAM_AUTH_PROVIDER": "flow",
@@ -1803,6 +2009,8 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
     for name in (
         "api",
         "worker",
+        "submission-finalization-worker",
+        "submission-source-cleanup-worker",
         "beat",
         *(("model-proxy",) if model_proxy_enabled else ()),
     ):
@@ -1818,6 +2026,12 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
             if str(service_environment.get(key, "")) != values[key]:
                 raise PreflightError(
                     "rendered project agent configuration differs from release: "
+                    f"{name}.{key}"
+                )
+        for key in SUBMISSION_PROFILE_KEYS:
+            if str(service_environment.get(key, "")) != values[key]:
+                raise PreflightError(
+                    "rendered submission profile differs from release: "
                     f"{name}.{key}"
                 )
     for name, service in services.items():
@@ -1964,6 +2178,7 @@ def main() -> int:
             )
             return 0
         validate_private_host_inputs(values)
+        validate_typed_submission_profiles(args.env_file, values)
     except PreflightError as exc:
         print(f"hosted release preflight failed: {exc}", file=sys.stderr)
         return 1

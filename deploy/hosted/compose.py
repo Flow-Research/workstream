@@ -18,6 +18,7 @@ from preflight import (
     validate_private_host_inputs,
     validate_identity_host_inputs,
     validate_local_data_host_inputs,
+    validate_typed_submission_profiles,
 )
 
 
@@ -31,6 +32,9 @@ def parse_args() -> argparse.Namespace:
 def resume_release(environment_path: Path, values: dict[str, str]) -> int:
     """Reconcile an installed release after reboot, without pulling or migrating."""
     validate_private_host_inputs(values, require_node=False)
+    validate_typed_submission_profiles(
+        environment_path, values, cached_images=True
+    )
     phases: list[list[str]] = []
     if values.get("WORKSTREAM_POSTGRES_IMAGE"):
         phases.append(["start", "local-data"])
@@ -91,6 +95,8 @@ def main() -> int:
                 validate_private_host_inputs(values, require_node=False)
             else:
                 validate_private_host_inputs(values)
+            if launch:
+                validate_typed_submission_profiles(args.env_file, values)
         if args.compose_arguments and args.compose_arguments[0] == "stop":
             if args.compose_arguments == ["stop", "worker"]:
                 return run_compose(args.env_file, values, args.compose_arguments)

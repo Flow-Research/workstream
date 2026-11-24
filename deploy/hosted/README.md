@@ -1,10 +1,11 @@
 # Hosted Release Configuration
 
-This directory prepares the Workstream API, durable Celery worker, Beat,
-fixed guide-document parser and optional trusted model proxy on an app-only
-Linux amd64 host. PostgreSQL and Redis may use the host-local data overlay or
-separately managed services. Project PRE/POST and trusted ZIP intake run only on
-the separately administered, always-on remote runner.
+This directory prepares the Workstream API, general Celery worker, exclusive
+submission-finalization and source-cleanup workers, Beat, fixed guide-document
+parser and optional trusted model proxy on an app-only Linux amd64 host.
+PostgreSQL and Redis may use the host-local data overlay or separately managed
+services. Project PRE/POST and trusted ZIP intake run only on the separately
+administered, always-on remote runner.
 
 The checked-in [release environment template](release.env.example),
 [Compose wrapper](compose.py), [preflight](preflight.py), and
@@ -247,8 +248,13 @@ The hosted profile uses `WORKSTREAM_ARTIFACT_S3_CREDENTIAL_MODE=aws_access_key`.
 Set `WORKSTREAM_ARTIFACT_S3_RUNTIME_USER_ARN` to the dedicated IAM user and
 `WORKSTREAM_ARTIFACT_S3_DIRECT_USER_CREDENTIAL_HOST_FILE` to its private JSON
 credential file. Compose mounts it read-only at
-`/run/workstream-artifact-credentials/aws-access-key.json` only in API, worker
-and model-proxy. Beat, MCP, parser and checker guests receive no storage key.
+`/run/workstream-artifact-credentials/aws-access-key.json` only in API, general
+worker, exclusive finalization worker and model-proxy. Set
+`WORKSTREAM_ARTIFACT_S3_CLEANUP_USER_ARN` and
+`WORKSTREAM_ARTIFACT_S3_CLEANUP_USER_CREDENTIAL_HOST_FILE` to the separately
+authorized deletion identity. Only the exclusive source-cleanup worker receives
+that file; preflight rejects a reused ARN, path or inode. Beat, MCP, parser and
+checker guests receive no storage key.
 
 Follow [S3 credential setup](../../docs/operations_aws_s3_credentials.md) for
 restricted policies and rotation. Qualification verifies real conditional
@@ -256,6 +262,18 @@ upload/readback and denied destructive access before cutover. There are no
 periodic proof jobs, certificate mounts or expiring database activations.
 Keep operation deadlines bounded and measured against the deployment; a network
 failure remains a recoverable storage failure, not permission to declare success.
+
+`WORKSTREAM_SUBMISSION_EXECUTION_PROFILE` and
+`WORKSTREAM_SUBMISSION_SOURCE_CLEANUP_PROFILE` are required JSON objects. The
+template intentionally contains sentinels rather than guessed values. Static
+preflight rejects missing or malformed objects and requires the cleanup
+profile's `upload_principal` to equal the runtime upload ARN. Full preflight,
+every `up`, and reboot reconciliation then run the canonical strict profile
+validators from the pinned backend image before activating services. The
+general worker consumes only `celery,workstream.outbox`; finalization and source
+cleanup each use a separate prefork worker with exactly one queue. Beat always
+receives the required cleanup profile, so the cleanup schedule cannot disappear
+because of an omitted setting.
 
 `WORKSTREAM_ARTIFACT_PREPARATION_TOTAL_DEADLINE_SECONDS` explicitly carries the
 existing ART processing deadline to every backend role. The
@@ -304,7 +322,8 @@ sudo python3 deploy/hosted/preflight.py \
 ```
 
 The full preflight additionally checks app secret/config metadata without reading
-secret contents and validates private app directories. Runner runtime, cache,
+secret contents, validates private app directories, and runs the pinned image's
+strict submission execution/source-cleanup profile validators. Runner runtime, cache,
 capacity and cleanup are established by its separate qualification and the
 typed remote health/execution paths. Wrong endpoint, TLS or pinned intake
 identity rejects launch:
@@ -396,8 +415,9 @@ administrator and do not attest the running node's complete source custody;
 qualification separately records its actual process/binary identities.
 
 The guide parser and enabled model proxy must pass their existing health checks
-before the worker starts. Beat retains existing recovery schedules. API health
-is a lightweight endpoint; Celery health checks its processes. Remote health
+before the general worker starts. The exclusive finalization and cleanup
+workers must also become healthy, and Beat retains its recovery schedules. API
+health is a lightweight endpoint; Celery health checks its processes. Remote health
 verifies runtime/identity/cache-count and pinned intake/default facts; exact
 image selection is independently checked during every execution. None of
 these checks replaces a public authenticated journey, storage qualification, resource
