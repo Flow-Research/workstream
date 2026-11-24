@@ -143,6 +143,90 @@ envelope. It never deletes an active or uncertain grant. Focused tests cover
 both `.incoming-*` and renamed `extract_*` residue, refusal while the native
 socket exists, exact removal after confirmed stop, and clean restart.
 
+## App deployment handoff
+
+The read-only app inspection found instance `i-000b0c090ddc142bd` healthy on
+immutable release `/opt/workstream/releases/013ffbac2291179c03ff6d832f52efee9382322d`.
+`workstream-hosted.service` and `workstream-identity-ingress.service` were
+loaded, enabled and active. API and worker used the digest-pinned backend image
+`094032936130.dkr.ecr.eu-north-1.amazonaws.com/workstream-backend@sha256:83744f1c16dd77e81555f613019898b1cca7d278a585749d2084de90ea3172a3`.
+The app has no EC2 instance role; its existing direct S3 credential path remains
+unchanged. Its observed source profile is hosted `app`, store backend
+`s3_compatible`, provider `aws_s3`, credential mode `aws_access_key` and virtual
+addressing. Keep those values and the existing credential mount unchanged; the
+separate AWS source-admission gate remains closed pending qualification.
+
+The installed release predates the remote-runner wiring. Its release environment
+contains no external-runner or trusted-intake keys, API and worker have no
+runner TLS mounts, and `/etc/workstream/runner-tls` is absent. The worker's
+existing app-local callback socket is healthy at
+`/var/lib/workstream/model-runtime/model.sock` (uid/gid 10001, mode 0600, one
+link); the API intentionally has no model callback socket.
+
+The exact non-secret release additions are:
+
+```dotenv
+WORKSTREAM_EXTERNAL_RUNNER_HOST=172.31.21.182
+WORKSTREAM_EXTERNAL_RUNNER_PORT=9443
+WORKSTREAM_EXTERNAL_RUNNER_SERVER_NAME=runner.workstream.internal
+WORKSTREAM_EXTERNAL_RUNNER_CA_FILE=/etc/workstream/runner-tls/ca.crt
+WORKSTREAM_EXTERNAL_RUNNER_CERTIFICATE_FILE=/etc/workstream/runner-tls/app.crt
+WORKSTREAM_EXTERNAL_RUNNER_PRIVATE_KEY_FILE=/etc/workstream/runner-tls/app.key
+WORKSTREAM_ARTIFACT_INTAKE_IMAGE_DIGEST=sha256:f77b5470b269ebce8ab2b467fcf0c52be814c2db9e5306aab090f45e7e2d8b81
+WORKSTREAM_ARTIFACT_INTAKE_CONFIG_DIGEST=sha256:6a83910f3989fb657a405188d9b84b1815993be7af11bb399246a0d30100c5b0
+```
+
+The three staged TLS inputs are present only in the operator-owned setup
+directory. The CA is valid through 2036; the client certificate is valid
+through 2029, has client-auth extended usage, chains to that CA and matches the
+staged private key. Install distinct copies on the app as uid/gid 10001, mode
+0400, without logging their contents. The reviewed Compose file mounts all
+three as mode-0400 secrets into API and worker only. The worker also retains its
+read-only app-local model socket; no runner secret or callback socket reaches
+Beat, MCP, parser or model proxy.
+
+Both instances are in `vpc-049ecd21b84781a6a`. A live TCP probe from the app to
+`172.31.21.182:9443` timed out. Control-plane readback showed that runner group
+`sg-06167eb0a825ed79a` has only operator SSH ingress. The one required network
+mutation is a TCP 9443 ingress rule on that runner group whose source is app
+group `sg-015b341d9f8d39117` (a security-group reference, not a CIDR). No public
+9443 rule and no app-group ingress change are needed.
+
+The bounded activation sequence is:
+
+1. Freeze the exact clean integrated commit and build/publish its backend image
+   under a new digest. The inspected candidate was `ccda21802`; deployment must
+   record the actual later head and image digest rather than reuse that mutable
+   observation.
+2. Copy that exact source to a new root-owned `/opt/workstream/releases/<commit>`
+   directory. Preserve the current release and image for forward-repair or
+   supported rollback; do not modify the installed release in place.
+3. Install the three TLS files with the ownership/mode above. Add only the eight
+   environment values listed above to a private staged release file, plus the
+   new release ID and backend image digest. Preserve all existing S3 direct-key
+   values and mounts.
+4. Authorize exactly the app-group-to-runner-group TCP 9443 rule after confirming
+   it is still absent. Re-read the rule, verify private TCP reachability, then run
+   an mTLS runner-health probe from the app using the candidate backend image.
+   Require Linux/amd64, `smolvm`, `smol-microvm`, two cached manifests and
+   sandbox uid/gid 10001.
+5. Run the candidate `compose.py` environment/render/private-input preflight
+   against the staged file before stopping any current container. Verify the
+   rendered environment and mode-0400 secrets appear on API and worker only,
+   and the model callback socket remains worker-only.
+6. After the root owner coordinates a release window, use the documented
+   consumer-first drain and forward migration/upgrade procedure. Reconcile the
+   candidate release, wait for all container health checks, then verify the API
+   and worker both reach runner health over the private address. Only after
+   success should the hosted systemd unit be repointed to the new immutable
+   release and reconciled.
+
+At handoff, the SG rule, app TLS files, new backend image digest and new immutable
+release were still absent. No app container, unit, environment, network or IAM
+state was changed. The AWS submission-source admission gate remains separately
+blocked on its IAM qualification; it must remain closed until that evidence
+passes, but it does not require adding a local-native checker fallback.
+
 ## Evidence and secret locations
 
 - this saved non-secret receipt:

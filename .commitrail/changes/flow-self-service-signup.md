@@ -465,3 +465,15 @@ refused it. Byte-identical units were restored and remain loaded, enabled and
 active; retained backup hashes match. Repaired POST and streamed-ZIP PRE both
 completed with pinned Smol isolation, PRE cleanup was destroyed, and all
 material, model-relay and Smol-lease roots were empty afterward.
+
+The app deployment handoff records the unchanged installed release and image,
+the eight exact remote-runner/trusted-intake environment additions, private TLS
+file custody, worker-only model callback mount, and one required private network
+rule. Read-only host and control-plane inspection confirmed that the app has no
+runner settings or TLS files yet and that TCP 9443 times out because the runner
+group has only SSH ingress. Activation requires a new exact-head backend image,
+an immutable release directory, one runner-group rule sourced from the app
+group, mTLS health from the app host, offline render/private-input checks, and a
+coordinated consumer-first upgrade. No app, network or IAM state changed during
+the inspection; AWS source admission remains closed pending its separate IAM
+qualification.
