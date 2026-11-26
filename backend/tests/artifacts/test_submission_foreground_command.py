@@ -220,6 +220,8 @@ async def test_timeout_settlement_requires_exact_expired_owner(admission_intake,
     from sqlalchemy import text
     from app.modules.artifacts.api.submission_intake import SubmissionIntakeFailure
     from app.modules.artifacts.intake.foreground_admission import IntakeReservationOwner
+    from app.modules.artifacts.intake.models import SubmissionIntakeOperation
+    from app.modules.artifacts.intake.repository import SubmissionIntakeRepository, clamped_foreground_deadline
     from tests.artifact_store_helpers import initialize_local_store
     from tests.artifacts.intake_acceptance_support import wait_foreground_expired
     from tests.artifacts.test_submission_intake_custody import foreground_upload, repository
@@ -235,7 +237,7 @@ async def test_timeout_settlement_requires_exact_expired_owner(admission_intake,
 
     store = initialize_local_store(root=tmp_path / "durable", buffer_bytes=256 * 1024)
     try:
-        for pre_timeout in (None, 60.0, 1.5):
+        for pre_timeout in (None, 60.0, 5.0):
             key = new_record_id()
             with monkeypatch.context() as configured:
                 if pre_timeout is None:
@@ -246,8 +248,31 @@ async def test_timeout_settlement_requires_exact_expired_owner(admission_intake,
             if pre_timeout is not None:
                 await foreground_upload(f, store).receive(
                     owner.operation_id, owner.lease_id, owner.generation, body(), part_bytes=5 * 1024**2,
-                    idle_timeout_seconds=10, pre_timeout_seconds=pre_timeout, pre_lease_seconds=1.5,
+                    idle_timeout_seconds=10, pre_timeout_seconds=pre_timeout,
+                    pre_lease_seconds=1.5 if pre_timeout == 60.0 else pre_timeout,
                 )
+            if pre_timeout == 5.0:
+                async with f.factory() as session:
+                    row = await session.get(SubmissionIntakeOperation, str(owner.operation_id))
+                    hard_deadline = clamped_foreground_deadline(row)
+                assert hard_deadline is not None
+                guarded_terminalize = SubmissionIntakeRepository._terminal
+                crossed = False
+
+                async def cross_deadline(repository, row, state, code):
+                    """Advance past the database cutoff after the live fence check."""
+                    nonlocal crossed
+                    await wait_foreground_expired(repository._session, owner.operation_id)
+                    crossed = True
+                    await guarded_terminalize(repository, row, state, code)
+
+                with monkeypatch.context() as delayed:
+                    delayed.setattr(SubmissionIntakeRepository, "_terminal", cross_deadline)
+                    assert await f.admission.finish(
+                        owner, state="failed", failure_code="submission_infrastructure_unavailable",
+                        deadline=hard_deadline,
+                    ) is None
+                assert crossed
             async with f.factory() as session:
                 await wait_foreground_expired(session, owner.operation_id)
             arguments = dict(metadata=metadata, actor_id=actor_id, idempotency_key=key)

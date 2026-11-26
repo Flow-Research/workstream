@@ -343,19 +343,24 @@ class ForegroundIntakeAdmission:
         A committed acceptance, another generation or an expired owner cannot be
         overwritten by a late request exception. Expiry remains the reaper's job.
         """
-        async with self._root() as (session, _authority):
-            repository = SubmissionIntakeRepository(session, self._tasks(session))
-            try:
-                row = await repository._owned(owner.operation_id, owner.lease_id, owner.generation)
-            except IntakeCustodyConflict:
-                return None
-            if deadline is not None and deadline == clamped_foreground_deadline(row):
-                failure_code = deadline.failure_code
-            await repository.terminalize(
-                owner.operation_id, owner.lease_id, owner.generation,
-                state=state, failure_code=failure_code,
-            )
-        return failure_code
+        try:
+            async with self._root() as (session, _authority):
+                repository = SubmissionIntakeRepository(session, self._tasks(session))
+                return await repository.terminalize(
+                    owner.operation_id, owner.lease_id, owner.generation,
+                    state=state, failure_code=failure_code, deadline=deadline,
+                )
+        except IntakeCustodyConflict as exc:
+            if str(exc) != "intake_owner_stale":
+                raise
+        except IntegrityError as exc:
+            # The lease can expire after the locked read but before the SQL
+            # trigger checks the update. The failed root is closed before recovery.
+            error = getattr(exc.orig, "__cause__", None)
+            if (getattr(exc.orig, "sqlstate", None) != "23514"
+                    or getattr(error, "message", None) != "expired intake requires abandonment"):
+                raise
+        return None
 
     async def settle_expired_foreground(
         self, owner: IntakeReservationOwner, metadata: SubmissionIntakeMetadata, *,

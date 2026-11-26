@@ -280,13 +280,18 @@ class SubmissionIntakeRepository:
         now = await self._session.scalar(select(func.clock_timestamp()))
         return (row.lease_expires_at - now).total_seconds(), clamped_foreground_deadline(row)
 
-    async def terminalize(self, operation_id: UUID, lease_id: UUID, generation: int,
-                          *, state: str, failure_code: str) -> None:
+    async def terminalize(
+        self, operation_id: UUID, lease_id: UUID, generation: int, *,
+        state: str, failure_code: str, deadline: ForegroundDeadline | None = None,
+    ) -> str:
         """Fence conclusively ended foreground work and clear only its task guard."""
         if state not in {"failed", "rejected", "cancelled"}:
             raise IntakeCustodyConflict("intake_terminal_state_invalid")
         row = await self._owned(operation_id, lease_id, generation)
+        if deadline is not None and deadline == clamped_foreground_deadline(row):
+            failure_code = deadline.failure_code
         await self._terminal(row, state, failure_code)
+        return failure_code
 
     async def expire_revision(self, operation_id: UUID, target: TaskRevisionExpiryTarget) -> None:
         """Participate only after TASK consumed expiry authority and fenced its event.
