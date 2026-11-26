@@ -6,7 +6,7 @@ from app.core.hashing import canonical_json_hash
 
 from app.modules.artifacts.api.submission_command import PostSubmissionProgress
 from app.modules.artifacts.api.submission_finalization import SubmissionFinalizationProgress
-from app.modules.checkers.api.execution import POST_SUBMISSION_RETRY_OPTIONS
+from app.modules.checkers.api.execution import POST_SUBMISSION_ATTEMPT_LIMIT
 from app.modules.artifacts.intake.acceptance import finalization_event
 from app.modules.artifacts.intake.repository import IntakeCustodyConflict
 from app.modules.artifacts.intake.recovery import recovery_event
@@ -218,7 +218,7 @@ class SubmissionOperationReadService:
                     failure_code = f"post_submission_{evaluation.previous_failure_code}"
                 post = PostSubmissionProgress(
                     attempt=evaluation.current.reservation.evaluation_generation,
-                    automatic_attempt_limit=POST_SUBMISSION_RETRY_OPTIONS.max_attempts,
+                    automatic_attempt_limit=POST_SUBMISSION_ATTEMPT_LIMIT,
                     next_attempt_at=delivery.next_attempt_at if evaluation.status == "queued" else None,
                 )
                 stage = ("operationally_stalled" if stalled else

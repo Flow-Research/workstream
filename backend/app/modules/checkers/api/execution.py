@@ -31,11 +31,10 @@ from app.modules.checkers.api.delivery_reconciliation import (
     PostSubmitExpiredLease, PostSubmitRequestDeliveryFacts,
 )
 from app.modules.model_usage.api import ModelRecoveryCandidate
-from app.modules.outbox.api import DeliveryOptions
 
 REQUEST_EVENT = "PostSubmissionEvaluationRequested"
 COMPLETION_EVENT = "PostSubmissionEvaluationCompleted"
-POST_SUBMISSION_RETRY_OPTIONS = DeliveryOptions()
+POST_SUBMISSION_ATTEMPT_LIMIT = 5
 
 
 class CheckerExecutionUnavailable(RuntimeError):

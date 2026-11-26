@@ -34,11 +34,11 @@ from app.modules.checkers.api.execution import (
     CheckerRetrySourceQuery,
     CheckerRetrySuccessor,
     EvaluationTaskGuard,
-    POST_SUBMISSION_RETRY_OPTIONS, REQUEST_EVENT,
+    REQUEST_EVENT,
 )
 from app.modules.checkers.api.evaluation_contract import PostSubmissionExecutionRequest
 from app.modules.checkers.api.selected_post_submit import make_selected_post_submit_request
-from app.modules.checkers.execution_coordination import EvaluationCoordinator
+from app.modules.checkers.execution_coordination import EvaluationCoordinator, POST_SUBMISSION_RETRY_OPTIONS
 from app.modules.checkers.execution_repository import (
     require_transaction,
     stored_request,

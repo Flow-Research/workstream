@@ -386,8 +386,13 @@ def test_submission_stage_timeouts_and_unknown_gateway_response(cli, tmp_path):
     path = tmp_path / "source.zip"
     path.write_bytes(b"ZIP")
     action = {"next_action": "retry_new_key_after_terminal"}
-    envelope = {"code": "submission_pre_timeout", "message": "upstream private diagnostic",
-                "details": action, "correlation_id": RUN, "retryable": True}
+    envelope = {
+        "code": "submission_pre_timeout",
+        "message": "upstream private diagnostic",
+        "details": action,
+        "correlation_id": RUN,
+        "retryable": True,
+    }
     with http_fixture() as (origin, response, requests):
         respond(response, {"error": envelope}, 504)
         first = cli(origin, TOKEN, *submit_args(path))
@@ -396,15 +401,32 @@ def test_submission_stage_timeouts_and_unknown_gateway_response(cli, tmp_path):
         assert error["details"] == action and not error.get("outcome_unknown", False)
         text = cli(origin, TOKEN, *submit_args(path)[:-2])
         assert "The ZIP uploaded, but pre-submission checks timed out" in text.stderr
-        assert "No Submission was created" in text.stderr and "new idempotency key" in text.stderr
+        assert (
+            "No Submission was created" in text.stderr
+            and "new idempotency key" in text.stderr
+        )
         assert "upstream private diagnostic" not in text.stderr
         respond(response, {"error": envelope | {"details": {}}}, 504)
         unknown = cli(origin, TOKEN, *submit_args(path))
         assert_failure(unknown, "invalid_api_response")
         assert json.loads(unknown.stderr)["error"]["outcome_unknown"] is True
-        respond(response, {"error": envelope | {"code": "submission_upload_timeout", "details": {}, "retryable": False}}, 408)
+        respond(
+            response,
+            {
+                "error": envelope
+                | {
+                    "code": "submission_upload_timeout",
+                    "details": {},
+                    "retryable": False,
+                }
+            },
+            408,
+        )
         upload = cli(origin, TOKEN, *submit_args(path)[:-2])
-        assert "The ZIP upload timed out before pre-submission checks started" in upload.stderr
+        assert (
+            "The ZIP upload timed out before pre-submission checks started"
+            in upload.stderr
+        )
         assert len(requests) == 4
 
 

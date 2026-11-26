@@ -18,7 +18,7 @@ from app.modules.checkers.api.execution import (
     EvaluationProgress,
     ReservedEvaluation,
     EvaluationCompletion,
-    EvaluationTaskGuard, POST_SUBMISSION_RETRY_OPTIONS,
+    EvaluationTaskGuard, POST_SUBMISSION_ATTEMPT_LIMIT,
     VerifiedMaterialFacts,
     VerifiedEvaluationCompletion,
 )
@@ -41,10 +41,14 @@ from app.modules.checkers.execution_repository import (
     stored_request,
 )
 from app.modules.outbox.api import (
+    DeliveryOptions,
     OutboxAppendInput, OutboxAppendPort, OutboxIdempotencyConflict, OutboxInputError, OutboxPersistenceError,
 )
 from app.modules.checkers.execution_results import evaluation_completion_event
 from app.modules.checkers.models import CheckerRun, CheckerSubmissionFence, CheckerRetryReceipt
+
+
+POST_SUBMISSION_RETRY_OPTIONS = DeliveryOptions(max_attempts=POST_SUBMISSION_ATTEMPT_LIMIT)
 
 
 class EvaluationCoordinator:
