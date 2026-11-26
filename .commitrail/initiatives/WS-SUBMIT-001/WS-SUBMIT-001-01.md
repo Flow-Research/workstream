@@ -11520,3 +11520,27 @@ are identical. Ruff check/format and whitespace pass. No PG/native/TUI execution
 on the repaired fixture yet; the original CI failed before that fixture setup
 completed. Parent holds the slot for the native prerequisite and will obtain
 runtime evidence in the coordinated run or new CI.
+
+
+Native fixture startup prerequisites are now proved: the production cleanup
+validator rejects the absent service identity and accepts the provisioned
+fixture; exact upload resolver/verifier actions authorize; the owned bucket
+reads back versioning. `/tmp/workstream-submitters-708-cleanup-startup.json`
+records complete cleanup. The companion cold2 log proves the four real child
+settings profiles; its later temporary proof-script alias error was repaired
+without product changes. 1f35f7dfb then started all seven consumers and Beat,
+processed public guide upload, but timed out waiting for policy_draft_ready.
+`/tmp/workstream-paired-native-bm3qq35f/cleanup.json` confirms database/storage
+cleanup. This remains a failed combined journey, with guide dispatch/execution
+under diagnosis before another full run.
+
+Verified 1d28 backend agents and MCP images are now staged in immutable ECR,
+without API deployment. `/tmp/workstream-published-1795683620543134554.json`
+binds source, exact local image IDs and repository digests: agents
+`sha256:5d7df0b2f3cd6528bc5e89f9bbfb8870b805e2298a984c8bd0dffde06e3f4176`,
+MCP `sha256:ad364ad848e12618003314733ab9eecf262d9b55facae2ad5bd7957ea25205eb`.
+ARCH reviewed the bounded staging operator before execution. ECR login-token
+response remained in memory and the invocation's remote Docker credential file
+was removed in finally; no running service configuration was changed. The prior
+inventory's unpublished status is superseded by this staging receipt, while its
+native/configuration/migration/deployed-proof limitations remain open.
