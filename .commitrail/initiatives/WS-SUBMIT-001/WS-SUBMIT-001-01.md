@@ -13322,8 +13322,8 @@ retry of an unresolved invocation. Check exact replay, whole-transaction rollbac
 and late-effect fencing through the existing signed Operator and database tests.
 
 Independent review identified optional retry composition on the canonical
-executor. The executor now requires the TASK retry guard in every composition;
-the unused alternate builder was removed. Focused fixtures that exercise
+executor. The executor now requires the TASK retry guard in every composition.
+The unused alternate builder was removed. Focused fixtures that exercise
 Operator recovery set an explicit exhausted allowance while the automatic
 retry regression uses the full production allowance. The MCP submission-create
 snapshot now retains the already deployed known PRE timeout response.
@@ -13345,3 +13345,9 @@ for all task execution contracts and response validation for the three submissio
 snapshots. Independent source review passed the required-port and TASK-first
 correction at `e87215872`. These are local proofs. Hosted recovery and maximum ZIP
 POST completion still require deployment and qualification.
+
+After the review corrections, four focused PostgreSQL cases at `e87215872`
+passed in 96.55 seconds with database and MinIO cleanup. The cases verified
+missing-byte terminalization and replay, refusal before lease work for an
+obsolete request, rollback on retry-event failure and the signed Operator path.
+The receipt is under `/tmp/workstream-post-canonical-retry.2nn3cm`.
