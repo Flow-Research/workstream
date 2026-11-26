@@ -854,7 +854,7 @@ cannot be reused as post-submission review-gate evidence. See the
   The [MCP initiative](../.commitrail/initiatives/WS-MCP-002/OVERVIEW.md)
   records the original tool delivery. Its unchanged-bearer design is superseded
   by [resource-scoped OAuth and same-subject exchange](../.commitrail/changes/keycloak-mcp-oauth.md).
-  The original [one-tool experiment](../experiments/mcp_caller_token/README.md)
+  The original [one-tool experiment](https://github.com/Flow-Research/workstream/blob/d713594ebf04a125917edb0ec981d380cf8047b4/experiments/mcp_caller_token/README.md)
   is historical evidence, not the current credential path. Independent packaging
   and the three bounded self-service
   tools are delivered through WS-MCP-002-02: profile read, profile update and
@@ -2050,7 +2050,7 @@ artifact lineage and contribution/award facts. This is self-hosted execution pro
 using recorded guide inference, a local Flow fixture and MinIO; intended hosted
 Flow/AWS deployment and live model invocation remain separate.
 
-The [offline gVisor build spike](engineering/pilot00-gvisor-offline-build-spike.md)
+The [offline gVisor build spike](https://github.com/Flow-Research/workstream/blob/d713594ebf04a125917edb0ec981d380cf8047b4/docs/engineering/pilot00-gvisor-offline-build-spike.md)
 selects a sealed-cache Kaniko builder plus a separate gVisor oracle sandbox for
 PILOT-04/PILOT-06. PILOT-04 now has a normalized external request/result
 contract, immutable authorized digest-pinned registry, selected Rust service/SDK

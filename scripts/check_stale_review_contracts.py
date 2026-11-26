@@ -23,23 +23,6 @@ ARCHIVAL_PATHS = {
 # Closed engineering/product reviews may describe earlier contracts verbatim.
 HISTORICAL_PATHS = {
     "docs/reference_specs/WS-CON-001-contribution-record-and-compensation-boundary-specification.md",
-    "docs/internal_reviews/2026-06-11_chunk9_pre_review_gate.md",
-    "docs/internal_reviews/2026-06-11_revision_context_rebase.md",
-    "docs/internal_reviews/2026-06-12_chunk10_checker_trial.md",
-    "docs/internal_reviews/2026-06-12_week2_closeout_real_api_drill.md",
-    "docs/internal_reviews/2026-06-13_week1_week2_deterministic_hardening.md",
-    "docs/internal_reviews/2026-06-16_submission_artifact_policy_architecture.md",
-    "docs/review_adversarial_quality_review.md",
-    "docs/review_architecture_review.md",
-    "docs/review_closure.md",
-    "docs/review_final_adversarial_review.md",
-    "docs/review_final_architecture_review.md",
-    "docs/review_final_product_strategy_review.md",
-    "docs/review_operations_review.md",
-    "docs/review_process_baseline_operations_review.md",
-    "docs/review_process_pattern_baseline_review.md",
-    "docs/review_product_strategy_review.md",
-    "docs/review_systems_architecture_review.md",
     "docs/spec_chunk_9_pre_review_gate.md",
 }
 
@@ -82,9 +65,6 @@ ACTIVE_PATHS = {
     "docs/product_principles.md",
     "docs/reference_specs/README.md",
     "docs/risk_register.md",
-    "docs/roadmap_30_day_master_plan.md",
-    "docs/roadmap_day_by_day_execution_plan.md",
-    "docs/roadmap_implementation_backlog.md",
     "docs/roadmap_pilot_plan.md",
     "docs/roles_permissions.md",
     "docs/spec_chunk_3_project_guide_foundation.md",

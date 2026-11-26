@@ -21,7 +21,7 @@ This index lists the main Workstream documents. Start with the
 - [Product Principles](product_principles.md)
 - [Product Brief](product_brief.md)
 - [First User Flows](product_first_user_flows.md)
-- [Architecture Brief PDF — target architecture](architecture_brief/workstream_architecture_brief.pdf)
+- [Architecture Brief](architecture_brief/workstream_architecture_brief.md)
 - [Architecture Diagrams](diagrams/README.md)
 - [System Architecture](architecture_system_architecture.md)
 - [Data Model](architecture_data_model.md)
@@ -43,20 +43,6 @@ This index lists the main Workstream documents. Start with the
 - [Risk Register](risk_register.md)
 - [Process Pattern Baseline](process_pattern_baseline.md)
 - [Glossary](glossary.md)
-
-## Historical Review Records
-
-These records preserve earlier product, architecture, process, and adversarial
-reviews. They are evidence and design history, not current implementation
-status. Current changes receive review through [CONTRIBUTING.md](../CONTRIBUTING.md).
-
-- [Process Baseline Operations Review](review_process_baseline_operations_review.md)
-- [Final Product Strategy Review](review_final_product_strategy_review.md)
-- [Final Architecture Review](review_final_architecture_review.md)
-- [Final Adversarial Review](review_final_adversarial_review.md)
-- [Adversarial Quality Review](review_adversarial_quality_review.md)
-- [Process Pattern Baseline Review](review_process_pattern_baseline_review.md)
-- [Review Closure](review_closure.md)
 
 ## Templates
 

@@ -9,7 +9,7 @@
 Use a maintained external identity provider for browser email/password login,
 required password changes, sessions and OAuth. Preserve issuer-owned profile
 email, locally editable display names and Workstream's independent role owners.
-The approved implementation contract is [the Keycloak plan](../../workstream_keyloack.md).
+The approved implementation contract is [the Keycloak plan](https://github.com/Flow-Research/workstream/blob/d713594ebf04a125917edb0ec981d380cf8047b4/workstream_keyloack.md).
 A provider-only harness or passing CI is not delivery of the Garden connection.
 
 ## Current behavior

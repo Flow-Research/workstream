@@ -17,20 +17,11 @@ DOCUMENT_SUFFIXES = {".html", ".json", ".md", ".puml"}
 # with an explicit rationale through normal review.
 HISTORICAL_PATHS = {
     "docs/checker_trial_failure_catalog.md": "closed checker-trial evidence",
-    "docs/internal_reviews/2026-06-11_chunk9_pre_review_gate.md": "closed internal review",
-    "docs/internal_reviews/2026-06-11_revision_context_rebase.md": "closed internal review",
-    "docs/internal_reviews/2026-06-12_chunk10_checker_trial.md": "closed internal review",
-    "docs/internal_reviews/2026-06-12_week2_closeout_real_api_drill.md": "closed internal review",
-    "docs/internal_reviews/2026-06-13_week1_week2_deterministic_hardening.md": "closed internal review",
-    "docs/internal_reviews/2026-06-16_submission_artifact_policy_architecture.md": "closed internal review",
     "docs/reference_specs/WS-AUTH-001-actor-profile-role-and-authorization-service-specification.md": "immutable archival input",
     "docs/reference_specs/WS-CON-001-contribution-record-and-compensation-boundary-specification.md": "immutable archival input",
     "docs/reference_specs/WS-IMP-001-workstream-v0.1-coding-agent-implementation-specification.md": "immutable archival input",
     "docs/reference_specs/WS-REV-001-review-lifecycle-specification.md": "immutable archival input",
-    "docs/roadmap_30_day_master_plan.md": "historical initial plan",
-    "docs/roadmap_day_by_day_execution_plan.md": "historical execution plan",
     "docs/roadmap_pilot_plan.md": "historical pilot plan",
-    "docs/roadmap_week1_backend_plan.md": "historical Week 1 plan",
     "docs/spec_chunk_1_backend_scaffold.md": "historical implemented chunk",
     "docs/spec_chunk_3_project_guide_foundation.md": "historical implemented chunk",
     "docs/spec_chunk_4_task_queue_assignment.md": "historical implemented chunk",
@@ -40,7 +31,6 @@ HISTORICAL_PATHS = {
     "docs/spec_chunk_8_submission_artifact_policy_checkers.md": "historical implemented chunk",
     "docs/spec_chunk_9_pre_review_gate.md": "historical implemented chunk",
     "docs/spec_chunk_10_checker_trial.md": "historical implemented chunk",
-    "docs/spec_week2_checker_framework.md": "historical implemented plan",
 }
 
 
