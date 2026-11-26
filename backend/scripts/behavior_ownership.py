@@ -20,15 +20,15 @@ from coverage import CoverageData
 from jsonschema import Draft202012Validator
 
 from scripts import run_test_lanes as test_lanes
-from scripts.mutation_policy import CALLABLE_RE
-from scripts.mutation_policy import MutationPolicyError
-from scripts.mutation_policy import OBSERVABLE_OUTCOMES
-from scripts.mutation_policy import REAL_BOUNDARIES
-from scripts.mutation_policy import _callable_spans
-from scripts.mutation_policy import _eligible_target
-from scripts.mutation_policy import _safe_path
-from scripts.mutation_policy import _regular_repository_file
-from scripts.mutation_policy import changed_callables
+from scripts.behavior_source import CALLABLE_RE
+from scripts.behavior_source import SourceAnalysisError
+from scripts.behavior_source import OBSERVABLE_OUTCOMES
+from scripts.behavior_source import REAL_BOUNDARIES
+from scripts.behavior_source import _callable_spans
+from scripts.behavior_source import _eligible_target
+from scripts.behavior_source import _safe_path
+from scripts.behavior_source import _regular_repository_file
+from scripts.behavior_source import changed_callables
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -893,6 +893,7 @@ OUTBOX_IDENTITY_REMOVED_TARGETS = frozenset({
 })
 V01_BASELINE_REMOVED_TARGETS = frozenset(
     {
+        "backend/scripts/mutation_policy.py",
         "backend/app/modules/actors/legacy_classification.py",
         "backend/scripts/legacy_actor_classification.py",
         "backend/app/modules/actors/service_identity_migration.py",
@@ -901,6 +902,7 @@ V01_BASELINE_REMOVED_TARGETS = frozenset(
 )
 V01_BASELINE_ADDED_TARGETS = frozenset(
     {
+        "backend/scripts/behavior_source.py",
         "backend/app/core/identifiers.py",
         "backend/scripts/identifier_inventory.py",
         "backend/scripts/record_id_collection.py",
@@ -1675,7 +1677,7 @@ def _tracked_at_revision(root: Path, revision: str, path: str) -> bool:
     """Return whether one safe repository path is tracked at the revision."""
     try:
         _safe_path(path)
-    except MutationPolicyError:
+    except SourceAnalysisError:
         return False
     result = subprocess.run(
         ["git", "cat-file", "-e", f"{revision}:{path}"],
@@ -1703,7 +1705,7 @@ def _context_target_is_valid(root: Path, target: object) -> bool:
         return False
     try:
         return _eligible_target(target) and _regular_repository_file(root, target)
-    except MutationPolicyError:
+    except SourceAnalysisError:
         return False
 
 

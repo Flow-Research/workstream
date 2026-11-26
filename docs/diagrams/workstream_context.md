@@ -1,6 +1,6 @@
 # Workstream System Context
 
-This C4-PlantUML context view shows Workstream as the governed contribution core
+This PlantUML context view shows Workstream as the governed contribution core
 between systems that request work and systems that consume trusted contribution
 facts.
 

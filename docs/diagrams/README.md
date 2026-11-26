@@ -5,7 +5,8 @@ This diagram pack explains Workstream at two levels:
 - the bounded v0.1 implementation that is being built now
 - the broader Workstream ecosystem that can connect later to external origins, agent identity, task contracts, settlement rails, and portable reputation
 
-The architecture diagrams use C4-PlantUML source files so they render with real C4 system, container, component, boundary, and external-system boxes. The backend component view and task lifecycle sequence use Mermaid, rendered directly by GitHub.
+The context and container diagrams use standalone PlantUML sources with explicit
+boxes and relationships; no remote C4 library includes are required. The backend component view and task lifecycle sequence use Mermaid, rendered directly by GitHub.
 
 ## Diagram Index
 

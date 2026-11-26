@@ -2638,6 +2638,10 @@
     },
     {
       "group": "shared",
+      "target": "backend/scripts/behavior_source.py"
+    },
+    {
+      "group": "shared",
       "target": "backend/scripts/bootstrap_access_administrator.py"
     },
     {
@@ -2710,10 +2714,6 @@
     },
     {
       "group": "shared",
-      "target": "backend/scripts/mutation_policy.py"
-    },
-    {
-      "group": "shared",
       "target": "backend/scripts/provision_local_service_actors.py"
     },
     {
@@ -2761,7 +2761,7 @@
       "target": "backend/scripts/validate_test_lane_evidence.py"
     }
   ],
-  "authority_digest": "a75698f5c20807b70e6d2dc8d930de60de2b991d7ae23e3b6e5fd9e07508da9e",
+  "authority_digest": "50266fb372abd495b53e56d22c13017ab4dbf6202e5498f1b0c4963410373c09",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }
