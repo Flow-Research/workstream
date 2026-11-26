@@ -13185,5 +13185,17 @@ The preceding signed HTTP and owner tests passed two cases covering the known
 504 and retry guidance. The unchanged watchdog, built CLI and installed MCP
 boundary tests passed 11, three and two cases respectively. The CLI and MCP
 cases distinguish known PRE timeout from an uncertain response and retain the
-original upload timeout. Hosted 300-second PRE and maximum-size acceptance
-still require live qualification.
+original upload timeout.
+
+Runtime source `a0e389a89` is deployed with the approved 300-second PRE profile;
+upload total remains 300 seconds and upload idle remains 30 seconds. The separate
+runner's authenticated readiness matched the new profile and configuration. All
+15 hosted containers were healthy after activation, protected data and identity
+containers retained their original IDs, MCP shares the replacement API's network
+namespace, and the public `/api/v1/health` returned 200. The updated native CLI is
+installed locally and staged on the API host. The live readback receipt is
+`/tmp/workstream-pre300-live-readback.json`; the coordinated deployment and backup
+are retained under `/var/backups/workstream/pr708-pre300-a0e389a8` on the API host.
+The hosted maximum-size retry stopped before upload because the saved CLI login
+reported an uncertain prior refresh and requires interactive login recovery.
+Maximum-size acceptance is not yet claimed.
