@@ -1238,7 +1238,10 @@ def _require_runner_health(execution: ExternalCheckerServiceHealth, intake: Trus
 
 async def run(database_url: str, image_reference: str, node_config: Path,
               broker_url: str, root: Path, expected_custody: Path,
-              clients: ContributorClients | None = None, *, separate_runner: bool = False) -> dict:
+              clients: ContributorClients | None = None, *, separate_runner: bool = False,
+              policy_case: str = "both") -> dict:
+    _require(policy_case in {"both", "human", "automatic"}, "unknown policy qualification case")
+    _require(policy_case == "both" or separate_runner, "single policy case requires separate runner")
     root.mkdir(parents=True, mode=0o700, exist_ok=True)
     _require(not separate_runner or clients is not None, 'separate runner proof needs both clients')
     custody = json.loads(expected_custody.read_text())
@@ -1450,17 +1453,22 @@ async def run(database_url: str, image_reference: str, node_config: Path,
                 _require((fault_root / "supervisor-ready").exists(), "owned node supervisor is absent")
                 runtime_trials = await public_runtime_trials(client, factory, env, fault_root,
                     stop_worker=stop_owned_worker, start_worker=start_owned_worker, operator_token=_token(env, operator))
-            true = await _one_mode(client, factory, env,
+            true = false = None
+            if policy_case in {"both", "human"}:
+                true = await _one_mode(client, factory, env,
                                    human_review_required=True,
                                    operator_id=operator.actor_profile_id, clients=clients,
                                    exercise_faults=not separate_runner, manager_authored=separate_runner)
-            false = await _one_mode(client, factory, env,
+                _write_policy_receipt(root, "human", true, custody)
+            if policy_case in {"both", "automatic"}:
+                false = await _one_mode(client, factory, env,
                                     human_review_required=False,
                                     operator_id=operator.actor_profile_id,
                                     stop_worker=stop_owned_worker,
                                     start_worker=start_owned_worker, fault_root=fault_root,
                                     operator_token=_token(env, operator), clients=clients,
                                     exercise_faults=not separate_runner, manager_authored=separate_runner)
+                _write_policy_receipt(root, "automatic", false, custody)
         _require(api.poll() is None and beat.poll() is None
                  and all(process.poll() is None for process in workers),
                  "API, dedicated prefork worker, or Beat exited during public journey")
@@ -1475,6 +1483,8 @@ async def run(database_url: str, image_reference: str, node_config: Path,
                 "maximum_parallel": service_config["smol"]["maximum_parallel"],
                 "pre_reserved_capacity": service_config["pre"]["reserved_capacity"],
                 "separate_runner": separate_runner,
+                "completed_policy_cases": [name for name, outcome in (("human", true), ("automatic", false))
+                                           if outcome is not None],
                 "scheduled_artifact_scans": True,
                 "public_original_guide_setup": True,
                 "connected_submitter_clients": ["cli", "mcp"] if clients is not None else [],
@@ -1495,6 +1505,19 @@ async def run(database_url: str, image_reference: str, node_config: Path,
                 await engine.dispose()
 
 
+def _write_policy_receipt(root: Path, case: str, result: dict, custody: dict) -> None:
+    """Retain a completed case without claiming the other case or overall cleanup."""
+    selected = {key: custody[key] for key in (
+        "source_tree", "config_sha256", "service_sha256", "smol_sha256", "guest_sha256",
+    )}
+    with (root / f"policy-{case}.json").open("x", encoding="utf-8") as stream:
+        json.dump({"completed_policy_case": case, "custody": selected, "result": result,
+                   "overall_cleanup_requires_separate_receipt": True}, stream, sort_keys=True)
+        stream.write("\n")
+        stream.flush()
+        os.fsync(stream.fileno())
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--database-url", default=os.environ.get("WORKSTREAM_TEST_DATABASE_URL"))
@@ -1508,6 +1531,8 @@ def main() -> int:
     parser.add_argument("--mcp-executable", type=Path, help="Installed MCP for connected submitter verification")
     parser.add_argument("--separate-runner", action="store_true",
                         help="Use baseline remote runner custody without local host fault controls")
+    parser.add_argument("--policy-case", choices=("both", "human", "automatic"), default="both",
+                        help="Qualify one independent policy case on the separate runner, or both")
     parser.add_argument('--hosted-attachment', type=Path,
                         help='Private attachment manifest for an existing hosted API/worker/Beat')
     parser.add_argument('--hosted-model-post', type=Path,
@@ -1521,6 +1546,8 @@ def main() -> int:
         parser.error("connected submitter verification requires both client executables")
     if args.separate_runner and not args.cli_executable:
         parser.error("the separate runner proof requires both client executables")
+    if args.policy_case != "both" and not args.separate_runner:
+        parser.error("a single policy case requires --separate-runner")
     if args.hosted_attachment:
         if (not args.broker_url or args.image_reference or args.node_config
                 or args.work_dir or args.expected_custody or args.cli_executable or args.mcp_executable
@@ -1544,6 +1571,7 @@ def main() -> int:
         value = asyncio.run(run(
             args.database_url, args.image_reference, args.node_config,
             args.broker_url, Path(directory), args.expected_custody, clients, separate_runner=args.separate_runner,
+            policy_case=args.policy_case,
         ))
     print(json.dumps(value, sort_keys=True, separators=(",", ":")))
     return 0

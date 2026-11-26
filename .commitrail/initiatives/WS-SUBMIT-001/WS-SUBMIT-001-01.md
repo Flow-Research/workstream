@@ -12001,3 +12001,18 @@ passed when rerun individually. Its deadline remains intact. The three
 Python fixtures compiled and their shared background-slot calculation passed
 both single-pool and partitioned examples. The native probes still require an
 owned runner and were not started for this review correction.
+
+
+### Bound connected qualification by policy case
+
+The combined f480 run reached the automatic project after completing the
+default-policy revision and duplicate-delivery assertions, but the 2400-second
+harness bound expired before its final automatic receipt. Cleanup is true in
+`/tmp/workstream-paired-native-pefexu4d/cleanup.json`; the in-progress checkpoint
+is not a terminal pass. Allowed files: the existing public probe and its focused
+proof tests, plus this record. Add an explicit separate-runner policy-case
+selector and exclusive per-case receipts after unchanged outcome assertions.
+Default remains both cases. Selected-case reports must identify the executed
+case and leave unexecuted outcomes empty; no business deadline/resource or
+assertion changes. This permits bounded final-head qualification without
+repeating a completed independent case or calling partial output a full pass.

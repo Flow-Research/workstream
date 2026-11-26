@@ -29,6 +29,26 @@ from experiments.pilot04_external_checker_runtime.public_hosted_attachment impor
 
 
 class PublicJourneyWorkerCustody(unittest.TestCase):
+    def test_completed_policy_receipt_cannot_overwrite_or_claim_both_cases(self):
+        from experiments.pilot04_external_checker_runtime import run_public_journey_probe as probe
+
+        custody = {key: "sha256:" + "1" * 64 for key in (
+            "source_tree", "config_sha256", "service_sha256", "smol_sha256", "guest_sha256",
+        )}
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            probe._write_policy_receipt(root, "automatic", {"submission_id": "first"}, custody)
+            receipt = root / "policy-automatic.json"
+            original = receipt.read_bytes()
+            value = json.loads(original)
+            self.assertEqual(value["completed_policy_case"], "automatic")
+            self.assertEqual(value["custody"], custody)
+            self.assertTrue(value["overall_cleanup_requires_separate_receipt"])
+            self.assertFalse((root / "policy-human.json").exists())
+            with self.assertRaises(FileExistsError):
+                probe._write_policy_receipt(root, "automatic", {"submission_id": "different"}, custody)
+            self.assertEqual(receipt.read_bytes(), original)
+
     def test_runner_health_reports_reviewed_cache_size_as_a_count(self):
         from app.interfaces.external_checker_execution import ExternalCheckerServiceHealth
         from app.interfaces.trusted_submission_intake import TrustedIntakeIdentity
