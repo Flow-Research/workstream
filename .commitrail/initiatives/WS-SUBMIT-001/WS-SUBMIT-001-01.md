@@ -12144,3 +12144,25 @@ cases, repeated cancellation cleanup, and the transport boundary. The test
 reschedules an actual outer deadline during source close, waits for cleanup,
 and requires the exact original unknown outcome. Before-send timeout and
 scratch failure preserve their own behavior. No services changed for this proof.
+
+### Reserved PRE capacity activated for native qualification
+
+The existing separate runner was idle (no machines, leases, workspaces,
+workload cgroups, live journey process or established runner TLS connection).
+An independently reviewed bounded operator preserved the old binary, config
+and unit under `/opt/workstream/a29-backup-745a93552b09`, stopped both runner
+units, checked absence again, installed the pinned candidate and restarted.
+The running `/proc/8195/exe` digest is
+`745a93552b09b1ef3573c07feab7a5119dbf91ddd6bbd6933a9a4336347f8bb3`;
+config digest is
+`a25f372fb6aee18ddf1769b774aea60ff949b8726082a327af759c43cf7bb628`.
+The delegated service limit is 6 GiB. Two slots are partitioned into one PRE
+slot (2.5 GiB memory, 5 GiB disk) and one background slot (3.375 GiB memory,
+7 GiB disk); existing CPU and per-invocation bounds are unchanged.
+Native framed health returned ready with four exact cached manifests.
+Activation and post-start observations are retained in
+`/tmp/workstream-a29-runner-candidate/activation-receipt.json` and
+`live-health.json`. This is qualification sizing, not a published production
+latency/resource approval or an overlap-test pass. The current public fixture
+prepares its current archive before running POST; predecessor-archive and
+trial policies need additional background capacity. API deployment is unchanged.
