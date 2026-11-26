@@ -523,6 +523,10 @@ def test_openapi_documents_request_error_and_response_context() -> None:
     contributor_reads = {
         "GET /api/v1/actors/me/projects": "actor.project.list",
         "GET /api/v1/actors/me/assignments": "actor.assignment.list",
+        "GET /api/v1/tasks/{task_id}/assignments/{assignment_id}": "task.assignment.read",
+        "GET /api/v1/projects/{project_id}/contributor-guide": "project.contributor_guide.read",
+        "GET /api/v1/projects/{project_id}/contributor-guide/{guide_id}/documents/{document_id}/content":
+            "project.contributor_guide.read",
         "GET /api/v1/actors/me/submissions": "actor.submission.list",
         "GET /api/v1/actors/me/summary": "actor.work_summary.read",
         f"GET {preparations}": "task.submission_bundle_preparation.list",
@@ -664,13 +668,18 @@ def test_openapi_documents_request_error_and_response_context() -> None:
         operation = schema["paths"][path][method.lower()]
         assert operation["x-workstream-action-id"] == action
         assert operation["security"]
-    assert len(route_inventory) == 134
-    retained_routes = sorted(set(route_inventory) - proposal_routes - post_policy_routes - queue_routes - new_manager_reads - guide_read - contribution_reads.keys() - public_entry_actions.keys() - registry_actions.keys() - recovery_actions.keys() - model_actions.keys())
-    retained_protected = sorted(set(protected_inventory) - proposal_routes - post_policy_routes - queue_routes - new_manager_reads - guide_read - contribution_reads.keys() - public_entry_actions.keys() - registry_actions.keys() - recovery_actions.keys() - model_actions.keys())
+    assert len(route_inventory) == 137
+    contributor_journey_routes = {
+        "GET /api/v1/tasks/{task_id}/assignments/{assignment_id}",
+        "GET /api/v1/projects/{project_id}/contributor-guide",
+        "GET /api/v1/projects/{project_id}/contributor-guide/{guide_id}/documents/{document_id}/content",
+    }
+    retained_routes = sorted(set(route_inventory) - proposal_routes - post_policy_routes - queue_routes - new_manager_reads - guide_read - contribution_reads.keys() - public_entry_actions.keys() - registry_actions.keys() - recovery_actions.keys() - model_actions.keys() - contributor_journey_routes)
+    retained_protected = sorted(set(protected_inventory) - proposal_routes - post_policy_routes - queue_routes - new_manager_reads - guide_read - contribution_reads.keys() - public_entry_actions.keys() - registry_actions.keys() - recovery_actions.keys() - model_actions.keys() - contributor_journey_routes)
     assert sha256("\n".join(retained_routes).encode()).hexdigest() == (
         "9a495b21b504f27997a26c233e7dc4b814133038a063376b760147118bd44b7e"
     )
-    assert len(protected_inventory) == 132
+    assert len(protected_inventory) == 135
     assert sha256("\n".join(retained_protected).encode()).hexdigest() == (
         "8aa0828260680a7bccdb055ebb3f21fcd06d4e37a808b4a0a37dcbf77ffa0732"
     )
@@ -1017,6 +1026,9 @@ def test_submission_mutation_is_one_raw_zip_acceptance_contract():
     assert "post" not in app.openapi()["paths"].get("/api/v1/tasks/{task_id}/submission-bundle-preparations", {})
     operation = app.openapi()["paths"][path]["post"]
     assert operation["x-workstream-action-id"] == "submission.create"
+    assert {value["name"] for value in operation["parameters"] if value["in"] == "header"} == {
+        "X-Task-Assignment-Id", "Idempotency-Key", "X-Submission-Feedback", "X-Request-ID", "X-Correlation-ID",
+    }
     assert set(operation["requestBody"]["content"]) == {"application/zip"}
     assert "202" in operation["responses"] and "201" not in operation["responses"]
     receipt = app.openapi()["components"]["schemas"]["SubmissionAcceptedResponse"]

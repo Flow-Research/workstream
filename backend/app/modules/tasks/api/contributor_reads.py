@@ -61,6 +61,12 @@ class ContributorAssignment(BaseModel):
     ))
 
 
+@dataclass(frozen=True, slots=True)
+class OwnAssignmentSelection:
+    assignment: ContributorAssignment
+    active_operation_id: UUID | None
+
+
 class ContributorAssignmentPage(BaseModel):
     model_config = _FROZEN
     items: tuple[ContributorAssignment, ...]
@@ -139,6 +145,14 @@ class ContributorSubmissionQuery:
 
 class ContributorWorkReadPort(Protocol):
     """Read-only TASK projections; the caller owns authority and the transaction."""
+
+    async def resolve_own_assignment_project(
+        self, task_id: UUID, assignment_id: UUID, contributor_id: UUID,
+    ) -> UUID | None: ...
+
+    async def read_own_assignment(
+        self, project_id: UUID, task_id: UUID, assignment_id: UUID, contributor_id: UUID,
+    ) -> OwnAssignmentSelection | None: ...
 
     async def read_assignments(
         self, query: ContributorAssignmentQuery,

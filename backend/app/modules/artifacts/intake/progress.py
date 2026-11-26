@@ -142,8 +142,40 @@ class SubmissionOperationReadService:
             results = row.acceptance_receipt["pre_submission_results"]
         else:
             results = await self._feedback(row, repository)
-        stage, action, stalled = row.state, "wait", False
+        action = "wait"
+        stage, stalled, submission_id, version, request_id = await self._attempt_progress(row)
+        if row.state in {"rejected", "failed", "abandoned", "cancelled"}:
+            action = "inspect_governed_outcome"
+            if row.state != "cancelled" and await self._permits_new_intake(current.candidate):
+                action = "correct_and_submit_new_key" if row.state == "rejected" else "retry_new_key_after_terminal"
+        elif row.state == "finalized" and stage not in {"evaluation_pending", "evaluation_running", "operationally_stalled"}:
+            action = "inspect_governed_outcome"
+        return SubmissionOperationResponse(
+            operation_id=UUID(row.id), task_id=task_id, assignment_id=UUID(row.assignment_id),
+            idempotency_key=UUID(row.idempotency_key), operation_state=row.state,
+            processing_stage=stage, accepted_at=row.accepted_at,
+            task_status_at_acceptance="evaluation_pending" if accepted else None,
+            current_task_status=current.current_task_status, submission_id=submission_id,
+            submission_version=version, evaluation_request_id=request_id,
+            pre_submission_results=results, failure_code=self._public_failure(row.failure_code), operationally_stalled=stalled, next_action=action,
+        )
+
+    @staticmethod
+    def _public_failure(code):
+        if code is not None and code not in {
+            "submission_packet_invalid", "submission_archive_limit_exceeded", "submission_upload_timeout",
+            "submission_infrastructure_unavailable", "pre_submission_checker_failed",
+            "submission_foreground_expired", "submission_operation_cancelled", "revision_deadline_expired",
+            "submission_unavailable", "revision_context_changed", "revision_context_blocked",
+            "revision_limit_reached", "task_submission_predecessor_changed",
+        }:
+            code = "submission_operation_terminal"
+        return code
+
+    async def _attempt_progress(self, row):
+        stage, stalled = row.state, False
         submission_id = version = request_id = None
+        task_id = UUID(row.task_id)
         if row.state == "finalization_pending":
             progress = await finalization_progress(row, self._events, self._deliveries)
             stalled = progress.operationally_stalled
@@ -163,7 +195,7 @@ class SubmissionOperationReadService:
             submission_id, version = outcome.submission_id, outcome.submission_version
             request_id = evaluation.current.request.evaluation_request_id
             if outcome.status != "evaluation_pending":
-                stage, action = outcome.status, "inspect_governed_outcome"
+                stage = outcome.status
             else:
                 event_id = evaluation.completion_event_id or evaluation.retry_event_id or outcome.evaluation_event_id
                 event = OutboxAppendInput.model_validate_json(evaluation.delivery_event_json or outcome.evaluation_event_json)
@@ -171,27 +203,43 @@ class SubmissionOperationReadService:
                 stalled = evaluation.status == "infrastructure_failed" or delivery.state == "dead_letter"
                 stage = ("operationally_stalled" if stalled else
                          "evaluation_running" if evaluation.live_worker_lease else "evaluation_pending")
-        elif row.state in {"rejected", "failed", "abandoned", "cancelled"}:
-            action = "inspect_governed_outcome"
-            if row.state != "cancelled" and await self._permits_new_intake(current.candidate):
-                action = "correct_and_submit_new_key" if row.state == "rejected" else "retry_new_key_after_terminal"
-        code = row.failure_code
-        if code is not None and code not in {
-            "submission_packet_invalid", "submission_archive_limit_exceeded", "submission_upload_timeout",
-            "submission_infrastructure_unavailable", "pre_submission_checker_failed",
-            "submission_foreground_expired", "submission_operation_cancelled", "revision_deadline_expired",
-            "submission_unavailable",
-        }:
-            code = "submission_operation_terminal"
-        return SubmissionOperationResponse(
-            operation_id=UUID(row.id), task_id=task_id, assignment_id=UUID(row.assignment_id),
-            idempotency_key=UUID(row.idempotency_key), operation_state=row.state,
-            processing_stage=stage, accepted_at=row.accepted_at,
-            task_status_at_acceptance="evaluation_pending" if accepted else None,
-            current_task_status=current.current_task_status, submission_id=submission_id,
-            submission_version=version, evaluation_request_id=request_id,
-            pre_submission_results=results, failure_code=code, operationally_stalled=stalled, next_action=action,
+        return stage, stalled, submission_id, version, request_id
+
+    async def read_assignment_attempt(self, query):
+        """Read one assignment-scoped operation and the original PRE projection."""
+        from sqlalchemy import select, text
+        from app.modules.artifacts.api.submission_command import AssignmentIntakeAttempt, AssignmentIntakeUnavailable
+        from app.modules.artifacts.intake.models import SubmissionIntakeOperation
+        from app.modules.artifacts.intake.repository import SubmissionIntakeRepository
+
+        model = SubmissionIntakeOperation
+        statement = select(model).where(
+            model.project_id == str(query.project_id), model.task_id == str(query.task_id),
+            model.assignment_id == str(query.assignment_id), model.actor_profile_id == str(query.contributor_id),
         )
+        if query.active_operation_id is not None:
+            statement = statement.where(model.id == str(query.active_operation_id))
+        row = await self._session.scalar(statement.order_by(model.created_at.desc(), model.id.desc()).limit(1))
+        if row is None:
+            if query.active_operation_id is not None:
+                raise AssignmentIntakeUnavailable("assignment operation unavailable")
+            return None
+        try:
+            if row.accepted_at is not None:
+                await self._session.execute(text("SELECT public.require_submission_acceptance(o) "
+                    "FROM public.submission_intake_operations o WHERE id=:id"), {"id": UUID(row.id)})
+                results = row.acceptance_receipt["pre_submission_results"]
+            else:
+                repository = SubmissionIntakeRepository(self._session, self._tasks)
+                results = await self._feedback(row, repository)
+            stage, stalled, submission_id, _, _ = await self._attempt_progress(row)
+            return AssignmentIntakeAttempt(
+                operation_id=UUID(row.id), stage=stage, failure_code=self._public_failure(row.failure_code),
+                submission_id=submission_id, pre_submission_results=results,
+                operationally_stalled=stalled or row.failure_code == "submission_infrastructure_unavailable",
+            )
+        except IntakeCustodyConflict as exc:
+            raise AssignmentIntakeUnavailable("assignment operation unavailable") from exc
 
     async def _feedback(self, row, repository):
         from app.modules.artifacts.api.submission_preparation import public_pre_submission_results

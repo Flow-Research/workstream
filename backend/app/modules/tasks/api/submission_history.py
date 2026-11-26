@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from datetime import datetime
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import Subquery
 from typing import Literal, Protocol
 from uuid import UUID
@@ -91,7 +91,8 @@ class ContributorSubmissionHistory(BaseModel):
     version: int
     status: SubmissionAttemptStatus
     status_reason: SubmissionStatusReason | None
-    summary: str
+    summary: str | None = Field(description="Retained summary on submissions recorded before project feedback.")
+    feedback: str | None
     submitted_at: datetime
     decided_at: datetime | None
     finding_counts: SubmissionFindingCounts

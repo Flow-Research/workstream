@@ -60,6 +60,7 @@ class SubmissionIntakeOperation(Base):
         Index("ix_submission_intake_cleanup_candidates", "terminal_at", "id",
               postgresql_where=text("state in ('rejected','failed','abandoned','cancelled') "
                                     "and accepted_at is null")),
+        Index("ix_submission_intake_assignment_activity", "assignment_id", "created_at", "id"),
         Index("ix_submission_intake_expiry", "lease_expires_at", "id", postgresql_where=text("state in ('receiving','pre_checking')")),
     )
 

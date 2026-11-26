@@ -6,8 +6,13 @@ from sqlalchemy import select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.hashing import canonical_json_hash
-from app.modules.projects.api.guide_documents import LabeledGuideOriginal, ProjectGuideDocumentSource
+from app.modules.projects.api.guide_documents import (
+    GuideDocumentUnavailable, LabeledGuideOriginal, LockedGuideOriginalsRequest, ProjectGuideDocumentSource,
+)
+from app.modules.projects.guide_activation.custody import load_guide_activation
+from app.modules.projects.guide_compilation.document_scope import SqlAlchemyProjectGuideDocumentScope
 from app.modules.projects.api.guide_reads import (
+    ApprovedContributorGuide, ContributorGuideDocument, ApprovedContributorGuideOriginals,
     GuideDocumentSelection,
     GuideReviewPolicyValues,
     GuideRevisionPolicyValues,
@@ -27,7 +32,7 @@ from app.modules.projects.models import (
     GuideSourceSnapshotItem,
     ProjectGuide,
 )
-from app.modules.projects.repository import ProjectRepository
+from app.modules.projects.repository import ProjectRepository, ProjectRepositoryIntegrityError
 from app.modules.projects.schemas import ReviewPolicyResponse, RevisionPolicyResponse
 
 
@@ -37,6 +42,40 @@ class ProjectGuideReader:
     def __init__(self, session: AsyncSession) -> None:
         """Read through the caller's session and snapshot."""
         self._session = session
+
+    async def read_approved_contributor_guide(self, project_id: UUID) -> ApprovedContributorGuideOriginals | None:
+        """Select the active approved snapshot even when the ready queue is empty."""
+        try:
+            guide = await ProjectRepository(self._session).get_active_guide(str(project_id))
+            if guide is None or guide.activation_operation_id is None:
+                return None
+            activation = await load_guide_activation(self._session, guide)
+            proposal = activation.command.target.proposal
+            originals = await SqlAlchemyProjectGuideDocumentScope(self._session).lock_task_originals(
+                LockedGuideOriginalsRequest(
+                    project_id=project_id, guide_id=UUID(guide.id), guide_version=guide.version,
+                    source_snapshot_id=proposal.source_snapshot_id,
+                    source_snapshot_hash=proposal.source_snapshot_hash,
+                )
+            )
+        except (ProjectRepositoryIntegrityError, GuideDocumentUnavailable, ValueError) as exc:
+            raise ProjectGuideReadUnavailable("approved guide originals unavailable") from exc
+        documents = tuple(
+            ContributorGuideDocument(
+                document_id=item.source.source_item_id, label=item.label,
+                order=item.source.item_order, media_type=item.source.media_type,
+                sha256=item.source.sha256, byte_count=item.source.byte_count,
+                read_reference=(f"/api/v1/projects/{project_id}/contributor-guide/{guide.id}/documents/"
+                                f"{item.source.source_item_id}/content"),
+            )
+            for item in originals
+        )
+        return ApprovedContributorGuideOriginals(
+            ApprovedContributorGuide(
+                project_id=project_id, guide_id=UUID(guide.id), version=guide.version, documents=documents,
+            ),
+            originals,
+        )
 
     async def list_guides(self, project_id, *, status, after, limit):
         """Page the project's guides by ``(created_at, id)``, optionally by stored status."""

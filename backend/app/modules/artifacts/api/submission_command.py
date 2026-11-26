@@ -1,11 +1,16 @@
 """Public single-request submission command and explicit deployment contract."""
 from collections.abc import AsyncIterator
+from dataclasses import dataclass
 from typing import Annotated, Literal, Protocol, Self
 from uuid import UUID
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
 
 from app.modules.artifacts.api.submission_intake import SubmissionIntakeMetadata, SubmissionSourceCapacityLimits
+from app.modules.checkers.api.default_checker import (
+    WorkstreamDefaultCheck, WorkstreamDefaultWarningCode,
+)
+from app.modules.checkers.api.external import ExternalCheckerFinding, Identifier, Sha256
 from app.modules.checkers.api.selected_pre_submit import SelectedPreSubmitRuntimeProfile
 from app.modules.tasks.api.management_queue import TaskStatus
 
@@ -44,6 +49,33 @@ class SubmissionExecutionProfile(BaseModel):
         return self
 
 
+class DefaultIntakeCheck(WorkstreamDefaultCheck):
+    source: Literal["workstream_default"]
+
+
+class DefaultIntakeWarning(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    source: Literal["workstream_default"]
+    status: Literal["warning"]
+    warning_code: WorkstreamDefaultWarningCode
+
+
+class ProjectIntakeCheck(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    source: Literal["project_external_checker"]
+    requirement_id: Identifier
+    registry_entry_id: UUID
+    registry_entry_digest: Sha256
+    status: Literal["passed", "failed"]
+    findings: list[ExternalCheckerFinding] = Field(max_length=256)
+
+
+PreSubmissionResult = DefaultIntakeCheck | DefaultIntakeWarning | ProjectIntakeCheck
+PreSubmissionResults = Annotated[list[PreSubmissionResult], Field(max_length=7)]
+
+
 class SubmissionAcceptedResponse(BaseModel):
     """Stable T4 snapshot; Submission/evaluation IDs do not exist until T5."""
 
@@ -56,7 +88,7 @@ class SubmissionAcceptedResponse(BaseModel):
     task_status_at_acceptance: Literal["evaluation_pending"]
     processing_stage_at_acceptance: Literal["finalization_pending"]
     replayed: bool
-    pre_submission_results: list[dict[str, object]]
+    pre_submission_results: PreSubmissionResults
 
 
 class SubmissionIntakeCommand(Protocol):
@@ -68,6 +100,35 @@ class SubmissionIntakeCommand(Protocol):
     ) -> dict:
         """Return committed acceptance or a bounded SubmissionIntakeFailure."""
         ...
+
+
+class AssignmentIntakeUnavailable(RuntimeError):
+    """Exact owned custody could not be projected."""
+
+
+class AssignmentIntakeAttempt(BaseModel):
+    """Retained intake activity and its safe feedback for one assignment."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    operation_id: UUID
+    stage: str
+    failure_code: str | None
+    submission_id: UUID | None
+    pre_submission_results: PreSubmissionResults
+    operationally_stalled: bool
+
+
+@dataclass(frozen=True, slots=True)
+class AssignmentIntakeQuery:
+    project_id: UUID
+    task_id: UUID
+    assignment_id: UUID
+    contributor_id: UUID
+    active_operation_id: UUID | None
+
+
+class AssignmentIntakeReadPort(Protocol):
+    async def read_assignment_attempt(self, query: AssignmentIntakeQuery) -> AssignmentIntakeAttempt | None: ...
 
 
 class SubmissionOperationSelector(BaseModel):
@@ -108,7 +169,7 @@ class SubmissionOperationResponse(BaseModel):
     submission_id: UUID | None
     submission_version: Annotated[int, Field(strict=True, gt=0)] | None
     evaluation_request_id: UUID | None
-    pre_submission_results: list[dict[str, object]]
+    pre_submission_results: PreSubmissionResults
     failure_code: str | None
     operationally_stalled: bool
     next_action: Literal[

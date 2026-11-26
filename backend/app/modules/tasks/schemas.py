@@ -15,7 +15,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from app.modules.projects.api.guide_activation_context import GuidePolicySelection
 from app.modules.projects.api.locked_policy import GuideDisplayFacts, ProjectDisplayFacts
 from app.modules.tasks.api.task_detail import ContributorTaskDetail, ManagementTaskDetail
-from app.modules.tasks.api.guide_documents import ContributorGuideDocument
+from app.modules.projects.api.guide_reads import ContributorGuideDocument
 
 
 class ContributorTaskLifecycle(BaseModel):

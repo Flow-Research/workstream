@@ -530,7 +530,10 @@ class ExternalCheckerFinding(ExternalCheckerValue):
     check_id: Identifier
     code: Identifier
     level: ExternalCheckerFindingLevel
-    message: Annotated[StrictStr, Field(min_length=1, max_length=4096)]
+    message: Annotated[StrictStr, Field(
+        min_length=1, max_length=4096,
+        description="Contributor-visible diagnosis, including useful correction guidance when available.",
+    )]
     path: Annotated[StrictStr, Field(min_length=1, max_length=1000)] | None = None
     line: Annotated[StrictInt, Field(ge=1, le=10_000_000)] | None = None
 

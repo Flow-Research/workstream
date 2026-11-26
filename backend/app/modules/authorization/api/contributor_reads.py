@@ -7,6 +7,7 @@ from uuid import UUID
 
 ContributorReadAction = Literal[
     "actor.project.list", "actor.assignment.list", "actor.submission.list",
+    "task.assignment.read", "project.contributor_guide.read",
     "actor.work_summary.read", "task.submission_bundle_preparation.list",
     "task.submission_bundle_preparation.read", "task.submission_operation.read",
 ]

@@ -962,7 +962,7 @@ class AuthorizedTaskCommands:
                 revision_context=(await read_contributor_revision(self._session, task, assignment))
                 if own_assignment else None,
                 guide_documents=(await self._guide_documents.list(task_id, self._guide_request(task, context)))
-                if own_assignment else (),
+                if own_assignment or actions else (),
             )
         return response
 

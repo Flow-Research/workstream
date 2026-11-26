@@ -210,6 +210,16 @@ async def test_public_minimal_submission_survives_acceptance_finalization_and_re
     assert first.status_code == 202, first.text
     receipt = first.json()
     assert receipt["status"] == "accepted" and receipt["replayed"] is False
+    status_path = f"/api/v1/tasks/{f.task}/assignments/{f.assignment}"
+    pending = await client.get(status_path, headers=f.access.target.headers)
+    assert pending.status_code == 200, pending.text
+    assert pending.json()["current_status"] == "evaluation_pending"
+    assert pending.json()["next_action"] == "awaiting_evaluation"
+    assert pending.json()["assignment"]["latest_submission"] is None
+    assert pending.json()["intake"]["pre_submission_results"] == receipt["pre_submission_results"]
+    assert (await client.get(
+        f"/api/v1/tasks/{f.task}/assignments/{new_record_id()}", headers=f.access.target.headers,
+    )).status_code == 404
     warnings = [item["warning_code"] for item in receipt["pre_submission_results"]
                 if item["source"] == "workstream_default" and item["status"] == "warning"]
     assert warnings == []
@@ -231,6 +241,10 @@ async def test_public_minimal_submission_survives_acceptance_finalization_and_re
         ))
     finally:
         bootstrap.close()
+    finalized = await client.get(status_path, headers=f.access.target.headers)
+    assert finalized.status_code == 200, finalized.text
+    assert finalized.json()["assignment"]["latest_submission"]["submission_id"] == str(submission_id)
+    assert finalized.json()["current_status"] == "evaluation_pending"
     replay = await client.post(route, headers=headers, content=payload)
     assert replay.status_code == 202 and replay.json() == dict(receipt, replayed=True), replay.text
     assert len(calls) == 1 and not errors, errors
@@ -406,6 +420,8 @@ async def test_public_initial_submission_replays_and_recovers_accepted_upload(
     history = await client.get(route, headers=f.access.target.headers)
     assert history.status_code == 200, history.text
     assert [item["id"] for item in history.json()["items"]] == [str(submission_id)]
+    assert history.json()["items"][0]["feedback"] == headers["X-Submission-Feedback"]
+    assert history.json()["items"][0]["summary"] is None
     async with f.factory.begin() as session:
         profile = await session.get(ActorProfile, str(f.actor.actor_profile_id))
         profile.status = "suspended"

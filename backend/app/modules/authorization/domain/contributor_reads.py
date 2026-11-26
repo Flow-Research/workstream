@@ -32,12 +32,15 @@ class ActorProjectListResourceContext(BaseModel):
 ContributorWorkResourceType = Literal[
     "actor_assignment_collection", "actor_submission_collection", "actor_work_summary",
     "task_submission_bundle_preparation_collection", "submission_bundle_preparation_read",
+    "task_assignment_read", "project_contributor_guide",
 ]
 _ACTOR_WIDE = frozenset({
     "actor_assignment_collection", "actor_submission_collection", "actor_work_summary",
 })
 WORK_RESOURCE_BY_ACTION = {
     ActionId.ACTOR_ASSIGNMENT_LIST: "actor_assignment_collection",
+    ActionId.TASK_ASSIGNMENT_READ: "task_assignment_read",
+    ActionId.PROJECT_CONTRIBUTOR_GUIDE_READ: "project_contributor_guide",
     ActionId.ACTOR_SUBMISSION_LIST: "actor_submission_collection",
     ActionId.ACTOR_WORK_SUMMARY_READ: "actor_work_summary",
     ActionId.TASK_SUBMISSION_BUNDLE_PREPARATION_LIST: "task_submission_bundle_preparation_collection",
@@ -61,6 +64,9 @@ class ContributorWorkReadResourceContext(BaseModel):
         if self.resource_type in _ACTOR_WIDE:
             if self.resource_id != self.actor_profile_id:
                 raise ValueError("contributor work read differs from caller")
+        elif self.resource_type == "project_contributor_guide":
+            if self.scope_project_id != self.resource_id:
+                raise ValueError("contributor guide requires its exact project")
         elif self.scope_project_id is None:
             raise ValueError("task work read requires its project")
         return self

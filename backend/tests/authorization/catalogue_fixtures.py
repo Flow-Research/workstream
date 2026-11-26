@@ -306,6 +306,8 @@ expected = {
     **dict.fromkeys(
         (
             "actor.assignment.list",
+            "task.assignment.read",
+            "project.contributor_guide.read",
             "actor.submission.list",
             "actor.work_summary.read",
             "task.submission_bundle_preparation.list",
@@ -616,6 +618,8 @@ AUDIT_ALLOWED_ACTION_VALUES = {
     "contribution.read_project",
     "actor.project.list",
     "actor.assignment.list",
+    "task.assignment.read",
+    "project.contributor_guide.read",
     "actor.submission.list",
     "actor.work_summary.read",
     "task.submission_bundle_preparation.list",

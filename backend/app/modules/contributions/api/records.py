@@ -90,6 +90,23 @@ class ContributionAwardView(BaseModel):
         return self
 
 
+class AcceptedAssignmentEvidence(BaseModel):
+    """The accepted artifact and earned awards of the contributor's exact assignment."""
+
+    model_config = _STRICT
+    contribution_id: UUID
+    submission_id: UUID
+    artifact_hash: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    awards: tuple[ContributionAwardView, ...] = Field(max_length=2)
+
+
+class AcceptedAssignmentEvidencePort(Protocol):
+    async def read_accepted_assignment(
+        self, *, project_id: UUID, task_id: UUID, assignment_id: UUID,
+        contributor_id: UUID, submission_id: UUID,
+    ) -> AcceptedAssignmentEvidence | None: ...
+
+
 class ContributionRecordView(BaseModel):
     """One recognized record with every applicable award and honest source times."""
 

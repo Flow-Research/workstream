@@ -125,6 +125,15 @@ def upgrade() -> None:
     op.execute("LOCK TABLE public.submission_intake_operations, public.selected_pre_submit_runs,"
                " public.submissions, public.submission_dispatches IN ACCESS EXCLUSIVE MODE")
     op.execute("""
+        DO $$
+        BEGIN
+          IF EXISTS (SELECT 1 FROM public.submission_intake_operations
+                     WHERE state IN ('receiving', 'pre_checking')) THEN
+            RAISE EXCEPTION 'wait for active submission uploads and PRE checks to end before upgrading';
+          END IF;
+        END $$;
+    """)
+    op.execute("""
         ALTER TABLE public.submissions
           ADD COLUMN feedback text,
           ALTER COLUMN summary DROP NOT NULL,
@@ -134,7 +143,8 @@ def upgrade() -> None:
             AND (feedback IS NULL OR (summary IS NULL AND octet_length(feedback)<=4096
               AND feedback COLLATE "C" !~ '[^ -~]' AND btrim(feedback)=feedback))
           );
-
+    """)
+    op.execute("""
         CREATE FUNCTION public.guard_submission_feedback()
         RETURNS trigger LANGUAGE plpgsql SET search_path=pg_catalog,public,pg_temp AS $$
         BEGIN
@@ -145,11 +155,13 @@ def upgrade() -> None:
           END IF;
           RETURN NEW;
         END $$;
-
+    """)
+    op.execute("""
         CREATE TRIGGER submission_feedback_immutable
         BEFORE UPDATE OF feedback,summary,worker_attestation ON public.submissions
         FOR EACH ROW EXECUTE FUNCTION public.guard_submission_feedback();
-
+    """)
+    op.execute("""
         CREATE FUNCTION public.submission_operation_checker_packet(metadata jsonb)
         RETURNS jsonb LANGUAGE sql IMMUTABLE STRICT SET search_path=pg_catalog,public,pg_temp AS $$
           SELECT CASE WHEN metadata ? 'feedback' THEN '{}'::jsonb
@@ -157,6 +169,8 @@ def upgrade() -> None:
                     'contributor_attestation',metadata->>'contributor_attestation') END
         $$;
     """)
+    op.execute("CREATE INDEX ix_submission_intake_assignment_activity "
+               "ON public.submission_intake_operations (assignment_id,created_at,id)")
     _intake_guard()
     _pre_guard()
     acceptance = _definition("public.require_submission_acceptance_current(public.submission_intake_operations)")

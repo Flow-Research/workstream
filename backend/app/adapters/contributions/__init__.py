@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.modules.contributions.api.policies import ContributionPolicyVersionListPort
 from app.modules.contributions.api.published_selection import PublishedContributionPolicyPort
 from app.modules.contributions.api.records import (
+    AcceptedAssignmentEvidencePort,
     ContributionExportPort, ContributionReadAuthorizationPort, ContributionExportResponse,
 )
 
@@ -124,3 +125,10 @@ def contribution_export_csv(projection: ContributionExportResponse) -> bytes:
     from app.modules.contributions.records.csv import contribution_csv
 
     return contribution_csv(projection)
+
+
+def accepted_assignment_evidence_reader(session: AsyncSession) -> AcceptedAssignmentEvidencePort:
+    from app.adapters.compensation import contribution_award_read_port
+    from app.modules.contributions.records.read_repository import AcceptedAssignmentEvidenceReader
+
+    return AcceptedAssignmentEvidenceReader(session, contribution_award_read_port(session))

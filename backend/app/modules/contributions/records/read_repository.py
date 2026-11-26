@@ -10,7 +10,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.identifiers import new_record_id
 from app.db.errors import integrity_constraint_name
+from app.modules.compensation.api.award_reads import ContributionAwardReadPort
 from app.modules.contributions.api.records import (
+    AcceptedAssignmentEvidence, ContributionAwardView,
     MAX_EXPORT_MEMBERS, ContributionExportAtCapacity, ContributionExportTooLarge,
     ContributionExportUnavailable, ContributionReadRequest, InvalidContributionCursor,
 )
@@ -234,4 +236,34 @@ class ContributionReadRepository:
             contribution_policy_version_id=row.contribution_policy_version_id,
             recorded_at=row.created_at, policy_version_number=version,
             compensation_mode=mode, award_definitions=definitions,
+        )
+
+
+class AcceptedAssignmentEvidenceReader:
+    """Read exact accepted evidence under the caller's own-assignment authority."""
+
+    def __init__(self, session: AsyncSession, awards: ContributionAwardReadPort) -> None:
+        self._session, self._awards = session, awards
+
+    async def read_accepted_assignment(
+        self, *, project_id: UUID, task_id: UUID, assignment_id: UUID,
+        contributor_id: UUID, submission_id: UUID,
+    ) -> AcceptedAssignmentEvidence | None:
+        record = await self._session.scalar(select(ContributionRecord).where(
+            ContributionRecord.project_id == str(project_id),
+            ContributionRecord.task_id == str(task_id),
+            ContributionRecord.source_task_assignment_id == str(assignment_id),
+            ContributionRecord.contributor_id == str(contributor_id),
+            ContributionRecord.submission_id == str(submission_id),
+            ContributionRecord.contribution_type == "accepted_submission",
+        ))
+        if record is None:
+            return None
+        awards = await self._awards.read_contribution_awards((record.id,))
+        return AcceptedAssignmentEvidence(
+            contribution_id=record.id, submission_id=submission_id, artifact_hash=record.artifact_hash,
+            awards=tuple(ContributionAwardView(
+                award_id=award.id, award_definition_id=award.award_definition_id,
+                instrument=award.instrument_type, unit=award.unit_code, quantity=format(award.quantity, "f"),
+            ) for award in awards),
         )

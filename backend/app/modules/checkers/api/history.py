@@ -79,6 +79,10 @@ class ManagementCheckerHistoryPage(BaseModel):
 class CheckerHistoryReadPort(Protocol):
     """CHECKERS reads only within the already authorized immutable TASK parent."""
 
+    async def read_current_attempt(
+        self, *, submission_id: UUID, task_id: UUID,
+    ) -> ContributorCheckerHistory | None: ...
+
     async def read(
         self, *, submission_id: UUID, task_id: UUID, manager: bool,
         run_id: UUID | None = None, limit: int = 25,

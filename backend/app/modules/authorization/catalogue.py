@@ -304,6 +304,8 @@ class ActionId(StrEnum):
     CONTRIBUTION_READ_PROJECT = "contribution.read_project"
     ACTOR_PROJECT_LIST = "actor.project.list"
     ACTOR_ASSIGNMENT_LIST = "actor.assignment.list"
+    TASK_ASSIGNMENT_READ = "task.assignment.read"
+    PROJECT_CONTRIBUTOR_GUIDE_READ = "project.contributor_guide.read"
     ACTOR_SUBMISSION_LIST = "actor.submission.list"
     ACTOR_WORK_SUMMARY_READ = "actor.work_summary.read"
     TASK_SUBMISSION_BUNDLE_PREPARATION_LIST = "task.submission_bundle_preparation.list"
@@ -327,6 +329,8 @@ CONTRIBUTION_READ_ACTIONS = frozenset(
 CONTRIBUTOR_WORK_READ_ACTIONS = frozenset(
     {
         ActionId.ACTOR_ASSIGNMENT_LIST,
+        ActionId.TASK_ASSIGNMENT_READ,
+        ActionId.PROJECT_CONTRIBUTOR_GUIDE_READ,
         ActionId.ACTOR_SUBMISSION_LIST,
         ActionId.ACTOR_WORK_SUMMARY_READ,
         ActionId.TASK_SUBMISSION_BUNDLE_PREPARATION_LIST,
@@ -573,7 +577,7 @@ HISTORICAL_PERMISSION_IDS = PERMISSION_IDS - NEW_PERMISSION_IDS
 
 def _require_catalogue_counts() -> None:
     """Keep the closed action inventory and permission boundary exact."""
-    if len(PERMISSION_IDS) != 95 or len(ACTION_IDS) != 195:
+    if len(PERMISSION_IDS) != 95 or len(ACTION_IDS) != 197:
         raise RuntimeError("authorization catalogue count mismatch")
     if len(HISTORICAL_PERMISSION_IDS) != 49 or len(NEW_PERMISSION_IDS) != 46:
         raise RuntimeError("authorization permission boundary mismatch")

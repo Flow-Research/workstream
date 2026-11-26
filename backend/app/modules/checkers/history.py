@@ -2,7 +2,8 @@
 
 from uuid import UUID
 
-from sqlalchemy import func, select, tuple_
+from sqlalchemy import cast, func, select, tuple_
+from sqlalchemy.dialects.postgresql import JSONB
 
 from app.modules.checkers.models import (
     CheckerResult, CheckerResultFinding, CheckerRun, CheckerSubmissionFence,
@@ -25,6 +26,16 @@ _FINDING_STATUS = {
 class CheckerHistoryRepository:
     def __init__(self, session):
         self._session = session
+
+    async def read_current_attempt(self, *, submission_id, task_id):
+        """Resolve the sole fence, then use the existing contributor projection."""
+        run_id = await self._session.scalar(select(CheckerSubmissionFence.current_run_id).where(
+            CheckerSubmissionFence.submission_id == str(submission_id),
+        ))
+        if run_id is None:
+            return None
+        items, _ = await self.read(submission_id=submission_id, task_id=task_id, manager=False, run_id=run_id)
+        return items[0] if items else None
 
     async def read(self, *, submission_id, task_id, manager, run_id=None, limit=25, after=None):
         schema = ManagementCheckerHistory if manager else ContributorCheckerHistory
@@ -59,12 +70,15 @@ class CheckerHistoryRepository:
         if not run_ids:
             return {}
         result_schema = ManagementCheckerResult if manager else ContributorCheckerResult
+        finding_body = cast(CheckerRun.result_json, JSONB)["execution"]["external_members"][
+            CheckerResult.member_order]["result"]["findings"][CheckerResultFinding.finding_order]
         statement = select(
             CheckerResult.checker_run_id, CheckerResult.id.label("member_id"),
             CheckerResult.checker_name, CheckerResult.status.label("member_status"),
             CheckerResult.severity.label("member_severity"), CheckerResult.failure_category,
             CheckerResultFinding.id.label("finding_id"), CheckerResultFinding.check_id,
             CheckerResultFinding.path, CheckerResultFinding.line, CheckerResultFinding.level,
+            finding_body["message"].as_string().label("finding_message"),
         ).join(
             CheckerRun, CheckerRun.id == CheckerResult.checker_run_id,
         ).outerjoin(
@@ -89,6 +103,10 @@ class CheckerHistoryRepository:
             else:
                 status, severity = _FINDING_STATUS[row["level"]]
             message, fix = RESULT_STATUS_MESSAGES[status]
+            if row["finding_message"] is not None:
+                # The retained checker message contains the approved diagnosis
+                # and any correction guidance. Preserve it verbatim.
+                message, fix = row["finding_message"], None
             visible = row["failure_category"] != "task_configuration"
             item = {
                 "id": row["finding_id"] or row["member_id"],
