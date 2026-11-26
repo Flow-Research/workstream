@@ -9230,6 +9230,20 @@ inherited copy of the proxy listener. The test now stops that owned finalizer
 after observing T5 and before disconnecting the proxy. It starts the separate
 POST worker after republication. The refusal assertion stays intact.
 
+The corrected post-T5 case passed in 82.41 seconds at `9991c3954` on
+PostgreSQL schema 0093. The closed proxy refused TCP and the production outbox
+scan selected the original POST event with zero publications. Reopening the
+same proxy produced one publication. Production prefork delivery consumed the
+recovered and duplicate messages with one controlled evaluation, one completed
+checker lease and one durable completion. Exact source, charge, task and request
+custody survived. The post-T4 control passed at `56dfd128b` with the same
+shared shutdown helper. The isolated database, login, Redis process and test
+keys were cleaned on both runs. Python's fork-with-threads warning remains
+visible. The post-T5 receipt is `/tmp/pr708-a10-post-t5-isolated.log` with its
+adjacent metadata JSON. This evidence covers local Redis and registered workers
+with controlled checker transports. The deployed release remains a separate
+qualification.
+
 ### Genuine-orphan scope clarification
 
 Read-only ARCH/SEC assessment at08fd205d0 confirms that spec17.4 makes
