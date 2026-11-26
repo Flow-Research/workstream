@@ -11612,3 +11612,37 @@ repair, which narrowed the cause rather than qualifying a full CI shard.
 Ruff/whitespace and record/link checks pass. Full PG/backend/native qualification
 was not rerun; this is local HTTP-only logging fixture isolation. No deployed
 image rebuild is needed for a test setup correction.
+
+
+Guide caller reconciliation is integrated: explicitly request `/setup` or
+`/requirements/compile`, verify same-key request identity and exact finalized
+generation, and check the fresh upload's public `document_stored` receipt.
+The caller suite passed 78 tests; actual guide-only proof remains unsuccessful.
+Its final c17 run started all seven consumers/API/Redis/Beat but its temporary
+HMAC issuer mismatched stored actor identity at project creation. Cleanup was
+complete; that separate launcher was retired from this qualification attempt.
+The paired native launcher had already proved signed project creation/uploads
+and is now replaying the corrected caller from frozen eddb8b560. No end-to-end
+success follows from startup, unit tests, or temporary launcher repairs.
+
+The 0096 CI run ended with four direct failures (TUI retired inputs, two exact
+history JSON-text expectations, and the OTLP timeout test); aggregate failures
+only propagated these. All four repairs are integrated, with the OTLP failure
+reproduced by real Alembic fileConfig disabling existing loggers and its three
+modes passing after narrowly restored test-local logger enablement. Required
+events, deadlines and privacy assertions remain unchanged. Final-head CI is
+still required.
+
+Local MinIO refused storage during guide qualification. Seven duplicate build
+archive copies were SHA-256 verified against retained exact copies, then only
+those duplicate files were unlinked, reclaiming 2,624,762,738 bytes. Every unique
+archive and JSON manifest remains; `/tmp/workstream-pre-root-duplicate-reclaim.json`
+records original inode/size/hash and retained-copy mapping. No Docker resources,
+user source, database or deployed artifact storage was purged.
+
+The review-only overlay `/tmp/workstream-hosted-submission-profile-candidate-7ceb/`
+contains published image digests plus the twelve absent deployment selectors.
+Its two profiles validate through their current owner contracts, and the PRE
+root digest now matches the independently checked runner rather than the old
+root. This local preparation has not been applied; C01 and measured/deployed
+qualification remain outstanding.
