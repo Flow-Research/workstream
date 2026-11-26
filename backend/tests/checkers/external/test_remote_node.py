@@ -237,6 +237,63 @@ async def test_remote_adapter_endpoint_preserves_explicit_roots_and_callback_rou
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("fault", ["connect", "write", "eof", "invalid_result", "timeout", "cancel"])
+async def test_remote_post_failure_preserves_possible_invocation(tmp_path, monkeypatch, fault):
+    from unittest.mock import AsyncMock, Mock
+
+    from app.adapters.artifacts import selected_pre_submit_source_contracts
+    from app.adapters.checkers.external_service import RemoteTlsExternalCheckerAdapter
+    from app.interfaces.external_checker_execution import ExternalCheckerExecutionOutcomeUnknown
+    from tests.checkers.external.support import empty_external_material_grant
+    from tests.checkers.external.test_model_transport import request
+    from workstream_external_services import ExternalServiceUnavailableError
+
+    adapter = RemoteTlsExternalCheckerAdapter(
+        host="127.0.0.1", port=1, server_name="runner.test",
+        ca_path=tmp_path / "ca.pem", certificate_path=tmp_path / "client.pem",
+        private_key_path=tmp_path / "key.pem", model_proxy_socket_path=None,
+        timeout_seconds=90.0, source_contracts=selected_pre_submit_source_contracts(),
+    )
+    reader = asyncio.StreamReader()
+    writer = Mock(spec=asyncio.StreamWriter)
+    writer.drain = AsyncMock(side_effect=OSError if fault == "write" else None)
+    writer.wait_closed = AsyncMock()
+    connect = AsyncMock(return_value=(reader, writer), side_effect=OSError if fault == "connect" else None)
+    monkeypatch.setattr(adapter, "_open", connect)
+    waiting = asyncio.Event()
+
+    async def interrupt_read(_size):
+        waiting.set()
+        if fault == "timeout":
+            raise TimeoutError
+        await asyncio.Future()
+
+    if fault in {"timeout", "cancel"}:
+        monkeypatch.setattr(reader, "readexactly", interrupt_read)
+    elif fault == "invalid_result":
+        reader.feed_data(_frame(b'{"protocol_version":"workstream.remote_runner.v1",'
+                                b'"operation":"execution_result"}') + _frame(b'{}'))
+    reader.feed_eof()
+
+    value = request()
+    task = asyncio.create_task(adapter.execute(value, empty_external_material_grant(value, suffix="c")))
+    if fault == "cancel":
+        await asyncio.wait_for(waiting.wait(), 1)
+        task.cancel()
+    expected = ExternalServiceUnavailableError if fault == "connect" else ExternalCheckerExecutionOutcomeUnknown
+    with pytest.raises(expected):
+        await asyncio.wait_for(task, 2)
+    connect.assert_awaited_once_with()
+    if fault == "connect":
+        writer.write.assert_not_called()
+    else:
+        control = json.loads(writer.write.call_args_list[0].args[0][4:])
+        assert control["service_request"]["request"]["request_digest"] == value.request_digest
+        writer.close.assert_called_once_with()
+        writer.wait_closed.assert_awaited_once_with()
+
+
+@pytest.mark.asyncio
 async def test_remote_adapter_endpoint_invalid_explicit_root_cleans_helper_socket_root(tmp_path, monkeypatch):
     """Fail before native contact and leave no helper-owned directory on rejection."""
     identity = uuid4()

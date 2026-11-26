@@ -12070,3 +12070,37 @@ its exact object bucket/prefix and CLI/MCP custody. It explicitly requires
 separate terminal-exit and overall-cleanup evidence. Local fault simulations
 do not emit these receipts. The focused receipt regression passed (one test),
 and Ruff passed; independent review approved the provenance correction.
+
+### A28 preserve unknown POST invocation custody
+
+Intent. A remote POST disconnect after an executable frame can leave the
+runner active. Converting that disconnect into a terminal infrastructure
+result lets the existing Operator checker retry create another evaluation
+generation. Preserve the committed execution claim and OUTBOX unknown outcome
+when the service has not returned an exact terminal response.
+
+Allowed scope. `backend/app/interfaces/external_checker_execution.py` owns
+the typed boundary outcome, `backend/app/adapters/checkers/external_service.py`
+owns the first possibly transmitted POST or forge control frame and response
+validation, and `backend/app/modules/artifacts/preparation.py` owns draining
+the existing callback on cancellation. Extend the existing transport tests,
+ART cancellation test, real PostgreSQL public held and no-effect Operator
+proof, and this record. Keep the existing dispatcher one-invocation marker
+and CHECKERS recovery authority. The authorized reconciliation child can invoke only
+an exact never-started run. No new state, endpoint configuration or migration.
+
+Acceptance. Known pre-send transport refusal and validated terminal results
+keep their established meanings. Loss, invalid output or timeout after possible
+invocation cannot mint a terminal retry source, even when cancellation drains
+the ART callback. Its exact run stays held, with no new result, member, routing
+or award. Show the Operator can still reconcile a proven no-effect source.
+PRE retains its one-use source/run lease and bounded expiry. A fresh authorized
+operation following a fenced failure is a separate attempt.
+
+The targeted pure run passed 112 cases. It includes the known terminal mTLS
+response, POST connect/write/EOF/output/deadline/cancel cases, ART cleanup
+across both cancellation and deadline, and the PRE lease and source guards.
+The product dispatcher commits an invocation once. Its recovery child can
+only execute an exact queued generation-zero run, and rejects a running row
+after fresh classification. The private expired-running claim branch is
+unreachable through these supported owners and is outside this change.

@@ -14,11 +14,10 @@ import ssl
 import struct
 from typing import Literal
 
-from pydantic import ValidationError
-
 from app.core.cancellation import await_cancellation_resistant
 
 from app.interfaces.external_checker_execution import (
+    ExternalCheckerExecutionOutcomeUnknown,
     ExternalCheckerExecutionResponse,
     ExternalPreSubmitSourceGrant,
     MAXIMUM_PRE_SOURCE_CHUNK_BYTES,
@@ -36,7 +35,6 @@ from workstream_external_services import (
 from app.modules.checkers.api.external import (
     EXTERNAL_CHECKER_EXECUTION_CLEANUP_MARGIN_MS,
     MAX_RESULT_BYTES,
-    ExternalCheckerContractError,
     ExternalCheckerExecutionRequest,
     ExternalCheckerExecutionResult,
 )
@@ -271,6 +269,7 @@ class RemoteTlsExternalCheckerAdapter:
 
     async def _exchange(self, request, grant, *, model_grant, locate):
         """Exchange one bounded request and revalidate every returned fact."""
+        possibly_invoked = False
         try:
             checked = ExternalCheckerExecutionRequest.model_validate(request)
             if locate:
@@ -340,6 +339,9 @@ class RemoteTlsExternalCheckerAdapter:
                         allow_nan=False,
                         separators=(",", ":"),
                     ).encode()
+                    # A failed drain can follow successful transmission. Treat
+                    # this call as possibly invoked before its first write.
+                    possibly_invoked = True
                     await self._send_frame(writer, control)
                     await self._send_frame(writer, manifest)
                     for item in files:
@@ -395,14 +397,6 @@ class RemoteTlsExternalCheckerAdapter:
                 finally:
                     writer.close()
                     await await_cancellation_resistant(writer.wait_closed())
-        except ExternalServiceProtocolError:
-            raise
-        except (TimeoutError, OSError, asyncio.IncompleteReadError) as exc:
-            raise ExternalServiceUnavailableError(self._identity) from exc
-        except (TypeError, ValueError, ValidationError, UnicodeError, json.JSONDecodeError) as exc:
-            raise ExternalServiceProtocolError(self._identity) from exc
-
-        try:
             body = json.loads(raw)
             if (
                 type(body) is not dict
@@ -437,8 +431,14 @@ class RemoteTlsExternalCheckerAdapter:
                 ExternalCheckerForgeLocatorResponse if locate else ExternalCheckerExecutionResponse
             )
             return response_type(result=result, isolation=isolation)
-        except (TypeError, ValueError, ValidationError, ExternalCheckerContractError) as exc:
-            raise ExternalServiceProtocolError(self._identity) from exc
+        except (Exception, asyncio.CancelledError) as exc:
+            if possibly_invoked:
+                raise ExternalCheckerExecutionOutcomeUnknown() from None
+            if isinstance(exc, (TimeoutError, OSError, asyncio.IncompleteReadError)):
+                raise ExternalServiceUnavailableError(self._identity) from exc
+            if isinstance(exc, (TypeError, ValueError)):
+                raise ExternalServiceProtocolError(self._identity) from exc
+            raise
 
     async def health(self) -> ExternalCheckerServiceHealth:
         """Require the service to recheck its configured engine and report readiness."""

@@ -31,6 +31,7 @@ from app.adapters.checkers.external_service import (
 from app.core.config import Settings
 from app.core.hashing import canonical_json_hash
 from app.interfaces.external_checker_execution import (
+    ExternalCheckerExecutionOutcomeUnknown,
     ExternalCheckerIsolationReceipt,
     ExternalCheckerServiceHealth,
 )
@@ -40,6 +41,7 @@ from workstream_external_services import (
 from app.modules.artifacts.preparation import (
     HARD_MAXIMUM_ARTIFACT_BYTES,
     ArtifactPreparationLimits,
+    ArtifactPreparationDeadlineError,
     ArtifactPreparationService,
     ArtifactScratchCapacityError,
     ArtifactScratchIntegrityError,
@@ -862,8 +864,12 @@ def test_post_aggregate_workspace_enforces_combined_quota_and_cleanup(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("interruption", ["cancelled", "deadline"])
+@pytest.mark.parametrize("unknown", [False, True])
 async def test_post_aggregate_rejects_duplicate_sources_and_drains_cancellation(
     tmp_path: Path,
+    interruption,
+    unknown,
 ) -> None:
     """Duplicate custody is rejected before scratch; cancellation drains both readers."""
     (
@@ -909,8 +915,14 @@ async def test_post_aggregate_rejects_duplicate_sources_and_drains_cancellation(
             }
             entered.set()
             await aborted.wait()
+            if unknown:
+                raise ExternalCheckerExecutionOutcomeUnknown()
             raise RuntimeError("aborted callback result must not replace cancellation")
 
+    if interruption == "deadline":
+        deadline = asyncio.get_running_loop().time() + 1.0
+        for prepared in (current, prior):
+            service._active[prepared._binding].deadline = deadline
     task = asyncio.create_task(
         service._process_prepared_post_submission(
             (
@@ -923,9 +935,13 @@ async def test_post_aggregate_rejects_duplicate_sources_and_drains_cancellation(
         )
     )
     await asyncio.wait_for(entered.wait(), 1)
-    task.cancel()
-    with pytest.raises(asyncio.CancelledError):
-        await asyncio.wait_for(task, 1)
+    if interruption == "cancelled":
+        task.cancel()
+    expected = ExternalCheckerExecutionOutcomeUnknown if unknown else (
+        asyncio.CancelledError if interruption == "cancelled" else ArtifactPreparationDeadlineError
+    )
+    with pytest.raises(expected):
+        await asyncio.wait_for(task, 3)
     assert aborted.is_set()
     assert list((tmp_path / "scratch" / "workspaces").iterdir()) == []
     assert not service._external_grant_workspaces

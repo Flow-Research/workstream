@@ -1,7 +1,9 @@
 """Public PostgreSQL proof for one-shot uncertain post-submit delivery recovery."""
 
 import asyncio
-
+import json
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from uuid import UUID
 
 import pytest
@@ -9,6 +11,7 @@ from sqlalchemy import event, text
 from sqlalchemy.engine import Engine
 
 from app.adapters import artifacts as artifact_adapters
+from app.adapters.checkers.external_service import RemoteTlsExternalCheckerAdapter
 from app.adapters.outbox import production_outbox_delivery
 from app.adapters.tasks import evaluation_completion_handler
 from app.core.identifiers import new_record_id
@@ -35,6 +38,7 @@ from tests.reviews.lifecycle.fixtures import (
 )
 from tests.tasks.evaluation_delivery.support import delivery_fixture, invoked, outcome, state
 from tests.checkers.execution.support import ControlledSelectedExecution
+from tests.checkers.external.test_remote_node import _read_frame, remote_adapter_endpoint
 from tests.tasks.post_submit_routing.outcome_support import (
     apply_outcome,
     authorized_routing_source,
@@ -370,6 +374,11 @@ async def test_public_operator_retries_proven_no_effect_request_once(
         )
         assert outcome(receipt)["delivery_state"] == "dead_letter"
         assert outcome(receipt)["error_code"] == "INVOKE_OUTCOME_UNKNOWN"
+        unstarted = await state(h)
+        assert unstarted["run"]["status"] == "queued"
+        assert unstarted["run"]["worker_lease_generation"] == 0
+        assert unstarted["run"]["execute_evidence_id"] is None
+        assert not h.store.opens
         original_before, _ = await _delivery_rows(h.factory, original.claim.event_id)
 
         source = await _discover_one(
@@ -766,8 +775,9 @@ async def test_public_operator_projects_uncertain_child_as_permanently_held(
     tmp_path,
     auth_database_env,
     admin_access,
+    monkeypatch,
 ) -> None:
-    """A child UNKNOWN is visible as held and can never create another child."""
+    """A lost POST response holds the actual child execution and both retry paths."""
     async with material_fixture(tmp_path, auth_database_env) as h:
         await admin_access.signed.grant(admin_access.admin, admin_access.target)
         prepared = await delivery_fixture(h)
@@ -794,14 +804,55 @@ async def test_public_operator_projects_uncertain_child_as_permanently_held(
         assert created.status_code == 201, created.text
         child_id = UUID(created.json()["successor"]["event_id"])
 
-        delivery = production_outbox_delivery(h.factory)
-        claim = await delivery.claim(child_id, h.request.project_id, "unknown-child")
-        assert claim is not None
-        envelope = await delivery._begin_invocation(claim)
-        assert envelope is not None
-        child_unknown = await delivery.finalize(claim, FinalizationCause.UNKNOWN)
+        before = await _project_facts(h.factory, h.request.project_id)
+        received = []
+
+        async def receive_without_result(reader, writer):
+            try:
+                received.append(json.loads(await _read_frame(reader)))
+            finally:
+                writer.close()
+                await writer.wait_closed()
+
+        monkeypatch.setattr("app.core.config.get_settings", lambda: h.settings)
+        monkeypatch.setattr(
+            artifact_adapters, "worker_post_submission_materialization", lambda *, sessions: h.service,
+        )
+        with TemporaryDirectory(prefix="ws-a28-post-") as directory:
+            native_socket = Path(directory) / "native.sock"
+            native = await asyncio.start_unix_server(receive_without_result, native_socket)
+            try:
+                async with remote_adapter_endpoint(tmp_path, native_socket) as endpoint:
+                    selected = RemoteTlsExternalCheckerAdapter(
+                        **endpoint, timeout_seconds=90.0,
+                        source_contracts=artifact_adapters.selected_pre_submit_source_contracts(),
+                    )
+                    monkeypatch.setattr(
+                        "app.adapters.checkers.configured_post_submit_external_execution",
+                        lambda settings, *, sessions: selected,
+                    )
+                    delivery = production_outbox_delivery(h.factory, worker_group="post")
+                    child_unknown = await delivery.deliver(child_id, h.request.project_id, "unknown-child")
+                    assert await delivery.deliver(child_id, h.request.project_id, "duplicate-child") is None
+            finally:
+                native.close()
+                await native.wait_closed()
+
         assert outcome(child_unknown)["delivery_state"] == "dead_letter"
-        assert not delivery._registry.can_retry_unknown(envelope.event_type, 1)
+        assert outcome(child_unknown)["error_code"] == "INVOKE_OUTCOME_UNKNOWN"
+        assert outcome(child_unknown)["invocation_unknown"] is True
+        assert len(received) == 1
+        assert received[0]["operation"] == "execute"
+        assert received[0]["request"]["identity"]["evaluation_request_id"] == str(h.request.evaluation_request_id)
+        running = await state(h)
+        assert running["run"]["status"] == "running"
+        assert running["run"]["worker_lease_generation"] == 1
+        assert running["run"]["execute_evidence_id"] in running["allows"]
+        assert running["run"]["finalize_evidence_id"] is None
+        assert running["run"]["result_json"] is None
+        assert running["members"] == running["events"] == 0
+        assert not h.preparation._active and not list((h.scratch / "workspaces").iterdir())
+        assert await _project_facts(h.factory, h.request.project_id) == before
 
         held = await _discover_one(
             admin_access, h.request.project_id, classification="unresolved"
@@ -825,6 +876,20 @@ async def test_public_operator_projects_uncertain_child_as_permanently_held(
             new_record_id(),
         )
         assert refused.status_code == 409, refused.text
+        scope = f"/api/v1/operations/projects/{h.request.project_id}"
+        retry_sources = await admin_access.signed.client.get(
+            f"{scope}/checker-retry-sources", headers=admin_access.target.headers,
+        )
+        assert retry_sources.status_code == 200, retry_sources.text
+        assert retry_sources.json()["items"] == []
+        new_generation = await admin_access.signed.client.post(
+            f"{scope}/checker-runs/{h.created.evaluation_attempt_id}/retry",
+            headers=admin_access.target.headers | {"Idempotency-Key": str(new_record_id())},
+            json={"reason": "Check that a possibly invoked runner cannot start another generation"},
+        )
+        assert new_generation.status_code == 404, new_generation.text
+        assert new_generation.json()["error"]["code"] == "checker_recovery_source_not_found"
+        assert await state(h) == running
 
 
 @pytest.mark.asyncio

@@ -27,6 +27,7 @@ from app.interfaces.artifacts import (
     ArtifactScratchIntegrityError,
     ArtifactStoreUnavailableError,
 )
+from app.interfaces.external_checker_execution import ExternalCheckerExecutionOutcomeUnknown
 from app.core.cancellation import (
     await_completion_preserving_cancellation,
     await_cancellation_resistant,
@@ -2768,6 +2769,18 @@ class ArtifactPreparationService:
                 ) from None
 
         operation = asyncio.create_task(process_and_cleanup())
+
+        async def abort_and_drain() -> None:
+            processor.abort()
+            try:
+                _, error = await await_cancellation_resistant(operation)
+            except asyncio.CancelledError:
+                return
+            # A cancelled transport can leave the checker running after local
+            # scratch cleanup. Preserve that outcome across the deadline boundary.
+            if isinstance(error, ExternalCheckerExecutionOutcomeUnknown):
+                raise error from None
+
         try:
             async with asyncio.timeout_at(deadline):
                 result, error = await asyncio.shield(operation)
@@ -2775,20 +2788,12 @@ class ArtifactPreparationService:
                     raise error
                 return cast(_InspectionResult, result)
         except TimeoutError:
-            processor.abort()
-            try:
-                await await_cancellation_resistant(operation)
-            except asyncio.CancelledError:
-                pass
+            await abort_and_drain()
             raise ArtifactPreparationDeadlineError(
                 "artifact preparation deadline exceeded"
             ) from None
         except asyncio.CancelledError as cancellation:
-            processor.abort()
-            try:
-                await await_cancellation_resistant(operation)
-            except asyncio.CancelledError:
-                pass
+            await abort_and_drain()
             raise cancellation from None
 
     async def _release_unhanded_preparation(

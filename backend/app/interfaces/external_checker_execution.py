@@ -29,6 +29,13 @@ _REPOSITORY = re.compile(
 )
 
 
+class ExternalCheckerExecutionOutcomeUnknown(RuntimeError):
+    """A possibly invoked POST/locator lacks an authoritative terminal response."""
+
+    def __init__(self) -> None:
+        super().__init__("checker_execution_outcome_unknown")
+
+
 @dataclass(frozen=True, slots=True)
 class ExternalCheckerMaterialGrant:
     """Opaque callback-scoped ART capability; never a filesystem path."""
@@ -201,7 +208,7 @@ class ExternalCheckerExecutionAdapter(ExternalServiceAdapter, Protocol):
         request: ExternalCheckerExecutionRequest,
         grant: ExternalCheckerMaterialGrant,
     ) -> ExternalCheckerForgeLocatorResponse:
-        """Read a project-owned selector inside the same bounded offline image."""
+        """Read a project-owned selector or raise if invocation custody is unresolved."""
         ...
 
     async def execute(
@@ -211,7 +218,7 @@ class ExternalCheckerExecutionAdapter(ExternalServiceAdapter, Protocol):
         *,
         model_grant: ExternalCheckerModelGrant | None = None,
     ) -> ExternalCheckerExecutionResponse:
-        """Return a request-bound result or a sanitized transport failure."""
+        """Return a request-bound result or report invocation custody as unresolved."""
 
     async def health(self) -> ExternalCheckerServiceHealth:
         """Return current runtime and cache readiness from the service."""
@@ -221,6 +228,7 @@ __all__ = (
     "ExternalCheckerExecutionAdapter",
     "ExternalPreSubmitSourceGrant",
     "MAXIMUM_PRE_SOURCE_CHUNK_BYTES",
+    "ExternalCheckerExecutionOutcomeUnknown",
     "ExternalCheckerExecutionResponse",
     "ExternalCheckerIsolationReceipt",
     "ExternalCheckerMaterialGrant",
