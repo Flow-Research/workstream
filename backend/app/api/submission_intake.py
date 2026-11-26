@@ -28,6 +28,7 @@ _PACKET_HEADERS = (
 
 
 def _reject(code: str, status_code: int, message: str) -> NoReturn:
+    """Raise a structured public intake error without reading request bytes."""
     raise StructuredHTTPException(status_code=status_code, detail=message,
                                   error_code=code, error_message=message)
 

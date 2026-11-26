@@ -79,6 +79,7 @@ def is_feedback_email_worker_process() -> bool:
 
 
 def _is_validated_child(queue: str) -> bool:
+    """Match the requested queue and the live validated worker parent."""
     return _validated_queue == queue and _validated_parent is not None and os.getppid() == _validated_parent
 
 

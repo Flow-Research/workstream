@@ -69,6 +69,7 @@ def validate_source_cleanup_worker(sender, **_kwargs):
 
 
 def is_source_cleanup_worker_process():
+    """Recognize only a child of the source cleanup startup validator."""
     return _validated_parent is not None and os.getppid() == _validated_parent
 
 

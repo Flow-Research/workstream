@@ -41,6 +41,7 @@ class UnsealedSubmissionSource(BaseModel):
 
     @model_validator(mode="after")
     def receipt_shape(self):
+        """Require complete handle and EOF custody for unfinished writes."""
         if self.upload_fence is None and (self.provider_upload_id is not None or self.raw_sha256 is not None):
             raise ValueError("unsealed source requires initiation custody")
         if (self.raw_sha256 is None) != (self.raw_byte_count is None):
@@ -165,6 +166,7 @@ class SubmissionSourceCleanupProfile(BaseModel):
 
     @model_validator(mode="after")
     def ordered_bounds(self):
+        """Keep each cleanup claim within the bounded sweep lifetime."""
         if self.lease_seconds > self.run_seconds:
             raise ValueError("cleanup lease exceeds sweep execution envelope")
         return self

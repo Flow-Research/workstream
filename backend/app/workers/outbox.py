@@ -59,6 +59,7 @@ def send_submission_feedback_email(self, event_id, project_id):
 
 
 def _run_delivery(self, event_id, project_id, *, queue, group):
+    """Deliver an event only from its validated dedicated worker queue."""
     require_outbox_worker(self, queue=queue)
     try:
         event, project, task = _uuid(event_id), _uuid(project_id), _uuid(self.request.id)

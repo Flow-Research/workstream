@@ -49,6 +49,7 @@ _FAILURE_MESSAGES = {
 
 
 def _failure_status(code: str) -> int:
+    """Map a closed submission failure code to its public HTTP status."""
     if code == "submission_unavailable":
         return 404
     if code == "submission_archive_limit_exceeded":

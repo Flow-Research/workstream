@@ -19,6 +19,7 @@ from workstream_external_services import ExternalServiceAdapterError
 
 
 def _configuration(settings):
+    """Bind the cleanup profile to the configured artifact namespace claim."""
     profile = SubmissionSourceCleanupProfile.model_validate(settings.submission_source_cleanup_profile)
     bootstrap = create_artifact_store_bootstrap(settings)
     try:

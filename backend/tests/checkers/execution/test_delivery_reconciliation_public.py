@@ -1,7 +1,6 @@
 """Public PostgreSQL proof for one-shot uncertain post-submit delivery recovery."""
 
 import asyncio
-import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from uuid import UUID
