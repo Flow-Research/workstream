@@ -1,5 +1,5 @@
 {
-  "canonical_sha256": "e8809457e0535252680c1da3d7a95876261005706b1c597228d8436fc93ef210",
+  "canonical_sha256": "0318de3e2f9da1577bc922f6bf3570a7ad9f0cb8c441244cdb146c839be6a3dc",
   "components": {
     "schemas": {
       "ActionId": {
@@ -186,6 +186,8 @@
           "contribution.read_project",
           "actor.project.list",
           "actor.assignment.list",
+          "task.assignment.read",
+          "project.contributor_guide.read",
           "actor.submission.list",
           "actor.work_summary.read",
           "task.submission_bundle_preparation.list",

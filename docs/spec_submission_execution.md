@@ -103,7 +103,7 @@ It also tightens project policy cardinality and removes provider-host assumption
 Preserve:
 
 - Flow Identity authentication and Workstream's own authorization decisions.
-- Task assignments, locked guides and policy lineage, exact predecessor and revision acknowledgement rules.
+- Task assignments, locked guides and policy lineage, server-selected predecessor and governed revision rules.
 - Canonical manifest representation and existing Workstream default-check semantics.
 - Existing ART ownership, namespace/readiness checks and verification for other artifact producers.
 - Existing CHECKERS terminal-result ownership, policy evaluation and governed lifecycle routing.
@@ -234,10 +234,7 @@ The old public `POST /tasks/{task_id}/submission-bundle-preparations` and the pu
 | `Content-Type` | `application/zip`. Reject other media types. |
 | `Content-Encoding` | Absent or `identity`. Do not transparently transform/compress/decompress the submitted body. |
 | `Content-Length` | If supplied, valid and within the permitted raw limit; verify actual EOF count equals it. If absent, reserve the permitted maximum and enforce the count while streaming. Reject ambiguous or contradictory framing at the HTTP edge. |
-| `X-Submission-Summary` | Optional; omitted means empty string. Preserve current printable-ASCII header semantics, at most 64 KiB, without leading/trailing header whitespace. |
-| `X-Contributor-Attestation` | Same encoding/size rules as summary. Omission preserves existing warning behavior. |
-| `X-Predecessor-Submission-Id` | Exactly the current predecessor when submitting a governed revision; absent for the initial submission. No client-selected replacement of the predecessor. |
-| `X-Revision-Preparation-Id` and `X-Revision-Preparation-Sha256` | Both present or both absent. Required and validated where the existing governed revision contract requires acknowledgement. |
+| `X-Submission-Feedback` | Optional project feedback, up to 4096 printable ASCII bytes without leading or trailing whitespace. Preserve the exact supplied text. Eligibility and earning do not depend on feedback. |
 | Body | Nonempty original ZIP; actual bytes are authoritative. No multipart/form-data parser or base64 transformation at the backend submit boundary. |
 
 Reject duplicate occurrences of every selector/packet header rather than accepting one framework-selected value. Treat text exactly as validated; do not trim, normalize or rewrite a packet while hashing it. Clients and edge/header limits must support the published packet limits consistently. A larger Unicode/multipart packet redesign is not part of this change.
@@ -281,10 +278,10 @@ Use the existing structured error envelope, correlation/request IDs, sanitizatio
 | 409 | `submission_operation_in_progress` | Another active operation owns this task, or this exact key is still in an unfinished foreground phase. Return its ID only if authorized. |
 | 409 | `submission_idempotency_conflict` | Same actor/key with different metadata or a verified different raw body. |
 | 409 | `submission_operation_terminal` | A pre-seal operation ended without a complete input identity; it cannot be resumed or reused. A new key is required once its task guard is released. |
-| 409 | Existing revision/context codes | Preserve revision limit/deadline, predecessor, acknowledgement-context and locked-rule conflict semantics. |
+| 409 | Existing revision/context codes | Preserve revision limit/deadline, predecessor, selected-context and locked-rule conflict semantics. |
 | 413 | `submission_archive_limit_exceeded` | Declared or actual raw ZIP exceeds the permitted ceiling. Stop upload; retain cleanup ownership. |
 | 415 | `submission_media_type_unsupported` | Unsupported content type or content encoding. |
-| 422 | `submission_packet_invalid` | Invalid selectors, packet or revision acknowledgement syntax; preserve more specific existing revision codes. |
+| 422 | `submission_packet_invalid` | Invalid task/assignment selectors, feedback or ZIP framing. |
 | 422 | `pre_submission_checker_failed` | Validated platform/project QC rejection. Include bounded actionable PRE results; `eligible_to_submit=false`; no new Submission. |
 | 408 | `submission_upload_timeout` | The client upload breached its explicit idle/total upload limit before handoff. No accepted work is implied. |
 | 429 | `submission_capacity_exceeded` | Admission or quota/rate bound prevents this request from proceeding. Include a finite retry hint where one is known. |
@@ -344,7 +341,7 @@ Derive `processing_stage` from this operation's own PRE, Submission, evaluation 
 
 For a terminal operation, “TASK currently permits new intake” means this reader has current contributor submit authority for this operation's task and original still-active assignment, with compatible current predecessor/revision context and no active-operation guard. Management-only readers and contributors whose assignments have closed receive `inspect_governed_outcome`. Do not recommend a submission merely because the task is eligible for somebody else.
 
-No next-action value bypasses current revision acknowledgement or authorization. Derive it through the TASK read owner, not client guesswork. Preserve existing historical-read concealment: permission to read an old operation does not reveal the reassigned task's current status. A missing/corrupt finalized association is an operational integrity error, not permission to infer progress from another Submission.
+No next-action value bypasses current revision eligibility or authorization. Derive it through the TASK read owner, not client guesswork. Preserve existing historical-read concealment: permission to read an old operation does not reveal the reassigned task's current status. A missing/corrupt finalized association is an operational integrity error, not permission to infer progress from another Submission.
 
 Extend existing task/work-context reads with its active/pending operation and stage. While a new revision awaits finalization, show the predecessor as historical and the new operation as pending; do not present the previous Submission as the newly submitted work.
 
@@ -354,7 +351,7 @@ Extend existing task/work-context reads with its active/pending operation and st
 
 The idempotency namespace is `(actor_profile_id, idempotency_key)`. Store the original identity-link provenance and packet. Token strings and expiry timestamps are not request identity.
 
-Metadata identity includes task, assignment, predecessor, summary, attestation, and revision acknowledgement. Raw identity adds server-observed ZIP SHA-256 and byte count. Canonical hashing uses existing Workstream encoding/domain-separation conventions; there is one explicit schema for this request body, covered by fixtures.
+Metadata identity includes task, assignment and exact optional feedback. The server-selected predecessor and revision context are frozen separately. Raw identity adds server-observed ZIP SHA-256 and byte count. Canonical hashing uses existing Workstream encoding/domain-separation conventions; there is one explicit schema for this request body, covered by fixtures.
 
 The operation's accepted context is separately pinned. A later replay uses that original context and result; it must not reinterpret the same key using newly selected project rules.
 
@@ -427,7 +424,7 @@ Extend the ART owner with one cohesive `SubmissionIntakeOperation` record. Reuse
 | Group | Required durable fields/facts |
 | --- | --- |
 | Identity | Workstream-generated UUIDv7 operation ID; task/project/assignment/actor/identity-link; caller idempotency key; request/correlation IDs |
-| Original command | Exact packet and metadata digest; predecessor; revision acknowledgement; original eligible task status; locked guide/rules/PRE/POST/default identities and resource profile |
+| Original command | Exact feedback and metadata digest; server-selected predecessor and revision context; original eligible task status; locked guide/rules/PRE/POST/default identities and resource profile |
 | Ownership | State; task active pointer relationship; foreground lease ID, generation, expiry; absolute deadlines; created/updated/terminal timestamps |
 | Source | Provider/namespace identity; generated object key; upload maximum/reservation; provider upload handle where used; immutable completion intent; raw SHA/count at EOF; sealed provider generation; completion/observation times |
 | PRE | Selected run ID; immutable execution-request digest; validated terminal digest; platform input/manifest/default evidence; selected project result and bounded public projection |
@@ -489,7 +486,7 @@ Within one short transaction:
 
 1. Resolve fresh authorization and lock the task.
 2. Resolve idempotency or validate new-operation eligibility.
-3. Validate active assignment, predecessor/revision acknowledgement, locked policy cardinality and configured provider/profile readiness.
+3. Validate the active assignment, select the predecessor and revision context, and verify locked policy cardinality and provider/profile readiness.
 4. Reserve upload capacity under existing required quota scopes.
 5. Create the operation, generated object key, lease/fence, deadlines and immutable command/context snapshot.
 6. Install the task's active-operation pointer.
@@ -683,7 +680,7 @@ Keep `workstream.default`, its versioned behavior identity and the following che
 | `high_confidence_secrets_absent` | Preserve existing approved signature/decision behavior. Public findings expose bounded categories/counts, not detected secret values. |
 | `submission_changed_for_current_rules` | Under unchanged canonical rules, reject the same raw archive or semantic manifest as the actual predecessor. Preserve the existing changed-rules exception. |
 
-Preserve current summary/attestation warning semantics. Do not silently turn omissions into blocking requirements or alter secret detection as part of moving execution.
+Optional project feedback stays outside checker inputs. New attempts have no text-absence warnings. Preserve the canonical text, hashes and warning evidence of retained attempts.
 
 Canonical predecessor/rules facts come from Workstream owners, not the uploaded ZIP. The trusted session receives their frozen, authenticated request snapshot. T4 revalidates that snapshot against live task truth before accepting the result.
 
@@ -869,7 +866,7 @@ POST outcomes continue through existing rules:
 | --- | --- |
 | Required checks pass; human review required | Enter the existing review-pending path. A passing checker cannot bypass required human review. |
 | Required checks pass; human review not required | Invoke the existing authorized shared final-acceptance operation. |
-| Governed fixable failure | Follow existing needs-revision policy, findings, rebase/acknowledgement and attempt-limit behavior. |
+| Governed fixable failure | Follow existing needs-revision policy, findings, server-selected rebase and attempt-limit behavior. |
 | Governed rejection / exhausted attempts | Follow the existing terminal outcome policy. |
 | Runtime/provider/infrastructure failure | Retry/hold under existing infrastructure rules; do not consume a contributor revision as though QC failed. |
 
@@ -1193,7 +1190,7 @@ The CLI's submit action uploads once, waits for inline PRE outcome, prints the d
 
 Keep local file-source stability checks where needed, safe JSON/terminal output, explicit unknown-outcome recovery and exact input/key replay. Add operation status inspection without implicitly resubmitting or polling an unbounded loop.
 
-Preserve governed **revision preparation/acknowledgement** actions where the existing revision workflow requires them. Removing the old bundle-preparation action does not remove that separate revision rule.
+Preserve governed revision preparation and recovery as internal selection and manager operations. Contributors resubmit through the same raw-ZIP command.
 
 MCP is an adapter to the same backend action. Its current 64 MiB transfer bound and 120-second timeout are narrower than the backend archive ceiling; update documentation and effective timeout validation honestly. Do not silently raise a base64 JSON/tool transport to 500 MiB or create a second backend upload flow. A larger MCP transport redesign needs an explicit scoped decision; it is not necessary to implement the single backend submission contract.
 
@@ -1268,7 +1265,7 @@ Tests must prove real boundaries. Mocking a method name does not prove bounded m
 | A32 | Automatic acceptance and human acceptance | Existing atomic FinalAcceptance/ContributionRecord/award facts; no fabricated Review. |
 | A33 | Migration with retained SHA artifacts and old admissions | Historical evidence remains readable; unsubmitted ready admissions not auto-submitted; no bulk object rewrite/delete. |
 | A34 | Policy cardinality and setup selection | Missing/multiple PRE or POST selection rejected everywhere; only authorized approved exact images used. |
-| A35 | Foreground/client edge and API schema convergence | One mutation across CLI/MCP/backend; removed bundle-preparation path absent from active contract; revision acknowledgement preserved. |
+| A35 | Foreground/client edge and API schema convergence | One mutation across CLI/MCP/backend; removed bundle-preparation path absent from active contract; governed revision selection owned by the server. |
 
 ### 23.2 Performance and provider evidence
 

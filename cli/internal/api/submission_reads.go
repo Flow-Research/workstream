@@ -46,7 +46,8 @@ type SubmissionHistory struct {
 	Version       *big.Int                `json:"version"`
 	Status        string                  `json:"status"`
 	StatusReason  *string                 `json:"status_reason"`
-	Summary       string                  `json:"summary"`
+	Summary       *string                 `json:"summary"`
+	Feedback      *string                 `json:"feedback"`
 	SubmittedAt   string                  `json:"submitted_at"`
 	DecidedAt     *string                 `json:"decided_at"`
 	FindingCounts SubmissionFindingCounts `json:"finding_counts"`
@@ -97,8 +98,8 @@ type SubmissionFindingsResult struct {
 func decodeSubmission(raw json.RawMessage, task, submission string) (SubmissionHistory, error) {
 	var value SubmissionHistory
 	bad := &Failure{Code: "invalid_api_response"}
-	fields, err := contextObject(raw, &value, []string{"id", "task_id", "version", "status", "summary", "submitted_at", "finding_counts", "evidence_items"}, nil)
-	if err != nil || !requiredNullable(fields, "status_reason", "decided_at", "locked_at", "supersedes_submission_id") ||
+	fields, err := contextObject(raw, &value, []string{"id", "task_id", "version", "status", "submitted_at", "finding_counts", "evidence_items"}, nil)
+	if err != nil || !requiredNullable(fields, "status_reason", "decided_at", "locked_at", "supersedes_submission_id", "summary", "feedback") ||
 		!validUUID(value.ID) || !validUUID(value.Task) || (task != "" && !sameUUID(value.Task, task)) ||
 		(submission != "" && !sameUUID(value.ID, submission)) || value.Version == nil || value.Version.Sign() <= 0 ||
 		!validSubmissionOutcome(value) || !validFindingCounts(fields["finding_counts"], &value.FindingCounts) ||
@@ -225,33 +226,40 @@ func decodeSubmissionChecker(raw json.RawMessage, submission, run string) (Submi
 	default:
 		return value, bad
 	}
-	var items []json.RawMessage
-	if json.Unmarshal(fields["results"], &items) != nil {
+	if !validateContributorFindings(fields["results"], value.Results) {
 		return value, bad
+	}
+	return value, nil
+}
+
+func validateContributorFindings(raw json.RawMessage, findings []ContributorFinding) bool {
+	var items []json.RawMessage
+	if json.Unmarshal(raw, &items) != nil || items == nil || len(items) != len(findings) {
+		return false
 	}
 	seen := map[[16]byte]bool{}
 	for i, item := range items {
-		f := &value.Results[i]
+		f := &findings[i]
 		fields, err := contextObject(item, f, []string{"id", "checker_name", "status", "severity"}, nil)
 		id, ok := uuidIdentity(f.ID)
 		if err != nil || !requiredNullable(fields, "check_id", "path", "line", "worker_message", "worker_suggested_fix") ||
 			!ok || seen[id] || f.Checker == "" || (f.CheckID != nil && *f.CheckID == "") ||
 			(f.Path != nil && *f.Path == "") || (f.Line != nil && (f.Path == nil || *f.Line < 1)) {
-			return value, bad
+			return false
 		}
 		switch f.Status {
 		case "passed", "warning", "failed", "coverage_incomplete":
 		default:
-			return value, bad
+			return false
 		}
 		switch f.Severity {
 		case "info", "low", "medium", "high", "critical", "error":
 		default:
-			return value, bad
+			return false
 		}
 		seen[id] = true
 	}
-	return value, nil
+	return true
 }
 
 func (c *Client) SubmissionFindings(ctx context.Context, submission, run string, limit int, cursor *string) (Result[SubmissionFindingsResult], error) {

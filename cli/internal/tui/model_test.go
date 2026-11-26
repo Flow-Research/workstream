@@ -92,7 +92,8 @@ func (f *fakeClient) SubmissionRequirements(ctx context.Context, id string) (api
 }
 func (f *fakeClient) Submission(context.Context, string) (api.Result[api.SubmissionHistory], error) {
 	f.calls = append(f.calls, "submission")
-	return api.Result[api.SubmissionHistory]{Value: api.SubmissionHistory{ID: submissionID, Task: taskID, Status: "review_pending", Summary: "Stored summary"}}, nil
+	summary := "Stored summary"
+	return api.Result[api.SubmissionHistory]{Value: api.SubmissionHistory{ID: submissionID, Task: taskID, Status: "review_pending", Summary: &summary}}, nil
 }
 func (f *fakeClient) SubmissionFindings(ctx context.Context, submission, run string, limit int, cursor *string) (api.Result[api.SubmissionFindingsResult], error) {
 	f.calls = append(f.calls, "findings")

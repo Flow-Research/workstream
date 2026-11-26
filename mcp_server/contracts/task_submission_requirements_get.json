@@ -1,5 +1,5 @@
 {
-  "canonical_sha256": "f32cf9d7a67d83912ee450e660c039fbfafc07a7d2c9d76f3fb10c0ee6c75472",
+  "canonical_sha256": "3f4054acf5398d06408b84dedf3058e4a6e320cacbe4e36b211bc803aee73f4d",
   "components": {
     "schemas": {
       "ApiError": {
@@ -80,13 +80,6 @@
           "artifact_hash_required": {
             "title": "Artifact Hash Required",
             "type": "boolean"
-          },
-          "attestation_terms": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Attestation Terms",
-            "type": "array"
           },
           "forbidden_artifacts": {
             "items": {
@@ -192,13 +185,6 @@
             "title": "Required Evidence",
             "type": "array"
           },
-          "required_packet_fields": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Required Packet Fields",
-            "type": "array"
-          },
           "storage_reference_rules": {
             "$ref": "#/components/schemas/StorageReferenceRules"
           },
@@ -214,11 +200,9 @@
           "guide_version",
           "policy_schema_version",
           "merge_algorithm_version",
-          "required_packet_fields",
           "required_artifacts",
           "required_evidence",
           "forbidden_artifacts",
-          "attestation_terms",
           "manifest_required",
           "artifact_hash_required",
           "artifact_hash_algorithm",

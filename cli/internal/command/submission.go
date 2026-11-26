@@ -11,41 +11,16 @@ import (
 
 func addSubmissionCommands(root, task *cobra.Command, client func() (*api.Client, error), output *string, stdout io.Writer) {
 	{
-		var assignment, predecessor, summary, attestation, path, key string
-		var revisionPreparationID, revisionPreparationSHA256 string
-		name, description := "submit", "Upload one ZIP for initial checks and durable evaluation acceptance"
-		cmd := &cobra.Command{Use: name + " TASK_ID", Short: description, Args: cobra.ExactArgs(1)}
+		var assignment, feedback, path, key string
+		cmd := &cobra.Command{Use: "submit TASK_ID", Short: "Submit one ZIP for initial work or revision", Args: cobra.ExactArgs(1)}
 		cmd.Flags().StringVar(&assignment, "assignment", "", "Required active task-assignment UUID")
-		cmd.Flags().StringVar(&predecessor, "predecessor", "", "Predecessor Submission UUID when required by the task")
-		cmd.Flags().StringVar(&summary, "summary", "", "Exact printable ASCII packet summary; preserve for same-key replay")
-		cmd.Flags().StringVar(&attestation, "attestation", "", "Exact printable ASCII contributor attestation")
+		cmd.Flags().StringVar(&feedback, "feedback", "", "Optional project feedback, up to 4096 printable ASCII bytes without leading or trailing whitespace")
 		cmd.Flags().StringVar(&path, "file", "", "Required regular ZIP; keep unchanged for explicit replay")
 		cmd.Flags().StringVar(&key, "idempotency-key", "", "Required caller-owned UUID; never retried automatically")
-		cmd.Flags().StringVar(&revisionPreparationID, "revision-preparation-id", "", "Exact preparation UUID from task context; required with --predecessor")
-		cmd.Flags().StringVar(&revisionPreparationSHA256, "revision-preparation-sha256", "", "Exact preparation digest from task context; required with --predecessor")
 		cmd.RunE = func(cmd *cobra.Command, args []string) error {
-			var acknowledgement *api.RevisionAcknowledgement
-			{
-				hasID := cmd.Flags().Changed("revision-preparation-id")
-				hasSHA := cmd.Flags().Changed("revision-preparation-sha256")
-				if cmd.Flags().Changed("predecessor") != (hasID && hasSHA) || hasID != hasSHA {
-					return commandError{"invalid_arguments", "revision preparation ID and sha256 are both required with --predecessor and forbidden for initial submission"}
-				}
-				if hasID {
-					acknowledgement = &api.RevisionAcknowledgement{
-						PreparationID: revisionPreparationID, PreparationSHA256: revisionPreparationSHA256,
-					}
-				}
-			}
-			packet := api.SubmissionPacket{Assignment: assignment}
-			if cmd.Flags().Changed("predecessor") {
-				packet.Predecessor = &predecessor
-			}
-			if cmd.Flags().Changed("summary") {
-				packet.Summary = &summary
-			}
-			if cmd.Flags().Changed("attestation") {
-				packet.Attestation = &attestation
+			input := api.SubmissionInput{Assignment: assignment}
+			if cmd.Flags().Changed("feedback") {
+				input.Feedback = &feedback
 			}
 			c, err := client()
 			if err != nil {
@@ -61,7 +36,7 @@ func addSubmissionCommands(root, task *cobra.Command, client func() (*api.Client
 				return bad
 			}
 			defer file.Close()
-			result, err := c.SubmitSubmission(cmd.Context(), args[0], key, packet, acknowledgement, file)
+			result, err := c.SubmitSubmission(cmd.Context(), args[0], key, input, file)
 			if err != nil {
 				return err
 			}
@@ -80,10 +55,55 @@ func addSubmissionCommands(root, task *cobra.Command, client func() (*api.Client
 					return err
 				}
 			}
-			_, err = fmt.Fprintln(stdout, "Initial checks passed. Evaluation is pending; use the operation ID or the same idempotency key to observe progress.")
+			_, err = fmt.Fprintln(stdout, "Initial checks passed. Evaluation is pending. Use workstream task status with this task and assignment to see the outcome.")
 			return err
 		}
 		task.AddCommand(cmd)
+	}
+
+	{
+		var assignment string
+		var page pageFlags
+		status := &cobra.Command{Use: "status TASK_ID", Short: "Read your assignment status and feedback", Args: cobra.ExactArgs(1)}
+		status.Flags().StringVar(&assignment, "assignment", "", "Required task-assignment UUID")
+		page.bind(status, 25)
+		status.RunE = func(cmd *cobra.Command, args []string) error {
+			if !api.ValidUUID(assignment) {
+				return commandError{"invalid_arguments", "--assignment must be a UUID"}
+			}
+			transport, err := client()
+			if err != nil {
+				return err
+			}
+			query := page.query(cmd)
+			result, err := transport.TaskAssignment(cmd.Context(), args[0], assignment, query.Limit, query.Cursor)
+			if err != nil || *output == "json" {
+				return jsonOrError(stdout, result.Raw, err)
+			}
+			value := result.Value
+			fields := []contextField{
+				{"Assignment", value.Assignment.AssignmentID}, {"Status", value.CurrentStatus},
+				{"Reason", optional(value.StatusReason)}, {"Next action", value.NextAction},
+				{"Terms", value.Assignment.Compensation}, {"Revision", value.Assignment.Revision},
+				{"Latest submitted attempt", value.Assignment.LatestSubmission},
+			}
+			if value.Intake != nil {
+				fields = append(fields, contextField{"Intake stage", value.Intake.Stage},
+					contextField{"Intake feedback", api.IntakeFeedbackLines(value.Intake.Feedback)})
+			}
+			if len(value.PostFindings) != 0 {
+				fields = append(fields, contextField{"Feedback for submission", optional(value.FeedbackSubmissionID)},
+					contextField{"Evaluation findings", value.PostFindings})
+			}
+			if value.AcceptedEvidence != nil {
+				fields = append(fields, contextField{"Accepted evidence", value.AcceptedEvidence})
+			}
+			if value.NextCursor != nil {
+				fields = append(fields, contextField{"Next feedback cursor", *value.NextCursor})
+			}
+			return writeTaskContextFields(stdout, fields)
+		}
+		task.AddCommand(status)
 	}
 
 	{

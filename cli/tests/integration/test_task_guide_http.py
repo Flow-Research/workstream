@@ -98,7 +98,7 @@ def guide_http():
 def test_assigned_guide_list_and_verified_private_download(cli, tmp_path):
     with guide_http() as (origin, state, requests):
         listed = cli(origin, TOKEN, "task", "guide", TASK, "-o", "json")
-        assert listed.returncode == 0 and json.loads(listed.stdout) == [DOCUMENT], (
+        assert listed.returncode == 0 and json.loads(listed.stdout)["documents"] == [DOCUMENT], (
             listed.stderr
         )
         terminal = cli(origin, TOKEN, "task", "guide", TASK)
@@ -243,7 +243,7 @@ def test_full_document_list_uses_bounded_context_not_small_page_limit(cli):
         assert len(json.dumps(state["context"]).encode()) > 64 * 1024
         result = cli(origin, TOKEN, "task", "guide", TASK, "-o", "json")
         assert result.returncode == 0, result.stderr
-        assert json.loads(result.stdout) == documents and len(requests) == 1
+        assert json.loads(result.stdout)["documents"] == documents and len(requests) == 1
 
 
 @pytest.mark.parametrize("damage", ("hash", "short", "long", "content_type"))
@@ -325,34 +325,25 @@ def test_canonical_duplicate_document_ids_are_rejected(cli):
         assert len(requests) == 1
 
 
-def test_assignment_and_symlink_targets_fail_without_download(cli, tmp_path):
+def test_ready_guide_can_download_before_claim_and_refuses_symlink(cli, tmp_path):
     with guide_http() as (origin, state, requests):
-        state["context"]["lifecycle"]["assigned_to_current_actor"] = False
-        state["context"]["guide_documents"] = []
-        denied = cli(
-            origin,
-            TOKEN,
-            "task",
-            "guide",
-            TASK,
-            "--download",
-            str(tmp_path),
-            "-o",
-            "json",
+        state["context"]["task"]["status"] = "ready"
+        state["context"]["lifecycle"] = {"assigned_to_current_actor": False, "next_actions": ["claim"]}
+        first_directory = tmp_path / "valid"
+        first_directory.mkdir()
+        result = cli(
+            origin, TOKEN, "task", "guide", TASK, "--download", str(first_directory), "-o", "json",
         )
-        assert (
-            denied.returncode != 0
-            and json.loads(denied.stderr)["error"]["code"] == "task_assignment_required"
-        )
-        assert len(requests) == 1
-        state["context"]["lifecycle"]["assigned_to_current_actor"] = True
-        state["context"]["guide_documents"] = [deepcopy(DOCUMENT)]
+        assert result.returncode == 0, result.stderr
+        assert json.loads(result.stdout)["documents"] == [DOCUMENT]
+        assert (first_directory / f"{ACTOR}.pdf").read_bytes() == ORIGINAL
+        assert len(requests) == 2
         outside = tmp_path / "outside"
         outside.write_bytes(b"UNTOUCHED")
         (tmp_path / f"{ACTOR}.pdf").symlink_to(outside)
         denied = cli(origin, TOKEN, "task", "guide", TASK, "--download", str(tmp_path))
         assert denied.returncode != 0 and outside.read_bytes() == b"UNTOUCHED"
-        assert len(requests) == 2
+        assert len(requests) == 3
 
 
 @pytest.mark.parametrize("status", (401, 404, 302, 503))

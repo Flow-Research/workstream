@@ -154,18 +154,17 @@ func TestIntakeDisplaysConstraintsWithoutValidationClaim(t *testing.T) {
 	desc, reason, fix := "Expected artifact", "Secrets forbidden", "Remove credentials"
 	value := api.SubmissionRequirements{
 		TaskID: taskID, ProjectID: projectID, GuideVersion: "locked-v1",
-		RequiredPacketFields: []string{"summary"},
-		RequiredArtifacts:    []api.ArtifactRequirement{{Key: "source", Path: "src/**", Required: true, HashRequired: true, Description: &desc}},
-		RequiredEvidence:     []api.EvidenceRequirement{{Key: "test", Label: "Tests", Required: true, HashRequired: false}},
-		ForbiddenArtifacts:   []api.ForbiddenArtifact{{Pattern: "*.key", Reason: &reason, WorkerFacingFix: &fix}},
-		AttestationTerms:     []string{"original work"}, ManifestRequired: true, ArtifactHashRequired: true,
+		RequiredArtifacts:  []api.ArtifactRequirement{{Key: "source", Path: "src/**", Required: true, HashRequired: true, Description: &desc}},
+		RequiredEvidence:   []api.EvidenceRequirement{{Key: "test", Label: "Tests", Required: true, HashRequired: false}},
+		ForbiddenArtifacts: []api.ForbiddenArtifact{{Pattern: "*.key", Reason: &reason, WorkerFacingFix: &fix}},
+		ManifestRequired:   true, ArtifactHashRequired: true,
 		ArtifactHashAlgorithm: "sha256", AllowedStorageSchemes: []string{"s3"},
 		StorageReferenceRules: api.StorageReferenceRules{AllowedURIPrefixes: []string{"s3://bucket/"}},
 		MaximumFileSizeBytes:  big.NewInt(4294967297), Packaging: api.PackagingRequirements{PackageRequired: true, AllowedPackageFormats: []string{"zip"}},
 	}
 	m := &Model{intake: &value, section: 2, noColor: true}
 	rendered := m.detailText()
-	orderOf(t, rendered, "Required packet fields", "Field: summary", "Required artifacts", "Artifact: source", "Required evidence", "Evidence: test", "Forbidden artifacts", "Forbidden pattern: *.key", "Attestations", "Attestation term: original work", "Package and storage constraints", "Maximum file bytes: 4294967297", "References")
+	orderOf(t, rendered, "Required artifacts", "Artifact: source", "Required evidence", "Evidence: test", "Forbidden artifacts", "Forbidden pattern: *.key", "Package and storage constraints", "Maximum file bytes: 4294967297", "References")
 	for _, want := range []string{"Hash required: true", "Path (text only): src/**", "Reason\nSecrets forbidden", "Suggested fix\nRemove credentials", "Package required: true", "Allowed package formats: zip", "Policy schema version"} {
 		if want == "Policy schema version" {
 			if strings.Contains(rendered, want) {
@@ -180,8 +179,8 @@ func TestIntakeDisplaysConstraintsWithoutValidationClaim(t *testing.T) {
 }
 
 func TestSubmissionAndFindingsSeparateOutcomeFromEvidence(t *testing.T) {
-	reason := "coverage_incomplete"
-	submission := api.SubmissionHistory{ID: submissionID, Task: taskID, Status: "needs_revision", StatusReason: &reason, Summary: "My full summary", Version: big.NewInt(12), FindingCounts: api.SubmissionFindingCounts{Blocking: big.NewInt(2), Warning: big.NewInt(1)}, Evidence: []api.SubmissionEvidence{{ID: actorID, Type: "artifact", Label: "source", Size: big.NewInt(9007199254740993)}}}
+	reason, summary := "coverage_incomplete", "My full summary"
+	submission := api.SubmissionHistory{ID: submissionID, Task: taskID, Status: "needs_revision", StatusReason: &reason, Summary: &summary, Version: big.NewInt(12), FindingCounts: api.SubmissionFindingCounts{Blocking: big.NewInt(2), Warning: big.NewInt(1)}, Evidence: []api.SubmissionEvidence{{ID: actorID, Type: "artifact", Label: "source", Size: big.NewInt(9007199254740993)}}}
 	m := &Model{submission: &submission, tab: submissions, noColor: true}
 	rendered := m.detailText()
 	orderOf(t, rendered, "My full summary", "Stored outcome: needs_revision", "Reason: coverage_incomplete", "Blocking findings: 2", "Version: 12", "Evidence label: source", "Size: 9007199254740993", "References", "Submission: "+submissionID)

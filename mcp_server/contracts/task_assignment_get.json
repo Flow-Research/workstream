@@ -1,0 +1,1637 @@
+{
+  "canonical_sha256": "520b366d4593eca5073cecba771d8321bd467750c85fe46eb8cbb5477b939a82",
+  "components": {
+    "schemas": {
+      "AcceptedAssignmentEvidence": {
+        "additionalProperties": false,
+        "description": "The accepted artifact and earned awards of the contributor's exact assignment.",
+        "properties": {
+          "artifact_hash": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Artifact Hash",
+            "type": "string"
+          },
+          "awards": {
+            "items": {
+              "$ref": "#/components/schemas/ContributionAwardView"
+            },
+            "maxItems": 2,
+            "title": "Awards",
+            "type": "array"
+          },
+          "contribution_id": {
+            "format": "uuid",
+            "title": "Contribution Id",
+            "type": "string"
+          },
+          "submission_id": {
+            "format": "uuid",
+            "title": "Submission Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "contribution_id",
+          "submission_id",
+          "artifact_hash",
+          "awards"
+        ],
+        "title": "AcceptedAssignmentEvidence",
+        "type": "object"
+      },
+      "ApiError": {
+        "additionalProperties": false,
+        "description": "Canonical machine-readable API error.",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "correlation_id": {
+            "title": "Correlation Id",
+            "type": "string"
+          },
+          "details": {
+            "additionalProperties": true,
+            "title": "Details",
+            "type": "object"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "retryable": {
+            "title": "Retryable",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "code",
+          "message",
+          "details",
+          "correlation_id",
+          "retryable"
+        ],
+        "title": "ApiError",
+        "type": "object"
+      },
+      "ApiErrorResponse": {
+        "additionalProperties": false,
+        "description": "Canonical error plus additive legacy compatibility fields.",
+        "properties": {
+          "detail": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "error": {
+            "$ref": "#/components/schemas/ApiError"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "title": "ApiErrorResponse",
+        "type": "object"
+      },
+      "AssignmentIntakeAttempt": {
+        "additionalProperties": false,
+        "description": "Retained intake activity and its safe feedback for one assignment.",
+        "properties": {
+          "failure_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure Code"
+          },
+          "operation_id": {
+            "format": "uuid",
+            "title": "Operation Id",
+            "type": "string"
+          },
+          "operationally_stalled": {
+            "title": "Operationally Stalled",
+            "type": "boolean"
+          },
+          "pre_submission_results": {
+            "items": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/DefaultIntakeCheck"
+                },
+                {
+                  "$ref": "#/components/schemas/DefaultIntakeWarning"
+                },
+                {
+                  "$ref": "#/components/schemas/ProjectIntakeCheck"
+                }
+              ]
+            },
+            "maxItems": 7,
+            "title": "Pre Submission Results",
+            "type": "array"
+          },
+          "stage": {
+            "title": "Stage",
+            "type": "string"
+          },
+          "submission_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submission Id"
+          }
+        },
+        "required": [
+          "operation_id",
+          "stage",
+          "failure_code",
+          "submission_id",
+          "pre_submission_results",
+          "operationally_stalled"
+        ],
+        "title": "AssignmentIntakeAttempt",
+        "type": "object"
+      },
+      "ContributionAwardView": {
+        "additionalProperties": false,
+        "description": "Earned immutable terms, without any fulfillment or payment assertion.",
+        "properties": {
+          "award_definition_id": {
+            "format": "uuid",
+            "title": "Award Definition Id",
+            "type": "string"
+          },
+          "award_id": {
+            "format": "uuid",
+            "title": "Award Id",
+            "type": "string"
+          },
+          "instrument": {
+            "enum": [
+              "money",
+              "project_points"
+            ],
+            "title": "Instrument",
+            "type": "string"
+          },
+          "quantity": {
+            "maxLength": 40,
+            "pattern": "^[0-9]+(?:\\.[0-9]+)?$",
+            "title": "Quantity",
+            "type": "string"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "award_id",
+          "award_definition_id",
+          "instrument",
+          "unit",
+          "quantity"
+        ],
+        "title": "ContributionAwardView",
+        "type": "object"
+      },
+      "ContributorAssignment": {
+        "additionalProperties": false,
+        "description": "One own claim. A closed one projects only the contributor's own facts.",
+        "properties": {
+          "assignment_id": {
+            "format": "uuid",
+            "title": "Assignment Id",
+            "type": "string"
+          },
+          "assignment_status": {
+            "enum": [
+              "active",
+              "completed",
+              "revision_expired",
+              "revision_exhausted",
+              "authority_revoked"
+            ],
+            "title": "Assignment Status",
+            "type": "string"
+          },
+          "claimed_at": {
+            "format": "date-time",
+            "title": "Claimed At",
+            "type": "string"
+          },
+          "compensation": {
+            "$ref": "#/components/schemas/TaskCompensationTerms"
+          },
+          "latest_submission": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ContributorLatestSubmission"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "locked_guide_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Locked Guide Version"
+          },
+          "next_action": {
+            "enum": [
+              "prepare_submission",
+              "awaiting_evaluation",
+              "revise",
+              "none"
+            ],
+            "title": "Next Action",
+            "type": "string"
+          },
+          "project_id": {
+            "format": "uuid",
+            "title": "Project Id",
+            "type": "string"
+          },
+          "released_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Released At"
+          },
+          "revision": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ContributorRevisionContext"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "state": {
+            "enum": [
+              "active",
+              "closed"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "task_id": {
+            "format": "uuid",
+            "title": "Task Id",
+            "type": "string"
+          },
+          "task_status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "draft",
+                  "screening",
+                  "ready",
+                  "in_progress",
+                  "submitted",
+                  "evaluation_pending",
+                  "review_pending",
+                  "needs_revision",
+                  "accepted"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Task Status"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "updated_at": {
+            "description": "Activity time: the latest own assignment, submission or revision stamp, plus the task stamp while active. Orders the list and drives updated_since.",
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "assignment_id",
+          "project_id",
+          "task_id",
+          "title",
+          "state",
+          "assignment_status",
+          "task_status",
+          "claimed_at",
+          "started_at",
+          "released_at",
+          "locked_guide_version",
+          "compensation",
+          "latest_submission",
+          "revision",
+          "next_action",
+          "updated_at"
+        ],
+        "title": "ContributorAssignment",
+        "type": "object"
+      },
+      "ContributorCheckerResult": {
+        "additionalProperties": false,
+        "description": "One stored finding, or one member that reported no findings.",
+        "properties": {
+          "check_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Check Id"
+          },
+          "checker_name": {
+            "title": "Checker Name",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "line": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Line"
+          },
+          "path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Path"
+          },
+          "severity": {
+            "enum": [
+              "info",
+              "low",
+              "medium",
+              "high",
+              "critical",
+              "error"
+            ],
+            "title": "Severity",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "passed",
+              "warning",
+              "failed",
+              "coverage_incomplete"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "worker_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Worker Message"
+          },
+          "worker_suggested_fix": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Worker Suggested Fix"
+          }
+        },
+        "required": [
+          "id",
+          "checker_name",
+          "check_id",
+          "path",
+          "line",
+          "status",
+          "severity",
+          "worker_message",
+          "worker_suggested_fix"
+        ],
+        "title": "ContributorCheckerResult",
+        "type": "object"
+      },
+      "ContributorLatestSubmission": {
+        "additionalProperties": false,
+        "description": "The newest own attempt on this assignment.",
+        "properties": {
+          "decided_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "status": {
+            "enum": [
+              "evaluation_pending",
+              "review_pending",
+              "accepted",
+              "needs_revision",
+              "rejected"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "status_reason": {
+            "anyOf": [
+              {
+                "enum": [
+                  "revision_deadline_expired",
+                  "revision_limit_reached",
+                  "checker_coverage_incomplete"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Reason"
+          },
+          "submission_id": {
+            "format": "uuid",
+            "title": "Submission Id",
+            "type": "string"
+          },
+          "submitted_at": {
+            "format": "date-time",
+            "title": "Submitted At",
+            "type": "string"
+          },
+          "version": {
+            "exclusiveMinimum": 0.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "submission_id",
+          "version",
+          "status",
+          "status_reason",
+          "submitted_at",
+          "decided_at"
+        ],
+        "title": "ContributorLatestSubmission",
+        "type": "object"
+      },
+      "ContributorRevisionContext": {
+        "additionalProperties": false,
+        "description": "Frozen preparation plus an eligibility projection evaluated at database time.",
+        "properties": {
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/RevisionContextChange"
+            },
+            "maxItems": 8,
+            "title": "Changes",
+            "type": "array"
+          },
+          "clock_state": {
+            "enum": [
+              "running",
+              "paused"
+            ],
+            "title": "Clock State",
+            "type": "string"
+          },
+          "deadline_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deadline At"
+          },
+          "direction": {
+            "anyOf": [
+              {
+                "enum": [
+                  "kept",
+                  "forward",
+                  "backward"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Direction"
+          },
+          "disposition": {
+            "enum": [
+              "ready",
+              "context_blocked",
+              "revision_limit_reached",
+              "revision_deadline_expired"
+            ],
+            "title": "Disposition",
+            "type": "string"
+          },
+          "max_revision_rounds": {
+            "minimum": 0.0,
+            "title": "Max Revision Rounds",
+            "type": "integer"
+          },
+          "next_revision_round": {
+            "minimum": 0.0,
+            "title": "Next Revision Round",
+            "type": "integer"
+          },
+          "outcome": {
+            "enum": [
+              "kept",
+              "rebased",
+              "blocked"
+            ],
+            "title": "Outcome",
+            "type": "string"
+          },
+          "predecessor_preparation_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Predecessor Preparation Id"
+          },
+          "preparation_id": {
+            "format": "uuid",
+            "title": "Preparation Id",
+            "type": "string"
+          },
+          "preparation_sha256": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Preparation Sha256",
+            "type": "string"
+          },
+          "prior": {
+            "$ref": "#/components/schemas/RevisionContextSnapshot"
+          },
+          "remaining_microseconds": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remaining Microseconds"
+          },
+          "requested_at": {
+            "format": "date-time",
+            "title": "Requested At",
+            "type": "string"
+          },
+          "sequence": {
+            "exclusiveMinimum": 0.0,
+            "title": "Sequence",
+            "type": "integer"
+          },
+          "source_routing_manifest_id": {
+            "format": "uuid",
+            "title": "Source Routing Manifest Id",
+            "type": "string"
+          },
+          "source_submission_id": {
+            "format": "uuid",
+            "title": "Source Submission Id",
+            "type": "string"
+          },
+          "target": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RevisionContextSnapshot"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "preparation_id",
+          "preparation_sha256",
+          "predecessor_preparation_id",
+          "source_submission_id",
+          "source_routing_manifest_id",
+          "sequence",
+          "next_revision_round",
+          "max_revision_rounds",
+          "requested_at",
+          "deadline_at",
+          "clock_state",
+          "remaining_microseconds",
+          "outcome",
+          "disposition",
+          "direction",
+          "prior",
+          "target",
+          "changes"
+        ],
+        "title": "ContributorRevisionContext",
+        "type": "object"
+      },
+      "DefaultIntakeCheck": {
+        "additionalProperties": false,
+        "properties": {
+          "check_id": {
+            "enum": [
+              "archive_safe",
+              "received_identity_exact",
+              "high_confidence_secrets_absent",
+              "submission_changed_for_current_rules"
+            ],
+            "title": "Check Id",
+            "type": "string"
+          },
+          "failure_code": {
+            "anyOf": [
+              {
+                "enum": [
+                  "submission_archive_malformed",
+                  "submission_archive_limit_exceeded",
+                  "submission_archive_unsafe_entry",
+                  "submission_archive_collision",
+                  "submission_archive_encrypted",
+                  "high_confidence_secret_detected",
+                  "submission_archive_unchanged",
+                  "submission_manifest_unchanged"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure Code"
+          },
+          "finding_count": {
+            "minimum": 0.0,
+            "title": "Finding Count",
+            "type": "integer"
+          },
+          "source": {
+            "const": "workstream_default",
+            "title": "Source",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "passed",
+              "failed",
+              "not_run"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "check_id",
+          "status",
+          "finding_count",
+          "source"
+        ],
+        "title": "DefaultIntakeCheck",
+        "type": "object"
+      },
+      "DefaultIntakeWarning": {
+        "additionalProperties": false,
+        "properties": {
+          "source": {
+            "const": "workstream_default",
+            "title": "Source",
+            "type": "string"
+          },
+          "status": {
+            "const": "warning",
+            "title": "Status",
+            "type": "string"
+          },
+          "warning_code": {
+            "enum": [
+              "submission_summary_missing",
+              "submission_attestation_missing"
+            ],
+            "title": "Warning Code",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "status",
+          "warning_code"
+        ],
+        "title": "DefaultIntakeWarning",
+        "type": "object"
+      },
+      "ExactContributorAssignment": {
+        "additionalProperties": false,
+        "description": "Current status, retained intake and governed evidence for one owned claim.",
+        "properties": {
+          "accepted_evidence": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AcceptedAssignmentEvidence"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "assignment": {
+            "$ref": "#/components/schemas/ContributorAssignment"
+          },
+          "current_status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "draft",
+                  "screening",
+                  "ready",
+                  "in_progress",
+                  "submitted",
+                  "evaluation_pending",
+                  "review_pending",
+                  "needs_revision",
+                  "accepted"
+                ],
+                "type": "string"
+              },
+              {
+                "enum": [
+                  "closed",
+                  "rejected"
+                ],
+                "type": "string"
+              }
+            ],
+            "title": "Current Status"
+          },
+          "feedback_submission_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feedback Submission Id"
+          },
+          "intake": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AssignmentIntakeAttempt"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "next_action": {
+            "enum": [
+              "submit",
+              "awaiting_intake",
+              "awaiting_evaluation",
+              "revise",
+              "wait_for_processing",
+              "none"
+            ],
+            "title": "Next Action",
+            "type": "string"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
+          "post_submission_results": {
+            "items": {
+              "$ref": "#/components/schemas/ContributorCheckerResult"
+            },
+            "maxItems": 100,
+            "title": "Post Submission Results",
+            "type": "array"
+          },
+          "status_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status Reason"
+          }
+        },
+        "required": [
+          "assignment",
+          "current_status",
+          "status_reason",
+          "next_action",
+          "intake",
+          "feedback_submission_id",
+          "post_submission_results",
+          "next_cursor",
+          "accepted_evidence"
+        ],
+        "title": "ExactContributorAssignment",
+        "type": "object"
+      },
+      "ExternalCheckerFinding": {
+        "additionalProperties": false,
+        "description": "Sanitized work result; policy later decides whether failure blocks.\n\n``coverage_incomplete`` reports work the checker could not evaluate. It never\nfails the verdict or costs a revision round; locked ReviewPolicy routing sends\nit to a reviewer or back to the contributor.",
+        "properties": {
+          "check_id": {
+            "maxLength": 100,
+            "minLength": 1,
+            "pattern": "^[a-z][a-z0-9_.-]*$",
+            "title": "Check Id",
+            "type": "string"
+          },
+          "code": {
+            "maxLength": 100,
+            "minLength": 1,
+            "pattern": "^[a-z][a-z0-9_.-]*$",
+            "title": "Code",
+            "type": "string"
+          },
+          "level": {
+            "enum": [
+              "info",
+              "warning",
+              "error",
+              "coverage_incomplete"
+            ],
+            "title": "Level",
+            "type": "string"
+          },
+          "line": {
+            "anyOf": [
+              {
+                "maximum": 10000000.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Line"
+          },
+          "message": {
+            "description": "Contributor-visible diagnosis, including useful correction guidance when available.",
+            "maxLength": 4096,
+            "minLength": 1,
+            "title": "Message",
+            "type": "string"
+          },
+          "path": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Path"
+          }
+        },
+        "required": [
+          "check_id",
+          "code",
+          "level",
+          "message"
+        ],
+        "title": "ExternalCheckerFinding",
+        "type": "object"
+      },
+      "ProjectIntakeCheck": {
+        "additionalProperties": false,
+        "properties": {
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/ExternalCheckerFinding"
+            },
+            "maxItems": 256,
+            "title": "Findings",
+            "type": "array"
+          },
+          "registry_entry_digest": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Registry Entry Digest",
+            "type": "string"
+          },
+          "registry_entry_id": {
+            "format": "uuid",
+            "title": "Registry Entry Id",
+            "type": "string"
+          },
+          "requirement_id": {
+            "maxLength": 100,
+            "minLength": 1,
+            "pattern": "^[a-z][a-z0-9_.-]*$",
+            "title": "Requirement Id",
+            "type": "string"
+          },
+          "source": {
+            "const": "project_external_checker",
+            "title": "Source",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "passed",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "requirement_id",
+          "registry_entry_id",
+          "registry_entry_digest",
+          "status",
+          "findings"
+        ],
+        "title": "ProjectIntakeCheck",
+        "type": "object"
+      },
+      "RevisionContextChange": {
+        "additionalProperties": false,
+        "description": "One bounded policy identity change, without provider or finance internals.",
+        "properties": {
+          "after": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "After",
+            "type": "string"
+          },
+          "before": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Before",
+            "type": "string"
+          },
+          "component": {
+            "enum": [
+              "guide",
+              "source",
+              "artifact",
+              "pre_submit",
+              "post_submit",
+              "review",
+              "revision",
+              "contribution"
+            ],
+            "title": "Component",
+            "type": "string"
+          }
+        },
+        "required": [
+          "component",
+          "before",
+          "after"
+        ],
+        "title": "RevisionContextChange",
+        "type": "object"
+      },
+      "RevisionContextSnapshot": {
+        "additionalProperties": false,
+        "description": "One complete activated context, independent of the task's mutable locks.",
+        "properties": {
+          "activated_at": {
+            "format": "date-time",
+            "title": "Activated At",
+            "type": "string"
+          },
+          "activation_generation": {
+            "exclusiveMinimum": 0.0,
+            "title": "Activation Generation",
+            "type": "integer"
+          },
+          "activation_operation_id": {
+            "format": "uuid",
+            "title": "Activation Operation Id",
+            "type": "string"
+          },
+          "guide_id": {
+            "format": "uuid",
+            "title": "Guide Id",
+            "type": "string"
+          },
+          "lineage": {
+            "$ref": "#/components/schemas/TaskPolicyLineage"
+          }
+        },
+        "required": [
+          "guide_id",
+          "activation_operation_id",
+          "activation_generation",
+          "activated_at",
+          "lineage"
+        ],
+        "title": "RevisionContextSnapshot",
+        "type": "object"
+      },
+      "TaskCompensationAward": {
+        "description": "One contributor-safe exact award value in a TASK response.",
+        "properties": {
+          "instrument": {
+            "enum": [
+              "money",
+              "project_points"
+            ],
+            "title": "Instrument",
+            "type": "string"
+          },
+          "quantity": {
+            "title": "Quantity",
+            "type": "string"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "instrument",
+          "unit",
+          "quantity"
+        ],
+        "title": "TaskCompensationAward",
+        "type": "object"
+      },
+      "TaskCompensationTerms": {
+        "description": "The two complete locked contribution rules disclosed by TASK.",
+        "properties": {
+          "accepted_submission": {
+            "anyOf": [
+              {
+                "const": "unpaid",
+                "type": "string"
+              },
+              {
+                "items": {
+                  "$ref": "#/components/schemas/TaskCompensationAward"
+                },
+                "type": "array"
+              }
+            ],
+            "title": "Accepted Submission"
+          },
+          "completed_review": {
+            "anyOf": [
+              {
+                "const": "unpaid",
+                "type": "string"
+              },
+              {
+                "items": {
+                  "$ref": "#/components/schemas/TaskCompensationAward"
+                },
+                "type": "array"
+              }
+            ],
+            "title": "Completed Review"
+          },
+          "contribution_policy_version_id": {
+            "format": "uuid",
+            "title": "Contribution Policy Version Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "contribution_policy_version_id",
+          "accepted_submission",
+          "completed_review"
+        ],
+        "title": "TaskCompensationTerms",
+        "type": "object"
+      },
+      "TaskPolicyLineage": {
+        "additionalProperties": false,
+        "description": "Complete bounded policy identities; no policy body or arbitrary metadata.",
+        "properties": {
+          "locked_contribution_policy_version_id": {
+            "format": "uuid",
+            "title": "Locked Contribution Policy Version Id",
+            "type": "string"
+          },
+          "locked_effective_project_submission_artifact_policy_hash": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Locked Effective Project Submission Artifact Policy Hash",
+            "type": "string"
+          },
+          "locked_effective_project_submission_artifact_policy_id": {
+            "format": "uuid",
+            "title": "Locked Effective Project Submission Artifact Policy Id",
+            "type": "string"
+          },
+          "locked_guide_source_snapshot_hash": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Locked Guide Source Snapshot Hash",
+            "type": "string"
+          },
+          "locked_guide_source_snapshot_id": {
+            "format": "uuid",
+            "title": "Locked Guide Source Snapshot Id",
+            "type": "string"
+          },
+          "locked_guide_version": {
+            "pattern": "\\S",
+            "title": "Locked Guide Version",
+            "type": "string"
+          },
+          "locked_post_submit_checker_policy_hash": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Locked Post Submit Checker Policy Hash",
+            "type": "string"
+          },
+          "locked_post_submit_checker_policy_id": {
+            "format": "uuid",
+            "title": "Locked Post Submit Checker Policy Id",
+            "type": "string"
+          },
+          "locked_post_submit_checker_policy_version": {
+            "pattern": "\\S",
+            "title": "Locked Post Submit Checker Policy Version",
+            "type": "string"
+          },
+          "locked_pre_submit_checker_bundle_hash": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Locked Pre Submit Checker Bundle Hash",
+            "type": "string"
+          },
+          "locked_pre_submit_checker_policy_id": {
+            "format": "uuid",
+            "title": "Locked Pre Submit Checker Policy Id",
+            "type": "string"
+          },
+          "locked_review_policy_generation": {
+            "exclusiveMinimum": 0.0,
+            "title": "Locked Review Policy Generation",
+            "type": "integer"
+          },
+          "locked_review_policy_hash": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Locked Review Policy Hash",
+            "type": "string"
+          },
+          "locked_review_policy_id": {
+            "format": "uuid",
+            "title": "Locked Review Policy Id",
+            "type": "string"
+          },
+          "locked_revision_policy_generation": {
+            "exclusiveMinimum": 0.0,
+            "title": "Locked Revision Policy Generation",
+            "type": "integer"
+          },
+          "locked_revision_policy_hash": {
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "title": "Locked Revision Policy Hash",
+            "type": "string"
+          },
+          "locked_revision_policy_id": {
+            "format": "uuid",
+            "title": "Locked Revision Policy Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "locked_guide_version",
+          "locked_guide_source_snapshot_id",
+          "locked_guide_source_snapshot_hash",
+          "locked_effective_project_submission_artifact_policy_id",
+          "locked_effective_project_submission_artifact_policy_hash",
+          "locked_pre_submit_checker_policy_id",
+          "locked_pre_submit_checker_bundle_hash",
+          "locked_post_submit_checker_policy_id",
+          "locked_post_submit_checker_policy_version",
+          "locked_post_submit_checker_policy_hash",
+          "locked_review_policy_id",
+          "locked_review_policy_generation",
+          "locked_review_policy_hash",
+          "locked_revision_policy_id",
+          "locked_revision_policy_generation",
+          "locked_revision_policy_hash",
+          "locked_contribution_policy_version_id"
+        ],
+        "title": "TaskPolicyLineage",
+        "type": "object"
+      }
+    }
+  },
+  "operation": {
+    "description": "Read your assignment status, feedback and earned evidence by task and assignment.",
+    "operationId": "read_my_assignment_api_v1_tasks__task_id__assignments__assignment_id__get",
+    "parameters": [
+      {
+        "in": "path",
+        "name": "task_id",
+        "required": true,
+        "schema": {
+          "format": "uuid",
+          "title": "Task Id",
+          "type": "string"
+        }
+      },
+      {
+        "in": "path",
+        "name": "assignment_id",
+        "required": true,
+        "schema": {
+          "format": "uuid",
+          "title": "Assignment Id",
+          "type": "string"
+        }
+      },
+      {
+        "in": "query",
+        "name": "limit",
+        "required": false,
+        "schema": {
+          "default": 25,
+          "maximum": 100,
+          "minimum": 1,
+          "title": "Limit",
+          "type": "integer"
+        }
+      },
+      {
+        "in": "query",
+        "name": "cursor",
+        "required": false,
+        "schema": {
+          "anyOf": [
+            {
+              "maxLength": 512,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Cursor"
+        }
+      },
+      {
+        "in": "header",
+        "name": "X-Request-ID",
+        "required": false,
+        "schema": {
+          "format": "uuid",
+          "maxLength": 36,
+          "minLength": 36,
+          "type": "string"
+        }
+      },
+      {
+        "in": "header",
+        "name": "X-Correlation-ID",
+        "required": false,
+        "schema": {
+          "format": "uuid",
+          "maxLength": 36,
+          "minLength": 36,
+          "type": "string"
+        }
+      }
+    ],
+    "responses": {
+      "200": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ExactContributorAssignment"
+            }
+          }
+        },
+        "description": "Successful Response",
+        "headers": {
+          "X-Correlation-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "X-Request-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "400": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiErrorResponse"
+            }
+          }
+        },
+        "description": "Invalid request.",
+        "headers": {
+          "X-Correlation-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "X-Request-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "401": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiErrorResponse"
+            }
+          }
+        },
+        "description": "Authentication failed.",
+        "headers": {
+          "WWW-Authenticate": {
+            "schema": {
+              "type": "string"
+            }
+          },
+          "X-Correlation-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "X-Request-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "403": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiErrorResponse"
+            }
+          }
+        },
+        "description": "Permission denied.",
+        "headers": {
+          "X-Correlation-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "X-Request-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "404": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiErrorResponse"
+            }
+          }
+        },
+        "description": "Not Found",
+        "headers": {
+          "X-Correlation-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "X-Request-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "422": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiErrorResponse"
+            }
+          }
+        },
+        "description": "Unprocessable Entity",
+        "headers": {
+          "X-Correlation-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "X-Request-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "500": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiErrorResponse"
+            }
+          }
+        },
+        "description": "Internal server error.",
+        "headers": {
+          "X-Correlation-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "X-Request-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "503": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApiErrorResponse"
+            }
+          }
+        },
+        "description": "Service Unavailable",
+        "headers": {
+          "X-Correlation-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "X-Request-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "security": [
+      {
+        "HTTPBearer": []
+      }
+    ],
+    "summary": "Read My Assignment",
+    "tags": [
+      "tasks"
+    ],
+    "x-workstream-action-id": "task.assignment.read"
+  },
+  "schema_version": 1,
+  "source": {
+    "method": "GET",
+    "openapi_version": "3.1.0",
+    "path": "/api/v1/tasks/{task_id}/assignments/{assignment_id}",
+    "repository_sha": "c853743b689a46711c13e1d800cdd27ab8230ac2"
+  }
+}

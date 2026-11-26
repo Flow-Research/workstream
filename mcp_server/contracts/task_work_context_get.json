@@ -1,5 +1,5 @@
 {
-  "canonical_sha256": "cb9b06d69399d48ef7672b9a32f17e96f6afbf33d80924d0f3a3a94d54fb3015",
+  "canonical_sha256": "a8c5b3cc4f2092bda5225aa0e46d343b433bc57b33119b0dc5d2197dab7781ea",
   "components": {
     "schemas": {
       "ApiError": {
@@ -63,7 +63,7 @@
       },
       "ContributorGuideDocument": {
         "additionalProperties": false,
-        "description": "Public original identity and task-scoped authorized read reference.",
+        "description": "Public original identity and authorized download reference.",
         "properties": {
           "byte_count": {
             "exclusiveMinimum": 0.0,
@@ -106,11 +106,11 @@
         },
         "required": [
           "document_id",
-          "order",
           "label",
+          "order",
           "media_type",
-          "byte_count",
           "sha256",
+          "byte_count",
           "read_reference"
         ],
         "title": "ContributorGuideDocument",

@@ -1112,16 +1112,13 @@ delivery, worker completion, live setup inference or deployed Flow behavior.
 
 ```sh
 workstream task submit TASK_ID --assignment ASSIGNMENT_ID --file work.zip \
-  --idempotency-key CALLER_UUID --summary 'Completed work' --attestation 'My attestation'
-# Inspect once using the returned operation ID, or your original caller key.
-workstream task submission-operation TASK_ID --operation-id OPERATION_ID
-workstream task submission-operation TASK_ID --idempotency-key CALLER_UUID
-# For a checker-requested revision, inspect the current task context first.
-workstream task context TASK_ID --output json
+  --idempotency-key CALLER_UUID
+workstream task status TASK_ID --assignment ASSIGNMENT_ID
+# After correcting work, use the same command and a new key.
 workstream task submit TASK_ID --assignment ASSIGNMENT_ID --file revision.zip \
-  --predecessor SOURCE_SUBMISSION_ID --revision-preparation-id PREPARATION_ID \
-  --revision-preparation-sha256 "$PREPARATION_SHA256" \
-  --idempotency-key REVISION_KEY --summary 'Revised work'
+  --idempotency-key REVISION_KEY --feedback 'Updated the examples.'
+# For exact request recovery, use the operation ID or the original key.
+workstream task submission-operation TASK_ID --idempotency-key CALLER_UUID
 workstream task submissions TASK_ID --limit 25
 workstream submission show SUBMISSION_ID
 workstream submission findings SUBMISSION_ID --limit 25
@@ -1141,26 +1138,24 @@ ID. Nullable Submission/evaluation IDs remain null before finalization. The
 operation's processing stage, PRE feedback and next-action advice come from the
 server; current task status is contextual and may differ from a historical outcome.
 
-Submit accepts optional `--summary`, `--attestation` and `--predecessor`.
-Revisions require the exact `revision_context.preparation_id` and
-`revision_context.preparation_sha256` from authorized task context as
-`--revision-preparation-id` and `--revision-preparation-sha256`. Both flags are
-forbidden for initial submission. These acknowledge the governed revision context;
-they do not request a separate bundle preparation. A fresh server check rejects a
-stale pair after a rebase, deadline or source change. The CLI never chooses a
-replacement automatically.
+Use `task status` with the task and assignment IDs to see current work status,
+the relevant intake and evaluation feedback, revision deadline and terms, and
+accepted contribution evidence. A status read is available throughout ordinary
+revisions and afterwards in the assignment history. The backend selects the
+current predecessor and revision terms under lock. It refuses an attempt if
+eligibility or the selected terms change while intake is in progress.
 
-Packet text uses headers: printable ASCII only, at most 64KiB per field, without
-leading/trailing whitespace. Unsupported text is rejected before dispatch, not
-rewritten. Omitted or empty text is supported, with warning-only defaults where
-applicable. The API owns policy, predecessor/currentness and authorization checks.
+Optional `--feedback` is project feedback. The header accepts up to 4096 printable
+ASCII bytes without leading or trailing whitespace. Workstream preserves the
+exact supplied text. Feedback can be omitted on every submission and has no
+effect on intake or earning.
 Before confirming upload success, the CLI rechecks file size, modification time
 and SHA-256; a changed source reports an uncertain outcome.
 
 A lost or malformed write response exits 1 with `outcome_unknown: true`, empty
 stdout and a text-mode recovery hint. Inspect progress with the original actor
-and key. Any explicit replay must preserve task, assignment, key, ZIP bytes,
-packet and revision acknowledgement. Do not create a new key while the outcome
+and key. Any explicit replay must preserve task, assignment, key, ZIP bytes
+and optional feedback. Do not create a new key while the outcome
 is unknown. Every read or replay requires fresh server authority.
 
 Blocked pre-submission intake prints the validated contributor findings in error
@@ -1809,44 +1804,38 @@ not an empty successful result.
 
 Context returns contributor instructions, project/guide display facts, exact
 review/revision policy identities and contribution-policy version, plus the
-server's current assignment/action hints and `guide_documents`. An active own
-assignment receives the exact locked originals' IDs, order, labels, media types,
-sizes, SHA-256 commitments and task-scoped read references; ready unassigned
-browsing receives an empty document list. Task examples are never included.
+server's current assignment/action hints and `guide_documents`. Ready unassigned tasks and active own assignments expose their exact locked
+originals' IDs, order, labels, media types, sizes, SHA-256 commitments and
+task-scoped read references. Task examples are never included.
 For a task awaiting revision, the optional `revision_context` gives the current
 preparation ID and digest, source Submission, deadline, eligibility disposition
-and bounded change summary. It may be absent or null on other tasks. Use its
-exact preparation pair for a revision ZIP submission; the read does not reserve
-or authorize later intake.
+and bounded change summary. It may be absent or null on other tasks. Use the shown deadline and terms to plan the next submission.
 Hints are observations, not authority
 or a claimability guarantee. The CLI never recomputes them or automatically
 executes a hinted action. Claim independently authorizes each request.
 
-Requirements expose the task's locked guide and intake rules: packet fields,
-artifact/evidence requirements, forbidden patterns, attestation, hash/manifest
+Requirements expose the task's locked guide and intake rules, including
+artifact and evidence requirements, forbidden patterns, hash and manifest
 requirements, storage-reference restrictions, size/entry limits and packaging.
 They are not a current-guide lookup, a checker verdict or permission to upload.
 These reads do not invoke `task submit`. Described
 paths and storage references are displayed only, never read, downloaded or executed.
 
-### Read the assigned guide
+### Read an approved guide
 
 ```sh
-workstream task guide TASK_ID --output json
-mkdir guide-documents
-workstream task guide TASK_ID --download guide-documents
+workstream project guide approved PROJECT_ID --output json
+mkdir project-guide task-guide
+workstream project guide approved PROJECT_ID --download project-guide
+workstream task guide TASK_ID --download task-guide
 ```
 
-This requires an active assignment and current exact-project Submitter authority.
-Each download reauthorizes independently; neither a cached list nor a read
-reference grants access. Workstream reads the task's locked snapshot, not the
-latest guide or drafts. A successor activation alone never changes its documents.
-Checker-requested revision preparation can atomically rebase the complete task
-and assignment context for the next attempt. Inspect `task context` for its
-frozen change summary and acknowledge the exact preparation pair when running
-`task submit`; this guide download does not initiate a rebase. Covered-manager
-repair is a separate backend operation with no CLI command. Genuine human
-Review revision integration remains #554 work.
+A current exact-project Submitter grant allows reading the active approved
+project guide even when no tasks are ready. The task guide shows the exact
+version that governs an eligible ready task or your active assignment, including
+a retained version superseded by a new project guide. Each download checks
+authority independently and verifies the original. Guide reads never claim tasks
+or change revision terms. Use `task status` to see the current terms during revision.
 
 The API verifies the complete original against retained ART size/SHA-256 before
 responding. Missing, corrupt or wrong-namespace originals fail with

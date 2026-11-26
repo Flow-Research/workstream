@@ -14,6 +14,8 @@ class SafeFailure:
     code: str | None = None
     correlation_id: str | None = None
     retryable: bool = False
+    message: str | None = None
+    details: dict[str, Any] | None = None
 
     def payload(self) -> dict[str, Any]:
         value: dict[str, Any] = {"error": self.error, "retryable": self.retryable}
@@ -23,6 +25,10 @@ class SafeFailure:
             value["code"] = self.code
         if self.correlation_id is not None:
             value["correlation_id"] = self.correlation_id
+        if self.message is not None:
+            value["message"] = self.message
+        if self.details is not None:
+            value["details"] = self.details
         return value
 
     def result(self) -> CallToolResult:

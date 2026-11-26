@@ -124,10 +124,8 @@ async def test_manager_context_history_and_checker_authority(
                     str(archive),
                     "--idempotency-key",
                     str(uuid4()),
-                    "--summary",
+                    "--feedback",
                     "Completed the required project work and included evidence.",
-                    "--attestation",
-                    " ".join(h.policy["attestation_terms"]),
                 )
                 assert receipt["status"] == "accepted" and receipt["replayed"] is False
                 assert len(runtime_calls) == 1 and not runtime_errors, runtime_errors

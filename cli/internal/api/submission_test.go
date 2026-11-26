@@ -31,7 +31,7 @@ func TestSubmitSubmissionRejectsOversizedCompressedZipBeforeHTTP(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err = client.SubmitSubmission(context.Background(), testTask, testRun,
-		SubmissionPacket{Assignment: testSubmission}, nil, file)
+		SubmissionInput{Assignment: testSubmission}, file)
 	if err == nil || err.Error() != "ZIP must be a nonempty regular file of at most 500MiB" {
 		t.Fatalf("expected local compressed ZIP limit rejection, got %v", err)
 	}

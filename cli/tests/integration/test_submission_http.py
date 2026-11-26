@@ -14,15 +14,14 @@ KEY = "018f0ebc-7966-7e8d-bc4d-1cae1e000012"
 OPERATION = "018f0ebc-7966-7e8d-bc4d-1cae1e000013"
 SUBMISSION = "018f0ebc-7966-7e8d-bc4d-1cae1e000015"
 RUN = "018f0ebc-7966-7e8d-bc4d-1cae1e000016"
-REVISION_PREPARATION = "018f0ebc-7966-7e8d-bc4d-1cae1e000017"
-REVISION_DIGEST = "sha256:" + "a" * 64
 HISTORY = {
     "id": SUBMISSION,
     "task_id": TASK,
     "version": 1,
     "status": "evaluation_pending",
     "status_reason": None,
-    "summary": "Work complete",
+    "summary": None,
+    "feedback": "Work complete",
     "submitted_at": "2026-10-14T10:00:00Z",
     "decided_at": None,
     "finding_counts": {"blocking": 0, "warning": 0, "coverage_incomplete": 0},
@@ -82,11 +81,6 @@ INTAKE_FEEDBACK = [
         "finding_count": 0,
     },
     {
-        "source": "workstream_default",
-        "status": "warning",
-        "warning_code": "submission_summary_missing",
-    },
-    {
         "source": "project_external_checker",
         "requirement_id": "quality",
         "registry_entry_id": RUN,
@@ -124,22 +118,22 @@ def respond(response, value, status=200):
     response.update(status=status, body=json.dumps(value, ensure_ascii=False).encode())
 
 
-def test_explicit_submit_replay_preserves_packet_and_bytes(cli, tmp_path):
+def test_explicit_submit_replay_preserves_feedback_and_bytes(cli, tmp_path):
     path = tmp_path / "submission.zip"
     path.write_bytes(b"PK\x03\x04exact-archive")
-    packet = ("--summary", "Completed work", "--attestation", "")
+    feedback = ("--feedback", "Completed  work")
     with http_fixture() as (origin, response, requests):
         for replayed in (False, True):
             respond(response, acceptance(replayed), 202)
-            result = cli(origin, TOKEN, *submit_args(path), *packet)
+            result = cli(origin, TOKEN, *submit_args(path), *feedback)
             assert result.returncode == 0, result.stderr
             assert json.loads(result.stdout) == acceptance(replayed)
         assert len(requests) == 2  # Only caller-requested replay.
         assert response["raw_commands"] == [path.read_bytes()] * 2
         for headers in response["request_headers"]:
             assert headers["X-Task-Assignment-Id"] == ASSIGNMENT
-            assert headers["X-Submission-Summary"] == "Completed work"
-            assert headers["X-Contributor-Attestation"] == ""
+            assert headers["X-Submission-Feedback"] == "Completed  work"
+            assert "X-Contributor-Attestation" not in headers
             assert headers["Idempotency-Key"] == KEY
             assert headers["Content-Type"] == "application/zip"
         assert (
@@ -159,7 +153,6 @@ def test_accepted_submission_shows_nonblocking_intake_feedback(cli, tmp_path):
         receipt_line = result.stdout.splitlines()[0]
         assert receipt_line.startswith("Submission accepted for evaluation")
         assert "pre_submission_results" not in receipt_line
-        assert "Intake feedback: warning submission_summary_missing" in result.stdout
         assert (
             "Intake feedback: coverage_incomplete coverage.files results/vendor.bin: "
             "One file was not evaluated." in result.stdout
@@ -172,9 +165,9 @@ def test_accepted_submission_shows_nonblocking_intake_feedback(cli, tmp_path):
             "finding_count": 1,
         }
         error_finding = copy.deepcopy(INTAKE_FEEDBACK)
-        error_finding[2]["findings"][0]["level"] = "error"
+        error_finding[-1]["findings"][0]["level"] = "error"
         failed_member = copy.deepcopy(INTAKE_FEEDBACK)
-        failed_member[2]["status"] = "failed"
+        failed_member[-1]["status"] = "failed"
         missing = acceptance()
         missing.pop("pre_submission_results")
         for invalid in (
@@ -191,58 +184,27 @@ def test_accepted_submission_shows_nonblocking_intake_feedback(cli, tmp_path):
         assert len(requests) == 6
 
 
-def test_revision_submit_requires_and_replays_exact_acknowledgement_headers(
-    cli, tmp_path
-):
+def test_submit_uses_the_same_inputs_for_revision(cli, tmp_path):
     path = tmp_path / "revision.zip"
     path.write_bytes(b"PK\x03\x04revision")
-    pair = (
-        "--revision-preparation-id",
-        REVISION_PREPARATION,
-        "--revision-preparation-sha256",
-        REVISION_DIGEST,
-    )
     with http_fixture() as (origin, response, requests):
-        for args in (
-            ("--predecessor", SUBMISSION),
-            pair,
-            (
-                "--predecessor",
-                SUBMISSION,
-                "--revision-preparation-id",
-                REVISION_PREPARATION,
-            ),
-            (
-                "--predecessor",
-                SUBMISSION,
-                "--revision-preparation-sha256",
-                REVISION_DIGEST,
-            ),
-            ("--predecessor", SUBMISSION, *pair[:-1], "sha256:" + "A" * 64),
-        ):
-            assert_failure(
-                cli(origin, TOKEN, *submit_args(path), *args), "invalid_arguments", 2
-            )
+        for flag in ("--predecessor", "--revision-preparation-id", "--revision-preparation-sha256",
+                     "--summary", "--attestation"):
+            assert_failure(cli(origin, TOKEN, *submit_args(path), flag, SUBMISSION), "invalid_arguments", 2)
         assert requests == []
         respond(response, acceptance(), 202)
-        for _ in range(2):
-            result = cli(
-                origin, TOKEN, *submit_args(path), "--predecessor", SUBMISSION, *pair
-            )
-            assert result.returncode == 0, result.stderr
-        assert len(requests) == 2
-        for headers in response["request_headers"]:
-            assert headers["X-Predecessor-Submission-Id"] == SUBMISSION
-            assert headers["X-Revision-Preparation-Id"] == REVISION_PREPARATION
-            assert headers["X-Revision-Preparation-Sha256"] == REVISION_DIGEST
+        result = cli(origin, TOKEN, *submit_args(path))
+        assert result.returncode == 0, result.stderr
+        assert len(requests) == 1
+        assert "X-Submission-Feedback" not in response["request_headers"][0]
 
 
-def test_submit_rejects_untransportable_packet_before_request(cli, tmp_path):
+def test_submit_rejects_untransportable_feedback_before_request(cli, tmp_path):
     path = tmp_path / "submission.zip"
     path.write_bytes(b"zip")
     with http_fixture() as (origin, _, requests):
-        for summary in ("é", "line\nbreak", " leading", "trailing ", "x" * 65537):
-            result = cli(origin, TOKEN, *submit_args(path), "--summary", summary)
+        for feedback in ("é", "line\nbreak", " leading", "trailing ", "x" * 4097):
+            result = cli(origin, TOKEN, *submit_args(path), "--feedback", feedback)
             assert_failure(result, "invalid_arguments", 2)
         assert requests == []
 

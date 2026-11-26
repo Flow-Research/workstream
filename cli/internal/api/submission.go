@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"regexp"
 	"strings"
 	"time"
 )
@@ -18,22 +17,13 @@ import (
 // Project limits may enforce a smaller allowance.
 const MaxSubmissionZipBytes = 500 * 1024 * 1024
 
-// SubmissionPacket is the exact metadata for one source submission.
-// ART's current public header boundary requires ASCII; no client normalization.
-type SubmissionPacket struct {
-	Assignment  string  `json:"assignment_id"`
-	Predecessor *string `json:"predecessor_submission_id,omitempty"`
-	Summary     *string `json:"summary,omitempty"`
-	Attestation *string `json:"contributor_attestation,omitempty"`
+// SubmissionInput carries the contributor's exact assignment and optional project feedback.
+type SubmissionInput struct {
+	Assignment string
+	Feedback   *string
 }
 
-// RevisionAcknowledgement binds the current governed revision context.
-type RevisionAcknowledgement struct {
-	PreparationID     string
-	PreparationSHA256 string
-}
-
-var revisionPreparationDigest = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
+const MaxSubmissionFeedbackBytes = 4096
 
 type SubmissionReceipt struct {
 	OperationID     string            `json:"operation_id"`
@@ -49,22 +39,20 @@ type SubmissionReceipt struct {
 
 func submissionSelector(value string) bool { return len(value) <= 100 && validUUID(value) }
 
-func (p SubmissionPacket) validate(task string) error {
-	if !submissionSelector(task) || !submissionSelector(p.Assignment) ||
-		(p.Predecessor != nil && !submissionSelector(*p.Predecessor)) {
-		return errors.New("task, assignment and predecessor must be UUIDs")
+func (p SubmissionInput) validate(task string) error {
+	if !submissionSelector(task) || !submissionSelector(p.Assignment) {
+		return errors.New("task and assignment must be UUIDs")
 	}
-	for _, text := range []*string{p.Summary, p.Attestation} {
-		if text == nil {
-			continue
-		}
-		if len(*text) > 64*1024 || strings.TrimSpace(*text) != *text {
-			return errors.New("packet text must fit 64KiB without header-edge whitespace")
-		}
-		for _, value := range []byte(*text) {
-			if value < 32 || value > 126 {
-				return errors.New("packet text must be printable ASCII for the public submission API")
-			}
+	if p.Feedback == nil {
+		return nil
+	}
+	text := *p.Feedback
+	if len(text) > MaxSubmissionFeedbackBytes || strings.TrimSpace(text) != text {
+		return errors.New("feedback accepts at most 4096 bytes without leading or trailing whitespace")
+	}
+	for _, value := range []byte(text) {
+		if value < 32 || value > 126 {
+			return errors.New("feedback must be printable ASCII")
 		}
 	}
 	return nil
@@ -73,27 +61,19 @@ func (p SubmissionPacket) validate(task string) error {
 func submissionFailure(err error) error {
 	var failure *Failure
 	if errors.As(err, &failure) && failure.OutcomeUnknown {
-		failure.RecoveryHint = "Observe the submission operation using the same actor and idempotency key, or explicitly replay the same task, assignment, ZIP bytes, packet and revision acknowledgement; do not create a new key while the outcome is unknown"
+		failure.RecoveryHint = "Observe the submission operation using the same actor and idempotency key, or explicitly replay the same task, assignment, ZIP bytes and feedback; do not create a new key while the outcome is unknown"
 	}
 	return err
 }
 
 // SubmitSubmission streams one regular ZIP once and returns its committed acceptance snapshot.
-func (c *Client) SubmitSubmission(ctx context.Context, task, key string, packet SubmissionPacket, acknowledgement *RevisionAcknowledgement, source *os.File) (Result[SubmissionReceipt], error) {
+func (c *Client) SubmitSubmission(ctx context.Context, task, key string, input SubmissionInput, source *os.File) (Result[SubmissionReceipt], error) {
 	var result Result[SubmissionReceipt]
-	if err := packet.validate(task); err != nil {
+	if err := input.validate(task); err != nil {
 		return result, err
 	}
 	if !submissionSelector(key) || source == nil {
 		return result, errors.New("submission requires a caller UUID key and a regular ZIP file")
-	}
-	if packet.Predecessor == nil {
-		if acknowledgement != nil {
-			return result, errors.New("initial submission cannot acknowledge a revision")
-		}
-	} else if acknowledgement == nil || !submissionSelector(acknowledgement.PreparationID) ||
-		!revisionPreparationDigest.MatchString(acknowledgement.PreparationSHA256) {
-		return result, errors.New("revision preparation requires its exact preparation ID and sha256 digest")
 	}
 	initial, err := source.Stat()
 	if err != nil || !initial.Mode().IsRegular() || initial.Size() <= 0 || initial.Size() > MaxSubmissionZipBytes {
@@ -103,18 +83,9 @@ func (c *Client) SubmitSubmission(ctx context.Context, task, key string, packet 
 	if err != nil {
 		return result, err
 	}
-	headers := http.Header{"X-Task-Assignment-Id": {packet.Assignment}}
-	for name, value := range map[string]*string{
-		"X-Submission-Summary": packet.Summary, "X-Contributor-Attestation": packet.Attestation,
-		"X-Predecessor-Submission-Id": packet.Predecessor,
-	} {
-		if value != nil {
-			headers.Set(name, *value)
-		}
-	}
-	if acknowledgement != nil {
-		headers.Set("X-Revision-Preparation-Id", acknowledgement.PreparationID)
-		headers.Set("X-Revision-Preparation-Sha256", acknowledgement.PreparationSHA256)
+	headers := http.Header{"X-Task-Assignment-Id": {input.Assignment}}
+	if input.Feedback != nil {
+		headers.Set("X-Submission-Feedback", *input.Feedback)
 	}
 	response, err := c.openBodyRequest(ctx, c.guideHTTP, http.MethodPost,
 		"/api/v1/tasks/"+url.PathEscape(task)+"/submissions", "",
@@ -150,7 +121,7 @@ func (c *Client) SubmitSubmission(ctx context.Context, task, key string, packet 
 	_, decodeErr := contextObject(raw, &value, []string{"operation_id", "task_id", "assignment_id", "status", "accepted_at", "task_status_at_acceptance", "processing_stage_at_acceptance", "replayed", "pre_submission_results"}, nil)
 	_, acceptedErr := time.Parse(time.RFC3339Nano, value.AcceptedAt)
 	if typeErr != nil || kind != "application/json" || decodeErr != nil || acceptedErr != nil ||
-		!validUUID(value.OperationID) || !sameUUID(value.TaskID, task) || !sameUUID(value.AssignmentID, packet.Assignment) ||
+		!validUUID(value.OperationID) || !sameUUID(value.TaskID, task) || !sameUUID(value.AssignmentID, input.Assignment) ||
 		value.Status != "accepted" || value.TaskStatus != "evaluation_pending" || value.ProcessingStage != "finalization_pending" ||
 		!c.safeMutationResponse(raw) || value.Feedback == nil || !validPreSubmissionResults(value.Feedback, true) ||
 		(response.Header.Get("Content-Encoding") != "" && response.Header.Get("Content-Encoding") != "identity") {

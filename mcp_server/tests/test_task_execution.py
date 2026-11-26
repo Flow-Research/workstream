@@ -34,8 +34,7 @@ def _arguments(name: str) -> dict[str, Any]:
             "assignment_id": ASSIGNMENT_ID,
             "zip_base64": base64.b64encode(b"PK\x03\x04fixture").decode(),
             "idempotency_key": KEY,
-            "summary": "ready",
-            "contributor_attestation": "reviewed",
+            "feedback": "ready  for review",
         },
         "preparations_list": {"task_id": TASK_ID, "limit": 25, "cursor": "opaque"},
         "preparation_get": {"task_id": TASK_ID, "preparation_id": PREPARATION_ID},
@@ -45,6 +44,11 @@ def _arguments(name: str) -> dict[str, Any]:
         "task_release": {"task_id": TASK_ID, "idempotency_key": KEY},
         "task_claim": {"task_id": TASK_ID, "idempotency_key": KEY},
         "task_work_context_get": {"task_id": TASK_ID},
+        "task_assignment_get": {"task_id": TASK_ID, "assignment_id": ASSIGNMENT_ID},
+        "project_contributor_guide_get": {"project_id": PROJECT_ID},
+        "project_contributor_guide_document_get": {
+            "project_id": PROJECT_ID, "guide_id": PREPARATION_ID, "document_id": DOCUMENT_ID,
+        },
         "task_guide_document_content_get": {
             "task_id": TASK_ID,
             "document_id": DOCUMENT_ID,
@@ -88,7 +92,11 @@ def _bound_response(name: str) -> dict[str, Any]:
         }
     if name == "task_work_context_get":
         return {"task": {"task_id": TASK_ID}}
-    if name == "task_guide_document_content_get":
+    if name == "task_assignment_get":
+        return {"assignment": {"task_id": TASK_ID, "assignment_id": ASSIGNMENT_ID}}
+    if name == "project_contributor_guide_get":
+        return {"project_id": PROJECT_ID}
+    if name in {"task_guide_document_content_get", "project_contributor_guide_document_get"}:
         return {
             "media_type": "text/markdown",
             "content_base64": "eA==",
@@ -160,7 +168,8 @@ def test_task_execution_catalogue_is_exact_closed_and_does_not_dispatch(
 
 @pytest.mark.parametrize(
     "name",
-    [name for name in TASK_EXECUTION_CONTRACT_NAMES if name != "task_guide_document_content_get"],
+    [name for name in TASK_EXECUTION_CONTRACT_NAMES
+     if name not in {"task_guide_document_content_get", "project_contributor_guide_document_get"}],
 )
 @pytest.mark.asyncio
 async def test_every_json_operation_forwards_only_its_fixed_request(
@@ -299,8 +308,8 @@ def test_submission_upload_decodes_once_and_forwards_only_reviewed_headers(
     assert request.headers["content-type"] == "application/zip"
     assert request.headers["idempotency-key"] == KEY
     assert request.headers["x-task-assignment-id"] == ASSIGNMENT_ID
-    assert request.headers["x-submission-summary"] == "ready"
-    assert request.headers["x-contributor-attestation"] == "reviewed"
+    assert request.headers["x-submission-feedback"] == "ready  for review"
+    assert "x-submission-summary" not in request.headers
 
 
 def test_submission_bundle_contract_fits_inside_mcp_ingress() -> None:
@@ -313,12 +322,12 @@ def test_submission_bundle_contract_fits_inside_mcp_ingress() -> None:
     )
 
 
-@pytest.mark.parametrize("field", ["summary", "contributor_attestation"])
-def test_submission_header_text_rejects_trailing_newline_before_dispatch(
-    adapter: Adapter, field: str
+@pytest.mark.parametrize("text", ["ready\n", " edge", "café", "x" * 4097])
+def test_submission_feedback_rejects_non_wire_text(
+    adapter: Adapter, text: str,
 ) -> None:
     client, received, _ = adapter
-    arguments = {**_arguments("submission_create"), field: "ready\n"}
+    arguments = {**_arguments("submission_create"), "feedback": text}
     response = client.post(
         "/mcp",
         headers={
@@ -342,7 +351,7 @@ def test_submission_header_text_rejects_trailing_newline_before_dispatch(
     assert received == []
 
 
-def test_incomplete_revision_preparation_selector_never_dispatches(adapter: Adapter) -> None:
+def test_retired_revision_selector_never_dispatches(adapter: Adapter) -> None:
     client, received, _ = adapter
     arguments = {
         **_arguments("submission_create"),
@@ -377,7 +386,12 @@ def test_pre_submit_checker_failure_is_a_safe_tool_outcome(adapter: Adapter) -> 
         "error": {
             "code": "pre_submission_checker_failed",
             "message": "Pre-submission checks failed",
-            "details": {"eligible_to_submit": False},
+            "details": {
+                "eligible_to_submit": False, "status": "failed", "results": [{
+                    "source": "workstream_default", "check_id": "archive_safe", "status": "failed",
+                    "failure_code": "submission_archive_malformed", "finding_count": 1,
+                }],
+            },
             "correlation_id": KEY,
             "retryable": False,
         }
@@ -402,6 +416,7 @@ def test_pre_submit_checker_failure_is_a_safe_tool_outcome(adapter: Adapter) -> 
     assert result["isError"] is True
     assert result["structuredContent"]["status"] == 422
     assert result["structuredContent"]["code"] == "pre_submission_checker_failed"
+    assert result["structuredContent"]["details"] == upstream["json"]["error"]["details"]
     assert len(received) == 1
 
 
@@ -459,17 +474,15 @@ def test_submission_acceptance_refuses_substitution_and_invalid_snapshots(
     {"revision_preparation_id": PREPARATION_ID,
      "revision_preparation_sha256": "sha256:" + "a" * 64},
 ])
-def test_submission_revision_requires_predecessor_and_both_acknowledgements(
+def test_submission_has_no_revision_acknowledgement_inputs(
     fields: dict[str, Any],
 ) -> None:
     validator = Draft202012Validator(
         TASK_EXECUTION_INPUT_SCHEMAS["submission_create"], format_checker=FormatChecker()
     )
     assert not validator.is_valid(_arguments("submission_create") | fields)
-    assert validator.is_valid(_arguments("submission_create") | {
-        "predecessor_submission_id": SUBMISSION_ID,
-        "revision_preparation_id": PREPARATION_ID,
-        "revision_preparation_sha256": "sha256:" + "a" * 64,
+    assert validator.is_valid({
+        key: value for key, value in _arguments("submission_create").items() if key != "feedback"
     })
 
 

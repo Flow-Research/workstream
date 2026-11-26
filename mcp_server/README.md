@@ -238,19 +238,30 @@ Task execution uses separate contributor and manager read tools so the adapter
 never chooses an authority path on the caller's behalf. Screen, release and claim
 require typed UUID idempotency keys. Claim atomically assigns and starts a ready
 task through one request, returning `in_progress` and the started assignment.
-Submission creation accepts a bounded Base64 ZIP, decodes it once and forwards the
-caller's typed assignment/key and optional submission or revision fields as the
-fixed backend headers. The raw-ZIP POST returns a `202` acceptance snapshot with
-an operation ID; formal Submission creation and evaluation continue durably.
-Use `workstream_submission_operation_get` with `task_id` and exactly one of
-`operation_id` or `idempotency_key` for one authorized progress read. Keys are
-actor-scoped; management reads can select an operation ID. The tool preserves
-nullable fields, PRE feedback and server next-action advice without resubmitting
-or polling. Current task status is context, not the historical operation outcome.
-Revision preparation ID and digest are both required with a predecessor and
-forbidden for initial submission. Workstream owns ZIP validation, pre-submit checks, replay and all task
-state changes. A checker rejection is a normal safe tool failure; an unverified
-mutation success remains uncertain and is never retried automatically.
+Use `workstream_project_contributor_guide_get` to read the approved project guide
+before claiming a task. Use its version and document IDs with
+`workstream_project_contributor_guide_document_get` to retrieve verified originals.
+The contributor task context exposes the locked guide of an eligible ready task
+or an active assignment. `workstream_task_guide_document_content_get` retrieves
+that task's exact original even if a newer project guide is active.
+
+`workstream_submission_create` takes `task_id`, `assignment_id`, `zip_base64`
+and a caller-supplied UUID `idempotency_key` for both initial work and revisions.
+MCP accepts up to 64 MiB of raw ZIP bytes. The CLI ceiling is 500 MiB and project
+limits apply to both clients. The optional `feedback` field accepts up to 4096
+printable ASCII bytes without leading or trailing whitespace. Workstream retains
+the exact text as project feedback. Workstream selects revision context and terms
+internally.
+
+A raw-ZIP `202` means Workstream admitted the attempt for durable evaluation.
+Both successful and rejected tool responses include applicable contributor-safe
+PRE findings. Read `workstream_task_assignment_get` with `task_id` and
+`assignment_id` for current status, feedback, revision terms and accepted
+evidence. Continue larger feedback sets with the returned cursor.
+Use `workstream_submission_operation_get` with `task_id` and the operation ID
+or original key to recover the precise request outcome. A write with an
+uncertain outcome is never retried automatically. Preserve the original task,
+assignment, ZIP, feedback and key when explicitly replaying that request.
 
 ## Deployment Boundary
 

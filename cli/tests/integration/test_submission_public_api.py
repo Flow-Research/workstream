@@ -223,7 +223,7 @@ async def _inspect(call, f, receipt, payload):
     detail = await call("submission", "show", submission_id)
     assert detail == history["items"][0]
     assert (
-        detail["summary"]
+        detail["feedback"]
         == "Completed the required project work and included evidence."
     )
     [run] = (await call("submission", "findings", submission_id))["items"]
@@ -357,7 +357,7 @@ async def test_cli_public_submission_progress_replay_history_and_suspension(
         str(archive),
         "--idempotency-key",
         key,
-        "--summary",
+        "--feedback",
         "Completed the required project work and included evidence.",
     )
     async with socket_api(app) as origin:
@@ -395,8 +395,14 @@ async def test_cli_public_submission_progress_replay_history_and_suspension(
         )
         assert await call(*submit) == dict(receipt, replayed=True)
         changed = list(submit)
-        changed[changed.index("--summary") + 1] += " changed"
+        changed[changed.index("--feedback") + 1] += " changed"
         await call(*changed, denied=409)
+        status_args = ("task", "status", str(f.task), "--assignment", str(f.assignment))
+        status = await call(*status_args)
+        assert status["current_status"] == "evaluation_pending"
+        assert status["next_action"] == "awaiting_evaluation"
+        assert status["assignment"]["latest_submission"] is None
+        assert status["intake"]["pre_submission_results"] == receipt["pre_submission_results"]
         by_key = await call(
             "task", "submission-operation", str(f.task), "--idempotency-key", key
         )
@@ -427,6 +433,7 @@ async def test_cli_public_submission_progress_replay_history_and_suspension(
         commands = (
             submit,
             ("submission", "show", submission_id),
+            status_args,
             ("submission", "findings", submission_id),
             ("task", "submissions", str(f.task)),
             (
