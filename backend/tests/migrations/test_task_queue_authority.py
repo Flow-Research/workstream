@@ -87,3 +87,17 @@ def test_queue_audit_permission_pairs_are_closed(isolated_database_env, migratio
                 asyncio.run(probe())
         else:
             asyncio.run(probe())
+
+
+async def test_contributor_read_audit_permission_pairs_are_closed(isolated_database_env):
+    """The head allows both exact pairs and rejects a substituted permission."""
+    connection = await asyncpg.connect(isolated_database_env.replace("+asyncpg", ""))
+    try:
+        for action in ("task.assignment.read", "project.contributor_guide.read"):
+            for allowed in (False, True):
+                assert await insert(connection, action, "submission.read_own", allowed=allowed)
+                with pytest.raises(asyncpg.CheckViolationError) as failure:
+                    await insert(connection, action, "project.read", allowed=allowed)
+                assert failure.value.constraint_name == CONSTRAINT
+    finally:
+        await connection.close()
