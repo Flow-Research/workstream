@@ -12480,3 +12480,25 @@ produces the reconciled file exactly; no other production test changed there.
 The staged source/config inventory has no old experiment/pilot imports or paths.
 The moved Garden fixture path was also corrected in its existing runtime test.
 These are merge regression results, not new deployed qualification.
+
+
+### Matching runner placement activation after main reconciliation
+
+Activated the reviewed native service `bd8833d5a91c…f618e` and mTLS gateway
+`9579ca6d1da2…03cc` on the separate runner. Their source is unchanged between
+`02b805740` and reconciled `c0b6b5180`. Exact old/new file pins, fresh idle
+inventory, no running local journeys, and zero established port-9443 sessions
+preceded the bounded replacement. Both services became active (native PID9789,
+gateway PID9785). Config `a25f372fb6ae…b628` and unit `e84782092a7b…fd48`
+were verified/backed up but not replaced; no resource, guest, image, credential,
+API-host or database changes occurred. Explicit rollback bytes are retained at
+`/opt/workstream/a28-backup-bd8833d5a91c`; a later rollback requires authenticated
+drain and separate edge cleanup, never an automatic retry after unknown drain.
+
+The current Python RunnerTransport completed an authenticated read-only mTLS
+placement probe with exact DNS identity and loaded config digest. It observed
+boot epoch `b6c854a71d11f32454ab92661d076c4c4799c431b47b3c8074d4d32e3733ea41`,
+four exact cached images, configured PRE root/profile, trusted intake and
+callback relay, with draining=false. Local receipts are under
+`/tmp/workstream-a28-runner-candidate/` (stage, activation, live-placement).
+This proves current remote readiness, not execution or multi-node qualification.
