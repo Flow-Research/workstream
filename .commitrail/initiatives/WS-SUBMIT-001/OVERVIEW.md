@@ -198,23 +198,44 @@ This is the final qualification queue, not a claim that all listed code is absen
 | A09–A13 | T5 rollback/redelivery, actual local SIGKILL recovery, accepted authority, pending reads and old-POST guard | Real Redis publication outage and Celery child-redelivery proofs passed; reconcile the remaining exact cases at the final head. |
 | A14–A18 | Cleanup lock/retention/charge owners, Local/MinIO tests and live AWS exact-version/lost-ack cleanup with retained-source survival | Production worker sweeps and exact acceptance-case reconciliation. |
 | A19–A23 | Streaming/framing, safe archives, semantic identity and findings tests; local A19 496 MiB slow-provider memory/backpressure drill | Full permitted maxima and safety matrix, native/deployment scope where required. |
-| A24–A27, A29–A30 | Source/result/fence contracts, dedicated queue and managed-style substitution tests | Essential native isolation/failure/cleanup and single-runner queue correctness remain; broad saturation/load qualification is user-deferred. |
+| A24–A27, A29 | Source/result/fence contracts and dedicated queue tests | Essential native isolation/failure/cleanup and single-runner queue correctness remain; broad saturation/load qualification is user-deferred. |
+| A30 | Managed-style public source acceptance/T5/replay and four typed cases passed at `2f7d8d95c` | Substitution proof complete in its stated scope; no paid-provider integration is selected or required. |
 | A28 | Multi-replica/multi-runner implementation and focused tests | User-deferred until after existing deployment delivery; no second instance is required now. Not claimed passed. |
 | A31–A32 | V14 proves real POST automatic acceptance, exact Contribution/export and default review_pending; focused tests cover applicable awards/replay | Deployed release and final downstream tests. Keep default review_pending guards; live human review remains explicitly deferred by the user. |
 | A33–A35 | Retained migrations, cardinality guards and API/CLI/MCP cutover | Affected old writers are retired; finish current-head migration/client convergence and remaining qualification callers. |
 
 ## Configuration and external evidence
 
-C01–C07 remain open until individually reconciled with the specification and
-actual deployment evidence. Test-only leases/profiles are not approved defaults.
-Native Smol qualification must run on the dedicated execution infrastructure,
-not the API host. V14 records connected public native proof; remaining runtime
-faults/capacity and deployed API proof need their own receipts. Live AWS source
-qualification passed separately from MinIO and ordinary SHA-object operation.
-Current main's dedicated credentials replace expiring provider activation;
-submission work must not reinstate the retired activation subsystem.
-Request only concrete missing access or decisions after the corresponding drill
-and proposed values are prepared.
+| Register | Current evidence | Remaining current-delivery action |
+| --- | --- | --- |
+| C01 | Connected CLI receipts observed 85.09s PRE rejection and 88.46s initial acceptance under a 120s qualification deadline; these are command durations, not isolated PRE-stage percentiles. | Set the explicit hosted hard deadline and matching HTTP envelope using measured stages; the approximately 60s target is not proved and 120s is not silently an approved production default. |
+| C02 | Exact native guest/root/image and resource profile passed the connected small-input journey. | Confirm the chosen existing-runner deployment profile against essential native isolation/failure and supported inputs. No new paid provider or hardware design. |
+| C03 | Bounded upload/framing owner tests exist; the earlier 496 MiB slow-provider drill did not complete successfully. | Verify supported input size, memory/backpressure, idle/total timeout and edge limits through the deployed path. A failed near-limit upload is not a pass. |
+| C04 | Dedicated queues and single-runner PRE/background resource reservations are implemented. | Verify the configured single-runner bounds and queue independence on deployment. Multi-replica/multi-runner and broad saturation testing are user-deferred. |
+| C05 | Existing lease/retry/outbox owners have PostgreSQL and real broker/child-redelivery proof. | Reconcile exact release settings and hosted consumer/recovery behavior; reuse current owners. |
+| C06 | The 12h sweep/2h minimum age and guarded exact-version cleanup are implemented; native AWS source permissions and lost-ack reconciliation passed. | Activate and prove the actual cleanup consumer and bounded runtime reaping, preserving accepted sources. No new S3 credential grant is currently requested. |
+| C07 | Managed-style public source/T5/replay substitution and four typed cases passed at `2f7d8d95c`, recorded in `73d81da66`. | No selected paid provider and no vendor integration required for this delivery. Do not call the substitution proof live vendor qualification. |
+
+## Spec reconciliation: bounded remaining delivery work
+
+This reconciliation uses sections 5, 9, 12–18, 20, 23 and 24 of the canonical
+specification, D01–D18/I01–I12, and the user's PR708 submitter-experience
+addition. Apply the explicit scalability and human-review deferrals above.
+Existing implementation/focused proof is not the same as deployed proof.
+
+| Delivery gate | Type of remaining work | Concrete closure |
+| --- | --- | --- |
+| Contributor reads and revision terms (A13, A32, A35; PR708 addition) | Prepared assertions need integration/review and connected execution, not a new status subsystem. | Integrate `44d89caac` for preclaim guides and pending assignment reads; verify authorization/history/deadline cases and applicable reward-changing revision evidence through the current ZIP owner. The passing paired run proves unpaid acceptance only; reuse existing reward owners/tests and do not expand PR709/Finance. |
+| Native failure and isolation (A24–A27) | Test execution and fixes only for demonstrated defects. | Execute the reviewed deadline/isolation fixture and reconcile OOM/crash/output and uncertain-destroy requirements with matching maintained evidence. Valid accepted input must continue when destroy is uncertain, with capacity held. Fixture build alone closes none of these native outcomes. |
+| Upload/retention limits (A14–A23) | Remaining deployed/provider verification. | Supported maximum/slow upload and framing/resource bounds pass; actual cleanup worker deletes only eligible exact versions and preserves accepted/retained sources. Retain already-passing AWS adapter evidence rather than repeating unrelated IAM setup. |
+| Hosted cutover (section 20, A33–A35) | Deployment still outstanding. | Fresh full inventory/drain/backup, retained-data migration from deployed 0069 to current 0093, configured API/MCP/dedicated workers and separate runner, readiness, and forward-repair plan. Published images are prepared, not deployed. |
+| Hosted end-to-end and recovery (A01–A18, A29 single-runner, A31–A32) | Connected production-path verification. | PRE reject/correct, accepted T4/T5, POST revision/correct, exact assignment history and acceptance/contribution, replay, infrastructure distinction, required-review guard, queue independence and bounded worker recovery on the deployed stack. |
+| Release checks and handoff | Final verification/review. | Required final-head backend/CLI/MCP/migration/security checks and actual review findings resolved; PR708 presented for explicit merge approval; post-merge/deployment smoke and accurate operational handoff. No new PR or automatic merge. |
+
+Email delivery is a separate user-deferred external setup item: notification code
+exists, but DNS/key/test delivery remain incomplete. It must not block status
+reads or falsely be reported as working. No second EC2 runner or its proposed
+provisioning policy is part of the current finish list.
 
 The original specification includes D01–D18, I01–I12, T1–T5 and A01–A35.
 Apply the explicit user scope decision above when assessing current delivery;

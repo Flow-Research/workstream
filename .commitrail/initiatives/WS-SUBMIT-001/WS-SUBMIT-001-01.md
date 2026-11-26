@@ -12728,3 +12728,24 @@ not needed for current delivery and must not be provisioned/applied on this
 workstream now. Existing implemented correctness guards and dedicated queues
 remain. The overview carries the ordered remaining delivery checklist.
 No live deployment or infrastructure changed for this scope reconciliation.
+
+
+### Reconcile finish list against the specification and PR708 addition
+
+Re-read the decision/invariant ledgers, single-command/read contracts, transaction
+boundaries, failure/cleanup rules, limits, cutover, acceptance matrix and C01–C07,
+plus the contributor-experience addition. The overview now separates prepared
+implementation, missing execution evidence and deployment into six finite gates.
+A30 substitution is recorded as passed in scope; A28 and broad scalability are
+user-deferred, not failures or hidden delivery prerequisites. Paid-provider and
+live human-review work remain excluded. The paired journey proves unpaid
+acceptance; applicable changed-reward/closed-assignment cases must be reconciled
+with existing focused owner tests, not inferred or used to expand Finance.
+
+Current observed PR708 head before this editorial change is `072bfa746`; its
+required GitHub checks are queued, not passing evidence. The retained deployed
+census is schema0069, not the tested schema0093. No deployment occurred during
+this status audit. The reviewed native fixture is built, but its raw transfer
+timed out and left an incomplete owned test archive; no test runner was started
+and normal services/configuration were unchanged. Reconcile that exact partial
+file before a subsequent transfer. Native outcomes remain unproved.
