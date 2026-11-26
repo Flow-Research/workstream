@@ -11415,3 +11415,15 @@ need their terminal evidence. The unchanged local OTLP failure matrix passed
 three cases but does not explain the earlier CI missing events. Main was fetched
 with zero unseen commits. All work remains in PR 708, with production deployment,
 final-head CI and acceptance/configuration reconciliation incomplete.
+
+
+Host MCP transport proof is now terminal PASS using unchanged image source
+1d28b567d and corrected verifier 565cc143a. Receipt
+`/tmp/workstream-mcp-proof-565.json` binds image ad364ad8, 135 tools, signed caller
+isolation, restart, replacement and stale-network-namespace counterexample.
+This is the shipped container against the fixture provider, not deployed OAuth
+or submission outcome proof. The d8046ea23 native rerun passed runner health but
+stopped when the dedicated cleanup worker refused startup configuration; the
+other workers started. Its database/storage cleanup is complete at
+`/tmp/workstream-paired-native-n7e8wt8w/cleanup.json`. Diagnose that exact
+configuration before another full rerun; no acceptance or PRE success is claimed.
