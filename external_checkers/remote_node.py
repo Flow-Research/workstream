@@ -470,7 +470,7 @@ class RemoteNode:
 
     async def handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         try:
-            async with asyncio.timeout(self.timeout):
+            async with asyncio.timeout(self.timeout) as transport_watchdog:
                 if self.client_name not in _peer_name(writer):
                     raise ProtocolError("client identity differs")
                 control = _decode_object(await _read_frame(reader, MAXIMUM_CONTROL_BYTES))
@@ -493,7 +493,7 @@ class RemoteNode:
                 elif operation == "execute":
                     if capability != CHECKER_CAPABILITY:
                         raise ProtocolError("execute capability differs")
-                    await self._execute(control, reader, writer)
+                    await self._execute(control, reader, writer, transport_watchdog)
                 else:
                     raise ProtocolError("remote operation is invalid")
         except (ProtocolError, TimeoutError, OSError, ssl.SSLError, asyncio.IncompleteReadError):
@@ -552,6 +552,7 @@ class RemoteNode:
         control: dict[str, Any],
         reader: asyncio.StreamReader,
         writer: asyncio.StreamWriter,
+        transport_watchdog: asyncio.Timeout,
     ) -> None:
         expected = {
             "protocol_version", "operation", "capability", "service_request",
@@ -606,7 +607,7 @@ class RemoteNode:
             raise ProtocolError("material bounds differ")
         async with self._execution:
             await self._stage_and_execute(
-                grant_id, raw_manifest, manifest, files, request, reader, writer, binding_frame
+                grant_id, raw_manifest, manifest, files, request, reader, writer, binding_frame, transport_watchdog
             )
 
     async def _stage_and_execute(
@@ -619,6 +620,7 @@ class RemoteNode:
         reader: asyncio.StreamReader,
         writer: asyncio.StreamWriter,
         binding_frame: bytes,
+        transport_watchdog: asyncio.Timeout,
     ) -> None:
         target = self.workspaces / grant_id
         incoming = self.workspaces / f".incoming-{uuid.uuid4().hex}"
@@ -661,6 +663,7 @@ class RemoteNode:
                         digest.update(chunk)
                         _write_descriptor(descriptor, chunk)
                         transferred += len(chunk)
+                        transport_watchdog.reschedule(asyncio.get_running_loop().time() + self.timeout)
                     if count != expected_count or "sha256:" + digest.hexdigest() != expected_digest:
                         raise ProtocolError("material file content differs")
                     os.fsync(descriptor)
@@ -687,6 +690,9 @@ class RemoteNode:
             start = _decode_object(await _read_frame(reader, 16_384))
             if start != dict(ready, operation="start_execution"):
                 raise ProtocolError("execution start binding differs")
+            # Native execution enforces its registered limits. Give the result
+            # exchange a fresh transport window after material staging.
+            transport_watchdog.reschedule(asyncio.get_running_loop().time() + self.timeout)
             stage = "native_execution"
             record("started")
             native_reader, native_writer = await asyncio.open_unix_connection(self.socket_path)

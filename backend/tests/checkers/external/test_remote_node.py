@@ -627,7 +627,7 @@ async def test_remote_post_stages_bound_material_and_removes_session(tmp_path: P
     if start_mode == "old_node":
         # The preceding deployed protocol rejects unknown control fields before
         # staging or native invocation. This is a refusal proof, not a fallback.
-        async def old_execute(control, _reader, _writer):
+        async def old_execute(control, _reader, _writer, _watchdog):
             old_keys = {
                 "protocol_version", "operation", "capability", "service_request",
                 "manifest_byte_count", "file_count", "total_byte_count", "epoch", "config_sha256",

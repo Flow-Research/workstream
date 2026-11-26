@@ -337,7 +337,8 @@ class RemoteTlsExternalCheckerAdapter:
             )
             if self._timeout_seconds < required_timeout:
                 raise ExternalServiceUnavailableError(self._identity)
-            async with asyncio.timeout(self._timeout_seconds):
+            loop = asyncio.get_running_loop()
+            async with asyncio.timeout(self._timeout_seconds) as transport_watchdog:
                 placement = await self._place_post(checked, with_model_grant=model_grant is not None)
                 reader, writer = await self._open(placement)
                 try:
@@ -377,6 +378,7 @@ class RemoteTlsExternalCheckerAdapter:
                                 if type(chunk) is not bytes or not 0 < len(chunk) <= 64 * 1024:
                                     raise ValueError("external material export chunk is invalid")
                                 await self._send_frame(writer, chunk)
+                                transport_watchdog.reschedule(loop.time() + self._timeout_seconds)
                         finally:
                             await await_cancellation_resistant(stream.aclose())
                         writer.write(struct.pack(">I", 0))
@@ -392,6 +394,7 @@ class RemoteTlsExternalCheckerAdapter:
                     # The remote owner cannot invoke native execution before
                     # this explicit start. A failed drain of this write may
                     # still follow successful transmission, so retain uncertainty.
+                    transport_watchdog.reschedule(loop.time() + required_timeout)
                     possibly_invoked = True
                     await self._send_frame(writer, json.dumps(
                         dict(ready, operation="start_execution"),
