@@ -203,6 +203,7 @@ async def test_upgrade_starts_only_retained_claim_and_preserves_evidence(predece
             RETURNING subject
         """)))
         assert sorted(observed) == ["historical-claimant", "project-manager-subject"]
+        await connection.execute(text("SET CONSTRAINTS ALL IMMEDIATE"))
         await drop_retained_owner_read_projection(connection)
     await db_session.dispose_engine()
     await asyncio.to_thread(command.upgrade, _config(), "head")
