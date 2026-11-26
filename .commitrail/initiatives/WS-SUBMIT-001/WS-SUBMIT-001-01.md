@@ -11385,3 +11385,33 @@ assertion and all dedicated queue, registration restoration, context and privacy
 guards. The private log remains available to the test's existing safe-content
 assertions; it is not copied into the public failure diagnostic. No production
 changes or PG/broker/native rerun is required for this diagnostic-only removal.
+
+
+### Integrated host qualification checkpoint (2026-11-26)
+
+Both backend SDK release images built from 1d28b567d and passed the existing
+native-hosted image verifier on the API host. Receipt:
+`/tmp/workstream-host-image-5fb26081a6c9/host-only-build-1d28.json`.
+They are local candidate images, not published or deployed releases. The MCP
+image built from the same source; its first container proof stopped at the
+obsolete 132-tool expectation. Current authenticated catalogue and OpenAPI proof
+passed 28 cases for 135 tools; the corrected existing container proof is pending.
+The ignored CSV/XLSX contain no obsolete tool count; the workbook retains its
+single WorkStream RoadMap sheet.
+
+The first paired CLI/MCP native probe stopped before submission because the
+health contract reports a cache count, not manifest identities. d8046ea23 fixes
+that comparison, retaining independent exact configuration/binary/cache custody;
+the positive and wrong-count controls passed. Original failed receipt remains at
+`/tmp/workstream-paired-native-5k85wccw/cleanup.json`, with database and storage
+cleanup complete. A fresh independently checked runner custody envelope binds
+config 7ceb63e3 and the clean d8046ea23 rerun. The running journey has no success
+claim yet. Runtime package source is unchanged by the subsequent test/doc repairs.
+
+ARCH reviewed the historical fixture changes and QA selector/queue repairs.
+The raw worker-log diagnostic finding was removed in 711c02b92. Exact historical
+0088 replay passed with cleanup; remaining historical and broker cases still
+need their terminal evidence. The unchanged local OTLP failure matrix passed
+three cases but does not explain the earlier CI missing events. Main was fetched
+with zero unseen commits. All work remains in PR 708, with production deployment,
+final-head CI and acceptance/configuration reconciliation incomplete.
