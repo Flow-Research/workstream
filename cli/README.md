@@ -234,7 +234,7 @@ the [terminal presentation contract](../docs/design/cli-terminal-experience.md).
 | `workstream operations task list PROJECT_ID [--limit N] [--cursor TOKEN]` | `GET /api/v1/operations/projects/PROJECT_ID/tasks` |
 | `workstream operations task locked-context PROJECT_ID TASK_ID` | `GET /api/v1/operations/projects/PROJECT_ID/tasks/TASK_ID/locked-context` |
 | `workstream task context TASK_ID` | `GET /api/v1/tasks/TASK_ID/work-context` |
-| `workstream task guide TASK_ID [--download DIR]` | Work context, then assigned-task `GET /api/v1/tasks/TASK_ID/guide/documents/DOCUMENT_ID/content` for downloads |
+| `workstream task guide TASK_ID [--download DIR]` | Work context and verified governing originals before or after claim |
 | `workstream task requirements TASK_ID` | `GET /api/v1/tasks/TASK_ID/submission-requirements` |
 | `workstream operations artifact bindings RESOURCE_TYPE RESOURCE_ID` | `GET /api/v1/operator/artifacts/bindings` |
 | `workstream operations artifact replicas CONTENT_ID` | `GET /api/v1/operator/artifacts/contents/CONTENT_ID/replicas` |

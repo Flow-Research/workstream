@@ -12,12 +12,6 @@ from task_work import create_claimed_task
 from source_audit import audit_accepted_source
 
 PILOT = Path(__file__).resolve().parents[3] / "pilots/terminal_systems/mvp"
-PACKET = (
-    "--summary",
-    "Fixed incident summary",
-    "--attestation",
-    "I counted the supplied incident events and retained the input.",
-)
 
 
 def _package(client, kind):
@@ -41,7 +35,6 @@ def _command(task_id, assignment_id, archive, key):
         task_id,
         "--assignment",
         assignment_id,
-        *PACKET,
         "--file",
         str(archive),
         "--idempotency-key",
