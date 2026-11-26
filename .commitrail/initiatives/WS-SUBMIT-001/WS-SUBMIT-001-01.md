@@ -9262,6 +9262,18 @@ fixture and check Ruff and the diff. Focused QA and architecture review should
 verify that the assertion follows each committed binding to its own exact copy
 and charge, and that logical deduplication cannot hide physical coalescing.
 
+The focused PostgreSQL case passed in 107.10 seconds at `8a03d1ac1`, schema
+0093. Distinct task assignments completed signed ZIP acceptance and canonical
+T5 OUTBOX delivery. Each submission's consumed admission selected its own
+replica and retained seal, with one independent sealed charge at the ZIP byte
+count. Both exact source reads succeeded after both commits. The local provider
+rechecks the seal and single-link inode generation on each read. The two
+bindings shared the same logical content ID. This run qualifies local source
+retention with controlled PRE execution. The isolated-runner log and metadata
+are `/tmp/pr708-a18-finalized-isolated.log` and
+`/tmp/pr708-a18-finalized-isolated.json`. Owned resources cleaned successfully.
+Ruff, diff validation, and Commitrail validation passed.
+
 ### Genuine-orphan scope clarification
 
 Read-only ARCH/SEC assessment at08fd205d0 confirms that spec17.4 makes
