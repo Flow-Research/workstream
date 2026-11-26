@@ -12910,3 +12910,47 @@ The hosted required-review branch still needs a matching receipt. Maximum
 upload, native failure/isolation and age-eligible exact S3 deletion through the
 cleanup consumer remain open, along with the applicable final-head checks.
 Feedback email remains disabled pending sender and key configuration.
+
+
+### Native PRE deadline and isolation, and current MCP replay
+
+This documentation-only reconciliation changes the existing submission record,
+overview, initiative index, roadmap and local spreadsheet exports. Runtime code,
+policy, service configuration and retained data are outside its scope. Review
+focus is exact proof scope and the remaining release boundaries; verification
+uses the retained client/trace receipts, documentation checks and export parity.
+
+At source `9fad17a04`, the maintained isolated CLI journey completed 170 CLI
+invocations and all four stages, including `source_first_pre_client_evidence`.
+`pre_qualification.py` verified the client evidence against the real remote Smol
+trace: the selected project's PRE deadline produced exit 125 with the deadline
+flag and destroyed its VM; a fresh key used a different VM with no prior VM
+resources, completed PRE with exit 0, and reached normal POST and unpaid
+acceptance. The failed intake had no downstream Submission or revision penalty.
+The fixture also checked the selected project's input/supervisor/credential
+isolation assertions. This proves the bounded deadline/isolation cases, not
+OOM, guest crash, oversized output, uncertain destroy or upload maxima.
+
+Private evidence is in `/tmp/workstream-native-pre-qualified-21i9dlu1`:
+`evidence/pre-qualification-client.json`, `native-trace.jsonl`, `journey.log`
+and `cleanup.json`. The test used isolated local HMAC authentication,
+PostgreSQL and MinIO with the real separate Smol runner; it is not a replacement
+for the independently completed hosted Flow/AWS contributor journey. Its database
+and bucket cleanup completed. Both temporary runner units stopped with empty
+lease, VM, workspace and cgroup inventories. Authenticated normal placement
+returned the original configuration and epoch with admission enabled; the hosted
+API health route remained healthy. Restore receipts are in
+`/tmp/workstream-pre-qualification-7e566ae2f`.
+
+The hosted MCP image now uses source `9fad17a04`, digest
+`sha256:7f6fd13c1ada0bc6cf527b29f52b669ba41cff991ed40042cf66699fa2df2056`.
+Its 135-tool restart/replacement proof passed, followed by paired replay of the
+original PRE rejection, corrected acceptance and exact assignment status in
+`/tmp/workstream-hosted-journey-2942/mcp9fad-paired-replay/result.json`.
+The API/worker release remains `2942dd4e7`; the MCP replacement preserved those
+containers and the database, Redis and identity containers.
+
+Remaining release proof includes the other required native fault/cleanup cases,
+supported upload bounds and tighter project archive-limit enforcement,
+age-eligible S3 deletion through the cleanup worker, the hosted required-review
+guard and applicable final-head checks. This update does not close those gates.

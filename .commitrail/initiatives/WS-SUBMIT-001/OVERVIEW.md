@@ -23,8 +23,10 @@ Current finish list, in execution order:
 - [x] Integrate the reviewed preclaim-guide and pending-status assertions.
 - [x] Back up retained data, migrate and activate the hosted API, MCP and
   dedicated Celery workers with the approved operational profiles.
-- [ ] Finish essential native isolation, bounded failure and cleanup proof for
-  the existing runner; fix only observed defects needed for this deployment.
+- [x] Prove the native project PRE deadline and isolation fixture, fresh-VM retry
+  to acceptance, test cleanup and restoration of normal runner admission.
+- [ ] Reconcile the remaining native fault and uncertain-destroy cases for the
+  existing runner; fix only observed defects needed for this deployment.
 - [x] Prove the hosted contributor ZIP journey through PRE rejection, pending
   status, POST revision, same-assignment MCP correction and unpaid acceptance.
 - [ ] Finish hosted failure recovery, the required-review branch, retained ZIP
@@ -74,9 +76,9 @@ work. Existing reward owners remain authoritative.
 
 - [x] Four required submission inputs and optional feedback; backend-selected revision context and exact actor-scoped replay.
 - [x] Forward migration preserves historical accepted commands and refuses unsafe old in-flight work before mutation.
-- [ ] Approved project and governing task guides are readable/downloadable before claim under exact contributor authority.
+- [x] Approved project and governing task guides are readable/downloadable before claim under exact contributor authority; hosted originals were verified before claim.
 - [x] Assignment-ID status exposes rejected intake feedback, revision terms and accepted evidence in the connected journey without internal-ID discovery.
-- [ ] Qualify live pending processing through assignment status; the connected journey observed it through operation progress.
+- [x] Qualify live pending processing through assignment status; the hosted journey observed the exact assignment in evaluation_pending.
 - [x] CLI/MCP use the same contract, preserve useful PRE findings and document their distinct upload limits.
 - [x] Maintained CLI baseline at `c715dbd47`: real remote PRE rejection, acceptance/replay, T5, automatic POST acceptance, incorrect POST revision, unpaid contribution custody and default review_pending; schema0093 test cleanup passed.
 - [x] Combined CLI/MCP journey at `73d81da66` proves actionable PRE/POST feedback, same-assignment correction, replay, retained versions and exact unpaid acceptance/contribution through real isolated Keycloak and the remote runner.
@@ -89,8 +91,9 @@ The dedicated queue topology and isolated scanner-to-T5 regression are integrate
 PR722 removes the retired experimental native harness, including branch-only
 extensions. Its receipts remain historical; current native qualification must
 use maintained client/runtime owners and the current authentication boundary.
-The connected real-provider journey now passes; native fault/capacity and deployed
-qualification remain open. The managed-style adapter substitution passed through public
+The connected real-provider and hosted contributor journeys pass. The native
+project-deadline/isolation fixture also passes; remaining native faults, cleanup
+and supported-input qualification remain open. The managed-style adapter substitution passed through public
 ZIP acceptance, retained source custody, real T5 owner delivery and replay;
 it does not establish a deployed managed provider or broker-consumer proof.
 
@@ -202,7 +205,7 @@ This is the final qualification queue, not a claim that all listed code is absen
 | A09–A13 | T5 rollback/redelivery, actual local SIGKILL recovery, accepted authority, pending reads and old-POST guard | Real Redis publication outage and Celery child-redelivery proofs passed; reconcile the remaining exact cases at the final head. |
 | A14–A18 | Cleanup lock/retention/charge owners, Local/MinIO tests and live AWS exact-version/lost-ack cleanup with retained-source survival | Production worker sweeps and exact acceptance-case reconciliation. |
 | A19–A23 | Streaming/framing, safe archives, semantic identity and findings tests; local A19 496 MiB slow-provider memory/backpressure drill | Full permitted maxima and safety matrix, native/deployment scope where required. |
-| A24–A27, A29 | Source/result/fence contracts and dedicated queue tests | Essential native isolation/failure/cleanup and single-runner queue correctness remain; broad saturation/load qualification is user-deferred. |
+| A24–A27, A29 | Source/result/fence contracts, dedicated queue tests and the real Smol project-deadline/isolation fixture passed | Reconcile remaining OOM/crash/output, uncertain-destroy and single-runner queue cases; broad saturation/load qualification is user-deferred. |
 | A30 | Managed-style public source acceptance/T5/replay and four typed cases passed at `2f7d8d95c` | Substitution proof complete in its stated scope; no paid-provider integration is selected or required. |
 | A28 | Multi-replica/multi-runner implementation and focused tests | User-deferred until after existing deployment delivery; no second instance is required now. Not claimed passed. |
 | A31–A32 | Hosted corrected version 2 reached automatic acceptance with one unpaid contribution, zero Reviews and zero awards. The maintained isolated journey proves default review_pending. | Finish the hosted required-review guard and applicable downstream checks. Live human review remains deferred. |
@@ -230,8 +233,8 @@ Existing implementation/focused proof is not the same as deployed proof.
 | Delivery gate | Type of remaining work | Concrete closure |
 | --- | --- | --- |
 | Contributor reads and revision terms (A13, A32, A35; PR708 addition) | Core hosted reads passed. | The contributor verified preclaim originals and the exact pending, revision and accepted assignment through the paired clients. Reconcile the remaining authorization, full history and applicable reward-changing cases through current owners. |
-| Native failure and isolation (A24–A27) | Test execution and fixes only for demonstrated defects. | Execute the reviewed deadline/isolation fixture and reconcile OOM/crash/output and uncertain-destroy requirements with matching maintained evidence. Valid accepted input must continue when destroy is uncertain, with capacity held. Fixture build alone closes none of these native outcomes. |
-| Upload/retention limits (A14–A23) | Remaining deployed/provider verification. | Supported maximum/slow upload and framing/resource bounds pass; actual cleanup worker deletes only eligible exact versions and preserves accepted/retained sources. Retain already-passing AWS adapter evidence rather than repeating unrelated IAM setup. |
+| Native failure and isolation (A24–A27) | Test execution and fixes only for demonstrated defects. | The maintained deadline/isolation fixture passed at `9fad17a04`, including destroyed VMs and normal admission restoration. Reconcile OOM/crash/output and uncertain-destroy requirements with matching maintained evidence. Valid accepted input must continue when destroy is uncertain, with capacity held. Fixture build alone closes none of these native outcomes. |
+| Upload/retention limits (A14–A23) | Remaining deployed/provider verification. | Prove supported maximum/slow upload and framing/resource bounds, including tighter project archive-limit enforcement; the actual cleanup worker must delete only eligible exact versions and preserve accepted/retained sources. Retain already-passing AWS adapter evidence rather than repeating unrelated IAM setup. |
 | Hosted cutover (section 20, A33–A35) | **Deployment complete.** | The drained backup and 0069-to-0093 migration retained all 132 existing table counts. The repaired `2942dd4e7` API, coupled MCP and seven dedicated Celery workers are active. The installed boot unit points to the repaired source. See the [cutover evidence](WS-SUBMIT-001-01.md#hosted-schema-and-release-cutover-completed). |
 | Hosted end-to-end and recovery (A01–A18, A29 single-runner, A31–A32) | Core journey and paired replay passed. | PRE rejection, pending and revision under one assignment, MCP correction, exact replay and unpaid acceptance passed. Finish hosted failure distinction and recovery, retained-source checks, required-review guard and scoped queue independence. See the [hosted journey evidence](WS-SUBMIT-001-01.md#hosted-contributor-zip-journey-and-paired-replay-passed). |
 | Release checks and handoff | Final verification/review. | Required final-head backend/CLI/MCP/migration/security checks and actual review findings resolved; PR708 presented for explicit merge approval; post-merge/deployment smoke and accurate operational handoff. No new PR or automatic merge. |
