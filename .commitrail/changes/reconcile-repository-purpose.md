@@ -68,7 +68,7 @@ proof requiring an isolated unlocked Secret Service, not a claimed CI result.
 ## Review findings
 
 Source analysis was a live consumer of the retired mutation module. Its nine
-helpers retain identical syntax trees apart from the renamed error type; eight
+helpers were initially moved unchanged apart from the error type; eight
 behavior tests survive, including symlink and changed-callable guards. The other
 31 test functions exclusively covered removed mutation-runner behavior.
 Documentation review corrected two stale assumptions: explicit empty PRE/POST
@@ -87,3 +87,12 @@ The hosted run exposed one missed consumer from the preceding sample move:
 separate `pilots`/`garden` segments. It now reads the existing `examples/garden`
 assets. Both the successful compilation and missing-citation rejection cases are
 retained; no fixture content or assertion is relaxed.
+
+CodeRabbit identified two inherited source-mapping defects after the extraction:
+Git output stripping shifted AST line numbers, and multiline class headers were
+only tracked on their first line. Preserve raw Git source output, strip only
+revision identifiers, and include class-header lines through the start of the
+first body statement (excluding method decorators). Real Git regressions must
+reject combined header/method changes while still mapping method-only changes,
+and identify the correct function when source starts with blank lines. The new
+cases fail against the pre-repair implementation; no ownership guard is relaxed.

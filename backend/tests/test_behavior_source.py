@@ -160,6 +160,57 @@ class TestBehaviorSource:
                 root, advanced_main, feature, "backend/scripts/claimed.py"
             ) == ["scripts.claimed.claimed"]
 
+    def test_source_whitespace_preserves_exact_changed_owner(self, tmp_path: Path) -> None:
+        from scripts.behavior_source import _source_at
+
+        self._initialize(tmp_path)
+        target = tmp_path / "backend/scripts/claimed.py"
+        before = "\n\ndef first():\n    return True\n\ndef second():\n    return False\n\n"
+        target.write_text(before)
+        self._git(tmp_path, "add", ".")
+        self._git(tmp_path, "commit", "-m", "leading whitespace")
+        base = self._git(tmp_path, "rev-parse", "HEAD")
+        after = before.replace("return True", "return 1")
+        target.write_text(after)
+        self._git(tmp_path, "add", ".")
+        self._git(tmp_path, "commit", "-m", "first function only")
+        head = self._git(tmp_path, "rev-parse", "HEAD")
+        assert changed_callables(tmp_path, base, head, "backend/scripts/claimed.py") == [
+            "scripts.claimed.first"
+        ]
+        assert _source_at(tmp_path, base, "backend/scripts/claimed.py") == before
+        assert _source_at(tmp_path, head, "backend/scripts/claimed.py") == after
+
+    @pytest.mark.parametrize("header", ["Base", "metaclass=Meta"])
+    @pytest.mark.parametrize("change_header", [False, True])
+    def test_multiline_class_header_and_method_edits(
+        self, tmp_path: Path, header: str, change_header: bool
+    ) -> None:
+        self._initialize(tmp_path)
+        target = tmp_path / "backend/scripts/claimed.py"
+        before = (
+            f"class Service(\n    {header},\n):\n"
+            "    @staticmethod\n    def run():\n        return True\n"
+        )
+        target.write_text(before)
+        self._git(tmp_path, "add", ".")
+        self._git(tmp_path, "commit", "-m", "multiline header")
+        base = self._git(tmp_path, "rev-parse", "HEAD")
+        after = before.replace("return True", "return False")
+        if change_header:
+            after = after.replace(header, header + "Replacement")
+        target.write_text(after)
+        self._git(tmp_path, "add", ".")
+        self._git(tmp_path, "commit", "-m", "method and optional header")
+        head = self._git(tmp_path, "rev-parse", "HEAD")
+        if change_header:
+            with pytest.raises(SourceAnalysisError, match="unmappable_changed_logic"):
+                changed_callables(tmp_path, base, head, "backend/scripts/claimed.py")
+        else:
+            assert changed_callables(tmp_path, base, head, "backend/scripts/claimed.py") == [
+                "scripts.claimed.Service.run"
+            ]
+
     def _initialize(self, root: Path) -> None:
         self._git(root, "init")
         self._git(root, "config", "user.email", "test@example.com")

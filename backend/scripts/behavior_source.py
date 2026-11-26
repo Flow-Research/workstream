@@ -44,10 +44,9 @@ def _git(root: Path, *arguments: str) -> str:
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
-    output = result.stdout.strip()
     if result.returncode != 0:
         raise SourceAnalysisError(f"git_command_failed:{arguments[0]}")
-    return output
+    return result.stdout
 
 
 def _safe_path(value: str) -> PurePosixPath:
@@ -122,7 +121,12 @@ def _callable_spans(
                 visit(node.body, (*parents, node.name))
             elif isinstance(node, ast.ClassDef):
                 start = min([node.lineno, *[item.lineno for item in node.decorator_list]])
-                executable.append((start, node.lineno))
+                first = node.body[0]
+                body_start = min(
+                    [first.lineno, *[item.lineno for item in getattr(first, "decorator_list", [])]]
+                )
+                # Include bases/keywords on later lines, but not a method's decorators.
+                executable.append((start, max(node.lineno, body_start - 1)))
                 visit(node.body, (*parents, node.name))
             else:
                 executable.append((node.lineno, end))
@@ -149,7 +153,7 @@ def changed_callables(
 ) -> list[str]:
     """Derive complete current callable ownership for executable target hunks."""
     module = target.removeprefix("backend/").removesuffix(".py").replace("/", ".")
-    delta_base = _git(root, "merge-base", base_sha, head_sha)
+    delta_base = _git(root, "merge-base", base_sha, head_sha).strip()
     old_lines, new_lines = _diff_lines(root, delta_base, head_sha, target)
     current_source = _source_at(root, head_sha, target)
     current, current_unmapped = _map_changed_lines(current_source, module, new_lines)
