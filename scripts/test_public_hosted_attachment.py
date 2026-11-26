@@ -29,6 +29,19 @@ from experiments.pilot04_external_checker_runtime.public_hosted_attachment impor
 
 
 class PublicJourneyWorkerCustody(unittest.TestCase):
+    def test_runner_health_reports_reviewed_cache_size_as_a_count(self):
+        from app.interfaces.external_checker_execution import ExternalCheckerServiceHealth
+        from app.interfaces.trusted_submission_intake import TrustedIntakeIdentity
+        from app.modules.checkers.api.default_checker import WORKSTREAM_DEFAULT_BEHAVIOR_SHA256
+        from experiments.pilot04_external_checker_runtime import run_public_journey_probe as probe
+
+        intake = TrustedIntakeIdentity('sha256:' + '1' * 64, 'sha256:' + '2' * 64,
+            WORKSTREAM_DEFAULT_BEHAVIOR_SHA256, 'smolvm', 'smol-microvm', 1000, 2 ** 30)
+        execution = ExternalCheckerServiceHealth('linux', 'amd64', 'smolvm', 'smol-microvm', 3, 10001, 10001)
+        probe._require_runner_health(execution, intake, 3)
+        with self.assertRaisesRegex(RuntimeError, 'live execution cache count differs'):
+            probe._require_runner_health(execution, intake, 2)
+
     def test_separate_runner_uses_exact_baseline_config_without_local_fault_files(self):
         from experiments.pilot04_external_checker_runtime import run_public_journey_probe as probe
 

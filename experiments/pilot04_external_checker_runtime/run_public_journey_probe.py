@@ -46,6 +46,8 @@ from app.modules.artifacts.service import artifact_storage_namespace_spec
 from app.modules.tasks.models import Submission, SubmissionDispatch, WorkstreamTask
 from app.adapters.artifacts import trusted_submission_intake
 from app.adapters.checkers import configured_external_checker_execution
+from app.interfaces.external_checker_execution import ExternalCheckerServiceHealth
+from app.interfaces.trusted_submission_intake import TrustedIntakeIdentity
 from tests.authorization.post_submit_routing.support import provision_router
 from tests.post_submit_materialization_helpers import (
     archive_with_modes,
@@ -1195,6 +1197,17 @@ def _read_runner_configuration(node_config: Path, root: Path, custody: dict, *, 
     return service_config
 
 
+def _require_runner_health(execution: ExternalCheckerServiceHealth, intake: TrustedIntakeIdentity,
+                           expected_cache_count: int) -> None:
+    """Compare authenticated readiness with the independently verified runner configuration."""
+    _require((execution.runtime, execution.isolation_mode)
+             == (intake.runtime, intake.isolation_mode)
+             == ("smolvm", "smol-microvm"), "typed capability health identities disagree")
+    # Health reports a count. The reviewed configuration binds the exact project manifest.
+    _require(execution.cached_platform_manifests == expected_cache_count,
+             "live execution cache count differs from reviewed runner configuration")
+
+
 async def run(database_url: str, image_reference: str, node_config: Path,
               broker_url: str, root: Path, expected_custody: Path,
               clients: ContributorClients | None = None, *, separate_runner: bool = False) -> dict:
@@ -1359,11 +1372,7 @@ async def run(database_url: str, image_reference: str, node_config: Path,
 
         intake_health = await trusted_submission_intake(runtime_settings).health()
         execution_health = await configured_external_checker_execution(runtime_settings).health()
-        _require((execution_health.runtime, execution_health.isolation_mode)
-                 == (intake_health.runtime, intake_health.isolation_mode)
-                 == ("smolvm", "smol-microvm"), "typed capability health identities disagree")
-        _require(image["platform_manifest_digest"] in execution_health.cached_platform_manifests,
-                 "live execution cache lacks the reviewed project checker manifest")
+        _require_runner_health(execution_health, intake_health, len(service_config["cache"]))
         port = find_free_port()
         origin = f"http://127.0.0.1:{port}"
         api = launch([
