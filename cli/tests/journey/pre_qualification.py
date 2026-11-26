@@ -119,7 +119,6 @@ async def _terminal(
         assert terminal.outcome == "infrastructure_failed"
         assert terminal.infrastructure_failure_code == "implementation_unavailable"
         assert invocation.outcome == "infrastructure_failure"
-        assert invocation.timings_ms.execution >= PRE_QUALIFICATION_DEADLINE_MS
         # The real source remains charged during the configured reclamation grace.
         async with _minio_client(
             environment["WORKSTREAM_TEST_MINIO_ENDPOINT"]
@@ -147,8 +146,19 @@ async def _terminal(
     }
 
 
+def _verify_timeout_replay(first, replay):
+    def stable(response):
+        error = response["error"].copy()
+        error.pop("correlation_id", None)
+        return response | {"error": error}
+
+    assert first["error"]["code"] == INFRASTRUCTURE_FAILURE
+    assert first["error"]["status"] == 503
+    assert stable(first) == stable(replay)
+
+
 def qualify(client, token, task_id, assignment_id, environment):
-    """Exercise a real selected timeout and one successful source fence probe."""
+    """Exercise an effective project-stage deadline and a successful source fence probe."""
     from source_audit import audit_accepted_source
     from submission_work import (
         _assignment_status,
@@ -175,8 +185,8 @@ def qualify(client, token, task_id, assignment_id, environment):
     key = str(uuid4())
     arguments = _command(task_id, assignment_id, timed, key)
     first = client.call(token, *arguments, expected_exit=1)
-    assert first["error"]["code"] == INFRASTRUCTURE_FAILURE
-    assert client.call(token, *arguments, expected_exit=1) == first
+    replay = client.call(token, *arguments, expected_exit=1)
+    _verify_timeout_replay(first, replay)
     observed = _progress(client, token, task_id, key)
     assert observed["operation_state"] == observed["processing_stage"] == "failed"
     assert observed["failure_code"] == INFRASTRUCTURE_FAILURE
@@ -238,7 +248,7 @@ def qualify(client, token, task_id, assignment_id, environment):
 def verify_native_trace(evidence, trace):
     """Bind the trusted guest's classified stage exit to both committed receipts."""
     wrapper_digest = "sha256:" + sha256(WRAPPER.read_bytes()).hexdigest()
-    seen = set()
+    leases = []
     for name, outcome, exit_code, expired in (
         ("timeout", "infrastructure_failure", 125, True),
         ("isolation", "completed", 0, False),
@@ -246,7 +256,7 @@ def verify_native_trace(evidence, trace):
         invocation = evidence[name]["invocation"]
         lease = invocation["provider_invocation_id"]
         if (
-            lease in seen
+            lease in leases
             or invocation["cleanup"]["obligation_id"] != lease
             or invocation["cleanup"]["disposition"] != "destroyed"
             or invocation["operation"] != "execute_pre"
@@ -254,7 +264,7 @@ def verify_native_trace(evidence, trace):
             or invocation["runtime"]["binary_sha256"] != wrapper_digest
         ):
             raise AssertionError(f"{name} has no exact destroyed PRE invocation")
-        seen.add(lease)
+        leases.append(lease)
         rows = [row for row in trace if row["name"] == lease]
         operations = [row["operation"] for row in rows]
         if (
@@ -266,6 +276,21 @@ def verify_native_trace(evidence, trace):
             raise AssertionError(
                 f"{name} did not have the expected native stage and cleanup trace"
             )
+        if name == "isolation":
+            prior_resources = rows[0].get("prior_resources")
+            if type(prior_resources) is not list or leases[0] in prior_resources:
+                raise AssertionError(
+                    "timeout VM resources remained at isolation create"
+                )
+
+    executions = [row for row in trace if row["operation"] == "exec"]
+    if (
+        any(type(row.get("source_pre")) is not bool for row in executions)
+        or [row["name"] for row in executions if row["source_pre"]] != leases
+    ):
+        raise AssertionError(
+            "native trace contains a different set of source-first PRE executions"
+        )
 
 
 def main():
@@ -280,7 +305,7 @@ def main():
         json.loads(arguments.client_evidence.read_bytes()),
         [json.loads(line) for line in arguments.native_trace.read_bytes().splitlines()],
     )
-    print(json.dumps({"timeout": "verified", "isolation": "verified"}))
+    print(json.dumps({"project_stage_deadline": "verified", "isolation": "verified"}))
 
 
 if __name__ == "__main__":

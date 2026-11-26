@@ -2303,11 +2303,16 @@ runner configuration in the existing TLS endpoint input. Preserve the
 runner and guest resource envelope. Record the source commit, fixture image
 manifest/config, and the exact installed configuration and executable hashes.
 
-The first ZIP reaches the selected checker and exceeds its stage deadline.
-The same assignment accepts the isolation probe on a fresh key as Submission
-version 1. The failed source stays charged during the two-hour reclamation
-grace. Keep the isolated launcher cleanup receipt for its test bucket and
-require the native observer's matching lease trace before recording a pass.
+The first ZIP reaches source-first PRE and triggers the trusted guest's
+effective project-stage deadline, which can elapse before the checker process
+starts. The fixture includes a sleeper to exercise this deadline if the process
+starts. Child-start, child OOM and child crash require separate evidence.
+The same assignment accepts the executed isolation probe on a fresh key as
+Submission version 1. The failed source stays charged during the two-hour
+reclamation grace. Keep the isolated launcher cleanup receipt for its test
+bucket and require the native observer's matching lease trace before recording
+a pass. The trace accounts for both source-first guest executions and checks
+that the timeout VM left no resources at the isolation VM's creation.
 
 ```sh
 python cli/tests/journey/pre_qualification.py \

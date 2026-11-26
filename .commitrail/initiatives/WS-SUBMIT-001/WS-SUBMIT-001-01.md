@@ -12684,8 +12684,10 @@ Exercise its actual source-first request through the public raw ZIP command,
 with fixture inputs selected by the test archive and pinned only for the
 qualification project.
 
-Acceptance. A selected project stage deadline produces a durable infrastructure
-failure and preserves the assignment's revision allowance. Retain its exact
+Acceptance. The effective project-stage deadline produces a durable infrastructure
+failure and preserves the assignment's revision allowance. The trusted guest
+diagnostic covers preparation in the project stage as well as execution, so
+child start, OOM and crash require their own evidence. Retain the failed ZIP's exact
 source version and charge during the two-hour reclamation grace, together
 with the runtime-destroyed receipt and the separate fixture teardown evidence. The isolation probe returns a valid passing result
 only after checking read-only source bytes, inaccessible supervisor state and
@@ -12693,7 +12695,10 @@ credential boundaries. Bind both observations to their exact selected PRE
 terminal receipt. Unknown destruction (A26) requires a separate approved
 runner ownership domain and remains outside this change.
 
-Nine focused trace and observer cases exercise the exact stage, lease and
-cleanup evidence, including absent, foreign and duplicate observations. The
-maintained guide and submission-progress regressions pass in the same run.
+The trace accounts for every source-first PRE execution and checks for the
+timed-out VM's resource absence at the next create. The same-key CLI 503 replay
+excludes each request's correlation identifier when comparing business fields.
 The test image build and isolated KVM run are pending.
+
+31 focused CLI checks pass, including 15 qualification observer, replay and
+resource counterexamples. Ruff checks the changed files and the CLI format.

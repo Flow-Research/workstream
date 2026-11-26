@@ -10,7 +10,7 @@ import sys
 
 
 def observe_pre_exit(binary, arguments, trace, name):
-    # The trusted guest emits the fixed diagnostic after killing the project.
+    # The trusted guest emits the fixed diagnostic on the effective project-stage deadline.
     # Forward stderr as usual. Retain only one bounded, classified observation.
     diagnostic = b'workstream guest bootstrap failed: project deadline exceeded'
     captured = bytearray()
@@ -38,12 +38,15 @@ if len(arguments) >= 2 and arguments[0] == 'machine':
     operation = arguments[1]
     name = arguments[arguments.index('--name') + 1] if '--name' in arguments else None
     trace = Path(settings['trace'])
+    source_pre = operation == 'exec' and '--pre-limits' in arguments
     if operation in {'create', 'start', 'exec', 'delete'}:
         with trace.open('a+') as output:
             fcntl.flock(output, fcntl.LOCK_EX)
             output.seek(0)
             prior = [json.loads(line)['name'] for line in output if json.loads(line)['operation'] == 'create']
             event = {'operation': operation, 'name': name}
+            if operation == 'exec':
+                event['source_pre'] = source_pre
             if operation == 'create':
                 rows = json.loads(subprocess.check_output([settings['binary'], 'machine', 'ls', '--json']))
                 event['prior_resources'] = [row['name'] for row in rows if row['name'] in prior]
@@ -68,6 +71,6 @@ if len(arguments) >= 2 and arguments[0] == 'machine':
                     sys.exit(93)
         if operation == 'delete' and Path(settings['delete_fault']).exists():
             sys.exit(93)
-        if operation == 'exec' and '--pre-limits' in arguments and settings.get('observe_pre_exit') is True:
+        if source_pre and settings.get('observe_pre_exit') is True:
             sys.exit(observe_pre_exit(settings['binary'], arguments, trace, name))
 os.execv(settings['binary'], [settings['binary'], *arguments])
