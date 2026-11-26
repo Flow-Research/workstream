@@ -273,7 +273,9 @@ def prepare_versioned_source_bucket(
         raise RuntimeError("journey source bucket is not runner-owned")
     bucket = environment.get("WORKSTREAM_TEST_MINIO_BUCKET", "")
     prefix = environment.get("WORKSTREAM_TEST_MINIO_PREFIX", "")
-    match = re.fullmatch(rf"workstream-ci-{lane.replace('_', '-')}-([a-f0-9]{{12}})", bucket)
+    match = re.fullmatch(
+        rf"workstream-ci-{lane.replace('_', '-')}-([a-f0-9]{{12}})", bucket
+    )
     if match is None or prefix != f"ci/{lane}/{match.group(1)}":
         raise RuntimeError("journey source bucket is not runner-owned")
     if client_factory is None:

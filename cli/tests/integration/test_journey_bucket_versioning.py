@@ -49,9 +49,13 @@ def test_journey_enables_and_reads_back_exact_owned_source_bucket(lane):
     client = VersioningClient()
     bucket = f"workstream-ci-{lane.replace('_', '-')}-{SUFFIX}"
     MODULE.prepare_versioned_source_bucket(
-        ENVIRONMENT | {"WORKSTREAM_TEST_MINIO_BUCKET": bucket,
-                       "WORKSTREAM_TEST_MINIO_PREFIX": f"ci/{lane}/{SUFFIX}"},
-        lane=lane, client_factory=factory_for(client),
+        ENVIRONMENT
+        | {
+            "WORKSTREAM_TEST_MINIO_BUCKET": bucket,
+            "WORKSTREAM_TEST_MINIO_PREFIX": f"ci/{lane}/{SUFFIX}",
+        },
+        lane=lane,
+        client_factory=factory_for(client),
     )
     assert client.calls == [
         ("put", {"Bucket": bucket, "VersioningConfiguration": {"Status": "Enabled"}}),
@@ -63,8 +67,10 @@ def test_journey_enables_and_reads_back_exact_owned_source_bucket(lane):
     "change",
     [
         {"WORKSTREAM_TEST_MINIO_BUCKET": "workstream-artifacts"},
-        {"WORKSTREAM_TEST_MINIO_BUCKET": f"workstream-ci-guide-journey-{SUFFIX}",
-         "WORKSTREAM_TEST_MINIO_PREFIX": f"ci/guide_journey/{SUFFIX}"},
+        {
+            "WORKSTREAM_TEST_MINIO_BUCKET": f"workstream-ci-guide-journey-{SUFFIX}",
+            "WORKSTREAM_TEST_MINIO_PREFIX": f"ci/guide_journey/{SUFFIX}",
+        },
         {"WORKSTREAM_TEST_MINIO_PREFIX": "ci/cli_full_journey/other"},
     ],
 )
