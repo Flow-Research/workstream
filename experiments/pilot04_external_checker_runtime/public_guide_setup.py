@@ -163,9 +163,10 @@ async def _approve_policies(client, compilation_root, token, call, attachments):
     return await call(client, "GET", post_root, token, 200)
 
 
-async def _source_evidence(factory, guide, setup, package, original):
+async def _source_evidence(factory, guide, setup, package, originals, *, manager_authored):
     expected_examples = [x.model_dump(mode="json") for x in validate_task_examples(TASK_EXAMPLES)]
     examples_hash = task_examples_hash(validate_task_examples(TASK_EXAMPLES))
+    original_digests = tuple("sha256:" + hashlib.sha256(content).hexdigest() for content in originals)
     async with factory() as session:
         source = (await session.execute(text(
             "SELECT g.task_examples,g.task_examples_hash,s.manifest_json,s.bundle_hash "
@@ -174,7 +175,11 @@ async def _source_evidence(factory, guide, setup, package, original):
         ), {"guide": guide["id"], "source": setup["source_snapshot_id"]})).one()
         attempt = (await session.execute(text(
             "SELECT a.id,a.canonical_input_hash,a.source_snapshot_hash,a.source_snapshot_id,"
-            "a.guide_material_hash,a.status,c.canonical_input_hash AS compiled_input_hash "
+            "a.guide_material_hash,a.status,c.canonical_input_hash AS compiled_input_hash,"
+            "a.runtime_configuration->>'runtime_key' AS runtime_key,"
+            "a.runtime_configuration->>'model_provider' AS model_provider,"
+            "(SELECT count(*) FROM setup_model_usage_slots m "
+            " WHERE m.compilation_attempt_id=a.id) AS setup_model_slots "
             "FROM project_guide_compilation_attempts a "
             "JOIN project_guide_compilations c ON c.id=a.persisted_compilation_id AND c.attempt_id=a.id "
             "WHERE a.setup_run_id=:setup"
@@ -189,7 +194,7 @@ async def _source_evidence(factory, guide, setup, package, original):
         source._mapping, attempt._mapping, examples=expected_examples,
         examples_hash=examples_hash, source_hash=package["target"]["source_snapshot_hash"],
         source_id=setup["source_snapshot_id"], accesses=accesses,
-        original_sha256="sha256:" + hashlib.sha256(original).hexdigest(),
+        original_sha256s=original_digests, manager_authored=manager_authored,
     )
     return {"guide_id": guide["id"], "setup_run_id": setup["id"],
             "setup_generation": setup["setup_generation"],
@@ -197,7 +202,9 @@ async def _source_evidence(factory, guide, setup, package, original):
             "source_snapshot_hash": source.bundle_hash,
             "task_examples_hash": examples_hash,
             "canonical_input_hash": attempt.canonical_input_hash,
-            "uploaded_sha256": "sha256:" + hashlib.sha256(original).hexdigest()}
+            "guide_compilation_runtime": attempt.runtime_key,
+            "uploaded_sha256": original_digests[0],
+            **({"manager_rules_sha256": original_digests[1]} if manager_authored else {})}
 
 
 async def _local_approval_attachments(factory):
@@ -227,10 +234,12 @@ async def _local_approval_attachments(factory):
 
 
 async def public_guide_setup(client, factory, human_review_required, call, token_for, *,
-                             pre_requirements=1, attachment=None, issuer="https://identity.flowresearch.tech"):
+                             pre_requirements=1, attachment=None, issuer="https://identity.flowresearch.tech",
+                             manager_authored=False):
     if pre_requirements != 1:
         raise ValueError("current qualification requires exactly one PRE image")
     model_post = attachment.model_post if attachment else None
+    manager_authored = manager_authored or attachment is not None
     if model_post and 'project_id' in model_post.state:
         raise RuntimeError('this model qualification already owns one project')
     original = model_post.guide_bytes() if model_post else guide_bytes(pre_requirements)
@@ -248,6 +257,7 @@ async def public_guide_setup(client, factory, human_review_required, call, token
         await attachment.grant(client, 'manager', 'project_manager', project['id'])
     else:
         await seed_review_actor(factory, UUID(project["id"]), actor=manager)
+    if not manager_authored:
         from guide_compilation_e2e import publish_scripted_model_profile
         operator, _ = await seed_review_actor(factory, None, role="operator", scope="system", issuer=issuer)
         profile = await publish_scripted_model_profile(client, token_for(operator), project["id"])
@@ -258,7 +268,7 @@ async def public_guide_setup(client, factory, human_review_required, call, token
     body = {"version": "initial", "change_summary": "Original sample worker guide",
             "task_examples": TASK_EXAMPLES,
             "documents": [{"label": "guide.md", "media_type": "text/markdown"}]}
-    if attachment:
+    if manager_authored:
         body['documents'].append({'label': 'workstream-rules.json', 'media_type': 'text/markdown'})
     headers = {"Idempotency-Key": str(uuid4())}
     guide = await call(client, "POST", root, token, 201, headers=headers, json=body)
@@ -268,7 +278,7 @@ async def public_guide_setup(client, factory, human_review_required, call, token
     root += "/" + guide["id"]
     await _public_policy_settings(client, root, token, human_review_required, call)
     originals = [original]
-    if attachment:
+    if manager_authored:
         from experiments.pilot04_external_checker_runtime.public_hosted_attachment import manager_rules
         originals.append(model_post.rules(original, pre_requirements) if model_post else
                          manager_rules(original, pre_requirements))
@@ -283,14 +293,14 @@ async def public_guide_setup(client, factory, human_review_required, call, token
                 or receipt["byte_count"] != len(content)):
             raise AssertionError("guide upload did not confirm the declared original bytes")
     setup = await _request_initial_compilation(client, root, token, call,
-                                               manager_authored=attachment is not None)
+                                               manager_authored=manager_authored)
     compilation_root = root + f"/compilations/{setup['finalized_compilation_id']}"
-    initial = await call(client, "GET", compilation_root + "/proposal", token, 200)
-    initial_setup = setup
     attachments = (model_post.approval_attachments() if model_post else
                    attachment.approval_attachments(pre_requirements) if attachment else
                    await _local_approval_attachments(factory))
-    if human_review_required and attachment is None:
+    if human_review_required and not manager_authored:
+        initial = await call(client, "GET", compilation_root + "/proposal", token, 200)
+        initial_setup = setup
         correction = await _correct_public_proposal(client, compilation_root, initial, token, call)
         setup = await wait_for_guide_read(client, root + "/setup-runs/latest", token,
             lambda v: v["status"] == "policy_draft_ready"
@@ -316,7 +326,8 @@ async def public_guide_setup(client, factory, human_review_required, call, token
         "post_approval_operation_id", "post_approval_output_digest", "guide_mutation_generation",
         "review", "revision", "expected_previous_active_guide_id", "expected_previous_active_guide_generation",
     )}, **context["contribution"]}
-    evidence = await _source_evidence(factory, guide, setup, post["proposal"], original)
+    evidence = await _source_evidence(factory, guide, setup, post["proposal"], originals,
+                                      manager_authored=manager_authored)
     target, upstream = post["target"], post["target"]["upstream"]
     evidence["locked_context"] = {
         "locked_guide_version": guide["version"],

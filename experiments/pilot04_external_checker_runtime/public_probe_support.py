@@ -223,7 +223,8 @@ async def _started_public_task(client, *, project_id: str, manager_token: str,
     return task_id, assignment_id
 
 
-async def _public_project(client, factory, env, *, human_review_required, pre_requirements=1):
+async def _public_project(client, factory, env, *, human_review_required, pre_requirements=1,
+                          manager_authored=False):
     """Public guide activation and submitter grant shared by every runtime trial."""
     from experiments.pilot04_external_checker_runtime.public_hosted_attachment import HostedAttachment
     from experiments.pilot04_external_checker_runtime.public_submission_clients import seeded_issuer
@@ -232,6 +233,7 @@ async def _public_project(client, factory, env, *, human_review_required, pre_re
     compilation = await public_guide_setup(
         client, factory, human_review_required, _json, lambda actor: _token(env, actor),
         pre_requirements=pre_requirements, attachment=attachment, issuer=seeded_issuer(env),
+        manager_authored=manager_authored,
     )
     manager = compilation.manager
     guide_id = str(compilation.guide_id)

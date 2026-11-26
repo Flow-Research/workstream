@@ -22,7 +22,8 @@ class SourceEvidenceTests(unittest.TestCase):
                            manifest_json={"task_examples_hash": self.expected["examples_hash"],
                                           "task_examples_count": 2},
                            bundle_hash=self.expected["source_hash"])
-        self.expected.update(source_id="source-1", original_sha256="sha256:" + "e" * 64,
+        self.expected.update(source_id="source-1", original_sha256s=("sha256:" + "e" * 64,),
+                             manager_authored=False,
                              accesses=[{"source_snapshot_id": "source-1", "sha256": "sha256:" + "e" * 64,
                                         "manifest_sha256": "sha256:" + "f" * 64,
                                         "access_method": "trusted_parser", "operation": "read"}])
@@ -59,6 +60,23 @@ class SourceEvidenceTests(unittest.TestCase):
                 verify_source_commitment(self.source, self.attempt, **changed)
         with self.assertRaisesRegex(AssertionError, "original-read"):
             verify_source_commitment(self.source, self.attempt, **(self.expected | {"accesses": []}))
+
+    def test_manager_authored_compilation_binds_both_originals_without_model_slots(self):
+        rules_sha256 = "sha256:" + "7" * 64
+        guide, = self.expected["accesses"]
+        both = self.expected | {
+            "manager_authored": True, "original_sha256s": (guide["sha256"], rules_sha256),
+            "accesses": [guide, guide | {"sha256": rules_sha256}],
+        }
+        runtime = self.attempt | {"runtime_key": "manager_authored", "model_provider": "none",
+                                  "setup_model_slots": 0}
+        verify_source_commitment(self.source, runtime, **both)
+        with self.assertRaisesRegex(AssertionError, "original-read"):
+            verify_source_commitment(self.source, runtime, **(both | {"accesses": [guide]}))
+        for field, value in (("runtime_key", "openai"), ("model_provider", "openai"),
+                             ("setup_model_slots", 1)):
+            with self.subTest(field=field), self.assertRaisesRegex(AssertionError, "used model assistance"):
+                verify_source_commitment(self.source, runtime | {field: value}, **both)
 
 
 class SetupPollingTests(unittest.IsolatedAsyncioTestCase):

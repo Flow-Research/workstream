@@ -1,7 +1,8 @@
 """Exercise public original-guide setup through a governed contribution outcome.
 
 Run only with isolated PostgreSQL/MinIO and an owned disposable Redis broker.
-Inference is explicitly recorded; real Celery executes the canonical setup owners.
+The separate-runner journey compiles manager-authored rules in the production worker.
+The same-host fault drill exercises explicitly recorded guide assistance.
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ from contextlib import ExitStack, contextmanager, nullcontext
 from decimal import Decimal
 import hashlib
 import hmac
+from importlib import import_module
 import json
 import os
 from pathlib import Path
@@ -121,6 +123,12 @@ def _celery_config_mismatches(settings, worker_app=None) -> list[str]:
     return [name for name in expected if expected[name] != actual[name]]
 
 
+def _worker_app_module(role: str, *, recorded_assistance: bool) -> str:
+    if role == "guide" and recorded_assistance:
+        return "experiments.pilot04_external_checker_runtime.guide_worker"
+    return "app.workers.celery_app"
+
+
 def _verify_child_configuration(role: str) -> int:
     """Import the same API or worker entry point and report only mismatched keys."""
     request = json.load(sys.stdin)
@@ -130,11 +138,9 @@ def _verify_child_configuration(role: str) -> int:
 
         actual = app.state.settings
     else:
-        if role == "guide":
-            from experiments.pilot04_external_checker_runtime.guide_worker import celery_app
-        else:
-            from app.workers.celery_app import celery_app
-
+        celery_app = import_module(_worker_app_module(
+            role, recorded_assistance=request["recorded_assistance"],
+        )).celery_app
         actual = get_settings()
     observed = _settings_digests(actual, nonce)
     expected = request["expected"]
@@ -148,13 +154,15 @@ def _verify_child_configuration(role: str) -> int:
     return 0
 
 
-def _preflight_children(settings, env: dict[str, str], cleanup_env: dict[str, str], root: Path) -> None:
+def _preflight_children(settings, env: dict[str, str], cleanup_env: dict[str, str], root: Path,
+                        *, recorded_assistance: bool) -> None:
     """Reject API/worker drift before starting real services or public requests."""
     nonce = os.urandom(32)
     for role in ("api", "guide", "worker", "source-cleanup"):
         child_env = cleanup_env if role == "source-cleanup" else env
         expected = _settings_digests(settings, nonce, cleanup_env=cleanup_env if role == "source-cleanup" else None)
-        request = json.dumps({"nonce": nonce.hex(), "expected": expected})
+        request = json.dumps({"nonce": nonce.hex(), "expected": expected,
+                              "recorded_assistance": recorded_assistance})
         with (root / f"preflight-{role}.log").open("wb") as errors:
             result = subprocess.run(
                 [
@@ -198,11 +206,10 @@ WORKER_ROLES = (
 
 
 def _start_worker(env: dict[str, str], root: Path, role: str, queue: str,
-                  generation: int = 1, *, launch=None) -> tuple[subprocess.Popen, str]:
+                  generation: int = 1, *, launch=None, recorded_assistance=False) -> tuple[subprocess.Popen, str]:
     """Start one owned prefork worker for exactly one registered workload queue."""
     hostname = f"first-journey-{role}-{uuid4().hex}@localhost"
-    celery_app = ("experiments.pilot04_external_checker_runtime.guide_worker"
-                  if role == "guide" else "app.workers.celery_app")
+    celery_app = _worker_app_module(role, recorded_assistance=recorded_assistance)
     process = (launch or _process)([
         sys.executable, "-m", "celery", "-A", celery_app,
         "worker", "--pool=prefork", "--concurrency=1",
@@ -905,7 +912,7 @@ async def _one_mode(client, factory, env, *,
                     stop_worker: Callable[[], None] | None = None,
                     start_worker: Callable[[], Awaitable[None]] | None = None, fault_root=None,
                     operator_token=None, clients: ContributorClients | None = None,
-                    exercise_faults: bool = True) -> dict:
+                    exercise_faults: bool = True, manager_authored: bool = False) -> dict:
     from experiments.pilot04_external_checker_runtime.public_hosted_attachment import HostedAttachment
 
     attachment = env if isinstance(env, HostedAttachment) else None
@@ -913,7 +920,7 @@ async def _one_mode(client, factory, env, *,
     from app.workers.outbox import deliver_event
 
     compilation, contributor, manager_token, contributor_token = await _public_project(
-        client, factory, env, human_review_required=human_review_required,
+        client, factory, env, human_review_required=human_review_required, manager_authored=manager_authored,
     )
     project_id = str(compilation.project_id)
     approved_guide = await _json(
@@ -1274,7 +1281,9 @@ async def run(database_url: str, image_reference: str, node_config: Path,
         "WORKSTREAM_ARTIFACT_INTAKE_CONFIG_DIGEST": intake_image["config_image_id"],
         "PYTHONPATH": os.pathsep.join(map(str, (BACKEND, BACKEND / "tests", BACKEND.parent))),
     })
-    configure_scripted_model_session_environment(env)
+    recorded_assistance = not separate_runner
+    if recorded_assistance:
+        configure_scripted_model_session_environment(env)
     env.pop("OPENAI_API_KEY", None)
     if clients is not None:
         env = clients.setup_authority(env)
@@ -1345,7 +1354,7 @@ async def run(database_url: str, image_reference: str, node_config: Path,
              "parent broker configuration differs from resolved Settings: "
              + ", ".join(parent_celery_mismatches))
     await asyncio.to_thread(prepare_versioned_source_bucket, env, lane="guide_journey")
-    _preflight_children(runtime_settings, env, cleanup_env, root)
+    _preflight_children(runtime_settings, env, cleanup_env, root, recorded_assistance=recorded_assistance)
 
     engine = create_async_engine(database_url)
     factory = async_sessionmaker(engine, expire_on_commit=False)
@@ -1408,6 +1417,7 @@ async def run(database_url: str, image_reference: str, node_config: Path,
         for role, queue in WORKER_ROLES:
             process, hostname = _start_worker(
                 cleanup_env if role == "source-cleanup" else env, root, role, queue, launch=launch,
+                recorded_assistance=recorded_assistance,
             )
             workers.append(process)
             await _wait_worker(process, hostname)
@@ -1436,14 +1446,14 @@ async def run(database_url: str, image_reference: str, node_config: Path,
             true = await _one_mode(client, factory, env,
                                    human_review_required=True,
                                    operator_id=operator.actor_profile_id, clients=clients,
-                                   exercise_faults=not separate_runner)
+                                   exercise_faults=not separate_runner, manager_authored=separate_runner)
             false = await _one_mode(client, factory, env,
                                     human_review_required=False,
                                     operator_id=operator.actor_profile_id,
                                     stop_worker=stop_owned_worker,
                                     start_worker=start_owned_worker, fault_root=fault_root,
                                     operator_token=_token(env, operator), clients=clients,
-                                    exercise_faults=not separate_runner)
+                                    exercise_faults=not separate_runner, manager_authored=separate_runner)
         _require(api.poll() is None and beat.poll() is None
                  and all(process.poll() is None for process in workers),
                  "API, dedicated prefork worker, or Beat exited during public journey")
@@ -1460,7 +1470,7 @@ async def run(database_url: str, image_reference: str, node_config: Path,
                 "scheduled_artifact_scans": True,
                 "public_original_guide_setup": True,
                 "connected_submitter_clients": ["cli", "mcp"] if clients is not None else [],
-                "recorded_inference": True,
+                "recorded_inference": recorded_assistance,
                 "custody": {key: custody[key] for key in (
                     'source_tree', 'config_sha256', 'service_sha256', 'smol_sha256', 'guest_sha256',
                 ) + (() if separate_runner else ('wrapper_sha256',))},

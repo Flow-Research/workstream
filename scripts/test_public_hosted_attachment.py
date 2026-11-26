@@ -118,16 +118,16 @@ class PublicJourneyWorkerCustody(unittest.TestCase):
         )
         self.assertEqual(probe.WORKER_ROLES, expected)
         with patch.object(probe, '_process', return_value=object()) as launch:
-            for role, queue in expected:
-                with self.subTest(role=role):
+            for recorded_assistance in (False, True):
+                for role, queue in expected:
                     launch.reset_mock()
-                    probe._start_worker({}, Path('/owned'), role, queue)
+                    probe._start_worker({}, Path('/owned'), role, queue, recorded_assistance=recorded_assistance)
                     command = launch.call_args.args[0]
                     self.assertEqual([part for part in command if part.startswith('--queues=')],
                                      [f'--queues={queue}'])
                     self.assertEqual(command[command.index('-A') + 1],
                         'experiments.pilot04_external_checker_runtime.guide_worker'
-                        if role == 'guide' else 'app.workers.celery_app')
+                        if role == 'guide' and recorded_assistance else 'app.workers.celery_app')
                     self.assertIn('--pool=prefork', command)
                     self.assertIn('--concurrency=1', command)
                     self.assertIn(f'{role}-worker-1.log', str(launch.call_args.kwargs['log']))
@@ -954,6 +954,50 @@ class HostedFixtureContracts(unittest.TestCase):
         call = AsyncMock(side_effect=[before, receipt, receipt, ready | {'setup_generation': 2}])
         with self.assertRaisesRegex(AssertionError, 'finalized outside the requested setup'):
             asyncio.run(_request_initial_compilation(None, root, 'token', call, manager_authored=False))
+
+    def test_local_manager_authored_guide_submits_both_originals_and_preserves_approval_pins(self):
+        from experiments.pilot04_external_checker_runtime import public_guide_setup as setup
+
+        project = {'id': str(uuid4())}
+        docs = [{'document_id': str(uuid4())}, {'document_id': str(uuid4())}]
+        guide = {'id': str(uuid4()), 'documents': docs}
+        root = f"/api/v1/projects/{project['id']}/guides/{guide['id']}"
+        guide_original = setup.guide_bytes()
+        originals = (guide_original, manager_rules(guide_original, 1))
+        uploads = [{'status': 'document_stored', 'document_id': document['document_id'],
+                    'sha256': 'sha256:' + hashlib.sha256(content).hexdigest(), 'byte_count': len(content)}
+                   for document, content in zip(docs, originals, strict=True)]
+        before = {'id': 'setup', 'setup_generation': 1, 'status': 'not_requested',
+                  'celery_task_id': None, 'finalized_compilation_id': None}
+        receipt = {'operation_id': 'operation', 'setup_run_id': 'setup', 'setup_generation': 1,
+                   'status': 'queued'}
+        ready = before | {'status': 'policy_draft_ready', 'finalized_compilation_id': 'compilation'}
+        pins = {'pre_submit_attachments': [object()], 'post_submit_attachments': [object()]}
+        for review_required in (True, False):
+            with self.subTest(review_required=review_required):
+                call = AsyncMock(side_effect=[project, guide, guide, *uploads, before, receipt, receipt, ready])
+                with (patch.object(setup, 'seed_review_actor', new=AsyncMock(return_value=(object(), None))),
+                      patch.object(setup, '_public_policy_settings', new=AsyncMock()) as policy,
+                      patch.object(setup, '_local_approval_attachments', new=AsyncMock(return_value=pins)),
+                      patch.object(setup, '_finance_policy', new=AsyncMock()) as finance,
+                      patch.object(setup, '_approve_policies', new=AsyncMock(side_effect=RuntimeError('approval reached'))) as approve,
+                      patch('guide_compilation_e2e.publish_scripted_model_profile', new=AsyncMock()) as profile,
+                      patch.object(setup, '_correct_public_proposal', new=AsyncMock()) as correction):
+                    with self.assertRaisesRegex(RuntimeError, 'approval reached'):
+                        asyncio.run(setup.public_guide_setup(None, None, review_required, call, lambda _: 'token',
+                                                             manager_authored=True))
+                profile.assert_not_awaited()
+                correction.assert_not_awaited()
+                policy.assert_awaited_once_with(None, root, 'token', review_required, call)
+                self.assertIs(finance.await_args.args[4], not review_required)
+                approve.assert_awaited_once_with(None, root + '/compilations/compilation', 'token', call, pins)
+                self.assertEqual(call.await_args_list[1].kwargs['json']['documents'], [
+                    {'label': 'guide.md', 'media_type': 'text/markdown'},
+                    {'label': 'workstream-rules.json', 'media_type': 'text/markdown'},
+                ])
+                self.assertEqual(tuple(item.kwargs['content'] for item in call.await_args_list[3:5]), originals)
+                self.assertEqual([item.args[2] for item in call.await_args_list[6:8]],
+                                 [root + '/requirements/compile'] * 2)
 
     def test_source_failure_preserves_exact_charge_and_releases_only_task_pointer(self):
         from experiments.pilot04_external_checker_runtime import public_intake_trials as intake
