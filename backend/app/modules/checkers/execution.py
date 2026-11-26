@@ -58,7 +58,8 @@ from app.modules.checkers.api.materialization import (
     PostSubmissionMaterializationFailure,
 )
 from app.modules.outbox.api import OutboxAppendPort
-from app.modules.checkers.api.execution import ReviewModePort
+from app.modules.checkers.api.execution import EvaluationTaskGuard, ReviewModePort
+from app.modules.checkers.execution_coordination import EvaluationCoordinator
 
 def _lease(run):
     """Recover the exact persisted lease, including its database expiry."""
@@ -151,6 +152,7 @@ class PostSubmissionExecutor:
         forge_facts: ForgeFactsResolver | None = None,
         outbox: Callable[[AsyncSession], OutboxAppendPort],
         review_modes: Callable[[AsyncSession], ReviewModePort],
+        retry_tasks: Callable[[AsyncSession], EvaluationTaskGuard] | None = None,
     ):
         """Receive explicit session, authority, materialization and publication ports."""
         self._sessions = sessions
@@ -159,6 +161,7 @@ class PostSubmissionExecutor:
         self._materialization, self._outbox = materialization, outbox
         self._selected_execution = selected_execution
         self._forge_facts = forge_facts
+        self._retry_tasks = retry_tasks
 
     @staticmethod
     def _execution_budget_seconds(request: PostSubmissionExecutionRequest) -> int:
@@ -395,4 +398,7 @@ class PostSubmissionExecutor:
                 run.outcome_source = "auto_checker"
                 run.status = result.outcome
                 await session.flush()
+                if result.outcome == "infrastructure_failed" and self._retry_tasks is not None:
+                    coordinator = EvaluationCoordinator(session, tasks=self._retry_tasks(session), events=self._outbox(session))
+                    await coordinator.schedule_automatic_retry(run)
                 return result

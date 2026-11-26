@@ -4,7 +4,9 @@ from uuid import UUID
 
 from app.core.hashing import canonical_json_hash
 
+from app.modules.artifacts.api.submission_command import PostSubmissionProgress
 from app.modules.artifacts.api.submission_finalization import SubmissionFinalizationProgress
+from app.modules.checkers.api.execution import POST_SUBMISSION_RETRY_OPTIONS
 from app.modules.artifacts.intake.acceptance import finalization_event
 from app.modules.artifacts.intake.repository import IntakeCustodyConflict
 from app.modules.artifacts.intake.recovery import recovery_event
@@ -143,12 +145,14 @@ class SubmissionOperationReadService:
         else:
             results = await self._feedback(row, repository)
         action = "wait"
-        stage, stalled, submission_id, version, request_id = await self._attempt_progress(row)
+        stage, stalled, submission_id, version, request_id, failure_code, post = await self._attempt_progress(row)
         if row.state in {"rejected", "failed", "abandoned", "cancelled"}:
             action = "inspect_governed_outcome"
             if row.state != "cancelled" and await self._permits_new_intake(current.candidate):
                 action = "correct_and_submit_new_key" if row.state == "rejected" else "retry_new_key_after_terminal"
-        elif row.state == "finalized" and stage not in {"evaluation_pending", "evaluation_running", "operationally_stalled"}:
+        elif row.state == "finalized" and stalled:
+            action = "contact_operator"
+        elif row.state == "finalized" and stage not in {"evaluation_pending", "evaluation_running"}:
             action = "inspect_governed_outcome"
         return SubmissionOperationResponse(
             operation_id=UUID(row.id), task_id=task_id, assignment_id=UUID(row.assignment_id),
@@ -157,7 +161,8 @@ class SubmissionOperationReadService:
             task_status_at_acceptance="evaluation_pending" if accepted else None,
             current_task_status=current.current_task_status, submission_id=submission_id,
             submission_version=version, evaluation_request_id=request_id,
-            pre_submission_results=results, failure_code=self._public_failure(row.failure_code), operationally_stalled=stalled, next_action=action,
+            pre_submission_results=results, failure_code=failure_code, operationally_stalled=stalled,
+            post_submission_progress=post, next_action=action,
         )
 
     @staticmethod
@@ -176,6 +181,8 @@ class SubmissionOperationReadService:
     async def _attempt_progress(self, row):
         stage, stalled = row.state, False
         submission_id = version = request_id = None
+        failure_code = self._public_failure(row.failure_code)
+        post = None
         task_id = UUID(row.task_id)
         if row.state == "finalization_pending":
             progress = await finalization_progress(row, self._events, self._deliveries)
@@ -201,10 +208,22 @@ class SubmissionOperationReadService:
                 event_id = evaluation.completion_event_id or evaluation.retry_event_id or outcome.evaluation_event_id
                 event = OutboxAppendInput.model_validate_json(evaluation.delivery_event_json or outcome.evaluation_event_json)
                 delivery = await evaluation_delivery_progress(event_id, event, evaluation, self._events, self._deliveries)
-                stalled = evaluation.status == "infrastructure_failed" or delivery.state == "dead_letter"
+                if evaluation.failure_code is not None:
+                    failure_code = f"post_submission_{evaluation.failure_code}"
+                elif delivery.state == "dead_letter":
+                    failure_code = ("post_submission_outcome_unknown" if delivery.error_code == "INVOKE_OUTCOME_UNKNOWN"
+                                    else "post_submission_delivery_failed")
+                stalled = failure_code is not None
+                if not stalled and evaluation.previous_failure_code is not None and evaluation.status in {"queued", "running"}:
+                    failure_code = f"post_submission_{evaluation.previous_failure_code}"
+                post = PostSubmissionProgress(
+                    attempt=evaluation.current.reservation.evaluation_generation,
+                    automatic_attempt_limit=POST_SUBMISSION_RETRY_OPTIONS.max_attempts,
+                    next_attempt_at=delivery.next_attempt_at if evaluation.status == "queued" else None,
+                )
                 stage = ("operationally_stalled" if stalled else
                          "evaluation_running" if evaluation.live_worker_lease else "evaluation_pending")
-        return stage, stalled, submission_id, version, request_id
+        return stage, stalled, submission_id, version, request_id, failure_code, post
 
     async def read_assignment_attempt(self, query):
         """Read one assignment-scoped operation and the original PRE projection."""
@@ -233,10 +252,10 @@ class SubmissionOperationReadService:
             else:
                 repository = SubmissionIntakeRepository(self._session, self._tasks)
                 results = await self._feedback(row, repository)
-            stage, stalled, submission_id, _, _ = await self._attempt_progress(row)
+            stage, stalled, submission_id, _, _, failure_code, post = await self._attempt_progress(row)
             return AssignmentIntakeAttempt(
-                operation_id=UUID(row.id), stage=stage, failure_code=self._public_failure(row.failure_code),
-                submission_id=submission_id, pre_submission_results=results,
+                operation_id=UUID(row.id), stage=stage, failure_code=failure_code,
+                submission_id=submission_id, pre_submission_results=results, post_submission_progress=post,
                 operationally_stalled=stalled or row.failure_code == "submission_infrastructure_unavailable",
             )
         except IntakeCustodyConflict as exc:

@@ -323,8 +323,9 @@ def evaluation_coordinator(session) -> EvaluationCoordinationPort:
     """Compose required TASK locking before CHECKERS reservation custody."""
     from app.modules.checkers.execution_coordination import EvaluationCoordinator
     from app.adapters.tasks import evaluation_task_guard
+    from app.adapters.outbox import outbox_append
 
-    return EvaluationCoordinator(session, tasks=evaluation_task_guard(session))
+    return EvaluationCoordinator(session, tasks=evaluation_task_guard(session), events=outbox_append(session))
 
 
 def checker_retry_service(session, context, *, cursor_secret=None):
@@ -345,7 +346,7 @@ def checker_retry_service(session, context, *, cursor_secret=None):
         session,
         actor_profile_id=context.actor_profile_id,
         tasks=tasks,
-        evaluations=EvaluationCoordinator(session, tasks=tasks),
+        evaluations=EvaluationCoordinator(session, tasks=tasks, events=outbox_append(session)),
         authorization=checker_retry_authorization(session, context),
         discovery=checker_retry_discovery_authorization(
             session,
@@ -563,6 +564,7 @@ def delivery_bound_post_submission_executor(
         forge_facts=forge_facts,
         outbox=outbox_append,
         review_modes=project_locked_policy_context_port,
+        retry_tasks=evaluation_task_guard,
     )
 
 
@@ -628,6 +630,7 @@ def reconciliation_bound_post_submission_executor(
         forge_facts=forge_facts,
         outbox=outbox_append,
         review_modes=project_locked_policy_context_port,
+        retry_tasks=evaluation_task_guard,
     )
 
 

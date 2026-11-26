@@ -106,6 +106,15 @@ class AssignmentIntakeUnavailable(RuntimeError):
     """Exact owned custody could not be projected."""
 
 
+class PostSubmissionProgress(BaseModel):
+    """Current checker attempt and the due time of a scheduled retry."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    attempt: Annotated[int, Field(strict=True, gt=0)]
+    automatic_attempt_limit: Annotated[int, Field(strict=True, gt=0)]
+    next_attempt_at: AwareDatetime | None
+
+
 class AssignmentIntakeAttempt(BaseModel):
     """Retained intake activity and its safe feedback for one assignment."""
 
@@ -116,6 +125,7 @@ class AssignmentIntakeAttempt(BaseModel):
     submission_id: UUID | None
     pre_submission_results: PreSubmissionResults
     operationally_stalled: bool
+    post_submission_progress: PostSubmissionProgress | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -172,9 +182,10 @@ class SubmissionOperationResponse(BaseModel):
     pre_submission_results: PreSubmissionResults
     failure_code: str | None
     operationally_stalled: bool
+    post_submission_progress: PostSubmissionProgress | None
     next_action: Literal[
         "wait", "correct_and_submit_new_key", "retry_new_key_after_terminal",
-        "inspect_governed_outcome",
+        "inspect_governed_outcome", "contact_operator",
     ]
 
 

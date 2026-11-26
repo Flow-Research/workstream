@@ -1,5 +1,5 @@
 {
-  "canonical_sha256": "4eb6fbe4174d135c9e76cf50806677ff944e3f9fafa06eb2f81d6aba73194733",
+  "canonical_sha256": "85deb7505c3c99c3c475b31592a6724f7c18a2e88c5868b1a32905e2240ed0e5",
   "components": {
     "schemas": {
       "AcceptedAssignmentEvidence": {
@@ -122,6 +122,16 @@
             "title": "Operationally Stalled",
             "type": "boolean"
           },
+          "post_submission_progress": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PostSubmissionProgress"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "pre_submission_results": {
             "items": {
               "anyOf": [
@@ -163,7 +173,8 @@
           "failure_code",
           "submission_id",
           "pre_submission_results",
-          "operationally_stalled"
+          "operationally_stalled",
+          "post_submission_progress"
         ],
         "title": "AssignmentIntakeAttempt",
         "type": "object"
@@ -884,6 +895,7 @@
               "awaiting_evaluation",
               "revise",
               "wait_for_processing",
+              "contact_operator",
               "none"
             ],
             "title": "Next Action",
@@ -1003,6 +1015,41 @@
           "message"
         ],
         "title": "ExternalCheckerFinding",
+        "type": "object"
+      },
+      "PostSubmissionProgress": {
+        "additionalProperties": false,
+        "description": "Current checker attempt and the due time of a scheduled retry.",
+        "properties": {
+          "attempt": {
+            "exclusiveMinimum": 0.0,
+            "title": "Attempt",
+            "type": "integer"
+          },
+          "automatic_attempt_limit": {
+            "exclusiveMinimum": 0.0,
+            "title": "Automatic Attempt Limit",
+            "type": "integer"
+          },
+          "next_attempt_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Attempt At"
+          }
+        },
+        "required": [
+          "attempt",
+          "automatic_attempt_limit",
+          "next_attempt_at"
+        ],
+        "title": "PostSubmissionProgress",
         "type": "object"
       },
       "ProjectIntakeCheck": {

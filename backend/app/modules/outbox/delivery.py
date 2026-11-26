@@ -115,10 +115,7 @@ def _outcome(
         code = "INVOKE_OUTCOME_UNKNOWN"
         if retry_unknown and claim.claim_generation < options.max_attempts:
             state = "retryable"
-            delay = min(
-                options.retry_cap_seconds,
-                options.retry_base_seconds * 2 ** min(claim.claim_generation - 1, 30),
-            )
+            delay = options.retry_delay_seconds(claim.claim_generation)
             retry = now + timedelta(seconds=delay)
     elif cause is FinalizationCause.ACKNOWLEDGE:
         state, code = "acknowledged", None
@@ -128,10 +125,7 @@ def _outcome(
         else:
             state = "retryable"
             code = "RETRY_REQUESTED" if invoked_at is not None else "LEASE_EXPIRED_BEFORE_INVOKE"
-            delay = min(
-                options.retry_cap_seconds,
-                options.retry_base_seconds * 2 ** min(claim.claim_generation - 1, 30),
-            )
+            delay = options.retry_delay_seconds(claim.claim_generation)
             retry = now + timedelta(seconds=delay)
     return {
         "delivery_state": state,

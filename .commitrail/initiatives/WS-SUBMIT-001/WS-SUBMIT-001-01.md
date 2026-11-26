@@ -13257,3 +13257,66 @@ ART ceiling, 3,520-second handler and 3,600-second delivery bounds remain explic
 operational limits; this slice does not claim unbounded execution or renewable
 leases. A real PostgreSQL regression must prove successful material preparation
 beyond the nominal estimate while stale workers remain fenced after takeover.
+
+### Explain held POST infrastructure outcomes
+
+The supported maximum ZIP reached immutable Submission and POST dispatch. Its
+POST delivery stopped with uncertain execution, while contributor reads showed
+only a stalled operation. A verified terminal POST failure and an uncertain
+execution require distinct feedback and the existing Operator recovery paths.
+
+This workflow-sensitive slice covers the CHECKERS execution progress contract,
+ART intake progress, the contributor assignment read, CLI submission status and
+its decoders, the two affected MCP read contracts, the submission execution
+specification and focused progress tests. Reuse the current authorized snapshot
+and the existing failure/action fields. Surface closed codes and an explicit
+Operator action while keeping the current Submission and governed task state.
+Preserve original PRE feedback, active recovery, and normal completed routing.
+Do not add delivery authority or change runtime deadlines in this slice.
+
+Verify signed operation and assignment reads for known terminal infrastructure
+failure and their clearing after the existing Operator schedules recovery.
+Exercise uncertain delivery projection and run focused CLI and MCP contract
+checks. Independent workflow and authorization review should check exact scoped
+source evidence and recovery guidance. Human review should verify that the
+contributor is never instructed to upload the ZIP again for a POST failure.
+
+The retry slice extends the existing CHECKERS finalization and reservation owners
+and their delivery composition. Extend checker-run custody with the exact
+scheduled OUTBOX event, and extend the existing deferred failed-supersession
+check in a forward migration. The service trigger uses the original fixed
+checker finalization decision. It does not create a human retry receipt. Reuse
+existing delivery options for the five-attempt allowance and exponential delay,
+and dispatch the successor through the same POST queue. The retry event, new
+checker generation and current pointer share the source result transaction.
+
+Allowed additional changes are the CHECKERS executor, coordination, retry and
+model files and public execution contract, their adapter wiring, the shared
+OUTBOX delay helper, the 0095 migration and affected schema expectations, and
+focused POST execution and progress tests. Retain the human Operator path and
+existing eligibility, invocation, immutable result and review guards. A running
+or uncertain invocation does not qualify for a successor. Verify one exact
+backoff event after a known failure, replay or rollback behavior, bounded
+exhaustion, and the contributor's attempt numbers and recovery action. Workflow
+and authorization review should examine the transaction and SQL guard together.
+
+### Explicit Operator abandonment of an unresolved POST execution
+
+The original hosted maximum-size attempt has finalized UNKNOWN delivery custody
+and a running checker without a result. The user wants an Operator-controlled
+recovery after automated handling cannot safely conclude. Extend the existing
+POST delivery reconciliation command and child handler with an explicit
+`abandon_unknown` choice. It binds the exact expired checker lease and original
+UNKNOWN delivery to the existing audited Operator reason. The child rechecks
+TASK and CHECKERS currentness, the original delivery and its own active
+invocation before atomically inserting one successor through the existing
+reservation owner. The original run and receipt remain unchanged.
+
+Allowed additional changes are the existing reconciliation contracts, service,
+handler, authorization request composition, Operator CLI/MCP contracts and the
+0095 custody guard and tests. This security-sensitive path must deny live or
+changed leases, ordinary unresolved reconciliation, completion-delivery
+abandonment, stale Operator authority, duplicate successors and late old-owner
+writes. It does not prove the provider stopped and does not authorize automatic
+retry of an unresolved invocation. Check exact replay, whole-transaction rollback
+and late-effect fencing through the existing signed Operator and database tests.

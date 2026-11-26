@@ -9,6 +9,28 @@ import (
 	"github.com/spf13/cobra"
 )
 
+func postSubmissionMessage(code *string, held bool) string {
+	if code == nil {
+		return ""
+	}
+	message := map[string]string{
+		"post_submission_capacity_exceeded":          "POST could not acquire enough checker capacity.",
+		"post_submission_deadline_exceeded":          "POST evaluation timed out.",
+		"post_submission_material_unavailable":       "POST could not read the retained submission material.",
+		"post_submission_implementation_unavailable": "The POST checker runtime is unavailable.",
+		"post_submission_invalid_output":             "The POST checker returned an invalid response.",
+		"post_submission_delivery_failed":            "The worker could not finish POST processing.",
+		"post_submission_outcome_unknown":            "The POST execution outcome is uncertain.",
+	}[*code]
+	if message == "" {
+		return ""
+	}
+	if held {
+		return message + " Your Submission is retained. Contact an Operator for recovery."
+	}
+	return message + " Workstream is retrying evaluation of your retained Submission."
+}
+
 func addSubmissionCommands(root, task *cobra.Command, client func() (*api.Client, error), output *string, stdout io.Writer) {
 	{
 		var assignment, feedback, path, key string
@@ -87,6 +109,12 @@ func addSubmissionCommands(root, task *cobra.Command, client func() (*api.Client
 				{"Latest submitted attempt", value.Assignment.LatestSubmission},
 			}
 			if value.Intake != nil {
+				if value.Intake.PostProgress != nil {
+					fields = append(fields, contextField{"Evaluation progress", value.Intake.PostProgress})
+					if message := postSubmissionMessage(value.StatusReason, value.Intake.Stalled); message != "" {
+						fields = append(fields, contextField{"Evaluation recovery", message})
+					}
+				}
 				fields = append(fields, contextField{"Intake stage", value.Intake.Stage},
 					contextField{"Intake feedback", api.IntakeFeedbackLines(value.Intake.Feedback)})
 			}
@@ -125,7 +153,11 @@ func addSubmissionCommands(root, task *cobra.Command, client func() (*api.Client
 			if *output == "json" {
 				return writeSafeJSON(stdout, result.Raw)
 			}
-			return writeTaskContextFields(stdout, []contextField{{"Submission operation", result.Value}})
+			fields := []contextField{{"Submission operation", result.Value}}
+			if message := postSubmissionMessage(result.Value.FailureCode, result.Value.Stalled); message != "" {
+				fields = append(fields, contextField{"Evaluation recovery", message})
+			}
+			return writeTaskContextFields(stdout, fields)
 		}
 		task.AddCommand(progress)
 	}

@@ -73,12 +73,13 @@ type ContributorAssignment struct {
 }
 
 type AssignmentIntake struct {
-	OperationID string            `json:"operation_id"`
-	Stage       string            `json:"stage"`
-	FailureCode *string           `json:"failure_code"`
-	Submission  *string           `json:"submission_id"`
-	Feedback    []json.RawMessage `json:"pre_submission_results"`
-	Stalled     bool              `json:"operationally_stalled"`
+	OperationID  string                  `json:"operation_id"`
+	Stage        string                  `json:"stage"`
+	FailureCode  *string                 `json:"failure_code"`
+	Submission   *string                 `json:"submission_id"`
+	Feedback     []json.RawMessage       `json:"pre_submission_results"`
+	Stalled      bool                    `json:"operationally_stalled"`
+	PostProgress *PostSubmissionProgress `json:"post_submission_progress"`
 }
 
 type AcceptedAssignmentEvidence struct {
@@ -359,7 +360,7 @@ func (c *Client) TaskAssignment(ctx context.Context, assignment string, limit in
 	if err != nil || !requiredNullable(fields, "status_reason", "intake", "feedback_submission_id", "next_cursor", "accepted_evidence") ||
 		!c.safeMutationResponse(raw) || !validOptionalID(value.FeedbackSubmissionID) ||
 		!oneOf(value.CurrentStatus, append(append([]string{}, taskStatuses...), "closed", "rejected")...) ||
-		!oneOf(value.NextAction, "submit", "awaiting_intake", "awaiting_evaluation", "revise", "wait_for_processing", "none") ||
+		!oneOf(value.NextAction, "submit", "awaiting_intake", "awaiting_evaluation", "revise", "wait_for_processing", "contact_operator", "none") ||
 		len(value.PostFindings) > limit || !validateContributorFindings(fields["post_submission_results"], value.PostFindings) ||
 		(value.NextCursor != nil && (!validTaskCursor(*value.NextCursor) || len(value.PostFindings) == 0)) {
 		return result, &Failure{Code: "invalid_api_response"}
@@ -373,7 +374,8 @@ func (c *Client) TaskAssignment(ctx context.Context, assignment string, limit in
 	value.Assignment = row
 	if intake := value.Intake; intake != nil {
 		part, err := contextObject(fields["intake"], intake, []string{"operation_id", "stage", "pre_submission_results", "operationally_stalled"}, nil)
-		if err != nil || !requiredNullable(part, "failure_code", "submission_id") || !validUUID(intake.OperationID) ||
+		if err != nil || !requiredNullable(part, "failure_code", "submission_id", "post_submission_progress") ||
+			!validPostSubmissionProgress(part["post_submission_progress"], intake.PostProgress) || !validUUID(intake.OperationID) ||
 			!validOptionalID(intake.Submission) || intake.Feedback == nil || !validPreSubmissionResults(intake.Feedback, false) {
 			return result, &Failure{Code: "invalid_api_response"}
 		}

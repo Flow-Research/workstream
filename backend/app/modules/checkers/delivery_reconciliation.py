@@ -289,10 +289,17 @@ class PostSubmitDeliveryService:
         classification = classified[0]
         if delivery.child is not None:
             return await self._replay(command, delivery, classified)
-        if classification == "unresolved":
+        abandonment = None
+        if command.action == "abandon_unknown" and classification == "unresolved" and delivery.envelope.event_type == REQUEST_EVENT:
+            try:
+                request = await self._requests.read(delivery.envelope)
+                abandonment = await self._evaluations.require_expired_unknown_lease(request)
+            except (PostSubmitDeliverySourceUnavailable, CheckerExecutionUnavailable) as exc:
+                raise PostSubmitDeliveryUnavailable("post_submit_delivery_unresolved") from exc
+        elif classification == "unresolved" or command.action is not None:
             raise PostSubmitDeliveryUnavailable("post_submit_delivery_unresolved")
         source = _public_source(delivery, classified)
-        preparation = PostSubmitDeliveryPreparation(command=command, source=source)
+        preparation = PostSubmitDeliveryPreparation(command=command, source=source, abandonment=abandonment)
         handle = await self._authorization.prepare(preparation)
         try:
             authority = await self._authorization.consume(handle, preparation)
@@ -313,6 +320,7 @@ class PostSubmitDeliveryService:
                 checker_run_id=source.checker_run_id,
                 evaluation_generation=source.evaluation_generation,
                 classification=classification,
+                abandonment=abandonment,
                 reconciliation_request_id=command.request_key,
                 request_digest=post_submit_delivery_request_digest(preparation),
                 authorization_decision_id=authority.decision_id,
@@ -409,14 +417,16 @@ class PostSubmitDeliveryService:
                 payload.evaluation_generation,
             ),
         )
+        # Revalidate authority for the retained decision before revealing a mode conflict.
+        action = "abandon_unknown" if payload.abandonment is not None else None
         preparation = PostSubmitDeliveryPreparation(
-            command=command,
-            source=scheduled_source,
+            command=command.model_copy(update={"action": action}),
+            source=scheduled_source, abandonment=payload.abandonment,
         )
         handle = await self._authorization.prepare(preparation)
         try:
             await self._authorization.authorize_replay(handle, preparation)
-            if payload.request_digest != post_submit_delivery_request_digest(preparation):
+            if command.action != action or payload.request_digest != post_submit_delivery_request_digest(preparation):
                 raise PostSubmitDeliveryConflict(
                     "post_submit_delivery_request_conflict"
                 )

@@ -269,6 +269,12 @@ class SelectedPostSubmitExecutionFacts:
         return canonical_json_hash(self.canonical_body())
 
 
+PostSubmissionInfrastructureFailureCode = Literal[
+    "capacity_exceeded", "deadline_exceeded", "material_unavailable",
+    "implementation_unavailable", "invalid_output",
+]
+
+
 class SelectedPostSubmissionEvaluationResult(CheckerValue):
     """Durable selected POST evidence envelope with no acceptance authority."""
 
@@ -283,16 +289,7 @@ class SelectedPostSubmissionEvaluationResult(CheckerValue):
     result_digest: Sha256
     outcome: Literal["completed", "infrastructure_failed"]
     execution: SelectedPostSubmitExecutionFacts | None
-    infrastructure_failure_code: (
-        Literal[
-            "capacity_exceeded",
-            "deadline_exceeded",
-            "material_unavailable",
-            "implementation_unavailable",
-            "invalid_output",
-        ]
-        | None
-    ) = None
+    infrastructure_failure_code: PostSubmissionInfrastructureFailureCode | None = None
 
     @model_validator(mode="after")
     def validate_result(self) -> Self:

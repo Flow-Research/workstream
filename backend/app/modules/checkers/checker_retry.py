@@ -1,7 +1,8 @@
-"""One hidden Operator retry of a terminal checker infrastructure failure."""
+"""Exact automatic and Operator retry custody for terminal checker failures."""
 
 from __future__ import annotations
 
+from datetime import timedelta
 import json
 from typing import Literal
 from uuid import UUID
@@ -33,6 +34,7 @@ from app.modules.checkers.api.execution import (
     CheckerRetrySourceQuery,
     CheckerRetrySuccessor,
     EvaluationTaskGuard,
+    POST_SUBMISSION_RETRY_OPTIONS, REQUEST_EVENT,
 )
 from app.modules.checkers.api.evaluation_contract import PostSubmissionExecutionRequest
 from app.modules.checkers.api.selected_post_submit import make_selected_post_submit_request
@@ -138,6 +140,73 @@ def _successor_from_receipt(receipt: CheckerRetryReceipt) -> CheckerRetrySuccess
         )
     except (TypeError, ValueError) as exc:
         raise CheckerRetryOperationUnavailable("checker_retry_replay_unavailable") from exc
+
+
+def retry_successor_request(previous: PostSubmissionExecutionRequest) -> PostSubmissionExecutionRequest:
+    """Retain every locked request fact apart from identity and generation."""
+    return make_selected_post_submit_request(
+        **previous.model_dump(exclude={"evaluation_request_id", "evaluation_generation", "request_sha256"}),
+        evaluation_request_id=new_record_id(), evaluation_generation=previous.evaluation_generation + 1,
+    )
+
+
+def abandoned_retry_event(prior: CheckerRun, successor: CheckerRun, cause: UUID) -> OutboxAppendInput:
+    """Record an explicit abandonment child without asserting a checker result."""
+    if prior.status != "running" or prior.worker_lease_id is None:
+        raise CheckerRetrySourceUnavailable("checker_abandonment_source_unavailable")
+    return OutboxAppendInput(
+        event_type=REQUEST_EVENT, event_version=1, aggregate_type="submission",
+        aggregate_id=UUID(successor.submission_id), project_id=UUID(successor.project_id),
+        correlation_id=prior.id, causation_event_id=cause,
+        idempotency_key="checker-abandonment-retry:" + prior.id,
+        payload={
+            "project_id": successor.project_id, "task_id": successor.task_id,
+            "submission_id": successor.submission_id, "submission_version": successor.submission_version,
+            "request_id": successor.evaluation_request_id, "request_digest": successor.request_digest,
+            "evaluation_generation": successor.evaluation_generation, "attempt_id": successor.id,
+            "result_id": successor.result_id, "source_run_id": prior.id,
+            "source_worker_lease_id": prior.worker_lease_id,
+            "source_worker_lease_generation": prior.worker_lease_generation,
+        },
+    )
+
+
+def automatic_retry_event(prior: CheckerRun, successor: CheckerRun) -> OutboxAppendInput:
+    """Use the committed fixed-service finalization as the automatic retry cause."""
+    _, source = require_finalized_infrastructure_source(prior)
+    if prior.completed_at is None or source.source_generation >= POST_SUBMISSION_RETRY_OPTIONS.max_attempts:
+        raise CheckerRetrySourceUnavailable("checker_automatic_retry_source_unavailable")
+    return OutboxAppendInput(
+        event_type=REQUEST_EVENT, event_version=1, aggregate_type="submission",
+        aggregate_id=source.submission_id, project_id=source.project_id,
+        correlation_id=str(source.source_run_id),
+        idempotency_key="checker-auto-retry:" + str(source.source_run_id),
+        not_before_at=prior.completed_at + timedelta(seconds=POST_SUBMISSION_RETRY_OPTIONS.retry_delay_seconds(
+            source.source_generation,
+        )),
+        payload={
+            "project_id": str(source.project_id), "task_id": str(source.task_id),
+            "submission_id": str(source.submission_id), "submission_version": source.submission_version,
+            "request_id": successor.evaluation_request_id, "request_digest": successor.request_digest,
+            "evaluation_generation": successor.evaluation_generation, "attempt_id": successor.id,
+            "result_id": successor.result_id, "source_run_id": str(source.source_run_id),
+            "source_result_digest": source.source_result_digest,
+            "source_finalize_evidence_id": str(source.source_finalize_evidence_id),
+        },
+    )
+
+
+def retry_event_expectation(expected: OutboxAppendInput) -> CheckerRetryEventExpectation:
+    """Express the exact immutable event expected by TASK and progress readers."""
+    return CheckerRetryEventExpectation(
+        event_type=expected.event_type, event_version=expected.event_version,
+        aggregate_type=expected.aggregate_type, aggregate_id=expected.aggregate_id,
+        correlation_id=expected.correlation_id, causation_event_id=expected.causation_event_id,
+        idempotency_key=expected.idempotency_key, not_before_at=expected.not_before_at,
+        payload_json=json.dumps(expected.payload, sort_keys=True, separators=(",", ":"),
+                                ensure_ascii=False, allow_nan=False),
+        payload_digest=canonical_json_hash(expected.payload),
+    )
 
 
 def retry_request_event(
@@ -446,18 +515,7 @@ class CheckerRetryService:
         )
         handle = await self._authorization.prepare(preparation)
         try:
-            request_fields = {
-                **source_request.model_dump(
-                    exclude={
-                        "evaluation_request_id",
-                        "evaluation_generation",
-                        "request_sha256",
-                    }
-                ),
-                "evaluation_request_id": new_record_id(),
-                "evaluation_generation": source.source_generation + 1,
-            }
-            next_request = make_selected_post_submit_request(**request_fields)
+            next_request = retry_successor_request(source_request)
             try:
                 reserved = await self._evaluations._reserve_after_task_lock(
                     next_request,
@@ -662,21 +720,5 @@ async def read_retry_delivery(
     )
     return CheckerRetryDelivery(
         request=stored.request,
-        expected_event=CheckerRetryEventExpectation(
-            event_type=expected.event_type,
-            event_version=expected.event_version,
-            aggregate_type=expected.aggregate_type,
-            aggregate_id=expected.aggregate_id,
-            correlation_id=expected.correlation_id,
-            causation_event_id=expected.causation_event_id,
-            idempotency_key=expected.idempotency_key,
-            payload_json=json.dumps(
-                expected.payload,
-                sort_keys=True,
-                separators=(",", ":"),
-                ensure_ascii=False,
-                allow_nan=False,
-            ),
-            payload_digest=canonical_json_hash(expected.payload),
-        ),
+        expected_event=retry_event_expectation(expected),
     )

@@ -107,12 +107,12 @@ async def _retained_rows(database_url: str) -> dict[str, str]:
         result = {}
         for table in _RETAINED_TABLES:
             excluded = {
-                "checker_runs": "input_context_custody",
-                "artifact_put_attempts": "checker_trial_evidence_id",
-                "artifact_operation_receipts": "checker_trial_evidence_id",
-                "artifact_replicas": "source_operation_id",
-            }.get(table)
-            projection = "to_jsonb(value)" + (f" - '{excluded}'" if excluded else "")
+                "checker_runs": ("input_context_custody", "retry_delivery_event_id", "retry_abandonment_event_id"),
+                "artifact_put_attempts": ("checker_trial_evidence_id",),
+                "artifact_operation_receipts": ("checker_trial_evidence_id",),
+                "artifact_replicas": ("source_operation_id",),
+            }.get(table, ())
+            projection = "to_jsonb(value)" + "".join(f" - '{column}'" for column in excluded)
             result[table] = await connection.fetchval(
                 f"select coalesce(jsonb_agg({projection} order by value.id),'[]')::text "
                 f"from {table} value"
@@ -153,7 +153,7 @@ async def _assert_head_lineage_projection(
         ) == 0
         assert (
             await connection.fetchval(
-                "select count(*) from checker_runs where input_context_custody is not null"
+                "select count(*) from checker_runs where input_context_custody is not null OR retry_delivery_event_id is not null OR retry_abandonment_event_id is not null"
             )
             == 0
         )

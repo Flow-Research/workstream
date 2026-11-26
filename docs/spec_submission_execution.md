@@ -289,6 +289,13 @@ Use the existing structured error envelope, correlation/request IDs, sanitizatio
 | 503 | `submission_infrastructure_unavailable` | Storage/runtime/DB/protocol failure before accepted handoff; not a QC verdict. |
 | 503 | `submission_outcome_unknown` | The API cannot determine whether its acceptance commit succeeded. Client must observe/replay the same key; it must not blindly create new work. |
 
+A finalized Submission remains retained when POST encounters an infrastructure
+failure. Its operation and assignment reads expose the verified
+`post_submission_*` failure code, distinct from PRE and work findings.
+`post_submission_outcome_unknown` identifies an uncertain delivery without a
+verified terminal result. A held POST exposes `contact_operator`. The Operator
+checks the source in the existing terminal retry or uncertain delivery surface.
+
 A platform-safe-archive rejection is QC feedback. A transport object mismatch, untrusted runtime response, unavailable provider, Celery worker failure or expired execution deadline is infrastructure failure unless an existing approved checker contract explicitly identifies a completed deterministic QC result.
 
 For an operation that reached a complete raw identity, persist the original terminal response classification and bounded findings for exact replay. Do not persist secrets or raw attacker-controlled logs in public error details.

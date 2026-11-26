@@ -529,6 +529,7 @@ def _operation_progress() -> dict[str, Any]:
         "pre_submission_results": [],
         "failure_code": None,
         "operationally_stalled": False,
+        "post_submission_progress": None,
         "next_action": "wait",
     }
 

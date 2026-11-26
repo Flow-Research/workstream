@@ -266,6 +266,14 @@ class PostSubmitDeliveryReconciliationHandler:
         if original.event_type == REQUEST_EVENT:
             evaluations = self._evaluations(session)
             request = await self._requests(session, evaluations).read(original)
+            if payload.abandonment is not None:
+                if await evaluations.require_expired_unknown_lease(request) != payload.abandonment:
+                    return HandlerOutcome.REJECT
+                await validate_cause()
+                if await custody.fence_invocation(original) is None:
+                    return HandlerOutcome.REJECT
+                await evaluations.reserve_abandoned_evaluation(request, payload.abandonment, child.claim.event_id)
+                return HandlerOutcome.ACKNOWLEDGE
             facts = await evaluations.classify_uncertain_delivery(request)
             if facts.classification == "committed":
                 await validate_cause()

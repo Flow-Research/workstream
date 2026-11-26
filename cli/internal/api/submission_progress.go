@@ -9,36 +9,55 @@ import (
 	"net/url"
 )
 
+// PostSubmissionProgress reports the durable attempt and any scheduled delay.
+type PostSubmissionProgress struct {
+	Attempt               int     `json:"attempt"`
+	AutomaticAttemptLimit int     `json:"automatic_attempt_limit"`
+	NextAttemptAt         *string `json:"next_attempt_at"`
+}
+
+func validPostSubmissionProgress(raw json.RawMessage, value *PostSubmissionProgress) bool {
+	if value == nil {
+		return true
+	}
+	fields, err := contextObject(raw, value, []string{"attempt", "automatic_attempt_limit"}, nil)
+	return err == nil && requiredNullable(fields, "next_attempt_at") && value.Attempt > 0 &&
+		value.AutomaticAttemptLimit > 0 && value.AutomaticAttemptLimit <= 100 &&
+		(value.NextAttemptAt == nil || validTime(*value.NextAttemptAt))
+}
+
 // SubmissionProgress preserves the operation's outcome separately from current task context.
 type SubmissionProgress struct {
-	OperationID            string            `json:"operation_id"`
-	TaskID                 string            `json:"task_id"`
-	AssignmentID           string            `json:"assignment_id"`
-	IdempotencyKey         string            `json:"idempotency_key"`
-	State                  string            `json:"operation_state"`
-	Stage                  string            `json:"processing_stage"`
-	AcceptedAt             *string           `json:"accepted_at"`
-	TaskStatusAtAcceptance *string           `json:"task_status_at_acceptance"`
-	CurrentTaskStatus      *string           `json:"current_task_status"`
-	SubmissionID           *string           `json:"submission_id"`
-	SubmissionVersion      *big.Int          `json:"submission_version"`
-	EvaluationRequestID    *string           `json:"evaluation_request_id"`
-	Feedback               []json.RawMessage `json:"pre_submission_results"`
-	FailureCode            *string           `json:"failure_code"`
-	Stalled                bool              `json:"operationally_stalled"`
-	NextAction             string            `json:"next_action"`
+	OperationID            string                  `json:"operation_id"`
+	TaskID                 string                  `json:"task_id"`
+	AssignmentID           string                  `json:"assignment_id"`
+	IdempotencyKey         string                  `json:"idempotency_key"`
+	State                  string                  `json:"operation_state"`
+	Stage                  string                  `json:"processing_stage"`
+	AcceptedAt             *string                 `json:"accepted_at"`
+	TaskStatusAtAcceptance *string                 `json:"task_status_at_acceptance"`
+	CurrentTaskStatus      *string                 `json:"current_task_status"`
+	SubmissionID           *string                 `json:"submission_id"`
+	SubmissionVersion      *big.Int                `json:"submission_version"`
+	EvaluationRequestID    *string                 `json:"evaluation_request_id"`
+	Feedback               []json.RawMessage       `json:"pre_submission_results"`
+	FailureCode            *string                 `json:"failure_code"`
+	Stalled                bool                    `json:"operationally_stalled"`
+	NextAction             string                  `json:"next_action"`
+	PostProgress           *PostSubmissionProgress `json:"post_submission_progress"`
 }
 
 func decodeSubmissionProgress(raw json.RawMessage, task, operation, key string) (SubmissionProgress, error) {
 	var value SubmissionProgress
 	bad := &Failure{Code: "invalid_api_response"}
 	fields, err := contextObject(raw, &value, []string{"operation_id", "task_id", "assignment_id", "idempotency_key", "operation_state", "processing_stage", "pre_submission_results", "operationally_stalled", "next_action"}, nil)
-	if err != nil || !requiredNullable(fields, "accepted_at", "task_status_at_acceptance", "current_task_status", "submission_id", "submission_version", "evaluation_request_id", "failure_code") ||
+	if err != nil || !requiredNullable(fields, "accepted_at", "task_status_at_acceptance", "current_task_status", "submission_id", "submission_version", "evaluation_request_id", "failure_code", "post_submission_progress") ||
+		!validPostSubmissionProgress(fields["post_submission_progress"], value.PostProgress) ||
 		!validUUID(value.OperationID) || !sameUUID(value.TaskID, task) || !validUUID(value.AssignmentID) || !validUUID(value.IdempotencyKey) ||
 		(operation != "" && !sameUUID(value.OperationID, operation)) || (key != "" && !sameUUID(value.IdempotencyKey, key)) ||
 		!oneOf(value.State, "receiving", "pre_checking", "finalization_pending", "finalized", "rejected", "failed", "abandoned", "cancelled") ||
 		!oneOf(value.Stage, "receiving", "pre_checking", "finalization_pending", "evaluation_pending", "evaluation_running", "review_pending", "needs_revision", "accepted", "rejected", "failed", "abandoned", "cancelled", "operationally_stalled") ||
-		!oneOf(value.NextAction, "wait", "correct_and_submit_new_key", "retry_new_key_after_terminal", "inspect_governed_outcome") ||
+		!oneOf(value.NextAction, "wait", "correct_and_submit_new_key", "retry_new_key_after_terminal", "inspect_governed_outcome", "contact_operator") ||
 		(value.AcceptedAt != nil && !validTime(*value.AcceptedAt)) ||
 		(value.TaskStatusAtAcceptance != nil && *value.TaskStatusAtAcceptance != "evaluation_pending") ||
 		(value.CurrentTaskStatus != nil && !oneOf(*value.CurrentTaskStatus, "draft", "screening", "ready", "in_progress", "submitted", "evaluation_pending", "review_pending", "needs_revision", "accepted")) ||

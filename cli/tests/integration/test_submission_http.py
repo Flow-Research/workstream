@@ -742,6 +742,7 @@ def operation_progress():
         "pre_submission_results": [],
         "failure_code": None,
         "operationally_stalled": False,
+        "post_submission_progress": None,
         "next_action": "wait",
     }
 

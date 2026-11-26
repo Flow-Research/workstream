@@ -208,6 +208,7 @@ async def _reconcile(
     *,
     actor=None,
     reason="Reconcile one exact uncertain post-submit delivery",
+    action=None,
 ):
     _, command = _paths(project_id, event_id)
     assert command is not None
@@ -215,7 +216,7 @@ async def _reconcile(
     return await admin_access.signed.client.post(
         command,
         headers=caller.headers | {"Idempotency-Key": str(request_key)},
-        json={"reason": reason},
+        json={"reason": reason} if action is None else {"reason": reason, "action": action},
     )
 
 
@@ -1021,3 +1022,79 @@ async def test_foreign_scope_and_non_operator_denials_leave_no_child(
             )
         assert children == 0
         assert denials == 1
+
+
+@pytest.mark.asyncio
+async def test_operator_abandons_exact_expired_unknown_once(
+    tmp_path, auth_database_env, admin_access, monkeypatch,
+) -> None:
+    """Expire the real owner and preserve its unresolved history through one successor."""
+    from sqlalchemy import func, select
+    from app.adapters.checkers import evaluation_coordinator
+    from app.modules.checkers import execution
+    from app.modules.checkers.api.execution import CheckerExecutionUnavailable
+    from app.modules.checkers.models import CheckerRetryReceipt, CheckerRun, CheckerSubmissionFence
+    from tests.checkers.execution.support import live_executor
+
+    async with material_fixture(tmp_path, auth_database_env) as h:
+        await admin_access.signed.grant(admin_access.admin, admin_access.target)
+        prepared = await delivery_fixture(h)
+        original = await invoked(h, prepared)
+        executor = live_executor(h)
+        with monkeypatch.context() as patch:
+            patch.setattr(executor, "_execution_budget_seconds", lambda _request: 6)
+            patch.setattr(execution, "SELECTED_POST_FINALIZATION_MARGIN_MS", 4_000)
+            lease, replay = await executor._claim(h.request)
+        assert replay is None
+        assert outcome(await prepared.delivery.finalize(original.claim, FinalizationCause.UNKNOWN))["invocation_unknown"]
+        original_before, _ = await _delivery_rows(h.factory, original.claim.event_id)
+        key = new_record_id()
+        project_id, event_id = h.request.project_id, original.claim.event_id
+        unexpired = await _reconcile(admin_access, project_id, event_id, key, action="abandon_unknown")
+        assert unexpired.status_code == 404, unexpired.text
+        async with h.factory() as session:
+            await session.execute(text(
+                "SELECT pg_sleep(GREATEST(EXTRACT(EPOCH FROM CAST(:expiry AS timestamptz)-clock_timestamp()),0)+0.05)"
+            ), {"expiry": lease.expires_at})
+        ignored = await _reconcile(admin_access, project_id, event_id, key)
+        assert ignored.status_code == 404, ignored.text
+        created = await _reconcile(admin_access, project_id, event_id, key, action="abandon_unknown")
+        assert created.status_code == 201, created.text
+        result = created.json()
+        assert result["source"]["classification"] == result["successor"]["classification"] == "unresolved"
+        child_id = UUID(result["successor"]["event_id"])
+        registry = production_outbox_delivery(h.factory, worker_group="post")
+        claim = await registry.claim(child_id, project_id, "abandonment-test")
+        assert claim is not None
+        child = await registry._begin_invocation(claim)
+        assert child is not None
+        assert await registry._registry.get(child.event_type, child.event_version)(child) is HandlerOutcome.ACKNOWLEDGE
+        await registry.finalize(claim, FinalizationCause.ACKNOWLEDGE)
+        replay = await _reconcile(admin_access, project_id, event_id, key, action="abandon_unknown")
+        assert replay.status_code == 201, replay.text
+        assert replay.json()["successor"] == result["successor"]
+        assert replay.json()["source"]["reconciliation_state"] == "acknowledged"
+        changed = await _reconcile(admin_access, project_id, event_id, key)
+        assert changed.status_code == 409, changed.text
+        assert (await _delivery_rows(h.factory, event_id))[0] == original_before
+        async with h.factory.begin() as session:
+            retained = await session.get(CheckerRun, str(lease.reservation.attempt_id))
+            assert retained.status == "running" and retained.result_json is None and retained.finalize_evidence_id is None
+            assert retained.worker_lease_id == str(lease.lease_id)
+            fence = await session.get(CheckerSubmissionFence, retained.submission_id)
+            successor = await session.get(CheckerRun, fence.current_run_id)
+            assert successor.evaluation_generation == 2 and successor.status == "queued"
+            assert successor.retry_abandonment_event_id == child_id
+            assert successor.supersedes_checker_run_id == retained.id
+            assert await session.scalar(select(func.count()).select_from(CheckerRetryReceipt)) == 0
+            assert await session.scalar(select(func.count()).select_from(CheckerRun)) == 2
+            evaluations = evaluation_coordinator(session)
+            observed = await evaluations.read_current_progress(
+                project_id=project_id, task_id=h.request.task_id,
+                submission_id=h.request.submission_id, original_request_id=h.request.evaluation_request_id,
+            )
+            assert observed.retry_event_id == successor.retry_delivery_event_id
+            assert observed.status == "queued" and observed.failure_code is None
+        with pytest.raises(CheckerExecutionUnavailable, match="checker_current_request_unavailable"):
+            await executor._claim(h.request)
+        assert not prepared.selected.requests

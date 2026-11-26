@@ -13,7 +13,7 @@ func progressJSON() map[string]any {
 		"idempotency_key": testSubmission, "operation_state": "finalization_pending", "processing_stage": "finalization_pending",
 		"accepted_at": "2026-11-16T12:00:00Z", "task_status_at_acceptance": "evaluation_pending", "current_task_status": nil,
 		"submission_id": nil, "submission_version": nil, "evaluation_request_id": nil, "pre_submission_results": []any{},
-		"failure_code": nil, "operationally_stalled": false, "next_action": "wait"}
+		"failure_code": nil, "operationally_stalled": false, "post_submission_progress": nil, "next_action": "wait"}
 }
 
 func TestSubmissionProgressSelectorsAndNoMutation(t *testing.T) {
@@ -77,10 +77,15 @@ func TestSubmissionProgressRefusesUnboundOrMalformedEvidence(t *testing.T) {
 		value["submission_version"] = 2
 		value["evaluation_request_id"] = testSubmission
 		value["operationally_stalled"] = stage == "operationally_stalled"
-		value["next_action"] = "inspect_governed_outcome"
+		action := "inspect_governed_outcome"
+		if stage == "operationally_stalled" {
+			action = "contact_operator"
+			value["failure_code"] = "post_submission_outcome_unknown"
+		}
+		value["next_action"] = action
 		raw, _ := json.Marshal(value)
 		got, err := decodeSubmissionProgress(raw, testTask, testRun, "")
-		if err != nil || got.Stage != stage || got.NextAction != "inspect_governed_outcome" {
+		if err != nil || got.Stage != stage || got.NextAction != action {
 			t.Fatal(stage, err)
 		}
 	}

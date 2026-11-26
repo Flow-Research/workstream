@@ -439,6 +439,7 @@ def test_v01_graph_has_one_root_and_head() -> None:
 
     assert [revision.revision for revision in revisions] == [
         HEAD_REVISION,
+        "0094_project_archive_limits",
         "0093_verified_email_observation",
         "0092_submission_feedback",
         "0091_qualified_aws_source",
@@ -537,7 +538,7 @@ def test_v01_graph_has_one_root_and_head() -> None:
     assert script.get_revision("0090_merge_direct_storage").down_revision == (
         "0089_observed_upload_cleanup", "0069_remove_artifact_proof",
     )
-    assert script.get_revision(HEAD_REVISION).down_revision == "0093_verified_email_observation"
+    assert script.get_revision(HEAD_REVISION).down_revision == "0094_project_archive_limits"
     assert revisions[-1].down_revision is None
     assert script.get_heads() == [HEAD_REVISION]
 
@@ -1981,7 +1982,7 @@ def test_root_upgrade_refuses_nonempty_unstamped_schema_before_product_ddl(
             "0004_task_context_authority",
             "Workstream v0.1 migrations cannot be downgraded; recreate the database",
         ),
-        (HEAD_REVISION, "project archive limits migration is forward-only"),
+        (HEAD_REVISION, "POST infrastructure retry migration is forward-only"),
     ],
 )
 def test_downgrade_refuses_without_mutation(
