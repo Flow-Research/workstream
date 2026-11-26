@@ -11691,3 +11691,21 @@ unaffected.
 The existing MCP HTTP gateway suite passed 38 cases in 1.76 seconds after the
 retired error token removal; its existing dependency deprecation warning remains
 visible. No new mutation path or compatibility handling was introduced.
+
+### Bound guide parser child startup CPU
+
+The paired native run at eddb8b560 timed out at the retained initial guide
+compilation attempt. The exact local parser's hardened children consumed
+4.095 and 4.085 CPU seconds and exited on SIGXCPU before writing a response.
+At lower load, an import-only child consumed 1.911 CPU seconds and the same
+framed parse consumed 1.973 CPU seconds. The release image contains no
+Pydantic bytecode. The observations are retained in
+`/tmp/workstream-paired-native-parser-child.log` and
+`/tmp/workstream-paired-native-parser-import-profile.log`.
+
+Scope is the existing release image dependency installation and this record.
+Test build-time bytecode compilation before changing parser imports. Verify
+the same source frames through hardened children and a disposable parser
+socket, using the existing resource limits, privilege drop, and file-system
+isolation. The current parser daemon stays in service while the candidate is
+measured. The paired native journey remains pending.
