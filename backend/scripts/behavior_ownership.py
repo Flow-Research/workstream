@@ -996,6 +996,9 @@ SUBMISSION_INTAKE_TARGETS = frozenset({
     "backend/app/modules/tasks/api/intake_custody.py",
     "backend/app/modules/tasks/api/pending_submission.py",
     "backend/app/modules/tasks/intake_custody.py",
+    "backend/app/adapters/submission_feedback_email.py",
+    "backend/app/interfaces/submission_feedback_email.py",
+    "backend/app/modules/tasks/post_submit_routing/feedback_email.py",
 })
 FORGE_PROOF_FACTS_TARGETS = frozenset({
     "backend/app/adapters/github/app_facts.py",

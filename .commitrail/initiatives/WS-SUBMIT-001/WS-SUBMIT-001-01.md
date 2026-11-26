@@ -9291,6 +9291,29 @@ and links the canonical source-key specification instead of duplicating its
 versioned key example. This resolves stale-vocabulary scan false positives
 without changing the scanner, IAM policy, runtime behavior or key format.
 
+### Register feedback email behavior ownership
+
+The AUTH preflight passed 98 tests on `f480` before the ownership
+validator reported `partition_target_mismatch`. Comparing the current
+tracked inventory with the protected partition identifies three missing
+lifecycle targets for the feedback email adapter, interface, and TASK owner.
+Authorize these exact additions in the existing submission-intake target
+set and its focused test. Regenerate the canonical partition with the
+same protected base and retain every existing assignment.
+
+Scope is `.ci/behavior-ownership/partition.v1.json`,
+`backend/scripts/behavior_ownership.py`, the existing
+`backend/tests/test_behavior_ownership.py` test, and this record. The
+validator, workflow, mutation policy, existing test claims and product
+behavior remain outside this correction. Low risk. Focused QA review should
+verify the unchanged protected base and reject unrelated targets. Run the
+existing ownership test, canonical ownership validation, Ruff and diff checks.
+
+The generated partition diff added exactly three lifecycle assignments and
+updated the authority digest. Four targeted ownership tests passed. The
+canonical validator passed against the protected PR base
+`d713594ebf04a125917edb0ec981d380cf8047b4`. Ruff and diff checks passed.
+
 ### Refresh pending-operation MCP schema descriptions
 
 Configured backend OpenAPI comparison atc853743b6 passed142 and failed2

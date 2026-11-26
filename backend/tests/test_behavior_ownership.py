@@ -2803,6 +2803,9 @@ def test_submission_intake_partition_addition_is_exact_and_retains_existing_targ
         "backend/app/modules/tasks/api/intake_custody.py",
         "backend/app/modules/tasks/api/pending_submission.py",
         "backend/app/modules/tasks/intake_custody.py",
+        "backend/app/adapters/submission_feedback_email.py",
+        "backend/app/interfaces/submission_feedback_email.py",
+        "backend/app/modules/tasks/post_submit_routing/feedback_email.py",
     }
     assert ownership.SUBMISSION_INTAKE_TARGETS == additions
     trusted = _partition([retained])
