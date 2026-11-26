@@ -299,10 +299,12 @@ and synthetic accounts. It exercises real TLS, code/PKCE login, forced password
 change, the production MCP adapter, the unchanged backend verifier, audience
 denial, refresh rotation, restart and database privilege isolation. It is an HTTP
 protocol/form test, not proof of a rendered browser UI or actual Garden session.
-`scripts/test_identity_browser.py` also runs real Chrome with the browser sandbox
+The separate manual qualification `scripts/test_identity_browser.py` runs real Chrome with the browser sandbox
 and TLS verification enabled, using an isolated trust store. Build the CLI first,
 set `WORKSTREAM_TEST_CLI` to its absolute path, and run the browser test inside an
-isolated D-Bus session with an unlocked test Secret Service. It covers the
+isolated D-Bus session with an unlocked test Secret Service. This native CLI/browser
+case is not run by the identity CI workflow; its signup/recovery browser case does
+not substitute for this proof. The manual qualification covers the
 native CLI login, initial password change, consent and renewal without
 using a personal browser profile.
 `scripts/test_public_ingress.py` separately exercises the pinned Caddy routes.

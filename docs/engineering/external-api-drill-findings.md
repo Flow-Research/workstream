@@ -9,8 +9,8 @@ five defects below. Both original drills passed on merged main `c681b51f`, with
 failures. The administrator run included twenty distinct actors and detected
 all three intentional last-admin guard mutants. These counts include negative
 and local evidence cases; they are not endpoint or exhaustive field counts.
-The orchestrator is extending the remaining client field checks before handing
-the verified endpoint-and-field list to the MCP adapter agent. The descriptions
+This historical handoff does not describe current MCP readiness; use the
+[current capability ledger](../roadmap_status.md) for that boundary. The descriptions
 for repaired items remain historical observations, not claims that those defects
 persist. API-DRILL-007 and API-DRILL-008 below preserve the NUL defect
 reproductions and their bounded request-validation repairs.

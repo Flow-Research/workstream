@@ -318,7 +318,7 @@ def test_semantic_family_membership_has_an_independent_fingerprint() -> None:
     expected = {
         "shared": (
             262,
-            "edf7ea7ac591fa74adf341c456651b2309f52b3563a07c117c87517eb8723e5b",
+            "e2c8b4a0222fc44f0458d447842303b65277d2402b7c05a0f71f152f24417435",
         ),
         "project": (
             255,

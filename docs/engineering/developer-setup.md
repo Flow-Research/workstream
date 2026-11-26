@@ -237,7 +237,9 @@ postgresql+asyncpg://workstream:<password>@localhost:<port>/workstream_test
 ```
 
 One project-guide compilation proposes sufficiency findings and separate
-pre-submission and post-submission policies through the OpenAI Agents SDK adapter.
+pre-submission and post-submission check specifications through the selected
+registered runtime (`openai_agents_sdk` or `omnicore_agent`). The provider-free
+`manager_authored` path lets a manager supply the specifications without inference.
 Use the locked installation and environment-loading commands in
 [Native Unified Guide Inference](#native-unified-guide-inference).
 
@@ -247,69 +249,33 @@ PRE/POST check. PRE is reserved for static and other checks that can reliably
 finish within 60 seconds before Submission creation; it may still use durable
 execution and polling. Longer or model-based work belongs to background POST.
 The compiler infers checks from required outcomes rather than requiring guide
-authors to label automation or stages. A missing registered implementation stays
-an engineering gap in a warning-ready draft and blocks activation; only a real
-guide blocker prevents the draft.
+authors to label automation or stages. Setup receives guide documents and task examples, not image registry metadata.
+At approval, both PRE and POST attachment lists must be present; explicit empty
+lists are valid. Each nonempty attachment binds an exact registered project image
+and configuration. Suggested requirements do not impose image membership.
 
-The SDK adapter first produces a private structured candidate, then uses a fresh model context
-to check it against the original documents and return the corrected proposal.
-Every draft, review and correction is checked against the same strict JSON Schema,
-canonical content rules, owner context and source identities. Bounded field paths
-and fixed error codes permit at most two corrections per phase; rejected
-values and exception messages are never returned. The private draft is never
-persisted, projected or accepted. Only the validated final review can become a
-retained proposal.
-Both phases share one attempt, trusted document tools, client, overall timeout and
-aggregate model-turn/tool budgets. The draft can use at most half the configured turn
-allowance; review receives the unused remainder. Full serialized review and correction
-inputs (assigned guide material and task examples, explicit manager feedback when
-present, plus the same-run candidate and wrapper) must fit `maximum_manifest_bytes`. Its default is 512,000
-bytes, configured through `WORKSTREAM_PROJECT_AGENT_MAX_MANIFEST_BYTES`; an oversized
-envelope is terminal invalid output. Every phase and correction must
-initially read every assigned original, including for blocked proposals. Only a
-read at offset zero returning text, or proving a genuinely empty original, counts
-as initial observation. Search supports revisiting content; it cannot establish
-initial observation. Earlier phases cannot supply later phases' observation.
-A review failure, cancellation, invalid result or exhausted budget does not publish
-the unchecked draft. This is a bounded phase of the same attempt, not a retry of
-an uncertain or terminal invocation. PM review and approval remain separate.
+The runtime drafts and reviews source-cited proposals within one bounded attempt.
+The shared contract, correction feedback and failure semantics are defined in
+[Guide Checker Specifications](guide-checker-specification.md). Initial inference
+receives only the assigned guide documents and task examples; an explicit manager
+correction may also supply the manager's written feedback. It never receives prior
+image selections or registry metadata. Manager approval remains separate.
 
-Specification failures identify bounded field paths and closed error codes.
-Rejected values and exception text are never returned. Registry configuration
-validation belongs to human image attachment at approval, not to setup inference.
-
-For a manager correction, the server validates predecessor and feedback custody
-against the saved project, guide, source, generation, finalization and hashes.
-These retained facts bind the request identity. Both phases receive only the
-manager's bounded written reason in `manager_feedback`, alongside the assigned
-guide material and task examples. Predecessor bodies, registry metadata and prior
-image selections remain excluded. Same-run draft
-review and bounded invalid-output feedback remain internal phases of that attempt.
-Retained results are never rewritten, and provider uncertainty prevents redispatch.
-
-The specification is validated as data: suggested method, inputs, ordered steps,
-pass conditions, work findings, positive and negative examples, implementation
-needs and inability outcomes must agree. These describe proposed behavior, not
-registered capabilities or runtime settings. New proposals use the strict
-`project_guide_check_specification.v1` contract. Original retained results remain
-private read-only evidence for existing locked policies; they cannot enter the
-current proposal approval or compilation path. Known invalid inference output receives at
-most two corrections in each drafting and review phase, using bounded field paths
-and error codes within the original shared execution budget. Exhaustion ends
-terminally; provider uncertainty is never retried as an output correction.
-Diagnostics never log guide or model content.
+`WORKSTREAM_PROJECT_AGENT_MAX_MANIFEST_BYTES` bounds the serialized inference
+inputs (default 512,000 bytes). An oversized envelope is invalid output; a failed
+review or uncertain provider outcome cannot publish an unchecked draft.
 
 The Celery worker captures runtime, model provider, model, API, instructions,
 timeout, document limits and tool budgets on the attempt before execution. Credentials stay in
 the Celery worker environment. `WORKSTREAM_PROJECT_AGENT_INSTRUCTIONS` and
 `WORKSTREAM_PROJECT_AGENT_INSTRUCTION_VERSION` configure trusted instructions;
 omitting the text selects the repository's canonical compilation instructions.
-The OpenAI Agents SDK uses explicit read/search function tools over verified
-originals; it no longer uploads guide files to OpenAI or creates hosted containers.
+Runtime adapters use bounded read/search tools over verified originals;
+PROJECTS does not use provider-hosted file stores or containers.
 Changing the inference provider does not change PROJECTS document custody or the
 proposal contract. The attempt records a validated adapter profile with the exact
 SDK versions and effective settings. `WORKSTREAM_PROJECT_AGENT_RUNTIME_OPTIONS`
-is a JSON object; unsupported options fail before dispatch. For this adapter,
+is a JSON object; unsupported options fail before dispatch. For `openai_agents_sdk`,
 `request_timeout_seconds` defaults to 300 and `maximum_retries` to 2. The shared
 `WORKSTREAM_PROJECT_AGENT_RUN_TIMEOUT_SECONDS` defaults to 1,800 seconds and
 includes retry waits. Only known safe transient failures are retried; uncertain
@@ -319,9 +285,9 @@ not a universal promise for every future runtime.
 
 The runtime adapter is selected through the shared typed adapter factory. The
 core grants only bounded document tools and validates the returned proposal;
-it does not depend on a vendor SDK's files, containers or session objects. Retained
-historical OpenAI resource IDs remain available solely for exact cleanup, using
-the original provider credential, without redispatching uncertain attempts.
+it does not depend on a vendor SDK's files, containers or session objects. See the [model operations guide](../operations_checker_models.md) for selected
+provider configuration and the [guide contract](../spec_project_guides.md) for
+proposal validation and approval boundaries.
 
 
 The connected Compose configuration includes Beat; start it before creating guide sources.

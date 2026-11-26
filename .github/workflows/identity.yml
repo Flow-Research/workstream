@@ -9,7 +9,6 @@ on:
       - 'mcp_server/workstream_mcp/adapters/keycloak.py'
       - 'scripts/identity_protocol_probe.py'
       - 'cli/**'
-      - 'scripts/test_identity_browser.py'
       - 'scripts/identity_browser_runner.py'
       - 'scripts/test_identity_browser_runner.py'
       - 'scripts/test_identity_provider.py'

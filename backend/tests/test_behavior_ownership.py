@@ -48,10 +48,10 @@ def test_repository_partition_is_exact_deterministic_and_digest_bound() -> None:
     assert ownership.build_partition(base_commit=value["protected_base_commit"]) == value
 
 
-def test_inventory_reuses_mutation_policy_eligibility() -> None:
+def test_inventory_uses_source_eligibility() -> None:
     targets = ownership.eligible_targets()
     assert targets == sorted(set(targets))
-    assert "backend/scripts/mutation_policy.py" in targets
+    assert "backend/scripts/behavior_source.py" in targets
     assert all(target.endswith(".py") and not target.endswith("/__init__.py") for target in targets)
 
 

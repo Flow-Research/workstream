@@ -5,6 +5,7 @@ This index lists the main Workstream documents. Start with the
 
 ## Start Here
 
+- [Protocol and Implementation](protocol-and-implementation.md)
 - [Developer Setup](engineering/developer-setup.md)
 - [Workstream Technical Reference](workstream_reference.md)
 - [Contribution Guide](../CONTRIBUTING.md)
@@ -43,6 +44,21 @@ This index lists the main Workstream documents. Start with the
 - [Risk Register](risk_register.md)
 - [Process Pattern Baseline](process_pattern_baseline.md)
 - [Glossary](glossary.md)
+
+## Engineering and deployment
+
+- [Hosted deployment](../deploy/hosted/README.md)
+- [Flow Identity accounts, API login and OAuth](../deploy/identity/README.md)
+- [MCP server](../mcp_server/README.md) and [CLI](../cli/README.md)
+- [Architecture boundary enforcement](engineering/repository_architecture_boundaries.md)
+- [Guide checker specifications](engineering/guide-checker-specification.md)
+- [Checker image development](engineering/checker-images.md)
+- [Observability](engineering/observability.md)
+- [External API qualification](engineering/external-api-drill.md)
+- [CLI release qualification](engineering/cli-release.md)
+- [Local environment](engineering/local-pilot.md) and [agent loop](engineering/local-agent-loop.md)
+- [Engineering records](engineering/commitrail.md)
+- [Reviewer selection](../.ci/reviewer-evidence/REVIEWER_MATRIX.md)
 
 ## Templates
 

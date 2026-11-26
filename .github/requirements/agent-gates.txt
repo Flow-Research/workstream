@@ -1,6 +1,6 @@
 # Complete, hash-pinned environment used by the lightweight agent gate.
-# JSON Schema versions align with backend/uv.lock; Markdown pins reuse
-# scripts/mutation-requirements.txt. No unpinned transitive dependencies.
+# JSON Schema versions align with backend/uv.lock. Markdown dependencies are
+# pinned here with hashes; there are no unpinned transitive dependencies.
 attrs==26.1.0 \
     --hash=sha256:c647aa4a12dfbad9333ca4e71fe62ddc36f4e63b2d260a37a8b83d2f043ac309
 jsonschema==4.26.0 \
