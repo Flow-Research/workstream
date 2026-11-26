@@ -400,8 +400,8 @@ is unchanged. Only the external image interprets the marker; it proves declared
 head-commit task association, not contributor identity or a human review in
 zero-count mode.
 
-See the [Garden guide](../../pilots/garden/guide.md) and
-[uploaded manager rules](../../pilots/garden/manager-rules.md). These source
+See the [Garden guide](../../examples/garden/guide.md) and
+[uploaded manager rules](../../examples/garden/manager-rules.md). These source
 fixtures and controlled image tests do not establish publication, deployment or
 a real GitHub merge/contribution drill. Register the exact new image and approve
 its separate phase attachments under a new guide/task context. Earlier records

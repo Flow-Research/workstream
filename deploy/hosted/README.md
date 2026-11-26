@@ -11,15 +11,16 @@ The checked-in [release environment template](release.env.example),
 [Compose wrapper](compose.py), [preflight](preflight.py), and
 [canonical Settings](../../backend/app/core/config.py) define the app topology.
 The runner unit/config examples live under
-[external_checkers/deploy](../../external_checkers/deploy). An operator must
-still build and pin exact images, provision both hosts, install private
-credentials, qualify storage and runner health, and verify the public journey.
-A render, image build or preflight alone is not deployment evidence.
+[external_checkers/deploy](../../external_checkers/deploy). Build and pin exact
+images, provision the app and runner hosts, install private credentials, and
+qualify S3 storage, runner health and the public journey on that deployment.
+The [capability ledger](../../docs/roadmap_status.md) and historical
+[hosted drill report](https://github.com/Flow-Research/workstream/blob/d713594ebf04a125917edb0ec981d380cf8047b4/docs/reports/garden-hosted-drill-2026-11-06.md)
+describe the scope of completed evidence.
 
 ## App host without KVM
 
-Hosted releases set `WORKSTREAM_HOSTED_PROFILE=app`. Supply the private runner
-address, port and certificate name through
+Hosted releases set `WORKSTREAM_HOSTED_PROFILE=app`. Set
 `WORKSTREAM_EXTERNAL_RUNNER_ENDPOINTS` with the reviewed private address, port,
 exact certificate DNS name and loaded config SHA-256 for each node. Supply the CA, client
 certificate and client key through the corresponding `*_FILE` selectors.
@@ -180,7 +181,7 @@ Beat, parser and model proxy receive none. Preflight reads file
 metadata only; the worker loader sets the adapter's existing private-key variable
 without evaluating or logging its contents. Never put a raw private key in the
 release environment. Follow the
-[GitHub App instructions](../../pilots/garden/github-app.md) for read-only permissions.
+[GitHub App instructions](../../examples/garden/github-app.md) for read-only permissions.
 
 `WORKSTREAM_MODEL_PROXY_ENABLED=true` starts one
 trusted model-proxy process independently of the setup runtime. Only that process

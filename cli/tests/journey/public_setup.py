@@ -7,9 +7,9 @@ import time
 from uuid import uuid4
 
 
-PILOT = Path(__file__).resolve().parents[3] / "pilots/terminal_systems/mvp"
-GUIDE = (PILOT / "guide.md").read_bytes()
-TASK = (PILOT / "task.md").read_text(encoding="utf-8")
+EXAMPLE = Path(__file__).resolve().parents[3] / "examples/incident_summary"
+GUIDE = (EXAMPLE / "guide.md").read_bytes()
+TASK = (EXAMPLE / "task.md").read_text(encoding="utf-8")
 
 
 def poll(client, token, arguments, predicate):

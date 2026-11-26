@@ -21,7 +21,7 @@ offers `Overview` and paged `Findings`. Contribution Evidence is an inert CLI
 handoff, not a fourth fetched collection. The project picker uses `me projects`;
 the separate system-reader `project list` does not feed this workbench.
 
-The workbench exposes deliberate exact-task Claim and Start. It exposes no
+The workbench exposes deliberate exact-task Claim. It exposes no
 preparation, Submission, Review, policy, management or payment mutation. Its only
 local file write is an explicitly confirmed, verified single-guide-document
 download. It does not poll, automatically retry, cache stale authority, store
@@ -31,11 +31,11 @@ supplied `WORKSTREAM_API_URL` and `WORKSTREAM_TOKEN`; there is no Workstream
 login. A profile read may have the backend's existing actor admission,
 last-seen and audit effects; reads are not unaudited server interactions.
 
-## Claim, start and uncertain outcomes
+## Claim and uncertain outcomes
 
 `a actions` is available on an exact freshly inspected Ready task with `ready`
-status, or Mine Overview with `claimed` task status. Assignment status on a Mine
-row is not task status and cannot select Start. Each action requires a caller-
+status. Claim assigns the contributor and immediately starts work; there is no
+separate Start action. Each action requires a caller-
 supplied UUID and confirmation of the exact actor/project/task/action/key and
 available locked terms. Explain and acknowledge saving the action, task and key
 outside this session before dispatch; the application cannot verify that external
@@ -48,7 +48,7 @@ opens explicit same-packet replay, with the same acknowledgment and confirmation
 Text entry,
 confirmation and pending-write states consume their own keys; navigation,
 refresh and repeated keys cannot duplicate or replace a pending POST. Claim
-never automatically starts work. Backend authorization remains fresh on every
+immediately starts work. Backend authorization remains fresh on every
 call, including exact replay. Validate selected-project and claim actor binding
 in addition to the typed client's task/receipt checks.
 

@@ -1,7 +1,9 @@
 # Workstream v0.1 Container View
 
-This is the v0.1 implementation architecture. It shows the deployable
-containers and internal runtime boundaries for the current build.
+This is the v0.1 container design. It includes planned UI surfaces as labelled
+below; it is not an inventory of deployed services. Use the
+[hosted deployment guide](../../deploy/hosted/README.md) for the supported
+service composition and the [capability ledger](../roadmap_status.md) for status.
 
 Future external origins, ERC-8004, ERC-8183, x402, OmniClaw, and USDC settlement are not active v0.1 dependencies. They remain later adapters behind the same records and interfaces.
 

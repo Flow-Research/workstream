@@ -56,7 +56,7 @@ focused security/architecture and QA/test-delta review must confirm fresh
 authority and the once-only proof are preserved. It fixes an existing recovery
 claim rather than adding a capability or changing roadmap exposure/dependencies.
 
-The [current report](../../docs/reports/terminal-systems-hosted-drill-2026-10-27.md)
+The [current report](https://github.com/Flow-Research/workstream/blob/d713594ebf04a125917edb0ec981d380cf8047b4/docs/reports/terminal-systems-hosted-drill-2026-10-27.md)
 is authoritative for exact deployment, proof and limitations. Wider ART same-job,
 UNKNOWN/lost-ack interruption and isolation scenarios remain explicitly unproven;
 live human review, paid fulfillment, real Flow issuer integration and general
@@ -326,7 +326,7 @@ with no separate push or pull request.
 
 ### Intent
 
-Execute and report the existing [#555 hosted-drill plan](https://github.com/Flow-Research/workstream/issues/555), consuming merged owners rather than designing another lifecycle or deployment system. The user authorized the current first automated journey; this record bounds its execution and reporting, not a new initiative. The result belongs in the [drill report](../../docs/reports/terminal-systems-hosted-drill-2026-10-27.md).
+Execute and report the existing [#555 hosted-drill plan](https://github.com/Flow-Research/workstream/issues/555), consuming merged owners rather than designing another lifecycle or deployment system. The user authorized the current first automated journey; this record bounds its execution and reporting, not a new initiative. The result belongs in the [drill report](https://github.com/Flow-Research/workstream/blob/d713594ebf04a125917edb0ec981d380cf8047b4/docs/reports/terminal-systems-hosted-drill-2026-10-27.md).
 
 ### Current behavior
 

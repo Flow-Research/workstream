@@ -1829,7 +1829,7 @@ and retains previous evidence. This is not an authorization-decision export.
 
 ### Canonical submission and checker history
 
-The [TASK history contract](spec_chunk_4_task_queue_assignment.md#retained-submission-and-checker-history)
+The [TASK history contract](spec_task_assignment.md#retained-submission-and-checker-history)
 defines eight exact read actions and distinct contributor/manager projections.
 AUTH stages a fresh matched-grant decision; the caller commits it only with a
 validated response. Authentication has no token-role compatibility projection or
@@ -1908,5 +1908,5 @@ PILOT-02B owns the distinct TASK actions `project.task.import` and
 require an active human covering Project Manager grant and exact native batch,
 selected source, received-byte identity and original manifest facts. They do
 not enlarge the ART action custody table or grant screen/release authority.
-The [atomic import contract](spec_chunk_4_task_queue_assignment.md#atomic-json-to-draft-import-contract)
+The [atomic import contract](spec_task_assignment.md#atomic-json-to-draft-import-contract)
 separates immutable original creation facts from current member states.

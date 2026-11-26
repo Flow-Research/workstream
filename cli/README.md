@@ -2203,12 +2203,12 @@ bootstrap and lifecycle transition remain explicit deployment prerequisites.
 The script never starts a native checker socket or silently falls back to one.
 
 Build the CLI and generate two exact registration inputs from the already
-installed [incident-summary pilot](../pilots/terminal_systems/mvp/README.md):
+installed [incident-summary pilot](../examples/incident_summary/README.md):
 
 ```sh
 (cd cli && go build -trimpath -o /tmp/workstream-journey-cli ./cmd/workstream)
 export WORKSTREAM_CLI_EXECUTABLE=/tmp/workstream-journey-cli
-python pilots/terminal_systems/mvp/registry.py \
+python examples/incident_summary/registry.py \
   --image-digest "$PINNED_INCIDENT_IMAGE_MANIFEST_SHA256" \
   --pre "$PRIVATE_ASSETS/registry-pre.json" \
   --post "$PRIVATE_ASSETS/registry-post.json"

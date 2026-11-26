@@ -107,10 +107,10 @@ from tests.test_checker_materialization import _limits
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
-PROJECT_MODEL = REPOSITORY_ROOT / "pilots/terminal_systems/checkers/post/model"
+PROJECT_MODEL = REPOSITORY_ROOT / "examples/terminal_systems/checkers/post/model"
 PACKAGE_ROOT = (
     REPOSITORY_ROOT
-    / "pilots/terminal_systems/checkers/post/qualification/runtime_package"
+    / "examples/terminal_systems/checkers/post/qualification/runtime_package"
 )
 sys.path.insert(0, str(PROJECT_MODEL))
 from trial_plan import (  # noqa: E402

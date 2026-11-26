@@ -88,5 +88,5 @@ Human focus: credential delivery remains private and out-of-band; email is not
 verified; API/MCP require bearer authentication and Workstream authorization;
 public TLS and localhost custody are independently proven.
 
-The [public qualification report](../../docs/reports/public-identity-access-2026-11-11.md)
+The [public qualification report](https://github.com/Flow-Research/workstream/blob/d713594ebf04a125917edb0ec981d380cf8047b4/docs/reports/public-identity-access-2026-11-11.md)
 records the deployed rotation, trusted TLS and selected CLI/MCP proof.

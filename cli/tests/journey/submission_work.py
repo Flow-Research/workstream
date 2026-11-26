@@ -11,20 +11,20 @@ from uuid import uuid4
 from task_work import create_claimed_task
 from source_audit import audit_accepted_source
 
-PILOT = Path(__file__).resolve().parents[3] / "pilots/terminal_systems/mvp"
+EXAMPLE = Path(__file__).resolve().parents[3] / "examples/incident_summary"
 
 
 def _package(client, kind):
     archive = client.directory / f"{kind}.zip"
     subprocess.run(
-        [sys.executable, str(PILOT / "package.py"), kind, str(archive)],
+        [sys.executable, str(EXAMPLE / "package.py"), kind, str(archive)],
         check=True,
         capture_output=True,
         text=True,
         timeout=30,
     )
     if archive.stat().st_size <= 0:
-        raise AssertionError("pilot package is empty")
+        raise AssertionError("incident summary package is empty")
     return archive
 
 

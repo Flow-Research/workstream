@@ -104,7 +104,7 @@ selection. Recovery does not initialize identities, migrate schema, repeat AWS
 proof or restart an already active native checker. The existing hosted Compose
 owner and a single systemd reconciliation unit own this behavior.
 
-The [private host qualification report](../../docs/reports/mvp-single-host-2026-11-11.md)
+The [private host qualification report](https://github.com/Flow-Research/workstream/blob/d713594ebf04a125917edb0ec981d380cf8047b4/docs/reports/mvp-single-host-2026-11-11.md)
 records the fresh public journey, exact contribution/award/replay and real
 post-reboot CLI/MCP evidence. The 2 vCPU/8 GiB host supports this bounded
 operator demo; public ingress and concurrent load remain outside the claim.

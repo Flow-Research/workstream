@@ -11360,7 +11360,7 @@ receipt, retained the two historical packet fields and digests, and finalized
 once using existing OUTBOX/T5 owners. A separate nonempty legacy command
 conflicted with the new minimal replay. The isolated database cleanup receipt
 was complete. The reproducible two-checkout drill now lives with the
-[submission qualification experiments](../../../experiments/pilot04_external_checker_runtime/submission_feedback_upgrade_drill.py).
+[submission qualification experiments](https://github.com/Flow-Research/workstream/blob/26dd6ec8e/experiments/pilot04_external_checker_runtime/submission_feedback_upgrade_drill.py).
 Run its test explicitly from a detached `0091` checkout with
 `WORKSTREAM_SUBMISSION_FEEDBACK_CANDIDATE` identifying the candidate backend,
 using the owned isolated PostgreSQL runner. It also checks the exact audit
@@ -12443,3 +12443,40 @@ read, the same-claim endpoint pin and the private bind rejection. Two hosted
 settings and render cases passed. These results use owned local fixtures and
 leave hardware latency, two-replica and two-node race, reload and drain
 qualification pending. No deployed service was changed.
+
+
+### Reconcile the maintained submission owners with PR722
+
+Intent. Merge current main `c6f34dd3d` into PR708 while preserving its deliberate
+removal of retired experiments, simulated hosted identity, unused actor
+classification, and duplicate documentation. Keep maintained examples at their
+new `examples/` paths. Do not restore the removed PILOT-04 harness or copy it
+under another name.
+
+Resolution. Remove the retired harness including this branch's exclusive
+observer, fault, client, and upgrade-drill additions, the four exclusive script
+suites, and the observer-only adapter test. Retain production single-PRE
+transport, cancellation, source-integrity, deadline and composition tests in
+`backend/tests/checkers/external/test_runtime.py`. Preserve separate API/runner
+deployment, current endpoint placement and notification owners. Move the
+incident-summary registry generator with its maintained example and update
+current CLI consumers. Historical evidence remains attached to its original
+commit, not a claim that its removed harness remains executable.
+
+Proof boundary. Prior harness receipts remain historical observations. Current
+native full-journey, PRE-launch fault, overlap and multi-node qualification
+remain incomplete and must use maintained product/client test owners and the
+current authentication boundary. This reconciliation does not waive any of
+those acceptance requirements or claim the failed native journey now passes.
+
+
+Reconciliation verification: all 34 retained runtime cases passed (28.45s),
+63 ownership/catalogue cases passed (17.17s), and 27 focused CLI cases passed
+(6.18s). The moved incident-summary checker passed 6 tests plus 2 subtests;
+CLI bootstrap import, authored rules and all three generated ZIPs passed.
+Markdown links and all four stale-document scans passed. Independent review
+confirmed that removing only the observer test from the pre-merge runtime file
+produces the reconciled file exactly; no other production test changed there.
+The staged source/config inventory has no old experiment/pilot imports or paths.
+The moved Garden fixture path was also corrected in its existing runtime test.
+These are merge regression results, not new deployed qualification.

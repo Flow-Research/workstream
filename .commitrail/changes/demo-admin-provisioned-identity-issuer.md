@@ -98,11 +98,11 @@ operator/client references. Prove the old tokens are denied by the new verifier.
 Do not erase retained Garden identity links, audit facts or contributions.
 Credential retirement is conditional on the new authorized path working.
 
-[Private hosted proof](../../docs/reports/demo-identity-hosted-2026-11-06.md) records real account, restart, verifier and Caddy transport evidence and the remaining public cutover boundary.
+[Private hosted proof](https://github.com/Flow-Research/workstream/blob/d713594ebf04a125917edb0ec981d380cf8047b4/docs/reports/demo-identity-hosted-2026-11-06.md) records real account, restart, verifier and Caddy transport evidence and the remaining public cutover boundary.
 
 The user additionally authorized private CLI/MCP testing while DNS is pending.
 The existing clients use real login tokens and the existing API without client
-core changes. The [bounded client proof](../../docs/reports/demo-identity-clients-2026-11-07.md)
+core changes. The [bounded client proof](https://github.com/Flow-Research/workstream/blob/d713594ebf04a125917edb0ec981d380cf8047b4/docs/reports/demo-identity-clients-2026-11-07.md)
 covers authority denials, one shared draft-task receipt, cross-client replay and
 revocation; it does not claim full client catalogue or native connector coverage.
 
@@ -143,7 +143,7 @@ compilation; actual deployed login, old-token rejection and credential retiremen
 Focused security/architecture, QA/test-delta, docs and CI review apply to affected
 boundaries. No native connector/OAuth claim or expansion to unrelated tools.
 
-The [active private cutover report](../../docs/reports/demo-identity-active-cutover-2026-11-07.md) records canonical release/AWS proof, retained-data checks, fresh login, unexpired old-token rejection, bounded credential retirement and actual CLI/MCP SDK calls against the normal API. Public DNS/TLS and native connector integration remain separate.
+The [active private cutover report](https://github.com/Flow-Research/workstream/blob/d713594ebf04a125917edb0ec981d380cf8047b4/docs/reports/demo-identity-active-cutover-2026-11-07.md) records canonical release/AWS proof, retained-data checks, fresh login, unexpired old-token rejection, bounded credential retirement and actual CLI/MCP SDK calls against the normal API. Public DNS/TLS and native connector integration remain separate.
 
 External review identified a shared database lock held during password hashing. Login and password replacement now read an owned snapshot, release the database lock during Argon2 work, and apply password changes through a subject/current-hash conditional update. A stale update cannot overwrite the winning change. The HTTP proxy-limit regression uses valid-format unknown addresses so normalization cannot bypass the throttle, and the issuer workflow includes its base Compose and environment inputs.
 
@@ -184,7 +184,7 @@ are weakened. The reviewed private topology shares API loopback; the wrapper
 stops MCP before API replacement, recreates it after success, and verifies the
 actual current container namespace.
 
-The [managed hosted qualification](../../docs/reports/managed-mcp-hosted-2026-11-07.md)
+The [managed hosted qualification](https://github.com/Flow-Research/workstream/blob/d713594ebf04a125917edb0ec981d380cf8047b4/docs/reports/managed-mcp-hosted-2026-11-07.md)
 records deployment, real Rust-account CLI/MCP calls, restart, malformed-PRE
 rejection/no Submission, verified admission, durable Garden POST, shared
 acceptance and a stable single 100 FLOW award across exact replay. Temporary
@@ -348,7 +348,7 @@ path.
 
 ### Completed resource qualification and fresh hosted proof
 
-The [managed hosted report](../../docs/reports/managed-mcp-hosted-2026-11-07.md#sealed-size-resource-qualification-and-fresh-hosted-journey)
+The [managed hosted report](https://github.com/Flow-Research/workstream/blob/d713594ebf04a125917edb0ec981d380cf8047b4/docs/reports/managed-mcp-hosted-2026-11-07.md#sealed-size-resource-qualification-and-fresh-hosted-journey)
 binds the exact backend, intake/native components and numeric receipt. Cold,
 maximum-size/path/inode, cancellation and capacity proofs passed. The small VM
 uses a 1 GiB data disk plus a separately charged 1 GiB overlay; qualified maximum

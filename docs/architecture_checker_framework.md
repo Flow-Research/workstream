@@ -1093,7 +1093,7 @@ Separate Project Manager reads expose internal result summaries and locked linea
 without raw metadata, provider locations, token claims or obsolete payment fields.
 Hidden result rows and internal-only routing results are never returned to contributors.
 No manual execution endpoint accompanies these reads. See the
-[TASK history contract](spec_chunk_4_task_queue_assignment.md#retained-submission-and-checker-history).
+[TASK history contract](spec_task_assignment.md#retained-submission-and-checker-history).
 
 
 ### Shared evaluation content capacity

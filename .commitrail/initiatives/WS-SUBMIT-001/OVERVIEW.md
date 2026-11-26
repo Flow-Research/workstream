@@ -48,8 +48,10 @@ work. Existing reward owners remain authoritative.
 
 The checked items have focused contract and PostgreSQL proof. The guide and
 assignment status changes are implemented and await the connected native proof.
-The dedicated queue topology, isolated scanner-to-T5 regression and native
-caller conversion are integrated. Combined native execution and deployed
+The dedicated queue topology and isolated scanner-to-T5 regression are integrated.
+PR722 removes the retired experimental native harness, including branch-only
+extensions. Its receipts remain historical; current native qualification must
+use maintained client/runtime owners and the current authentication boundary. Combined native execution and deployed
 qualification remain open. The managed-style adapter substitution passed through public
 ZIP acceptance, retained source custody, real T5 owner delivery and replay;
 it does not establish a deployed managed provider or broker-consumer proof.
@@ -118,7 +120,7 @@ journey. The remaining cleanup and verification requirements below still apply.
 | Order | Required outcome | Concrete finishing evidence |
 | --- | --- | --- |
 | 1 | Reproduce the connected proof on the deployed API | V14 passes real PRE/T5/POST, automatic acceptance, exact ZIP/Contribution export, rejection, replay and default review_pending with a local API and separate AWS runner. The actual deployed API/consumers remain to activate and prove. |
-| 2 | Finish affected qualification callers | Preparation API/materialization and the admission-only TASK writer are removed. Current qualification scripts use raw ZIP acceptance and dedicated finalization; remaining runtime fault vectors must use that same flow and preserve their evidence. |
+| 2 | Finish affected qualification callers | Preparation API/materialization and the admission-only TASK writer are removed. PR722 retires the experimental harness; complete current native journey and fault proof through maintained client/runtime owners using raw ZIP acceptance and dedicated finalization. Do not restore the old harness. |
 | 3 | Complete separate-runner integration and runtime/provider/resource qualification | Activate the prepared authenticated remote configuration on the app deployment; actual Smol one-session/isolation proof on runner infrastructure; representative maxima, cold paths, concurrency and timing measurements; applicable AWS exact-version/uncertain multipart proof. Portable/MinIO evidence is insufficient for these claims. |
 | 4 | Execute final full-system verification and close the acceptance matrix | Full backend lanes, CLI/MCP contracts and CI at the final head; every A01–A35 row linked to an executed, scope-matching result. Fix actual failures without weakening requirements. |
 | 5 | Reconcile configuration and delivery documentation | Resolve C01–C07 using measured/approved values; update affected roadmap/overview/index and local spreadsheet exports; preserve the distinction between implemented, exposed and deployed. |

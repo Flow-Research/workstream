@@ -234,7 +234,7 @@ project. Task import, screening and release follow the governed task flow.
 
 See the [checker architecture](../docs/architecture_checker_framework.md) for
 the canonical execution and lifecycle contract, and the
-[Terminal Systems onboarding inputs](../pilots/terminal_systems/README.md) for
+[Terminal Systems onboarding inputs](../examples/terminal_systems/README.md) for
 the current real-project preparation. Ordinary platform regression tests protect
 this execution boundary; their passing results do not establish a live project
 journey or the correctness of a project's checker images.
@@ -419,17 +419,17 @@ it only with an isolated runtime home; exact test machines and disks are removed
 
 ## Trusted submission intake
 
-ART uses the separate typed `trusted_submission_intake/unix_socket` capability.
-After task/project authorization, the upload request receives, hashes and seals
-the ZIP before allocating its size-bound trusted VM. Preparation binds the exact
-server-counted length; inspection rejects a substituted length before accepting
-archive bytes. The sealed artifact reader streams the exact bytes into that VM
-for canonical inspection and extraction. ART verifies every exported path,
-size, mode and hash in quota-owned scratch. The default PRE checker runs inside
-the trusted VM only after the selected PRE reservation commits. Cleanup must be
-acknowledged before project checker execution, including on a one-slot node.
-POST uses the same intake capability during authorized artifact download and
-retains its existing lease and material revalidation.
+For foreground acceptance, ART receives, hashes and seals the ZIP under the
+authorized task and assignment. The selected PRE session uses that exact
+source for canonical inspection, the default checks and the approved project
+checker. See the [submission execution contract](../docs/spec_submission_execution.md).
+
+POST materialization uses the separate typed `trusted_submission_intake`
+capability to inspect the retained source. Preparation binds the exact byte
+count, and inspection rejects a substituted length before accepting archive
+bytes. ART verifies every exported path, size, mode and hash in quota-owned
+scratch. It confirms closure of the intake lease before running the project
+POST checker.
 
 Build `intake/Dockerfile` from the repository root, pin its platform manifest and
 config, and provision it with the same cache command. Configure the node's
@@ -452,48 +452,30 @@ lease cannot spawn an unaccounted automatic image-seed VM. The pinned image
 archive cache remains available; existing seed data is not deleted. Qualification
 and latency measurements must use this same enforced cold-start behavior.
 
-Backend API and durable workers require all three settings:
+Set `WORKSTREAM_EXTERNAL_RUNNER_ENDPOINTS` and the private TLS configuration on
+the [app host](../deploy/hosted/README.md#app-host-without-kvm). Pin the intake
+image and config with `WORKSTREAM_ARTIFACT_INTAKE_IMAGE_DIGEST` and
+`WORKSTREAM_ARTIFACT_INTAKE_CONFIG_DIGEST`. The native service checks the
+selected loaded config digest and boot epoch on the connection that carries the
+request. The remote gateway forwards to its own private native Unix socket.
 
-- `WORKSTREAM_ARTIFACT_INTAKE_SERVICE_SOCKET`: private absolute Unix socket path.
-- `WORKSTREAM_ARTIFACT_INTAKE_IMAGE_DIGEST`: exact trusted platform manifest digest.
-- `WORKSTREAM_ARTIFACT_INTAKE_CONFIG_DIGEST`: exact image config digest.
+The original artifact deadline covers material transfer and preparation. On the
+selected node, only known pre-launch infrastructure failures permit up to three
+launch attempts with 100/200 ms backoff, within the original lease and after
+confirmed cleanup. Capacity stays reserved until the guardian confirms cleanup
+after cancellation, EOF or expiry. Each used VM is destroyed.
 
-The configured socket must serve Smol with the expected trusted image and default
-behavior. The hosted release uses the same native node socket for this typed capability
-and project execution; the protocols and privileged intake image remain separate.
-Missing or mismatched configuration fails closed. Local Docker-only mechanism
-configurations still cannot supply Smol intake readiness.
+The [maintained intake tests](../backend/tests/test_trusted_intake.py) exercise
+the adapter and ART boundary. The retired PILOT-04 harness and simulated issuer
+are outside current qualification. Qualify the public lifecycle on the intended
+deployment with its [Flow Identity provider](../deploy/identity/README.md#verification-scope)
+and approved project images.
 
-The original artifact deadline bounds upload and intake preparation together.
-Only known pre-launch infrastructure failures permit at most three preparation
-attempts, after confirmed cleanup, with 100/200 ms backoff inside that deadline.
-No retry occurs after archive bytes are accepted. Upload failure, cancellation,
-EOF or expiry closes the lease; capacity remains reserved until guardian cleanup.
-A lost cleanup acknowledgment is an infrastructure failure, never evidence that
-resources were released. Used VMs are destroyed; only capacity is reused.
+### Trusted root provisioning for single-session PRE
 
-The opt-in [intake proof](workstream-checker-service/tests/trusted_intake.py) uses
-backend dependencies and an isolated `maximum_parallel=1` node. It exercises
-retained ART inspection/export/grant custody, poisons host ZIP/default execution,
-and checks cancellation, abandoned uploads and idle expiry. Run with
-
-```bash
-PYTHONPATH=backend python external_checkers/workstream-checker-service/tests/trusted_intake.py \
-  --socket /absolute/node.sock --image sha256:... --config sha256:...
-```
-
-This matrix proves the adapter/ART boundary. The separate
-[public lifecycle drill](../experiments/pilot04_external_checker_runtime/README.md)
-connects the same node to API uploads and durable workers, including the public
-Operator retry and both governed policy branches. Its recorded Flow/inference
-fixtures do not certify production identity, live models or hosted deployment.
-
-### Trusted root provisioning for single-session PRE development
-
-`backend/scripts/checker_trusted_root.py` provisions a separate pinned Python
-root for the single-session PRE supervisor under development. This command and
-the guest bundle reader do not yet replace the current submission PRE flow or
-establish native runtime qualification.
+`backend/scripts/checker_trusted_root.py` provisions the pinned Python root
+used by the single-session PRE supervisor. Native runtime qualification covers
+the installed bundle and the exact approved profile, source bounds and image.
 
 The command constructs its root directly from the approved local image graph
 validated by the existing Smol cache provisioner. Docker-exported files are not
@@ -534,10 +516,9 @@ the spool and expanded root, then mount the root read-only before executing a
 trusted child. The PRE guest bootstrap calls this verifier. Host `execute_pre`
 dispatch now admits an explicitly configured profile, creates one journaled
 session and streams the root and ZIP into it with bounded buffers. Its invocation
-response includes runtime pins, timing and cleanup custody. Python adapter and
-CHECKERS retention of that envelope, the complete qualification/conformance
-contract, and native isolation proof remain required before end-to-end use.
-This library alone does not authorize project execution.
+response includes runtime pins, timing and cleanup custody. The typed Python
+adapter and CHECKERS validate and retain the envelope for the selected source.
+Native isolation and the public lifecycle require proof on the intended node.
 Cleanup restores owned directory permissions after late staging failures; an
 underlying filesystem cleanup error is propagated and cannot establish released
 capacity. Relative and absolute symlink targets that traverse above the root are
@@ -557,7 +538,7 @@ WORKSTREAM_PRE_WORKER_PYTHON="$PWD/backend/.venv/bin/python" \
 
 This test runs the real Python worker on ZIP bytes through the Rust supervisor's
 socket dialogue and validates the received completion with Python's typed owner
-contract. The project result is a protocol sentinel; this does not qualify native
-mounts, cgroups, root images or one-VM execution. The checker CI job requires this
-test and rejects empty selection or ignored execution. The Cargo feature affects
-only test code and introduces no runtime entry point.
+contract. The project result is a protocol sentinel. Native mounts, cgroups,
+root images and one-VM execution require separate qualification. The checker CI
+job requires this test and rejects empty selection or ignored execution. The
+Cargo feature affects only test code.

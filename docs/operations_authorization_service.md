@@ -1399,7 +1399,7 @@ remain deferred; this handler releases work for supported authority loss only.
 
 ### Canonical submission and checker history
 
-The [TASK history contract](spec_chunk_4_task_queue_assignment.md#retained-submission-and-checker-history)
+The [TASK history contract](spec_task_assignment.md#retained-submission-and-checker-history)
 defines eight exact read actions and distinct contributor/manager projections.
 AUTH stages a fresh matched-grant decision; the caller commits it only with a
 validated response. Authentication has no token-role compatibility projection or

@@ -47,7 +47,7 @@ Project guide activation requires the guide plus its required policy context bef
 
 CP07 delivers this hidden activation/binding contract, and AUTH-12H supplies
 explicit live exact-project manager authority. Composition without that adapter
-still denies; AUTH-18 exposes the canonical operation through public HTTP. See the [current guide contract](spec_chunk_3_project_guide_foundation.md).
+still denies; AUTH-18 exposes the canonical operation through public HTTP. See the [current guide contract](spec_project_guides.md).
 
 The Workstream-derived submission artifact policy defines project-level intake
 rules. Project owners provide open-ended project material and business terms.

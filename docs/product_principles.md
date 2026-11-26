@@ -36,7 +36,9 @@ Every project has its own guide, quality bar, submission artifact policy,
 checker policy, review policy, revision policy, and independently published
 contribution policy.
 
-Workstream combines the approved submission artifact policy with non-bypassable default artifact rules and generates the pre-submit checker policy.
+Workstream applies its non-bypassable PRE default separately from the project's
+explicitly approved external PRE and POST image selections. Optional setup
+assistance proposes source-cited requirements; it never selects images.
 
 The platform does not rely on memory or chat messages to enforce rules. If a
 rule matters, it belongs in the project guide, submission artifact policy,
@@ -56,7 +58,7 @@ Projects may differ by domain, language, task format, or review style. The lifec
 
 ```text
 Guide -> Task -> Pre-Submission Intake -> Submission -> Post-Submission Evaluation
--> Review -> Revision/FinalAcceptance
+-> Policy-Governed Review/Revision or Automatic FinalAcceptance
 -> Contribution -> Conditional Compensation Award/Fulfillment
 -> deferred reputation projection
 ```
@@ -69,7 +71,8 @@ requirements and protects reviewer time. Neither stage decides final acceptance.
 These stages are not synonyms for deterministic execution: a supported model
 evaluator is distinct from deterministic policy compilation and intake rules.
 
-Critical- and high-severity checker failures block review. Medium and low severity issues are visible to reviewers and can influence decisions.
+Required failures and warnings follow the locked policy. Checker findings are
+evidence for routing, not checker-owned acceptance.
 
 Blocking pre-submit checker failures block submission creation before a submission version exists.
 
@@ -77,7 +80,10 @@ Blocking pre-submit checker failures block submission creation before a submissi
 
 Automated checks catch structural, formatting, packaging, and basic quality problems. Human reviewers judge whether the work actually satisfies the task and project guide.
 
-The system improves reviewer judgment. It does not pretend to replace it.
+Human review is required by default. If the locked ReviewPolicy explicitly
+disables it, passing required checks reaches shared authorized FinalAcceptance
+and a submitter contribution, with no fabricated Review or reviewer contribution.
+Public human-review execution remains governed by the capability ledger.
 
 ## 5A. Human Owners Are Accountable For Agent-Assisted Work
 
@@ -185,3 +191,9 @@ declared limits.
 Canonical records remain available during an automation stop. Operations fall
 back to manual queueing and authorized review instead of failing closed around
 an unavailable or unsafe model.
+
+## 15. Protect Private Source Material
+
+Project guides and examples must not copy confidential client materials or
+private platform data without authorization. Use owned or authorized source
+material; evidence retention does not grant new permission to disclose it.

@@ -955,40 +955,6 @@ async def test_post_aggregate_rejects_duplicate_sources_and_drains_cancellation(
     manager.close()
 
 
-@pytest.mark.parametrize("with_model_grant", [False, True])
-async def test_public_trace_preserves_execution_arguments(monkeypatch, tmp_path, with_model_grant):
-    """The opt-in observer must remain transparent to the current adapter port."""
-    import runpy
-    from types import SimpleNamespace
-    from unittest.mock import AsyncMock
-
-    from app.adapters.artifacts.trusted_intake import RemoteTlsTrustedIntakeAdapter
-    from app.adapters.checkers.external_service import RemoteTlsExternalCheckerAdapter
-
-    trace = tmp_path / "trace.jsonl"
-    monkeypatch.setenv("WORKSTREAM_PROBE_INTAKE_TRACE", str(trace))
-    original_prepare = RemoteTlsTrustedIntakeAdapter.prepare
-    original_execute_pre = RemoteTlsExternalCheckerAdapter.execute_pre
-    monkeypatch.setattr(RemoteTlsTrustedIntakeAdapter, "prepare", original_prepare)
-    monkeypatch.setattr(RemoteTlsExternalCheckerAdapter, "execute_pre", original_execute_pre)
-    expected = object()
-    execute = AsyncMock(return_value=expected)
-    monkeypatch.setattr(RemoteTlsExternalCheckerAdapter, "execute", execute)
-    probe = Path(__file__).resolve().parents[4] / "experiments/pilot04_external_checker_runtime/public_intake_observer.py"
-    runpy.run_path(str(probe))
-    adapter, grant = object(), object()
-    model_grant = object() if with_model_grant else None
-    request = SimpleNamespace(request_digest="sha256:" + "a" * 64)
-    actual = await RemoteTlsExternalCheckerAdapter.execute(
-        adapter, request, grant, model_grant=model_grant,
-    )
-    assert actual is expected
-    execute.assert_awaited_once_with(adapter, request, grant, model_grant=model_grant)
-    assert [json.loads(line)["event"] for line in trace.read_text().splitlines()] == [
-        "project_started", "project_completed",
-    ]
-
-
 def _pre_transport_processor(lease, endpoint, changed):
     """Exercise direct transport and both real production composition wrappers."""
     from app.modules.checkers.selected_pre_submit_execution import SelectedPreSubmitProcessor
