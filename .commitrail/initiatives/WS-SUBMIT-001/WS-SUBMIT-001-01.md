@@ -13327,3 +13327,6 @@ the unused alternate builder was removed. Focused fixtures that exercise
 Operator recovery set an explicit exhausted allowance while the automatic
 retry regression uses the full production allowance. The MCP submission-create
 snapshot now retains the already deployed known PRE timeout response.
+Automatic-failure finalization also takes the exact TASK replay scope before
+CHECKERS ownership. This preserves lock ordering even for direct executor
+composition and checks active successor scope only on new retry creation.

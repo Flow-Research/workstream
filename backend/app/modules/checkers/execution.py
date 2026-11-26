@@ -318,6 +318,11 @@ class PostSubmissionExecutor:
         ):
             raise CheckerExecutionUnavailable("checker_material_custody_unavailable")
         async with self._sessions() as session, session.begin():
+            retry_tasks = self._retry_tasks(session)
+            if result.outcome == "infrastructure_failed":
+                # Retain TASK before acquiring the current CHECKERS run. This
+                # historical scope still permits exact terminal replay.
+                await retry_tasks.lock_retry_replay_scope(request)
             human = await self._review_modes(session).observe_review_mode(
                 request.project_id, request.expected_context.review_policy_id,
             )
@@ -399,6 +404,6 @@ class PostSubmissionExecutor:
                 run.status = result.outcome
                 await session.flush()
                 if result.outcome == "infrastructure_failed":
-                    coordinator = EvaluationCoordinator(session, tasks=self._retry_tasks(session), events=self._outbox(session))
+                    coordinator = EvaluationCoordinator(session, tasks=retry_tasks, events=self._outbox(session))
                     await coordinator.schedule_automatic_retry(run)
                 return result
