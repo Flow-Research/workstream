@@ -880,6 +880,8 @@ OUTBOX_IDENTITY_REMOVED_TARGETS = frozenset({
 })
 V01_BASELINE_REMOVED_TARGETS = frozenset(
     {
+        "backend/app/modules/actors/legacy_classification.py",
+        "backend/scripts/legacy_actor_classification.py",
         "backend/app/modules/actors/service_identity_migration.py",
         "backend/scripts/service_actor_identity_mapping.py",
     }

@@ -85,7 +85,6 @@ SHARED_FOUNDATION_MODULES = (
     "tests/authorization/setup_finalization/test_replay.py",
     "tests/authorization/setup_finalization/test_resource_context.py",
     "tests/authorization/setup_finalization/test_structure.py",
-    "tests/test_actor_legacy_classification.py",
     "tests/test_agent_runtime.py",
     "tests/test_omnicore_sdk_unavailable.py",
     "tests/test_guide_compilation_draft.py",

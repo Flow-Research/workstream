@@ -486,10 +486,6 @@
     },
     {
       "group": "shared",
-      "target": "backend/app/modules/actors/legacy_classification.py"
-    },
-    {
-      "group": "shared",
       "target": "backend/app/modules/actors/models.py"
     },
     {
@@ -2502,10 +2498,6 @@
     },
     {
       "group": "shared",
-      "target": "backend/scripts/legacy_actor_classification.py"
-    },
-    {
-      "group": "shared",
       "target": "backend/scripts/local_flow_tokens.py"
     },
     {
@@ -2569,7 +2561,7 @@
       "target": "backend/scripts/validate_test_lane_evidence.py"
     }
   ],
-  "authority_digest": "af687beaaa56d7b3f72fd3f92cf70af9e5df5f721cc36f7212bceb47d1add30d",
+  "authority_digest": "e677be6a5335703e8e255bdba0a8929edea649881e6ac20d5e838fb2fd9bfef7",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }
