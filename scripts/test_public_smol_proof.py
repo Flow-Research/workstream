@@ -373,8 +373,9 @@ class PrivateFaultControls(unittest.TestCase):
         owner.chmod(0o600)
         config_path = self.root / 'service.json'
         config = {'socket_path': str(socket_root / 'checker.sock'), 'smol': {
-            'binary': str(smol), 'guest_binary': str(guest), 'maximum_parallel': 1,
-            'cgroup_root': '/sys/fs/cgroup/system.slice/ws-proof.service'}}
+            'binary': str(smol), 'guest_binary': str(guest), 'maximum_parallel': 2,
+            'cgroup_root': '/sys/fs/cgroup/system.slice/ws-proof.service'},
+            'pre': {'reserved_capacity': {'slots': 1, 'memory_bytes': 3 << 30, 'storage_bytes': 5 << 30}}}
         config_path.write_text(json.dumps(config))
         config_path.chmod(0o600)
         manifest = {'unit': 'ws-proof.service', 'config': str(config_path),
@@ -409,14 +410,14 @@ class PrivateFaultControls(unittest.TestCase):
             with self.assertRaises(ValueError):
                 validate_node(config_path, config, 'ws-proof.service', manifest_path)
             argv[1] = str(config_path)
-            config['smol']['maximum_parallel'] = 2
+            config['smol']['maximum_parallel'] = 1
             config_path.write_text(json.dumps(config))
             manifest['node_config'] = config
             manifest['config_sha256'] = digest(config_path)
             manifest_path.write_text(json.dumps(manifest))
-            with self.assertRaisesRegex(ValueError, 'one-slot'):
+            with self.assertRaisesRegex(ValueError, 'one slot per phase'):
                 validate_node(config_path, config, 'ws-proof.service', manifest_path)
-            config['smol']['maximum_parallel'] = 1
+            config['smol']['maximum_parallel'] = 2
             config_path.write_text(json.dumps(config))
             manifest['node_config'] = config
             manifest['config_sha256'] = digest(config_path)

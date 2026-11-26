@@ -285,7 +285,7 @@ pub(crate) fn serve(
     let deadline = Instant::now() + Duration::from_millis(request.deadline_ms);
     // Intake explicitly allocates a separate 1 GiB writable root overlay.
     let capacity = resource_capacity(resources, Some(1))?;
-    let reservation = match reserve_capacity(config, capacity, None) {
+    let reservation = match reserve_capacity(config, Phase::Background, capacity, None) {
         Ok(value) => value,
         Err(_) => {
             return send(
@@ -926,15 +926,17 @@ mod tests {
         assert_eq!(intake.storage_bytes, data_only.storage_bytes + GIB);
         assert_eq!(intake.slots, data_only.slots);
         assert_eq!(intake.memory_bytes, data_only.memory_bytes);
-        let insufficient = Arc::new(Admission::new(data_only, "a".repeat(64)).unwrap());
-        assert!(insufficient.reserve(intake, None).is_err());
-        let node = Arc::new(Admission::new(intake, "b".repeat(64)).unwrap());
-        let reservation = node.reserve(intake, None).unwrap();
+        let insufficient = Arc::new(Admission::new(data_only, None, "a".repeat(64)).unwrap());
+        assert!(insufficient
+            .reserve(Phase::Background, intake, None)
+            .is_err());
+        let node = Arc::new(Admission::new(intake, None, "b".repeat(64)).unwrap());
+        let reservation = node.reserve(Phase::Background, intake, None).unwrap();
         assert_eq!(node.reserved_storage_bytes().unwrap(), intake.storage_bytes);
-        assert!(node.reserve(intake, None).is_err());
+        assert!(node.reserve(Phase::Background, intake, None).is_err());
         drop(reservation);
         assert_eq!(node.reserved_storage_bytes().unwrap(), 0);
-        assert!(node.reserve(intake, None).is_ok());
+        assert!(node.reserve(Phase::Background, intake, None).is_ok());
         assert!(resource_capacity(
             Resources {
                 storage_gib: u64::MAX,

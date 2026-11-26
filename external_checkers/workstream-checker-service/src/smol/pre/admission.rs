@@ -12,8 +12,44 @@ pub(crate) struct Config {
     pub root: RootDescriptor,
     pub root_limits: RootLimits,
     pub limits: PreBootstrapLimits,
+    pub reserved_capacity: Capacity,
     pub smol_binary_sha256: String,
     pub guest_sha256: String,
+}
+
+impl Config {
+    pub(in crate::smol) fn node_reserve(&self) -> Result<Capacity, String> {
+        let (resources, overlay_gib) = self.resources(self.limits.maximum_source_bytes)?;
+        let required = resource_capacity(resources, Some(overlay_gib))?;
+        if !required.fits(self.reserved_capacity) {
+            return Err("PRE reserve cannot fit the configured profile".into());
+        }
+        Ok(self.reserved_capacity)
+    }
+
+    fn resources(&self, source_bytes: u64) -> Result<(Resources, u64), String> {
+        let limits = &self.limits;
+        let storage = sum([
+            self.root.bundle_byte_count,
+            self.root.expanded_bytes,
+            source_bytes,
+            number(&self.profile["archive_limits"], "maximum_expanded_bytes")?,
+            limits.worker_scratch_bytes,
+            limits.project_scratch_bytes,
+            limits.filesystem_overhead_bytes,
+        ])?;
+        if sum([storage, limits.overlay_bytes])? > number(&self.profile, "temporary_disk_bytes")? {
+            return Err("PRE disk exceeds profile".into());
+        }
+        const GIB: u64 = 1 << 30;
+        let resources = Resources {
+            cpu_millis: number(&self.profile, "cpu_millis")?,
+            memory_bytes: number(&self.profile, "memory_bytes")?,
+            pids: number(&self.profile, "maximum_processes")?,
+            storage_gib: storage.div_ceil(GIB),
+        };
+        Ok((resources, limits.overlay_bytes.div_ceil(GIB)))
+    }
 }
 
 #[derive(Deserialize)]
@@ -414,32 +450,7 @@ pub(super) fn prepare<'a>(config: &'a ServiceConfig, bytes: &[u8]) -> Result<Pre
     {
         return Err("PRE root custody differs".into());
     }
-    let storage = sum([
-        configured.root.bundle_byte_count,
-        configured.root.expanded_bytes,
-        number(source, "raw_byte_count")?,
-        number(&profile["archive_limits"], "maximum_expanded_bytes")?,
-        limits.worker_scratch_bytes,
-        limits.project_scratch_bytes,
-        limits.filesystem_overhead_bytes,
-    ])?;
-    if sum([storage, limits.overlay_bytes])? > number(profile, "temporary_disk_bytes")? {
-        return Err("PRE disk exceeds profile".into());
-    }
-    let gib = |bytes: u64| {
-        bytes
-            .checked_add((1 << 30) - 1)
-            .map(|n| n / (1 << 30))
-            .ok_or("PRE capacity overflow")
-    };
-    let resources = Resources {
-        cpu_millis: number(profile, "cpu_millis")?,
-        memory_bytes: number(profile, "memory_bytes")?,
-        pids: number(profile, "maximum_processes")?,
-        storage_gib: gib(storage)?,
-    };
-    let overlay_gib = gib(limits.overlay_bytes)?;
-    resource_capacity(resources, Some(overlay_gib))?;
+    let (resources, overlay_gib) = configured.resources(number(source, "raw_byte_count")?)?;
     let invocation = Invocation {
         operation: Operation::ExecutePre,
         run_id: text(reservation, "attempt_id")?.into(),

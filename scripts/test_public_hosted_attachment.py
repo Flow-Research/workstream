@@ -46,7 +46,10 @@ class PublicJourneyWorkerCustody(unittest.TestCase):
         from experiments.pilot04_external_checker_runtime import run_public_journey_probe as probe
 
         source, binary = 'b' * 40, 'sha256:' + 'c' * 64
-        configuration = {"smol": {"binary": "/runner/smolvm", "binary_sha256": binary}}
+        configuration = {
+            "smol": {"binary": "/runner/smolvm", "binary_sha256": binary, "maximum_parallel": 2},
+            "pre": {"reserved_capacity": {"slots": 1, "memory_bytes": 2684354560, "storage_bytes": 5368709120}},
+        }
         encoded = json.dumps(configuration).encode()
         custody = {
             'source_tree': source,
@@ -65,6 +68,9 @@ class PublicJourneyWorkerCustody(unittest.TestCase):
             self.assertFalse((root / 'node-control').exists())
             config.write_bytes(encoded + b'\n')
             with self.assertRaisesRegex(RuntimeError, 'separate runner configuration differs'):
+                probe._read_runner_configuration(config, root, custody, separate_runner=True)
+            config.write_text(json.dumps({"smol": configuration["smol"]}))
+            with self.assertRaisesRegex(RuntimeError, 'requires an explicit PRE reservation'):
                 probe._read_runner_configuration(config, root, custody, separate_runner=True)
 
     def test_cleanup_child_alone_receives_a_private_distinct_principal(self):

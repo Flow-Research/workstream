@@ -45,6 +45,7 @@ pub(crate) fn serve(
     let deadline = prepared.deadline;
     let _reservation = reserve_capacity(
         config,
+        Phase::Pre,
         resource_capacity(prepared.resources, Some(prepared.overlay_gib))?,
         None,
     )?;

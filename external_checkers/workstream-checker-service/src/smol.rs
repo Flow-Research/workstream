@@ -28,7 +28,7 @@ pub(super) fn validate_child_home_root(root: &Path) -> Result<(), String> {
 }
 
 mod admission;
-pub(crate) use admission::{Admission, Capacity, Reservation};
+pub(crate) use admission::{Admission, Capacity, Phase, Reservation};
 mod intake;
 pub(crate) mod trial;
 mod trial_io;
@@ -131,7 +131,12 @@ fn reserve_resources(
     config: &ServiceConfig,
     resources: Resources,
 ) -> Result<Arc<Reservation>, String> {
-    reserve_capacity(config, resource_capacity(resources, None)?, None)
+    reserve_capacity(
+        config,
+        Phase::Background,
+        resource_capacity(resources, None)?,
+        None,
+    )
 }
 pub(super) fn reserve_invocation(
     config: &ServiceConfig,
@@ -140,6 +145,7 @@ pub(super) fn reserve_invocation(
 ) -> Result<Arc<Reservation>, String> {
     reserve_capacity(
         config,
+        Phase::Background,
         resource_capacity(request.into(), None)?,
         Some(child),
     )
@@ -185,6 +191,7 @@ pub(crate) fn quarantine(config: &ServiceConfig) {
 }
 fn reserve_capacity(
     config: &ServiceConfig,
+    phase: Phase,
     outer: Capacity,
     child: Option<Capacity>,
 ) -> Result<Arc<Reservation>, String> {
@@ -192,10 +199,10 @@ fn reserve_capacity(
         .smol_admission
         .as_ref()
         .ok_or("admission unavailable")?;
-    let reservation = admission.reserve(outer, child)?;
+    let reservation = admission.reserve(phase, outer, child)?;
     // Reserve atomically first, then recheck physical space. A failure drops the
     // complete reservation; no VM or provider operation has begun.
-    let required = admission.reserved_storage_bytes()?;
+    let required = admission.required_storage_bytes(phase)?;
     if available_storage(settings(config)?)? < required {
         return Err("node storage unavailable".into());
     }
@@ -1331,12 +1338,18 @@ where
 {
     let maximum = settings(config)?.maximum_parallel;
     let mut config = config.clone();
+    let pre_reserve = config
+        .pre
+        .as_ref()
+        .map(PreConfig::node_reserve)
+        .transpose()?;
     config.smol_admission = Some(Arc::new(Admission::new(
         Capacity {
             slots: maximum,
             memory_bytes: memory_capacity(settings(&config)?)? as u64,
             storage_bytes: settings(&config)?.maximum_storage_bytes,
         },
+        pre_reserve,
         random_token()?,
     )?));
     let config = Arc::new(config);

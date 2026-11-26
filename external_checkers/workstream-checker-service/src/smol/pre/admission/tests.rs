@@ -37,6 +37,11 @@ pub(crate) fn fixture() -> (PathBuf, ServiceConfig, Value) {
     config.pre = Some(Config {
         profile_sha256: hash(&profile).unwrap(),
         profile,
+        reserved_capacity: Capacity {
+            slots: 1,
+            memory_bytes: (2 << 30) + 512 * 1024 * 1024,
+            storage_bytes: 2 << 30,
+        },
         root_bundle: root.join("root.bundle"),
         root: RootDescriptor {
             schema_version: "workstream.trusted_root.v1".into(),
@@ -92,6 +97,22 @@ pub(crate) fn fixture() -> (PathBuf, ServiceConfig, Value) {
     fs::write(root.join("root.bundle"), vec![0_u8; 1024]).unwrap();
     fs::set_permissions(root.join("root.bundle"), fs::Permissions::from_mode(0o644)).unwrap();
     (root, config, header)
+}
+
+#[test]
+fn node_reserve_covers_maximum_configured_pre_and_rounds_overlay_separately() {
+    let (root, mut config, _) = fixture();
+    let pre = config.pre.as_mut().unwrap();
+    let reserve = pre.node_reserve().unwrap();
+    pre.reserved_capacity.memory_bytes -= 1;
+    assert!(pre.node_reserve().is_err());
+    pre.reserved_capacity = reserve;
+    pre.reserved_capacity.storage_bytes -= 1;
+    assert!(pre.node_reserve().is_err());
+    pre.reserved_capacity = reserve;
+    pre.limits.maximum_source_bytes += 1 << 30;
+    assert!(pre.node_reserve().is_err());
+    fs::remove_dir_all(root).unwrap();
 }
 
 #[test]

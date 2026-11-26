@@ -606,7 +606,7 @@ fn infrastructure(code: TrialRelayFailure) -> SandboxFailure {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::smol::{Admission, Capacity};
+    use crate::smol::{Admission, Capacity, Phase};
     use crate::trial_engine::SandboxEnforcementOverruns;
 
     struct NoopRuntime;
@@ -681,12 +681,14 @@ mod tests {
                     memory_bytes: 2 * 1024 * 1024,
                     storage_bytes: 2 * 1024 * 1024,
                 },
+                None,
                 "epoch".into(),
             )
             .unwrap(),
         );
         let reservation = admission
             .reserve(
+                Phase::Background,
                 Capacity {
                     slots: 1,
                     memory_bytes: 1024,

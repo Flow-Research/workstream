@@ -315,6 +315,20 @@ For this engine omit `docker_binary`, and configure `smol` with absolute `binary
 and required positive `maximum_parallel` and `maximum_storage_bytes`. Install the verified Smol release bundle together and
 keep it operator-controlled. Build `workstream-checker-guest` for
 `x86_64-unknown-linux-musl`; the node and bootstrap must come from the same source.
+
+When the node enables `pre`, set `pre.reserved_capacity` with positive `slots`,
+`memory_bytes`, and `storage_bytes`. The reserve must fit the largest PRE shape
+permitted by the configured source limit, root and profile. The check includes
+host memory overhead and separately rounded VM and overlay disk. The remaining
+node capacity must have positive slots, memory, and storage for POST and
+trusted ART preparation. The node derives its total allocable memory from
+the delegated cgroup and checks actual disk space before creating each VM.
+Background reservations leave the configured PRE disk budget available while
+PRE is idle. POST with a trial consumes capacity for the outer VM and one
+sequential child at their combined peak. Per-VM CPU ceilings still share the
+parent cgroup limit. Size and measure concurrency on the chosen host before
+publishing an interactive latency envelope.
+
 Each existing cache entry additionally has `smol.archive`,
 `smol.archive_sha256` and `smol.image_config`. The
 [cache preparation command](../backend/scripts/checker_smol_cache.py) verifies an already local

@@ -99,8 +99,9 @@ The command below describes the operator-local fault harness, not a qualified
 two-host deployment. Production API/workers must stay on an app-only host and
 KVM on a separate Linux x86-64 runner. Remote fault transport is still missing,
 as detailed below. Use disposable PostgreSQL, MinIO and Redis. Provision the [Smol node](../../external_checkers/README.md#smol-microvm-engine)
-with `maximum_parallel=1`, the pinned trusted intake image and this directory's
-project fixture image. Both are operator-provisioned cache entries; no registry
+with two total slots and one expressly reserved for PRE. Use the pinned trusted
+intake image and this directory's project fixture image. Both are
+operator-provisioned cache entries. No registry
 or Docker socket is needed by the API/worker or running guests. Build the Rust
 service and native guest from this checkout. The probe takes the exact node
 configuration and checks both typed adapter identities before starting services.

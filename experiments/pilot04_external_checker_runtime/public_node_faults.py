@@ -371,9 +371,14 @@ def write_node_config(config_path, data, identity, *, hosted_runtime=False):
             raise ValueError('node config custody changed during write')
 
 
+def validate_fault_capacity(config):
+    pre_slots = config.get('pre', {}).get('reserved_capacity', {}).get('slots')
+    if pre_slots != 1 or config['smol'].get('maximum_parallel') != 2:
+        raise ValueError('public fault proof requires one slot per phase')
+
+
 def validate_node(config_path, config, unit, manifest_path, *, hosted_runtime=False):
-    if config['smol'].get('maximum_parallel') != 1:
-        raise ValueError('public proof requires a one-slot node')
+    validate_fault_capacity(config)
     original, _ = _read_config(config_path, hosted_runtime)
     if json.loads(original) != config:
         raise ValueError('node config changed during validation')

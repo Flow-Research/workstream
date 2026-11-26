@@ -11921,3 +11921,53 @@ removed; the running parser was unchanged. The release recipe now uses this
 narrow cache scope. Original verifier and counterexample tests are restored
 exactly; there is no new bytecode admission or source-inventory exception.
 Actual recipe image build and verification remain required.
+
+### A29 independent runner admission
+
+Intent. A selected POST invocation and its reserved trial can occupy the
+entire current runtime budget before a foreground PRE arrives. Both phases
+already use the same authoritative Smol node admission owner. Keep that owner
+and protect a bounded PRE budget inside the existing total node capacity.
+
+Allowed scope. `external_checkers/workstream-checker-service/src/smol.rs`,
+`src/smol/admission.rs`, `src/smol/pre.rs`, `src/smol/pre/admission.rs`, and
+`src/smol/intake.rs` under the same service own partitioned reservation and its
+callers. Update their affected Rust fixtures, including `src/trial_smol.rs` and
+`src/smol/trial.rs`, the operational admission documentation in
+`external_checkers/README.md`, the existing public Smol proof and fault owner in
+`experiments/pilot04_external_checker_runtime/` with their focused
+`scripts/test_public_smol_proof.py` and `scripts/test_public_hosted_attachment.py`
+tests, and this record. The isolated local
+fault harness keeps one slot for each phase. The separate-runner proof keeps
+its independent config and executable custody check.
+
+Acceptance. A PRE-enabled node explicitly reserves slots, RAM, and disk for
+PRE. Startup rejects a reserve smaller than one maximum configured PRE or a
+reserve without a positive POST complement. Trusted ART intake uses the same
+background budget as POST. An outer POST and its sequential child reserve
+their combined peak atomically. Verify PRE can reserve beside saturated POST,
+release is exact, physical headroom protects PRE storage, and unsettled
+cleanup still closes the entire node until existing reconciliation succeeds.
+Existing per-VM CPU ceilings, deadlines, and lease/journal ownership stay in
+force. This work changes source and focused fixtures. Separate-runner overlap,
+foreground latency under contention, and deployed configuration still require
+measured qualification.
+
+Verification from the isolated `f480146ca`-based worktree. The checker service
+`smol::` selector passed 56 tests with the offline locked Cargo build. This
+includes saturated POST with a held child, simultaneously admitted PRE,
+physical disk headroom, exact release, invalid startup capacity and whole-node
+quarantine. The public Smol and hosted custody unit suite passed 64 tests, and
+the final separate-runner missing-reserve preflight regression passed on its
+own. `cargo fmt --check`, Python compilation and `git diff --check` passed.
+These were source and fixture checks. No node configuration, active process,
+deployed service or admission deadline was changed.
+
+The `7ceb63e3` runner custody capture has a 2 GiB PRE guest and 2 GiB overlay.
+The source/root/scratch disk calculation rounds to 3 GiB outside the overlay.
+That exact profile requires one slot, 2.5 GiB memory including host overhead,
+and 5 GiB disk before allocating POST capacity. The current one-slot node
+requires a measured two-phase configuration before installing this revision.
+Use an owned saturation test to measure true POST/PRE/T5 overlap and the
+interactive tail on the existing host. A POST profile that reserves a trial
+also requires a second POST slot and its exact memory/disk peak.

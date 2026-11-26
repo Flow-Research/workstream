@@ -59,17 +59,22 @@ pub(super) fn fixture() -> (PathBuf, ServiceConfig, Lease, Journal) {
         guest_binary: root.join("guest"),
         guest_sha256: format!("sha256:{}", "b".repeat(64)),
         cgroup_root: root.join("groups"),
-        maximum_parallel: 1,
+        maximum_parallel: 2,
         maximum_storage_bytes: 4 * 1024 * 1024 * 1024,
     };
     config.smol = Some(runtime.clone());
     config.smol_admission = Some(Arc::new(
         Admission::new(
             Capacity {
-                slots: 1,
+                slots: 2,
                 memory_bytes: u64::MAX,
                 storage_bytes: u64::MAX,
             },
+            Some(Capacity {
+                slots: 1,
+                memory_bytes: 1,
+                storage_bytes: 1,
+            }),
             "e".repeat(64),
         )
         .unwrap(),
@@ -122,6 +127,7 @@ fn pending_cleanup_requires_exact_pre_journal_and_quarantines_admission() {
         .as_ref()
         .unwrap()
         .reserve(
+            Phase::Pre,
             Capacity {
                 slots: 1,
                 memory_bytes: 1,
@@ -154,6 +160,7 @@ fn lost_journal_still_quarantines_the_node() {
         .as_ref()
         .unwrap()
         .reserve(
+            Phase::Pre,
             Capacity {
                 slots: 1,
                 memory_bytes: 1,

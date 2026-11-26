@@ -49,19 +49,19 @@ fn trial_peak_reservation_admits_maximum_memory_and_overrun_atomically() {
         memory_bytes: outer.memory_bytes + peak.memory_bytes,
         storage_bytes: outer.storage_bytes + peak.storage_bytes,
     };
-    let node = Arc::new(Admission::new(maximum, "e".repeat(64)).unwrap());
-    let invocation = node.reserve(outer, Some(peak)).unwrap();
+    let node = Arc::new(Admission::new(maximum, None, "e".repeat(64)).unwrap());
+    let invocation = node.reserve(Phase::Background, outer, Some(peak)).unwrap();
     let child = invocation
         .child(trial_capacity(maximum_memory + overrun, disk).unwrap())
         .unwrap();
-    assert!(node.reserve(outer, None).is_err());
+    assert!(node.reserve(Phase::Background, outer, None).is_err());
     drop(child);
     drop(invocation);
     let mut insufficient = maximum;
     insufficient.memory_bytes -= 1;
-    let node = Arc::new(Admission::new(insufficient, "f".repeat(64)).unwrap());
-    assert!(node.reserve(outer, Some(peak)).is_err());
-    assert!(node.reserve(outer, None).is_ok());
+    let node = Arc::new(Admission::new(insufficient, None, "f".repeat(64)).unwrap());
+    assert!(node.reserve(Phase::Background, outer, Some(peak)).is_err());
+    assert!(node.reserve(Phase::Background, outer, None).is_ok());
     assert!(trial_peak_capacity(u64::MAX, 1, disk).is_err());
 }
 
@@ -136,6 +136,7 @@ fn missing_lease_directory_does_not_poison_node_admission() {
                 memory_bytes: 1024 * 1024 * 1024,
                 storage_bytes: 4 * 1024 * 1024 * 1024,
             },
+            None,
             "e".repeat(64),
         )
         .unwrap(),
@@ -196,6 +197,7 @@ fn concurrent_capacity_is_reserved_until_its_owner_releases_it() {
                 memory_bytes: capacity,
                 storage_bytes: 4 * 1024 * 1024 * 1024,
             },
+            None,
             "e".repeat(64),
         )
         .unwrap(),
@@ -305,12 +307,14 @@ fn quarantined_admission_makes_runtime_health_unavailable() {
                 memory_bytes: 20,
                 storage_bytes: 20,
             },
+            None,
             "e".repeat(64),
         )
         .unwrap(),
     );
     let held = admission
         .reserve(
+            Phase::Background,
             Capacity {
                 slots: 1,
                 memory_bytes: 10,

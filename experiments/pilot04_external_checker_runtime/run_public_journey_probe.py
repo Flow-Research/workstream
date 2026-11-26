@@ -1200,14 +1200,17 @@ def _read_runner_configuration(node_config: Path, root: Path, custody: dict, *, 
         ['git', 'rev-parse', 'HEAD'], cwd=BACKEND, text=True).strip(), 'custody source differs')
     raw = node_config.read_bytes()
     service_config = json.loads(raw)
+    _require(isinstance(service_config.get('pre'), dict)
+             and isinstance(service_config['pre'].get('reserved_capacity'), dict),
+             'public proof requires an explicit PRE reservation')
     if separate_runner:
         _require(service_config == custody['node_config']
                  and 'sha256:' + hashlib.sha256(raw).hexdigest() == custody['config_sha256']
                  and service_config['smol']['binary_sha256'] == custody['smol_sha256'],
                  'separate runner configuration differs from reviewed custody')
         return service_config
-    _require(service_config["smol"].get("maximum_parallel") == 1,
-             "public proof requires a one-slot node")
+    from experiments.pilot04_external_checker_runtime.public_node_faults import validate_fault_capacity
+    validate_fault_capacity(service_config)
     original_config = json.loads(json.dumps(service_config))
     wrapper = root / 'node-control/runtime-wrapper'
     _require(service_config['smol']['binary'] == str(wrapper)
@@ -1470,6 +1473,7 @@ async def run(database_url: str, image_reference: str, node_config: Path,
                 "public_api": True, "prefork_worker": True, "prefork_finalization_worker": True,
                 "dedicated_worker_queues": [queue for _, queue in WORKER_ROLES],
                 "maximum_parallel": service_config["smol"]["maximum_parallel"],
+                "pre_reserved_capacity": service_config["pre"]["reserved_capacity"],
                 "separate_runner": separate_runner,
                 "scheduled_artifact_scans": True,
                 "public_original_guide_setup": True,
