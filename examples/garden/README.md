@@ -1,7 +1,7 @@
 # Garden engineering drill
 
 This directory defines a small real project drill. Its first v3 task passed the
-[hosted public-API journey](../../docs/reports/garden-hosted-drill-2026-11-06.md).
+[hosted public-API journey](https://github.com/Flow-Research/workstream/blob/d713594ebf04a125917edb0ec981d380cf8047b4/docs/reports/garden-hosted-drill-2026-11-06.md).
 The [project guide](guide.md) describes the contributor contract; the task
 definitions remain local examples for native Workstream tasks. Garden's code
 and current-head CI evidence stay in GitHub. This version-3 test explicitly requires
@@ -135,7 +135,7 @@ award; exact replay must create no duplicate award or contribution. An earned
 project-points award is not cash, a wallet balance or proof of fulfillment.
 Garden PR #287 remains open. The hosted drill produced the exact accepted
 Submission, submitter ContributionRecord and one earned 100 FLOW award; see the
-[evidence report](../../docs/reports/garden-hosted-drill-2026-11-06.md).
+[evidence report](https://github.com/Flow-Research/workstream/blob/d713594ebf04a125917edb0ec981d380cf8047b4/docs/reports/garden-hosted-drill-2026-11-06.md).
 
 ## Evidence boundaries
 

@@ -1379,7 +1379,7 @@ abandoned declarations and admitted sources remain retained immutable ART facts.
 They do not claim that a batch or any Tasks were created. There is no source
 deletion API or retention scheduler, and automatic recovery cannot create Tasks.
 Atomic DRAFT import, project/external-ID conflicts and explicit screen/release
-are implemented by the [TASK batch owner](spec_chunk_4_task_queue_assignment.md#explicit-whole-batch-screening-and-release-contract),
+are implemented by the [TASK batch owner](spec_task_assignment.md#explicit-whole-batch-screening-and-release-contract),
 with separate [CLI conversion and batch commands](../cli/README.md#prepare-a-task-import-json-source).
 They are not ART operations; source storage alone never invokes them.
 When a client converts CSV, the retained source is the received JSON, not the

@@ -107,7 +107,7 @@ at `POST /api/v1/projects/{project_id}/guides/{guide_id}/setup`, or provider-fre
 rules compilation at `POST /api/v1/projects/{project_id}/guides/{guide_id}/requirements/compile`.
 The latter reads exactly one `text/markdown` original whose complete body is the
 `workstream.project_guide_rules.v1` JSON object; ordinary prose is insufficient.
-See the [Garden rules fixture](../../pilots/garden/manager-rules.md) and
+See the [Garden rules fixture](../../examples/garden/manager-rules.md) and
 [operating format](../operations_project_operating_manual.md#manager-authored-guide-rules).
 Public requests accept no provider/runtime configuration. Both paths retain the
 same validation, independent manager approvals and activation guards. Revised

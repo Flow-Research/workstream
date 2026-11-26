@@ -18,7 +18,7 @@ host and external services, configure private assets and credentials, run the
 real S3 storage qualification, and verify the public journey for that deployment. A render,
 image build or preflight alone does not establish hosted operation or a real
 model call. The [capability ledger](../../docs/roadmap_status.md) and
-[hosted drill report](../../docs/reports/garden-hosted-drill-2026-11-06.md)
+[hosted drill report](https://github.com/Flow-Research/workstream/blob/d713594ebf04a125917edb0ec981d380cf8047b4/docs/reports/garden-hosted-drill-2026-11-06.md)
 record what has actually been exercised; neither makes this directory an
 automatic installer or qualifies another host.
 
@@ -298,7 +298,7 @@ Beat, parser and model proxy receive none. Preflight reads file
 metadata only; the worker loader sets the adapter's existing private-key variable
 without evaluating or logging its contents. Never put a raw private key in the
 release environment. Follow the
-[GitHub App instructions](../../pilots/garden/github-app.md) for read-only permissions.
+[GitHub App instructions](../../examples/garden/github-app.md) for read-only permissions.
 `WORKSTREAM_MODEL_PROXY_ENABLED=true` starts one
 trusted model-proxy process independently of the setup runtime. Only that process
 gets the database, each configured provider credential and the runtime ART identity.

@@ -303,7 +303,7 @@ obsolete API namespace. Its health check verifies API health, protected-resource
 metadata and the unauthenticated challenge; authenticated live workflow proof
 is still required.
 
-The historical [managed hosted qualification](../docs/reports/managed-mcp-hosted-2026-11-07.md)
+The historical [managed hosted qualification](https://github.com/Flow-Research/workstream/blob/d713594ebf04a125917edb0ec981d380cf8047b4/docs/reports/managed-mcp-hosted-2026-11-07.md)
 records actual SDK calls with Rust-issued login tokens, CLI cross-client checks
 and restart behavior. It does not establish all-tool live coverage or native
 connector/OAuth support.

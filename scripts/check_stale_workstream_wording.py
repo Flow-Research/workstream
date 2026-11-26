@@ -198,24 +198,12 @@ ACTIVE_SHARED_CONTRACT_EXCLUDED_PREFIXES = (
 # authorization and artifact contract scanners; unknown future files remain
 # active by default.
 HISTORICAL_PATHS = {
-    "docs/checker_trial_failure_catalog.md",
     "docs/reference_specs/WS-AUTH-001-actor-profile-role-and-authorization-service-specification.md",
     "docs/reference_specs/WS-CON-001-contribution-record-and-compensation-boundary-specification.md",
     "docs/reference_specs/WS-IMP-001-workstream-v0.1-coding-agent-implementation-specification.md",
     "docs/reference_specs/WS-REV-001-review-lifecycle-specification.md",
-    "docs/roadmap_pilot_plan.md",
-    "docs/spec_chunk_1_backend_scaffold.md",
-    "docs/spec_chunk_3_project_guide_foundation.md",
-    "docs/spec_chunk_4_task_queue_assignment.md",
-    "docs/spec_chunk_5_submission_packet_foundation.md",
-    "docs/spec_chunk_6_checker_contract_records.md",
-    "docs/spec_chunk_7_checker_runner_registry.md",
-    "docs/spec_chunk_8_submission_artifact_policy_checkers.md",
-    "docs/spec_chunk_9_pre_review_gate.md",
-    "docs/spec_chunk_10_checker_trial.md",
 }
 CURRENT_RUNTIME_CONTRACT_PATHS = {
-    "docs/current_system_data_flow.html",
 }
 ACTIVE_COMPENSATION_LINE_EXEMPTIONS: dict[str, tuple[str, ...]] = {}
 UNIMPLEMENTED_CURRENT_RUNTIME_COMPENSATION_PATTERNS = (

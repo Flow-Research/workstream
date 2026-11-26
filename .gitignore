@@ -228,6 +228,4 @@ demos/week1_api_demo_ui/dist/
 # Local checker image qualification/publication receipts
 .checker-images/
 
-# Generated architecture export; Markdown and diagram sources are authoritative.
-/docs/architecture_brief/workstream_architecture_brief.pdf
 /mcp-experiment-evidence.local.json

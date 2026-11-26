@@ -14,18 +14,18 @@ This index lists the main Workstream documents. Start with the
 - [Architecture Lockdown](architecture_lockdown.md)
 - [System Architecture](architecture_system_architecture.md)
 - [Glossary](glossary.md)
-- [Historical Planning Index](historical_planning.md)
 
 ## Product And Operations Documentation
 
 - [Product Principles](product_principles.md)
 - [Product Brief](product_brief.md)
 - [First User Flows](product_first_user_flows.md)
-- [Architecture Brief](architecture_brief/workstream_architecture_brief.md)
 - [Architecture Diagrams](diagrams/README.md)
 - [System Architecture](architecture_system_architecture.md)
 - [Data Model](architecture_data_model.md)
 - [Lifecycle State Machine](architecture_lifecycle_state_machine.md)
+- [Project Guides and Policy Approval](spec_project_guides.md)
+- [Tasks and Assignments](spec_task_assignment.md)
 - [Checker Framework](architecture_checker_framework.md)
 - [Operator Workflow](operations_operator_workflow.md)
 - [Project Operating Manual](operations_project_operating_manual.md)
@@ -74,3 +74,10 @@ This index lists the main Workstream documents. Start with the
 - [ADR 0014: External Services Use One Adapter Convention](decision_0014_external_service_adapter_convention.md)
 - [ADR 0015: Project Contributor Roles Are Independent](decision_0015_project_contributor_roles_are_independent.md)
 - [ADR 0016: Contribution Recognition Precedes External Fulfillment](decision_0016_contribution_compensation_boundary.md)
+
+## Historical sources
+
+Superseded implementation plans and drill reports are available through
+[Git history](historical_planning.md), not maintained as parallel specifications.
+Imported source specifications remain under `reference_specs/` because preserved
+Commitrail records bind those exact inputs; they do not override current contracts.

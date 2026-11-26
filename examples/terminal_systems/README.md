@@ -1,10 +1,10 @@
 # Terminal Systems project setup
 
-The current MVP lifecycle drill uses the [small incident-summary task](mvp/README.md).
+The current MVP lifecycle drill uses the [small incident-summary task](../incident_summary/README.md).
 It retains real API/storage/worker/checker behavior and genuinely wrong/correct
 work, with no model in POST. The broader benchmark-authoring inputs below remain
 available and their earlier drill evidence is retained; they are not a prerequisite
-for the first lifecycle demonstration. See the [current report](../../docs/reports/terminal-systems-hosted-drill-2026-10-27.md).
+for the first lifecycle demonstration. See the [current report](https://github.com/Flow-Research/workstream/blob/d713594ebf04a125917edb0ec981d380cf8047b4/docs/reports/terminal-systems-hosted-drill-2026-10-27.md).
 
 Start with [the contributor guide](guide.md) and [one illustrative task](task-example.md).
 These are original project inputs for a fresh onboarding run. They are not a
@@ -52,9 +52,10 @@ normal task creation; no runtime change or checker allowlist is implied.
 
 1. The PM creates the project and guide with its illustrative task example,
    then uploads the declared original document through the public API or CLI.
-   Committing the last document upload queues setup. The manager needs a role
-   grant on this exact project for setup and proposal reads; project-creation
-   authority alone is insufficient.
+   Uploading the guide does not start inference. The PM may explicitly request
+   setup assistance or supply manager-authored rules. Setup and proposal reads
+   require authority on this exact project; project-creation authority alone is
+   insufficient.
 2. Setup receives the assigned guide documents and task examples, along with
    trusted system instructions. It reads the originals and proposes source-cited,
    structured PRE and POST checks for PM review. Each suggestion has a stage,
@@ -108,7 +109,7 @@ normal task creation; no runtime change or checker allowlist is implied.
 
 ## Current boundary
 
-The [current hosted drill report](../../docs/reports/terminal-systems-hosted-drill-2026-10-27.md)
+The [current hosted drill report](https://github.com/Flow-Research/workstream/blob/d713594ebf04a125917edb0ec981d380cf8047b4/docs/reports/terminal-systems-hosted-drill-2026-10-27.md)
 records the exact deployment, guide versions, retained evidence and remaining
 gates. Setup's source-backed PRE and POST suggestions are advisory. They do not
 select implementations, approve policies or establish a work outcome. The PM
@@ -119,7 +120,7 @@ For this drill, [checker qualification](checkers/README.md#post-prerequisites)
 must exercise realistic valid, invalid and edge-case examples through the actual
 Workstream intake and post-submission execution paths. Retain each exact image
 digest/configuration hash, expected and observed outcomes, and bounded evidence
-in the [drill report](../../docs/reports/terminal-systems-hosted-drill-2026-10-27.md).
+in the [drill report](https://github.com/Flow-Research/workstream/blob/d713594ebf04a125917edb0ec981d380cf8047b4/docs/reports/terminal-systems-hosted-drill-2026-10-27.md).
 Infrastructure failure never establishes a work verdict. The PM judges whether
 the rules express the intended project standard; engineering proves observed
 checker behavior on those examples. That evidence is bounded, not a universal

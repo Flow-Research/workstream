@@ -219,7 +219,7 @@ v3 require new approvals and a new task; retain the earlier records and leave PR
 facts alone. Exact check/review freshness
 and operational completion evidence belong in the PR.
 
-The [hosted Garden v3 drill](../../docs/reports/garden-hosted-drill-2026-11-06.md)
+The [hosted Garden v3 drill](https://github.com/Flow-Research/workstream/blob/d713594ebf04a125917edb0ec981d380cf8047b4/docs/reports/garden-hosted-drill-2026-11-06.md)
 now supplies that live positive evidence. Garden PR #287 remained open at head
 `97a0378c726126521819f0a281833d000901b42a`; trusted CI run
 `42251194616` succeeded and the durable external POST returned

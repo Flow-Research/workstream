@@ -21,13 +21,13 @@ and tests on `main`, accepted ADRs, and the canonical subsystem specifications.
 
 ## Early Implementation Records
 
-- [Submission Packet Foundation](spec_chunk_5_submission_packet_foundation.md)
-- [Checker Contract And Records](spec_chunk_6_checker_contract_records.md)
-- [Checker Runner And Registry](spec_chunk_7_checker_runner_registry.md)
-- [Submission Artifact And Policy Checkers](spec_chunk_8_submission_artifact_policy_checkers.md)
-- [Pre-Review Gate](spec_chunk_9_pre_review_gate.md)
-- [Checker Trial](spec_chunk_10_checker_trial.md)
-- [Checker Trial Failure Catalog](checker_trial_failure_catalog.md)
+- [Submission Packet Foundation](https://github.com/Flow-Research/workstream/blob/d713594ebf04a125917edb0ec981d380cf8047b4/docs/spec_chunk_5_submission_packet_foundation.md)
+- [Checker Contract And Records](https://github.com/Flow-Research/workstream/blob/d713594ebf04a125917edb0ec981d380cf8047b4/docs/spec_chunk_6_checker_contract_records.md)
+- [Checker Runner And Registry](https://github.com/Flow-Research/workstream/blob/d713594ebf04a125917edb0ec981d380cf8047b4/docs/spec_chunk_7_checker_runner_registry.md)
+- [Submission Artifact And Policy Checkers](https://github.com/Flow-Research/workstream/blob/d713594ebf04a125917edb0ec981d380cf8047b4/docs/spec_chunk_8_submission_artifact_policy_checkers.md)
+- [Pre-Review Gate](https://github.com/Flow-Research/workstream/blob/d713594ebf04a125917edb0ec981d380cf8047b4/docs/spec_chunk_9_pre_review_gate.md)
+- [Checker Trial](https://github.com/Flow-Research/workstream/blob/d713594ebf04a125917edb0ec981d380cf8047b4/docs/spec_chunk_10_checker_trial.md)
+- [Checker Trial Failure Catalog](https://github.com/Flow-Research/workstream/blob/d713594ebf04a125917edb0ec981d380cf8047b4/docs/checker_trial_failure_catalog.md)
 
 ## Early Strategy And Review Records
 

@@ -5,7 +5,7 @@ This diagram pack explains Workstream at two levels:
 - the bounded v0.1 implementation that is being built now
 - the broader Workstream ecosystem that can connect later to external origins, agent identity, task contracts, settlement rails, and portable reputation
 
-The architecture diagrams use C4-PlantUML source files so they render with real C4 system, container, component, boundary, and external-system boxes. The task lifecycle sequence remains Mermaid because GitHub renders it directly and the sequence is easier to read in that format.
+The architecture diagrams use C4-PlantUML source files so they render with real C4 system, container, component, boundary, and external-system boxes. The backend component view and task lifecycle sequence use Mermaid, rendered directly by GitHub.
 
 ## Diagram Index
 
@@ -19,7 +19,6 @@ The architecture diagrams use C4-PlantUML source files so they render with real 
 
 - [workstream_context.puml](workstream_context.puml)
 - [workstream_v01_container.puml](workstream_v01_container.puml)
-- [backend_v01_components.puml](backend_v01_components.puml)
 - [future_identity_payment_reputation.puml](future_identity_payment_reputation.puml)
 
 ## Legend

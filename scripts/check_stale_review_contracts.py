@@ -23,7 +23,6 @@ ARCHIVAL_PATHS = {
 # Closed engineering/product reviews may describe earlier contracts verbatim.
 HISTORICAL_PATHS = {
     "docs/reference_specs/WS-CON-001-contribution-record-and-compensation-boundary-specification.md",
-    "docs/spec_chunk_9_pre_review_gate.md",
 }
 
 NON_PRODUCT_REVIEW_PATHS = {
@@ -34,8 +33,6 @@ NON_PRODUCT_REVIEW_PATHS = {
 # revision document must be deliberately classified instead of escaping review.
 ACTIVE_PATHS = {
     "README.md",
-    "docs/architecture_brief/task_lifecycle_sequence.puml",
-    "docs/architecture_brief/workstream_architecture_brief.md",
     "docs/architecture_data_model.md",
     "docs/architecture_lifecycle_state_machine.md",
     "docs/architecture_lockdown.md",
@@ -48,7 +45,6 @@ ACTIVE_PATHS = {
     "docs/decision_0013_immutable_artifact_storage_boundary.md",
     "docs/decision_0015_project_contributor_roles_are_independent.md",
     "docs/diagrams/backend_v01_components.md",
-    "docs/diagrams/backend_v01_components.puml",
     "docs/diagrams/task_lifecycle_sequence.md",
     "docs/diagrams/workstream_v01_container.md",
     "docs/diagrams/workstream_v01_container.puml",
@@ -60,14 +56,10 @@ ACTIVE_PATHS = {
     "docs/operations_reviewer_workflow.md",
     "docs/operations_revision_replay.md",
     "docs/operations_roles_permissions.md",
-    "docs/principles.md",
     "docs/product_first_user_flows.md",
     "docs/product_principles.md",
     "docs/reference_specs/README.md",
     "docs/risk_register.md",
-    "docs/roadmap_pilot_plan.md",
-    "docs/roles_permissions.md",
-    "docs/spec_chunk_3_project_guide_foundation.md",
     "docs/spec_review_lifecycle.md",
     "docs/template_prior_feedback_checklist.md",
     "docs/template_project_guide.md",

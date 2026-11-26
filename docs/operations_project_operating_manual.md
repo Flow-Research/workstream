@@ -428,8 +428,8 @@ carry no source filenames and JSON is not an admitted guide media type:
   `unsafe_text` when prose fails the shared safe-text rule). Fix the rules and
   create a new guide version; the failed attempt is not retried.
 
-The [Garden rules fixture](../pilots/garden/manager-rules.md) accompanies the
-[Garden guide](../pilots/garden/guide.md). Retain the complete uploaded
+The [Garden rules fixture](../examples/garden/manager-rules.md) accompanies the
+[Garden guide](../examples/garden/guide.md). Retain the complete uploaded
 original; changed rules require a new guide version, rather than inference
 correction feedback. Both compilation paths retain current manager authority,
 validation, separate phase approvals and activation.

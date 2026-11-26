@@ -233,7 +233,7 @@ project. Task import, screening and release follow the governed task flow.
 
 See the [checker architecture](../docs/architecture_checker_framework.md) for
 the canonical execution and lifecycle contract, and the
-[Terminal Systems onboarding inputs](../pilots/terminal_systems/README.md) for
+[Terminal Systems onboarding inputs](../examples/terminal_systems/README.md) for
 the current real-project preparation. Ordinary platform regression tests protect
 this execution boundary; their passing results do not establish a live project
 journey or the correctness of a project's checker images.

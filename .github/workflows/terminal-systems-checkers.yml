@@ -3,7 +3,7 @@ name: Terminal Systems checker images
 on:
   pull_request:
     paths:
-      - 'pilots/terminal_systems/checkers/**'
+      - 'examples/terminal_systems/checkers/**'
       - 'scripts/checker-image'
       - 'backend/scripts/checker_image*.py'
       - 'backend/app/modules/checkers/api/external.py'
@@ -17,7 +17,7 @@ on:
   push:
     branches: [main]
     paths:
-      - 'pilots/terminal_systems/checkers/**'
+      - 'examples/terminal_systems/checkers/**'
       - 'scripts/checker-image'
       - 'backend/scripts/checker_image*.py'
       - 'backend/app/modules/checkers/api/external.py'
@@ -46,9 +46,9 @@ jobs:
       - name: Install locked environment tool
         run: python -m pip install uv==0.10.7
       - name: Check guide-derived PRE rules
-        run: python -m unittest discover -s pilots/terminal_systems/checkers/pre -p 'test_*.py' -v
+        run: python -m unittest discover -s examples/terminal_systems/checkers/pre -p 'test_*.py' -v
       - name: Build and test the actual networkless image
-        run: ./scripts/checker-image pilots/terminal_systems/checkers/pre
+        run: ./scripts/checker-image examples/terminal_systems/checkers/pre
 
   post-image:
     runs-on: ubuntu-latest
@@ -62,15 +62,15 @@ jobs:
           python-version: '3.12'
       - name: Check guide-derived POST rules and protocols
         run: |
-          python -m unittest discover -s pilots/terminal_systems/checkers/post/model -p 'test_*.py' -v
-          python -m unittest discover -s pilots/terminal_systems/checkers/post/qualification -p 'test_*.py' -v
+          python -m unittest discover -s examples/terminal_systems/checkers/post/model -p 'test_*.py' -v
+          python -m unittest discover -s examples/terminal_systems/checkers/post/qualification -p 'test_*.py' -v
       - name: Fetch the digest-pinned POST base
         run: docker pull python:3.12-slim-bookworm@sha256:4766d8b510c428e595d74b9cc5bbb2fae8e26316fffb4adc89908d79aacd58a2
       - name: Build the POST image from a private context without build-network access
         run: |
           post_context=$(mktemp -d "${RUNNER_TEMP}/terminal-systems-post-context.XXXXXX")
           trap 'rm -rf -- "$post_context"' EXIT
-          cp -a pilots/terminal_systems/checkers/post/model/. "$post_context/"
+          cp -a examples/terminal_systems/checkers/post/model/. "$post_context/"
           find "$post_context" -type f -exec chmod 0600 {} +
           find "$post_context" -type d -exec chmod 0700 {} +
           docker build --pull=false --network=none \
@@ -78,5 +78,5 @@ jobs:
             --file "$post_context/Dockerfile" "$post_context"
       - name: Smoke the actual image with a controlled model session
         run: >-
-          python pilots/terminal_systems/checkers/post/qualify_image.py
+          python examples/terminal_systems/checkers/post/qualify_image.py
           --image workstream-terminal-systems-post:ci

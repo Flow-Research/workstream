@@ -25,7 +25,7 @@ TASK and Submission storage do not retain a parallel PaymentPolicy lineage.
 - `ActorProfile` and `ActorIdentityLink` are canonical actor and external
   identity records. Identity admission is not permission to work.
 - AUTH owns `ProjectRoleGrant`, actor/link lifecycle and permission decisions.
-  Submitter and reviewer are project roles, not separate worker profiles.
+  Submitter and reviewer are independent project roles on the same actor profile.
 - `WorkstreamTask` stores the project, source and work description, state,
   assigned contributor and locked guide/policy references.
 - `TaskAssignment` records the actual contributor and enforces one active
@@ -64,7 +64,7 @@ grants and removes their obsolete wrappers. ARCH-03C7 delivers bounded
 Audit Authority task history and removes the old unbounded task-only audit route.
 
 There is no self-activation endpoint. A contributor cannot acquire permission
-by creating a worker profile, supplying skill tags, or presenting a token role.
+through profile creation, skill tags or identity-token claims.
 There is no public JSON-packet submission creation route. Contributors upload
 one ZIP through the public submission-bundle preparation route, then the public
 `POST /api/v1/tasks/{task_id}/submissions` operation consumes a fresh ready
@@ -266,10 +266,10 @@ pre-effect non-live refusal rolls back and uses bounded retry.
 
 ## Required verification
 
-- Real exact-project grants permit the supported commands without a worker
-  token role; missing, revoked, reviewer-only and foreign-project grants deny.
+- Live exact-project grants permit the supported commands; missing, revoked,
+  reviewer-only and foreign-project grants deny.
 - Suspended/deactivated actors and revoked or substituted identity links deny.
-- Non-owner starts, inconsistent assignments and invalid locked context deny.
+- Non-owner submissions, inconsistent assignments and invalid locked context deny.
 - System Operator authority is distinct from Project Manager and token roles.
 - Concurrent claims have one winner; revocation and commands serialize.
 - Audit/storage failure rolls back task, assignment and authorization evidence.
@@ -733,7 +733,7 @@ validates the original immutable owners under live authority without reserve or
 append calls; it cannot reset a later generation. Every new predecessor-linked
 Submission uses the same writer. ARCH-02I-B exposes public ZIP preparation
 and admission-backed Submission creation; PILOT-04 registers selected request
-and completion handlers. The bounded local public/worker drill starts from public guide
+and completion handlers. The bounded local public API/Celery drill starts from public guide
 inputs with recorded inference; hosted operation remains separate.
 
 ARCH-04F3 names the supported predecessor-linked creation kind

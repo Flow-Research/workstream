@@ -58,8 +58,8 @@ actual entry types; they do not repeat archive extraction or custody checks.
 From the Workstream checkout:
 
 ```bash
-python3 -m unittest discover -s pilots/terminal_systems/checkers/pre -p 'test_*.py' -v
-./scripts/checker-image pilots/terminal_systems/checkers/pre
+python3 -m unittest discover -s examples/terminal_systems/checkers/pre -p 'test_*.py' -v
+./scripts/checker-image examples/terminal_systems/checkers/pre
 ```
 
 The image has no network, host socket, secrets or writable submission mount.
@@ -151,7 +151,7 @@ separate PRE/POST approvals and activation. Its task reached immutable
 Submission/replay and automatic POST, which ended infrastructure
 `invalid_output` on November 3 without persisted results or findings. No live
 work verdict or contribution is claimed; retained paid
-effects and locked policies are not rewritten. See the [current hosted drill report](../../../docs/reports/terminal-systems-hosted-drill-2026-10-27.md).
+effects and locked policies are not rewritten. See the [current hosted drill report](https://github.com/Flow-Research/workstream/blob/d713594ebf04a125917edb0ec981d380cf8047b4/docs/reports/terminal-systems-hosted-drill-2026-10-27.md).
 
 The retained guide 19 assessment returned source text in string-valued recovery
 line spans; its correction repeated those strings and also quoted finding line
