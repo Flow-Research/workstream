@@ -968,7 +968,9 @@ async def test_public_trace_preserves_execution_arguments(monkeypatch, tmp_path,
     trace = tmp_path / "trace.jsonl"
     monkeypatch.setenv("WORKSTREAM_PROBE_INTAKE_TRACE", str(trace))
     original_prepare = RemoteTlsTrustedIntakeAdapter.prepare
+    original_execute_pre = RemoteTlsExternalCheckerAdapter.execute_pre
     monkeypatch.setattr(RemoteTlsTrustedIntakeAdapter, "prepare", original_prepare)
+    monkeypatch.setattr(RemoteTlsExternalCheckerAdapter, "execute_pre", original_execute_pre)
     expected = object()
     execute = AsyncMock(return_value=expected)
     monkeypatch.setattr(RemoteTlsExternalCheckerAdapter, "execute", execute)
