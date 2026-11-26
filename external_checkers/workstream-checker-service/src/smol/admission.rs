@@ -84,6 +84,18 @@ impl Admission {
         Ok(used.pre.storage_bytes + used.background.storage_bytes)
     }
 
+    pub(crate) fn drain_state(
+        &self,
+        marker: impl FnOnce() -> Result<bool, String>,
+    ) -> Result<(bool, bool), String> {
+        let used = self.used.lock().map_err(|_| "node admission unavailable")?;
+        if self.poisoned.load(Ordering::SeqCst) {
+            return Err("node admission quarantined".into());
+        }
+        let draining = marker()?;
+        Ok((draining, draining && *used == Usage::default()))
+    }
+
     fn required_storage_bytes(&self, phase: Phase, used: Usage) -> Result<u64, String> {
         match phase {
             Phase::Pre => Ok(used.pre.storage_bytes + used.background.storage_bytes),
@@ -133,6 +145,40 @@ impl Admission {
         child: Option<Capacity>,
         available_storage: impl FnOnce() -> Result<u64, String>,
     ) -> Result<Arc<Reservation>, String> {
+        let mut used = self.used.lock().map_err(|_| "node admission unavailable")?;
+        let (proposed, charge) =
+            self.proposed_usage(*used, phase, outer, child, available_storage)?;
+        *used = proposed;
+        Ok(Arc::new(Reservation {
+            admission: self.clone(),
+            phase,
+            charge,
+            child,
+            child_active: AtomicBool::new(false),
+        }))
+    }
+
+    pub(super) fn fits_with_storage(
+        &self,
+        phase: Phase,
+        outer: Capacity,
+        child: Option<Capacity>,
+        available_storage: impl FnOnce() -> Result<u64, String>,
+    ) -> Result<bool, String> {
+        let used = self.used.lock().map_err(|_| "node admission unavailable")?;
+        Ok(self
+            .proposed_usage(*used, phase, outer, child, available_storage)
+            .is_ok())
+    }
+
+    fn proposed_usage(
+        &self,
+        used: Usage,
+        phase: Phase,
+        outer: Capacity,
+        child: Option<Capacity>,
+        available_storage: impl FnOnce() -> Result<u64, String>,
+    ) -> Result<(Usage, Capacity), String> {
         if outer.slots != 1
             || outer.memory_bytes == 0
             || outer.storage_bytes == 0
@@ -144,7 +190,6 @@ impl Admission {
         let charge = outer
             .checked_add(child.unwrap_or_default())
             .ok_or("capacity overflow")?;
-        let mut used = self.used.lock().map_err(|_| "node admission unavailable")?;
         if self.poisoned.load(Ordering::SeqCst) {
             return Err("node admission quarantined".into());
         }
@@ -154,7 +199,7 @@ impl Admission {
         };
         // Both ceilings are disjoint partitions of the node maximum. Charging either
         // under this same lock keeps their aggregate within the node maximum.
-        let mut proposed = *used;
+        let mut proposed = used;
         let phase_usage = proposed.for_phase(phase);
         *phase_usage = phase_usage
             .checked_add(charge)
@@ -168,14 +213,7 @@ impl Admission {
         if self.poisoned.load(Ordering::SeqCst) {
             return Err("node admission quarantined".into());
         }
-        *used = proposed;
-        Ok(Arc::new(Reservation {
-            admission: self.clone(),
-            phase,
-            charge,
-            child,
-            child_active: AtomicBool::new(false),
-        }))
+        Ok((proposed, charge))
     }
 
     #[cfg(test)]
@@ -300,6 +338,36 @@ mod tests {
         ] {
             assert!(Admission::new(maximum, Some(invalid), "test".into()).is_err());
         }
+    }
+
+    #[test]
+    fn runner_placement_checks_exact_peak_and_storage_without_claiming() {
+        let pre = amount(1, 8, 16);
+        let job = amount(1, 6, 7);
+        let node = Arc::new(Admission::new(amount(3, 20, 30), Some(pre), "test".into()).unwrap());
+        for (outer, child, free) in [
+            (amount(1, 7, 7), job, 60),
+            (job, amount(1, 6, 8), 60),
+            (job, job, 59),
+        ] {
+            assert!(!node
+                .fits_with_storage(Phase::Background, outer, Some(child), || Ok(free))
+                .unwrap());
+        }
+        assert!(node
+            .fits_with_storage(Phase::Background, job, Some(job), || Ok(60))
+            .unwrap());
+        assert_eq!(node.reserved_storage_bytes().unwrap(), 0);
+        let _held = node
+            .reserve_with_storage(Phase::Background, job, Some(job), || Ok(60))
+            .unwrap();
+        assert!(!node
+            .fits_with_storage(Phase::Background, job, None, || Ok(60))
+            .unwrap());
+        assert!(node
+            .fits_with_storage(Phase::Pre, pre, None, || Ok(30))
+            .unwrap());
+        assert_eq!(node.reserved_storage_bytes().unwrap(), 14);
     }
 
     #[test]

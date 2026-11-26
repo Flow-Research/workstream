@@ -19,12 +19,19 @@ pub(crate) struct Config {
 
 impl Config {
     pub(in crate::smol) fn node_reserve(&self) -> Result<Capacity, String> {
-        let (resources, overlay_gib) = self.resources(self.limits.maximum_source_bytes)?;
-        let required = resource_capacity(resources, Some(overlay_gib))?;
+        let required = self.capacity(self.limits.maximum_source_bytes)?;
         if !required.fits(self.reserved_capacity) {
             return Err("PRE reserve cannot fit the configured profile".into());
         }
         Ok(self.reserved_capacity)
+    }
+
+    pub(in crate::smol) fn capacity(&self, source_bytes: u64) -> Result<Capacity, String> {
+        if source_bytes == 0 || source_bytes > self.limits.maximum_source_bytes {
+            return Err("PRE source bound differs".into());
+        }
+        let (resources, overlay_gib) = self.resources(source_bytes)?;
+        resource_capacity(resources, Some(overlay_gib))
     }
 
     fn resources(&self, source_bytes: u64) -> Result<(Resources, u64), String> {

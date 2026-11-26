@@ -142,6 +142,86 @@ fn background_disk_allocation_preserves_physical_pre_headroom() {
 }
 
 #[test]
+fn runner_drain_uses_owned_control_root_and_preserves_admitted_child() {
+    let (root, mut config) = super::super::tests::test_config();
+    const MIB: u64 = 1024 * 1024;
+    let one = Capacity {
+        slots: 1,
+        memory_bytes: MIB,
+        storage_bytes: MIB,
+    };
+    config.smol = Some(SmolConfig {
+        binary: root.join("unused-runtime"),
+        binary_sha256: "unused".into(),
+        home: root.clone(),
+        guest_binary: root.join("unused-guest"),
+        guest_sha256: "unused".into(),
+        cgroup_root: root.join("unused-cgroup"),
+        maximum_parallel: 4,
+        maximum_storage_bytes: 4 * MIB,
+    });
+    let admission = Arc::new(
+        Admission::new(
+            Capacity {
+                slots: 4,
+                memory_bytes: 4 * MIB,
+                storage_bytes: 4 * MIB,
+            },
+            Some(one),
+            "e".repeat(64),
+        )
+        .unwrap(),
+    );
+    config.smol_admission = Some(admission.clone());
+    let held = reserve_capacity(&config, Phase::Background, one, Some(one)).unwrap();
+    assert!(admission
+        .fits_with_storage(Phase::Pre, one, None, || Ok(u64::MAX))
+        .unwrap());
+
+    let control = config.socket_path.parent().unwrap();
+    let marker = control.join(DRAIN_MARKER);
+    fs::write(&marker, b"bad marker").unwrap();
+    assert!(node_draining(&config).is_err());
+    fs::remove_file(&marker).unwrap();
+    OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .open(&marker)
+        .unwrap();
+    assert!(node_draining(&config).unwrap());
+    let owned_control = root.join("owned-control");
+    fs::rename(control, &owned_control).unwrap();
+    fs::create_dir(control).unwrap();
+    assert!(node_draining(&config).unwrap());
+    assert_eq!(
+        admission.drain_state(|| node_draining(&config)).unwrap(),
+        (true, false)
+    );
+
+    for phase in [Phase::Pre, Phase::Background] {
+        assert_eq!(
+            reserve_capacity(&config, phase, one, None).unwrap_err(),
+            "runner is draining"
+        );
+    }
+    let child = held.child(one).unwrap();
+    drop((child, held));
+    assert_eq!(admission.reserved_storage_bytes().unwrap(), 0);
+    assert_eq!(
+        admission.drain_state(|| node_draining(&config)).unwrap(),
+        (true, true)
+    );
+    fs::remove_file(owned_control.join(DRAIN_MARKER)).unwrap();
+    assert_eq!(
+        admission.drain_state(|| node_draining(&config)).unwrap(),
+        (false, false)
+    );
+    assert!(reserve_capacity(&config, Phase::Pre, one, None).is_ok());
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn foreign_lease_refuses_recovery_before_any_runtime_or_owned_cleanup() {
     let (root, mut config) = super::super::tests::test_config();
     let leases = config.socket_path.parent().unwrap().join("smol-leases");

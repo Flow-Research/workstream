@@ -12359,3 +12359,30 @@ and rejects invalid epoch, extra data, and a changed configuration digest.
 The selector test checks drain and capability exclusion, and stable selection
 after reordering the same configured endpoints. The change is staged without
 activating a new runtime path until the native authority can enforce it.
+
+Native authority scope. The captured startup config digest and verified
+control-root descriptor belong to `src/main.rs`. The existing `smol.rs` and
+`smol/admission.rs` read native capacity and refuse new work during drain. The
+existing `smol/intake.rs` identity supplies the ART capability. Native tests
+cover the private bind frame, exact drain inventory and settled existing
+reservations. The gateway will require the bound epoch when the application
+starts using the new endpoint set.
+
+The placement query carries a bounded read-only demand so an available slot
+alone cannot qualify insufficient memory or disk. Reuse the existing PRE and
+ART capacities and the exact approved trial catalogue in `smol/pre/admission.rs`
+and `trial_profiles.rs`. Both snapshot and reservation evaluate the same
+prospective charge and physical storage gate under the admission lock. Only
+the execution changes usage. The query has no source, execution payload or grant.
+
+Drain readiness includes an authoritative `drained` observation. The same
+admission lock checks the private marker and zero usage, including reserved
+children and work that has acquired capacity but has yet to publish its
+journal. Quarantine prevents a drained reply. A separate visible VM inventory
+cannot certify this boundary.
+
+The native runner selector passed the three placement, drain and epoch cases
+and one existing matching relay case. A separate eight-case transport run
+passed the closed observations and proved that a wedged TLS read cannot
+extend selection through TLS shutdown. These checks use owned local fixtures
+with no new runtime deployment.

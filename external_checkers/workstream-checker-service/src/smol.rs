@@ -32,6 +32,7 @@ pub(crate) use admission::{Admission, Capacity, Phase, Reservation};
 mod intake;
 pub(crate) mod trial;
 mod trial_io;
+pub(super) use intake::identity as intake_identity;
 pub(super) use intake::{serve as serve_intake, IntakeConfig};
 mod io;
 mod pre;
@@ -48,16 +49,20 @@ struct Resources {
 }
 impl From<&ValidatedRequest> for Resources {
     fn from(value: &ValidatedRequest) -> Self {
-        Self {
-            cpu_millis: value.cpu_millis,
-            memory_bytes: value.memory_bytes,
-            storage_gib: 1,
-            pids: (value.memory_bytes / (16 * 1024 * 1024)).clamp(16, 256),
-        }
+        Self::checker(value.cpu_millis, value.memory_bytes)
     }
 }
 
 impl Resources {
+    fn checker(cpu_millis: u64, memory_bytes: u64) -> Self {
+        Self {
+            cpu_millis,
+            memory_bytes,
+            storage_gib: 1,
+            pids: (memory_bytes / (16 * 1024 * 1024)).clamp(16, 256),
+        }
+    }
+
     fn host_pids(self) -> u64 {
         // The VMM needs host threads independently of the guest workload's
         // process ceiling. The pinned runtime reaches 57 during cold startup.
@@ -199,7 +204,100 @@ fn reserve_capacity(
         .smol_admission
         .as_ref()
         .ok_or("admission unavailable")?;
-    admission.reserve_with_storage(phase, outer, child, || available_storage(settings(config)?))
+    admission.reserve_with_storage(phase, outer, child, || storage_open_for_admission(config))
+}
+
+fn storage_open_for_admission(config: &ServiceConfig) -> Result<u64, String> {
+    let available = available_storage(settings(config)?)?;
+    // Read the operator gate under the same lock as the final reservation.
+    if node_draining(config)? {
+        return Err("runner is draining".into());
+    }
+    Ok(available)
+}
+
+pub(super) fn fits_placement(
+    config: &ServiceConfig,
+    demand: &PlacementDemand,
+) -> Result<bool, String> {
+    let admission = config
+        .smol_admission
+        .as_ref()
+        .ok_or("runner epoch unavailable")?;
+    let (phase, outer, child) = match demand {
+        PlacementDemand::Pre { source_bytes } => (
+            Phase::Pre,
+            config
+                .pre
+                .as_ref()
+                .ok_or("PRE unavailable")?
+                .capacity(*source_bytes)?,
+            None,
+        ),
+        PlacementDemand::Intake { preparation } => (
+            Phase::Background,
+            intake::placement_capacity(config, preparation)?,
+            None,
+        ),
+        PlacementDemand::Post {
+            memory_bytes,
+            trial,
+        } => {
+            let child = trial
+                .as_ref()
+                .map(|binding| {
+                    let profile = config
+                        .trial_profiles
+                        .as_ref()
+                        .and_then(|catalog| catalog.resolve_placement(binding))
+                        .ok_or("trial authority unavailable")?;
+                    trial_peak_capacity(
+                        profile.maximum_memory_bytes,
+                        profile.maximum_memory_overrun_bytes,
+                        profile.maximum_disk_bytes,
+                    )
+                })
+                .transpose()?;
+            (
+                Phase::Background,
+                resource_capacity(Resources::checker(0, *memory_bytes), None)?,
+                child,
+            )
+        }
+    };
+    admission.fits_with_storage(phase, outer, child, || storage_open_for_admission(config))
+}
+
+pub(super) const DRAIN_MARKER: &str = ".workstream-checker-drain";
+
+pub(super) fn node_draining(config: &ServiceConfig) -> Result<bool, String> {
+    let root = config
+        .control_root
+        .as_ref()
+        .ok_or("runner control root unavailable")?;
+    let path = PathBuf::from(format!(
+        "/proc/self/fd/{}/{}",
+        root.as_raw_fd(),
+        DRAIN_MARKER
+    ));
+    let metadata = match fs::symlink_metadata(path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(_) => return Err("runner drain marker unavailable".into()),
+    };
+    let owner = root
+        .metadata()
+        .map_err(|_| "runner control root unavailable")?;
+    if !metadata.is_file()
+        || metadata.uid() != owner.uid()
+        || metadata.gid() != owner.gid()
+        || metadata.mode() & 0o7777 != 0o600
+        || metadata.nlink() != 1
+        || metadata.len() != 0
+    {
+        return Err("runner drain marker custody invalid".into());
+    }
+    Ok(true)
 }
 fn available_storage(s: &SmolConfig) -> Result<u64, String> {
     let directory = File::open(&s.home).map_err(|_| "Smol storage unavailable")?;

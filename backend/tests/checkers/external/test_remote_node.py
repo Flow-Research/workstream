@@ -103,11 +103,11 @@ def _placement_body():
         "health": {"operating_system": "linux", "architecture": "amd64", "runtime": "smolvm",
                    "isolation_mode": "smol-microvm", "cached_platform_manifests": 1,
                    "sandbox_uid": 10001, "sandbox_gid": 10001},
-        "draining": False, "pre_available": True, "background_available": True,
+        "draining": False, "drained": False, "fits_admission": None,
         "images": [{"platform_manifest_digest": "sha256:" + "b" * 64,
                     "config_image_id": "sha256:" + "c" * 64}],
         "pre": {"profile_sha256": "sha256:" + "d" * 64, "root_sha256": "sha256:" + "f" * 64},
-        "intake": None, "model_callbacks": False, "trial_authority_manifest_sha256": None,
+        "intake": None, "callback_relay": False, "trial_authority_manifest_sha256": None,
     }
 
 
@@ -167,13 +167,13 @@ async def test_runner_placement_probe_authenticates_loaded_identity(tmp_path, ch
         }])
         transport = RunnerTransport(endpoints, certificates["ca"], certificates["client_certificate"],
                                     certificates["client_key"])
-        matched = await transport.select("attempt-1", qualifies=lambda readiness: readiness.pre_available)
+        matched = await transport.select("attempt-1", qualifies=lambda readiness: readiness.pre is not None)
         if changed is None:
             assert matched is not None and matched.readiness.epoch == body["epoch"]
             assert matched.readiness.images[0].config_image_id == body["images"][0]["config_image_id"]
         else:
             assert matched is None
-    assert requests == [{"protocol_version": "workstream.remote_runner.v1", "operation": "placement"}]
+    assert requests == [{"protocol_version": "workstream.remote_runner.v1", "operation": "placement", "demand": None}]
 
 
 @pytest.mark.asyncio
@@ -186,15 +186,21 @@ async def test_runner_selection_uses_only_qualified_ready_targets(tmp_path, monk
     endpoints = ExternalRunnerEndpoints.model_validate([
         {"host": "127.0.0.1", "port": 9443 + index, "server_name": f"{name}.test",
          "config_sha256": "sha256:" + "a" * 64}
-        for index, name in enumerate(("qualified-a", "qualified-b", "drained", "other-profile", "unreachable"))
+        for index, name in enumerate(("qualified-a", "qualified-b", "drained", "other-profile", "full", "unreachable"))
     ])
     calls = []
 
-    async def probe(_transport, endpoint):
+    demand = {"kind": "pre", "source_bytes": 200}
+
+    async def probe(_transport, endpoint, *, demand):
+        assert demand == {"kind": "pre", "source_bytes": 200}
         calls.append(endpoint.server_name)
         state = _placement_body()
+        state["fits_admission"] = True
         if endpoint.server_name == "drained.test":
-            state.update(draining=True, pre_available=False, background_available=False)
+            state.update(draining=True, fits_admission=False)
+        if endpoint.server_name == "full.test":
+            state.update(fits_admission=False)
         if endpoint.server_name == "other-profile.test":
             state["pre"]["profile_sha256"] = "sha256:" + "0" * 64
         if endpoint.server_name == "unreachable.test":
@@ -206,15 +212,39 @@ async def test_runner_selection_uses_only_qualified_ready_targets(tmp_path, monk
     reordered = RunnerTransport(ExternalRunnerEndpoints(tuple(reversed(endpoints.root))), tmp_path, tmp_path, tmp_path)
 
     def qualifies(readiness):
-        return readiness.pre_available and readiness.pre.profile_sha256 == "sha256:" + "d" * 64
+        return readiness.pre.profile_sha256 == "sha256:" + "d" * 64
 
-    chosen = await transport.select("stable-attempt", qualifies=qualifies)
-    assert chosen == await reordered.select("stable-attempt", qualifies=qualifies)
+    chosen = await transport.select("stable-attempt", qualifies=qualifies, demand=demand)
+    assert chosen == await reordered.select("stable-attempt", qualifies=qualifies, demand=demand)
     assert chosen.endpoint.server_name in {"qualified-a.test", "qualified-b.test"}
     assert len(calls) == 2 * len(endpoints.root)
     cert = SimpleNamespace(getpeercert=lambda: {"subjectAltName": (("DNS", "*.test"),)})
     with pytest.raises(ssl.SSLError, match="certificate identity differs"):
         transport.require_peer(cert, chosen.endpoint)
+
+
+@pytest.mark.asyncio
+async def test_runner_probe_aborts_without_waiting_for_tls_shutdown(tmp_path, monkeypatch):
+    from unittest.mock import AsyncMock, Mock
+
+    from app.adapters import runner
+    from app.core.runner_endpoints import ExternalRunnerEndpoints
+
+    async def no_result(*_args):
+        await asyncio.Future()
+
+    endpoints = ExternalRunnerEndpoints.model_validate([{
+        "host": "127.0.0.1", "port": 9443, "server_name": "runner.test",
+        "config_sha256": _placement_body()["config_sha256"],
+    }])
+    reader = Mock(readexactly=AsyncMock(side_effect=no_result))
+    writer = Mock(drain=AsyncMock(), wait_closed=AsyncMock(side_effect=no_result))
+    monkeypatch.setattr(runner.RunnerTransport, "open", AsyncMock(return_value=(reader, writer)))
+    monkeypatch.setattr(runner, "_PROBE_SECONDS", 0.02)
+    transport = runner.RunnerTransport(endpoints, tmp_path, tmp_path, tmp_path)
+    assert await asyncio.wait_for(transport.select("claim", qualifies=lambda _state: True), 1) is None
+    writer.transport.abort.assert_called_once_with()
+    writer.wait_closed.assert_not_awaited()
 
 
 @asynccontextmanager

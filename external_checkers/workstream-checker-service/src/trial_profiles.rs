@@ -257,6 +257,30 @@ pub(crate) struct TrialProfileCatalog {
     entries: Vec<TrialProfile>,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct TrialPlacementBinding {
+    registry_entry_id: String,
+    registry_entry_digest: String,
+    image_digest: String,
+    configuration_sha256: String,
+    profile_digest: String,
+    projection_digest: String,
+}
+
+fn matches_binding(
+    profile: &TrialProfile,
+    registry_entry_id: &str,
+    registry_entry_digest: &str,
+    image_digest: &str,
+    configuration_sha256: &str,
+) -> bool {
+    profile.registry_entry_id == registry_entry_id
+        && profile.registry_entry_digest == registry_entry_digest
+        && profile.checker_image_digest == image_digest
+        && profile.configuration_sha256 == configuration_sha256
+}
+
 impl TrialProfileCatalog {
     #[cfg(test)]
     pub(crate) fn empty_for_test() -> Self {
@@ -324,16 +348,36 @@ impl TrialProfileCatalog {
             .iter()
             .filter(|profile| {
                 selector_from_profile(profile) == selected
-                    && profile.registry_entry_id == request.registry_entry_id
-                    && profile.registry_entry_digest == request.registry_entry_digest
-                    && profile.checker_image_digest == request.image_digest
-                    && profile.configuration_sha256 == request.configuration_digest
+                    && matches_binding(
+                        profile,
+                        &request.registry_entry_id,
+                        &request.registry_entry_digest,
+                        &request.image_digest,
+                        &request.configuration_digest,
+                    )
             })
             .collect::<Vec<_>>();
         match matches.as_slice() {
             [profile] => Ok(Some(*profile)),
             _ => Err("trial authority unavailable"),
         }
+    }
+
+    pub(crate) fn resolve_placement(
+        &self,
+        binding: &TrialPlacementBinding,
+    ) -> Option<&TrialProfile> {
+        // The approved authority catalogue requires distinct exact binding tuples.
+        self.entries.iter().find(|profile| {
+            matches_binding(
+                profile,
+                &binding.registry_entry_id,
+                &binding.registry_entry_digest,
+                &binding.image_digest,
+                &binding.configuration_sha256,
+            ) && profile.profile_digest == binding.profile_digest
+                && profile.projection_digest == binding.projection_digest
+        })
     }
 }
 

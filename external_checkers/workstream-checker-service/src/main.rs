@@ -63,6 +63,10 @@ struct ServiceConfig {
     #[serde(skip)]
     container_owner: Option<String>,
     #[serde(skip)]
+    control_root: Option<std::sync::Arc<File>>,
+    #[serde(skip)]
+    startup_config_sha256: String,
+    #[serde(skip)]
     smol_admission: Option<std::sync::Arc<smol::Admission>>,
     socket_path: PathBuf,
     model_proxy_socket: Option<PathBuf>,
@@ -162,6 +166,38 @@ struct HealthEnvelope {
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
+struct BindEpochEnvelope {
+    protocol_version: String,
+    operation: String,
+    config_sha256: String,
+    epoch: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PlacementEnvelope {
+    protocol_version: String,
+    operation: String,
+    demand: Option<PlacementDemand>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+enum PlacementDemand {
+    Pre {
+        source_bytes: u64,
+    },
+    Intake {
+        preparation: Value,
+    },
+    Post {
+        memory_bytes: u64,
+        trial: Option<trial_profiles::TrialPlacementBinding>,
+    },
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
 struct GrantReference {
     grant_id: String,
     binding_digest: String,
@@ -231,6 +267,12 @@ struct HealthReceipt<'a> {
     protocol_version: &'static str,
     operation: &'static str,
     status: &'static str,
+    #[serde(flatten)]
+    runtime: RuntimeHealth<'a>,
+}
+
+#[derive(Debug, Serialize)]
+struct RuntimeHealth<'a> {
     operating_system: &'a str,
     architecture: &'a str,
     runtime: &'a str,
@@ -485,6 +527,7 @@ fn run() -> Result<(), String> {
     let bytes = fs::read(path).map_err(|_| "configuration unavailable")?;
     let mut config: ServiceConfig =
         serde_json::from_slice(&bytes).map_err(|_| "configuration invalid")?;
+    config.startup_config_sha256 = format!("sha256:{:x}", Sha256::digest(&bytes));
     load_trial_profiles(&mut config)?;
     let listener = prepare_listener(&mut config)?;
     if config.runtime == "smolvm" {
@@ -780,6 +823,12 @@ fn prepare_listener(config: &mut ServiceConfig) -> Result<OwnedSocketListener, S
     // live owner's resources.
     let listener = OwnedSocketListener::bind(&config.socket_path)?;
     config.container_owner = Some(load_container_owner(&listener.parent)?);
+    config.control_root = Some(std::sync::Arc::new(
+        listener
+            .parent
+            .try_clone()
+            .map_err(|_| "control root unavailable")?,
+    ));
     validate_config(config)?;
     load_trial_runtime(config)?;
     let trial_roots = trial_roots::claim(config)?;
@@ -877,7 +926,7 @@ fn serve_connection(
     if stream.set_nonblocking(true).is_err() {
         return Ok(());
     }
-    let frame = read_frame_until(&mut stream, MAX_ENVELOPE_BYTES, Instant::now() + timeout);
+    let frame = read_connection_frame(config, &mut stream, Instant::now() + timeout);
     if let Ok(bytes) = &frame {
         if serde_json::from_slice::<Value>(bytes)
             .ok()
@@ -914,6 +963,35 @@ fn serve_connection(
     Ok(())
 }
 
+fn read_connection_frame(
+    config: &ServiceConfig,
+    stream: &mut UnixStream,
+    deadline: Instant,
+) -> Result<Vec<u8>, String> {
+    let frame = read_frame_until(stream, MAX_ENVELOPE_BYTES, deadline)?;
+    if !serde_json::from_slice::<Value>(&frame)
+        .ok()
+        .is_some_and(|value| value["operation"] == "bind_epoch")
+    {
+        return Ok(frame);
+    }
+    let binding: BindEpochEnvelope =
+        serde_json::from_slice(&frame).map_err(|_| "runner binding invalid")?;
+    let admission = config
+        .smol_admission
+        .as_ref()
+        .ok_or("runner epoch unavailable")?;
+    if binding.protocol_version != PROTOCOL
+        || binding.operation != "bind_epoch"
+        || binding.config_sha256 != config.startup_config_sha256
+        || binding.epoch != admission.epoch
+    {
+        return Err("runner binding differs".into());
+    }
+    // A bound frame never changes the original private request or its read deadline.
+    read_frame_until(stream, MAX_ENVELOPE_BYTES, deadline)
+}
+
 fn connection_response(response: Result<Vec<u8>, String>) -> Result<Option<Vec<u8>>, String> {
     match response {
         Ok(bytes) => Ok(Some(bytes)),
@@ -934,6 +1012,7 @@ fn validate_config(config: &ServiceConfig) -> Result<(), String> {
         || config.sandbox_uid == 0
         || config.sandbox_gid == 0
         || config.cache.is_empty()
+        || config.cache.len() > 64
     {
         return Err("configuration values invalid".into());
     }
@@ -1033,7 +1112,16 @@ fn handle_frame(
     bytes: &[u8],
 ) -> Result<Vec<u8>, String> {
     let value: Value = serde_json::from_slice(bytes).map_err(|_| "request envelope invalid")?;
-    if value.get("operation").and_then(Value::as_str) == Some("health") {
+    if value["operation"] == "placement" {
+        let envelope: PlacementEnvelope =
+            serde_json::from_value(value).map_err(|_| "runner placement envelope invalid")?;
+        if envelope.protocol_version != PROTOCOL || envelope.operation != "placement" {
+            return Err("request operation invalid".into());
+        }
+        runtime_ready(config)?;
+        return placement_reply(config, envelope.demand.as_ref());
+    }
+    if value["operation"] == "health" {
         let envelope: HealthEnvelope =
             serde_json::from_value(value).map_err(|_| "health envelope invalid")?;
         if envelope.protocol_version != PROTOCOL || envelope.operation != "health" {
@@ -1044,13 +1132,7 @@ fn handle_frame(
             protocol_version: PROTOCOL,
             operation: "health",
             status: "ready",
-            operating_system: &config.operating_system,
-            architecture: &config.architecture,
-            runtime: &config.runtime,
-            isolation_mode: &config.isolation_mode,
-            cached_platform_manifests: config.cache.len(),
-            sandbox_uid: config.sandbox_uid,
-            sandbox_gid: config.sandbox_gid,
+            runtime: runtime_health(config),
         })
         .map_err(|_| "health encoding failed".into());
     }
@@ -1147,6 +1229,64 @@ fn handle_frame(
     };
     validate_execution_result(&result, &request).map_err(|_| "result contract invalid")?;
     encode_response(result, isolation)
+}
+
+fn runtime_health(config: &ServiceConfig) -> RuntimeHealth<'_> {
+    RuntimeHealth {
+        operating_system: &config.operating_system,
+        architecture: &config.architecture,
+        runtime: &config.runtime,
+        isolation_mode: &config.isolation_mode,
+        cached_platform_manifests: config.cache.len(),
+        sandbox_uid: config.sandbox_uid,
+        sandbox_gid: config.sandbox_gid,
+    }
+}
+
+fn placement_reply(
+    config: &ServiceConfig,
+    demand: Option<&PlacementDemand>,
+) -> Result<Vec<u8>, String> {
+    let admission = config
+        .smol_admission
+        .as_ref()
+        .ok_or("runner epoch unavailable")?;
+    let (draining, drained) = admission.drain_state(|| smol::node_draining(config))?;
+    let fits_admission = demand
+        .map(|demand| match draining {
+            true => Ok(false),
+            false => smol::fits_placement(config, demand),
+        })
+        .transpose()?;
+    let images: Vec<_> = config
+        .cache
+        .iter()
+        .map(|entry| {
+            serde_json::json!({
+                "platform_manifest_digest": entry.platform_manifest_digest,
+                "config_image_id": entry.config_image_id,
+            })
+        })
+        .collect();
+    let intake = config
+        .trusted_intake
+        .as_ref()
+        .map(|_| smol::intake_identity(config))
+        .transpose()?;
+    serde_json::to_vec(&serde_json::json!({
+        "protocol_version": PROTOCOL, "operation": "placement",
+        "config_sha256": config.startup_config_sha256, "epoch": admission.epoch,
+        "health": runtime_health(config), "draining": draining, "drained": drained,
+        "fits_admission": fits_admission,
+        "images": images,
+        "pre": config.pre.as_ref().map(|pre| serde_json::json!({
+            "profile_sha256": pre.profile_sha256, "root_sha256": pre.root.bundle_sha256,
+        })),
+        "intake": intake,
+        "callback_relay": config.model_proxy_socket.is_some(),
+        "trial_authority_manifest_sha256": config.trial_authority_manifest_digest,
+    }))
+    .map_err(|_| "runner placement encoding failed".into())
 }
 
 fn validate_execution_operation(
@@ -3061,6 +3201,8 @@ mod tests {
             trusted_intake: None,
             pre: None,
             smol_admission: None,
+            control_root: Some(std::sync::Arc::new(File::open(&socket_root).unwrap())),
+            startup_config_sha256: format!("sha256:{}", "a".repeat(64)),
             container_owner: Some(
                 load_container_owner(&File::open(&socket_root).unwrap()).unwrap(),
             ),
@@ -3091,6 +3233,65 @@ mod tests {
             }],
         };
         (root, config)
+    }
+
+    #[test]
+    fn runner_binding_requires_loaded_config_and_current_epoch() {
+        let (root, mut config) = test_config();
+        config.smol_admission = Some(std::sync::Arc::new(
+            smol::Admission::new(
+                smol::Capacity {
+                    slots: 1,
+                    memory_bytes: 1,
+                    storage_bytes: 1,
+                },
+                None,
+                "e".repeat(64),
+            )
+            .unwrap(),
+        ));
+        let inner = serde_json::to_vec(&serde_json::json!({
+            "protocol_version": PROTOCOL, "operation": "health",
+        }))
+        .unwrap();
+        let binding = serde_json::json!({
+            "protocol_version": PROTOCOL, "operation": "bind_epoch",
+            "config_sha256": config.startup_config_sha256, "epoch": "e".repeat(64),
+        });
+        for field in [
+            None,
+            Some("epoch"),
+            Some("config_sha256"),
+            Some("unexpected"),
+        ] {
+            let mut proposed = binding.clone();
+            if let Some(name) = field {
+                proposed[name] = serde_json::json!("different");
+            }
+            let (mut client, mut service) = UnixStream::pair().unwrap();
+            let deadline = Instant::now() + Duration::from_secs(1);
+            write_frame_until(
+                &mut client,
+                &serde_json::to_vec(&proposed).unwrap(),
+                deadline,
+            )
+            .unwrap();
+            write_frame_until(&mut client, &inner, deadline).unwrap();
+            let observed = read_connection_frame(&config, &mut service, deadline);
+            if field.is_none() {
+                assert_eq!(observed.unwrap(), inner);
+            } else {
+                assert!(observed.is_err());
+            }
+        }
+        let (mut client, mut service) = UnixStream::pair().unwrap();
+        let deadline = Instant::now() + Duration::from_secs(1);
+        write_frame_until(&mut client, &inner, deadline).unwrap();
+        assert_eq!(
+            read_connection_frame(&config, &mut service, deadline).unwrap(),
+            inner
+        );
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

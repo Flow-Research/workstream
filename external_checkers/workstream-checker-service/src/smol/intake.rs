@@ -159,7 +159,7 @@ fn image(config: &ServiceConfig) -> Result<(&IntakeConfig, &CacheEntry), String>
     inspect_image(cache)?;
     Ok((intake, cache))
 }
-fn identity(config: &ServiceConfig) -> Result<Value, String> {
+pub(crate) fn identity(config: &ServiceConfig) -> Result<Value, String> {
     let (intake, cache) = image(config)?;
     Ok(
         json!({"image_digest": cache.platform_manifest_digest, "config_digest": cache.config_image_id,
@@ -167,6 +167,20 @@ fn identity(config: &ServiceConfig) -> Result<Value, String> {
         "isolation_mode": config.isolation_mode, "cpu_millis": BASE_RESOURCES.cpu_millis,
         "memory_bytes": BASE_RESOURCES.memory_bytes}),
     )
+}
+
+pub(super) fn placement_capacity(
+    config: &ServiceConfig,
+    payload: &Value,
+) -> Result<Capacity, String> {
+    let request = preparation(payload)?;
+    let (intake, _) = image(config)?;
+    intake_capacity(resources(&request, &intake.storage_envelope)?)
+}
+
+fn intake_capacity(resources: Resources) -> Result<Capacity, String> {
+    // Intake explicitly allocates a separate 1 GiB writable root overlay.
+    resource_capacity(resources, Some(1))
 }
 fn preparation(value: &Value) -> Result<Preparation, String> {
     let request: Preparation =
@@ -283,8 +297,7 @@ pub(crate) fn serve(
     let (intake, cache) = image(config)?;
     let resources = resources(&request, &intake.storage_envelope)?;
     let deadline = Instant::now() + Duration::from_millis(request.deadline_ms);
-    // Intake explicitly allocates a separate 1 GiB writable root overlay.
-    let capacity = resource_capacity(resources, Some(1))?;
+    let capacity = intake_capacity(resources)?;
     let reservation = match reserve_capacity(config, Phase::Background, capacity, None) {
         Ok(value) => value,
         Err(_) => {
