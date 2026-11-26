@@ -12803,3 +12803,9 @@ modes. The bounded repair covers the backend release Dockerfile and its
 image verifier. The isolated parser must import the packaged code both as
 capability-restricted root and as the broker UID. Runtime and secret
 directories retain their existing permissions.
+
+The release image verifier now reads the packaged source bytes and imports
+the exact parser module as both identities. A local Docker fixture with
+owner-only application source reproduced the permission failure for both
+identities and the verifier rejected it. The verifier passed the readable
+release fixture, and all 20 focused verifier tests passed.
