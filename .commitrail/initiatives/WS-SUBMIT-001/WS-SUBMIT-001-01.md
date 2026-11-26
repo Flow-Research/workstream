@@ -11137,6 +11137,18 @@ Ruff/whitespace checks and unchanged structure passed. Root inspected the bounde
 draft with no scoped code blocker; final clean content binding follows this
 evidence-only append. Full goal/hosted CI qualification remains outside scope.
 
+At clean `2f7d8d95c18598f36e869be1de16263c8bacf81d`, the retained public
+managed-style substitution passed in 62.94 seconds on schema 0093. The
+test exercised signed ZIP intake, bound managed PRE evidence and cleanup,
+acceptance replay, and production OUTBOX/T5 finalization of the exact source.
+The separate selected factory/runtime and failure/cancellation contract
+passed four cases in 4.72 seconds. The isolated launcher provisioned and
+probed MinIO and cleaned its owned bucket, database, and role. The exact ZIP
+case stores its source through the Local adapter. This qualifies controlled
+managed-style substitution through the current typed contracts. Receipts:
+`/tmp/pr708-a30-2f7d-pure.log` and `/tmp/pr708-a30-2f7d-isolated.log`
+with its adjacent metadata JSON.
+
 ### Dedicated worker queues and durable outbox publication
 
 PRE6 proved the public native launch failure, same-key failed replay, and fresh
