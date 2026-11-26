@@ -28,6 +28,31 @@ from experiments.pilot04_external_checker_runtime.public_hosted_attachment impor
 
 
 class PublicJourneyWorkerCustody(unittest.TestCase):
+    def test_separate_runner_uses_exact_baseline_config_without_local_fault_files(self):
+        from experiments.pilot04_external_checker_runtime import run_public_journey_probe as probe
+
+        source, binary = 'b' * 40, 'sha256:' + 'c' * 64
+        configuration = {"smol": {"binary": "/runner/smolvm", "binary_sha256": binary}}
+        encoded = json.dumps(configuration).encode()
+        custody = {
+            'source_tree': source,
+            'node_config': configuration,
+            'config_sha256': 'sha256:' + hashlib.sha256(encoded).hexdigest(),
+            'smol_sha256': binary,
+        }
+        with tempfile.TemporaryDirectory() as directory, patch.object(
+            probe.subprocess, 'check_output', return_value=source + '\n',
+        ):
+            root = Path(directory)
+            config = root / 'runner.json'
+            config.write_bytes(encoded)
+            self.assertEqual(probe._read_runner_configuration(config, root, custody, separate_runner=True),
+                             configuration)
+            self.assertFalse((root / 'node-control').exists())
+            config.write_bytes(encoded + b'\n')
+            with self.assertRaisesRegex(RuntimeError, 'separate runner configuration differs'):
+                probe._read_runner_configuration(config, root, custody, separate_runner=True)
+
     def test_cleanup_child_alone_receives_a_private_distinct_principal(self):
         from pydantic import SecretStr
         from experiments.pilot04_external_checker_runtime import run_public_journey_probe as probe

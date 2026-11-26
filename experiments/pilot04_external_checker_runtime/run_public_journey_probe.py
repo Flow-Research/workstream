@@ -866,7 +866,8 @@ async def _one_mode(client, factory, env, *,
                     human_review_required: bool, operator_id: UUID | None,
                     stop_worker: Callable[[], None] | None = None,
                     start_worker: Callable[[], Awaitable[None]] | None = None, fault_root=None,
-                    operator_token=None, clients: ContributorClients | None = None) -> dict:
+                    operator_token=None, clients: ContributorClients | None = None,
+                    exercise_faults: bool = True) -> dict:
     from experiments.pilot04_external_checker_runtime.public_hosted_attachment import HostedAttachment
 
     attachment = env if isinstance(env, HostedAttachment) else None
@@ -985,7 +986,7 @@ async def _one_mode(client, factory, env, *,
         project_id=compilation.project_id,
         recommendation="needs_revision" if human_review_required else "allow_review",
         finding_code="probe.post_rule_failed" if human_review_required else None,
-        deliver_completion=human_review_required, successor=successor,
+        deliver_completion=human_review_required or not exercise_faults, successor=successor,
     )
     attempt_id = first_attempt_id
     if human_review_required:
@@ -1022,7 +1023,7 @@ async def _one_mode(client, factory, env, *,
             factory, submission_id=saved["submission_id"],
             project_id=compilation.project_id, recommendation="allow_review",
         )
-    else:
+    elif exercise_faults:
         await _wait_known_retry(
             factory, completion_id, compilation.project_id,
             task_id, first_submission_id,
@@ -1109,7 +1110,7 @@ async def _one_mode(client, factory, env, *,
     )
     _require(again == outcome, "duplicate completion changed governed outcome")
     late_revocation = None
-    if not human_review_required and attachment is None:
+    if exercise_faults and not human_review_required and attachment is None:
         late_revocation = await _late_revocation_trial(
             client, factory, env, project_id=compilation.project_id,
             accepted_task_id=task_id, manager_token=manager_token,
@@ -1148,14 +1149,18 @@ async def _pre_runs(factory, task_id: str) -> list[str]:
         ).order_by(SelectedPreSubmitRun.queued_at)))
 
 
-async def run(database_url: str, image_reference: str, node_config: Path,
-              broker_url: str, root: Path, expected_custody: Path,
-              clients: ContributorClients | None = None) -> dict:
-    root.mkdir(parents=True, mode=0o700, exist_ok=True)
-    custody = json.loads(expected_custody.read_text())
+def _read_runner_configuration(node_config: Path, root: Path, custody: dict, *, separate_runner: bool) -> dict:
+    """Bind a copied baseline config or the exact locally supervised wrapper."""
     _require(custody['source_tree'] == subprocess.check_output(
         ['git', 'rev-parse', 'HEAD'], cwd=BACKEND, text=True).strip(), 'custody source differs')
-    service_config = json.loads(node_config.read_text())
+    raw = node_config.read_bytes()
+    service_config = json.loads(raw)
+    if separate_runner:
+        _require(service_config == custody['node_config']
+                 and 'sha256:' + hashlib.sha256(raw).hexdigest() == custody['config_sha256']
+                 and service_config['smol']['binary_sha256'] == custody['smol_sha256'],
+                 'separate runner configuration differs from reviewed custody')
+        return service_config
     _require(service_config["smol"].get("maximum_parallel") == 1,
              "public proof requires a one-slot node")
     original_config = json.loads(json.dumps(service_config))
@@ -1169,6 +1174,16 @@ async def run(database_url: str, image_reference: str, node_config: Path,
     _require(original_config == custody['node_config'], 'node configuration differs from expected custody')
     _require(json.loads((root / 'node-control/node-binding.json').read_text()) == custody,
              'host binary/config validation receipt differs from expected custody')
+    return service_config
+
+
+async def run(database_url: str, image_reference: str, node_config: Path,
+              broker_url: str, root: Path, expected_custody: Path,
+              clients: ContributorClients | None = None, *, separate_runner: bool = False) -> dict:
+    root.mkdir(parents=True, mode=0o700, exist_ok=True)
+    _require(not separate_runner or clients is not None, 'separate runner proof needs both clients')
+    custody = json.loads(expected_custody.read_text())
+    service_config = _read_runner_configuration(node_config, root, custody, separate_runner=separate_runner)
     _require((service_config["runtime"], service_config["isolation_mode"])
              == ("smolvm", "smol-microvm"), "public drill requires the provisioned Smol node")
     repository, digest = image_reference.rsplit("@", 1)
@@ -1178,7 +1193,7 @@ async def run(database_url: str, image_reference: str, node_config: Path,
     image = images[0]
     bucket = os.environ["WORKSTREAM_TEST_MINIO_BUCKET"]
     prefix = os.environ["WORKSTREAM_TEST_MINIO_PREFIX"]
-    scratch = Path(service_config["material_root"])
+    scratch = root / "artifact-scratch" if separate_runner else Path(service_config["material_root"])
     intake_images = [entry for entry in service_config["cache"]
                      if entry["platform_manifest_digest"]
                      == service_config["trusted_intake"]["platform_manifest_digest"]]
@@ -1317,6 +1332,8 @@ async def run(database_url: str, image_reference: str, node_config: Path,
         operator, _ = await seed_review_actor(factory, None, role="operator", scope="system", issuer=seeded_issuer(env))
         from tests.reviews.lifecycle.transition_support import command_for, transition
         await transition(await command_for(operator.actor_profile_id, "shadow"))
+        if separate_runner:
+            await transition(await command_for(operator.actor_profile_id, "live"))
 
         intake_health = await trusted_submission_intake(runtime_settings).health()
         execution_health = await configured_external_checker_execution(runtime_settings).health()
@@ -1353,25 +1370,28 @@ async def run(database_url: str, image_reference: str, node_config: Path,
         ], env=env, log=root / "beat.log")
         await _wait_beat_scan(factory, beat, scans_before_beat)
         async with httpx.AsyncClient(base_url=origin, timeout=(source_profile.upload_total_seconds
-                + runtime_settings.external_checker_service_timeout_seconds)) as client:
-            from experiments.pilot04_external_checker_runtime.public_intake_trials import public_intake_trials
-            intake_trials = await public_intake_trials(
-                client, factory, env, root / "node-control",
-                stop_worker=stop_owned_worker, start_worker=start_owned_worker)
-            from experiments.pilot04_external_checker_runtime.public_runtime_trials import public_runtime_trials
-            fault_root = root / "node-control"
-            _require((fault_root / "supervisor-ready").exists(), "owned node supervisor is absent")
-            runtime_trials = await public_runtime_trials(client, factory, env, fault_root,
-                stop_worker=stop_owned_worker, start_worker=start_owned_worker, operator_token=_token(env, operator))
+                + runtime_settings.external_checker_service_timeout_seconds), trust_env=False) as client:
+            fault_root = None if separate_runner else root / "node-control"
+            intake_trials = runtime_trials = None
+            if fault_root is not None:
+                from experiments.pilot04_external_checker_runtime.public_intake_trials import public_intake_trials
+                from experiments.pilot04_external_checker_runtime.public_runtime_trials import public_runtime_trials
+                intake_trials = await public_intake_trials(
+                    client, factory, env, fault_root, stop_worker=stop_owned_worker, start_worker=start_owned_worker)
+                _require((fault_root / "supervisor-ready").exists(), "owned node supervisor is absent")
+                runtime_trials = await public_runtime_trials(client, factory, env, fault_root,
+                    stop_worker=stop_owned_worker, start_worker=start_owned_worker, operator_token=_token(env, operator))
             true = await _one_mode(client, factory, env,
                                    human_review_required=True,
-                                   operator_id=operator.actor_profile_id, clients=clients)
+                                   operator_id=operator.actor_profile_id, clients=clients,
+                                   exercise_faults=not separate_runner)
             false = await _one_mode(client, factory, env,
                                     human_review_required=False,
                                     operator_id=operator.actor_profile_id,
                                     stop_worker=stop_owned_worker,
                                     start_worker=start_owned_worker, fault_root=fault_root,
-                                    operator_token=_token(env, operator), clients=clients)
+                                    operator_token=_token(env, operator), clients=clients,
+                                    exercise_faults=not separate_runner)
         _require(api.poll() is None and beat.poll() is None
                  and all(process.poll() is None for process in workers),
                  "API, dedicated prefork worker, or Beat exited during public journey")
@@ -1382,13 +1402,16 @@ async def run(database_url: str, image_reference: str, node_config: Path,
                 "trusted_intake_image_digest": intake_health.image_digest,
                 "trusted_intake_config_digest": intake_health.config_digest,
                 "public_api": True, "prefork_worker": True, "prefork_finalization_worker": True,
-                "dedicated_worker_queues": [queue for _, queue in WORKER_ROLES], "maximum_parallel": 1,
+                "dedicated_worker_queues": [queue for _, queue in WORKER_ROLES],
+                "maximum_parallel": service_config["smol"]["maximum_parallel"],
+                "separate_runner": separate_runner,
                 "scheduled_artifact_scans": True,
                 "public_original_guide_setup": True,
                 "connected_submitter_clients": ["cli", "mcp"] if clients is not None else [],
                 "recorded_inference": True,
                 "custody": {key: custody[key] for key in (
-                    'source_tree', 'config_sha256', 'service_sha256', 'smol_sha256', 'guest_sha256', 'wrapper_sha256')},
+                    'source_tree', 'config_sha256', 'service_sha256', 'smol_sha256', 'guest_sha256',
+                ) + (() if separate_runner else ('wrapper_sha256',))},
                 "runtime_trials": runtime_trials, "intake_trials": intake_trials, "human": true, "automatic": false}
     finally:
         cleanup_error = None
@@ -1416,6 +1439,8 @@ def main() -> int:
                         help="Unique private directory retaining API and worker diagnostics")
     parser.add_argument("--cli-executable", type=Path, help="Built CLI for connected submitter verification")
     parser.add_argument("--mcp-executable", type=Path, help="Installed MCP for connected submitter verification")
+    parser.add_argument("--separate-runner", action="store_true",
+                        help="Use baseline remote runner custody without local host fault controls")
     parser.add_argument('--hosted-attachment', type=Path,
                         help='Private attachment manifest for an existing hosted API/worker/Beat')
     parser.add_argument('--hosted-model-post', type=Path,
@@ -1427,9 +1452,12 @@ def main() -> int:
         parser.error('model POST qualification requires explicit hosted attachment')
     if bool(args.cli_executable) != bool(args.mcp_executable):
         parser.error("connected submitter verification requires both client executables")
+    if args.separate_runner and not args.cli_executable:
+        parser.error("the separate runner proof requires both client executables")
     if args.hosted_attachment:
         if (not args.broker_url or args.image_reference or args.node_config
-                or args.work_dir or args.expected_custody or args.cli_executable or args.mcp_executable):
+                or args.work_dir or args.expected_custody or args.cli_executable or args.mcp_executable
+                or args.separate_runner):
             parser.error('hosted attachment requires broker URL and excludes local launch arguments')
         from experiments.pilot04_external_checker_runtime.public_hosted_attachment import HostedAttachment, run as attach
         attachment = HostedAttachment.read(args.hosted_attachment)
@@ -1448,7 +1476,7 @@ def main() -> int:
             cleanup.callback(clients.identity.close)
         value = asyncio.run(run(
             args.database_url, args.image_reference, args.node_config,
-            args.broker_url, Path(directory), args.expected_custody, clients,
+            args.broker_url, Path(directory), args.expected_custody, clients, separate_runner=args.separate_runner,
         ))
     print(json.dumps(value, sort_keys=True, separators=(",", ":")))
     return 0

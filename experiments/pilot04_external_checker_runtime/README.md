@@ -150,7 +150,15 @@ clients address the same public API while the dedicated workers process
 submissions. The clean run receipt includes `connected_submitter_clients`
 after guide download, PRE rejection, cross-client replay, POST revision,
 resubmission, and final assignment reads complete. Hosted Flow Identity and
-deployed service qualification remain separate.
+deployed service qualification remain separate. Use `--separate-runner` for
+the local API and independently staged remote Smol topology. Pass an exact
+byte copy of the remote baseline service JSON and the reviewed custody file
+with `node_config`, `config_sha256`, `service_sha256`, `smol_sha256`,
+`guest_sha256`, and the qualification checkout's `source_tree`. The node must
+already serve the pinned project checker and trusted intake images over the
+configured mTLS route. The client host keeps its own artifact scratch.
+This mode records null intake and runtime fault trials. The existing remote
+PRE fault bridge covers its independently supervised fault stage.
 
 ```sh
 PYTHONPATH=.:tests:.. .venv/bin/python scripts/run_isolated_tests.py \
@@ -162,6 +170,7 @@ PYTHONPATH=.:tests:.. .venv/bin/python scripts/run_isolated_tests.py \
   --expected-custody /absolute/private-node/custody.json \
   --broker-url redis://127.0.0.1:<owned-port>/0 \
   --work-dir /absolute/private-guide-journey \
+  --separate-runner \
   --cli-executable /absolute/bin/workstream \
   --mcp-executable /absolute/mcp-wheel/bin/workstream-mcp
 ```
