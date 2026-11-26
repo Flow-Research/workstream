@@ -149,7 +149,7 @@ uploaded rules compilation at the same prefix's `requirements/compile` suffix.
 Both require a UUID `Idempotency-Key` and no body; manager review and separate
 approvals remain required. See the [local pilot](local-pilot.md#declare-and-upload-a-real-guide-document).
 
-The local Compose workers each consume one queue: project guide compilation,
+The local Compose Celery workers each consume one queue: project guide compilation,
 project control, artifact work, outbox scanning, POST delivery, submission
 finalization, and source cleanup. The submission finalizer and source cleanup
 services use the opt-in `submission-intake` profile. Set `WORKSTREAM_SUBMISSION_FINALIZATION_CONCURRENCY`
