@@ -13136,3 +13136,19 @@ The reconciliation used the one original publication. Its local receipt is
 on the API host. This proof covers exact aged rejection cleanup and accepted
 retention on the deployed release. Remaining native faults, supported maximum
 upload acceptance and final release activation still require evidence.
+
+### Archive-limit test contract corrections
+
+Backend run `45868305617` identified three test failures. The schema graph
+omitted retained parent `0093_verified_email_observation`. The downgrade test
+expected another revision's refusal message. The selected PRE revision fixture
+omitted the canonical locked effective policy now consumed at reservation.
+
+Test-only commit `3f06b9f2e` asserts the full graph and exact current parent,
+retains the exact refusal and unchanged database snapshots, and verifies the
+approved file limit in the revision's canonical PRE request. The graph and PRE
+cases passed as a focused pair. The isolated PostgreSQL downgrade case reported
+`PASSED` for the exact refusal and unchanged snapshots. Its 660-second wrapper
+cap expired before pytest finished schema teardown. The wrapper confirmed
+isolated database cleanup. The three complete CI lane reruns remain the
+release evidence for this correction.
