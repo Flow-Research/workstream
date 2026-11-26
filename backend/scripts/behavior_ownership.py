@@ -999,6 +999,8 @@ SUBMISSION_INTAKE_TARGETS = frozenset({
     "backend/app/adapters/submission_feedback_email.py",
     "backend/app/interfaces/submission_feedback_email.py",
     "backend/app/modules/tasks/post_submit_routing/feedback_email.py",
+    "backend/app/adapters/runner.py",
+    "backend/app/core/runner_endpoints.py",
 })
 FORGE_PROOF_FACTS_TARGETS = frozenset({
     "backend/app/adapters/github/app_facts.py",

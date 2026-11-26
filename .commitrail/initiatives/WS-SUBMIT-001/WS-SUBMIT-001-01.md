@@ -9355,6 +9355,28 @@ post-upgrade comparisons and database guards ran through completion. The
 isolated runner confirmed cleanup. The terminal receipt is
 `/tmp/pr708-feedback-claim-start-isolated.log` with its adjacent metadata JSON.
 
+### Register runner placement behavior ownership
+
+The canonical behavior ownership check at `feffb4ce3` rejected the
+placement additions because the protected partition lacked exactly
+`backend/app/adapters/runner.py` and `backend/app/core/runner_endpoints.py`.
+The existing classifier assigns both to the shared group. Register those
+two paths in the existing submission target set and its exact test, then
+regenerate the partition with the same protected base and retained assignments.
+
+Scope is `.ci/behavior-ownership/partition.v1.json`,
+`backend/scripts/behavior_ownership.py`, its existing test, and this record.
+Low risk. Focused QA should check that only the two approved shared targets
+and the authority digest change. Verify the canonical ownership check and
+the unchanged semantic-family, project ownership and concrete factory
+inventory tests. No validator policy, lane, workflow, runtime or gate change.
+
+The regenerated partition contains 692 targets with exactly those additions
+and an updated digest. The canonical validator passed against the protected
+PR base `d713594ebf04a125917edb0ec981d380cf8047b4`. Twenty focused tests
+passed in 23.79 seconds. The semantic fingerprints and exact factory counts
+matched their existing expectations. Ruff and diff checks passed.
+
 ### Refresh pending-operation MCP schema descriptions
 
 Configured backend OpenAPI comparison atc853743b6 passed142 and failed2

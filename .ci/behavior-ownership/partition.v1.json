@@ -181,6 +181,10 @@
       "target": "backend/app/adapters/reviews/contribution_reads.py"
     },
     {
+      "group": "shared",
+      "target": "backend/app/adapters/runner.py"
+    },
+    {
       "group": "lifecycle",
       "target": "backend/app/adapters/submission_feedback_email.py"
     },
@@ -395,6 +399,10 @@
     {
       "group": "lifecycle",
       "target": "backend/app/core/project_guide_instructions.py"
+    },
+    {
+      "group": "shared",
+      "target": "backend/app/core/runner_endpoints.py"
     },
     {
       "group": "shared",
@@ -2761,7 +2769,7 @@
       "target": "backend/scripts/validate_test_lane_evidence.py"
     }
   ],
-  "authority_digest": "14aa921cf9fc07a0779144d16686327eaa779d64e06fa40d383137a387d8b791",
+  "authority_digest": "9c68637f899c62f695b18ecffa768597d8e9ac09aaaf1d39a3b339ef3a60f4af",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }
