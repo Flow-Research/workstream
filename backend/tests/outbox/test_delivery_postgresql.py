@@ -27,7 +27,7 @@ async def test_background_invocation_survives_original_claim_expiry(delivery_har
         retry_base_seconds=1,
     )
     h.delivery = h.build(HandlerRegistry([(REQUEST_EVENT, 1, h.handle)]))
-    monkeypatch.setattr(delivery_module, "BACKGROUND_STATUS_INSPECTION_INTERVAL_SECONDS", 0.2)
+    monkeypatch.setattr(delivery_module, "BACKGROUND_STATUS_INSPECTION_INTERVAL_SECONDS", 10)
     entered, release = asyncio.Event(), asyncio.Event()
 
     async def block(_envelope):
@@ -44,14 +44,18 @@ async def test_background_invocation_survives_original_claim_expiry(delivery_har
             if invoked.done():
                 await invoked
             raise
-        await asyncio.sleep(5.2)
+        async with h.factory() as session:
+            first = await DeliveryRepository(session).attempt(claim)
+            first_decision = first.renew_decision_event_id
+            assert first_decision is not None
+        await asyncio.sleep(12)
         async with h.factory() as session:
             now = await database_time(session)
             event = await session.get(OutboxEvent, claim.event_id)
             attempt = await DeliveryRepository(session).attempt(claim)
             assert claim.claim_expires_at < now < event.claim_live_until
             assert attempt.claim_live_until == event.claim_live_until
-            assert attempt.renew_decision_event_id is not None
+            assert attempt.renew_decision_event_id != first_decision
             assert event.claim_generation == claim.claim_generation
         assert await h.delivery.recover(claim.event_id, h.project) is None
         assert await h.delivery.claim(claim.event_id, h.project, "competing-worker") is None
