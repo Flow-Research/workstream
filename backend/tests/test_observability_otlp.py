@@ -310,6 +310,14 @@ async def test_real_otlp_http_transport_is_sanitized_and_fail_open(
     failure_mode: str,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    # In-process Alembic tests can disable existing library loggers. Supply
+    # enabled sources for this matrix, restoring their prior policy afterward.
+    for logger in tuple(logging.Logger.manager.loggerDict.values()):
+        if isinstance(logger, logging.Logger) and logger.name.split(".", 1)[0] in {
+            "celery",
+            "opentelemetry",
+        }:
+            monkeypatch.setattr(logger, "disabled", False)
     if failure_mode == "refusal":
         with socket.socket() as reservation:
             reservation.bind(("127.0.0.1", 0))

@@ -11572,3 +11572,43 @@ and json.loads makes the full module AST identical to0096, so no assertion,
 fixture or other behavior changed. Ruff/whitespace and record checks pass. Both
 actual PostgreSQL manager/contributor cases remain pending coordinated runtime
 or CI; these pure checks do not qualify their database projection or privacy.
+
+### OTLP failure-matrix logging precondition (2026-11-26)
+
+Intent and bounded scope: tests/test_observability_otlp.py and this record only.
+New0096 schema_contracts_a job139790509534 has199 passes and one timeout-case
+failure with an empty log event set. Exact artifact15102175569 is retained at
+/tmp/pr708-0096-schema-a-artifact/metadata/schema_contracts_a.log. The standalone
+three-mode matrix, partial-cleanup/timeout pair, and exact nine same-shard pure
+observability predecessors pass; this does not explain away the repeated CI red.
+
+Causal probe: after importing the OTLP test, call the actual
+logging.config.fileConfig('alembic.ini') used by alembic/env.py:19. It changes
+existing Celery and OpenTelemetry logger.disabled flags to true. The unchanged
+timeout case then fails exactly with events=set() in1.76s
+(/tmp/pr708-0096-otlp-alembic-logging-before.log), without PG or broker. Prior
+in-process migration tests configure logging before this synthetic log proof.
+
+Make the matrix's logging inputs explicit: temporarily enable existing loggers in
+only its tested Celery/OpenTelemetry families through pytest monkeypatch, which
+restores their prior disabled flags afterward. Preserve required event labels,
+sanitization, registered task execution, fail-open results and all deadlines. No
+production logger behavior, migration configuration/guard, provider or skip
+change. Validate against the exact real Alembic logging precondition, including
+restoration, rather than relaxing the event assertion.
+
+Final discriminator: under that same actual Alembic fileConfig precondition, all
+three unchanged failure modes pass in2.67s
+(/tmp/pr708-0096-otlp-alembic-logging-after.log). The probe checks every original
+Celery/OpenTelemetry logger disabled flag is restored after pytest and an
+unrelated disabled logger stays disabled. Old exact timeout fails; repaired
+matrix retains exactly the original event set, output/privacy checks, registered
+task execution and timings. Removing only the explicit logger-input setup gives
+full module AST equality to the base. No test skip, production edit or node
+inventory change. The exact partial-cleanup/timeout pair passed2 in4.88s and
+nine same-shard pure observability predecessors passed9 in17.73s before this
+repair, which narrowed the cause rather than qualifying a full CI shard.
+
+Ruff/whitespace and record/link checks pass. Full PG/backend/native qualification
+was not rerun; this is local HTTP-only logging fixture isolation. No deployed
+image rebuild is needed for a test setup correction.
