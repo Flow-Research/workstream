@@ -293,8 +293,15 @@ A finalized Submission remains retained when POST encounters an infrastructure
 failure. Its operation and assignment reads expose the verified
 `post_submission_*` failure code, distinct from PRE and work findings.
 `post_submission_outcome_unknown` identifies an uncertain delivery without a
-verified terminal result. A held POST exposes `contact_operator`. The Operator
-checks the source in the existing terminal retry or uncertain delivery surface.
+verified terminal result. The progress object reports the current attempt, the
+automatic attempt limit and the earliest due time while another attempt is queued.
+A verified infrastructure failure schedules a successor after 5, 10, 20 or 40
+seconds, for five attempts including the original. The Submission and previous
+checker results remain retained. Once the automatic budget is exhausted, a held
+POST exposes `contact_operator`. An uncertain execution remains held unless the
+existing Operator reconciliation proves its outcome or an Operator explicitly
+abandons the exact expired lease. That decision preserves the uncertain source
+and moves the current fence to one new attempt.
 
 A platform-safe-archive rejection is QC feedback. A transport object mismatch, untrusted runtime response, unavailable provider, Celery worker failure or expired execution deadline is infrastructure failure unless an existing approved checker contract explicitly identifies a completed deterministic QC result.
 

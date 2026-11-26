@@ -13330,3 +13330,18 @@ snapshot now retains the already deployed known PRE timeout response.
 Automatic-failure finalization also takes the exact TASK replay scope before
 CHECKERS ownership. This preserves lock ordering even for direct executor
 composition and checks active successor scope only on new retry creation.
+
+The isolated schema probe applied `0095_post_infrastructure_retry` and captured
+its exact fingerprint. Nine PostgreSQL cases at `abcb92da2` exited zero in
+510.62 seconds. They verified the actual four delayed successors and exhaustion,
+atomic rollback, signed abandonment and replay of an expired UNKNOWN lease,
+contributor feedback through Operator recovery, longer background POST work,
+and stale-worker fencing. The launcher confirmed database and MinIO cleanup.
+Exact receipts are under `/tmp/workstream-post-0095-focused.p2eYBR`.
+
+The focused Go projection checks passed. The installed MCP test suite's six
+selected cases passed at `9782e13d1`, including exact backend OpenAPI comparison
+for all task execution contracts and response validation for the three submission
+snapshots. Independent source review passed the required-port and TASK-first
+correction at `e87215872`. These are local proofs. Hosted recovery and maximum ZIP
+POST completion still require deployment and qualification.
