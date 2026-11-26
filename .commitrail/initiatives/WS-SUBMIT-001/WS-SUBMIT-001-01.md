@@ -12126,3 +12126,21 @@ qualify hardware runtime cleanup or two-node placement.
 The additional forge and repeated PRE claim checks passed 21 cases. The three
 selected ART architecture guards passed. This follow-up changes only test
 expectations and the record. No running service or runner was changed.
+
+Independent review reproduced a second cancellation boundary. The outer POST
+deadline can fire while the materializer drains the sealed source after a
+known unknown invocation. Under the ordinary timeout path that would create
+a terminal retry source. The allowed correction is
+`backend/app/modules/artifacts/post_submit_materialization.py`, its existing
+`backend/tests/artifacts/test_post_source_cleanup.py` owner, and this record.
+Retain the exact invocation error across the real cleanup stack. A failed
+scratch cleanup still takes precedence. Preserve the existing deadline and
+fresh custody check where no invocation ambiguity was observed.
+
+The focused pre-fix run returned `TimeoutError` through the production sealed
+source close for the unknown case. Both controls passed. With the correction,
+16 targeted cases passed in 5.22 seconds, including the four outer materializer
+cases, repeated cancellation cleanup, and the transport boundary. The test
+reschedules an actual outer deadline during source close, waits for cleanup,
+and requires the exact original unknown outcome. Before-send timeout and
+scratch failure preserve their own behavior. No services changed for this proof.

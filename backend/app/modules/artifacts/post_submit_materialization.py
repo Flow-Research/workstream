@@ -17,7 +17,10 @@ from app.interfaces.artifacts import (
     ArtifactLimitExceededError,
     ArtifactStoreUnavailableError,
 )
-from app.interfaces.external_checker_execution import ExternalCheckerMaterialGrant
+from app.interfaces.external_checker_execution import (
+    ExternalCheckerExecutionOutcomeUnknown,
+    ExternalCheckerMaterialGrant,
+)
 from app.interfaces.trusted_submission_intake import (
 
     TrustedSubmissionIntakeAdapter,
@@ -709,6 +712,7 @@ class PostSubmissionMaterializer:
         selected, evidence_id = await self._select(facts)
         sources = []
         failure = None
+        unknown_invocation = None
         deadline = asyncio.get_running_loop().time() + self._artifact_deadline_ms / 1000
         try:
             materialization_facts = self._authority_facts(facts, selected)
@@ -759,38 +763,45 @@ class PostSubmissionMaterializer:
                     inspections[role] = inspection
                     intakes[role] = intake
                     media_types[role] = selection.media_type
-                evaluation = await self._preparation._process_prepared_post_submission(
-                    tuple(sources),
-                    _MaterialProcessor(
-                        intakes,
-                        inspections,
-                        request,
-                        consumer,
-                        limits=self._archive_limits,
-                        preparation=self._preparation,
-                        sources=tuple(sources),
-                        execution=facts,
-                        materialization=materialization_facts,
-                        media_types=media_types,
-                    ),
-                    reserved_bytes=expanded_bytes,
-                    # Aggregate materials root, each role root and one temporary grant.
-                    maximum_entries=entries + len(sources) + 2,
+                try:
+                    evaluation = await self._preparation._process_prepared_post_submission(
+                        tuple(sources),
+                        _MaterialProcessor(
+                            intakes,
+                            inspections,
+                            request,
+                            consumer,
+                            limits=self._archive_limits,
+                            preparation=self._preparation,
+                            sources=tuple(sources),
+                            execution=facts,
+                            materialization=materialization_facts,
+                            media_types=media_types,
+                        ),
+                        reserved_bytes=expanded_bytes,
+                        # Aggregate materials root, each role root and one temporary grant.
+                        maximum_entries=entries + len(sources) + 2,
+                    )
+                except ExternalCheckerExecutionOutcomeUnknown as error:
+                    # Stack cleanup can replace the active exception. Preserve the known
+                    # invocation ambiguity before allowing cleanup to run normally.
+                    unknown_invocation = error
+                    raise
+        except (asyncio.CancelledError, TimeoutError) as error:
+            if unknown_invocation is not None:
+                raise unknown_invocation from None
+            if isinstance(error, asyncio.CancelledError):
+                # Before invocation, the executor may convert its deadline cancellation
+                # into a terminal timeout. Fresh custody must still permit that result.
+                await await_cancellation_resistant(
+                    self._select(facts, original=selected, evidence_id=evidence_id)
                 )
-        except asyncio.CancelledError:
-            # The executor may convert its deadline cancellation into a terminal
-            # timeout. Validate the completed read before allowing that conversion.
-            # Denial/drift must win over cancellation; cleanup has already finished.
-            await await_cancellation_resistant(
-                self._select(facts, original=selected, evidence_id=evidence_id)
-            )
             raise
         except ArtifactScratchIntegrityError:
             # Unconfirmed cleanup must never become a retained terminal result.
             raise
-        except PostSubmissionMaterializationFailure as error:
-            failure = error
         except (
+            PostSubmissionMaterializationFailure,
             ArtifactObjectMissingError,
             ArtifactInputMismatchError,
             ArtifactIntegrityError,
@@ -799,8 +810,13 @@ class PostSubmissionMaterializer:
             SubmissionArchiveRejectedError,
             ExternalServiceAdapterError,
         ) as error:
-            failure = PostSubmissionMaterializationFailure("post_submit_material_unavailable")
-            failure.__cause__ = error
+            if unknown_invocation is not None:
+                raise unknown_invocation from None
+            if isinstance(error, PostSubmissionMaterializationFailure):
+                failure = error
+            else:
+                failure = PostSubmissionMaterializationFailure("post_submit_material_unavailable")
+                failure.__cause__ = error
         await self._select(facts, original=selected, evidence_id=evidence_id)
         if failure is not None:
             raise failure
