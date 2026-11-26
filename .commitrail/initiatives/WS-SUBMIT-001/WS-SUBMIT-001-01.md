@@ -9349,6 +9349,12 @@ pending. Complete those checks in the same transaction before the fixture DDL.
 The original validation and all predecessor guards remain active. The first
 run `/tmp/pr708-feedback-historical-isolated.log` cleaned its isolated resources.
 
+After completing the deferred checks before the DDL, the exact claim-start
+case passed in 268.55 seconds at `14a010262`, schema 0093. The existing
+post-upgrade comparisons and database guards ran through completion. The
+isolated runner confirmed cleanup. The terminal receipt is
+`/tmp/pr708-feedback-claim-start-isolated.log` with its adjacent metadata JSON.
+
 ### Refresh pending-operation MCP schema descriptions
 
 Configured backend OpenAPI comparison atc853743b6 passed142 and failed2
