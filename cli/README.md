@@ -2278,3 +2278,39 @@ public retained evidence, Operator custody and non-Operator concealment.
 The real checker validates only the fixed incident-summary exercise; this is
 not hosted deployment, external Flow issuer, model inference, broad ZIP-size
 performance qualification or compensation fulfillment certification.
+
+#### Source-first PRE qualification
+
+Run the same isolated command with
+`WORKSTREAM_CLI_JOURNEY_PRE_QUALIFICATION_IMAGE_DIGEST` set to the approved
+manifest digest of the retained
+[Smol Python fixture](../external_checkers/workstream-checker-service/tests/smol_fixture/python.Dockerfile).
+Build it with the sibling `smol_fixture` directory as context and install it
+using the same [verified cache preparation](../external_checkers/README.md#smol-microvm-engine).
+Generate the PRE registration with this digest and set
+`resources.deadline_ms` to `5000`. Keep the ordinary incident-summary image
+and registration for POST. Use the local isolated CLI authentication path,
+the existing qualified PRE runtime profile, and a fresh evidence directory.
+
+Use an independently owned test runner with the retained
+[runtime wrapper](../external_checkers/workstream-checker-service/tests/smol_fixture/runtime_wrapper.py).
+Configure its adjacent JSON with the real Smol binary, an owned empty trace,
+the normal `mode` file containing `0`, the owned cgroup directory, an absent
+`delete_fault` marker and `observe_pre_exit` set to `true`. Pin the wrapper
+bytes in the test runner's `smol.binary_sha256`, `pre.smol_binary_sha256` and
+`trusted_intake.storage_envelope.smol_binary_sha256`. Pin the exact loaded
+runner configuration in the existing TLS endpoint input. Preserve the
+runner and guest resource envelope. Record the source commit, fixture image
+manifest/config, and the exact installed configuration and executable hashes.
+
+The first ZIP reaches the selected checker and exceeds its stage deadline.
+The same assignment accepts the isolation probe on a fresh key as Submission
+version 1. The failed source stays charged during the two-hour reclamation
+grace. Keep the isolated launcher cleanup receipt for its test bucket and
+require the native observer's matching lease trace before recording a pass.
+
+```sh
+python cli/tests/journey/pre_qualification.py \
+  "$WORKSTREAM_CLI_JOURNEY_EVIDENCE/pre-qualification-client.json" \
+  "$OWNED_NATIVE_TRACE"
+```

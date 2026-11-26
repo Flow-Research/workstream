@@ -12675,3 +12675,25 @@ Its private refresh grants, exchange secret and environment handoff were
 removed. Only disposable copied interpreter trust stores were modified.
 This qualifies the current connected client/runtime path with an isolated real
 provider; it does not claim the hosted API/worker release or live email delivery.
+
+### Qualify source-first PRE timeout and isolation
+
+Scope. Extend the maintained CLI journey with an explicit qualification
+selection and use the retained Smol runtime fixture as the pinned PRE checker.
+Exercise its actual source-first request through the public raw ZIP command,
+with fixture inputs selected by the test archive and pinned only for the
+qualification project.
+
+Acceptance. A selected project stage deadline produces a durable infrastructure
+failure and preserves the assignment's revision allowance. Retain its exact
+source version and charge during the two-hour reclamation grace, together
+with the runtime-destroyed receipt and the separate fixture teardown evidence. The isolation probe returns a valid passing result
+only after checking read-only source bytes, inaccessible supervisor state and
+credential boundaries. Bind both observations to their exact selected PRE
+terminal receipt. Unknown destruction (A26) requires a separate approved
+runner ownership domain and remains outside this change.
+
+Nine focused trace and observer cases exercise the exact stage, lease and
+cleanup evidence, including absent, foreign and duplicate observations. The
+maintained guide and submission-progress regressions pass in the same run.
+The test image build and isolated KVM run are pending.

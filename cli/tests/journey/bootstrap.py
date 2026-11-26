@@ -196,6 +196,19 @@ def main():
         ).decode(),
     )
     mcp_executable = environment.get("WORKSTREAM_CLI_JOURNEY_MCP_EXECUTABLE")
+    pre_qualification = environment.get(
+        "WORKSTREAM_CLI_JOURNEY_PRE_QUALIFICATION_IMAGE_DIGEST"
+    )
+    if pre_qualification is not None and (
+        mcp_executable
+        or any(
+            environment.get(f"WORKSTREAM_CLI_JOURNEY_{stage}") != "1"
+            for stage in ("SETUP", "TASKS", "SUBMIT")
+        )
+    ):
+        raise RuntimeError(
+            "PRE qualification requires the isolated CLI submission stages"
+        )
     paired_tokens = None
     if mcp_executable:
         if any(
@@ -436,7 +449,18 @@ def main():
                             client, tokens, actors, project_id
                         )
                         client.complete_stage("task_claim_and_guide")
-                        if os.environ.get("WORKSTREAM_CLI_JOURNEY_SUBMIT") == "1":
+                        if pre_qualification is not None:
+                            from pre_qualification import qualify
+
+                            qualify(
+                                client,
+                                tokens["alice"],
+                                task_id,
+                                assignment_id,
+                                environment,
+                            )
+                            client.complete_stage("source_first_pre_client_evidence")
+                        elif os.environ.get("WORKSTREAM_CLI_JOURNEY_SUBMIT") == "1":
                             receipt = submit_and_observe(
                                 client,
                                 tokens,
@@ -472,7 +496,9 @@ def main():
                             "result": "passed",
                             "cli_invocations": len(client.steps),
                             "verified_stages": client.completed_stages,
-                            "scope": "isolated manager-authored unpaid submission journey",
+                            "scope": "source-first PRE client evidence, native trace required"
+                            if pre_qualification is not None
+                            else "isolated manager-authored unpaid submission journey",
                             "authentication": "configured_flow_provider"
                             if mcp
                             else "isolated_local_hmac",

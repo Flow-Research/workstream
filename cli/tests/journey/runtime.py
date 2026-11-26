@@ -16,6 +16,7 @@ import time
 
 
 SHA256 = re.compile(r"sha256:[0-9a-f]{64}\Z")
+PRE_QUALIFICATION_DEADLINE_MS = 5_000
 PILOT_CHECKS = {
     "pre": ("pre_submit", "incident_summary_layout"),
     "post": ("post_submit", "incident_summary_counts"),
@@ -158,7 +159,9 @@ def load_journey_configuration(environment: dict[str, str]) -> dict[str, Path]:
     from public_setup import validate_authored_rules_template
 
     try:
-        endpoints = ExternalRunnerEndpoints.model_validate_json(environment.get("WORKSTREAM_EXTERNAL_RUNNER_ENDPOINTS", ""))
+        endpoints = ExternalRunnerEndpoints.model_validate_json(
+            environment.get("WORKSTREAM_EXTERNAL_RUNNER_ENDPOINTS", "")
+        )
     except ValueError as exc:
         raise RuntimeError("journey requires reviewed TLS runner endpoints") from exc
     if any(endpoint.host != "127.0.0.1" for endpoint in endpoints.root):
@@ -222,17 +225,35 @@ def load_journey_configuration(environment: dict[str, str]) -> dict[str, Path]:
         raise RuntimeError("journey PRE runtime differs from qualified profile")
 
     registry_files = {}
+    qualification_image = environment.get(
+        "WORKSTREAM_CLI_JOURNEY_PRE_QUALIFICATION_IMAGE_DIGEST"
+    )
+    pilot_image = environment["WORKSTREAM_CLI_JOURNEY_CHECKER_IMAGE_DIGEST"]
+    if qualification_image is not None and (
+        SHA256.fullmatch(qualification_image) is None
+        or qualification_image == pilot_image
+    ):
+        raise RuntimeError("PRE qualification requires a distinct pinned fixture image")
     for name, (phase, check) in PILOT_CHECKS.items():
         path, body = _required_json(
             environment, f"WORKSTREAM_CLI_JOURNEY_REGISTRY_{name.upper()}_FILE"
         )
         spec = ExternalCheckerRegistrySpec.model_validate(body)
-        if (
-            spec.phase != phase
-            or spec.image_digest
-            != environment["WORKSTREAM_CLI_JOURNEY_CHECKER_IMAGE_DIGEST"]
-        ):
+        expected_image = (
+            qualification_image
+            if name == "pre" and qualification_image
+            else pilot_image
+        )
+        if spec.phase != phase or spec.image_digest != expected_image:
             raise RuntimeError("journey checker phase or pinned image differs")
+        if (
+            name == "pre"
+            and qualification_image
+            and spec.resources.deadline_ms != PRE_QUALIFICATION_DEADLINE_MS
+        ):
+            raise RuntimeError(
+                "PRE qualification requires the exact selected stage deadline"
+            )
         if (
             spec.resources.cpu_millis > profile.runtime.cpu_millis
             or spec.resources.memory_bytes > profile.runtime.memory_bytes
