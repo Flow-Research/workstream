@@ -6,6 +6,7 @@ and replay authorization to that composition. Expired foreground work is never
 resumed by another request or by a background PRE worker.
 """
 
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 import json
 import re
@@ -35,6 +36,23 @@ from app.modules.tasks.api.submission_context import TaskSubmissionContextReques
 
 class IntakeCustodyConflict(RuntimeError):
     """A private owner conflict, never a quality verdict or permission grant."""
+
+
+@dataclass(frozen=True, slots=True)
+class ForegroundDeadline:
+    """A fixed stage deadline observed on its clamped foreground lease."""
+
+    expires_at: datetime
+    failure_code: str
+
+
+def clamped_foreground_deadline(row: SubmissionIntakeOperation) -> ForegroundDeadline | None:
+    """Identify a hard stage deadline independently of an earlier rolling expiry."""
+    if row.state == "receiving" and row.lease_expires_at == row.upload_deadline_at:
+        return ForegroundDeadline(row.upload_deadline_at, "submission_upload_timeout")
+    if row.state == "pre_checking" and row.lease_expires_at == row.pre_deadline_at:
+        return ForegroundDeadline(row.lease_expires_at, "submission_pre_timeout")
+    return None
 
 
 class SubmissionIntakeRepository:
@@ -249,8 +267,8 @@ class SubmissionIntakeRepository:
         return self._sealed_source(row)
 
     async def heartbeat(self, operation_id: UUID, lease_id: UUID, generation: int,
-                        *, lease_duration: timedelta) -> float:
-        """Renew without shortening custody; return DB remaining seconds after flush."""
+                        *, lease_duration: timedelta) -> tuple[float, ForegroundDeadline | None]:
+        """Renew custody and report remaining time and any binding stage deadline."""
         if not isinstance(lease_duration, timedelta) or lease_duration <= timedelta(0):
             raise ValueError("foreground lease duration must be positive")
         row = await self._owned(operation_id, lease_id, generation)
@@ -260,7 +278,7 @@ class SubmissionIntakeRepository:
         row.lease_expires_at = max(row.lease_expires_at, now + extension)
         await self._session.flush()
         now = await self._session.scalar(select(func.clock_timestamp()))
-        return (row.lease_expires_at - now).total_seconds()
+        return (row.lease_expires_at - now).total_seconds(), clamped_foreground_deadline(row)
 
     async def terminalize(self, operation_id: UUID, lease_id: UUID, generation: int,
                           *, state: str, failure_code: str) -> None:
@@ -304,13 +322,23 @@ class SubmissionIntakeRepository:
         state = "abandoned" if row.lease_expires_at <= now else "cancelled"
         await self._terminal(row, state, "submission_unavailable")
 
-    async def abandon_expired(self, operation_id: UUID) -> bool:
+    async def abandon_expired(
+        self, operation_id: UUID, *, deadline_owner: tuple[UUID, int] | None = None,
+    ) -> bool:
         """Recovery can end expired foreground custody, never resume or accept it."""
         row = await self._lock(operation_id)
         now = await self._session.scalar(select(func.clock_timestamp()))
         if row.state not in {"receiving", "pre_checking"} or row.lease_expires_at > now:
             return False
-        await self._terminal(row, "abandoned", "submission_foreground_expired")
+        code = "submission_foreground_expired"
+        if deadline_owner is not None:
+            lease_id, generation = deadline_owner
+            deadline = clamped_foreground_deadline(row)
+            if (deadline is None
+                    or row.lease_id != str(lease_id) or row.lease_generation != generation):
+                return False
+            code = deadline.failure_code
+        await self._terminal(row, "abandoned", code)
         return True
 
     async def _terminal(self, row: SubmissionIntakeOperation, state: str, code: str) -> None:

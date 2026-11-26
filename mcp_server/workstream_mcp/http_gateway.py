@@ -40,6 +40,8 @@ _SAFE_VALUE = re.compile(
     re.ASCII,
 )
 _CORRELATION_HEADERS = ("x-request-id", "x-correlation-id")
+# Upload and PRE each need up to 300s, with a separate response margin.
+_SUBMISSION_TIMEOUT_SECONDS = 660.0
 _SUBMISSION_ERROR_CODES = frozenset({
     "submission_unavailable", "submission_packet_invalid", "submission_media_type_unsupported",
     "submission_archive_limit_exceeded", "submission_upload_timeout",
@@ -1544,7 +1546,7 @@ class WorkstreamGateway:
             raw_body=upload,
             content_type="application/zip" if name == "submission_create" else None,
             operation_timeout_seconds=(
-                self._settings.document_timeout_seconds
+                _SUBMISSION_TIMEOUT_SECONDS
                 if name == "submission_create"
                 else None
             ),
@@ -2232,6 +2234,12 @@ class WorkstreamGateway:
                     ) as response:
                         body = await self._bounded_body(response)
                         correlation_id = self._correlation_id(response, request_id)
+                        media_type = (
+                            response.headers.get("content-type", "")
+                            .split(";", 1)[0]
+                            .strip()
+                            .lower()
+                        )
                         if response.status_code != expected_status:
                             failure = self._api_failure(response.status_code, body, correlation_id)
                             # Proxy errors and unexpected successes cannot prove rollback.
@@ -2246,15 +2254,10 @@ class WorkstreamGateway:
                                 )
                             if submission_upload and (
                                 400 <= response.status_code < 500 or response.status_code == 503
+                                or response.status_code == 504 and media_type == "application/json"
                             ):
                                 failure = self._submission_failure(failure, body, output_validator)
                             return GatewayResult(failure=failure)
-                        media_type = (
-                            response.headers.get("content-type", "")
-                            .split(";", 1)[0]
-                            .strip()
-                            .lower()
-                        )
                         if media_type != "application/json":
                             return GatewayResult(
                                 failure=SafeFailure(
@@ -2404,14 +2407,44 @@ class WorkstreamGateway:
         failure: SafeFailure, body: bytes, validator: Draft202012Validator,
     ) -> SafeFailure:
         """Expose only the contributor-safe error fields of the raw ZIP route."""
+        def unique_fields(pairs):
+            """Refuse duplicate fields when validating a terminal response."""
+            value = dict(pairs)
+            if len(value) != len(pairs):
+                raise ValueError("duplicate timeout response field")
+            return value
+
         try:
-            decoded = json.loads(body)
+            decoded = json.loads(
+                body, object_pairs_hook=unique_fields if failure.status == 504 else None,
+            )
             error = decoded["error"]
             if not isinstance(error, dict):
                 return failure
             code = error.get("code")
             if not isinstance(code, str):
                 return failure
+            if failure.status == 504:
+                details = {"next_action": "retry_new_key_after_terminal"}
+                fields = {"code", "message", "details", "correlation_id", "retryable"}
+                if (
+                    code != "submission_pre_timeout" or decoded.keys() != {"error"}
+                    or error.keys() != fields or not isinstance(error["message"], str)
+                    or not 0 < len(error["message"]) <= 512
+                    or not isinstance(error["correlation_id"], str)
+                    or str(UUID(error["correlation_id"])) != error["correlation_id"]
+                    or error["retryable"] is not True or error["details"] != details
+                ):
+                    return failure
+                return replace(
+                    failure, error="workstream_request_failed", code=code, retryable=True,
+                    details=details,
+                    message=(
+                        "The ZIP uploaded, but pre-submission checks timed out. "
+                        "No Submission was created. Retry this assignment with a new "
+                        "idempotency key."
+                    ),
+                )
             if failure.status == 503:
                 # Proxy errors cannot authorize reflection of upstream diagnostic text.
                 recovery = {
@@ -2426,6 +2459,11 @@ class WorkstreamGateway:
                 return replace(failure, code=code, message=recovery) if recovery else failure
             if code not in _SUBMISSION_ERROR_CODES:
                 return failure
+            if code == "submission_upload_timeout" and failure.status == 408:
+                return replace(
+                    failure, code=code,
+                    message="The ZIP upload timed out before pre-submission checks started.",
+                )
             details = error.get("details")
             message = error.get("message")
             if not isinstance(message, str) or len(message) > 512 or not message.isprintable():

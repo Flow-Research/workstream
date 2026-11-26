@@ -34,6 +34,7 @@ _FAILURE_MESSAGES = {
     "submission_packet_invalid": "The submitted ZIP or request was invalid",
     "submission_archive_limit_exceeded": "The ZIP exceeds the permitted archive limits",
     "submission_upload_timeout": "The ZIP upload timed out",
+    "submission_pre_timeout": "The ZIP uploaded, but pre-submission checks timed out. No Submission was created. Retry this assignment with a new idempotency key.",
     "submission_capacity_exceeded": "Submission processing is at capacity. Try again later.",
     "submission_infrastructure_unavailable": "Submission processing is temporarily unavailable",
     "submission_outcome_unknown": "Check the original submission operation or retry with the same idempotency key",
@@ -56,6 +57,8 @@ def _failure_status(code: str) -> int:
         return 413
     if code == "submission_upload_timeout":
         return 408
+    if code == "submission_pre_timeout":
+        return 504
     if code == "submission_capacity_exceeded":
         return 429
     if code in {"submission_packet_invalid", "pre_submission_checker_failed"}:
@@ -83,6 +86,7 @@ def _failure_status(code: str) -> int:
         422: {"description": "Invalid packet or bounded pre-submission QC feedback"},
         429: {"description": "Submission capacity exhausted"},
         503: {"description": "Infrastructure unavailable or acceptance outcome unknown"},
+        504: {"description": "Pre-submission deadline expired and the operation durably ended"},
     },
 )
 async def submit_source(
@@ -103,10 +107,12 @@ async def submit_source(
         details = None
         if exc.code == "pre_submission_checker_failed":
             details = {"status": "failed", "eligible_to_submit": False, "results": exc.pre_submission_results or []}
+        elif exc.code == "submission_pre_timeout":
+            details = {"next_action": "retry_new_key_after_terminal"}
         return error_response(
             request, status_code=_failure_status(exc.code), code=exc.code,
             message=_FAILURE_MESSAGES.get(exc.code, "Submission could not be completed"),
-            details=details, retryable=exc.code in {"submission_capacity_exceeded", "submission_infrastructure_unavailable", "submission_outcome_unknown"},
+            details=details, retryable=exc.code in {"submission_capacity_exceeded", "submission_infrastructure_unavailable", "submission_outcome_unknown", "submission_pre_timeout"},
         )
     return SubmissionAcceptedResponse.model_validate(receipt)
 

@@ -623,6 +623,38 @@ def test_operation_progress_rejects_unbound_or_noncontract_response(
     assert len(received) == 1
 
 
+@pytest.mark.parametrize("valid", [True, False])
+def test_submission_pre_timeout_requires_closed_terminal_envelope(
+    adapter: Adapter, valid: bool,
+) -> None:
+    """Forward known timeout guidance while leaving a malformed 504 uncertain."""
+    client, received, upstream = adapter
+    action = {"next_action": "retry_new_key_after_terminal"}
+    upstream["status"] = 504
+    upstream["json"] = {"error": {
+        "code": "submission_pre_timeout",
+        "message": "private runner diagnostic",
+        "details": action if valid else action | {"private": "opaque value"},
+        "correlation_id": "a92cd489-0aef-4e95-97c9-e10b4ae52b68",
+        "retryable": True,
+    }}
+    response = client.post("/mcp", headers={"authorization": "Bearer fixture-token",
+                 "accept": "application/json, text/event-stream"},
+        json={"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {
+            "name": "workstream_submission_create", "arguments": _arguments("submission_create")}})
+    result = response.json()["result"]
+    assert result["isError"] is True and len(received) == 1
+    error = result["structuredContent"]
+    if valid:
+        assert error["error"] == "workstream_request_failed"
+        assert error["code"] == "submission_pre_timeout" and error["details"] == action
+        assert error["retryable"] is True and "new idempotency key" in error["message"]
+    else:
+        assert error["error"] == "workstream_execution_uncertain" and error["retryable"] is False
+        assert "code" not in error and "details" not in error
+    assert "private runner diagnostic" not in response.text and "opaque value" not in response.text
+
+
 @pytest.mark.parametrize("private_message", [False, True])
 @pytest.mark.parametrize(
     ("code", "message"),

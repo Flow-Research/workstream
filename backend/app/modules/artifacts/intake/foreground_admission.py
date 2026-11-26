@@ -21,7 +21,9 @@ from app.interfaces.artifacts import ArtifactLimitExceededError
 from app.modules.artifacts.api.submission_archive import MAXIMUM_SUBMISSION_ZIP_BYTES
 from app.modules.artifacts.api.submission_intake import SealedSubmissionSource, SubmissionIntakeFailure, SubmissionIntakeMetadata, SubmissionSourceCapacityLimits
 from app.modules.artifacts.api.submission_preparation import public_pre_submission_results
-from app.modules.artifacts.intake.repository import IntakeCustodyConflict, SubmissionIntakeRepository
+from app.modules.artifacts.intake.repository import (
+    ForegroundDeadline, IntakeCustodyConflict, SubmissionIntakeRepository, clamped_foreground_deadline,
+)
 from app.modules.artifacts.intake.progress import finalization_progress
 from app.modules.artifacts.api.submission_finalization import SubmissionFinalizationProgress
 from app.modules.artifacts.intake.streaming import hash_submission_replay
@@ -332,7 +334,10 @@ class ForegroundIntakeAdmission:
                 self._match_acceptance_command(row, request, terminal_digest, accepted=True)
                 return await self._accepted_receipt(session, authority, row)
 
-    async def finish(self, owner: IntakeReservationOwner, *, state: str, failure_code: str) -> bool:
+    async def finish(
+        self, owner: IntakeReservationOwner, *, state: str, failure_code: str,
+        deadline: ForegroundDeadline | None = None,
+    ) -> str | None:
         """End drained foreground work, retaining all physical source obligations.
 
         A committed acceptance, another generation or an expired owner cannot be
@@ -341,20 +346,22 @@ class ForegroundIntakeAdmission:
         async with self._root() as (session, _authority):
             repository = SubmissionIntakeRepository(session, self._tasks(session))
             try:
-                await repository._owned(owner.operation_id, owner.lease_id, owner.generation)
+                row = await repository._owned(owner.operation_id, owner.lease_id, owner.generation)
             except IntakeCustodyConflict:
-                return False
+                return None
+            if deadline is not None and deadline == clamped_foreground_deadline(row):
+                failure_code = deadline.failure_code
             await repository.terminalize(
                 owner.operation_id, owner.lease_id, owner.generation,
                 state=state, failure_code=failure_code,
             )
-        return True
+        return failure_code
 
-    async def assignment_release_failure(
+    async def settle_expired_foreground(
         self, owner: IntakeReservationOwner, metadata: SubmissionIntakeMetadata, *,
         actor_id: UUID, idempotency_key: UUID,
     ) -> str | None:
-        """Resolve a release-fenced foreground owner under current read authority."""
+        """Settle exact hard expiry or observe the original assignment release."""
         async with self._root() as (session, authority):
             repository = SubmissionIntakeRepository(session, self._tasks(session))
             row = await repository._lock(owner.operation_id)
@@ -368,6 +375,11 @@ class ForegroundIntakeAdmission:
                        and row.lease_id == str(owner.lease_id)
                        and row.lease_generation == owner.generation + 1)
             code = row.failure_code if released else None
+            deadline = clamped_foreground_deadline(row)
+            if deadline is not None and await repository.abandon_expired(
+                owner.operation_id, deadline_owner=(owner.lease_id, owner.generation),
+            ):
+                code = deadline.failure_code
         return code
 
     @staticmethod
@@ -504,7 +516,8 @@ class ForegroundIntakeAdmission:
             else:
                 code = row.failure_code if row.failure_code in {
                     "submission_packet_invalid", "submission_archive_limit_exceeded",
-                    "submission_upload_timeout", "submission_infrastructure_unavailable", "revision_deadline_expired",
+                    "submission_upload_timeout", "submission_pre_timeout",
+                    "submission_infrastructure_unavailable", "revision_deadline_expired",
                     "submission_unavailable", "revision_limit_reached", "revision_context_changed",
                     "revision_context_blocked", "task_submission_predecessor_changed",
                 } else "submission_operation_terminal"

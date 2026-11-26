@@ -60,11 +60,12 @@ func (f *Failure) Error() string {
 }
 
 type Client struct {
-	origin        string
-	token         string
-	http          *http.Client
-	guideHTTP     *http.Client
-	taskBatchHTTP *http.Client
+	origin         string
+	token          string
+	http           *http.Client
+	guideHTTP      *http.Client
+	submissionHTTP *http.Client
+	taskBatchHTTP  *http.Client
 }
 
 type Profile struct {
@@ -126,11 +127,18 @@ func New(origin, token string) (*Client, error) {
 	guideHTTP := *client
 	guideHTTP.Transport = guideTransport
 	guideHTTP.Timeout = 10 * time.Minute
+	// Submissions have independent five-minute upload and PRE envelopes.
+	// Keep a response margin after both and leave guide transfers unchanged.
+	submissionTransport := transport.Clone()
+	submissionTransport.ResponseHeaderTimeout = 6 * time.Minute
+	submissionHTTP := *client
+	submissionHTTP.Transport = submissionTransport
+	submissionHTTP.Timeout = 11 * time.Minute
 	// Complete 1..500-member writes include fresh per-Task authorization and one
 	// atomic commit. Keep their measured budget separate from ordinary requests.
 	taskBatchHTTP := *client
 	taskBatchHTTP.Timeout = 3 * time.Minute
-	return &Client{origin: normalized, token: token, http: client, guideHTTP: &guideHTTP, taskBatchHTTP: &taskBatchHTTP}, nil
+	return &Client{origin: normalized, token: token, http: client, guideHTTP: &guideHTTP, submissionHTTP: &submissionHTTP, taskBatchHTTP: &taskBatchHTTP}, nil
 }
 
 func validateOrigin(raw string) (string, error) {

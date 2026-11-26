@@ -302,6 +302,16 @@ worker consuming exactly one named queue. Beat always
 receives the required cleanup profile, so the cleanup schedule cannot disappear
 because of an omitted setting.
 
+Set the PRE window in `WORKSTREAM_SUBMISSION_EXECUTION_PROFILE` at
+`runtime.aggregate_deadline_ms`. Use `300000` for five minutes and bind the same
+approved runtime profile and digest on the runner. Keep `upload_total_seconds`
+and `upload_idle_seconds` separately configured. The CLI allows 360 seconds for
+response headers and 660 seconds overall. The MCP submission tool allows 660
+seconds overall and the hosted `/mcp` proxy allows 675 seconds for headers.
+Guide transfers retain their own deadlines. If a later deployment extends the
+upload or PRE window beyond these client budgets, adjust and qualify the matching
+submission client and proxy limits together.
+
 `WORKSTREAM_ARTIFACT_PREPARATION_TOTAL_DEADLINE_SECONDS` explicitly carries the
 existing ART processing deadline to every backend role. The
 template preserves its 3,400-second default. With the unchanged ZIP inspection,

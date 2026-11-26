@@ -53,7 +53,7 @@ class JourneyClient:
             cwd=self.directory,
             capture_output=True,
             text=True,
-            timeout=180,
+            timeout=675 if arguments[:2] == ("task", "submit") else 180,
             check=False,
         )
         elapsed_seconds = time.monotonic() - started

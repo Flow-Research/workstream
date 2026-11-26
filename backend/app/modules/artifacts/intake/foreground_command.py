@@ -18,7 +18,7 @@ from app.modules.artifacts.api.submission_preparation import public_pre_submissi
 from app.modules.artifacts.intake.foreground_admission import (
     ForegroundIntakeAdmission, IntakeCommitUnknown, IntakeReplay, IntakeReservationOwner,
 )
-from app.modules.artifacts.intake.foreground_lease import ForegroundIntakeLease
+from app.modules.artifacts.intake.foreground_lease import ForegroundIntakeExpired, ForegroundIntakeLease
 from app.modules.artifacts.intake.foreground_upload import ForegroundSourceUpload
 from app.modules.artifacts.intake.repository import IntakeCustodyConflict
 from app.modules.artifacts.intake.streaming import SubmissionUploadTimeout
@@ -107,6 +107,7 @@ class ForegroundSubmissionCommand:
         except BaseException as exc:
             state = "cancelled" if isinstance(exc, asyncio.CancelledError) else "failed"
             code = "submission_cancelled" if state == "cancelled" else "submission_infrastructure_unavailable"
+            deadline = exc.deadline if isinstance(exc, ForegroundIntakeExpired) else None
             if isinstance(exc, SubmissionIntakeFailure):
                 code = exc.code
                 if code == "pre_submission_checker_failed":
@@ -124,21 +125,25 @@ class ForegroundSubmissionCommand:
             elif isinstance(exc, SubmissionUploadTimeout):
                 code = "submission_upload_timeout"
             try:
-                finished = await await_cancellation_resistant(self._admission.finish(owner, state=state, failure_code=code))
+                finished = await await_cancellation_resistant(self._admission.finish(
+                    owner, state=state, failure_code=code, deadline=deadline,
+                ))
             except BaseException:
                 logger.exception("Submission foreground terminalization failed", extra={"operation_id": str(owner.operation_id)})
                 if not isinstance(exc, asyncio.CancelledError):
                     raise IntakeCommitUnknown("submission terminal outcome is unresolved") from None
             else:
                 if not finished and not isinstance(exc, asyncio.CancelledError):
-                    release_failure = await self._admission.assignment_release_failure(
+                    release_failure = await self._admission.settle_expired_foreground(
                         owner, metadata, actor_id=actor_id, idempotency_key=idempotency_key,
                     )
                     if release_failure is not None:
                         raise SubmissionIntakeFailure(release_failure) from None
                     raise IntakeCommitUnknown("submission foreground ownership has changed") from None
-            if isinstance(exc, SubmissionUploadTimeout):
-                raise SubmissionIntakeFailure(code) from None
+                if isinstance(exc, (SubmissionUploadTimeout, ForegroundIntakeExpired)) and finished in {
+                    "submission_upload_timeout", "submission_pre_timeout",
+                }:
+                    raise SubmissionIntakeFailure(finished) from None
             raise
 
     async def _run(self, owner: IntakeReservationOwner, chunks: AsyncIterator[bytes]) -> dict:
@@ -157,6 +162,8 @@ class ForegroundSubmissionCommand:
         if terminal.lease.reservation != reservation:
             raise IntakeCustodyConflict("intake_pre_result_mismatch")
         if terminal.execution is None:
+            if terminal.infrastructure_failure_code == "deadline_exceeded":
+                raise SubmissionIntakeFailure("submission_pre_timeout")
             raise SubmissionIntakeFailure("submission_infrastructure_unavailable")
         if not terminal.execution.eligible:
             raise SubmissionIntakeFailure(

@@ -53,6 +53,7 @@ async def configure_source_http(factory, client, tmp_path, monkeypatch, payload,
 
 @pytest.mark.parametrize("outcome,framing", [
     ("completed", "small"), ("rejected", "small"),
+    ("deadline_exceeded", "small"),
     ("completed", "large-single"), ("completed", "large-split"),
 ])
 async def test_public_raw_zip_submission_uses_real_owners_and_stable_replay(admission_intake, tmp_path, monkeypatch, outcome, framing):
@@ -96,6 +97,12 @@ async def test_public_raw_zip_submission_uses_real_owners_and_stable_replay(admi
         assert receipt["status"] == "accepted" and receipt["replayed"] is False
         assert set(receipt) == {"operation_id", "task_id", "assignment_id", "status", "accepted_at",
                                 "task_status_at_acceptance", "processing_stage_at_acceptance", "replayed", "pre_submission_results"}
+    elif outcome == "deadline_exceeded":
+        assert first.status_code == second.status_code == 504, (first.text, second.text)
+        for reply in (first, second):
+            failure = reply.json()["error"]
+            assert failure["code"] == "submission_pre_timeout" and failure["retryable"] is True
+            assert failure["details"] == {"next_action": "retry_new_key_after_terminal"}
     else:
         assert first.status_code == second.status_code == 422, (first.text, second.text)
         assert first.json()["error"]["code"] == second.json()["error"]["code"] == "pre_submission_checker_failed"
@@ -109,14 +116,18 @@ async def test_public_raw_zip_submission_uses_real_owners_and_stable_replay(admi
                                     params={"idempotency_key": str(key)})
         assert progress.status_code == 200, progress.text
         observed = progress.json()
-        expected = "finalization_pending" if outcome == "completed" else "rejected"
+        expected = {"completed": "finalization_pending", "rejected": "rejected", "deadline_exceeded": "failed"}[outcome]
         assert observed["operation_state"] == observed["processing_stage"] == expected
-        assert observed["next_action"] == ("wait" if outcome == "completed" else "correct_and_submit_new_key")
+        assert observed["next_action"] == {
+            "completed": "wait", "rejected": "correct_and_submit_new_key", "deadline_exceeded": "retry_new_key_after_terminal",
+        }[outcome]
         assert observed["operationally_stalled"] is False
         assert observed["current_task_status"] == ("evaluation_pending" if outcome == "completed" else "in_progress")
         assert observed["submission_id"] is observed["submission_version"] is observed["evaluation_request_id"] is None
         assert observed["pre_submission_results"] == (receipt["pre_submission_results"] if outcome == "completed"
-                                                       else first.json()["error"]["details"]["results"])
+                                                       else first.json()["error"]["details"].get("results", []))
+        if outcome == "deadline_exceeded":
+            assert observed["failure_code"] == "submission_pre_timeout"
         by_id = await client.get(progress_url, headers=f.access.target.headers,
                                  params={"operation_id": observed["operation_id"]})
         assert by_id.status_code == 200 and by_id.json() == observed, by_id.text
@@ -200,6 +211,71 @@ async def test_foreground_command_upload_timeout_retains_charge(admission_intake
                 "SELECT id,state,failure_code FROM submission_intake_operations WHERE idempotency_key=:key"), {"key": key})).one()
             assert (row.state, row.failure_code) == ("failed", "submission_upload_timeout")
             assert await session.scalar(text("SELECT accounted_bytes FROM submission_source_charges WHERE operation_id=:id"), {"id": row.id}) == 1024
+
+
+async def test_timeout_settlement_requires_exact_expired_owner(admission_intake, tmp_path, monkeypatch):
+    """Hard upload or PRE expiry may close the exact owner and preserve source custody."""
+    from dataclasses import replace
+    from datetime import timedelta
+    from sqlalchemy import text
+    from app.modules.artifacts.api.submission_intake import SubmissionIntakeFailure
+    from app.modules.artifacts.intake.foreground_admission import IntakeReservationOwner
+    from tests.artifact_store_helpers import initialize_local_store
+    from tests.artifacts.intake_acceptance_support import wait_foreground_expired
+    from tests.artifacts.test_submission_intake_custody import foreground_upload, repository
+    from tests.test_trusted_intake import _archive
+
+    f = admission_intake
+    metadata = SubmissionIntakeMetadata(task_id=f.task, assignment_id=f.assignment)
+    payload = _archive()
+    actor_id, identity_link_id = f.actor.actor_profile_id, f.actor.identity_link_id
+
+    async def body():
+        yield payload
+
+    store = initialize_local_store(root=tmp_path / "durable", buffer_bytes=256 * 1024)
+    try:
+        for pre_timeout in (None, 60.0, 1.5):
+            key = new_record_id()
+            with monkeypatch.context() as configured:
+                if pre_timeout is None:
+                    configured.setattr(f.admission, "_upload_duration", timedelta(seconds=1.5))
+                    configured.setattr(f.admission, "_lease_duration", timedelta(seconds=1.5))
+                owner = await f.admission.admit(metadata, actor_id=actor_id, identity_link_id=identity_link_id,
+                                                 idempotency_key=key, declared_raw_bytes=len(payload))
+            if pre_timeout is not None:
+                await foreground_upload(f, store).receive(
+                    owner.operation_id, owner.lease_id, owner.generation, body(), part_bytes=5 * 1024**2,
+                    idle_timeout_seconds=10, pre_timeout_seconds=pre_timeout, pre_lease_seconds=1.5,
+                )
+            async with f.factory() as session:
+                await wait_foreground_expired(session, owner.operation_id)
+            arguments = dict(metadata=metadata, actor_id=actor_id, idempotency_key=key)
+            if pre_timeout == 60.0:
+                assert await f.admission.settle_expired_foreground(owner, **arguments) is None
+                async with f.factory.begin() as session:
+                    assert await repository(session).abandon_expired(owner.operation_id)
+                continue
+            for substitute in (replace(owner, lease_id=new_record_id()), replace(owner, generation=2)):
+                assert await f.admission.settle_expired_foreground(substitute, **arguments) is None
+            code = "submission_upload_timeout" if pre_timeout is None else "submission_pre_timeout"
+            assert await f.admission.settle_expired_foreground(owner, **arguments) == code
+            if pre_timeout is not None:
+                with pytest.raises(SubmissionIntakeFailure, match=code):
+                    await f.admission.replay_failure(operation_id=owner.operation_id, checkers=None, **arguments)
+            async with f.factory() as session:
+                row = (await session.execute(text(
+                    "SELECT state, lease_generation, failure_code FROM submission_intake_operations WHERE id=:id"
+                ), {"id": owner.operation_id})).one()
+                assert tuple(row) == ("abandoned", 2, code)
+                assert await session.scalar(text("SELECT active_submission_operation_id FROM workstream_tasks WHERE id=:id"), {"id": f.task}) is None
+                assert await session.scalar(text("SELECT accounted_bytes FROM submission_source_charges WHERE operation_id=:id"), {"id": owner.operation_id}) == len(payload)
+                assert await session.scalar(text("SELECT count(*) FROM submissions WHERE task_id=:id"), {"id": f.task}) == 0
+        retry = await f.admission.admit(metadata, actor_id=actor_id, identity_link_id=identity_link_id,
+                                         idempotency_key=new_record_id(), declared_raw_bytes=len(payload))
+        assert isinstance(retry, IntakeReservationOwner) and retry.operation_id != owner.operation_id
+    finally:
+        store.close()
 
 
 @pytest.mark.parametrize("outcome", ["completed", "received_failure", "rejected"])

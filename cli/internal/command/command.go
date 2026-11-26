@@ -264,7 +264,9 @@ func writeFailure(w io.Writer, output string, f api.Failure) {
 		return
 	}
 	_, _ = fmt.Fprintln(w, "Error:", f.Error())
-	if len(f.Details) != 0 {
+	if !f.OutcomeUnknown && f.RecoveryHint != "" {
+		_, _ = fmt.Fprintln(w, f.RecoveryHint)
+	} else if len(f.Details) != 0 {
 		_, _ = fmt.Fprintln(w, "Intake findings:", safeText(string(f.Details)))
 	}
 }

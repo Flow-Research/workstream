@@ -386,7 +386,7 @@ async def test_foreground_lease_committed_command_wins_simultaneous_pulse_failur
         nonlocal calls
         calls += 1
         if calls == 1:
-            return 1
+            return 1, None
         release.set()
         raise IntakeCustodyConflict("fixture_after_commit")
 
@@ -398,11 +398,13 @@ async def test_foreground_lease_committed_command_wins_simultaneous_pulse_failur
     assert await runner.run(new_record_id(), new_record_id(), 1, command) == "committed"
 
 
-@pytest.mark.parametrize("renewed", [True, False])
-async def test_foreground_lease_uses_only_the_last_committed_deadline(monkeypatch, renewed):
+@pytest.mark.parametrize("renewed, timeout_code", [
+    (True, None), (False, None), (False, "submission_upload_timeout"), (False, "submission_pre_timeout"),
+])
+async def test_foreground_lease_uses_only_the_last_committed_deadline(monkeypatch, renewed, timeout_code):
     """Keep a renewed command alive and cancel an expired command before rollback drains."""
-    from app.modules.artifacts.intake.foreground_lease import ForegroundIntakeLease
-    from app.modules.artifacts.intake.repository import IntakeCustodyConflict
+    from app.modules.artifacts.intake.foreground_lease import ForegroundIntakeExpired, ForegroundIntakeLease
+    from app.modules.artifacts.intake.repository import ForegroundDeadline
 
     loop = asyncio.get_running_loop()
     clock = loop.time()
@@ -414,15 +416,16 @@ async def test_foreground_lease_uses_only_the_last_committed_deadline(monkeypatc
     finish, cancelled = asyncio.Event(), asyncio.Event()
     rollback, release_rollback = asyncio.Event(), asyncio.Event()
     calls = 0
+    hard_deadline = ForegroundDeadline(datetime.now(UTC) + timedelta(seconds=60), timeout_code) if timeout_code else None
 
     async def renew(*owner):
         nonlocal calls
         calls += 1
         if calls == 1:
-            return 60
+            return 60, hard_deadline
         renewals.put_nowait(calls)
         if renewed and calls <= 4:
-            return 60
+            return 60, None
         try:
             await loop.create_future()
         finally:
@@ -457,8 +460,9 @@ async def test_foreground_lease_uses_only_the_last_committed_deadline(monkeypatc
         else:
             assert cancelled.is_set() and rollback.is_set() and not running.done()
             release_rollback.set()
-            with pytest.raises(IntakeCustodyConflict, match="intake_owner_renewal_expired"):
+            with pytest.raises(ForegroundIntakeExpired, match="intake_owner_renewal_expired") as expired:
                 await running
+            assert expired.value.deadline == hard_deadline
     finally:
         release_rollback.set()
         if not running.done():

@@ -60,10 +60,32 @@ func (p SubmissionInput) validate(task string) error {
 
 func submissionFailure(err error) error {
 	var failure *Failure
-	if errors.As(err, &failure) && failure.OutcomeUnknown {
-		failure.RecoveryHint = "Observe the submission operation using the same actor and idempotency key, or explicitly replay the same task, assignment, ZIP bytes and feedback; do not create a new key while the outcome is unknown"
+	if errors.As(err, &failure) {
+		if failure.OutcomeUnknown {
+			failure.RecoveryHint = "Observe the submission operation using the same actor and idempotency key, or explicitly replay the same task, assignment, ZIP bytes and feedback; do not create a new key while the outcome is unknown"
+		} else if failure.Status == http.StatusRequestTimeout && failure.Code == "submission_upload_timeout" {
+			failure.RecoveryHint = "The ZIP upload timed out before pre-submission checks started."
+		}
 	}
 	return err
+}
+
+func submissionPreTimeout(raw []byte, contentType string) bool {
+	if !canonicalMutationError(raw, contentType) {
+		return false
+	}
+	var envelope struct {
+		Error struct {
+			Details   json.RawMessage `json:"details"`
+			Retryable bool            `json:"retryable"`
+		} `json:"error"`
+	}
+	var details struct {
+		NextAction string `json:"next_action"`
+	}
+	return json.Unmarshal(raw, &envelope) == nil && envelope.Error.Retryable &&
+		decode(envelope.Error.Details, &details, []string{"next_action"}, nil) == nil &&
+		details.NextAction == "retry_new_key_after_terminal"
 }
 
 // SubmitSubmission streams one regular ZIP once and returns its committed acceptance snapshot.
@@ -87,7 +109,7 @@ func (c *Client) SubmitSubmission(ctx context.Context, task, key string, input S
 	if input.Feedback != nil {
 		headers.Set("X-Submission-Feedback", *input.Feedback)
 	}
-	response, err := c.openBodyRequest(ctx, c.guideHTTP, http.MethodPost,
+	response, err := c.openBodyRequest(ctx, c.submissionHTTP, http.MethodPost,
 		"/api/v1/tasks/"+url.PathEscape(task)+"/submissions", "",
 		io.NewSectionReader(source, 0, initial.Size()), initial.Size(), key, "application/json", "application/zip", headers)
 	if err != nil {
@@ -101,9 +123,17 @@ func (c *Client) SubmitSubmission(ctx context.Context, task, key string, input S
 	}
 	if response.StatusCode != http.StatusAccepted {
 		failure := c.responseFailure(http.MethodPost, response, raw)
-		if response.StatusCode == 422 {
-			var typed *Failure
-			if errors.As(failure, &typed) && typed.Code == "pre_submission_checker_failed" {
+		var typed *Failure
+		if errors.As(failure, &typed) {
+			if response.StatusCode == http.StatusGatewayTimeout && typed.Code == "submission_pre_timeout" {
+				if !c.safeMutationResponse(raw) || !submissionPreTimeout(raw, response.Header.Get("Content-Type")) {
+					return result, submissionFailure(invalid)
+				}
+				typed.OutcomeUnknown = false
+				typed.Details = json.RawMessage(`{"next_action":"retry_new_key_after_terminal"}`)
+				typed.RecoveryHint = "The ZIP uploaded, but pre-submission checks timed out. No Submission was created. Retry this assignment with a new idempotency key."
+			}
+			if response.StatusCode == 422 && typed.Code == "pre_submission_checker_failed" {
 				if typed.OutcomeUnknown || !c.safeMutationResponse(raw) {
 					return result, submissionFailure(invalid)
 				}

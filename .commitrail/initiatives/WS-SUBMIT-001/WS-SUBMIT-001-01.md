@@ -13152,3 +13152,18 @@ cases passed as a focused pair. The isolated PostgreSQL downgrade case reported
 cap expired before pytest finished schema teardown. The wrapper confirmed
 isolated database cleanup. The three complete CI lane reruns remain the
 release evidence for this correction.
+
+### End a known PRE timeout under the original foreground fence
+
+The hosted 500 MiB operation reached the original PRE deadline with its lease
+renewed. The native checker restarted and reclaimed its VM. The CLI stopped
+waiting at the same boundary and the expired intake held TASK until the source
+cleanup sweep. The user approved a 300-second PRE profile using the existing
+configuration. Upload and source retention keep their separate bounds.
+
+This slice updates the existing foreground lease, ART settlement and public
+submission error owners, the submission-specific CLI/MCP and proxy time bounds,
+and focused regressions. Carry the committed stage deadline in the watchdog.
+Release the task under live ownership or the exact expired-owner abandonment
+guard. Return new-key guidance only for a durably closed PRE timeout. Preserve
+caller cancellation, uncertain acceptance and dedicated source cleanup ownership.

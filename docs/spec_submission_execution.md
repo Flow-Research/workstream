@@ -284,6 +284,7 @@ Use the existing structured error envelope, correlation/request IDs, sanitizatio
 | 422 | `submission_packet_invalid` | Invalid task/assignment selectors, feedback or ZIP framing. |
 | 422 | `pre_submission_checker_failed` | Validated platform/project QC rejection. Include bounded actionable PRE results; `eligible_to_submit=false`; no new Submission. |
 | 408 | `submission_upload_timeout` | The client upload breached its explicit idle/total upload limit before handoff. No accepted work is implied. |
+| 504 | `submission_pre_timeout` | The ZIP sealed, PRE timed out and the foreground operation durably ended before acceptance. The actor may retry the assignment with a new key after this terminal response. The same key replays the original timeout. |
 | 429 | `submission_capacity_exceeded` | Admission or quota/rate bound prevents this request from proceeding. Include a finite retry hint where one is known. |
 | 503 | `submission_infrastructure_unavailable` | Storage/runtime/DB/protocol failure before accepted handoff; not a QC verdict. |
 | 503 | `submission_outcome_unknown` | The API cannot determine whether its acceptance commit succeeded. Client must observe/replay the same key; it must not blindly create new work. |

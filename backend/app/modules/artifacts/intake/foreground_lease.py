@@ -10,10 +10,19 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.cancellation import await_completion_preserving_cancellation
-from app.modules.artifacts.intake.repository import IntakeCustodyConflict, SubmissionIntakeRepository
+from app.modules.artifacts.intake.repository import ForegroundDeadline, IntakeCustodyConflict, SubmissionIntakeRepository
 from app.modules.tasks.api.intake_custody import IntakeTaskCustodyPort
 
 Result = TypeVar("Result")
+
+
+class ForegroundIntakeExpired(IntakeCustodyConflict):
+    """Stop an expired watchdog, retaining the last committed deadline kind."""
+
+    def __init__(self, deadline: ForegroundDeadline | None) -> None:
+        """Distinguish a committed stage cap from an ordinary rolling lease loss."""
+        super().__init__("intake_owner_renewal_expired")
+        self.deadline = deadline
 
 
 class ForegroundIntakeLease:
@@ -32,38 +41,45 @@ class ForegroundIntakeLease:
         self._duration = lease_duration
         self._interval = heartbeat_interval.total_seconds()
 
-    async def _renew(self, operation_id: UUID, lease_id: UUID, generation: int) -> float:
+    async def _renew(
+        self, operation_id: UUID, lease_id: UUID, generation: int,
+    ) -> tuple[float, ForegroundDeadline | None]:
         loop = asyncio.get_running_loop()
         started = loop.time()
         async with self._sessions.begin() as session:
-            remaining = await SubmissionIntakeRepository(session, self._tasks(session)).heartbeat(
+            remaining, hard_deadline = await SubmissionIntakeRepository(session, self._tasks(session)).heartbeat(
                 operation_id, lease_id, generation, lease_duration=self._duration,
             )
         # Conservative: includes lock wait, flush and commit response, not host wall time.
         budget = remaining - (loop.time() - started)
         if budget <= 0:
-            raise IntakeCustodyConflict("intake_owner_renewal_expired")
-        return budget
+            raise ForegroundIntakeExpired(hard_deadline)
+        return budget, hard_deadline
 
     async def run(
         self, operation_id: UUID, lease_id: UUID, generation: int,
         command_factory: Callable[[UUID, UUID, int], Coroutine[Any, Any, Result]],
     ) -> Result:
         """Invoke once after committed renewal; drain all work before returning."""
-        budget = await self._renew(operation_id, lease_id, generation)
+        budget, hard_deadline = await self._renew(operation_id, lease_id, generation)
         loop = asyncio.get_running_loop()
         watchdog = asyncio.timeout(budget)
 
         async def pulse() -> None:
+            nonlocal hard_deadline
             while True:
                 deadline = watchdog.when()
                 assert deadline is not None
                 await asyncio.sleep(min(self._interval, (deadline - loop.time()) / 2))
-                remaining = await self._renew(operation_id, lease_id, generation)
+                try:
+                    remaining, renewed_deadline = await self._renew(operation_id, lease_id, generation)
+                except ForegroundIntakeExpired as exc:
+                    raise ForegroundIntakeExpired(hard_deadline) from exc
                 renewed_at = loop.time()
                 if renewed_at >= deadline:
-                    raise IntakeCustodyConflict("intake_owner_renewal_expired")
+                    raise ForegroundIntakeExpired(hard_deadline)
                 watchdog.reschedule(renewed_at + remaining)
+                hard_deadline = renewed_deadline
 
         command = asyncio.create_task(command_factory(operation_id, lease_id, generation),
                                       name=f"submission-foreground:{operation_id}")
@@ -74,7 +90,7 @@ class ForegroundIntakeLease:
                     await asyncio.wait((command, renewal), return_when=asyncio.FIRST_COMPLETED)
             except TimeoutError as exc:
                 if not command.done():
-                    raise IntakeCustodyConflict("intake_owner_renewal_expired") from exc
+                    raise ForegroundIntakeExpired(hard_deadline) from exc
             if command.done():
                 return command.result()
             renewal.result()
