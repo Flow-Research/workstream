@@ -30,7 +30,9 @@ LANES = (
     "shared_foundations_g",
     "shared_foundations_h",
     "shared_foundations_i",
-    "schema_contracts",
+    "schema_contracts_a",
+    "schema_contracts_b",
+    "schema_contracts_c",
     "project_lifecycle_a",
     "project_lifecycle_b",
     "project_lifecycle_c",
@@ -48,7 +50,7 @@ LANES = (
 
 
 def test_validator_requires_exact_expanded_lane_and_shared_s3_custody() -> None:
-    assert validator.LANE_COUNT == len(LANES) == 23
+    assert validator.LANE_COUNT == len(LANES) == 25
     assert validator.SHARED_S3_LANES == {"omnicore_sdk"}
 
 
@@ -73,7 +75,7 @@ def _bundle(tmp_path: Path, mode: str = "run") -> tuple[Path, Path, dict]:
     nodes.append(
         {
             "execution_kind": "admin_runner_self_test",
-            "lane": "schema_contracts",
+            "lane": "schema_contracts_a",
             "module": "tests/test_isolated_database_runner.py",
             "nodeid": "tests/test_isolated_database_runner.py::test_admin_custody",
         }
@@ -225,7 +227,7 @@ def test_rejects_wrong_head_and_noncanonical_manifest(tmp_path: Path) -> None:
         ),
     ],
 )
-@pytest.mark.parametrize("lane_name", ["shared_foundations_a", "shared_foundations_i", "project_lifecycle_d", "project_lifecycle_e", "task_lifecycle_d"])
+@pytest.mark.parametrize("lane_name", ["shared_foundations_a", "shared_foundations_i", "schema_contracts_a", "schema_contracts_b", "schema_contracts_c", "project_lifecycle_d", "project_lifecycle_e", "task_lifecycle_d"])
 def test_rejects_node_custody_failures(tmp_path: Path, mutation, message: str, lane_name: str) -> None:
     metadata, summary_path, summary = _bundle(tmp_path)
     lane = next(row for row in summary["lanes"] if row["name"] == lane_name)
@@ -250,7 +252,7 @@ def test_rejects_node_custody_failures(tmp_path: Path, mutation, message: str, l
         ("interrupted", True, "lane_interrupted"),
     ],
 )
-@pytest.mark.parametrize("lane_name", ["shared_foundations_a", "shared_foundations_i", "project_lifecycle_d", "project_lifecycle_e", "task_lifecycle_d"])
+@pytest.mark.parametrize("lane_name", ["shared_foundations_a", "shared_foundations_i", "schema_contracts_a", "schema_contracts_b", "schema_contracts_c", "project_lifecycle_d", "project_lifecycle_e", "task_lifecycle_d"])
 def test_rejects_failed_or_partial_lane(
     tmp_path: Path, field: str, value: object, message: str, lane_name: str
 ) -> None:

@@ -134,7 +134,7 @@ def test_admin_runner_environment_retains_only_admin_database_url(
     monkeypatch.setenv(
         "WORKSTREAM_TEST_DATABASE_URL", "postgresql+asyncpg://test:secret@localhost/test"
     )
-    lane = next(lane for lane in LANES if lane.name == "schema_contracts")
+    lane = next(lane for lane in LANES if lane.name == "schema_contracts_a")
 
     env = runner.admin_runner_environment(lane, tmp_path, tmp_path / ".coverage", "admin")
 
@@ -171,10 +171,10 @@ def test_admin_wrapper_redacts_admin_url_before_persisted_output() -> None:
 def test_finalize_lane_requires_ordinary_coverage_but_allows_empty_admin_coverage(
     tmp_path: Path,
 ) -> None:
-    lane = next(lane for lane in LANES if lane.name == "schema_contracts")
+    lane = next(lane for lane in LANES if lane.name == "schema_contracts_a")
     isolation = tmp_path / f"{lane.name}.database.json"
     isolation.write_text("{}\n", encoding="utf-8")
-    ordinary_coverage = tmp_path / ".coverage.unit.schema_contracts"
+    ordinary_coverage = tmp_path / ".coverage.unit.schema_contracts_a"
     ordinary_coverage.write_bytes(b"ordinary coverage")
     units = [
         {
@@ -193,7 +193,7 @@ def test_finalize_lane_requires_ordinary_coverage_but_allows_empty_admin_coverag
             "collection_exit_code": 0,
             "collected_nodes": [f"{runner.ADMIN_RUNNER_MODULE}::test_one"],
             "completed_nodes": [f"{runner.ADMIN_RUNNER_MODULE}::test_one"],
-            "coverage_path": tmp_path / ".coverage.unit.schema_contracts.admin",
+            "coverage_path": tmp_path / ".coverage.unit.schema_contracts_a.admin",
             "deselected_nodes": [],
             "elapsed_seconds": 2.0,
             "execution_kind": runner.ADMIN_KIND,
@@ -337,11 +337,13 @@ def test_timing_summary_is_derived_from_exact_declared_lanes() -> None:
         0.25,
         0.25,
         0.25,
+        0.25,
+        0.25,
     )
     lanes = [{"elapsed_seconds": value} for value in elapsed]
 
     assert runner._timing_summary(lanes) == {
-        "aggregate_runner_seconds": 16.5,
+        "aggregate_runner_seconds": 17.0,
         "slowest_lane_seconds": 3.75,
     }
     with pytest.raises(LaneError, match="invalid_lane_timing_inventory"):

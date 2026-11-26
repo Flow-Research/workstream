@@ -10998,3 +10998,88 @@ scanner/finalizer proof. The native public-journey caller still needs its owned
 worker lifecycle updated before the combined live drill. The submitter handoff
 core remains in a separate reviewed candidate pending historical-upgrade and
 public read tests. All changes remain in PR 708; PR 709 is not our workstream.
+
+
+### Bounded schema lane capacity partition (2026-11-26)
+
+Intent: Backend45465160851 schema artifact14957896305 has584canonical nodes
+(528ordinary,56admin),237completed (181ordinary,56admin), zero skip/deselection
+and1502.273seconds before unchanged1500-second interruption.65/70Alembic cases
+completed. Root remaining-five-case probe also reached180seconds after three
+completions with completecleanup; sortedmetadata/progress does not identify a
+hanging node. No assertion repair or skipped case follows from these timeouts.
+
+Scope exactly ten paths: existing test_lane_catalogue.py, independent
+validate_test_lane_evidence.py, Backendworkflow, test_ci_lane_catalogue.py,
+test_ci_scope_selection.py, test_ci_test_lanes.py, test_test_lane_evidence.py,
+test_merge_test_lane_evidence.py, operations_backend_testing.md and this record.
+Use the existing hash to partition the entire current schema family across
+schema_contracts_a, schema_contracts_b and schema_contracts_c. Preserve all module
+membership, current A30 inventory, otherfamily ownership, every node and runtime
+kind. Admin runner self-tests still execute in separate admin units; ordinary
+children retain isolated credential/database custody. All three schema jobs and
+the aggregate remain disk-backed. Total required lanes23->25 with exact distinct
+coverage/fan-in/validator inventory. Keep1500seconds, all blocking gates and all
+cleanup/skip/deselection/duplicate/partial-execution checks unchanged.
+
+Existinghash on the historical584nodes gives191/207/186total,175/178/175ordinary,
+16/29/11admin and29/26/15Alembic across three shards. Two shards leave259/269
+ordinary and35/35Alembic; three is the smallest placing every ordinary group
+below the181observed ordinary completions, with expensive Alembic groups reduced
+from70to atmost29. Counts guide capacity, not timingqualification or a diagnosis
+of an individual slow/hanging case. Existingnodehash and runtime are unchanged.
+
+Acceptance: exact old-to-new canonical row preservation except schema owner,
+no foreignfamily changes, deterministic/order-independent and head-independent
+one-owner partition, unchangedadmin classification/credentials, all3disk-backed
+workflow selection, missing/duplicate/new-shard evidence rejection and existing
+purelane suites. Risk is CI capacity/custody; root+ARCH review exact gates and
+admin isolation before push. No heavy PostgreSQL run, cancellation, rerun, product
+change, newframework, timeoutincrease or PR709 work. Fresh hosted completion
+remains required. Runtime roadmap capabilities do not change.
+
+Candidate uses consistent schema_contracts_a/b/c names; the ambiguous old
+unsuffixed lane is retired from active callers. The existing schema module tuple
+is moved unchanged into SCHEMA_CONTRACT_MODULES, registered as one more existing
+partition group. No new runner or hash path. All three schema jobs explicitly
+select disk storage both in PostgreSQL container options and the independent
+mount/write-settings expectation. Exact hosted fan-in/coverage and independent
+validator require25lanes. Every1500-second execution budget is unchanged.
+
+The saved12423-node manifest comparison preserves all node IDs, module names and
+execution kinds; only584schema owner fields change, with11839other owners
+unchanged (/tmp/submission-schema-capacity-preservation.json). The current A30
+shared module membership/fingerprint and all other family definitions are
+unchanged. This historical redistribution is not a current full collection or
+actual execution result.
+
+Focused existing five-module CI suite passed335tests in100.20s
+(/tmp/submission-schema-capacity-pure-v1.log), including deterministic reversed
+input/head independence, every schema module partitioned once, ordinary/admin
+kind preservation, exact three-shard scope selection, strict25-row timings and
+fan-in/independent custody failures on all three schema names. Existing missing,
+foreign, partial/duplicate/skipped and latest-invalid/no-fallback controls remain
+blocking. Tests still require separate ordinary coverage even when admin coverage
+is empty. The plugin-disabled pure run has its existing asyncio_mode warning;
+no async or database test was silently skipped.
+
+An isolated source-only workflow probe kills omission of one schema disk member,
+reversal of the storage guard expectation, and an increased execution budget. No
+shared file was mutated by these probes. The regular pure suite also checks exact
+three-name membership in both disk rules and unchanged45-minute job allowance.
+Ruff and whitespace pass; full unchanged structural validation is recorded at
+completion separately. No PostgreSQL, native runner, deployment, CI rerun,
+cancellation or push was started. Hosted timing/completeness must still be
+qualified on the combined candidate; no individual timeout/hang is declared fixed.
+
+Final unchanged structural validator exits0
+(/tmp/submission-schema-capacity-structure.log). Source binding confirms the
+old schema module tuple is identical, every non-schema lane definition is
+unchanged, A30 membership remains present, and run_test_lanes.py has no diff
+(/tmp/submission-schema-capacity-source-binding.json). Pure tests executed these
+modified candidate files over clean basef40071744 before commit; subsequent
+changes were documentation/evidence only. This is bounded precommit verification,
+not a clean-head hosted run. Ruff, links, Commitrail and whitespace pass. Root
+inspected the scoped diff with no blocker; independent ARCH review and combined
+25-lane hosted completion remain pending. No schema test was executed or skipped
+locally for this partition change, and no other workstream/PR was touched.

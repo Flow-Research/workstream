@@ -340,7 +340,7 @@ jobs:
         ports:
           - 5433:5432
         options: >-
-          ${{ matrix.lane != 'schema_contracts' && '--tmpfs /var/lib/postgresql/data:rw,nosuid,nodev,noexec,size=2147483648' || '' }}
+          ${{ !contains(fromJSON('["schema_contracts_a","schema_contracts_b","schema_contracts_c"]'), matrix.lane) && '--tmpfs /var/lib/postgresql/data:rw,nosuid,nodev,noexec,size=2147483648' || '' }}
           --health-cmd "pg_isready -U workstream -d workstream_test"
           --health-interval 5s
           --health-timeout 5s
@@ -415,7 +415,7 @@ jobs:
       - name: Verify PostgreSQL CI storage and write settings
         env:
           POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
-          EXPECTED_PG_STORAGE: ${{ matrix.lane == 'schema_contracts' && 'disk' || 'tmpfs' }}
+          EXPECTED_PG_STORAGE: ${{ contains(fromJSON('["schema_contracts_a","schema_contracts_b","schema_contracts_c"]'), matrix.lane) && 'disk' || 'tmpfs' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -652,7 +652,7 @@ jobs:
           set -euo pipefail
           shopt -s nullglob
           coverage_files=(.ci/test-lanes/run/.coverage.*)
-          test "${#coverage_files[@]}" -eq 23
+          test "${#coverage_files[@]}" -eq 25
           for source in "${coverage_files[@]}"; do
             destination="$(basename "${source}")"
             test -f "${source}"
@@ -731,7 +731,7 @@ jobs:
               raise SystemExit("hosted evidence head drift")
 
           lanes = summary.get("lanes")
-          if not isinstance(lanes, list) or len(lanes) != 23:
+          if not isinstance(lanes, list) or len(lanes) != 25:
               raise SystemExit("invalid hosted lane inventory")
           collected: list[str] = []
           completed: list[str] = []

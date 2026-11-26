@@ -102,7 +102,7 @@ def test_external_checker_change_requires_full_unmapped_consumer_proof() -> None
 @pytest.mark.parametrize(
     ("path", "expected"),
     [
-        ("backend/tests/test_observability.py", ("schema_contracts",)),
+        ("backend/tests/test_observability.py", ("schema_contracts_a", "schema_contracts_b", "schema_contracts_c")),
         (
             "backend/tests/projects/guide_activation/test_contracts.py",
             (

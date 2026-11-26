@@ -172,7 +172,7 @@ Assertion-map validation analyzes each exact historical revision/module once per
 invocation, then checks every referenced node and assertion against that analysis.
 It does not cache current source or reuse analysis across validation calls.
 
-The fifteen ordinary lanes use private, 2 GiB RAM-backed PostgreSQL data directories
+Non-schema lane jobs use private, 2 GiB RAM-backed PostgreSQL data directories
 to reduce ephemeral reset I/O. A runtime guard verifies the mount, capacity,
 data directory and enabled `fsync`, `full_page_writes` and `synchronous_commit`
 before tests. Real SQL, transaction, lock, isolation, and full hosted behavior
@@ -183,7 +183,7 @@ replacement use `postgres_schema_contract` to rebuild it. The contribution
 storage function-replacement and trigger-removal controls explicitly roll back
 their transaction-local DDL and retain canonical teardown verification. No
 assertions or storage tests are omitted.
-The schema-contract lane and aggregate job retain disk-backed databases.
+All three schema-contract shards and the aggregate job retain disk-backed databases.
 This is not a production configuration or proof of host-power-loss durability:
 [Docker tmpfs data disappears when the container stops](https://docs.docker.com/engine/storage/tmpfs/).
 An exhausted mount fails the job; it does not silently change storage or skip tests.
@@ -208,16 +208,19 @@ The isolated runner retains those bytes if a later test times out; its existing
 outer output buffering and redaction remain in place.
 Measure final-report overhead alongside test execution when comparing allocations.
 The five `task_lifecycle_a` through `task_lifecycle_e` lanes use the same
-deterministic partition mechanism for the remaining TASK and checker nodes. The single `schema_contracts` lane owns all baseline/PostgreSQL schema, reset and
-isolated-runner contracts, together with database-backed migration, storage, and
-custody proofs. The
+deterministic partition mechanism for the remaining TASK and checker nodes.
+The three `schema_contracts_a`, `schema_contracts_b`, and `schema_contracts_c` lanes
+partition baseline/PostgreSQL schema, reset and isolated-runner contracts, together
+with database-backed migration, storage and custody proofs, using that same
+exact-node hash. Admin runner tests retain their separate execution kind and
+credential custody within each shard; ordinary tests remain isolated. The
 nine `shared_foundations_a` through `shared_foundations_i` lanes deterministically
 partition exact node IDs from the remaining authorization, artifact, API, and
 infrastructure modules. This includes the database-independent repository inspections
 in `test_artifact_architecture.py`, `architecture/test_module_boundaries.py`, and
 `architecture/test_test_structure_boundary.py`, together with the static authorization
 boundary, identifier inventory and record-ID collection checks; schema, reset and
-isolated-runner contracts stay in `schema_contracts`. Every collected test node, including each Alembic and
+isolated-runner contracts stay in that schema family. Every collected test node, including each Alembic and
 shared-foundation node, belongs to exactly one lane.
 An explicit per-module owner tuple may order its eligible lanes for measured
 distribution. The manifest builder rejects missing, duplicate, or foreign lane
@@ -273,7 +276,7 @@ SHA, lane and numeric run attempt, containing its manifest, lane evidence,
 isolation record, and coverage data. On complete runs, the `full-suite` job
 runs with a fail-closed dependency guard, downloads available diagnostic
 bundles, then rejects any failed, cancelled, or skipped matrix result before
-fan-in. Fan-in selects the highest numeric attempt available for each of the 23 declared
+fan-in. Fan-in selects the highest numeric attempt available for each of the 25 declared
 lanes from separately downloaded artifact directories. It rejects malformed,
 foreign or future attempt names and never falls back from an incomplete or
 corrupt latest bundle to an older passing one. For the selected bundles it

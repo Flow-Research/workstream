@@ -4,6 +4,11 @@ from dataclasses import dataclass
 
 ADMIN_RUNNER_MODULE = "tests/test_isolated_database_runner.py"
 SCHEMA_MODULE = "tests/test_alembic.py"
+PARTITIONED_SCHEMA_LANES = (
+    "schema_contracts_a",
+    "schema_contracts_b",
+    "schema_contracts_c",
+)
 PARTITIONED_SHARED_LANES = (
     "shared_foundations_a",
     "shared_foundations_b",
@@ -775,10 +780,37 @@ PROJECT_MODULE_LANE_OVERRIDES = {
     ),
 }
 
+SCHEMA_CONTRACT_MODULES = (
+    SCHEMA_MODULE,
+    "tests/test_checker_evidence_migrations.py",
+    "tests/migrations/test_project_catalogue_read.py",
+    "tests/migrations/test_guide_check_specification.py",
+    "tests/migrations/test_contribution_read_audit.py",
+    "tests/migrations/test_contribution_export_snapshots.py",
+    "tests/reviews/lifecycle/test_contracts.py",
+    "tests/reviews/lifecycle/test_storage.py",
+    "tests/reviews/lifecycle/test_transition_storage.py",
+    "tests/reviews/lifecycle/test_fence.py",
+    "tests/reviews/lifecycle/test_migration.py",
+    "tests/reviews/acceptance/test_contracts.py",
+    "tests/reviews/acceptance/test_storage.py",
+    "tests/reviews/acceptance/test_migration.py",
+    "tests/test_database_reset.py",
+    "tests/test_ci_lane_catalogue.py",
+    "tests/test_ci_scope_selection.py",
+    "tests/test_ci_test_lanes.py",
+    "tests/test_test_lane_evidence.py",
+    "tests/test_merge_test_lane_evidence.py",
+    *TASK_ROUTING_REQUEST_MODULES,
+    *OBSERVABILITY_MODULES,
+    ADMIN_RUNNER_MODULE,
+)
+
 PARTITION_GROUPS = (
     (PARTITIONED_SHARED_LANES, SHARED_FOUNDATION_MODULES),
     (PARTITIONED_PROJECT_LANES, PROJECT_PARTITIONED_MODULES),
     (PARTITIONED_TASK_LANES, TASK_MODULES),
+    (PARTITIONED_SCHEMA_LANES, SCHEMA_CONTRACT_MODULES),
 )
 PARTITION_LANES_BY_MODULE = {
     module: PROJECT_MODULE_LANE_OVERRIDES.get(module, names)
@@ -788,34 +820,7 @@ PARTITION_LANES_BY_MODULE = {
 
 LANES = (
     *(TestLane(name, SHARED_FOUNDATION_MODULES) for name in PARTITIONED_SHARED_LANES),
-    TestLane(
-        "schema_contracts",
-        (
-            SCHEMA_MODULE,
-            "tests/test_checker_evidence_migrations.py",
-            "tests/migrations/test_project_catalogue_read.py",
-            "tests/migrations/test_guide_check_specification.py",
-            "tests/migrations/test_contribution_read_audit.py",
-            "tests/migrations/test_contribution_export_snapshots.py",
-            "tests/reviews/lifecycle/test_contracts.py",
-            "tests/reviews/lifecycle/test_storage.py",
-            "tests/reviews/lifecycle/test_transition_storage.py",
-            "tests/reviews/lifecycle/test_fence.py",
-            "tests/reviews/lifecycle/test_migration.py",
-            "tests/reviews/acceptance/test_contracts.py",
-            "tests/reviews/acceptance/test_storage.py",
-            "tests/reviews/acceptance/test_migration.py",
-            "tests/test_database_reset.py",
-            "tests/test_ci_lane_catalogue.py",
-            "tests/test_ci_scope_selection.py",
-            "tests/test_ci_test_lanes.py",
-            "tests/test_test_lane_evidence.py",
-            "tests/test_merge_test_lane_evidence.py",
-            *TASK_ROUTING_REQUEST_MODULES,
-            *OBSERVABILITY_MODULES,
-            ADMIN_RUNNER_MODULE,
-        ),
-    ),
+    *(TestLane(name, SCHEMA_CONTRACT_MODULES) for name in PARTITIONED_SCHEMA_LANES),
     *(
         TestLane(
             name,
