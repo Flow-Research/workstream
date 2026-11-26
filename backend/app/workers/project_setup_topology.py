@@ -14,7 +14,7 @@ from celery.signals import worker_init
 PROJECT_GUIDE_HARD_LIMIT_SECONDS = 7_260
 PROJECT_GUIDE_DRAIN_SECONDS = 7_320
 CELERY_VISIBILITY_TIMEOUT_SECONDS = 7_380
-PROJECT_GUIDE_QUEUE = "celery"
+PROJECT_GUIDE_QUEUE = "workstream.project_setup"
 PROJECT_GUIDE_CONSUMER_MARKER = "workstream_project_guide_consumer"
 _validated_parent: int | None = None
 
@@ -51,6 +51,8 @@ def validate_project_setup_worker(sender, **_kwargs: object) -> None:
     ):
         return
     _validated_parent = None
+    if set(sender.app.amqp.queues.consume_from) != {PROJECT_GUIDE_QUEUE}:
+        raise WorkerShutdown("project guide compilation requires an exclusive worker queue")
     pool = sender.pool_cls
     if isinstance(pool, str):
         pool = get_implementation(pool)

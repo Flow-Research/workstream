@@ -1100,13 +1100,18 @@ def run_compose(
     # MCP attached to a retired API namespace after a Compose-managed update.
     selected_services = set(compose_arguments) & {
         "postgres", "redis",
-        "api", "mcp", "worker", "submission-finalization-worker",
+        "api", "mcp", "worker", "project-control-worker", "artifact-worker",
+        "outbox-scan-worker", "outbox-worker", "submission-finalization-worker",
         "submission-source-cleanup-worker", "beat", "model-proxy", "identity",
         "guide-document-parser",
     }
     targets_api = not selected_services or "api" in selected_services or (
         "--no-deps" not in compose_arguments
-        and bool(selected_services & {"mcp", "worker", "beat"})
+        and bool(selected_services & {
+            "mcp", "beat", "worker", "project-control-worker", "artifact-worker",
+            "outbox-scan-worker", "outbox-worker", "submission-finalization-worker",
+            "submission-source-cleanup-worker",
+        })
     )
     couple_mcp = bool(values.get("WORKSTREAM_MCP_IMAGE")) and (
         compose_arguments[0] == "up" and targets_api
@@ -1119,6 +1124,10 @@ def run_compose(
                 *compose_arguments,
                 "api",
                 "worker",
+                "project-control-worker",
+                "artifact-worker",
+                "outbox-scan-worker",
+                "outbox-worker",
                 "submission-finalization-worker",
                 "submission-source-cleanup-worker",
                 "beat",
@@ -1291,11 +1300,13 @@ def run_shutdown(environment_path: Path, values: dict[str, str]) -> int:
     """Stop producers, drain the worker, then stop its isolated dependencies."""
     phases = [
         ["stop", "beat", "api"],
-        ["stop", "--timeout", "7320", "worker"],
+        ["stop", "--timeout", "7320", "worker", "project-control-worker",
+         "artifact-worker", "outbox-worker"],
         [
             "stop", "--timeout", "420",
             "submission-finalization-worker", "submission-source-cleanup-worker",
         ],
+        ["stop", "--timeout", "120", "outbox-scan-worker"],
     ]
     if values.get("WORKSTREAM_MCP_IMAGE"):
         phases.insert(0, ["stop", "mcp"])
@@ -1560,11 +1571,17 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
     """Check the rendered release process and privilege topology."""
     paths = deployment_paths(values)
     services = rendered.get("services")
+    standard_workers = {
+        "worker", "project-control-worker", "artifact-worker", "outbox-worker",
+    }
+    bounded_workers = {
+        "outbox-scan-worker", "submission-finalization-worker",
+        "submission-source-cleanup-worker",
+    }
+    all_workers = standard_workers | bounded_workers
     expected_services = {
         "api",
-        "worker",
-        "submission-finalization-worker",
-        "submission-source-cleanup-worker",
+        *all_workers,
         "beat",
         "guide-document-parser",
     }
@@ -1619,9 +1636,7 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
     )
     backend_runtime_services = {
         "api",
-        "worker",
-        "submission-finalization-worker",
-        "submission-source-cleanup-worker",
+        *all_workers,
         "beat",
     }
     if model_proxy_enabled:
@@ -1634,13 +1649,9 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
     if services["guide-document-parser"]["user"] != "0:0":
         raise PreflightError("guide parser has the wrong bootstrap identity")
     backend_image = services["api"]["image"]
-    if (
-        services["worker"]["image"] != backend_image
-        or services["submission-finalization-worker"]["image"] != backend_image
-        or services["submission-source-cleanup-worker"]["image"] != backend_image
-        or services["beat"]["image"] != backend_image
-        or services["guide-document-parser"]["image"] != backend_image
-    ):
+    if any(services[name]["image"] != backend_image for name in (
+        *all_workers, "beat", "guide-document-parser",
+    )):
         raise PreflightError(
             "API, workers, Beat and guide parser must use one exact backend image"
         )
@@ -1651,9 +1662,7 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
         raise PreflightError("model proxy must use the exact agents backend image")
     for name in (
         "api",
-        "worker",
-        "submission-finalization-worker",
-        "submission-source-cleanup-worker",
+        *all_workers,
         "beat",
         "guide-document-parser",
         *({"model-proxy"} if model_proxy_enabled else set()),
@@ -1669,16 +1678,26 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
     shared_backend_mounts = {
         str(paths.scratch): (str(paths.scratch), False),
     }
+    cloned_worker_mounts = (
+        shared_backend_mounts
+        | {str(paths.guide_root): (str(paths.guide_root), True)}
+        | direct_user_credential_mount
+    )
     expected_mounts = {
         "api": shared_backend_mounts | direct_user_credential_mount,
-        "worker": shared_backend_mounts
-        | {str(paths.guide_root): (str(paths.guide_root), True)}
+        "worker": cloned_worker_mounts
         | (
             {str(paths.model_root): (str(paths.model_root), True)}
             if model_proxy_enabled
             else {}
-        )
-        | direct_user_credential_mount,
+        ),
+        "project-control-worker": cloned_worker_mounts,
+        "artifact-worker": cloned_worker_mounts,
+        "outbox-worker": cloned_worker_mounts | (
+            {str(paths.model_root): (str(paths.model_root), True)}
+            if model_proxy_enabled else {}
+        ),
+        "outbox-scan-worker": {},
         "submission-finalization-worker": direct_user_credential_mount,
         "submission-source-cleanup-worker": {
             str(DIRECT_USER_CREDENTIAL_TARGET): (
@@ -1812,6 +1831,12 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
         "required": True,
     }:
         raise PreflightError("worker must wait for a healthy model proxy")
+    if model_proxy_enabled and (
+        services["outbox-worker"].get("depends_on") or {}
+    ).get("model-proxy") != {
+        "condition": "service_healthy", "required": True,
+    }:
+        raise PreflightError("outbox worker must wait for a healthy model proxy")
     worker = services["worker"]
     worker_command = worker.get("command")
     if (
@@ -1820,10 +1845,30 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
         or "--pool=prefork" not in worker_command
         or [value for value in worker_command
             if str(value).startswith(("-Q", "--queues"))]
-        != ["--queues=celery,workstream.outbox"]
+        != ["--queues=workstream.project_setup"]
     ):
         raise PreflightError("project guide worker delivery profile is invalid")
     bounded_worker_profiles = {
+        "project-control-worker": (
+            "--queues=workstream.project_control",
+            "--hostname=project-control@%h",
+            "--pidfile=/tmp/celery-worker.pid",
+        ),
+        "artifact-worker": (
+            "--queues=workstream.artifacts",
+            "--hostname=artifacts@%h",
+            "--pidfile=/tmp/celery-worker.pid",
+        ),
+        "outbox-worker": (
+            "--queues=workstream.outbox",
+            "--hostname=outbox@%h",
+            "--pidfile=/tmp/celery-worker.pid",
+        ),
+        "outbox-scan-worker": (
+            "--queues=workstream.outbox_scan",
+            "--hostname=outbox-scan@%h",
+            "--pidfile=/tmp/celery-outbox-scan.pid",
+        ),
         "submission-finalization-worker": (
             "--queues=workstream.submission_finalization",
             "--hostname=submission-finalization@%h",
@@ -1839,7 +1884,12 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
         bounded_worker = services[name]
         command = bounded_worker.get("command")
         if (
-            bounded_worker.get("stop_grace_period") not in {"420s", "7m0s"}
+            bounded_worker.get("stop_grace_period") not in (
+                {"120s", "2m0s"} if name == "outbox-scan-worker" else
+                {"7320s", "2h2m0s"} if name in {
+                    "project-control-worker", "artifact-worker", "outbox-worker",
+                } else {"420s", "7m0s"}
+            )
             or not isinstance(command, list)
             or "--pool=prefork" not in command
             or "--concurrency=1" not in command
@@ -1871,9 +1921,7 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
     environments: dict[str, dict[str, Any]] = {}
     active_roles = (
         "api",
-        "worker",
-        "submission-finalization-worker",
-        "submission-source-cleanup-worker",
+        *sorted(all_workers),
         "beat",
     ) + (
         ("model-proxy",) if model_proxy_enabled else ()
@@ -1882,28 +1930,27 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
         environment = services[role].get("environment")
         if not isinstance(environment, dict):
             raise PreflightError(f"{role} release environment is unavailable")
-        expected_release_role = (
-            "worker" if role.startswith("submission-") else role
-        )
+        expected_release_role = "worker" if role in all_workers else role
         if environment.get("WORKSTREAM_RELEASE_ROLE") != expected_release_role:
             raise PreflightError(f"{role} has an unsafe release role")
         expected_direct_credential = (
             str(DIRECT_USER_CREDENTIAL_TARGET)
-            if role in {
-                "api", "worker", "model-proxy",
-                "submission-finalization-worker",
-                "submission-source-cleanup-worker",
-            }
+            if role in {"api", "model-proxy", *standard_workers,
+                         "submission-finalization-worker", "submission-source-cleanup-worker"}
             else None
         )
         if environment.get(DIRECT_USER_CREDENTIAL_FILE_KEY) != expected_direct_credential:
             raise PreflightError(
                 f"{role} direct IAM user credential selector differs from its release role"
             )
-        policy_role = "bounded-worker" if role.startswith("submission-") else role
+        policy_role = "bounded-worker" if role in bounded_workers else (
+            "worker" if role in standard_workers else role
+        )
         required_file_keys = (
             {"WORKSTREAM_DATABASE_URL_FILE", "WORKSTREAM_CELERY_BROKER_URL_FILE"}
             if policy_role == "bounded-worker"
+            else set(ROLE_SECRET_FILE_KEYS["worker"])
+            if role in standard_workers - {"worker"}
             else set(_role_secret_file_keys(policy_role, values))
         )
         for key, (_, target) in SECRET_FILE_TARGETS.items():
@@ -2008,9 +2055,7 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
             raise PreflightError(f"rendered release environment is unsafe: {key}")
     for name in (
         "api",
-        "worker",
-        "submission-finalization-worker",
-        "submission-source-cleanup-worker",
+        *sorted(all_workers),
         "beat",
         *(("model-proxy",) if model_proxy_enabled else ()),
     ):
@@ -2052,11 +2097,11 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
                 ),
                 **(
                     {key: values[key] for key in INTAKE_DIGEST_KEYS}
-                    if name in {"api", "worker"}
+                    if name in {"api", *standard_workers}
                     else {}
                 ),
             }
-            if name in {"api", "worker"}
+            if name in {"api", *standard_workers}
             else {}
         )
         if {
@@ -2088,6 +2133,10 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
         "WORKSTREAM_CHECKER_MODEL_PROXY_SOCKET"
     ) != str(paths.model_socket):
         raise PreflightError("worker lacks the fixed model proxy socket")
+    if model_proxy_enabled and environments["outbox-worker"].get(
+        "WORKSTREAM_CHECKER_MODEL_PROXY_SOCKET"
+    ) != str(paths.model_socket):
+        raise PreflightError("outbox worker lacks the fixed model proxy socket")
     if model_proxy_enabled and environments["model-proxy"].get(
         "WORKSTREAM_CHECKER_MODEL_PROXY_SOCKET"
     ) != str(paths.model_socket):

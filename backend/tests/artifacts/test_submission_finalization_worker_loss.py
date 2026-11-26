@@ -165,6 +165,24 @@ def _broker_finalizer(app, hostname, completed):
                without_heartbeat=True).start()
 
 
+def _broker_scanner(app, hostname, completed):
+    """Run the production scan task with its own real prefork consumer."""
+    from celery.signals import task_postrun
+    from app.workers.outbox_topology import OUTBOX_DELIVERY_TASK, OUTBOX_SCAN_QUEUE, OUTBOX_SCAN_TASK
+
+    def record(task_id, task, retval, state, **_kwargs):
+        if task.name in {OUTBOX_SCAN_TASK, OUTBOX_DELIVERY_TASK}:
+            completed.put((task_id, task.name, state, str(retval) if state == "FAILURE" else retval,
+                           os.getpid(), task.request.is_eager,
+                           task.request.delivery_info["routing_key"]))
+
+    os.setsid()
+    task_postrun.connect(record, weak=False)
+    app.Worker(pool="prefork", concurrency=1, queues=[OUTBOX_SCAN_QUEUE], hostname=hostname,
+               loglevel="ERROR", without_gossip=True, without_mingle=True,
+               without_heartbeat=True).start()
+
+
 async def _redis_forwarder(reader, writer, destination, connections):
     """Restore only this test's TCP endpoint; Redis and its namespace stay real."""
     current = asyncio.current_task()
@@ -316,8 +334,9 @@ async def _public_broker_case(f, tmp_path, monkeypatch, *, kill_at=None):
     from app.workers import outbox as worker
     case = SimpleNamespace(connection=redis.Redis.from_url(broker.geturl(), socket_timeout=2),
         prefix=f"finalizer-proof-{new_record_id()}:", hostname=f"finalizer-{new_record_id()}@localhost",
-        endpoint=socket.socket(), proxy=None, connections=set(), process=None,
-        completed=multiprocessing.get_context("fork").Queue(), app=worker.celery_app,
+        endpoint=socket.socket(), proxy=None, connections=set(), process=None, scan_process=None,
+        completed=multiprocessing.get_context("fork").Queue(),
+        scan_completed=multiprocessing.get_context("fork").Queue(), app=worker.celery_app,
         destination=(broker.hostname, broker.port), worker=worker,
         marker=tmp_path / "broker-child-kill.json", trace=tmp_path / "broker-delivery.jsonl")
     try:
@@ -349,6 +368,7 @@ async def _close_broker_case(case):
     from app.core.config import get_settings
 
     case.endpoint.close()
+    await _stop_broker_worker(case.scan_process, case.scan_completed)
     await _stop_broker_worker(case.process, case.completed)
     for pool in (case.app.amqp._producer_pool, case.app._pool):
         if pool is not None:
@@ -394,6 +414,79 @@ async def _next_broker_result(case):
     raise AssertionError("production finalization task did not return")
 
 
+async def _next_scan_result(case):
+    """Observe real scanner completion in a child of its exclusive worker."""
+    import queue
+    import time
+    from app.workers.outbox_topology import OUTBOX_SCAN_QUEUE
+
+    deadline = time.monotonic() + 30
+    while time.monotonic() < deadline:
+        assert case.scan_process.is_alive(), f"scan worker exited: {case.scan_process.exitcode}"
+        try:
+            result = await asyncio.to_thread(case.scan_completed.get, True, 0.2)
+        except queue.Empty:
+            continue
+        assert result[1:3] == ("workstream.outbox.scan_pending", "SUCCESS")
+        assert result[4] not in {os.getpid(), case.scan_process.pid}
+        assert result[5:] == (False, OUTBOX_SCAN_QUEUE)
+        return result
+    raise AssertionError("dedicated scan worker did not publish finalization")
+
+
+async def _next_scan_foreign_result(case):
+    """Observe a substituted broker delivery rejected before owner I/O."""
+    import queue
+    import time
+    from app.workers.outbox_topology import OUTBOX_SCAN_QUEUE
+
+    deadline = time.monotonic() + 30
+    while time.monotonic() < deadline:
+        assert case.scan_process.is_alive(), f"scan worker exited: {case.scan_process.exitcode}"
+        try:
+            result = await asyncio.to_thread(case.scan_completed.get, True, 0.2)
+        except queue.Empty:
+            continue
+        assert result[4] not in {os.getpid(), case.scan_process.pid}
+        assert result[5:] == (False, OUTBOX_SCAN_QUEUE)
+        return result
+    raise AssertionError("foreign task did not reach dedicated scan worker")
+
+
+async def test_dedicated_scanner_publishes_finalization_without_general_consumer(
+    admission_intake, tmp_path, monkeypatch,
+):
+    """Pending public acceptance reaches T5 through only scan and finalizer queues."""
+    from app.core.identifiers import new_record_id
+    from app.workers.outbox_topology import OUTBOX_DELIVERY_TASK, OUTBOX_SCAN_QUEUE
+
+    f = admission_intake
+    async with _public_broker_case(f, tmp_path, monkeypatch) as case:
+        await _restore_broker_endpoint(case)
+        case.scan_process = multiprocessing.get_context("fork").Process(
+            target=_broker_scanner,
+            args=(case.app, f"outbox-scan-{new_record_id()}@localhost", case.scan_completed),
+        )
+        case.scan_process.start()
+        case.process.start()
+        await asyncio.to_thread(case.worker.deliver_event.apply_async,
+            args=(str(case.before[4]), str(f.project)), queue=OUTBOX_SCAN_QUEUE,
+            task_id=str(new_record_id()))
+        foreign = await _next_scan_foreign_result(case)
+        assert foreign[1:3] == (OUTBOX_DELIVERY_TASK, "FAILURE")
+        assert foreign[3] == "dedicated worker rejects a foreign task"
+        assert await _accepted_broker_facts(f, case.operation_id) == case.before
+        await asyncio.to_thread(case.worker.scan_pending.apply_async,
+            task_id=str(new_record_id()))
+        scan = await _next_scan_result(case)
+        assert scan[3] == {"selected": 1, "published": 1}
+        finalization = await _next_broker_result(case)
+        assert finalization[2] == {"status": "delivery_recorded"}
+        await _assert_broker_finalized_once(f, case.operation_id, case.before[1])
+        await _assert_public_broker_replay(case)
+        await _assert_broker_finalized_once(f, case.operation_id, case.before[1])
+
+
 async def _assert_public_broker_replay(case):
     """Exact accepted replay never uploads again or invokes PRE again."""
     response = await case.client.post(case.url, headers=case.headers, content=case.payload)
@@ -410,12 +503,12 @@ async def test_real_broker_recovers_public_acceptance_and_deduplicates_finalizat
 
     f = admission_intake
     async with _public_broker_case(f, tmp_path, monkeypatch) as case:
-        failed = await asyncio.to_thread(case.worker.scan_pending.run)
+        failed = await asyncio.to_thread(case.worker._scan_pending, case.worker.scan_pending)
         assert failed == {"selected": 1, "published": 0}
         assert await _accepted_broker_facts(f, case.operation_id) == case.before
         assert list(case.connection.scan_iter(match=case.prefix + "*")) == []
         await _restore_broker_endpoint(case)
-        assert await asyncio.to_thread(case.worker.scan_pending.run) == {"selected": 1, "published": 1}
+        assert await asyncio.to_thread(case.worker._scan_pending, case.worker.scan_pending) == {"selected": 1, "published": 1}
         for _ in range(2):
             await asyncio.to_thread(case.worker.finalize_submission.apply_async,
                 args=(str(case.before[4]), str(f.project)))
@@ -563,17 +656,17 @@ async def test_real_broker_redelivers_killed_finalizer_and_recovers_owner_lease(
     f = admission_intake
     async with _public_broker_case(f, tmp_path, monkeypatch, kill_at=kill_at) as case:
         await _restore_broker_endpoint(case)
-        assert await asyncio.to_thread(case.worker.scan_pending.run) == {"selected": 1, "published": 1}
+        assert await asyncio.to_thread(case.worker._scan_pending, case.worker.scan_pending) == {"selected": 1, "published": 1}
         case.process.start()
         redelivery = await _next_broker_result(case)
         due, original_submission = await _assert_broker_redelivery(case, f, kill_at, redelivery)
         await _wait_for_broker_database_time(f.factory, due)
-        assert await asyncio.to_thread(case.worker.scan_pending.run) == {"selected": 1, "published": 1}
+        assert await asyncio.to_thread(case.worker._scan_pending, case.worker.scan_pending) == {"selected": 1, "published": 1}
         recovered = await _next_broker_result(case)
         assert recovered[2] == {"status": "delivery_recorded"}
         due = await _assert_broker_recovered_unknown(case, f)
         await _wait_for_broker_database_time(f.factory, due)
-        assert await asyncio.to_thread(case.worker.scan_pending.run) == {"selected": 1, "published": 1}
+        assert await asyncio.to_thread(case.worker._scan_pending, case.worker.scan_pending) == {"selected": 1, "published": 1}
         finalized = await _next_broker_result(case)
         assert finalized[2] == {"status": "delivery_recorded"}
         submission = await _assert_broker_finalized_once(f, case.operation_id, case.before[1],

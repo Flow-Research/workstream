@@ -10,7 +10,8 @@ from app.db.session import get_database_url
 from app.workers.async_runner import run_async_task
 from app.workers.celery_app import celery_app
 from app.workers.outbox_topology import (
-    require_outbox_worker, OUTBOX_HARD_LIMIT_SECONDS, FINALIZATION_HARD_LIMIT_SECONDS,
+    require_outbox_worker, require_outbox_scan_worker, OUTBOX_HARD_LIMIT_SECONDS,
+    OUTBOX_SCAN_TASK, OUTBOX_SCAN_HARD_LIMIT_SECONDS, FINALIZATION_HARD_LIMIT_SECONDS,
 )
 
 logger = get_task_logger(__name__)
@@ -73,9 +74,15 @@ async def _deliver(event_id, project_id, task_id, finalization=False):
         await engine.dispose()
 
 
-@celery_app.task(name="workstream.outbox.scan_pending", bind=True)
+@celery_app.task(name=OUTBOX_SCAN_TASK, bind=True, time_limit=OUTBOX_SCAN_HARD_LIMIT_SECONDS)
 def scan_pending(self, after=None):
     """One stable page continues despite a failed publication; periodic scans repair gaps."""
+    require_outbox_scan_worker(self)
+    return _scan_pending(self, after)
+
+
+def _scan_pending(self, after=None):
+    """Publish one bounded page; the next periodic scan repairs interrupted pages."""
     try:
         cursor = _uuid(after) if after is not None else None
     except (TypeError, ValueError):

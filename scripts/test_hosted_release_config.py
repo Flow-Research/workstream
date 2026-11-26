@@ -166,6 +166,8 @@ class HostedReleaseConfigTests(unittest.TestCase):
         self.assertIn("model-proxy", services)
         self.assertIn("guide-document-parser", services["worker"]["depends_on"])
         self.assertIn("model-proxy", services["worker"]["depends_on"])
+        self.assertEqual(services["outbox-worker"]["depends_on"]["model-proxy"],
+                         {"condition": "service_healthy", "required": True})
         paths = preflight.deployment_paths(values)
         self.assertEqual(
             services["worker"]["environment"]["WORKSTREAM_CHECKER_MODEL_PROXY_SOCKET"],
@@ -183,6 +185,16 @@ class HostedReleaseConfigTests(unittest.TestCase):
         ]
         self.assertEqual(worker_model_mount["source"], str(paths.model_socket.parent))
         self.assertTrue(worker_model_mount["read_only"])
+        self.assertEqual(
+            services["outbox-worker"]["environment"]["WORKSTREAM_CHECKER_MODEL_PROXY_SOCKET"],
+            str(paths.model_socket),
+        )
+        self.assertTrue(preflight._service_mounts(services["outbox-worker"])[
+            str(paths.model_socket.parent)]["read_only"])
+        changed = copy.deepcopy(rendered)
+        del changed["services"]["outbox-worker"]["depends_on"]["model-proxy"]
+        with self.assertRaisesRegex(preflight.PreflightError, "outbox worker must wait"):
+            preflight.validate_compose(changed, values)
         for role in ("api", "worker"):
             self.assertFalse(
                 {
@@ -356,7 +368,8 @@ class HostedReleaseConfigTests(unittest.TestCase):
             self.assertEqual(preflight.run_shutdown(self.environment_path, values), 0)
         commands = [call.args[0] for call in run.call_args_list]
         self.assertEqual(commands[-1][-5:], ["stop", "--timeout", "60", "redis", "postgres"])
-        self.assertTrue(any(command[-4:] == ["stop", "--timeout", "7320", "worker"] for command in commands[:-1]))
+        self.assertTrue(any(command[-7:] == ["stop", "--timeout", "7320", "worker",
+            "project-control-worker", "artifact-worker", "outbox-worker"] for command in commands[:-1]))
         with patch.object(preflight.subprocess, "run", side_effect=[
             subprocess.CompletedProcess([], 0), subprocess.CompletedProcess([], 17),
         ]) as run:
@@ -484,6 +497,26 @@ class HostedReleaseConfigTests(unittest.TestCase):
         ]):
             with self.assertRaisesRegex(preflight.PreflightError, "different API namespace"):
                 preflight.validate_running_mcp_namespace(["docker", "compose"], values)
+
+    def test_targeted_worker_up_keeps_mcp_coupled_to_api_dependency(self):
+        values = self.mcp_environment()
+        for service in ("project-control-worker", "artifact-worker", "outbox-scan-worker",
+                        "outbox-worker", "submission-finalization-worker",
+                        "submission-source-cleanup-worker"):
+            calls = []
+            def run(command, **_kwargs):
+                calls.append(command)
+                return subprocess.CompletedProcess(command, 0)
+            with self.subTest(service=service), patch.object(
+                preflight.subprocess, "run", side_effect=run
+            ), patch.object(preflight, "validate_running_mcp_namespace"):
+                self.assertEqual(preflight.run_compose(
+                    self.environment_path, values, ["up", "--detach", service]
+                ), 0)
+            self.assertEqual(calls[0][-2:], ["stop", "mcp"])
+            self.assertIn(service, calls[1])
+            self.assertIn("--force-recreate", calls[2])
+            self.assertEqual(calls[2][-1], "mcp")
 
     def test_full_launch_waits_for_api_before_starting_stale_mcp(self):
         values = self.mcp_environment()
@@ -761,11 +794,11 @@ class HostedReleaseConfigTests(unittest.TestCase):
     def test_worker_cannot_consume_finalization_or_omit_its_queue_selection(self) -> None:
         rendered = preflight.render_compose(self.environment_path, self.environment)
         for selection in (None, "--queues=celery", "-Qworkstream.submission_finalization",
-                          "--queues=celery,workstream.outbox,workstream.submission_finalization"):
+                          "--queues=workstream.project_setup,workstream.outbox"):
             with self.subTest(selection=selection):
                 changed = copy.deepcopy(rendered)
                 command = changed["services"]["worker"]["command"]
-                command.remove("--queues=celery,workstream.outbox")
+                command.remove("--queues=workstream.project_setup")
                 if selection:
                     command.append(selection)
                 with self.assertRaisesRegex(preflight.PreflightError, "worker delivery profile"):
@@ -982,7 +1015,8 @@ class HostedReleaseConfigTests(unittest.TestCase):
             )
         commands = [call.args[0] for call in run.call_args_list]
         self.assertEqual(commands[0][-3:], ["stop", "beat", "api"])
-        self.assertEqual(commands[1][-4:], ["stop", "--timeout", "7320", "worker"])
+        self.assertEqual(commands[1][-7:], ["stop", "--timeout", "7320", "worker",
+            "project-control-worker", "artifact-worker", "outbox-worker"])
         self.assertEqual(
             commands[2][-5:],
             [
@@ -995,19 +1029,23 @@ class HostedReleaseConfigTests(unittest.TestCase):
         )
         self.assertEqual(
             commands[3][-4:],
+            ["stop", "--timeout", "120", "outbox-scan-worker"],
+        )
+        self.assertEqual(
+            commands[4][-4:],
             ["stop", "--timeout", "7320", "model-proxy"],
         )
         self.assertEqual(
-            commands[4][-2:],
+            commands[5][-2:],
             ["stop", "guide-document-parser"],
         )
 
     def test_shutdown_failure_keeps_later_dependencies_running(self) -> None:
-        for failed_phase in (0, 1, 2, 3):
+        for failed_phase in (0, 1, 2, 3, 4):
             with self.subTest(failed_phase=failed_phase):
                 results = [
                     subprocess.CompletedProcess([], 17 if index == failed_phase else 0)
-                    for index in range(5)
+                    for index in range(6)
                 ]
                 with patch.object(
                     preflight.subprocess, "run", side_effect=results

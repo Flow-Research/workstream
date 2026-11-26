@@ -18,6 +18,31 @@ SOURCE_CLEANUP_QUEUE = "workstream.source_cleanup"
 SOURCE_CLEANUP_TASK = "workstream.artifacts.sweep_submission_sources"
 SOURCE_CLEANUP_SCHEDULE = "submission-source-cleanup"
 _validated_parent = None
+_selected_queue_parent = None
+_selected_queue = None
+
+
+@worker_init.connect
+def validate_workstream_queue_selection(sender, **_kwargs):
+    """Require one declared queue for every Workstream application worker."""
+    global _selected_queue_parent, _selected_queue
+    from app.workers.project_setup_topology import PROJECT_GUIDE_CONSUMER_MARKER
+
+    if getattr(sender.app.conf, PROJECT_GUIDE_CONSUMER_MARKER, False) is not True:
+        return
+    _selected_queue_parent = None
+    _selected_queue = None
+    queues = set(sender.app.amqp.queues.consume_from)
+    declared = {queue.name for queue in sender.app.conf.task_queues}
+    if len(queues) != 1 or not queues <= declared:
+        raise WorkerShutdown("Workstream workers require one declared queue")
+    pool = sender.pool_cls
+    if isinstance(pool, str):
+        pool = get_implementation(pool)
+    if pool is not TaskPool or sender.app.conf.task_always_eager:
+        raise WorkerShutdown("Workstream workers require non-eager prefork delivery")
+    _selected_queue = next(iter(queues))
+    _selected_queue_parent = os.getpid()
 
 
 @worker_init.connect
@@ -60,9 +85,17 @@ def require_source_cleanup_worker(task):
 
 
 class WorkerTaskBoundary(Task):
-    """Keep foreign registered tasks away from a cleanup child's credentials."""
+    """Reject foreign task names on each dedicated worker before owner I/O."""
 
     def before_start(self, task_id, args, kwargs):
         if is_source_cleanup_worker_process() and self.name != SOURCE_CLEANUP_TASK:
             raise RuntimeError("dedicated source cleanup worker rejects foreign tasks")
+        if _selected_queue_parent is not None and os.getppid() == _selected_queue_parent:
+            from app.workers.celery_app import WORKSTREAM_TASK_ROUTES
+
+            route = WORKSTREAM_TASK_ROUTES.get(self.name)
+            expected = route.get("queue") if isinstance(route, dict) else None
+            received = self.request.delivery_info.get("routing_key")
+            if expected != _selected_queue or received != _selected_queue:
+                raise RuntimeError("dedicated worker rejects a foreign task")
         return super().before_start(task_id, args, kwargs)

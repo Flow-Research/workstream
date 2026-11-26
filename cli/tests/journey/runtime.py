@@ -399,7 +399,11 @@ def durable_runtime(root: Path, directory: Path, environment: dict[str, str]):
                 required.append(process)
                 return process
 
-            general_worker = worker("worker", "celery,workstream.outbox", 2)
+            worker("guide", "workstream.project_setup", 1)
+            worker("project-control", "workstream.project_control", 1)
+            worker("artifacts", "workstream.artifacts", 1)
+            worker("outbox-scan", "workstream.outbox_scan", 1)
+            effect_worker = worker("outbox", "workstream.outbox", 1)
             worker("finalizer", "workstream.submission_finalization", 1)
             worker(
                 "source-cleanup",
@@ -436,26 +440,24 @@ def durable_runtime(root: Path, directory: Path, environment: dict[str, str]):
                     raise RuntimeError("required journey worker exited during startup")
                 time.sleep(0.2)
 
-            def stop_general_worker():
-                if general_worker.poll() is not None:
-                    raise RuntimeError("owned general worker already exited")
-                _stop_owned_group(general_worker)
-                processes.remove(general_worker)
+            def stop_effect_worker():
+                if effect_worker.poll() is not None:
+                    raise RuntimeError("owned POST delivery worker already exited")
+                _stop_owned_group(effect_worker)
+                processes.remove(effect_worker)
 
-            async def start_general_worker():
-                nonlocal general_worker
-                if general_worker.poll() is None:
-                    raise RuntimeError("owned general worker was not stopped")
-                general_worker = worker(
-                    "worker-restarted", "celery,workstream.outbox", 2
-                )
+            async def start_effect_worker():
+                nonlocal effect_worker
+                if effect_worker.poll() is None:
+                    raise RuntimeError("owned POST delivery worker was not stopped")
+                effect_worker = worker("outbox-restarted", "workstream.outbox", 1)
                 deadline = time.monotonic() + 15
                 while time.monotonic() < deadline:
-                    if general_worker.poll() is not None:
-                        raise RuntimeError("owned general worker restart exited")
+                    if effect_worker.poll() is not None:
+                        raise RuntimeError("owned POST delivery worker restart exited")
                     await asyncio.sleep(0.2)
 
-            return stop_general_worker, start_general_worker
+            return stop_effect_worker, start_effect_worker
 
         yield start_workers
     finally:

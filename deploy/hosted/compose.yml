@@ -187,7 +187,7 @@ services:
       retries: 6
       start_period: 30s
 
-  worker:
+  worker: &project-guide-worker
     <<: *backend-runtime
     environment:
       <<: *backend-environment
@@ -240,7 +240,7 @@ services:
       - --pool=prefork
       - --concurrency=${WORKSTREAM_CELERY_WORKER_CONCURRENCY:-1}
       - --hostname=worker@%h
-      - --queues=celery,workstream.outbox
+      - --queues=workstream.project_setup
       - --pidfile=/tmp/celery-worker.pid
       - --loglevel=INFO
     volumes:
@@ -264,6 +264,97 @@ services:
     stop_grace_period: 7320s
     healthcheck:
       test: [CMD-SHELL, "test -s /tmp/celery-worker.pid && kill -0 $$(cat /tmp/celery-worker.pid)"]
+      interval: 20s
+      timeout: 10s
+      retries: 6
+      start_period: 30s
+
+  project-control-worker:
+    <<: *project-guide-worker
+    command:
+      - python
+      - -m
+      - celery
+      - -A
+      - app.workers.celery_app
+      - worker
+      - --pool=prefork
+      - --concurrency=1
+      - --hostname=project-control@%h
+      - --queues=workstream.project_control
+      - --pidfile=/tmp/celery-worker.pid
+      - --loglevel=INFO
+
+  artifact-worker:
+    <<: *project-guide-worker
+    command:
+      - python
+      - -m
+      - celery
+      - -A
+      - app.workers.celery_app
+      - worker
+      - --pool=prefork
+      - --concurrency=1
+      - --hostname=artifacts@%h
+      - --queues=workstream.artifacts
+      - --pidfile=/tmp/celery-worker.pid
+      - --loglevel=INFO
+
+  outbox-worker:
+    <<: *project-guide-worker
+    command:
+      - python
+      - -m
+      - celery
+      - -A
+      - app.workers.celery_app
+      - worker
+      - --pool=prefork
+      - --concurrency=1
+      - --hostname=outbox@%h
+      - --queues=workstream.outbox
+      - --pidfile=/tmp/celery-worker.pid
+      - --loglevel=INFO
+
+  outbox-scan-worker:
+    <<: *backend-runtime
+    environment:
+      <<: *backend-environment
+      WORKSTREAM_RELEASE_ROLE: worker
+      WORKSTREAM_DATABASE_URL_FILE: /run/secrets/database_url
+      WORKSTREAM_CELERY_BROKER_URL_FILE: /run/secrets/celery_broker_url
+    secrets:
+      - source: database_url
+        target: database_url
+        uid: "${WORKSTREAM_RUNTIME_UID}"
+        gid: "${WORKSTREAM_RUNTIME_GID}"
+        mode: 0400
+      - source: celery_broker_url
+        target: celery_broker_url
+        uid: "${WORKSTREAM_RUNTIME_UID}"
+        gid: "${WORKSTREAM_RUNTIME_GID}"
+        mode: 0400
+    command:
+      - python
+      - -m
+      - celery
+      - -A
+      - app.workers.celery_app
+      - worker
+      - --pool=prefork
+      - --concurrency=1
+      - --hostname=outbox-scan@%h
+      - --queues=workstream.outbox_scan
+      - --pidfile=/tmp/celery-outbox-scan.pid
+      - --loglevel=INFO
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: on-failure:5
+    stop_grace_period: 120s
+    healthcheck:
+      test: [CMD-SHELL, "test -s /tmp/celery-outbox-scan.pid && kill -0 $$(cat /tmp/celery-outbox-scan.pid)"]
       interval: 20s
       timeout: 10s
       retries: 6

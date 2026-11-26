@@ -64,6 +64,16 @@ class LocalGuideRuntimeTests(unittest.TestCase):
         self.compose = yaml.safe_load((ROOT / "docker-compose.yml").read_text())
         self.services = self.compose["services"]
 
+    def test_agent_loop_post_worker_receives_model_and_checker_sockets(self):
+        overlay = yaml.safe_load((ROOT / "docker-compose.agent-loop.yml").read_text())
+        worker = overlay["services"]["outbox-worker"]
+        self.assertEqual(worker["environment"]["WORKSTREAM_CHECKER_MODEL_PROXY_SOCKET"],
+                         "/run/ws-model-proxy/model-proxy.sock")
+        self.assertEqual(worker["environment"]["WORKSTREAM_EXTERNAL_CHECKER_SERVICE_SOCKET"],
+                         "/run/ws-checker/checker.sock")
+        self.assertIn("checker_model_proxy:/run/ws-model-proxy:ro", worker["volumes"])
+        self.assertIn("checker_socket:/run/ws-checker:ro", worker["volumes"])
+
     def test_parser_has_no_secrets_network_or_source_mount(self):
         parser = self.services["guide-document-parser"]
         self.assertEqual(parser["network_mode"], "none")
@@ -106,7 +116,7 @@ class LocalGuideRuntimeTests(unittest.TestCase):
     def test_finalization_consumer_requires_explicit_positive_capacity(self):
         service = self.services["submission-finalizer"]
         self.assertEqual(service["profiles"], ["submission-intake"])
-        self.assertIn("--queues=celery,workstream.outbox", self.services["worker"]["command"])
+        self.assertIn("--queues=workstream.project_setup", self.services["worker"]["command"])
         # Compose turns escaped dollars into shell variables at container launch.
         script = service["command"][2].replace("$$", "$")
         with tempfile.TemporaryDirectory() as directory:

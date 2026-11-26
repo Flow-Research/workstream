@@ -270,8 +270,9 @@ preflight rejects missing or malformed objects and requires the cleanup
 profile's `upload_principal` to equal the runtime upload ARN. Full preflight,
 every `up`, and reboot reconciliation then run the canonical strict profile
 validators from the pinned backend image before activating services. The
-general worker consumes only `celery,workstream.outbox`; finalization and source
-cleanup each use a separate prefork worker with exactly one queue. Beat always
+guide compilation, project control, artifact work, outbox scanning, POST delivery,
+submission finalization, and source cleanup each have one dedicated prefork
+worker consuming exactly one named queue. Beat always
 receives the required cleanup profile, so the cleanup schedule cannot disappear
 because of an omitted setting.
 
@@ -415,7 +416,7 @@ administrator and do not attest the running node's complete source custody;
 qualification separately records its actual process/binary identities.
 
 The guide parser and enabled model proxy must pass their existing health checks
-before the general worker starts. The exclusive finalization and cleanup
+before the guide worker starts. The exclusive finalization and cleanup
 workers must also become healthy, and Beat retains its recovery schedules. API
 health is a lightweight endpoint; Celery health checks its processes. Remote health
 verifies runtime/identity/cache-count and pinned intake/default facts; exact

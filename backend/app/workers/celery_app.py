@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from celery import Celery
+from celery.exceptions import QueueNotFound
 from kombu import Queue
 from app.workers.outbox_topology import (
-    OUTBOX_DELIVERY_TASK, OUTBOX_QUEUE, FINALIZATION_DELIVERY_TASK, FINALIZATION_QUEUE,
-    is_finalization_worker_process,
+    OUTBOX_DELIVERY_TASK, OUTBOX_QUEUE, OUTBOX_SCAN_TASK, OUTBOX_SCAN_QUEUE,
+    FINALIZATION_DELIVERY_TASK, FINALIZATION_QUEUE, is_finalization_worker_process,
+    is_outbox_scan_worker_process,
 )
 from app.workers.source_cleanup_topology import (
     SOURCE_CLEANUP_QUEUE, SOURCE_CLEANUP_TASK, SOURCE_CLEANUP_SCHEDULE,
@@ -18,6 +20,7 @@ from app.modules.artifacts.api.submission_cleanup import (
 from app.workers.project_setup_topology import (
     CELERY_VISIBILITY_TIMEOUT_SECONDS,
     PROJECT_GUIDE_CONSUMER_MARKER,
+    PROJECT_GUIDE_QUEUE,
 )
 from celery.signals import beat_init, worker_process_init, worker_process_shutdown, worker_shutdown
 
@@ -46,17 +49,24 @@ ARTIFACT_PENDING_WORK_SCAN_SCHEDULE = "artifact-pending-work-scan"
 GUIDE_SETUP_CONTINUATION_TASK = "workstream.artifacts.continue_guide_setup"
 GUIDE_SETUP_CONTINUATION_SCAN_TASK = "workstream.artifacts.scan_guide_setup_continuations"
 GUIDE_SETUP_CONTINUATION_SCAN_SCHEDULE = "guide-setup-continuation-scan"
+PROJECT_CONTROL_QUEUE = "workstream.project_control"
+ARTIFACT_WORK_QUEUE = "workstream.artifacts"
+PROJECT_GUIDE_COMPILATION_TASK = "workstream.project_setup.compile_project_guide"
+POST_POLICY_DERIVATION_TASK = "workstream.project_setup.derive_post_policy"
+POST_POLICY_SCAN_TASK = "workstream.project_setup.scan_post_policy_approvals"
+RETAINED_REVISION_SCAN_TASK = "workstream.tasks.scan_retained_revisions"
+GUIDE_RUNTIME_CLEANUP_TASK = "workstream.project_setup.cleanup_runtime_resources"
 OBSERVED_TASK_NAMES = frozenset(
     {
         OUTBOX_DELIVERY_TASK,
         FINALIZATION_DELIVERY_TASK,
         SOURCE_CLEANUP_TASK,
-        "workstream.outbox.scan_pending",
-        "workstream.tasks.scan_retained_revisions",
-        "workstream.project_setup.derive_post_policy",
-        "workstream.project_setup.scan_post_policy_approvals",
-        "workstream.project_setup.compile_project_guide",
-        "workstream.project_setup.cleanup_runtime_resources",
+        OUTBOX_SCAN_TASK,
+        RETAINED_REVISION_SCAN_TASK,
+        POST_POLICY_DERIVATION_TASK,
+        POST_POLICY_SCAN_TASK,
+        PROJECT_GUIDE_COMPILATION_TASK,
+        GUIDE_RUNTIME_CLEANUP_TASK,
         ARTIFACT_SCRATCH_CLEANUP_TASK,
         ARTIFACT_PUT_RESOLUTION_TASK,
         ARTIFACT_VERIFICATION_TASK,
@@ -65,6 +75,28 @@ OBSERVED_TASK_NAMES = frozenset(
         GUIDE_SETUP_CONTINUATION_SCAN_TASK,
     }
 )
+WORKSTREAM_TASK_ROUTES = {
+    PROJECT_GUIDE_COMPILATION_TASK: {"queue": PROJECT_GUIDE_QUEUE},
+    POST_POLICY_DERIVATION_TASK: {"queue": PROJECT_CONTROL_QUEUE},
+    POST_POLICY_SCAN_TASK: {"queue": PROJECT_CONTROL_QUEUE},
+    RETAINED_REVISION_SCAN_TASK: {"queue": PROJECT_CONTROL_QUEUE},
+    GUIDE_RUNTIME_CLEANUP_TASK: {"queue": PROJECT_CONTROL_QUEUE},
+    ARTIFACT_SCRATCH_CLEANUP_TASK: {"queue": ARTIFACT_WORK_QUEUE},
+    ARTIFACT_PUT_RESOLUTION_TASK: {"queue": ARTIFACT_WORK_QUEUE},
+    ARTIFACT_VERIFICATION_TASK: {"queue": ARTIFACT_WORK_QUEUE},
+    ARTIFACT_PENDING_WORK_SCAN_TASK: {"queue": ARTIFACT_WORK_QUEUE},
+    GUIDE_SETUP_CONTINUATION_TASK: {"queue": ARTIFACT_WORK_QUEUE},
+    GUIDE_SETUP_CONTINUATION_SCAN_TASK: {"queue": ARTIFACT_WORK_QUEUE},
+    OUTBOX_SCAN_TASK: {"queue": OUTBOX_SCAN_QUEUE},
+    OUTBOX_DELIVERY_TASK: {"queue": OUTBOX_QUEUE},
+    FINALIZATION_DELIVERY_TASK: {"queue": FINALIZATION_QUEUE},
+    SOURCE_CLEANUP_TASK: {"queue": SOURCE_CLEANUP_QUEUE},
+}
+
+
+def _reject_unrouted_task(name, _args, _kwargs, _options, *, task=None):
+    """Refuse a publisher that bypasses the closed Workstream task inventory."""
+    raise QueueNotFound(f"unrouted Workstream task: {name}")
 
 
 @worker_process_init.connect
@@ -73,9 +105,9 @@ def initialize_artifact_runtime_for_process(**_kwargs: object) -> None:
     if is_source_cleanup_worker_process():
         # Parent validated cleanup startup; each sweep rechecks current authority.
         return
-    if is_finalization_worker_process():
-        # Finalized replay needs retained SQL facts only. Unfinished finalization
-        # leases/initializes the same provider through _WorkerSourceObservation.
+    if is_finalization_worker_process() or is_outbox_scan_worker_process():
+        # Scanning uses SQL and broker only. Finalized replay uses retained SQL;
+        # unfinished finalization initializes its provider on actual observation.
         return
     run_async_task(initialize_artifact_internal_runtime)
 
@@ -144,10 +176,13 @@ def create_celery_app() -> Celery:
         ],
     )
     celery_app.conf.update(
-        task_queues=(Queue("celery"), Queue(OUTBOX_QUEUE), Queue(FINALIZATION_QUEUE), Queue(SOURCE_CLEANUP_QUEUE)),
-        task_routes={SOURCE_CLEANUP_TASK: {"queue": SOURCE_CLEANUP_QUEUE},
-                     OUTBOX_DELIVERY_TASK: {"queue": OUTBOX_QUEUE},
-                     FINALIZATION_DELIVERY_TASK: {"queue": FINALIZATION_QUEUE}},
+        task_queues=tuple(Queue(name) for name in (
+            PROJECT_GUIDE_QUEUE, PROJECT_CONTROL_QUEUE, ARTIFACT_WORK_QUEUE,
+            OUTBOX_SCAN_QUEUE, OUTBOX_QUEUE, FINALIZATION_QUEUE, SOURCE_CLEANUP_QUEUE,
+        )),
+        task_default_queue=PROJECT_GUIDE_QUEUE,
+        task_create_missing_queues=False,
+        task_routes=(WORKSTREAM_TASK_ROUTES, _reject_unrouted_task),
         accept_content=["json"],
         result_serializer="json",
         task_always_eager=settings.celery_task_always_eager,
@@ -169,17 +204,17 @@ def create_celery_app() -> Celery:
                 "task": SOURCE_CLEANUP_TASK, "schedule": SUBMISSION_SOURCE_SWEEP_SECONDS,
             }} if settings.submission_source_cleanup_profile is not None else {}),
             "outbox-delivery-recovery": {
-                "task": "workstream.outbox.scan_pending", "schedule": 60.0,
+                "task": OUTBOX_SCAN_TASK, "schedule": 60.0,
             },
             "retained-revision-recovery": {
-                "task": "workstream.tasks.scan_retained_revisions", "schedule": 60.0,
+                "task": RETAINED_REVISION_SCAN_TASK, "schedule": 60.0,
             },
             "post-policy-approval-recovery": {
-                "task": "workstream.project_setup.scan_post_policy_approvals",
+                "task": POST_POLICY_SCAN_TASK,
                 "schedule": 60.0,
             },
             "guide-runtime-resource-cleanup": {
-                "task": "workstream.project_setup.cleanup_runtime_resources",
+                "task": GUIDE_RUNTIME_CLEANUP_TASK,
                 "schedule": settings.artifact_pending_work_scan_interval_seconds,
             },
             ARTIFACT_SCRATCH_CLEANUP_SCHEDULE: {

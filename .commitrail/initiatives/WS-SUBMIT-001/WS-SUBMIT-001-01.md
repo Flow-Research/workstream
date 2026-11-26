@@ -10921,3 +10921,56 @@ existing independent family guard. No existing module or lane owner moved.
 Ruff/whitespace checks and unchanged structure passed. Root inspected the bounded
 draft with no scoped code blocker; final clean content binding follows this
 evidence-only append. Full goal/hosted CI qualification remains outside scope.
+
+### Dedicated worker queues and durable outbox publication
+
+PRE6 proved the public native launch failure, same-key failed replay, and fresh
+accepted PRE source, then timed out before T5. A read-only isolated database
+observation found the accepted operation still `finalization_pending` and its
+`SubmissionFinalizationRequested` event `pending` with zero delivery attempts.
+The general worker had been stopped for the trial; Beat scheduled the outbox
+scan on its default `celery` queue, which that same worker consumed. Hosted
+general workers also shared guide work and POST effects at concurrency one,
+so a long effect could delay publication. The PRE6 isolated database/MinIO
+cleanup and runner restoration completed; this is a partial diagnostic, not
+a completed public journey.
+
+The bounded repair assigns all fifteen registered application tasks to seven
+fixed workload queues: guide compilation, project control, artifact work,
+outbox scanning, generic POST effects, submission finalization, and source
+cleanup. Each queue has one dedicated prefork service in hosted and local
+composition and the public journey launcher. Outbox scanning uses its own
+DB-and-broker hosted worker and a sixty-second hard limit for each one-hundred
+candidate page. Existing sixty-second Beat scheduling reselects still-pending
+events after a failed or killed publication; generic effects remain on the
+outbox delivery queue and finalization remains exclusive. A closed route map
+refuses unknown task names; the worker start and task boundary refuse mixed
+queues or delivery to a foreign role before owner work. The model proxy socket
+follows POST delivery to its new worker. No provider, authorization, schema,
+public contract, or native runner behavior changes are in this repair. Existing
+cloned local/hosted worker mounts retain their prior permissions; queue
+isolation is a scheduling and execution claim, not a new least-privilege claim.
+The hosted scanner receives only database and broker secrets; the local opt-in
+scanner still inherits the local MinIO root environment. Retained OpenAI guide
+runtime cleanup remains governed by its existing provider-mode credential
+availability and is not qualified by moving it to project control.
+
+Allowed files are the existing Celery worker topology/task files, the hosted
+and local Compose/preflight and inference overlays, the public journey worker
+launcher, affected topology/broker/Compose tests, and their immediate docs.
+The risk is high because publication can stall accepted operations; architecture,
+security, QA/test-delta and CI topology review apply. Acceptance requires an
+independent exact task-route inventory, wrong-queue task refusal, actual Redis
+prefork scan-to-finalizer delivery with no general consumer, hosted/local
+singleton queue checks, and cleanup of owned test resources. This proof does
+not qualify native fault recovery or the complete public journey by itself.
+The focused real Redis/prefork test passed with one scanner and one finalizer,
+no general consumer, an actual foreign registered-task rejection before DB
+effects, exact T5 finalization and public replay; its isolated PostgreSQL and
+MinIO resources cleaned (`/tmp/workstream-queue-scanner-real2.log` and `.json`).
+The first run exposed Celery's requirement for a declared sender default even
+with explicit routes; the corrected closed fallback router still refuses an
+unknown task. The launch receipt names the base commit because the working tree
+held this patch, so it is scope-compatible dirty-tree evidence, not clean-head
+qualification. Focused topology, rendered hosted/local configuration, Ruff,
+structure, Commitrail and changed Markdown links are checked separately.

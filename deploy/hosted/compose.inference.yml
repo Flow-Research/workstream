@@ -10,3 +10,14 @@ services:
     depends_on:
       model-proxy:
         condition: service_healthy
+  outbox-worker:
+    environment:
+      WORKSTREAM_CHECKER_MODEL_PROXY_SOCKET: ${WORKSTREAM_DEPLOYMENT_ROOT:-/var/lib/workstream}/model-runtime/model.sock
+    volumes:
+      - type: bind
+        source: ${WORKSTREAM_DEPLOYMENT_ROOT:-/var/lib/workstream}/model-runtime
+        target: ${WORKSTREAM_DEPLOYMENT_ROOT:-/var/lib/workstream}/model-runtime
+        read_only: true
+    depends_on:
+      model-proxy:
+        condition: service_healthy

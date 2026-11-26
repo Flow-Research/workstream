@@ -25,6 +25,7 @@ def worker(delivery_harness, monkeypatch):
 
     # Shared SQL/timeout proofs isolate topology, covered by the real broker drill.
     monkeypatch.setattr(worker, "require_outbox_worker", lambda _task, **_kwargs: None)
+    monkeypatch.setattr(worker, "require_outbox_scan_worker", lambda _task: None)
     monkeypatch.setattr(worker, "get_database_url", lambda: h.factory.kw["bind"].url)
     monkeypatch.setattr(
         worker,
