@@ -9196,6 +9196,40 @@ Ruff/structure/diff pass (structure log
 /tmp/submission-finalizer-broker-death-structure.log); final Commitrail check
 runs after this append. No production or lane changes, no remote mutation.
 
+### Broker publication recovery after T5
+
+A10 has a real broker-refusal case after public T4. Add a separate case for
+the initial POST event committed by T5. Scope is the existing finalization
+worker-loss test module and this record. Reuse its signed upload, prefork
+finalizer, Redis proxy and owned cleanup. Close the proxy after observing
+committed T5, attempt the canonical scan, and require zero publication with
+the exact source, charge, task, and POST request unchanged. Reopen the same
+proxy to real Redis and require one production POST delivery. Deliver a
+duplicate to verify one actual evaluation and one durable completion.
+
+Use the existing local intake and controlled selected-execution transports
+behind the registered worker's real ART, CHECKERS, and OUTBOX owners. Production
+code, retry settings, deployment, native execution setup and shared broker
+configuration stay outside this test-only change. Risk is medium for worker
+and shared-resource custody. Verify the focused real PostgreSQL/Redis test and
+existing post-T4 control, with focused QA and architecture review. Human
+review should verify the recovered message selects the original request and
+the test only closes its own proxy, worker processes and Redis prefix.
+
+The first run observed finalized T5 and the original pending POST event. It
+stalled before the outage scan because Python 3.12 waits for active connections
+when `Server.wait_closed()` runs after closing a listener. The test now closes
+the listener, drains its forwarding tasks, then awaits server closure. An
+isolated socket probe timed out with the prior order and completed with the
+repaired helper. The interrupted PostgreSQL and Redis run cleaned both owned
+services and supplies no recovery result.
+
+The post-T4 control passed on rerun. The new case reached the explicit TCP
+refusal check, which found that the live prefork finalizer still held its
+inherited copy of the proxy listener. The test now stops that owned finalizer
+after observing T5 and before disconnecting the proxy. It starts the separate
+POST worker after republication. The refusal assertion stays intact.
+
 ### Genuine-orphan scope clarification
 
 Read-only ARCH/SEC assessment at08fd205d0 confirms that spec17.4 makes

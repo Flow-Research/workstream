@@ -165,6 +165,33 @@ def _broker_finalizer(app, hostname, completed):
                without_heartbeat=True).start()
 
 
+def _broker_post_worker(app, hostname, completed):
+    """Run the registered POST delivery with controlled checker transports."""
+    from unittest.mock import patch
+    from celery.signals import task_postrun
+    from app.workers.outbox_topology import OUTBOX_DELIVERY_TASK, OUTBOX_QUEUE
+    from tests.checkers.execution.support import ControlledSelectedExecution
+    from tests.trusted_intake_fixtures import LocalIntakeAdapter
+
+    execution = ControlledSelectedExecution()
+
+    def record(task_id, task, retval, state, **_kwargs):
+        if task.name == OUTBOX_DELIVERY_TASK:
+            completed.put((task_id, state, retval, os.getpid(), task.request.is_eager,
+                           task.request.delivery_info["routing_key"], len(execution.requests)))
+
+    os.setsid()
+    task_postrun.connect(record, weak=False)
+    with (
+        patch("app.adapters.artifacts.trusted_submission_intake", lambda _settings: LocalIntakeAdapter()),
+        patch("app.adapters.checkers.configured_post_submit_external_execution",
+              lambda _settings, *, sessions: execution),
+    ):
+        app.Worker(pool="prefork", concurrency=1, queues=[OUTBOX_QUEUE], hostname=hostname,
+                   loglevel="ERROR", without_gossip=True, without_mingle=True,
+                   without_heartbeat=True).start()
+
+
 def _broker_scanner(app, hostname, completed):
     """Run the production scan task with its own real prefork consumer."""
     from celery.signals import task_postrun
@@ -370,21 +397,31 @@ async def _close_broker_case(case):
     case.endpoint.close()
     await _stop_broker_worker(case.scan_process, case.scan_completed)
     await _stop_broker_worker(case.process, case.completed)
-    for pool in (case.app.amqp._producer_pool, case.app._pool):
-        if pool is not None:
-            pool.force_close_all()
-    if case.proxy is not None:
-        case.proxy.close()
-        await case.proxy.wait_closed()
-    for pending in tuple(case.connections):
-        pending.cancel()
-    await asyncio.gather(*tuple(case.connections), return_exceptions=True)
+    await _disconnect_broker_endpoint(case, terminal=True)
     keys = list(case.connection.scan_iter(match=case.prefix + "*"))
     if keys:
         case.connection.delete(*keys)
     assert list(case.connection.scan_iter(match=case.prefix + "*")) == []
     case.connection.close()
     get_settings.cache_clear()
+
+
+async def _disconnect_broker_endpoint(case, *, terminal=False):
+    """Refuse new publication and drain only this case's existing connections."""
+    proxy, case.proxy = case.proxy, None
+    if proxy is not None:
+        proxy.close()
+    for pending in tuple(case.connections):
+        pending.cancel()
+    await asyncio.gather(*tuple(case.connections), return_exceptions=True)
+    if proxy is not None:
+        await proxy.wait_closed()
+    for pool in (case.app.amqp._producer_pool, case.app._pool):
+        if pool is not None:
+            if terminal:
+                pool.force_close_all()
+            else:
+                pool.resize(pool.limit, reset=True)
 
 
 async def _restore_broker_endpoint(case):
@@ -395,7 +432,7 @@ async def _restore_broker_endpoint(case):
         "127.0.0.1", case.port)
 
 
-async def _next_broker_result(case):
+async def _next_broker_result(case, *, expected_queue=None):
     """Observe a real task return while the proxy event loop remains live."""
     import queue
     import time
@@ -409,9 +446,12 @@ async def _next_broker_result(case):
             continue
         from app.workers.outbox_topology import FINALIZATION_QUEUE
         assert result[1] == "SUCCESS" and result[3] not in {os.getpid(), case.process.pid}, result
-        assert result[4:] == (False, FINALIZATION_QUEUE), result
+        if expected_queue is None:
+            assert result[4:] == (False, FINALIZATION_QUEUE), result
+        else:
+            assert result[4:6] == (False, expected_queue), result
         return result
-    raise AssertionError("production finalization task did not return")
+    raise AssertionError("production outbox task did not return")
 
 
 async def _next_scan_result(case):
@@ -521,6 +561,107 @@ async def test_real_broker_recovers_public_acceptance_and_deduplicates_finalizat
         await _assert_broker_finalized_once(f, case.operation_id, case.before[1])
         await _assert_public_broker_replay(case)
         await _assert_broker_finalized_once(f, case.operation_id, case.before[1])
+
+
+async def _post_broker_facts(f, operation_id):
+    """Pin the exact accepted source and initial evaluation selected by T5."""
+    from app.modules.checkers.api.execution import COMPLETION_EVENT, REQUEST_EVENT
+    from app.modules.checkers.models import CheckerRun
+    from app.modules.tasks.models import SubmissionDispatch, WorkstreamTask
+
+    async with f.factory() as session:
+        operation = await session.get(SubmissionIntakeOperation, operation_id)
+        task = await session.get(WorkstreamTask, str(f.task))
+        dispatch = await session.get(SubmissionDispatch, operation.finalized_submission_id)
+        event = await session.get(OutboxEvent, dispatch.evaluation_event_id)
+        run = await session.get(CheckerRun, dispatch.evaluation_attempt_id)
+        assert event.event_type == REQUEST_EVENT and event.aggregate_id == UUID(dispatch.submission_id)
+        completions = tuple(await session.scalars(select(OutboxEvent.event_id).where(
+            OutboxEvent.project_id == str(f.project), OutboxEvent.event_type == COMPLETION_EVENT,
+        )))
+        return {
+            "source": (operation.object_ref, operation.provider_generation,
+                       operation.raw_sha256, operation.raw_byte_count),
+            "task_status": task.status,
+            "request": (event.event_id, event.payload_digest, event.payload),
+            "delivery": (event.delivery_state, event.attempt_count),
+            "execution": (run.id, run.status, run.worker_lease_generation),
+            "material": run.material_custody,
+            "completion": run.completion_event_id,
+            "completions": completions,
+        }
+
+
+async def _prepare_post_broker_worker(case):
+    """Release the finalizer's inherited listener before testing broker loss."""
+    from app.core.identifiers import new_record_id
+
+    context = multiprocessing.get_context("fork")
+    finalizer, completed = case.process, case.completed
+    case.process, case.completed = None, context.Queue()
+    await _stop_broker_worker(finalizer, completed)
+    case.process = context.Process(target=_broker_post_worker,
+        args=(case.app, f"post-delivery-{new_record_id()}@localhost", case.completed))
+
+
+async def test_real_broker_recovers_committed_t5_and_executes_original_post_once(
+    admission_intake, tmp_path, monkeypatch,
+):
+    """Losing the broker after T5 leaves one recoverable POST request and source."""
+    from app.core.identifiers import new_record_id
+    from app.workers.outbox_topology import OUTBOX_QUEUE
+
+    f = admission_intake
+    async with _public_broker_case(f, tmp_path, monkeypatch) as case:
+        async def scan():
+            return await asyncio.to_thread(case.worker._scan_pending, case.worker.scan_pending)
+
+        await provision_post_submit_service(f.factory, ServiceIdentity.CHECKER_POST_SUBMIT)
+        await _restore_broker_endpoint(case)
+        assert await scan() == {"selected": 1, "published": 1}
+        case.process.start()
+        assert (await _next_broker_result(case))[2] == {"status": "delivery_recorded"}
+        submission = await _assert_broker_finalized_once(f, case.operation_id, case.before[1])
+        accepted = await _accepted_broker_facts(f, case.operation_id)
+        pending = await _post_broker_facts(f, case.operation_id)
+        assert pending["delivery"] == ("pending", 0)
+        assert pending["execution"][1:] == ("queued", 0) and pending["completions"] == ()
+        assert pending["task_status"] == "evaluation_pending"
+
+        await _prepare_post_broker_worker(case)
+        await _disconnect_broker_endpoint(case)
+        with pytest.raises(ConnectionRefusedError):
+            await asyncio.open_connection("127.0.0.1", case.port)
+        assert await scan() == {"selected": 1, "published": 0}
+        assert case.connection.llen(case.prefix + OUTBOX_QUEUE) == 0
+        assert await _accepted_broker_facts(f, case.operation_id) == accepted
+        assert await _post_broker_facts(f, case.operation_id) == pending
+
+        await _restore_broker_endpoint(case)
+        assert await scan() == {"selected": 1, "published": 1}
+        assert case.connection.llen(case.prefix + OUTBOX_QUEUE) == 1
+        duplicate = str(new_record_id())
+        await asyncio.to_thread(case.worker.deliver_event.apply_async,
+            args=(str(pending["request"][0]), str(f.project)), task_id=duplicate)
+        assert case.connection.llen(case.prefix + OUTBOX_QUEUE) == 2
+        case.process.start()
+        original = await _next_broker_result(case, expected_queue=OUTBOX_QUEUE)
+        replay = await _next_broker_result(case, expected_queue=OUTBOX_QUEUE)
+        assert original[0] != duplicate and original[2] == {"status": "delivery_recorded"}
+        assert replay[0] == duplicate and replay[2] == {"status": "delivery_unavailable"}
+        assert original[3] == replay[3] and original[6] == replay[6] == 1
+
+        completed = await _post_broker_facts(f, case.operation_id)
+        for key in ("source", "task_status", "request"):
+            assert completed[key] == pending[key]
+        assert completed["delivery"] == ("acknowledged", 1)
+        assert completed["execution"] == (pending["execution"][0], "completed", 1)
+        assert completed["completion"] is not None
+        assert completed["completions"] == (completed["completion"],)
+        assert completed["material"]["content_sha256"] == pending["source"][2]
+        assert completed["material"]["byte_count"] == pending["source"][3]
+        await _assert_public_broker_replay(case)
+        assert await _assert_broker_finalized_once(f, case.operation_id, case.before[1]) == submission
 
 
 def _record_broker_trace(path, body):
