@@ -11804,7 +11804,7 @@ rollback, replay and retry, stale or foreign source and recipient refusal,
 transport status mapping, bounded delivery, and queue isolation. Focused
 security, architecture, QA and operating documentation review are required.
 Human review focuses on verified recipient evidence, email wording and the
-configured authenticated feedback destination before activation.
+authenticated assignment read before activation.
 
 
 ### Paired native duplicate-result observation repair
@@ -11820,3 +11820,17 @@ the probe was not observing the duplicate worker result despite configuring
 a result backend. The local probe now explicitly requests a result for this
 one duplicate publication. Production task defaults and the exact duplicate
 refusal/custody assertions remain unchanged. A connected rerun remains required.
+
+The PostgreSQL 16 catalog comparison for migration 0093 reversed only the
+new mailbox column and check plus the exact email event in the existing
+outbox retry function, inside an isolated rolled-back transaction. This
+recovered the established 0092 fingerprint `03192dcee654b3e4322b2ed1bbbb7b45293008a156df7bbe750c1de2a26b6b7e`.
+The current schema uses the ORM's exact check name and fingerprint
+`3e045ec0e2fe6f0b14b19ea1404f4500b1cde5d440c1a7ddd76d90bab1ffed0b`.
+Hosted release and Keycloak tests passed 80 cases, including opt-in key and
+consumer isolation. The local Compose overlay rendered with that same key and
+queue isolation. The architecture and authorization boundary suite passed 56
+cases after moving the handler composition to the TASK adapter root. The fake
+HTTP tests passed 10 cases including expiry, provider errors and redirect
+refusal. Live delivery still depends on the verified sender, the secret file
+and a designated verified recipient.

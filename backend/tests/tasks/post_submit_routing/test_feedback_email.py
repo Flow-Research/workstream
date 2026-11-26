@@ -70,7 +70,10 @@ async def test_resend_http_mapping_and_request_privacy(tmp_path, status, body, e
             "from": "Workstream <no-reply@workstream.flowresearch.tech>",
             "to": ["verified@example.test"], "subject": "Assignment needs revision", "text": "Read feedback.",
         }
-        return _response(status, **body)
+        response = _response(status, **body)
+        if status == 307:
+            response.headers["Location"] = "https://untrusted.example.test/emails"
+        return response
 
     settings = Settings(environment="test", resend_api_key_file=_private_key(tmp_path))
     adapter = email_adapter.submission_feedback_email_factory(
@@ -147,6 +150,7 @@ async def test_only_committed_current_quality_routes_send(
         ))
         if case == "retry":
             async with h.factory() as session:
+                await session.begin()
                 await task_post_submit_outcome(session, h.factory).apply(h.envelope, current_generation=None)
                 assert await _email_events(h.factory) == ()
                 await session.rollback()

@@ -15,7 +15,7 @@ def upgrade() -> None:
         "email_verified", sa.Boolean(), nullable=False, server_default=sa.false(),
     ), schema="public")
     op.create_check_constraint(
-        "ck_actor_identity_links_email_verified_observation", "actor_identity_links",
+        op.f("ck_actor_identity_links_email_verified_observation"), "actor_identity_links",
         "not email_verified or (subject_kind = 'human' and email_observed_issued_at is not null)",
         schema="public",
     )
