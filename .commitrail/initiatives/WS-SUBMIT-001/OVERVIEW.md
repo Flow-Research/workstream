@@ -31,6 +31,26 @@ Recent focused evidence includes atomic invalidation (`8a854f7a6`), public
 ZIP/T5 lineage (`168e5268f`), and policy-error translation (`d31a45773`). These and the cleanup/recovery runs recorded below are bounded results, not
 full-head qualification.
 
+## Submitter experience reconciliation in PR 708
+
+The user-provided `workstream_submission_pr_708_addition.md` supplements the
+execution specification and supersedes conflicting public-input/guide-access
+requirements. All implementation belongs in this PR; PR 709 is not part of this
+work. Existing reward owners remain authoritative.
+
+- [ ] Four required submission inputs and optional feedback; backend-selected revision context and exact actor-scoped replay.
+- [ ] Forward migration preserves historical accepted commands and refuses unsafe old in-flight work before mutation.
+- [ ] Approved project and governing task guides are readable/downloadable before claim under exact contributor authority.
+- [ ] Exact task/assignment status exposes current safe feedback, processing activity, revision terms and accepted evidence without internal-ID discovery.
+- [ ] CLI/MCP use the same contract, preserve useful PRE findings and document their distinct upload limits.
+- [ ] Combined public contributor journey proves correction, revision, replay, history and applicable existing awards on the integrated code.
+
+Dedicated queue/consumer implementation and its real isolated scanner-to-T5
+regression are integrated; native caller conversion and deployed qualification
+remain required. The managed-style adapter substitution passed through public
+ZIP acceptance, retained source custody, real T5 owner delivery and replay;
+it does not establish a deployed managed provider or broker-consumer proof.
+
 ## Execution deployment decision
 
 The API/application server and microVM execution run on separate infrastructure.
@@ -39,7 +59,8 @@ mixed queue list, and no catch-all worker handles unrelated workloads. Outbox
 publication must remain available while POST execution is stopped or saturated;
 it must not share the POST or submission-finalization consumer. The PRE6 drill
 accepted a fresh source but exposed publication waiting behind the paused general
-worker, so dedicated scanner delivery and the corresponding T5 proof remain open.
+worker. Dedicated scanner delivery now has a real Redis/prefork T5 proof;
+combined native and deployed confirmation remain open.
 The application instance is a verified t3.large; the dedicated always-on runner
 is an m7i.large with native KVM. App-origin mTLS health and native transport
 smoke receipts establish connectivity. V14 also proves the connected local API
