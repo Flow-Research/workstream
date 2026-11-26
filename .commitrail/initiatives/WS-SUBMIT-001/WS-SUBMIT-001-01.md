@@ -13167,3 +13167,23 @@ and focused regressions. Carry the committed stage deadline in the watchdog.
 Release the task under live ownership or the exact expired-owner abandonment
 guard. Return new-key guidance only for a durably closed PRE timeout. Preserve
 caller cancellation, uncertain acceptance and dedicated source cleanup ownership.
+
+Independent review reproduced a deadline race between the live owner check and
+terminalization. The follow-up at `a0e389a89` handles the database's exact expired
+fence refusal after rollback, then lets the original owner attempt durable expiry
+settlement. The reviewer verified the corrected path and the closed CLI and MCP
+error projections.
+
+At `a0e389a89`, three isolated PostgreSQL tests passed in 195.55 seconds. They
+crossed the database deadline during terminalization, then proved exact-owner
+expiry settlement, source charge retention and task release. They also verified
+caller cancellation and replay of an acceptance after a lost commit response.
+The launcher exited zero and confirmed database and MinIO cleanup. The exact
+receipt is `/tmp/workstream-deadline-crossing-pg.EmS932/cleanup.json`.
+
+The preceding signed HTTP and owner tests passed two cases covering the known
+504 and retry guidance. The unchanged watchdog, built CLI and installed MCP
+boundary tests passed 11, three and two cases respectively. The CLI and MCP
+cases distinguish known PRE timeout from an uncertain response and retain the
+original upload timeout. Hosted 300-second PRE and maximum-size acceptance
+still require live qualification.
