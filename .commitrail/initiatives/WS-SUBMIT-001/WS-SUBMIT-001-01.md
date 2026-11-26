@@ -12104,3 +12104,25 @@ The product dispatcher commits an invocation once. Its recovery child can
 only execute an exact queued generation-zero run, and rejects a running row
 after fresh classification. The private expired-running claim branch is
 unreachable through these supported owners and is outside this change.
+
+Caller verification also covers the existing forge locator transport and the
+source PRE claim test. Forge transport tests require an unresolved outcome
+after a malformed response, while keeping exact pre-send marker refusals and
+validated terminal infrastructure results. The PRE claim test exercises the
+same committed run twice and requires one lease and one authority consumption.
+
+Three public Operator cases passed against PostgreSQL on frozen
+`b11f13e83c9f86714371e36709858e773f7f8935`, schema `0093`, in 127.14 seconds.
+The isolated-runner receipt records database and MinIO cleanup. The held case
+used the real application, AUTH, OUTBOX, ART preparation, mTLS adapter and
+gateway. Its controlled Unix peer received one bound POST request and closed
+before returning a result. The child was dead-lettered with unknown invocation,
+and the exact CHECKERS claim stayed running without a result, finalization,
+or project effects. Other delivery and Operator retries could not invoke it.
+The never-started source reconciled once, and a queued-to-running change
+before recovery prevented a child from invoking. The controlled peer does not
+qualify hardware runtime cleanup or two-node placement.
+
+The additional forge and repeated PRE claim checks passed 21 cases. The three
+selected ART architecture guards passed. This follow-up changes only test
+expectations and the record. No running service or runner was changed.

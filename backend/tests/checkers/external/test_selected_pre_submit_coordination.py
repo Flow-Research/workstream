@@ -759,7 +759,7 @@ async def test_source_first_claim_caps_lease_at_existing_hard_deadline() -> None
     )
     session = SimpleNamespace(
         sync_session=SimpleNamespace(get_transaction=lambda: SimpleNamespace(is_active=True)),
-        in_nested_transaction=lambda: False, scalar=AsyncMock(side_effect=[row, now]),
+        in_nested_transaction=lambda: False, scalar=AsyncMock(side_effect=[row, now, row]),
         flush=AsyncMock(),
     )
     async def consume(facts):
@@ -772,6 +772,10 @@ async def test_source_first_claim_caps_lease_at_existing_hard_deadline() -> None
     lease = await coordinator.claim(run_id=request.attempt_id, facts=request, authority=authority)
     assert lease.lease_expires_at == request.pre_deadline_at
     assert row.started_at == now
+    with pytest.raises(SelectedPreSubmitUnavailable, match="selected_pre_submit_lease_unavailable"):
+        await coordinator.claim(run_id=request.attempt_id, facts=request, authority=authority)
+    authority.consume.assert_awaited_once()
+    assert (row.lease_id, row.lease_generation) == (str(lease.lease_id), lease.lease_generation)
 
 
 def test_source_first_lease_cannot_extend_aggregate_deadline() -> None:

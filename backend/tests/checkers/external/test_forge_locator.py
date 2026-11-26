@@ -13,6 +13,7 @@ import pytest
 
 from app.adapters.checkers import external_checker_execution_factory
 from app.adapters.checkers.model_execution import ModelAwareExternalExecution
+from app.interfaces.external_checker_execution import ExternalCheckerExecutionOutcomeUnknown
 from workstream_external_services import ExternalServiceProtocolError
 from app.modules.checkers.api.external import (
     ExternalCheckerContractError,
@@ -215,7 +216,7 @@ async def test_locator_socket_uses_separate_operation_and_no_model_grant(tmp_pat
 async def test_locator_socket_rejects_resigned_substitutions_and_invalid_values(tmp_path, changes):
     request = _request()
     async with _service(tmp_path, request, _locator(request, **changes)) as (adapter, _):
-        with pytest.raises(ExternalServiceProtocolError):
+        with pytest.raises(ExternalCheckerExecutionOutcomeUnknown):
             await adapter.locate_forge_change(request, _grant(request))
 
 
@@ -232,7 +233,7 @@ async def test_locator_socket_rejects_changed_digest_missing_isolation_and_compl
         (_work_result(request), True),
     ]:
         async with _service(tmp_path, request, value, isolation=isolation) as (adapter, _):
-            with pytest.raises(ExternalServiceProtocolError):
+            with pytest.raises(ExternalCheckerExecutionOutcomeUnknown):
                 await adapter.locate_forge_change(request, _grant(request))
 
 
@@ -257,7 +258,7 @@ async def test_socket_operation_rejects_marker_mismatches_and_locator_as_work_re
         with pytest.raises(ExternalServiceProtocolError):
             await adapter.locate_forge_change(ordinary, _grant(ordinary))
         assert received == []
-        with pytest.raises(ExternalServiceProtocolError):
+        with pytest.raises(ExternalCheckerExecutionOutcomeUnknown):
             await adapter.execute(ordinary, _grant(ordinary))
     assert received[0]["operation"] == "execute"
 
@@ -273,7 +274,7 @@ async def test_locator_validates_locked_output_schema_and_output_byte_limit(tmp_
         with pytest.raises(ExternalCheckerContractError):
             parsed.validate_request(request)
         async with _service(tmp_path, request, value) as (adapter, _):
-            with pytest.raises(ExternalServiceProtocolError):
+            with pytest.raises(ExternalCheckerExecutionOutcomeUnknown):
                 await adapter.locate_forge_change(request, _grant(request))
 
 
