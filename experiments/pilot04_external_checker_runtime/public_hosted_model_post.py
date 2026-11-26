@@ -469,11 +469,8 @@ async def run_model_post(attachment, client, factory, qualification):
     archive = fixture_archive()
     qualification.checkpoint(phase='task_started', task_id=task, assignment_id=assignment,
                             archive_sha256=digest(archive), guide_setup=project.evidence)
-    summary = 'Synthetic model-only hosted qualification.'
-    attestation = 'rights_confirmed; no confidential data or credentials.'
     saved = await _submit(client, factory, task_id=task, assignment_id=assignment,
-        contributor_token=contributor_token, archive=archive, summary=summary,
-        attestation=attestation, predecessor_id=None)
+        contributor_token=contributor_token, archive=archive)
     qualification.checkpoint(phase='submission_created', submission=saved)
     async with factory() as session:
         dispatch = await session.get(SubmissionDispatch, saved['submission_id'])
@@ -481,13 +478,12 @@ async def run_model_post(attachment, client, factory, qualification):
         event_id, run_id = dispatch.evaluation_event_id, dispatch.evaluation_attempt_id
     return await observe_model_post(
         attachment, client, factory, qualification, project=project, contributor=contributor,
-        task=task, assignment=assignment, archive=archive, summary=summary,
-        attestation=attestation, saved=saved, event_id=event_id, run_id=run_id,
+        task=task, assignment=assignment, archive=archive, saved=saved, event_id=event_id, run_id=run_id,
     )
 
 
 async def observe_model_post(attachment, client, factory, qualification, *, project,
-                             contributor, task, assignment, archive, summary, attestation,
+                             contributor, task, assignment, archive,
                              saved, event_id, run_id):
     """Qualify one exact public dispatch; this never creates or retries a run."""
     import asyncio
@@ -593,7 +589,7 @@ async def observe_model_post(attachment, client, factory, qualification, *, proj
     before = {str(identifier): await _outbox_snapshot(factory, identifier) for identifier in (event_id, completion)}
     from experiments.pilot04_external_checker_runtime.run_public_journey_probe import _replay_source_submission
     await _replay_source_submission(client, task, assignment, attachment.token_for_label('contributor'),
-                                    archive, summary, attestation, saved)
+                                    archive, saved)
     duplicate_tasks = []
     for identifier in (event_id, completion):
         duplicate = await attachment.deliver_duplicate(identifier, project_id)

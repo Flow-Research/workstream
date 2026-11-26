@@ -1,6 +1,7 @@
 """Shared public drill operations; production API and durable owners retain authority."""
 
 import asyncio
+import hashlib
 from datetime import UTC, datetime
 from io import BytesIO
 from uuid import UUID, uuid4
@@ -174,7 +175,7 @@ async def _wait_outbox_acknowledged(factory, event_id: UUID, project_id: UUID) -
 
 
 async def _started_public_task(client, *, project_id: str, manager_token: str,
-                               contributor_token: str, source_ref: str) -> tuple[str, str]:
+                               contributor_token: str, source_ref: str, approved_guide: dict | None = None) -> tuple[str, str]:
     """Use public task creation and the claim which immediately starts work."""
     from tests.test_tasks import complete_task_payload
 
@@ -191,6 +192,23 @@ async def _started_public_task(client, *, project_id: str, manager_token: str,
             manager_token, 200, headers={"Idempotency-Key": str(uuid4())},
             json={"reason": "Public first journey"},
         )
+    if approved_guide is not None:
+        locked = await _json(client, "GET", f"/api/v1/tasks/{task_id}/work-context", contributor_token, 200)
+        _require(not locked["lifecycle"]["assigned_to_current_actor"]
+                 and locked["guide"]["id"] == approved_guide["guide_id"]
+                 and [item["sha256"] for item in locked["guide_documents"]]
+                 == [item["sha256"] for item in approved_guide["documents"]],
+                 "the ready task did not disclose its exact originals before claim")
+        for guide_document, task_document in zip(approved_guide["documents"], locked["guide_documents"], strict=True):
+            project_guide = f"/api/v1/projects/{project_id}/contributor-guide/{approved_guide['guide_id']}"
+            task_guide = f"/api/v1/tasks/{task_id}/guide"
+            for prefix, document in ((project_guide, guide_document), (task_guide, task_document)):
+                path = f"{prefix}/documents/{UUID(document['document_id'])}/content"
+                _require(document["read_reference"] == path, "guide manifest returned a different download path")
+                response = await client.get(path, headers={"Authorization": f"Bearer {contributor_token}"})
+                _require(response.status_code == 200
+                         and "sha256:" + hashlib.sha256(response.content).hexdigest() == document["sha256"],
+                         "approved guide download did not match the retained original")
     claimed = await _json(
         client, "POST", f"/api/v1/tasks/{task_id}/claim", contributor_token,
         200, headers={"Idempotency-Key": str(uuid4())},

@@ -351,11 +351,12 @@ async def test_rebase_retains_original_attempt_and_selects_current_terms(
     from app.modules.tasks.revision.models import TaskRevisionPreparation
     from tests.tasks.post_submit_routing.support import activate_successor_guide
 
-    async with remediation_source(tmp_path, isolated_database_env) as h:
+    async with remediation_source(tmp_path, isolated_database_env, contribution_awards=("money",)) as h:
         async with h.factory() as session:
             original = await session.scalar(text(
                 "SELECT to_jsonb(s)-ARRAY['attempt_status','status_reason','decided_at','updated_at'] FROM public.submissions s WHERE id=:id"
             ), {"id": h.created.submission_id})
+            old_policy_id = original["contribution_policy_version_id"]
             retained_run = await session.scalar(text(
                 "SELECT to_jsonb(r) FROM public.checker_runs r WHERE id=:id"
             ), {"id": h.result.attempt_id})
@@ -386,6 +387,14 @@ async def test_rebase_retains_original_attempt_and_selects_current_terms(
             assert view["preparation_id"] == str(h.revision_preparation_id)
             assert view["outcome"] == "rebased" and view["disposition"] == "ready"
             assert "contribution" in {change["component"] for change in view["changes"]}
+            status = await client.get(f"/api/v1/tasks/{h.request.task_id}/assignments/{h.request.assignment_id}")
+            assert status.status_code == 200, status.text
+            context = status.json()
+            assert context["current_status"] == "needs_revision" and context["next_action"] == "revise"
+            assert context["assignment"]["compensation"]["accepted_submission"] == "unpaid"
+            assert context["feedback_submission_id"] == str(h.created.submission_id)
+            assert any(finding["worker_message"] and finding["status"] == "failed"
+                       for finding in context["post_submission_results"])
             data = revision_archive(h.data)
             settings, errors, calls = await _revision_http_runtime(h, client, tmp_path, monkeypatch, data)
             route = f"/api/v1/tasks/{h.request.task_id}/submissions"
@@ -424,6 +433,7 @@ async def test_rebase_retains_original_attempt_and_selects_current_terms(
                 assert selected.command_metadata["revision_preparation_sha256"] == h.revision_preparation_sha256
                 submission = await session.get(Submission, submission_id)
                 assert str(submission.contribution_policy_version_id) == str(assignment.submitter_contribution_policy_version_id)
+                assert str(submission.contribution_policy_version_id) != old_policy_id
 
         async with h.factory() as session:
             assert await session.scalar(text(
@@ -454,7 +464,7 @@ async def test_pm_recovers_retained_source_and_repairs_without_resetting_window(
     from app.modules.tasks.revision.models import TaskRevisionPreparation
     from tests.tasks.post_submit_routing.support import activate_successor_guide
 
-    async with remediation_source(tmp_path, isolated_database_env) as h:
+    async with remediation_source(tmp_path, isolated_database_env, contribution_awards=("money",)) as h:
         source_id = await _fixture_revision_context(h)
         async with h.factory() as session:
             original = await session.get(TaskRevisionPreparation, h.revision_preparation_id)

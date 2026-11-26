@@ -153,6 +153,14 @@ async def test_public_malformed_zip_preserves_task_and_retains_cleanup_custody(
     assert any(item["source"] == "workstream_default"
                and item.get("failure_code") == "submission_archive_malformed" for item in results)
     assert not any(item["source"] == "project_external_checker" for item in results)
+    status = await client.get(
+        f"/api/v1/tasks/{f.task}/assignments/{f.assignment}", headers=f.access.target.headers,
+    )
+    assert status.status_code == 200, status.text
+    assignment = status.json()
+    assert assignment["current_status"] == "in_progress" and assignment["next_action"] == "submit"
+    assert assignment["assignment"]["latest_submission"] is None
+    assert assignment["intake"]["pre_submission_results"] == results
     assert len(calls) == 1 and not errors, errors
     assert all(value not in response.text for value in (
         "/tmp/", "s3://", "not-a-readable-zip", "BadZipFile",

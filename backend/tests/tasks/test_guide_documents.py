@@ -110,6 +110,20 @@ async def test_approved_guide_and_ready_task_originals_are_available_without_cla
     task = await create_ready_task(task_client, project)
     newer, newer_bytes = await activate_uploaded_guide(task_client, project, monkeypatch, version="v2")
     set_dev_actor(monkeypatch, roles="viewer", subject="guide-reader")
+    set_dev_actor(monkeypatch, roles="project_manager", subject="project-manager-subject")
+    created = await task_client.post(
+        f"/api/v1/projects/{project}/guides", headers=auth_headers(),
+        json={"version": "unapproved", "task_examples": [{"content": "Unapproved notes."}],
+              "documents": [{"label": "draft.md", "media_type": "text/markdown"}]},
+    )
+    assert created.status_code == 201, created.text
+    draft = created.json()
+    set_dev_actor(monkeypatch, roles="viewer", subject="guide-reader")
+    draft_path = f"{project_path}/{draft['id']}/documents/{draft['documents'][0]['document_id']}/content"
+    assert (await task_client.get(draft_path, headers=auth_headers())).status_code == 404
+    assert (await task_client.get(
+        f"/api/v1/projects/{project}/guides/{draft['id']}", headers=auth_headers(),
+    )).status_code == 404
     active = await task_client.get(project_path, headers=auth_headers())
     assert active.status_code == 200 and active.json()["guide_id"] == newer["id"]
     refreshed = await task_client.get(active.json()["documents"][0]["read_reference"], headers=auth_headers())

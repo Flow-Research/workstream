@@ -187,8 +187,7 @@ async def _remote_pre_launch_failure(client, factory, *, task, assignment, token
     _require(not await _trial_operation_ids(factory, task), 'launch trial task already has intake custody')
     route = f'/api/v1/tasks/{task}/submissions'
     headers = {'Content-Type': 'application/zip', 'X-Task-Assignment-Id': assignment,
-               'X-Submission-Summary': 'Completed task evidence.',
-               'X-Contributor-Attestation': 'rights_confirmed; no confidential data or credentials.'}
+               }
     installed = await runner.command('project_fail_once')
     before = await runner.snapshot()
     key = str(uuid4())
@@ -274,8 +273,7 @@ async def public_runtime_trials(client, factory, env, root: Path, *, stop_worker
                 manager_token=manager, contributor_token=token, source_ref='source-' + action)
             route = f'/api/v1/tasks/{task}/submissions'
             headers = {'Content-Type': 'application/zip', 'X-Task-Assignment-Id': assignment,
-                       'X-Submission-Summary': 'Completed task evidence.',
-                       'X-Contributor-Attestation': 'rights_confirmed; no confidential data or credentials.'}
+                       }
             control = await node_command(root, 'clear' if action == 'project_wait_failure' else action)
             start, key, began = len(trace_events(root)), str(uuid4()), time.monotonic()
             content = (_with_fixture_file(archive, 'runtime-wait.txt')
@@ -318,8 +316,7 @@ async def _post_launch_trials(client, factory, project_id, manager, token, archi
                 manager_token=manager, contributor_token=token, source_ref='post-' + action)
             route = f'/api/v1/tasks/{task}/submissions'
             headers = {'Content-Type': 'application/zip', 'X-Task-Assignment-Id': assignment,
-                       'X-Submission-Summary': 'Completed task evidence.',
-                       'X-Contributor-Attestation': 'rights_confirmed; no confidential data or credentials.'}
+                       }
             stop_worker()
             try:
                 key = str(uuid4())

@@ -162,7 +162,7 @@ class HostedModelAuthority(unittest.TestCase):
                     asyncio.run(observe_model_post(
                         None, None, Mock(return_value=session), None,
                         project=SimpleNamespace(project_id=project), contributor=None,
-                        task=task, assignment=None, archive=b'', summary=None, attestation=None,
+                        task=task, assignment=None, archive=b'',
                         saved={'submission_id': submission}, event_id=new_record_id(), run_id=new_record_id(),
                     ))
                 request.assert_not_called()
@@ -190,7 +190,7 @@ class HostedModelAuthority(unittest.TestCase):
                 asyncio.run(observe_model_post(
                     attachment, None, Mock(return_value=session), None,
                     project=SimpleNamespace(project_id=project), contributor=None,
-                    task=task, assignment=None, archive=b'', summary=None, attestation=None,
+                    task=task, assignment=None, archive=b'',
                     saved={'submission_id': submission}, event_id=new_record_id(), run_id=new_record_id(),
                 ))
 
@@ -516,8 +516,7 @@ class PublicSourceCommandContracts(unittest.TestCase):
         async def exercise():
             async with httpx.AsyncClient(transport=httpx.MockTransport(respond), base_url='http://test') as client:
                 return await probe._submit(client, None, task_id=task, assignment_id=assignment,
-                    contributor_token='token', archive=b'raw-zip', summary='summary',
-                    attestation='attestation', predecessor_id=None)
+                    contributor_token='token', archive=b'raw-zip')
 
         with patch.object(probe, '_finalized_source_evidence', new=AsyncMock(return_value=graph)) as retained, \
                 patch.object(probe, '_fixture_hashes', return_value={'expected': 'hashes'}), \

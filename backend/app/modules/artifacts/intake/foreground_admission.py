@@ -495,7 +495,8 @@ class ForegroundIntakeAdmission:
                 code = row.failure_code if row.failure_code in {
                     "submission_packet_invalid", "submission_archive_limit_exceeded",
                     "submission_upload_timeout", "submission_infrastructure_unavailable", "revision_deadline_expired",
-                    "submission_unavailable",
+                    "submission_unavailable", "revision_limit_reached", "revision_context_changed",
+                    "revision_context_blocked", "task_submission_predecessor_changed",
                 } else "submission_operation_terminal"
                 failure = SubmissionIntakeFailure(code)
         # Commit the current read authorization before returning QC feedback.

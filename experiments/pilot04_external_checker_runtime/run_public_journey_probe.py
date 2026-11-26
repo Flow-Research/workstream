@@ -496,22 +496,14 @@ async def _wait_outbox_due(factory, event_id: UUID) -> None:
     raise RuntimeError("known safe outbox retry did not become due")
 
 
-async def _source_headers(client, task_id, assignment_id, token, archive, summary, attestation,
-                          predecessor_id=None):
-    """Bind original ZIP metadata and the exact current public revision acknowledgement."""
+def _source_headers(assignment_id, archive, key, feedback=None):
+    """Build the exact initial or revision wire inputs."""
     headers = {
         "Content-Type": "application/zip", "Content-Length": str(len(archive)),
-        "X-Task-Assignment-Id": assignment_id, "Idempotency-Key": str(uuid4()),
-        "X-Submission-Summary": summary, "X-Contributor-Attestation": attestation,
+        "X-Task-Assignment-Id": assignment_id, "Idempotency-Key": key,
     }
-    if predecessor_id is not None:
-        detail = await _json(client, "GET", f"/api/v1/tasks/{task_id}/work-context", token, 200)
-        revision = detail["revision_context"]
-        _require(revision and revision["source_submission_id"] == predecessor_id,
-                 "revision acknowledgement differs from the exact predecessor")
-        headers.update({"X-Predecessor-Submission-Id": predecessor_id,
-                        "X-Revision-Preparation-Id": revision["preparation_id"],
-                        "X-Revision-Preparation-Sha256": revision["preparation_sha256"]})
+    if feedback is not None:
+        headers["X-Submission-Feedback"] = feedback
     return headers
 
 
@@ -570,15 +562,9 @@ async def _await_finalized_source(client, factory, task_id, assignment_id, token
     raise RuntimeError("source finalization did not complete; no worker task was injected")
 
 
-async def _replay_source_submission(client, task_id, assignment_id, token, archive, summary,
-                                    attestation, saved):
-    """Replay the original command once, including its original revision acknowledgement."""
-    headers = {"Content-Type": "application/zip", "Content-Length": str(len(archive)),
-               "X-Task-Assignment-Id": assignment_id, "Idempotency-Key": saved["idempotency_key"],
-               "X-Submission-Summary": summary, "X-Contributor-Attestation": attestation}
-    if saved["predecessor_submission_id"] is not None:
-        headers["X-Predecessor-Submission-Id"] = saved["predecessor_submission_id"]
-        headers.update(saved["revision_acknowledgement"])
+async def _replay_source_submission(client, task_id, assignment_id, token, archive, saved):
+    """Replay the original command and let ART recover its frozen selection."""
+    headers = _source_headers(assignment_id, archive, saved["idempotency_key"], saved["feedback"])
     repeated = await _json(client, "POST", f"/api/v1/tasks/{task_id}/submissions", token, 202,
                            headers=headers, content=archive)
     _require(repeated == dict(saved["acceptance_receipt"], replayed=True),
@@ -586,21 +572,16 @@ async def _replay_source_submission(client, task_id, assignment_id, token, archi
 
 
 async def _submit(client, factory, *, task_id: str, assignment_id: str,
-                  contributor_token: str, archive: bytes, summary: str,
-                  attestation: str, predecessor_id: str | None) -> dict:
-    headers = await _source_headers(client, task_id, assignment_id, contributor_token, archive,
-                                    summary, attestation, predecessor_id)
+                  contributor_token: str, archive: bytes, feedback: str | None = None) -> dict:
+    headers = _source_headers(assignment_id, archive, str(uuid4()), feedback)
     accepted = await _json(client, "POST", f"/api/v1/tasks/{task_id}/submissions", contributor_token, 202,
                            headers=headers, content=archive)
     _require(accepted["task_id"] == task_id and accepted["assignment_id"] == assignment_id
              and accepted["status"] == "accepted" and accepted["replayed"] is False
              and accepted["pre_submission_results"], "raw ZIP command returned an invalid accepted receipt")
     context = {"operation_id": accepted["operation_id"], "acceptance_receipt": accepted,
-               "idempotency_key": headers["Idempotency-Key"], "predecessor_submission_id": predecessor_id,
-               "revision_acknowledgement": {name: value for name, value in headers.items()
-                                            if name.startswith("X-Revision-")}}
-    await _replay_source_submission(client, task_id, assignment_id, contributor_token, archive,
-                                     summary, attestation, context)
+               "idempotency_key": headers["Idempotency-Key"], "feedback": feedback}
+    await _replay_source_submission(client, task_id, assignment_id, contributor_token, archive, context)
     return context | await _await_finalized_source(
         client, factory, task_id, assignment_id, contributor_token, context, archive)
 
@@ -787,7 +768,7 @@ async def _assert_outcome(factory, *, guide_source, project_id: UUID, task_id: s
 async def _late_revocation_trial(client, factory, env, *, project_id: UUID,
                                  accepted_task_id: str, manager_token: str,
                                  contributor_token: str, operator_id: UUID,
-                                 archive: bytes, summary: str, attestation: str,
+                                 archive: bytes,
                                  stop_worker: Callable[[], None],
                                  start_worker: Callable[[], Awaitable[None]]) -> dict:
     """Revoke routing authority after real POST I/O and a known non-live retry."""
@@ -810,7 +791,6 @@ async def _late_revocation_trial(client, factory, env, *, project_id: UUID,
         client, factory, task_id=task_id, assignment_id=assignment_id,
         contributor_token=contributor_token,
         archive=_with_fixture_file(archive, "late-revocation-trial.txt"),
-        summary=summary, attestation=attestation, predecessor_id=None,
     )
     attempt_id, completion_id = await _complete_post(
         factory, submission_id=saved["submission_id"], project_id=project_id,
@@ -885,17 +865,17 @@ async def _one_mode(client, factory, env, *,
         client, factory, env, human_review_required=human_review_required,
     )
     project_id = str(compilation.project_id)
+    approved_guide = await _json(
+        client, "GET", f"/api/v1/projects/{project_id}/contributor-guide", contributor_token, 200,
+    )
+    _require(approved_guide["guide_id"] == str(compilation.guide_id)
+             and approved_guide["documents"], "preclaim project guide does not match the approved originals")
     task_id, assignment_id = await _started_public_task(
         client, project_id=project_id, manager_token=manager_token,
-        contributor_token=contributor_token, source_ref="local-ticket-1",
+        contributor_token=contributor_token, source_ref="local-ticket-1", approved_guide=approved_guide,
     )
 
     archive = archive_with_modes("evidence/results", compilation.project_id)
-    summary = "Completed the governed task with required evidence."
-    attestation = (
-        "I confirm no confidential client data, credentials, or copied source "
-        "material is included in this submission; rights_confirmed."
-    )
     bad = await _json(
         client, "POST", f"/api/v1/tasks/{task_id}/submissions",
         contributor_token, 422,
@@ -903,8 +883,6 @@ async def _one_mode(client, factory, env, *,
             "Content-Type": "application/zip",
             "X-Task-Assignment-Id": assignment_id,
             "Idempotency-Key": str(uuid4()),
-            "X-Submission-Summary": summary,
-            "X-Contributor-Attestation": attestation,
         },
         content=_secret_archive(archive),
     )
@@ -935,8 +913,6 @@ async def _one_mode(client, factory, env, *,
             "Content-Type": "application/zip",
             "X-Task-Assignment-Id": assignment_id,
             "Idempotency-Key": str(uuid4()),
-            "X-Submission-Summary": summary,
-            "X-Contributor-Attestation": attestation,
         },
         content=_with_fixture_file(archive, "project-rejected.txt"),
     )
@@ -950,6 +926,13 @@ async def _one_mode(client, factory, env, *,
              and all(item.get("failure_code") is None for item in results
                      if item["source"] == "workstream_default"),
              "public external PRE rejection did not preserve passing defaults")
+    status_path = f"/api/v1/tasks/{task_id}/assignments/{assignment_id}"
+    rejected = await _json(client, "GET", status_path, contributor_token, 200)
+    _require(rejected["current_status"] == "in_progress"
+             and rejected["assignment"]["latest_submission"] is None
+             and rejected["next_action"] == "submit"
+             and rejected["intake"]["pre_submission_results"] == results,
+             "the exact assignment lost its rejected ZIP feedback")
     async with factory() as session:
         _require(await session.scalar(select(func.count()).select_from(Submission).where(
             Submission.task_id == task_id
@@ -968,8 +951,7 @@ async def _one_mode(client, factory, env, *,
     try:
         saved = await _submit(
             client, factory, task_id=task_id, assignment_id=assignment_id,
-            contributor_token=contributor_token, archive=first_archive,
-            summary=summary, attestation=attestation, predecessor_id=None)
+            contributor_token=contributor_token, archive=first_archive)
         if inject_post_fault:
             await fail_post_launch()
     finally:
@@ -1001,13 +983,19 @@ async def _one_mode(client, factory, env, *,
             task_id=task_id, submission_id=first_submission_id,
             attempt_id=first_attempt_id,
         )
+        revision = await _json(client, "GET", status_path, contributor_token, 200)
+        _require(revision["current_status"] == "needs_revision"
+                 and revision["next_action"] == "revise"
+                 and revision["feedback_submission_id"] == first_submission_id
+                 and any(finding["worker_message"] and finding["status"] == "failed"
+                         for finding in revision["post_submission_results"]),
+                 "the exact assignment lost its governed revision feedback")
         replacement_archive = revision_archive(archive)
         saved = await _submit(
             client, factory, task_id=task_id, assignment_id=assignment_id,
             contributor_token=contributor_token,
-            archive=replacement_archive, summary=summary,
-            attestation=attestation, predecessor_id=first_submission_id,
-            )
+            archive=replacement_archive,
+        )
         expected_inputs[saved["submission_id"]] = _fixture_hashes(replacement_archive)
         _require(saved["submission_version"] == 2,
                  "public checker remediation did not create version 2")
@@ -1062,6 +1050,17 @@ async def _one_mode(client, factory, env, *,
                  and [(award["instrument"], award["unit"], Decimal(award["quantity"]))
                  for award in item["awards"]] == ([("project_points", "PTS", Decimal("7"))] if awards else []),
                  "public contribution source or award set differs")
+    final_status = await _json(client, "GET", status_path, contributor_token, 200)
+    if human_review_required:
+        _require(final_status["current_status"] == "review_pending" and final_status["accepted_evidence"] is None,
+                 "the exact assignment changed required human-review custody")
+    else:
+        evidence = final_status["accepted_evidence"]
+        _require(final_status["current_status"] == "accepted" and evidence
+                 and evidence["submission_id"] == saved["submission_id"]
+                 and evidence["artifact_hash"] == expected_inputs[saved["submission_id"]]["archive_sha256"]
+                 and len(evidence["awards"]) == len(awards),
+                 "the exact assignment differs from accepted artifact and award evidence")
     # Arm hosted task events before duplicate publication. The local fixture
     # has a result backend; neither path changes the production worker.
     before_delivery = await _outbox_snapshot(factory, completion_id)
@@ -1098,7 +1097,7 @@ async def _one_mode(client, factory, env, *,
             client, factory, env, project_id=compilation.project_id,
             accepted_task_id=task_id, manager_token=manager_token,
             contributor_token=contributor_token, operator_id=operator_id,
-            archive=archive, summary=summary, attestation=attestation,
+            archive=archive,
             stop_worker=stop_worker, start_worker=start_worker,
         )
     return {

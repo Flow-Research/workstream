@@ -27,6 +27,7 @@ from app.modules.checkers.api.selected_pre_submit import (
     SelectedPreSubmitReservationFacts, SelectedPreSubmitRuntimeProfile,
 )
 from app.modules.outbox.api import OutboxAppendPort
+from app.modules.tasks.api.submission_context import TaskSubmissionContextUnavailable
 
 logger = logging.getLogger(__name__)
 
@@ -110,6 +111,12 @@ class ForegroundSubmissionCommand:
                 code = exc.code
                 if code == "pre_submission_checker_failed":
                     state = "rejected"
+            elif isinstance(exc, TaskSubmissionContextUnavailable):
+                code = exc.code if exc.code in {
+                    "revision_context_changed", "revision_context_blocked",
+                    "revision_deadline_expired", "revision_limit_reached",
+                    "task_submission_predecessor_changed",
+                } else "submission_unavailable"
             elif isinstance(exc, ArtifactLimitExceededError):
                 code = "submission_archive_limit_exceeded"
             elif isinstance(exc, ArtifactInputMismatchError):

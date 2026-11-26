@@ -203,8 +203,7 @@ async def public_intake_trials(client, factory, env, node_root: Path, *, stop_wo
     archive = archive_with_modes('evidence/results', project.project_id)
     route = f'/api/v1/tasks/{task}/submissions'
     headers = {'Content-Type': 'application/zip', 'X-Task-Assignment-Id': assignment,
-               'X-Submission-Summary': 'Completed task evidence.',
-               'X-Contributor-Attestation': 'rights_confirmed; no confidential data or credentials.'}
+               }
     evidence, accepted = [], []
     stop_worker()
     try:
