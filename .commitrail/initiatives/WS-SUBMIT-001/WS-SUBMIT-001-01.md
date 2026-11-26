@@ -13320,3 +13320,10 @@ abandonment, stale Operator authority, duplicate successors and late old-owner
 writes. It does not prove the provider stopped and does not authorize automatic
 retry of an unresolved invocation. Check exact replay, whole-transaction rollback
 and late-effect fencing through the existing signed Operator and database tests.
+
+Independent review identified optional retry composition on the canonical
+executor. The executor now requires the TASK retry guard in every composition;
+the unused alternate builder was removed. Focused fixtures that exercise
+Operator recovery set an explicit exhausted allowance while the automatic
+retry regression uses the full production allowance. The MCP submission-create
+snapshot now retains the already deployed known PRE timeout response.

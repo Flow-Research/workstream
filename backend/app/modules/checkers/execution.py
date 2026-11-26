@@ -152,7 +152,7 @@ class PostSubmissionExecutor:
         forge_facts: ForgeFactsResolver | None = None,
         outbox: Callable[[AsyncSession], OutboxAppendPort],
         review_modes: Callable[[AsyncSession], ReviewModePort],
-        retry_tasks: Callable[[AsyncSession], EvaluationTaskGuard] | None = None,
+        retry_tasks: Callable[[AsyncSession], EvaluationTaskGuard],
     ):
         """Receive explicit session, authority, materialization and publication ports."""
         self._sessions = sessions
@@ -398,7 +398,7 @@ class PostSubmissionExecutor:
                 run.outcome_source = "auto_checker"
                 run.status = result.outcome
                 await session.flush()
-                if result.outcome == "infrastructure_failed" and self._retry_tasks is not None:
+                if result.outcome == "infrastructure_failed":
                     coordinator = EvaluationCoordinator(session, tasks=self._retry_tasks(session), events=self._outbox(session))
                     await coordinator.schedule_automatic_retry(run)
                 return result

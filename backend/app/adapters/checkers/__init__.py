@@ -409,24 +409,6 @@ def post_submit_delivery_service(
     )
 
 
-def post_submission_executor(*, sessions, materialization):
-    """Compose the sole executor with exact fixed-service AUTH at both phases."""
-    from app.adapters.outbox import outbox_append
-    from app.modules.checkers.execution import PostSubmissionExecutor
-    from app.adapters.auth import post_submit_execution_authority
-
-    from app.adapters.projects import project_locked_policy_context_port
-
-    return PostSubmissionExecutor(
-        sessions=sessions,
-        materialization=materialization,
-        execute_authority=post_submit_execution_authority,
-        finalize_authority=post_submit_execution_authority,
-        outbox=outbox_append,
-        review_modes=project_locked_policy_context_port,
-    )
-
-
 def checker_output_reservations(session):
     """Resolve exact call custody with TASK-before-CHECKERS request locking."""
     from app.adapters.tasks import evaluation_task_guard

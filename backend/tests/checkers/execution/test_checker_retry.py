@@ -73,7 +73,7 @@ from app.modules.tasks.repository import TaskRepository
 from tests.post_submit_materialization_helpers import material_fixture
 from tests.checkers.post_submit.support import change_request
 from tests.checkers.execution.completion_fixture import completed_evidence
-from tests.checkers.execution.support import live_executor, reserve
+from tests.checkers.execution.support import final_post_attempt, live_executor, reserve
 from tests.project_create_fixtures import grant_fixture_admin_role
 from tests.authentication.fixtures import (
     auth_database_env as auth_database_env,
@@ -118,13 +118,7 @@ async def _failed_source(
 
         try:
             delivery = await delivery_fixture(h, materialization=port)
-            with monkeypatch.context() as patch:
-                from app.modules.checkers import execution_coordination
-
-                # Isolate the Operator path after escalation. The automatic policy
-                # and its durable retry chain are covered by delivery tests.
-                patch.setattr(execution_coordination, "POST_SUBMISSION_RETRY_OPTIONS",
-                    execution_coordination.POST_SUBMISSION_RETRY_OPTIONS.model_copy(update={"max_attempts": 1}))
+            with final_post_attempt(monkeypatch), monkeypatch.context() as patch:
                 patch.setattr(
                     LocalStorageAdapter if provider == "local" else S3CompatibleArtifactStore,
                     "open_source", missing,
@@ -999,7 +993,7 @@ async def test_independent_sessions_wait_for_task_and_commit_one_retry(
 
         try:
             delivery = await delivery_fixture(h, materialization=port)
-            with monkeypatch.context() as patch:
+            with final_post_attempt(monkeypatch), monkeypatch.context() as patch:
                 patch.setattr(LocalStorageAdapter, "open_source", missing)
                 initial = await delivery.delivery.deliver(
                     h.created.evaluation_event_id, h.request.project_id, "concurrent-source",
