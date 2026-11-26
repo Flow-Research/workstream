@@ -12519,3 +12519,49 @@ both changed-version/corrupted-byte negative controls pass (3 cases). Ruff passe
 The failed journey is retained under `/tmp/workstream-paired-native-4g1j5bbe`;
 its schema0093 database and MinIO cleanup are all confirmed. No PRE/POST outcome
 was reached by this run. Repeat the maintained journey with the corrected caller.
+
+### Keep the contributor revision proof in the maintained journey
+
+Allowed scope. Extend the existing `cli/tests/journey` bootstrap, public client,
+submission checks and read-only source audit. Use the maintained incident
+summary example and the installed MCP binary over its published HTTP tool
+endpoint. Keep the existing worker lifecycle and default human review branch.
+Focused checks belong with the existing CLI integration tests. No product
+authentication edits, retired harness, provisioner or deployed service changes.
+
+Acceptance. A malformed submission returns the exact actionable PRE finding,
+and leaves no Submission. A valid ZIP with incorrect counts reaches POST and
+requests one revision on the original assignment. The corrected ZIP uses that
+same assignment with a fresh key and no client-controlled revision fields.
+Require two immutable attempts, one preparation and one final acceptance. The
+optional installed MCP check exercises the same API and verifies shared public
+findings, assignment status and command replay. Keep local proof and real
+provider/deployment qualification distinct.
+
+The maintained command is `cli/tests/journey/bootstrap.py` under the existing
+isolated PostgreSQL and MinIO launcher. Its regular CLI path retains the
+explicit local HMAC fixture. To also run MCP, point
+`WORKSTREAM_CLI_JOURNEY_MCP_EXECUTABLE` at the installed current OAuth wheel
+entry point and keep `SETUP`, `TASKS` and `SUBMIT` enabled through the existing
+`WORKSTREAM_CLI_JOURNEY_` settings. The proof interpreter needs the matching
+MCP SDK. Supply the existing `WORKSTREAM_TOKEN_ISSUER` for `/realms/flow`,
+`WORKSTREAM_TOKEN_AUDIENCE=workstream-api`, and the provider's existing JWKS,
+RS256 and introspection settings. This selection removes local HMAC from the
+fixture API and workers. Use its real, TLS-verified provider configuration.
+
+`WORKSTREAM_CLI_JOURNEY_REFRESH_FILE` is an absolute owned mode-0600 JSON object
+with fresh registered CLI refresh grants in `administrator`, `manager`,
+`finance`, `operator`, `alice`, and `bob`, plus `mcp` for the same Alice's
+registered MCP proof client. The maintained provider helper renews them and
+keeps rotated values in process memory. Supply `WORKSTREAM_MCP_RESOURCE_URL`
+for that registered MCP audience and `WORKSTREAM_MCP_EXCHANGE_SECRET_FILE` for
+the current confidential exchange client. MCP listens only on loopback and
+calls the isolated API. This proof disables application feedback email.
+
+31 focused CLI integration fixture cases passed, including exact cross-client
+replay, refusal of substituted feedback and the rotating grant contract. The
+installed OAuth-enabled MCP wheel passed public metadata readiness and clean
+process teardown. The earlier non-OAuth wheel did not provide that metadata.
+These local checks used no authentication request to a provider and no native
+submission. Real paired-tool, corrected same-assignment and live deployment
+qualification remain open until the maintained journey runs end to end.

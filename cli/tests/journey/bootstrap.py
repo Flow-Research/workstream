@@ -12,6 +12,8 @@ import os
 from pathlib import Path
 import secrets
 import socket
+import ssl
+import stat
 import subprocess
 import sys
 import tempfile
@@ -19,7 +21,7 @@ import time
 from urllib.request import urlopen
 from uuid import uuid4
 
-from client import JourneyClient
+from client import JourneyClient, RefreshingToken, installed_mcp
 from public_setup import configure_guide, publish_unpaid_terms, approve_and_activate
 from runtime import (
     durable_runtime,
@@ -35,9 +37,68 @@ BACKEND = ROOT / "backend"
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(BACKEND))
 sys.path.insert(0, str(BACKEND / "scripts"))
+sys.path.insert(0, str(ROOT / "scripts"))
+from identity_protocol_probe import IdentityProtocolProbe  # noqa: E402
 from local_flow_tokens import issue_flow_token  # noqa: E402
 from run_isolated_tests import NAME_RE  # noqa: E402
 from urllib.parse import urlsplit  # noqa: E402
+
+ACTORS = ("administrator", "manager", "finance", "operator", "alice", "bob")
+
+
+def connected_tokens(environment):
+    """Read rotating grants for isolated actors from the configured real provider."""
+    issuer = environment["WORKSTREAM_TOKEN_ISSUER"]
+    suffix = "/realms/flow"
+    if (
+        not issuer.endswith(suffix)
+        or environment.get("WORKSTREAM_TOKEN_AUDIENCE") != "workstream-api"
+    ):
+        raise RuntimeError(
+            "paired proof requires the configured Flow API issuer and audience"
+        )
+    provider = IdentityProtocolProbe(
+        issuer.removesuffix(suffix), ssl.create_default_context()
+    )
+    path = Path(environment["WORKSTREAM_CLI_JOURNEY_REFRESH_FILE"])
+    if not path.is_absolute():
+        raise RuntimeError("paired proof refresh file must be absolute")
+    descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    with os.fdopen(descriptor, "rb") as stream:
+        metadata = os.fstat(stream.fileno())
+        if (
+            not stat.S_ISREG(metadata.st_mode)
+            or stat.S_IMODE(metadata.st_mode) != 0o600
+            or metadata.st_uid != os.getuid()
+            or not 0 < metadata.st_size <= 65_536
+        ):
+            raise RuntimeError("paired proof requires an owned private refresh file")
+        try:
+            grants = json.loads(stream.read(65_537))
+        except (ValueError, UnicodeError):
+            raise RuntimeError("paired proof refresh file is invalid") from None
+    if (
+        type(grants) is not dict
+        or set(grants) != {*ACTORS, "mcp"}
+        or any(
+            type(token) is not str or not 0 < len(token) <= 8192
+            for token in grants.values()
+        )
+    ):
+        raise RuntimeError(
+            "paired proof requires one refresh grant for each fixture actor and MCP"
+        )
+    return {
+        name: RefreshingToken(provider, "workstream-cli-login", grants[name])
+        for name in ACTORS
+    } | {
+        "mcp": RefreshingToken(
+            provider,
+            "workstream-mcp-proof",
+            grants["mcp"],
+            resource=environment["WORKSTREAM_MCP_RESOURCE_URL"],
+        ),
+    }
 
 
 def run_default_review_branch(client, tokens, actors, registry_entries):
@@ -107,6 +168,7 @@ def main():
         WORKSTREAM_PROJECT_AGENT_MODEL_API="none",
         WORKSTREAM_PROJECT_AGENT_MODEL="none",
         WORKSTREAM_CELERY_TASK_ALWAYS_EAGER="false",
+        WORKSTREAM_SUBMISSION_FEEDBACK_EMAIL_ENABLED="false",
         WORKSTREAM_API_RATE_LIMIT_KEY_SECRET=base64.b64encode(
             secrets.token_bytes(32)
         ).decode(),
@@ -114,6 +176,18 @@ def main():
             secrets.token_bytes(32)
         ).decode(),
     )
+    mcp_executable = environment.get("WORKSTREAM_CLI_JOURNEY_MCP_EXECUTABLE")
+    paired_tokens = None
+    if mcp_executable:
+        if any(
+            environment.get(f"WORKSTREAM_CLI_JOURNEY_{stage}") != "1"
+            for stage in ("SETUP", "TASKS", "SUBMIT")
+        ):
+            raise RuntimeError(
+                "installed MCP proof requires the isolated submission stages"
+            )
+        paired_tokens = connected_tokens(environment)
+        environment.pop("WORKSTREAM_FLOW_AUTH_LOCAL_HMAC_SECRET")
     with socket.socket() as listener:
         listener.bind(("127.0.0.1", 0))
         port = listener.getsockname()[1]
@@ -168,7 +242,7 @@ def main():
                         "API readiness deadline exceeded; no journey pass"
                     )
                 client = JourneyClient(executable, origin, directory)
-                tokens = {
+                tokens = paired_tokens or {
                     name: issue_flow_token(
                         f"cli-journey-{name}",
                         [],
@@ -176,19 +250,30 @@ def main():
                         audience=audience,
                         secret=secret,
                     )
-                    for name in (
-                        "administrator",
-                        "manager",
-                        "finance",
-                        "operator",
-                        "alice",
-                        "bob",
-                    )
+                    for name in ACTORS
                 }
                 actors = {
-                    name: client.call(token, "whoami")["actor_profile_id"]
-                    for name, token in tokens.items()
+                    name: client.call(tokens[name], "whoami")["actor_profile_id"]
+                    for name in ACTORS
                 }
+                mcp = None
+                if mcp_executable:
+                    mcp = stack.enter_context(
+                        installed_mcp(
+                            Path(mcp_executable),
+                            origin,
+                            directory,
+                            environment,
+                            tokens["mcp"],
+                        )
+                    )
+                    if (
+                        mcp.call("workstream_profile_get", {})["actor_profile_id"]
+                        != actors["alice"]
+                    ):
+                        raise AssertionError(
+                            "MCP and CLI contributor identities differ"
+                        )
                 bootstrap = subprocess.run(
                     [
                         sys.executable,
@@ -344,10 +429,15 @@ def main():
                                 task_id,
                                 assignment_id,
                                 grant,
+                                mcp=mcp,
                             )
                             client.complete_stage(
                                 "submission_contribution_export_revocation"
                             )
+                            if mcp is not None:
+                                client.complete_stage(
+                                    "installed_mcp_submission_revision"
+                                )
                             inspect_submission_custody(
                                 client,
                                 tokens,
@@ -366,7 +456,10 @@ def main():
                             "result": "passed",
                             "cli_invocations": len(client.steps),
                             "verified_stages": client.completed_stages,
-                            "scope": "local manager-authored unpaid automated-acceptance branch",
+                            "scope": "isolated manager-authored unpaid submission journey",
+                            "authentication": "configured_flow_provider"
+                            if mcp
+                            else "isolated_local_hmac",
                         }
                     )
                 )

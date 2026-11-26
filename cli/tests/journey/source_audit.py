@@ -36,6 +36,7 @@ async def _audit(
     byte_count: int,
     *,
     accepted: bool,
+    predecessor_submission_id: str | None,
 ) -> None:
     url = os.environ["WORKSTREAM_DATABASE_URL"]
     if not urlsplit(url).path.lstrip("/").startswith("workstream_test_"):
@@ -53,6 +54,7 @@ async def _audit(
                     o.raw_sha256, o.raw_byte_count, o.provider_generation,
                     o.sealed_upload_fence, o.namespace_id, o.namespace_fingerprint,
                     o.provider_profile, o.object_ref, o.accepted_source_sha256,
+                    o.assignment_id::text AS assignment_id, o.command_metadata,
                     selected.request_json AS selected_request,
                     charge.state AS charge_state, charge.accounted_bytes,
                     admission.source_operation_id::text AS admission_source,
@@ -151,10 +153,11 @@ async def _audit(
                 name: await connection.scalar(text(query), {"task_id": task_id})
                 for name, query in _COUNTS.items()
             }
+            attempts = 1 + int(predecessor_submission_id is not None)
             expected_counts = {
-                "submissions": 1,
-                "dispatches": 1,
-                "checker_runs": 1,
+                "submissions": attempts,
+                "dispatches": attempts,
+                "checker_runs": attempts,
                 "acceptances": int(accepted),
                 "reviews": 0,
                 "contributions": int(accepted),
@@ -164,6 +167,33 @@ async def _audit(
                 raise AssertionError(
                     "isolated task effect counts differ from the governed outcome"
                 )
+            if predecessor_submission_id is not None:
+                preparations = (
+                    await connection.execute(
+                        text("""
+                    SELECT id::text, submission_id::text, assignment_id::text,
+                        sequence, next_revision_round, preparation_sha256
+                    FROM task_revision_preparations WHERE task_id = CAST(:task_id AS uuid)
+                """),
+                        {"task_id": task_id},
+                    )
+                ).all()
+                metadata = row["command_metadata"]
+                if metadata[
+                    "predecessor_submission_id"
+                ] != predecessor_submission_id or preparations != [
+                    (
+                        metadata["revision_preparation_id"],
+                        predecessor_submission_id,
+                        row["assignment_id"],
+                        1,
+                        1,
+                        metadata["revision_preparation_sha256"],
+                    )
+                ]:
+                    raise AssertionError(
+                        "corrected source did not consume the one retained revision context"
+                    )
     finally:
         await engine.dispose()
 
@@ -175,6 +205,7 @@ def audit_accepted_source(
     archive: Path,
     *,
     accepted: bool,
+    predecessor_submission_id: str | None = None,
 ) -> None:
     """Observe exact source graph and downstream counts without changing state."""
     data = archive.read_bytes()
@@ -186,5 +217,6 @@ def audit_accepted_source(
             "sha256:" + sha256(data).hexdigest(),
             len(data),
             accepted=accepted,
+            predecessor_submission_id=predecessor_submission_id,
         )
     )
