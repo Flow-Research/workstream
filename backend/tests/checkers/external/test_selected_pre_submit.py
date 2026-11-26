@@ -419,6 +419,7 @@ async def test_selected_admission_binds_unchanged_work_to_current_task_rules() -
     """Bind prior content/rules before inspection, then derive unchanged input in PRE."""
     from app.modules.artifacts.api.submission_intake import SubmissionIntakeMetadata
     from app.modules.checkers.api.selected_pre_submit import derive_selected_pre_submit_default_input
+    from app.modules.projects.api.locked_policy import CanonicalJsonObject
     from tests.checkers.external.test_selected_pre_submit_coordination import (
         _source_reservation, _source_guard, _source_completed_execution,
     )
@@ -432,10 +433,11 @@ async def test_selected_admission_binds_unchanged_work_to_current_task_rules() -
         archive_sha256=original.source.raw_sha256,
         semantic_manifest_sha256=derived.manifest_sha256,
     )
+    effective_policy = CanonicalJsonObject.from_mapping({"maximum_file_size_bytes": 1_000_000})
     references = SimpleNamespace(
         project_id=original.project_id, guide_version=lineage.guide_version,
         source_snapshot_id=lineage.source_snapshot_id, source_snapshot_hash=lineage.source_snapshot_sha256,
-        effective_policy_id=lineage.effective_policy_id, effective_policy_hash=lineage.effective_policy_sha256,
+        effective_policy_id=lineage.effective_policy_id, effective_policy_hash=effective_policy.sha256,
         pre_submit_policy_id=lineage.pre_submit_policy_id, pre_submit_policy_bundle_hash=lineage.pre_submit_policy_sha256,
     )
     task = SimpleNamespace(
@@ -449,6 +451,7 @@ async def test_selected_admission_binds_unchanged_work_to_current_task_rules() -
         }),
     )
     project = SimpleNamespace(**vars(references), guide_id=lineage.guide_id,
+        effective_policy=effective_policy,
         external_checker_policies=SimpleNamespace(value=policies.model_dump_json()))
     packet = SubmissionPacketView()
     metadata = SubmissionIntakeMetadata(task_id=task.task_id, assignment_id=task.assignment_id)
@@ -469,6 +472,9 @@ async def test_selected_admission_binds_unchanged_work_to_current_task_rules() -
         runtime_profile=original.runtime_profile,
     )
     assert "semantic_manifest_body" not in reservation.admission_lineage.canonical_body()
+    assert reservation.default_context.canonical_body()["project_archive_limits"] == {
+        "maximum_file_size_bytes": 1_000_000,
+    }
     assert reservation.admission_lineage.packet_sha256 == packet.sha256
     assert reservation.admission_lineage.revision_preparation_id == task.revision_context.preparation_id
     assert reservation.admission_lineage.revision_preparation_sha256 == task.revision_context.preparation_sha256
