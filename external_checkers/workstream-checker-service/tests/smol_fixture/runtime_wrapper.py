@@ -28,11 +28,19 @@ def observe_pre_exit(binary, arguments, trace, name):
             b'guest output ceiling was not enforced',
         )
     )
+    markers = {
+        b'WORKSTREAM_PRE_QUALIFICATION observed_oom_kill': 'oom_kill',
+        b'WORKSTREAM_PRE_QUALIFICATION observed_project_exit_37': 'project_exit_37',
+        b'WORKSTREAM_PRE_QUALIFICATION observed_output_limit': 'output_limit',
+    }
+    lines = bytes(captured).splitlines()
+    observed = [markers[line] for line in lines if line in markers]
     with trace.open('a') as output:
         fcntl.flock(output, fcntl.LOCK_EX)
         output.write(json.dumps({
             'operation': 'pre_exit', 'name': name, 'exit_code': code,
-            'project_deadline_exceeded': diagnostic in captured.splitlines(),
+            'project_deadline_exceeded': diagnostic in lines,
+            'project_fault': observed[0] if len(observed) == 1 else None,
             'guest_limit_unenforced': limit_unenforced,
         }) + '\n')
         output.flush()

@@ -119,9 +119,19 @@ def test_timeout_replay_compares_stable_business_fields(change):
 
 
 @pytest.mark.parametrize("exact", [True, False])
-@pytest.mark.parametrize("limit", [None, "memory", "output"])
-def test_runtime_fixture_classifies_only_the_trusted_deadline_line(
-    tmp_path, exact, limit
+@pytest.mark.parametrize(
+    ("marker", "expected_fault"),
+    [
+        (None, None),
+        ("observed_oom_kill", "oom_kill"),
+        ("observed_project_exit_37", "project_exit_37"),
+        ("observed_output_limit", "output_limit"),
+        ("observed_output_limit suffix", None),
+        ("observed_oom_kill\nWORKSTREAM_PRE_QUALIFICATION observed_oom_kill", None),
+    ],
+)
+def test_runtime_fixture_classifies_only_exact_trusted_lines(
+    tmp_path, exact, marker, expected_fault
 ):
     wrapper = tmp_path / "runtime_wrapper.py"
     wrapper.write_bytes(WRAPPER.read_bytes())
@@ -129,8 +139,10 @@ def test_runtime_fixture_classifies_only_the_trusted_deadline_line(
     diagnostic = "workstream guest bootstrap failed: project deadline exceeded"
     if not exact:
         diagnostic += " (other diagnostic)"
-    if limit is not None:
-        diagnostic += f"\nAssertionError: guest {limit} ceiling was not enforced"
+    if marker:
+        diagnostic += f"\nWORKSTREAM_PRE_QUALIFICATION {marker}"
+    else:
+        diagnostic += "\nAssertionError: guest memory ceiling was not enforced"
     guest.write_text(
         f"#!{sys.executable}\n"
         "import os\n"
@@ -179,7 +191,8 @@ def test_runtime_fixture_classifies_only_the_trusted_deadline_line(
             "operation": "pre_exit",
             "exit_code": 125,
             "project_deadline_exceeded": exact,
-            "guest_limit_unenforced": limit is not None,
+            "guest_limit_unenforced": marker is None,
+            "project_fault": expected_fault,
         },
     ]
 
@@ -194,13 +207,21 @@ def test_runtime_fixture_classifies_only_the_trusted_deadline_line(
         "leaked_guest",
         "extra_pre",
         "completed_failure",
+        "missing_marker",
+        "wrong_marker",
+        "pending_marker",
     ],
 )
 def test_remaining_native_trace_binds_each_failure_and_pending_lease(fault):
     wrapper_digest = "sha256:" + sha256(WRAPPER.read_bytes()).hexdigest()
     evidence = {"mode": "failure_cleanup", "failures": {}}
     trace = []
-    for name in ("memory", "crash", "output", "pending"):
+    for name, observation in (
+        ("memory", "oom_kill"),
+        ("crash", "project_exit_37"),
+        ("output", "output_limit"),
+        ("pending", None),
+    ):
         invocation = {
             "provider_invocation_id": name,
             "operation": "execute_pre",
@@ -224,7 +245,8 @@ def test_remaining_native_trace_binds_each_failure_and_pending_lease(fault):
                 {
                     "name": name,
                     "operation": "pre_exit",
-                    "exit_code": 0 if name == "pending" else 37,
+                    "exit_code": 0 if name == "pending" else 125,
+                    "project_fault": observation,
                     "project_deadline_exceeded": False,
                     "guest_limit_unenforced": False,
                 },
@@ -243,6 +265,12 @@ def test_remaining_native_trace_binds_each_failure_and_pending_lease(fault):
         trace.append({"name": "extra", "operation": "exec", "source_pre": True})
     elif fault == "completed_failure":
         trace[8]["exit_code"] = 0
+    elif fault == "missing_marker":
+        trace[3]["project_fault"] = None
+    elif fault == "wrong_marker":
+        trace[3]["project_fault"] = "output_limit"
+    elif fault == "pending_marker":
+        trace[18]["project_fault"] = "project_exit_37"
     if fault:
         with pytest.raises(AssertionError):
             MODULE.verify_native_trace(evidence, trace)

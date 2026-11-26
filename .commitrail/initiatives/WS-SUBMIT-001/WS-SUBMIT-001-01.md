@@ -13413,3 +13413,21 @@ pending-delete cases still require evidence. The trusted PRE worker's
 infrastructure reply currently maps to outer exit 125, which can also occur
 before selected project execution. Exact fault qualification needs a trusted
 observation of the selected project outcome.
+
+### Bind fault qualification to observed project outcomes
+
+The passing control supports executing the failure matrix with the readable
+fixture. Qualify OOM, the injected process exit 37, and captured output
+overflow by observing the supervisor's existing child outcome fields. A
+separate local build of the exact runner guest source adds three fixed
+observation strings only. The isolated test domain pins that binary. The
+normal runner keeps its current guest, resource limits and policy.
+
+The allowed repository paths are the test runtime wrapper, the maintained
+CLI PRE qualification assertion and its focused integration tests, plus this
+record. The wrapper retains a closed fault label and the matrix requires the
+matching trace, durable PRE receipt and cleanup disposition for each input.
+Verify missing, mismatched and repeated markers fail qualification. The
+pending-delete input must still pass PRE, reach the existing T5 owner and
+resume POST after the exact native lease is reconciled. Finally restore the
+normal runner and confirm unchanged authenticated placement and inventories.
