@@ -12574,3 +12574,47 @@ dotenv HMAC setting with an empty value. 35 focused CLI cases passed after these
 corrections. An independent in-memory transport check used installed SDK 2.2.0
 and observed the current protocol and one exchanged request. No live provider
 account or token operation took place for this review.
+
+
+### Maintained current-source native CLI journey: passed
+
+The corrected maintained CLI journey completed at frozen `c715dbd47` against
+real isolated PostgreSQL/MinIO and the dedicated remote Smol runner with current
+placement binary/gateway and unchanged exact profile. All 540 built-CLI calls
+completed their expected checks. Public authored guide activation and claim,
+real selected PRE rejection without Submission, corrected T4 and exact replay,
+T5 retained-source finalization, required POST automatic acceptance and exact
+unpaid contribution/source lineage, incorrect POST `needs_revision`, export and
+role-revocation checks, Operator custody, and default `review_pending` all passed.
+No human Review or unpaid award was fabricated. The finalizer, POST, scanner and
+other workload consumers ran on their dedicated queues.
+
+Terminal receipt: `/tmp/workstream-paired-native-aopmeffy/journey.log`; launcher
+exit0. `cleanup.json` records schema `0093_verified_email_observation`, exact
+source commit and successful database, MinIO and overall cleanup. CLI receipts
+and runtime logs are retained privately in that run's evidence directory. This
+is a local API using the maintained isolated identity fixture and a real remote
+runner, not a deployed API or real hosted identity qualification. Same-assignment
+corrected revision/MCP, source-first fault/isolation/capacity, multiple nodes and
+hosted cutover remain open. The fixture-only guide fix is in `c715dbd47`.
+
+### Reconciled release candidates: built and backend published
+
+Both backend SDK variants from source `c715dbd47`, tree
+`aeddbbc03510250eaf8cd948853e8df86ba50773`, passed the strict native-hosted image
+verifier on the API host. Agents image digest:
+`sha256:33158596d19bf26dbdd669f403a465b981572b6a0ae80eefbc1bdb863f6c0251`;
+OmniCore image digest:
+`sha256:d294054ecde8bcfc04c2be1dee505b9958d8c303bd666bd829afde074edec0d7`.
+Both were published to immutable candidate tags in workstream-backend ECR and
+read back by exact repository digest. The temporary Docker registry credential
+file was removed by the publisher's finally block. Build receipt is
+`/tmp/workstream-host-image-c715dbd47001/host-only-build.json`; publication is
+`/tmp/workstream-published-1795699780475858533.json`.
+
+Matching MCP image `sha256:47e49c0861a970d5e220187b5722d5623a0304b0deaef276cb503956c140c2f9`
+built and passed the maintained container fixture:135 tools, restart,
+replacement and stale-namespace negative control. Receipt:
+`/tmp/workstream-mcp-host-proof-c715.json`. That fixture is not real provider
+or connected submission proof. No running API service, migration, hosted
+configuration or deployed image changed in these build/publication operations.
