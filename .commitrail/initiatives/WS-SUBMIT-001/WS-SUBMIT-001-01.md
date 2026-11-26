@@ -13431,3 +13431,21 @@ Verify missing, mismatched and repeated markers fail qualification. The
 pending-delete input must still pass PRE, reach the existing T5 owner and
 resume POST after the exact native lease is reconciled. Finally restore the
 normal runner and confirm unchanged authenticated placement and inventories.
+
+### Hosted POST renewal release, 26 November 2026
+
+The API host deployed release `a1061f392f45d17e51294573cab980d8874d677a` with
+schema `0096_post_renewable_lifetimes`. The drained upgrade compared retained
+rows before and after migration. The separate runner activated executable
+SHA-256 `314962d5079fb13a09c6fe226bf6a965baa7d32d5a7a49f448225d88275eef3f`.
+The API authenticated runner readiness with the existing PRE300 profile. Hosted
+activation verified application container health and the MCP container's
+attachment to the current API network namespace.
+
+PostgreSQL tests retained two archived datasets across the upgrade. A live
+handler outlasted its original claim, recorded a second renewal, refused a
+competitor and acknowledged once. The hosted 500 MiB assignment remained
+`evaluation_pending` immediately after deployment, with its original unknown
+attempt retained. The dedicated native PRE control passed with confirmed VM
+destruction. Individual native fault and pending-delete outcomes still require
+live evidence.
