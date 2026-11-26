@@ -1459,7 +1459,8 @@ async def run(database_url: str, image_reference: str, node_config: Path,
                                    human_review_required=True,
                                    operator_id=operator.actor_profile_id, clients=clients,
                                    exercise_faults=not separate_runner, manager_authored=separate_runner)
-                _write_policy_receipt(root, "human", true, custody)
+                if separate_runner:
+                    _write_policy_receipt(root, "human", true, custody, bucket=bucket, prefix=prefix)
             if policy_case in {"both", "automatic"}:
                 false = await _one_mode(client, factory, env,
                                     human_review_required=False,
@@ -1468,7 +1469,8 @@ async def run(database_url: str, image_reference: str, node_config: Path,
                                     start_worker=start_owned_worker, fault_root=fault_root,
                                     operator_token=_token(env, operator), clients=clients,
                                     exercise_faults=not separate_runner, manager_authored=separate_runner)
-                _write_policy_receipt(root, "automatic", false, custody)
+                if separate_runner:
+                    _write_policy_receipt(root, "automatic", false, custody, bucket=bucket, prefix=prefix)
         _require(api.poll() is None and beat.poll() is None
                  and all(process.poll() is None for process in workers),
                  "API, dedicated prefork worker, or Beat exited during public journey")
@@ -1505,14 +1507,19 @@ async def run(database_url: str, image_reference: str, node_config: Path,
                 await engine.dispose()
 
 
-def _write_policy_receipt(root: Path, case: str, result: dict, custody: dict) -> None:
+def _write_policy_receipt(
+    root: Path, case: str, result: dict, custody: dict, *, bucket: str, prefix: str,
+) -> None:
     """Retain a completed case without claiming the other case or overall cleanup."""
     selected = {key: custody[key] for key in (
         "source_tree", "config_sha256", "service_sha256", "smol_sha256", "guest_sha256",
     )}
     with (root / f"policy-{case}.json").open("x", encoding="utf-8") as stream:
         json.dump({"completed_policy_case": case, "custody": selected, "result": result,
-                   "overall_cleanup_requires_separate_receipt": True}, stream, sort_keys=True)
+                   "separate_runner": True, "connected_submitter_clients": ["cli", "mcp"],
+                   "minio_bucket": bucket, "minio_prefix": prefix,
+                   "overall_cleanup_requires_separate_receipt": True,
+                   "terminal_probe_exit_requires_separate_receipt": True}, stream, sort_keys=True)
         stream.write("\n")
         stream.flush()
         os.fsync(stream.fileno())

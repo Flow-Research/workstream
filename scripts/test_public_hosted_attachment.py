@@ -37,16 +37,22 @@ class PublicJourneyWorkerCustody(unittest.TestCase):
         )}
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            probe._write_policy_receipt(root, "automatic", {"submission_id": "first"}, custody)
+            storage = {"bucket": "owned-bucket", "prefix": "owned-run/"}
+            probe._write_policy_receipt(root, "automatic", {"submission_id": "first"}, custody, **storage)
             receipt = root / "policy-automatic.json"
             original = receipt.read_bytes()
             value = json.loads(original)
             self.assertEqual(value["completed_policy_case"], "automatic")
             self.assertEqual(value["custody"], custody)
             self.assertTrue(value["overall_cleanup_requires_separate_receipt"])
+            self.assertTrue(value["terminal_probe_exit_requires_separate_receipt"])
+            self.assertTrue(value["separate_runner"])
+            self.assertEqual(value["connected_submitter_clients"], ["cli", "mcp"])
+            self.assertEqual((value["minio_bucket"], value["minio_prefix"]), ("owned-bucket", "owned-run/"))
             self.assertFalse((root / "policy-human.json").exists())
             with self.assertRaises(FileExistsError):
-                probe._write_policy_receipt(root, "automatic", {"submission_id": "different"}, custody)
+                probe._write_policy_receipt(root, "automatic", {"submission_id": "different"}, custody,
+                                            bucket="another-bucket", prefix="another-run/")
             self.assertEqual(receipt.read_bytes(), original)
 
     def test_runner_health_reports_reviewed_cache_size_as_a_count(self):

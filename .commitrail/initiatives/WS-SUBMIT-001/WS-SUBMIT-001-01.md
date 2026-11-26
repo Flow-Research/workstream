@@ -12016,3 +12016,9 @@ Default remains both cases. Selected-case reports must identify the executed
 case and leave unexecuted outcomes empty; no business deadline/resource or
 assertion changes. This permits bounded final-head qualification without
 repeating a completed independent case or calling partial output a full pass.
+
+The reviewed receipt follow-up binds each completed separate-runner case to
+its exact object bucket/prefix and CLI/MCP custody. It explicitly requires
+separate terminal-exit and overall-cleanup evidence. Local fault simulations
+do not emit these receipts. The focused receipt regression passed (one test),
+and Ruff passed; independent review approved the provenance correction.
