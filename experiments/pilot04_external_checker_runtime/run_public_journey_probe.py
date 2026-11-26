@@ -1295,12 +1295,15 @@ async def _run_admission_overlap(client, factory, env, root, observer, custody, 
 
     initial = await _overlap_snapshot(observer, custody)
     _require(initial["leases"] == initial["post_grants"] == [], "overlap node did not start idle")
-    # Stage publication while both owners are parked so overlap timing does not
-    # depend on when the next Beat scan happens to run.
+    # Let the dedicated scanner stage any remaining publications while both owners
+    # are parked. A prior Beat scan may already have staged either exact event.
     scan = await asyncio.to_thread(scan_pending.apply_async, ignore_result=False)
     try:
         scanned = await asyncio.to_thread(scan.get, timeout=30, propagate=True)
-        _require(scanned["published"] >= 2, "owned scanner did not publish both initial requests")
+        _require(type(scanned) is dict and set(scanned) == {"selected", "published"}
+                 and type(scanned["selected"]) is int and type(scanned["published"]) is int
+                 and 0 <= scanned["published"] <= scanned["selected"],
+                 "owned scanner did not return a valid terminal result")
     finally:
         await asyncio.to_thread(scan.forget)
     (root / "source.sha256").write_text(_fixture_hashes(pre_archive)["archive_sha256"] + "\n")

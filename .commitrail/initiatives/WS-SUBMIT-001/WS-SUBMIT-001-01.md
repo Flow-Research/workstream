@@ -12279,3 +12279,9 @@ the held fixture's unchanged resource limits, the native POST grant and journal
 reader, and refusal of unpopulated or mismatched background state. Compilation,
 focused Ruff and diff checks passed. Native overlap remains for the exclusive
 runner qualification; no service, broker or PostgreSQL was used for these checks.
+
+The overlap probe validates the dedicated scanner's bounded terminal report
+and permits zero new publications in that particular pass. Its positive
+evidence comes from the exact live POST request and the original T5
+acknowledgement, whether the scheduled scanner or the explicit pass
+published either parked event.
