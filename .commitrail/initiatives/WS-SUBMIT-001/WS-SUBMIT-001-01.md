@@ -12990,3 +12990,24 @@ The focused trusted-worker suite passed 25 tests, including each exact approved
 limit and plus-one refusal before project execution, and retained protocol and
 source substitution cases. The source changes passed production lint and diff
 checks. Hosted activation and the maximum accepted ZIP remain separate proof.
+
+The first PostgreSQL run passed the raw reservation test and exposed the exact
+SQL dependency before any guest invocation. The existing
+`require_selected_pre_source(selected_pre_submit_runs)` function reconstructs
+the canonical default context and rejected the added project facts. Migration
+`0094_project_archive_limits` narrowly extends that function to derive the
+four caps from the exact locked effective-policy row. It refuses active
+receiving or PRE-checking operations while replacing the guard. It rewrites no
+historical rows, and retained accepted operations can continue finalization.
+The schema fingerprint and existing direct SQL source substitution tests must
+match this one function-definition change.
+
+The isolated 0094 catalogue fingerprint is
+`a92907ed73f32d8af6056ee18ef5fca372d7c8629fcd1fd3f730d25b6effd0d3`.
+Reversing only the changed PRE function definition recovers the exact 0093
+fingerprint `3e045ec0e2fe6f0b14b19ea1404f4500b1cde5d440c1a7ddd76d90bab1ffed0b`.
+The isolated resources were cleaned. The guarded raw-ceiling case pairs an
+otherwise valid 100-byte source with a stored 1,024-byte allowance under an
+approved 256-byte compressed cap. The separate missing and widened cases
+reconstruct the supplied digest to exercise the binding rather than a stale
+digest failure.

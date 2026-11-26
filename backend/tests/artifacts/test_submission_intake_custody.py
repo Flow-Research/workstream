@@ -48,6 +48,7 @@ async def intake(tmp_path, isolated_database_env, capacity_limits, request):
         from tests.checkers.external.support import pre_registry_spec
         plan, _ = await approved_selected_policy_fixture(
             factory, _namespace(_settings(tmp_path)), guide_version="v1",
+            maximum_archive_size_bytes=256 if getattr(request, "param", None) == "project_archive_cap" else None,
             pre_submit_registry_spec=pre_registry_spec(),
         )
         actor = _context()

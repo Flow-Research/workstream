@@ -72,6 +72,10 @@ def _substitute_pre_source_request(body, changed, deadline):
         body["pre_deadline_at"] = (deadline + timedelta(seconds=1)).isoformat()
     elif changed == "storage_scheme":
         body["admission_lineage"]["storage_scheme"] = "s3"
+    elif changed == "project_caps_missing":
+        del body["default_context"]["project_archive_limits"]
+    elif changed == "project_caps_widened":
+        body["default_context"]["project_archive_limits"]["maximum_file_size_bytes"] += 1
     elif changed == "rules":
         body["default_context"]["current_rules_sha256"] = "sha256:" + "f" * 64
         body["admission_lineage"]["rules_sha256"] = "sha256:" + "f" * 64
@@ -165,8 +169,17 @@ async def test_pre_source_custody_rejects_substitution_or_stale_owner(intake, ch
             await session.rollback()
 
 
-@pytest.mark.parametrize("intake", [True], indirect=True)
-@pytest.mark.parametrize("changed", [None, "source", "packet", "policy", "post_policy", "fence", "deadline", "actor", "rules", "predecessor", "predecessor_identity", "storage_scheme"])
+@pytest.mark.parametrize(
+    "intake, changed",
+    [
+        pytest.param(True, changed, id=f"{changed}-True") for changed in (
+            None, "source", "packet", "policy", "post_policy", "fence", "deadline",
+            "actor", "rules", "predecessor", "predecessor_identity", "storage_scheme",
+            "project_caps_missing", "project_caps_widened",
+        )
+    ] + [pytest.param("project_archive_cap", "project_raw_cap", id="project_raw_cap")],
+    indirect=["intake"],
+)
 async def test_selected_pre_sql_requires_exact_live_source(intake, changed):
     """Exercise the SQL source participant; not full PRE execution or T4 proof."""
     from app.core.hashing import canonical_json_hash
@@ -241,7 +254,12 @@ async def test_selected_pre_sql_requires_exact_live_source(intake, changed):
         if changed is None:
             await session.execute(statement, {"value": json.dumps(value)})
         else:
-            with pytest.raises(DBAPIError, match="selected PRE"):
+            expected = {
+                "project_caps_missing": "selected PRE default context mismatch",
+                "project_caps_widened": "selected PRE default context mismatch",
+                "project_raw_cap": "selected PRE locked raw archive limit mismatch",
+            }.get(changed, "selected PRE")
+            with pytest.raises(DBAPIError, match=expected):
                 await session.execute(statement, {"value": json.dumps(value)})
             await session.rollback()
     from app.modules.checkers.models import SelectedPreSubmitRun
@@ -259,7 +277,7 @@ async def test_selected_pre_sql_requires_exact_live_source(intake, changed):
         if changed is None:
             await session.flush()
         else:
-            with pytest.raises(DBAPIError, match="selected PRE"):
+            with pytest.raises(DBAPIError, match=expected):
                 await session.flush()
             await session.rollback()
     if changed is None:
