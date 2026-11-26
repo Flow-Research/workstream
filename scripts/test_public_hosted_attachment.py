@@ -139,6 +139,7 @@ class PublicJourneyWorkerCustody(unittest.TestCase):
 
     def test_term_reaches_owned_sessions_before_runner_kill_grace(self):
         from experiments.pilot04_external_checker_runtime import run_public_journey_probe as probe
+        from cli.tests.journey.runtime import _live_groups
 
         child = "import os,signal,time;signal.signal(signal.SIGTERM,signal.SIG_IGN);print(os.getpid(),flush=True);time.sleep(60)"
         leader = f"import subprocess,sys;subprocess.Popen([sys.executable,'-c',{child!r}])"
@@ -187,10 +188,13 @@ except KeyboardInterrupt:
                     self.assertEqual(len(groups), 2)
                     self.assertTrue(all(probe._live_group_members(group) for group in groups))
                     os.killpg(supervisor.pid, signal.SIGTERM)
-                    output, _ = supervisor.communicate(timeout=2)
+                    deadline = time.monotonic() + 2
+                    while time.monotonic() < deadline and _live_groups(set(groups)):
+                        time.sleep(.01)
+                    self.assertFalse(_live_groups(set(groups)), 'owned descendants survived the isolation runner grace')
+                    output, _ = supervisor.communicate(timeout=3)
                     self.assertEqual(supervisor.returncode, 0)
                     self.assertEqual(output.strip(), 'restored')
-                    self.assertTrue(all(not probe._live_group_members(group) for group in groups))
                 finally:
                     if supervisor.poll() is None:
                         supervisor.terminate()

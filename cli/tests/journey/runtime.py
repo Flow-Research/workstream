@@ -22,19 +22,25 @@ PILOT_CHECKS = {
 }
 
 
-def _live_group_members(group_id: int) -> set[int]:
-    """Observe live members of one process group created by this fixture."""
-    members = set()
+def _live_groups(group_ids: set[int]) -> dict[int, set[int]]:
+    """Observe the fixture's live groups in one process-table scan."""
+    groups: dict[int, set[int]] = {}
     for entry in Path("/proc").iterdir():
         if not entry.name.isdecimal():
             continue
         try:
             fields = (entry / "stat").read_text().rsplit(") ", 1)[1].split()
-            if int(fields[2]) == group_id and fields[0] not in {"Z", "X"}:
-                members.add(int(entry.name))
+            group = int(fields[2])
+            if group in group_ids and fields[0] not in {"Z", "X"}:
+                groups.setdefault(group, set()).add(int(entry.name))
         except (IndexError, OSError, ValueError):
             continue
-    return members
+    return groups
+
+
+def _live_group_members(group_id: int) -> set[int]:
+    """Observe live members of one process group created by this fixture."""
+    return _live_groups({group_id}).get(group_id, set())
 
 
 def _stop_owned_group(
@@ -79,21 +85,24 @@ def _stop_owned_group(
 
 def _interrupt_owned_groups(processes: list[subprocess.Popen]) -> None:
     """Fan out cancellation before the isolation runner's two-second KILL grace."""
-    for process in reversed(processes):
-        if _live_group_members(process.pid):
+    owned = [process.pid for process in reversed(processes)]
+    if not owned:
+        return
+    active = _live_groups(set(owned))
+    for group in owned:
+        if group in active:
             try:
-                os.killpg(process.pid, signal.SIGTERM)
+                os.killpg(group, signal.SIGTERM)
             except ProcessLookupError:
                 pass
     deadline = time.monotonic() + 1
-    while time.monotonic() < deadline and any(
-        _live_group_members(process.pid) for process in processes
-    ):
+    while active and time.monotonic() < deadline:
         time.sleep(0.05)
-    for process in reversed(processes):
-        if _live_group_members(process.pid):
+        active = _live_groups(set(active))
+    for group in owned:
+        if group in active:
             try:
-                os.killpg(process.pid, signal.SIGKILL)
+                os.killpg(group, signal.SIGKILL)
             except ProcessLookupError:
                 pass
 
