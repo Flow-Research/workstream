@@ -13116,3 +13116,23 @@ retained the original PRE deadline and cancelled the expired command while
 renewal rollback was still held. The integrated `b9123afa4` has identical
 production and regression files. Both test processes exited. Hosted acceptance
 of the maximum-size archive remains pending.
+
+### Hosted age-eligible source cleanup
+
+The deployed Celery cleanup consumer processed task
+`47b58f4f-44bb-431a-927d-6696f613f321` for rejected source
+`01a21888-f356-77d3-9b5e-759fe1f31dea` after the two-hour retention minimum.
+The fixed service principal's claim and confirmation released the 373-byte
+charge to zero. Exact-version S3 HEAD confirmed the rejected version was absent
+and accepted versions 1 and 2 were present. Both accepted custody hashes matched
+the pre-cleanup snapshot, and the cleanup consumer returned to idle.
+
+The first monitor expected a plain-text Celery success message that the deployed
+structured logs omit. A read-only reconciliation matched the original task ID
+in the logs to the committed owner records, S3 observations and idle consumer.
+The reconciliation used the one original publication. Its local receipt is
+`/tmp/workstream-hosted-cleanup-reconciled.json`. The complete private receipt is
+`/var/backups/workstream/pr708-cleanup-01a21888-f356-77d3-9b5e-759fe1f31dea/reconciled-confirmed.json`
+on the API host. This proof covers exact aged rejection cleanup and accepted
+retention on the deployed release. Remaining native faults, supported maximum
+upload acceptance and final release activation still require evidence.

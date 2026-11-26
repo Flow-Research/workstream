@@ -29,8 +29,10 @@ Current finish list, in execution order:
   existing runner; fix only observed defects needed for this deployment.
 - [x] Prove the hosted contributor ZIP journey through PRE rejection, pending
   status, POST revision, same-assignment MCP correction and unpaid acceptance.
+- [x] Confirm exact aged rejected-source deletion and accepted-version retention
+  through the deployed Celery cleanup consumer. [Hosted cleanup evidence](WS-SUBMIT-001-01.md#hosted-age-eligible-source-cleanup)
 - [ ] Finish hosted failure recovery, the required-review branch, retained ZIP
-  custody, age-eligible S3 cleanup and supported upload bounds.
+  custody checks and supported upload bounds.
 - [ ] Run required final-head checks, resolve actual failures, and present PR708
   for explicit merge approval. Merge and post-merge smoke require that approval.
 - [ ] Complete post-deployment/merge verification and hand over the release.
@@ -172,8 +174,9 @@ real PRE/T4/T5/POST, exact source and Contribution/export custody, PRE/POST
 rejection and default review_pending; owned database/bucket cleanup passed.
 Live AWS source qualification passed at 074cade5e with the actual restricted
 runtime/cleanup identities, pinned versions, lost acknowledgements and exact
-cleanup. The hosted cutover and core contributor journey passed. Native
-fault/isolation, supported upload bounds, aged hosted cleanup, the hosted
+cleanup. The hosted cutover and core contributor journey passed. The deployed
+cleanup consumer deleted the age-eligible rejected S3 version and preserved both
+accepted versions. Remaining native faults, supported upload bounds, the hosted
 required-review branch and full-head qualification remain open. Ordinary
 indexed unsealed cleanup is implemented; optional absent-operation inventory is
 not a new prerequisite. Known uncertain writes stay owned and charged until
@@ -188,10 +191,9 @@ lost-abort/replay case proves conservative charge retention then one release.
 Remote initiation without a recorded handle now retains discovered IDs before
 abort and binds them to a fresh cleanup authorization. Focused PostgreSQL/MinIO
 checks cover growing observations and lost-abort replay. Empty ambiguous
-discovery remains charged; deployed cleanup qualification remains open. Real
-Redis outage recovery and Celery child redelivery are proved with unchanged
-production leases/backoff; these do not qualify broker-server loss or hosted
-operation.
+discovery remains charged. Real Redis outage recovery and Celery child
+redelivery are proved with unchanged production leases and backoff. Broker-server
+loss and hosted operation remain separate proofs.
 
 ## Acceptance evidence still to close
 
@@ -203,7 +205,7 @@ This is the final qualification queue, not a claim that all listed code is absen
 | A01–A03 | Hosted `2942dd4e7` passed PRE rejection, T4/T5, POST revision and same-assignment correction through CLI/MCP; paired replay passed. | Reconcile any remaining scope in the exact acceptance rows. |
 | A04–A08 | Metadata/body replay, competing custody, interruption and T4 uncertainty tests | Reconcile exact cases and execute integrated final-head failure/retry matrix. |
 | A09–A13 | T5 rollback/redelivery, actual local SIGKILL recovery, accepted authority, pending reads and old-POST guard | Real Redis publication outage and Celery child-redelivery proofs passed; reconcile the remaining exact cases at the final head. |
-| A14–A18 | Cleanup lock/retention/charge owners, Local/MinIO tests and live AWS exact-version/lost-ack cleanup with retained-source survival | Production worker sweeps and exact acceptance-case reconciliation. |
+| A14–A18 | Cleanup lock/retention/charge owners, Local/MinIO tests, live AWS lost-ack cleanup and deployed exact aged rejection deletion with both accepted sources preserved | Reconcile the remaining exact cases and scheduled sweep coverage. |
 | A19–A23 | Streaming/framing, safe archives, semantic identity and findings tests; local A19 496 MiB slow-provider memory/backpressure drill | Full permitted maxima and safety matrix, native/deployment scope where required. |
 | A24–A27, A29 | Source/result/fence contracts, dedicated queue tests and the real Smol project-deadline/isolation fixture passed | Reconcile remaining OOM/crash/output, uncertain-destroy and single-runner queue cases; broad saturation/load qualification is user-deferred. |
 | A30 | Managed-style public source acceptance/T5/replay and four typed cases passed at `2f7d8d95c` | Substitution proof complete in its stated scope; no paid-provider integration is selected or required. |
@@ -220,7 +222,7 @@ This is the final qualification queue, not a claim that all listed code is absen
 | C03 | Bounded upload/framing owner tests exist; the earlier 496 MiB slow-provider drill did not complete successfully. | Verify supported input size, memory/backpressure, idle/total timeout and edge limits through the deployed path. A failed near-limit upload is not a pass. |
 | C04 | Dedicated queues and single-runner PRE/background resource reservations are implemented. | Verify the configured single-runner bounds and queue independence on deployment. Multi-replica/multi-runner and broad saturation testing are user-deferred. |
 | C05 | Existing lease/retry/outbox owners have PostgreSQL and real broker/child-redelivery proof. | Reconcile exact release settings and hosted consumer/recovery behavior; reuse current owners. |
-| C06 | The 12h sweep/2h minimum age and guarded exact-version cleanup are implemented; native AWS source permissions and lost-ack reconciliation passed. | The dedicated cleanup consumer is healthy with its provisioned fixed principal. Prove exact-version deletion and bounded runtime reaping on the hosted path while preserving accepted sources. |
+| C06 | The 12h sweep/2h minimum age and guarded exact-version cleanup are implemented. The deployed cleanup consumer deleted an eligible rejected version and preserved both accepted versions. AWS source permissions and lost-ack reconciliation passed. | Reconcile bounded runtime reaping on the hosted path. |
 | C07 | Managed-style public source/T5/replay substitution and four typed cases passed at `2f7d8d95c`, recorded in `73d81da66`. | No selected paid provider and no vendor integration required for this delivery. Do not call the substitution proof live vendor qualification. |
 
 ## Spec reconciliation: bounded remaining delivery work
@@ -234,7 +236,7 @@ Existing implementation/focused proof is not the same as deployed proof.
 | --- | --- | --- |
 | Contributor reads and revision terms (A13, A32, A35; PR708 addition) | Core hosted reads passed. | The contributor verified preclaim originals and the exact pending, revision and accepted assignment through the paired clients. Reconcile the remaining authorization, full history and applicable reward-changing cases through current owners. |
 | Native failure and isolation (A24–A27) | Test execution and fixes only for demonstrated defects. | The maintained deadline/isolation fixture passed at `9fad17a04`, including destroyed VMs and normal admission restoration. Reconcile OOM/crash/output and uncertain-destroy requirements with matching maintained evidence. Valid accepted input must continue when destroy is uncertain, with capacity held. Fixture build alone closes none of these native outcomes. |
-| Upload/retention limits (A14–A23) | Remaining deployed/provider verification. | Prove supported maximum/slow upload and framing/resource bounds, including tighter project archive-limit enforcement; the actual cleanup worker must delete only eligible exact versions and preserve accepted/retained sources. Retain already-passing AWS adapter evidence rather than repeating unrelated IAM setup. |
+| Upload/retention limits (A14–A23) | Remaining deployed/provider verification. | Prove supported maximum/slow upload and framing/resource bounds, including tighter project archive-limit enforcement. The deployed exact-version cleanup preserved accepted sources. Reuse that result and the existing AWS adapter evidence. |
 | Hosted cutover (section 20, A33–A35) | **Deployment complete.** | The drained backup and 0069-to-0093 migration retained all 132 existing table counts. The repaired `2942dd4e7` API, coupled MCP and seven dedicated Celery workers are active. The installed boot unit points to the repaired source. See the [cutover evidence](WS-SUBMIT-001-01.md#hosted-schema-and-release-cutover-completed). |
 | Hosted end-to-end and recovery (A01–A18, A29 single-runner, A31–A32) | Core journey and paired replay passed. | PRE rejection, pending and revision under one assignment, MCP correction, exact replay and unpaid acceptance passed. Finish hosted failure distinction and recovery, retained-source checks, required-review guard and scoped queue independence. See the [hosted journey evidence](WS-SUBMIT-001-01.md#hosted-contributor-zip-journey-and-paired-replay-passed). |
 | Release checks and handoff | Final verification/review. | Required final-head backend/CLI/MCP/migration/security checks and actual review findings resolved; PR708 presented for explicit merge approval; post-merge/deployment smoke and accurate operational handoff. No new PR or automatic merge. |
