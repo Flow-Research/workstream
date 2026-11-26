@@ -11439,3 +11439,57 @@ stored failure history, both SQL predecessor-fence parameters and the real
 prefork observability probe on its declared queue. The existing synthetic-context
 Pydantic warning remains visible. Broker-loss replay and the earlier CI OTLP
 missing-events failure are not closed by these eight cases.
+
+### Hosted API cutover inventory (2026-11-26)
+
+Read-only inspection of the current API host and `deploy/hosted` composition
+found the enabled `workstream-hosted.service` and healthy app-profile containers
+still using release `013ffbac2291179c03ff6d832f52efee9382322d`; PostgreSQL is at
+`0069_remove_artifact_proof`. The existing service unit points at that release
+directory. The reviewed backend agents, omnicore, and MCP images built from
+`1d28b567d` passed local hosted image verification (receipts
+`/tmp/workstream-host-image-5fb26081a6c9/host-only-build-1d28.json` and
+`/tmp/workstream-mcp-proof-565.json`), but have no published ECR digests and are
+not deployed. Agents is the currently selected backend variant; the installed
+model selection remains `openai_agents_sdk` / `openrouter` /
+`openai/gpt-5.6-luna`. Neither guide nor artifact data was changed.
+
+The existing release environment already selects the runtime AWS credential,
+database and Redis secret files, app profile, model proxy, S3 bucket and region.
+Separate cleanup credentials are installed at
+`/etc/workstream/aws/source-cleanup.json` for
+`arn:aws:iam::094032936130:user/workstream-source-cleanup`, distinct from the
+runtime `workstream-storage` principal. Runner TLS files are installed at
+`/etc/workstream/runner-tls/{ca.crt,app.crt,app.key}`. Twelve unique preflight
+selectors remain absent: cleanup principal ARN and credential host-file path;
+submission execution and source-cleanup profile paths; runner CA, certificate,
+private-key paths, host, port, and server name; trusted-intake image and config
+digests. Bind the runner address and server name to its installed endpoint and
+certificate, and the intake digests to its qualified custody receipt rather
+than template values. The verified runner capture is recorded separately at
+`/tmp/workstream-paired-native-e38-custody.json`; it does not qualify the blocked
+native journey.
+
+The typed execution and cleanup JSON candidates under
+`/tmp/workstream-hosted-submission-profile-candidate/` validate structurally.
+Their PRE aggregate deadline is 120 seconds; **choosing 120 seconds for C01 is
+an explicit production policy decision still outstanding**. The other candidate
+capacity, quota, retry, sweep, and cleanup values need reconciliation against
+measured hosted behavior; the local 496 MiB MinIO resource result does not by
+itself qualify hosted AWS limits. This is evidence and configuration work, not
+an additional approval gate for each field.
+
+After the native blocker and configuration reconciliation, cutover uses the
+existing `deploy/hosted/compose.py` pull/migrate/up and `preflight.py` flow:
+publish the exact verified agents and MCP images to the existing
+`workstream-backend` ECR repository and record actual repository digests; stage
+a new exact-source release directory while retaining the old directory/unit;
+back up PostgreSQL and source custody, drain old producers, migrate forward to
+`0092`, run full preflight, then start the dedicated app workers and verify the
+public and durable journey before repointing the enabled service unit. Existing
+guide and source data stay intact. Migration is forward-only: restoring the old
+`013ffbac` image against `0092` is not a safe rollback without independent
+compatibility proof. Preserve the pre-migration backup and prior image for a
+controlled restore or use a reviewed forward repair. No host mutation, image
+publication, migration, service restart, or production cutover was performed in
+this inventory.
