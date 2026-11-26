@@ -23,6 +23,7 @@ flowchart TB
   checkers --> routing[Policy-governed outcome routing]
   routing -->|Human review not required; required checks pass| acceptance[Shared authorized FinalAcceptance]
   routing -.->|Human review required: planned public workflow| review[REV human review and revision]
+  review -.->|Every valid Review| reviewer_contribution[Reviewer ContributionRecord and applicable conditional award]
   review -.->|Accept| acceptance
   acceptance --> contributions[Submitter ContributionRecord and applicable conditional awards]
   projects --> database[(PostgreSQL record database)]
@@ -30,12 +31,15 @@ flowchart TB
   artifacts --> database
   checkers --> database
   contributions --> database
+  reviewer_contribution --> database
 ```
 
 PRE checks govern intake before immutable Submission creation. POST evaluation
 uses the exact retained artifact and locked policy. Checker findings are evidence;
 AUTH and lifecycle guards govern final acceptance. Automatic acceptance creates
-no Review or reviewer contribution. External payment fulfillment remains a
+no Review or reviewer contribution. In the human-review workflow, every valid
+Review creates a reviewer contribution, including `needs_revision` and `reject`;
+it does not depend on submitter acceptance. External payment fulfillment remains a
 separate boundary; it must not be inferred from an accepted contribution.
 
 ## Module responsibilities
