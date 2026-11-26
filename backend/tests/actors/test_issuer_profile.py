@@ -8,6 +8,7 @@ import pytest
 from sqlalchemy import func, select, text
 from sqlalchemy.exc import SQLAlchemyError
 from app.adapters.auth.flow import FlowAuthVerifier
+from app.adapters.actors import verified_notification_email
 from app.core.identifiers import new_record_id
 from app.db import session as db_session
 from app.main import create_app
@@ -83,6 +84,50 @@ async def test_issuer_email_sync_preserves_identity_and_local_name(
         link = await session.scalar(select(ActorIdentityLink).where(ActorIdentityLink.actor_profile_id == actor_id))
         assert link.subject == "email-owner"
         assert link.email_observed_issued_at == issued + 3
+
+
+async def test_notification_recipient_follows_exact_signed_mailbox_verification(
+    auth_database_env, rsa_signing_material,
+):
+    """Current verified mailbox only, with stale, conflicting and missing proof refused."""
+    import time
+    from uuid import UUID
+
+    private_key, settings, app = _profile_app(auth_database_env, rsa_signing_material)
+    issued = int(time.time()) - 20
+
+    async def observe(client, *, tick, email, proof):
+        claims = {"sub": "feedback-email-owner", "email": email, "iat": issued + tick}
+        if proof is not None:
+            claims["email_verified"] = proof
+        token = issue_asymmetric_token(private_key, claims=claims)
+        result = await client.get("/api/v1/actors/me", headers={"Authorization": f"Bearer {token}"})
+        assert result.status_code == 200
+        assert "email_verified" not in result.json()
+        actor_id = UUID(result.json()["actor_profile_id"])
+        async with db_session.get_session_factory()() as session:
+            assert await verified_notification_email(session, actor_id, "https://foreign.example.test") is None
+            return actor_id, await verified_notification_email(session, actor_id, settings.token_issuer)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+        initial = "first@example.test"
+        corrected = "current@example.test"
+        actor, recipient = await observe(client, tick=0, email=initial, proof="true")
+        assert recipient is None
+        phases = (
+            (1, initial, True, initial),
+            (2, corrected, False, None),
+            (1, initial, True, None),
+            (3, corrected, True, corrected),
+            (3, initial, True, None),
+            (3, corrected, True, None),
+            (4, corrected, True, corrected),
+            (5, None, None, None),
+            (4, corrected, True, None),
+            (6, corrected, True, corrected),
+        )
+        for tick, email, proof, expected in phases:
+            assert await observe(client, tick=tick, email=email, proof=proof) == (actor, expected)
 
 
 @pytest.mark.parametrize("blocked", ["suspended", "revoked", "rollback"])

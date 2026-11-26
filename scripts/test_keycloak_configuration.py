@@ -224,6 +224,11 @@ class KeycloakConfigurationTests(unittest.TestCase):
         mappers = {m["name"]: m for m in scope["protocolMappers"]}
         self.assertEqual(mappers["account-email"]["config"]["user.attribute"], "email")
         self.assertEqual(mappers["account-email"]["config"]["claim.name"], "email")
+        verification = mappers["account-email-verified"]
+        self.assertEqual(verification["protocolMapper"], "oidc-usermodel-property-mapper")
+        self.assertEqual(verification["config"]["user.attribute"], "emailVerified")
+        self.assertEqual(verification["config"]["claim.name"], "email_verified")
+        self.assertEqual(verification["config"]["jsonType.label"], "boolean")
         self.assertEqual(mappers["subject-kind"]["protocolMapper"], "oidc-usermodel-attribute-mapper")
         for mapper in mappers.values():
             self.assertEqual(mapper["config"]["access.token.claim"], "true")

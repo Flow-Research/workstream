@@ -395,7 +395,7 @@ async def _migration_resume_custody(database_url: str, snapshot_id) -> dict[str,
             export = await connection.fetchrow(
                 """
                 SELECT to_jsonb(s)::text,to_jsonb(a)::text,
-                       ('{"email_observed_issued_at":null}'::jsonb || to_jsonb(l))::text,
+                       ('{"email_observed_issued_at":null,"email_verified":false}'::jsonb || to_jsonb(l))::text,
                        s.tableoid::bigint,a.tableoid::bigint,l.tableoid::bigint,
                        s.xmin::text,a.xmin::text,l.xmin::text
                 FROM public.contribution_export_snapshots s
@@ -439,6 +439,7 @@ def test_v01_graph_has_one_root_and_head() -> None:
 
     assert [revision.revision for revision in revisions] == [
         HEAD_REVISION,
+        "0092_submission_feedback",
         "0091_qualified_aws_source",
         "0090_merge_direct_storage",
         "0089_observed_upload_cleanup",
@@ -535,7 +536,7 @@ def test_v01_graph_has_one_root_and_head() -> None:
     assert script.get_revision("0090_merge_direct_storage").down_revision == (
         "0089_observed_upload_cleanup", "0069_remove_artifact_proof",
     )
-    assert script.get_revision(HEAD_REVISION).down_revision == "0091_qualified_aws_source"
+    assert script.get_revision(HEAD_REVISION).down_revision == "0092_submission_feedback"
     assert revisions[-1].down_revision is None
     assert script.get_heads() == [HEAD_REVISION]
 

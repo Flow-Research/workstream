@@ -81,7 +81,7 @@ async def test_app_worker_discovers_remote_post_and_recovers_expired_custody(del
     monkeypatch.setenv("WORKSTREAM_HOSTED_PROFILE", "app")
     get_settings.cache_clear()
     try:
-        app_delivery = production_outbox_delivery(h.factory, finalization_worker=False)
+        app_delivery = production_outbox_delivery(h.factory, worker_group="post")
         for _ in range(2):
             page = await app_delivery.candidates(limit=2)
             assert tuple(item.event_id for item in page.items) == (
@@ -418,7 +418,7 @@ async def test_finalization_worker_cannot_deliver_or_recover_post_event(delivery
     monkeypatch.setenv("WORKSTREAM_HOSTED_PROFILE", "app")
     get_settings.cache_clear()
     try:
-        finalization = production_outbox_delivery(h.factory, finalization_worker=True)
+        finalization = production_outbox_delivery(h.factory, worker_group="finalization")
         assert finalization._registry.keys == (("SubmissionFinalizationRequested", 1), ("SubmissionFinalizationRecoveryRequested", 1))
         assert await finalization.deliver(event.event_id, h.project, "wrong-worker", registered_only=True) is None
         async with h.factory() as session:

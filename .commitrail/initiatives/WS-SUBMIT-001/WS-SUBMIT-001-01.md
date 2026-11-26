@@ -11762,3 +11762,37 @@ status checkpoints use the stable assignment ID. The retired API route and CLI
 flag occur only in rejection tests. Built the integrated Go CLI and installed
 the assignment-only MCP wheel for the next native run. Connected proof remains
 open; this review does not substitute for that run.
+
+### Contributor email for governed POST quality feedback
+
+Intent: alert the contributor when the latest submitted work was returned for
+revision or rejected because it exhausted its allowed revisions. The exact
+authorized assignment read remains the feedback source for people and agents.
+The user confirmed that the notification and public read use the stable
+assignment ID throughout one contributor's work. PRE attempts, formal
+Submission versions and post-check evidence retain their exact owner IDs.
+
+Allowed scope: the existing TASK routing outcome and outbox worker composition,
+ACTORS issuer metadata and private recipient read, the Flow Identity signed
+claim mapper, one forward migration, the typed Resend mail adapter, its worker
+configuration and operating documentation, and focused tests. Append the
+notification intent to the routing transaction and dispatch it after commit
+with the existing outbox recovery rules and an exclusive email worker queue.
+Email delivery is disabled by default. Use a stable event-derived Resend key
+and a retry lifetime shorter than the provider's idempotency window. The email
+identifies the assignment and gives the existing client command without a link.
+
+Prohibited changes: PRE and human review behavior, product outcomes, awards,
+provider credentials in source, public recipient overrides, plaintext mailbox
+data in outbox payloads, private check evidence in email, new frontend work,
+and sends to existing contributors during qualification. Require an active
+exact-project contributor with issuer-signed verified mailbox evidence and
+recheck the exact assignment, attempt and current work state before dispatch.
+Coverage gaps and infrastructure/provider failures are outside the email scope.
+
+Risk is security-sensitive and crosses an external delivery boundary. Verify
+rollback, replay and retry, stale or foreign source and recipient refusal,
+transport status mapping, bounded delivery, and queue isolation. Focused
+security, architecture, QA and operating documentation review are required.
+Human review focuses on verified recipient evidence, email wording and the
+configured authenticated feedback destination before activation.

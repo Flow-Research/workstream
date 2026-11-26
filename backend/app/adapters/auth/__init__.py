@@ -65,6 +65,15 @@ from app.modules.projects.api.guide_activation import GuideActivationAuthorizati
 from app.modules.tasks.api.routing_outcome import RoutingAuthorityFacts
 
 
+async def has_submission_feedback_recipient_grant(
+    session: AsyncSession, project_id: UUID, actor_id: UUID,
+) -> bool:
+    """Require the same exact active Submitter grant as the assignment feedback read."""
+    return await AdminAuthorizationRepository(session).find_active_project_role(
+        project_id=project_id, actor_profile_id=actor_id, role="submitter",
+    ) is not None
+
+
 def artifact_operator_read_authorization(
     session: AsyncSession, context: AuthorizationContext,
 ) -> ArtifactOperatorReadAuthorization:

@@ -59,6 +59,9 @@ async def add_retained_owner_read_projection(connection):
         await connection.execute(text(
             f"ALTER TABLE public.{table} ADD COLUMN {column} {column_type}"
         ))
+    await connection.execute(text(
+        "ALTER TABLE public.actor_identity_links ADD COLUMN email_verified boolean DEFAULT false"
+    ))
 
 
 async def drop_retained_owner_read_projection(connection):
@@ -69,6 +72,10 @@ async def drop_retained_owner_read_projection(connection):
         )) == 0, f"historical owner projection contains new evidence: {table}.{column}"
     for table, column, _column_type in _OWNER_READ_PROJECTION_COLUMNS:
         await connection.execute(text(f"ALTER TABLE public.{table} DROP COLUMN {column}"))
+    assert await connection.scalar(text(
+        "SELECT count(*) FROM public.actor_identity_links WHERE email_verified IS TRUE"
+    )) == 0
+    await connection.execute(text("ALTER TABLE public.actor_identity_links DROP COLUMN email_verified"))
 
 
 async def add_historical_revision_read_projection(connection):

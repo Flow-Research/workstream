@@ -44,7 +44,7 @@ work. Existing reward owners remain authoritative.
 - [ ] Assignment-ID status exposes current safe feedback, processing activity, revision terms and accepted evidence without internal-ID discovery.
 - [x] CLI/MCP use the same contract, preserve useful PRE findings and document their distinct upload limits.
 - [ ] Combined public contributor journey proves correction, revision, replay, history and applicable existing awards on the integrated code.
-- [ ] Quality-feedback email uses the stable assignment ID, with a dedicated consumer and no infrastructure-failure notifications; integrate and prove delivery after sender DNS verification and private key configuration.
+- [ ] Quality-feedback email uses the stable assignment ID for POST revision requests and revision-limit rejection, with a dedicated consumer and no infrastructure-failure notifications; qualify delivery after sender DNS verification and private key configuration.
 
 The checked items have focused contract and PostgreSQL proof. The guide and
 assignment status changes are implemented and await the connected native proof.

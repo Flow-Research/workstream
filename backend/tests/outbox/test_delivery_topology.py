@@ -24,8 +24,7 @@ def restore_process_state(monkeypatch):
 
     original_join_guard = task_join_will_block()
     monkeypatch.setattr(topology, "_validated_parent", None)
-    monkeypatch.setattr(topology, "_validated_finalization", False)
-    monkeypatch.setattr(topology, "_validated_scan", False)
+    monkeypatch.setattr(topology, "_validated_queue", None)
     try:
         yield
     finally:
@@ -172,7 +171,7 @@ def test_finalization_prefork_worker_rejects_general_delivery(monkeypatch):
     monkeypatch.setattr(topology.os, "getppid", os.getpid)
     task = SimpleNamespace(app=configured.app, time_limit=topology.FINALIZATION_HARD_LIMIT_SECONDS,
         request=SimpleNamespace(is_eager=False, called_directly=False, timelimit=None))
-    topology.require_outbox_worker(task, finalization=True)
+    topology.require_outbox_worker(task, queue=topology.FINALIZATION_QUEUE)
     with pytest.raises(RuntimeError, match="validated prefork"):
         topology.require_outbox_worker(task)
 
@@ -221,6 +220,7 @@ def test_every_registered_workstream_task_has_one_explicit_queue(monkeypatch):
         "workstream.outbox.scan_pending": "workstream.outbox_scan",
         "workstream.outbox.deliver_event": "workstream.outbox",
         "workstream.outbox.finalize_submission": "workstream.submission_finalization",
+        "workstream.outbox.send_submission_feedback_email": "workstream.submission_feedback_email",
         "workstream.artifacts.sweep_submission_sources": "workstream.source_cleanup",
     }
     try:
@@ -242,6 +242,7 @@ def test_every_registered_workstream_task_has_one_explicit_queue(monkeypatch):
 @pytest.mark.parametrize("queues", [
     (topology.OUTBOX_SCAN_QUEUE, topology.OUTBOX_QUEUE),
     (topology.OUTBOX_SCAN_QUEUE, topology.FINALIZATION_QUEUE),
+    (topology.OUTBOX_SCAN_QUEUE, topology.FEEDBACK_EMAIL_QUEUE),
     (topology.OUTBOX_SCAN_QUEUE, "celery"),
 ])
 def test_scan_worker_refuses_shared_queues(queues):
@@ -261,6 +262,26 @@ def test_scan_entry_requires_dedicated_prefork_and_sixty_second_limit(monkeypatc
     with pytest.raises(RuntimeError, match="bounded hard time limit"):
         topology.require_outbox_scan_worker(SimpleNamespace(app=configured.app, time_limit=61,
             request=task.request))
+    with pytest.raises(RuntimeError, match="validated prefork"):
+        topology.require_outbox_worker(task)
+
+
+def test_feedback_email_requires_its_own_validated_child(monkeypatch):
+    from app.adapters import submission_feedback_email
+
+    configured = worker(queues=(topology.FEEDBACK_EMAIL_QUEUE,))
+    with pytest.raises(WorkerShutdown, match="feedback email worker configuration invalid"):
+        topology.validate_outbox_worker(configured)
+    validated = []
+    monkeypatch.setattr(submission_feedback_email, "validate_submission_feedback_email_worker", validated.append)
+    topology.validate_outbox_worker(configured)
+    assert len(validated) == 1
+    task = SimpleNamespace(app=configured.app, time_limit=topology.FEEDBACK_EMAIL_HARD_LIMIT_SECONDS,
+        request=SimpleNamespace(is_eager=False, called_directly=False, timelimit=None))
+    with pytest.raises(RuntimeError, match="validated prefork"):
+        topology.require_outbox_worker(task, queue=topology.FEEDBACK_EMAIL_QUEUE)
+    monkeypatch.setattr(topology.os, "getppid", os.getpid)
+    topology.require_outbox_worker(task, queue=topology.FEEDBACK_EMAIL_QUEUE)
     with pytest.raises(RuntimeError, match="validated prefork"):
         topology.require_outbox_worker(task)
 
@@ -299,11 +320,12 @@ def test_scan_routes_each_event_group_without_acknowledging(monkeypatch):
     from app.core.config import get_settings
     from app.core.identifiers import new_record_id
     from app.modules.outbox.api import DeliveryCandidate, DeliveryCandidatePage
+    from app.modules.tasks.api.routing_outcome import SUBMISSION_FEEDBACK_EMAIL_EVENT
     monkeypatch.setenv("WORKSTREAM_CELERY_TASK_ALWAYS_EAGER", "true")
     get_settings.cache_clear()
     from app.workers import outbox
     items = tuple(DeliveryCandidate(event_id=new_record_id(), project_id=new_record_id(), event_type=kind)
-                  for kind in ("PostSubmissionEvaluationRequested", "SubmissionFinalizationRequested", "SubmissionFinalizationRecoveryRequested"))
+                  for kind in ("PostSubmissionEvaluationRequested", "SubmissionFinalizationRequested", "SubmissionFinalizationRecoveryRequested", SUBMISSION_FEEDBACK_EMAIL_EVENT))
     async def candidates(_after):
         return DeliveryCandidatePage(items=items, next_after=None)
     published = []
@@ -311,10 +333,11 @@ def test_scan_routes_each_event_group_without_acknowledging(monkeypatch):
     monkeypatch.setattr(outbox, "require_outbox_scan_worker", lambda _task: None)
     monkeypatch.setattr(outbox.deliver_event, "apply_async", lambda **kwargs: published.append(("post", kwargs)))
     monkeypatch.setattr(outbox.finalize_submission, "apply_async", lambda **kwargs: published.append(("final", kwargs)))
+    monkeypatch.setattr(outbox.send_submission_feedback_email, "apply_async", lambda **kwargs: published.append(("feedback", kwargs)))
     try:
-        assert outbox.scan_pending.apply(task_id=str(new_record_id()), throw=True).get() == {"selected": 3, "published": 3}
+        assert outbox.scan_pending.apply(task_id=str(new_record_id()), throw=True).get() == {"selected": 4, "published": 4}
         assert published == [(kind, {"args": (str(item.event_id), str(item.project_id))})
-                             for kind, item in zip(("post", "final", "final"), items, strict=True)]
+                             for kind, item in zip(("post", "final", "final", "feedback"), items, strict=True)]
     finally:
         get_settings.cache_clear()
 

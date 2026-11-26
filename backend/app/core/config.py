@@ -92,6 +92,8 @@ class Settings(BaseSettings):
     flow_auth_audience: str = "workstream-api"
     flow_auth_local_hmac_secret: str | None = None
     token_issuer: str | None = None
+    submission_feedback_email_enabled: bool = False
+    resend_api_key_file: Path | None = None
     token_audience: str = "workstream"
     token_jwks_url: str | None = None
     token_algorithms: str = ""

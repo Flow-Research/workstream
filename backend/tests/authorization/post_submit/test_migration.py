@@ -118,14 +118,16 @@ async def test_upgrade_excludes_writer_across_receipt_preflight(
                 # the predecessor receipt migration has already run above.
                 async with h.factory() as session, session.begin():
                     await session.execute(text(
-                        "ALTER TABLE actor_identity_links ADD COLUMN email_observed_issued_at bigint"
+                        "ALTER TABLE actor_identity_links ADD COLUMN email_observed_issued_at bigint, "
+                        "ADD COLUMN email_verified boolean DEFAULT false"
                     ))
                 try:
                     await provision_post_submit_service(h.factory)
                 finally:
                     async with h.factory() as session, session.begin():
                         await session.execute(text(
-                            "ALTER TABLE actor_identity_links DROP COLUMN email_observed_issued_at"
+                            "ALTER TABLE actor_identity_links DROP COLUMN email_observed_issued_at, "
+                            "DROP COLUMN email_verified"
                         ))
                 valid = await seed_archived_running_checker(h)
                 assert valid["reservation"]["attempt_id"] == reserved["attempt_id"]

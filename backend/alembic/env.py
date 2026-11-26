@@ -21,7 +21,7 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 _BASELINE_REVISION = "0001_uuid7_v01"
-_CURRENT_HEAD_REVISION = "0092_submission_feedback"
+_CURRENT_HEAD_REVISION = "0093_verified_email_observation"
 _RECREATE_GUIDANCE = (
     "Workstream v0.1 requires a fresh database; recreate this database before "
     "running the 0001_uuid7_v01 migration"
@@ -146,6 +146,8 @@ def do_run_migrations(connection: Connection) -> None:
             ("0089_observed_upload_cleanup",),
             ("0069_remove_artifact_proof",),
             ("0090_merge_direct_storage",),
+            ("0091_qualified_aws_source",),
+            ("0092_submission_feedback",),
             (_CURRENT_HEAD_REVISION,),
         ):
             raise RuntimeError(_RECREATE_GUIDANCE)

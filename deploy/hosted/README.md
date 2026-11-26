@@ -180,6 +180,7 @@ metadata only; the worker loader sets the adapter's existing private-key variabl
 without evaluating or logging its contents. Never put a raw private key in the
 release environment. Follow the
 [GitHub App instructions](../../pilots/garden/github-app.md) for read-only permissions.
+
 `WORKSTREAM_MODEL_PROXY_ENABLED=true` starts one
 trusted model-proxy process independently of the setup runtime. Only that process
 gets the database, each configured provider credential and the runtime ART identity.
@@ -295,6 +296,38 @@ roots, and TLS server identity. The runner system journal and a non-secret
 qualification receipt record actual health, PRE/POST execution and cleanup.
 App preflight validates only the configured endpoint, TLS files and intake
 digests; it does not infer runner qualification from local files.
+
+### Contributor feedback email
+
+`WORKSTREAM_SUBMISSION_FEEDBACK_EMAIL_ENABLED` defaults to `false`. To enable
+delivery, verify `workstream.flowresearch.tech` in Resend and provide a sending
+key scoped to that domain. Set `WORKSTREAM_RESEND_API_KEY_FILE` to its private
+absolute host path outside the deployment runtime tree. Give the regular file
+the release runtime UID/GID and mode `0400`. Store only the key on one line.
+Set `WORKSTREAM_SUBMISSION_FEEDBACK_EMAIL_ENABLED=true`. Release preflight
+selects the email overlay and checks that only the dedicated
+`workstream.submission_feedback_email` worker mounts the key. This worker uses
+SQL, Redis and the fixed Resend HTTPS endpoint.
+
+Before activation, apply the mailbox claim and verify a fresh signed contributor
+self-profile observation with a designated test account. The worker uses the
+active Workstream actor's latest signed, verified mailbox and current exact-project
+Submitter grant. Existing actors can refresh the observation through an authorized
+`GET /api/v1/actors/me` using a fresh token. Historical or unverified mailboxes
+are ineligible. [Flow Identity mailbox claim](../identity/README.md#workstream-feedback-email-claim).
+
+New governed POST quality outcomes request an email for a current revision
+return or immediate revision-limit rejection. The message uses the assignment
+ID and the same authorized assignment status and feedback read available in
+the API, CLI and MCP. The assignment read remains the source of feedback and
+revision terms. Workstream continues processing assignments if email fails.
+
+Temporary Resend errors and uncertain HTTP outcomes retry through the shared
+outbox using a stable event key and an absolute 12-hour send cutoff. Outbox
+acknowledgement records a handled request, including suppression if the
+assignment no longer needs its alert or the recipient is ineligible. Resend
+acceptance acknowledges the request, and inbox delivery has separate provider
+status. [Resend's 24-hour idempotency window](https://resend.com/docs/dashboard/emails/idempotency-keys).
 
 ## Validate without disclosure
 

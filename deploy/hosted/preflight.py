@@ -21,6 +21,10 @@ from urllib.parse import urlsplit
 
 
 COMPOSE_PATH = Path(__file__).with_name("compose.yml")
+FEEDBACK_EMAIL_COMPOSE_PATH = Path(__file__).with_name("compose.submission-feedback-email.yml")
+FEEDBACK_EMAIL_WORKER = "submission-feedback-email-worker"
+FEEDBACK_EMAIL_ENABLED_KEY = "WORKSTREAM_SUBMISSION_FEEDBACK_EMAIL_ENABLED"
+RESEND_KEY_FILE = "WORKSTREAM_RESEND_API_KEY_FILE"
 INFERENCE_COMPOSE_PATH = Path(__file__).with_name("compose.inference.yml")
 TRIAL_COMPOSE_PATH = Path(__file__).with_name("compose.trials.yml")
 TRIAL_MANIFEST_TARGET = Path("/etc/workstream/trial-authority.json")
@@ -172,8 +176,10 @@ SECRET_FILE_KEYS = (
     *BASE_SECRET_FILE_KEYS,
     *MODEL_PROXY_SECRET_FILE_KEYS,
     GITHUB_APP_KEYS[1],
+    RESEND_KEY_FILE,
 )
 SECRET_FILE_TARGETS = {
+    RESEND_KEY_FILE: ("resend_api_key", "/run/secrets/resend_api_key"),
     "WORKSTREAM_GITHUB_APP_PRIVATE_KEY_FILE": (
         "github_app_private_key",
         "/run/secrets/github_app_private_key",
@@ -233,6 +239,7 @@ ROLE_SECRET_FILE_KEYS = {
     "model-proxy": ("WORKSTREAM_DATABASE_URL_FILE",),
 }
 FORBIDDEN_RELEASE_KEYS = (
+    "WORKSTREAM_RESEND_API_KEY",
     "WORKSTREAM_GITHUB_APP_PRIVATE_KEY",
     "AWS_ACCESS_KEY_ID",
     "AWS_CONFIG_FILE",
@@ -354,6 +361,8 @@ OPTIONAL_RELEASE_KEYS = (
     "WORKSTREAM_OBSERVABILITY_OTLP_ENDPOINT",
     "WORKSTREAM_OBSERVABILITY_TRACE_SAMPLE_RATIO",
     *MODEL_PROXY_SECRET_FILE_KEYS,
+    FEEDBACK_EMAIL_ENABLED_KEY,
+    RESEND_KEY_FILE,
 )
 RELEASE_KEYS = frozenset((*REQUIRED_RELEASE_KEYS, *OPTIONAL_RELEASE_KEYS))
 
@@ -514,6 +523,18 @@ def validate_environment(values: dict[str, str]) -> None:
     validate_identity_environment(values)
     validate_mcp_environment(values)
     validate_local_data_environment(values)
+    feedback_enabled = values.get(FEEDBACK_EMAIL_ENABLED_KEY, "false")
+    if feedback_enabled not in {"true", "false"} or (
+        (feedback_enabled == "true") != bool(values.get(RESEND_KEY_FILE))
+    ):
+        raise PreflightError("submission feedback email requires an explicit flag and its private key file")
+    if feedback_enabled == "true":
+        key_file = Path(values[RESEND_KEY_FILE])
+        root = deployment_paths(values).root
+        if (not key_file.is_absolute() or key_file != key_file.resolve(strict=False)
+                or key_file.is_relative_to(root) or root.is_relative_to(key_file)
+                or any(character.isspace() or character in ",:" for character in str(key_file))):
+            raise PreflightError("Resend key file must use a canonical private path outside deployment storage")
     github_app_id, github_key_file, github_installation_id = (
         values.get(key, "") for key in GITHUB_APP_KEYS
     )
@@ -857,6 +878,7 @@ def _secret_file_keys(values: dict[str, str]) -> tuple[str, ...]:
             if values["WORKSTREAM_MODEL_PROXY_ENABLED"] == "true" and values.get(key)
         ),
         *((GITHUB_APP_KEYS[1],) if values.get(GITHUB_APP_KEYS[0]) else ()),
+        *((RESEND_KEY_FILE,) if values.get(FEEDBACK_EMAIL_ENABLED_KEY) == "true" else ()),
     )
 
 
@@ -1002,6 +1024,8 @@ def _compose_file_arguments(values: dict[str, str]) -> list[str]:
         arguments.extend(("--file", str(IDENTITY_COMPOSE_PATH)))
     if values.get(GITHUB_APP_KEYS[0]):
         arguments.extend(("--file", str(GITHUB_COMPOSE_PATH)))
+    if values.get(FEEDBACK_EMAIL_ENABLED_KEY) == "true":
+        arguments.extend(("--file", str(FEEDBACK_EMAIL_COMPOSE_PATH)))
     if values["WORKSTREAM_MODEL_PROXY_ENABLED"] == "true":
         arguments.extend(("--file", str(INFERENCE_COMPOSE_PATH)))
         for provider, key in MODEL_PROVIDER_SECRET_FILE_KEYS.items():
@@ -1104,6 +1128,7 @@ def run_compose(
         "outbox-scan-worker", "outbox-worker", "submission-finalization-worker",
         "submission-source-cleanup-worker", "beat", "model-proxy", "identity",
         "guide-document-parser",
+        FEEDBACK_EMAIL_WORKER,
     }
     targets_api = not selected_services or "api" in selected_services or (
         "--no-deps" not in compose_arguments
@@ -1111,6 +1136,7 @@ def run_compose(
             "mcp", "beat", "worker", "project-control-worker", "artifact-worker",
             "outbox-scan-worker", "outbox-worker", "submission-finalization-worker",
             "submission-source-cleanup-worker",
+            FEEDBACK_EMAIL_WORKER,
         })
     )
     couple_mcp = bool(values.get("WORKSTREAM_MCP_IMAGE")) and (
@@ -1139,6 +1165,8 @@ def run_compose(
                 compose_arguments.append("identity")
             if values["WORKSTREAM_MODEL_PROXY_ENABLED"] == "true":
                 compose_arguments.append("model-proxy")
+            if values.get(FEEDBACK_EMAIL_ENABLED_KEY) == "true":
+                compose_arguments.append(FEEDBACK_EMAIL_WORKER)
         else:
             compose_arguments = [item for item in compose_arguments if item != "mcp"]
             if selected_services == {"mcp"}:
@@ -1310,6 +1338,8 @@ def run_shutdown(environment_path: Path, values: dict[str, str]) -> int:
     ]
     if values.get("WORKSTREAM_MCP_IMAGE"):
         phases.insert(0, ["stop", "mcp"])
+    if values.get(FEEDBACK_EMAIL_ENABLED_KEY) == "true":
+        phases.append(["stop", "--timeout", "120", FEEDBACK_EMAIL_WORKER])
     if values["WORKSTREAM_MODEL_PROXY_ENABLED"] == "true":
         phases.append(["stop", "--timeout", "7320", "model-proxy"])
     phases.append(["stop", "guide-document-parser"])
@@ -1578,6 +1608,9 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
         "outbox-scan-worker", "submission-finalization-worker",
         "submission-source-cleanup-worker",
     }
+    feedback_enabled = values.get(FEEDBACK_EMAIL_ENABLED_KEY, "false")
+    if feedback_enabled == "true":
+        bounded_workers.add(FEEDBACK_EMAIL_WORKER)
     all_workers = standard_workers | bounded_workers
     expected_services = {
         "api",
@@ -1710,6 +1743,8 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
             str(paths.guide_root): (str(paths.guide_root), False),
         },
     }
+    if feedback_enabled == "true":
+        expected_mounts[FEEDBACK_EMAIL_WORKER] = {}
     if model_proxy_enabled:
         expected_mounts["model-proxy"] = {
             str(paths.scratch): (str(paths.scratch), False),
@@ -1880,12 +1915,18 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
             "--pidfile=/tmp/celery-submission-source-cleanup.pid",
         ),
     }
+    if feedback_enabled == "true":
+        bounded_worker_profiles[FEEDBACK_EMAIL_WORKER] = (
+            "--queues=workstream.submission_feedback_email",
+            "--hostname=submission-feedback-email@%h",
+            "--pidfile=/tmp/celery-submission-feedback-email.pid",
+        )
     for name, required_arguments in bounded_worker_profiles.items():
         bounded_worker = services[name]
         command = bounded_worker.get("command")
         if (
             bounded_worker.get("stop_grace_period") not in (
-                {"120s", "2m0s"} if name == "outbox-scan-worker" else
+                {"120s", "2m0s"} if name in {"outbox-scan-worker", FEEDBACK_EMAIL_WORKER} else
                 {"7320s", "2h2m0s"} if name in {
                     "project-control-worker", "artifact-worker", "outbox-worker",
                 } else {"420s", "7m0s"}
@@ -1953,6 +1994,8 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
             if role in standard_workers - {"worker"}
             else set(_role_secret_file_keys(policy_role, values))
         )
+        if role == FEEDBACK_EMAIL_WORKER:
+            required_file_keys.add(RESEND_KEY_FILE)
         for key, (_, target) in SECRET_FILE_TARGETS.items():
             if key in REMOTE_RUNNER_SECRET_FILE_KEYS:
                 if key in environment:
@@ -2062,6 +2105,8 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
         service_environment = services[name].get("environment")
         if not isinstance(service_environment, dict):
             raise PreflightError(f"{name} release environment is unavailable")
+        if service_environment.get(FEEDBACK_EMAIL_ENABLED_KEY) != feedback_enabled:
+            raise PreflightError(f"rendered submission feedback email flag differs from release: {name}")
         deadline_key = "WORKSTREAM_ARTIFACT_PREPARATION_TOTAL_DEADLINE_SECONDS"
         if str(service_environment.get(deadline_key, "")) != values[deadline_key]:
             raise PreflightError(
@@ -2081,6 +2126,10 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
                 )
     for name, service in services.items():
         environment = service.get("environment") or {}
+        if "WORKSTREAM_RESEND_API_KEY" in environment or (
+            RESEND_KEY_FILE in environment and name != FEEDBACK_EMAIL_WORKER
+        ):
+            raise PreflightError(f"Resend credential is exposed outside its email worker: {name}")
         expected_remote = (
             {
                 "WORKSTREAM_EXTERNAL_RUNNER_HOST": values["WORKSTREAM_EXTERNAL_RUNNER_HOST"],

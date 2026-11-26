@@ -8,7 +8,8 @@ from kombu import Queue
 from app.workers.outbox_topology import (
     OUTBOX_DELIVERY_TASK, OUTBOX_QUEUE, OUTBOX_SCAN_TASK, OUTBOX_SCAN_QUEUE,
     FINALIZATION_DELIVERY_TASK, FINALIZATION_QUEUE, is_finalization_worker_process,
-    is_outbox_scan_worker_process,
+    is_outbox_scan_worker_process, FEEDBACK_EMAIL_DELIVERY_TASK, FEEDBACK_EMAIL_QUEUE,
+    is_feedback_email_worker_process,
 )
 from app.workers.source_cleanup_topology import (
     SOURCE_CLEANUP_QUEUE, SOURCE_CLEANUP_TASK, SOURCE_CLEANUP_SCHEDULE,
@@ -60,6 +61,7 @@ OBSERVED_TASK_NAMES = frozenset(
     {
         OUTBOX_DELIVERY_TASK,
         FINALIZATION_DELIVERY_TASK,
+        FEEDBACK_EMAIL_DELIVERY_TASK,
         SOURCE_CLEANUP_TASK,
         OUTBOX_SCAN_TASK,
         RETAINED_REVISION_SCAN_TASK,
@@ -90,6 +92,7 @@ WORKSTREAM_TASK_ROUTES = {
     OUTBOX_SCAN_TASK: {"queue": OUTBOX_SCAN_QUEUE},
     OUTBOX_DELIVERY_TASK: {"queue": OUTBOX_QUEUE},
     FINALIZATION_DELIVERY_TASK: {"queue": FINALIZATION_QUEUE},
+    FEEDBACK_EMAIL_DELIVERY_TASK: {"queue": FEEDBACK_EMAIL_QUEUE},
     SOURCE_CLEANUP_TASK: {"queue": SOURCE_CLEANUP_QUEUE},
 }
 
@@ -105,9 +108,10 @@ def initialize_artifact_runtime_for_process(**_kwargs: object) -> None:
     if is_source_cleanup_worker_process():
         # Parent validated cleanup startup; each sweep rechecks current authority.
         return
-    if is_finalization_worker_process() or is_outbox_scan_worker_process():
-        # Scanning uses SQL and broker only. Finalized replay uses retained SQL;
-        # unfinished finalization initializes its provider on actual observation.
+    if (is_finalization_worker_process() or is_outbox_scan_worker_process()
+            or is_feedback_email_worker_process()):
+        # Scanner, email and finalized replay need no artifact provider.
+        # Unfinished finalization initializes its provider on actual observation.
         return
     run_async_task(initialize_artifact_internal_runtime)
 
@@ -179,6 +183,7 @@ def create_celery_app() -> Celery:
         task_queues=tuple(Queue(name) for name in (
             PROJECT_GUIDE_QUEUE, PROJECT_CONTROL_QUEUE, ARTIFACT_WORK_QUEUE,
             OUTBOX_SCAN_QUEUE, OUTBOX_QUEUE, FINALIZATION_QUEUE, SOURCE_CLEANUP_QUEUE,
+            FEEDBACK_EMAIL_QUEUE,
         )),
         task_default_queue=PROJECT_GUIDE_QUEUE,
         task_create_missing_queues=False,

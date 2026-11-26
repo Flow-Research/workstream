@@ -21,7 +21,10 @@ def assert_no_live_finalization(paths):
             assert "setup_finalization_authorization" in imports
             imports.remove("setup_finalization_authorization")
         topology = {
-            ROOT / "app/workers/outbox.py": {"FINALIZATION_HARD_LIMIT_SECONDS"},
+            ROOT / "app/workers/outbox.py": {
+                "FINALIZATION_DELIVERY_TASK", "FINALIZATION_HARD_LIMIT_SECONDS",
+                "FINALIZATION_QUEUE", "FINALIZATION_RECOVERY_EVENT",
+            },
             ROOT / "app/workers/celery_app.py": {
                 "FINALIZATION_DELIVERY_TASK", "FINALIZATION_QUEUE", "is_finalization_worker_process",
             },

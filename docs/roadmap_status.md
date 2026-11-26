@@ -106,6 +106,9 @@ refreshes on authorized self-profile GET/PATCH when the token is newer. Workstre
 CLI and MCP cannot edit email. Optional issuer name seeds first admission; subsequent
 display-name edits, including clearing it, remain local. Identity and authority remain
 bound to issuer/subject, not email; signed email is not proof of mailbox verification.
+The optional POST quality email uses a signed positive mailbox-verification
+claim for the active exact-project contributor and refreshes it through the same
+issuer-owned observation.
 
 The [single-request submission specification](spec_submission_execution.md) governs
 [WS-SUBMIT-001](../.commitrail/initiatives/WS-SUBMIT-001/OVERVIEW.md). The current
@@ -711,6 +714,12 @@ ID remains stable across intake attempts and submission versions. Backend-select
 are retained through finalization and can be read before resubmission.
 Existing contribution evidence shows earned awards. Hosted qualification and
 the separately reviewed sized-award fields remain outside this exposure claim.
+
+PR #708 provides optional email for new governed POST revision returns and
+immediate revision-limit rejections. The dedicated outbox consumer uses the
+assignment ID and directs the contributor to the existing authorized feedback
+read. Hosted email activation and a live provider receipt remain pending.
+[Hosted email configuration](../deploy/hosted/README.md#contributor-feedback-email).
 
 ## What Has Been Completed
 

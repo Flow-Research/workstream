@@ -340,6 +340,39 @@ class HostedReleaseConfigTests(unittest.TestCase):
         with self.assertRaisesRegex(preflight.PreflightError, "exclusive worker"):
             preflight.validate_compose(changed, values)
 
+    def test_feedback_email_overlay_restricts_key_and_queue_to_its_worker(self):
+        disabled = self.app_environment()
+        rendered = preflight.render_compose(self.environment_path, disabled)
+        worker = preflight.FEEDBACK_EMAIL_WORKER
+        self.assertNotIn(worker, rendered["services"])
+        with self.assertRaises(preflight.PreflightError):
+            preflight.validate_environment(disabled | {preflight.FEEDBACK_EMAIL_ENABLED_KEY: "true"})
+        values = disabled | {
+            preflight.FEEDBACK_EMAIL_ENABLED_KEY: "true",
+            preflight.RESEND_KEY_FILE: str(self.root / "resend-api-key"),
+        }
+        self.environment_path.write_text(
+            "\n".join(f"{name}={value}" for name, value in values.items()) + "\n", encoding="utf-8",
+        )
+        preflight.validate_environment(values)
+        rendered = preflight.render_compose(self.environment_path, values)
+        preflight.validate_compose(rendered, values)
+        services = rendered["services"]
+        self.assertEqual(
+            [name for name, item in services.items()
+             if any(secret.get("source") == "resend_api_key" for secret in item.get("secrets", []))],
+            [worker],
+        )
+        self.assertIn("--queues=workstream.submission_feedback_email", services[worker]["command"])
+        changed = copy.deepcopy(rendered)
+        changed["services"][worker]["command"].append("--queues=workstream.outbox")
+        with self.assertRaisesRegex(preflight.PreflightError, "exclusive worker"):
+            preflight.validate_compose(changed, values)
+        changed = copy.deepcopy(rendered)
+        changed["services"]["outbox-scan-worker"]["environment"][preflight.RESEND_KEY_FILE] = "/run/secrets/resend_api_key"
+        with self.assertRaisesRegex(preflight.PreflightError, "unrelated secret selector"):
+            preflight.validate_compose(changed, values)
+
     def test_image_owned_profile_validation_is_fixed_and_fail_closed(self):
         completed = subprocess.CompletedProcess([], 0)
         with patch.object(preflight.subprocess, "run", return_value=completed) as run:

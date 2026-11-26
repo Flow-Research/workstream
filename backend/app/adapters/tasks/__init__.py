@@ -490,6 +490,7 @@ def task_post_submit_outcome(session, sessions):
     from app.adapters.auth import task_routing_authorization
     from app.adapters.checkers import evaluation_coordinator
     from app.adapters.projects import project_locked_policy_context_port
+    from app.core.config import get_settings
     from app.modules.tasks.post_submit_routing.outcome import TaskPostSubmitOutcome
 
     return TaskPostSubmitOutcome(
@@ -502,6 +503,7 @@ def task_post_submit_outcome(session, sessions):
         invocation_fence=outbox_invocation_fence(session),
         audit=task_routing_audit(session),
         outbox=outbox_append(session),
+        feedback_email_enabled=get_settings().submission_feedback_email_enabled,
     )
 
 
@@ -521,6 +523,7 @@ def reconciliation_task_post_submit_outcome(
     from app.adapters.checkers import evaluation_coordinator
     from app.adapters.outbox import outbox_append
     from app.adapters.projects import project_locked_policy_context_port
+    from app.core.config import get_settings
     from app.adapters.tasks.routing_acceptance import RoutingAcceptanceAdapter
     from app.modules.tasks.post_submit_routing.outcome import TaskPostSubmitOutcome
 
@@ -535,6 +538,7 @@ def reconciliation_task_post_submit_outcome(
         audit=task_routing_audit(session),
         outbox=outbox_append(session),
         reconciliation_claim=reconciliation_claim,
+        feedback_email_enabled=get_settings().submission_feedback_email_enabled,
     ))
 
 

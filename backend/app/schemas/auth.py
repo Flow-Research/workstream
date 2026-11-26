@@ -28,6 +28,7 @@ class VerifiedIssuerToken(BaseModel):
     subject_kind: SubjectKind
     scopes: frozenset[str]
     email: str | None = Field(default=None, strict=True, min_length=1, max_length=320, pattern=r"^[^\x00\r\n]+$")
+    email_verified: bool = Field(default=False, strict=True)
     name: str | None = Field(default=None, strict=True, min_length=1, max_length=200, pattern=r"^[^\x00\r\n]+$")
 
 

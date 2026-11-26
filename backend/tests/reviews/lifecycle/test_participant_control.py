@@ -257,7 +257,8 @@ async def test_0038_old_manifest_live_upgrade_denies_new_effects_until_renewed(
     # Remove it before the real migration introduces the column.
     async with db_session.get_engine().begin() as connection:
         await connection.execute(text(
-            "ALTER TABLE actor_identity_links ADD COLUMN email_observed_issued_at bigint"
+            "ALTER TABLE actor_identity_links ADD COLUMN email_observed_issued_at bigint, "
+            "ADD COLUMN email_verified boolean DEFAULT false"
         ))
     access = await _provision_0038_operator(admin_access)
     _set_runtime_manifest(monkeypatch, migration._OLD_MANIFEST)
@@ -286,7 +287,7 @@ async def test_0038_old_manifest_live_upgrade_denies_new_effects_until_renewed(
 
     async with db_session.get_engine().begin() as connection:
         await connection.execute(text(
-            "ALTER TABLE actor_identity_links DROP COLUMN email_observed_issued_at"
+            "ALTER TABLE actor_identity_links DROP COLUMN email_observed_issued_at, DROP COLUMN email_verified"
         ))
     # The retained 0039 control is unchanged; current runtime owners require
     # their complete schema before exercising new submissions and acceptance.
