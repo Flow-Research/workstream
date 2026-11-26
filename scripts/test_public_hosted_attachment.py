@@ -4,6 +4,7 @@ import copy
 import asyncio
 import hashlib
 import json
+import os
 from itertools import count as sequence
 from pathlib import Path
 import shutil
@@ -11,6 +12,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 import unittest
 from unittest.mock import AsyncMock, patch
 from types import SimpleNamespace
@@ -23,6 +25,100 @@ from experiments.pilot04_external_checker_runtime.public_hosted_attachment impor
     validate_container,
     HostedAttachment, manager_rules, deliver_duplicate,
 )
+
+
+class PublicJourneyWorkerCustody(unittest.TestCase):
+    def test_cleanup_child_alone_receives_a_private_distinct_principal(self):
+        from pydantic import SecretStr
+        from experiments.pilot04_external_checker_runtime import run_public_journey_probe as probe
+
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'cleanup.secret'
+            path.write_text('deletion-secret', encoding='ascii')
+            path.chmod(0o600)
+            original = {
+                'WORKSTREAM_ARTIFACT_S3_ACCESS_KEY_ID': 'upload-key',
+                'WORKSTREAM_ARTIFACT_S3_SECRET_ACCESS_KEY': 'upload-secret',
+                'WORKSTREAM_CLI_JOURNEY_CLEANUP_ACCESS_KEY_ID': 'cleanup-key',
+                'WORKSTREAM_CLI_JOURNEY_CLEANUP_SECRET_FILE': str(path),
+            }
+            settings = SimpleNamespace(artifact_s3_access_key_id=SecretStr('upload-key'),
+                submission_source_cleanup_profile={'maximum_candidates': 10,
+                    'run_seconds': 60, 'lease_seconds': 30, 'upload_principal': 'upload-key'})
+            child = probe._source_cleanup_environment(original, settings)
+            self.assertEqual(original['WORKSTREAM_ARTIFACT_S3_ACCESS_KEY_ID'], 'upload-key')
+            self.assertEqual(child['WORKSTREAM_ARTIFACT_S3_ACCESS_KEY_ID'], 'cleanup-key')
+            self.assertEqual(child['WORKSTREAM_ARTIFACT_S3_SECRET_ACCESS_KEY'], 'deletion-secret')
+            self.assertEqual(set(child) ^ set(original), set())
+            for change in (
+                {'WORKSTREAM_CLI_JOURNEY_CLEANUP_ACCESS_KEY_ID': 'upload-key'},
+                {'WORKSTREAM_CLI_JOURNEY_CLEANUP_SECRET_FILE': str(path.parent / 'missing')},
+            ):
+                with self.subTest(change=change), self.assertRaises(RuntimeError):
+                    probe._source_cleanup_environment(dict(original, **change), settings)
+            path.chmod(0o644)
+            with self.assertRaisesRegex(RuntimeError, 'private credential file'):
+                probe._source_cleanup_environment(original, settings)
+
+    def test_every_workload_starts_one_dedicated_queue_with_the_right_app(self):
+        from experiments.pilot04_external_checker_runtime import run_public_journey_probe as probe
+
+        expected = (
+            ('guide', 'workstream.project_setup'),
+            ('project-control', 'workstream.project_control'),
+            ('artifacts', 'workstream.artifacts'),
+            ('outbox-scan', 'workstream.outbox_scan'),
+            ('outbox', 'workstream.outbox'),
+            ('finalization', 'workstream.submission_finalization'),
+            ('source-cleanup', 'workstream.source_cleanup'),
+        )
+        self.assertEqual(probe.WORKER_ROLES, expected)
+        with patch.object(probe, '_process', return_value=object()) as launch:
+            for role, queue in expected:
+                with self.subTest(role=role):
+                    launch.reset_mock()
+                    probe._start_worker({}, Path('/owned'), role, queue)
+                    command = launch.call_args.args[0]
+                    self.assertEqual([part for part in command if part.startswith('--queues=')],
+                                     [f'--queues={queue}'])
+                    self.assertEqual(command[command.index('-A') + 1],
+                        'experiments.pilot04_external_checker_runtime.guide_worker'
+                        if role == 'guide' else 'app.workers.celery_app')
+                    self.assertIn('--pool=prefork', command)
+                    self.assertIn('--concurrency=1', command)
+                    self.assertIn(f'{role}-worker-1.log', str(launch.call_args.kwargs['log']))
+
+    def test_stopping_an_exited_leader_reaps_its_owned_child_group(self):
+        from experiments.pilot04_external_checker_runtime import run_public_journey_probe as probe
+
+        launcher = subprocess.Popen([
+            sys.executable, '-c',
+            "import subprocess,sys; child=subprocess.Popen([sys.executable,'-c',"
+            "'import time;time.sleep(60)'],stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,"
+            "stderr=subprocess.DEVNULL); print(child.pid,flush=True)",
+        ], stdout=subprocess.PIPE, text=True, start_new_session=True)
+        assert launcher.stdout is not None
+        child_pid = int(launcher.stdout.readline())
+        launcher.wait(timeout=5)
+        deadline = time.monotonic() + 2
+        while child_pid not in probe._live_group_members(launcher.pid) and time.monotonic() < deadline:
+            time.sleep(.01)
+        self.assertIn(child_pid, probe._live_group_members(launcher.pid))
+        try:
+            probe._stop_process(launcher)
+            self.assertFalse(probe._live_group_members(launcher.pid))
+        finally:
+            if probe._live_group_members(launcher.pid):
+                os.killpg(launcher.pid, 9)
+
+    def test_partial_startup_still_attempts_every_owned_group_cleanup(self):
+        from experiments.pilot04_external_checker_runtime import run_public_journey_probe as probe
+
+        owned = (object(), object(), object())
+        with patch.object(probe, '_stop_process', side_effect=[RuntimeError('first'), None, None]) as stop:
+            with self.assertRaisesRegex(RuntimeError, 'owned journey worker cleanup failed'):
+                probe._stop_owned_processes(owned)
+        self.assertEqual([call.args[0] for call in stop.call_args_list], list(owned))
 
 
 class HostedDuplicateEvents(unittest.TestCase):

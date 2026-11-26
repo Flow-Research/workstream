@@ -17,6 +17,7 @@ import json
 import os
 from pathlib import Path
 import signal
+import stat
 import subprocess
 import sys
 import tempfile
@@ -171,30 +172,58 @@ def _process(command: list[str], *, env: dict[str, str], log: Path) -> subproces
         )
 
 
-def _start_worker(env: dict[str, str], root: Path, generation: int) -> tuple[subprocess.Popen, str]:
-    """Start one owned prefork worker with a distinct broker identity and log."""
-    hostname = f"first-journey-{uuid4().hex}@localhost"
+WORKER_ROLES = (
+    ("guide", "workstream.project_setup"),
+    ("project-control", "workstream.project_control"),
+    ("artifacts", "workstream.artifacts"),
+    ("outbox-scan", "workstream.outbox_scan"),
+    ("outbox", "workstream.outbox"),
+    ("finalization", "workstream.submission_finalization"),
+    ("source-cleanup", "workstream.source_cleanup"),
+)
+
+
+def _start_worker(env: dict[str, str], root: Path, role: str, queue: str,
+                  generation: int = 1) -> tuple[subprocess.Popen, str]:
+    """Start one owned prefork worker for exactly one registered workload queue."""
+    hostname = f"first-journey-{role}-{uuid4().hex}@localhost"
+    celery_app = ("experiments.pilot04_external_checker_runtime.guide_worker"
+                  if role == "guide" else "app.workers.celery_app")
     process = _process([
-        sys.executable, "-m", "celery", "-A",
-        "experiments.pilot04_external_checker_runtime.guide_worker",
+        sys.executable, "-m", "celery", "-A", celery_app,
         "worker", "--pool=prefork", "--concurrency=1",
-        "--queues=celery,workstream.outbox", "--hostname", hostname,
+        f"--queues={queue}", "--hostname", hostname,
         "--without-gossip", "--without-mingle", "--without-heartbeat",
         "--loglevel=ERROR",
-    ], env=env, log=root / ("worker.log" if generation == 1 else f"worker-{generation}.log"))
+    ], env=env, log=root / f"{role}-worker-{generation}.log")
     return process, hostname
 
 
-def _start_finalization_worker(env: dict[str, str], root: Path):
-    """Use the production exclusive consumer; the general worker cannot consume T5."""
-    hostname = f"journey-finalization-{uuid4().hex}@localhost"
-    process = _process([
-        sys.executable, "-m", "celery", "-A", "app.workers.celery_app", "worker",
-        "--pool=prefork", "--concurrency=1", "--queues=workstream.submission_finalization",
-        "--hostname", hostname, "--without-gossip", "--without-mingle", "--without-heartbeat",
-        "--loglevel=ERROR",
-    ], env=env, log=root / "finalization-worker.log")
-    return process, hostname
+def _source_cleanup_environment(env: dict[str, str], settings) -> dict[str, str]:
+    """Give only the deletion worker its explicitly supplied separate principal."""
+    from app.modules.artifacts.api.submission_cleanup import SubmissionSourceCleanupProfile
+
+    profile = SubmissionSourceCleanupProfile.model_validate(
+        settings.submission_source_cleanup_profile
+    )
+    upload_key = settings.artifact_s3_access_key_id
+    _require(upload_key is not None
+             and profile.upload_principal == upload_key.get_secret_value(),
+             "source cleanup profile does not identify the upload principal")
+    cleanup_key = env.get("WORKSTREAM_CLI_JOURNEY_CLEANUP_ACCESS_KEY_ID")
+    _require(bool(cleanup_key) and cleanup_key != profile.upload_principal,
+             "source cleanup requires a distinct provider principal")
+    secret_name = env.get("WORKSTREAM_CLI_JOURNEY_CLEANUP_SECRET_FILE")
+    secret_file = Path(secret_name) if secret_name else None
+    _require(secret_file is not None and secret_file.is_absolute()
+             and not secret_file.is_symlink() and secret_file.is_file()
+             and stat.S_IMODE(secret_file.stat().st_mode) == 0o600
+             and 0 < secret_file.stat().st_size <= 4096,
+             "source cleanup requires a private credential file")
+    cleanup_env = dict(env)
+    cleanup_env["WORKSTREAM_ARTIFACT_S3_ACCESS_KEY_ID"] = cleanup_key
+    cleanup_env["WORKSTREAM_ARTIFACT_S3_SECRET_ACCESS_KEY"] = secret_file.read_text(encoding="ascii")
+    return cleanup_env
 
 
 def _require_source_runtime_window(settings):
@@ -220,15 +249,56 @@ def _require_parser_socket(settings):
     return path
 
 
+def _live_group_members(group_id: int) -> set[int]:
+    """Find live members of only this fixture's start_new_session group."""
+    members = set()
+    for entry in Path("/proc").iterdir():
+        if not entry.name.isdecimal():
+            continue
+        try:
+            fields = (entry / "stat").read_text().rsplit(") ", 1)[1].split()
+            if int(fields[2]) == group_id and fields[0] not in {"Z", "X"}:
+                members.add(int(entry.name))
+        except (IndexError, OSError, ValueError):
+            continue
+    return members
+
+
 def _stop_process(process: subprocess.Popen | None) -> None:
-    if process is None or process.poll() is not None:
+    """Reap a whole owned worker group even if its leader already exited."""
+    if process is None:
         return
-    os.killpg(process.pid, signal.SIGTERM)
-    try:
-        process.wait(timeout=10)
-    except subprocess.TimeoutExpired:
-        os.killpg(process.pid, signal.SIGKILL)
-        process.wait(timeout=5)
+    group_id = process.pid
+    if _live_group_members(group_id):
+        try:
+            os.killpg(group_id, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+    deadline = time.monotonic() + 10
+    while _live_group_members(group_id) and time.monotonic() < deadline:
+        time.sleep(0.1)
+    if _live_group_members(group_id):
+        try:
+            os.killpg(group_id, signal.SIGKILL)
+        except ProcessLookupError:
+            pass
+    deadline = time.monotonic() + 5
+    while _live_group_members(group_id) and time.monotonic() < deadline:
+        time.sleep(0.1)
+    _require(not _live_group_members(group_id), "owned worker retained live children")
+    process.wait(timeout=1)
+
+
+def _stop_owned_processes(processes: tuple[subprocess.Popen | None, ...]) -> None:
+    """Attempt every owned group even when one group fails to stop."""
+    failures = []
+    for process in processes:
+        try:
+            _stop_process(process)
+        except Exception as error:
+            failures.append(error)
+    if failures:
+        raise RuntimeError("owned journey worker cleanup failed") from failures[0]
 
 
 async def _wait_api(origin: str, process: subprocess.Popen) -> None:
@@ -1155,6 +1225,11 @@ async def run(database_url: str, image_reference: str, node_config: Path,
              and runtime_settings.submission_execution_profile is not None,
              "supply explicit remote TLS runner and source execution profile before qualification")
     source_profile = _require_source_runtime_window(runtime_settings)
+    _require(runtime_settings.submission_source_cleanup_profile is not None,
+             "supply explicit source cleanup profile for the dedicated worker")
+    cleanup_env = _source_cleanup_environment(env, runtime_settings)
+    env.pop("WORKSTREAM_CLI_JOURNEY_CLEANUP_ACCESS_KEY_ID", None)
+    env.pop("WORKSTREAM_CLI_JOURNEY_CLEANUP_SECRET_FILE", None)
     _require_parser_socket(runtime_settings)
     for field in (
         "artifact_store_backend", "artifact_s3_provider_profile", "artifact_s3_region",
@@ -1181,23 +1256,27 @@ async def run(database_url: str, image_reference: str, node_config: Path,
 
     engine = create_async_engine(database_url)
     factory = async_sessionmaker(engine, expire_on_commit=False)
-    api = worker = beat = finalization_worker = None
+    api = worker = beat = None
+    workers: list[subprocess.Popen] = []
     worker_generation = 0
 
     def stop_owned_worker() -> None:
         _require(worker is not None and worker.poll() is None,
-                 "prefork worker was not running before restart")
+                 "POST effect worker was not running before restart")
         _stop_process(worker)
-        _require(worker.poll() is not None, "old prefork worker did not exit")
+        _require(worker.poll() is not None, "old POST effect worker did not exit")
+        workers.remove(worker)
 
     async def start_owned_worker() -> None:
         nonlocal worker, worker_generation
         _require(worker is None or worker.poll() is not None,
-                 "prefork worker was not stopped before restart")
+                 "POST effect worker was not stopped before restart")
         previous_pid = worker.pid if worker is not None else None
         worker_generation += 1
-        worker, hostname = _start_worker(env, root, worker_generation)
-        _require(worker.pid != previous_pid, "restart reused the old worker process")
+        worker, hostname = _start_worker(env, root, "outbox", "workstream.outbox",
+                                         worker_generation)
+        workers.append(worker)
+        _require(worker.pid != previous_pid, "restart reused the old POST worker process")
         await _wait_worker(worker, hostname)
 
     try:
@@ -1225,9 +1304,15 @@ async def run(database_url: str, image_reference: str, node_config: Path,
             "--log-level", "error", "--no-access-log",
         ], env=env, log=root / "api.log")
         await _wait_api(origin, api)
-        await start_owned_worker()
-        finalization_worker, finalization_hostname = _start_finalization_worker(env, root)
-        await _wait_worker(finalization_worker, finalization_hostname)
+        for role, queue in WORKER_ROLES:
+            process, hostname = _start_worker(
+                cleanup_env if role == "source-cleanup" else env, root, role, queue
+            )
+            workers.append(process)
+            await _wait_worker(process, hostname)
+            if role == "outbox":
+                worker = process
+                worker_generation = 1
         scans_before_beat = await _scan_audit_count(factory)
         beat = _process([
             sys.executable, "-m", "celery", "-A", "app.workers.celery_app",
@@ -1255,15 +1340,16 @@ async def run(database_url: str, image_reference: str, node_config: Path,
                                     stop_worker=stop_owned_worker,
                                     start_worker=start_owned_worker, fault_root=fault_root,
                                     operator_token=_token(env, operator))
-        _require(api.poll() is None and worker.poll() is None and beat.poll() is None
-                 and finalization_worker.poll() is None,
-                 "API, prefork worker, or Beat exited during public journey")
+        _require(api.poll() is None and beat.poll() is None
+                 and all(process.poll() is None for process in workers),
+                 "API, dedicated prefork worker, or Beat exited during public journey")
         return {"tree_sha": subprocess.check_output(
             ["git", "rev-parse", "HEAD"], text=True, cwd=BACKEND
         ).strip(), "runtime": "smolvm/smol-microvm", "image_digest": image["platform_manifest_digest"],
                 "trusted_intake_image_digest": intake_health.image_digest,
                 "trusted_intake_config_digest": intake_health.config_digest,
-                "public_api": True, "prefork_worker": True, "prefork_finalization_worker": True, "maximum_parallel": 1,
+                "public_api": True, "prefork_worker": True, "prefork_finalization_worker": True,
+                "dedicated_worker_queues": [queue for _, queue in WORKER_ROLES], "maximum_parallel": 1,
                 "scheduled_artifact_scans": True,
                 "public_original_guide_setup": True,
                 "recorded_inference": True,
@@ -1271,13 +1357,18 @@ async def run(database_url: str, image_reference: str, node_config: Path,
                     'source_tree', 'config_sha256', 'service_sha256', 'smol_sha256', 'guest_sha256', 'wrapper_sha256')},
                 "runtime_trials": runtime_trials, "intake_trials": intake_trials, "human": true, "automatic": false}
     finally:
-        _stop_process(beat)
-        for schedule_file in root.glob("beat-schedule*"):
-            schedule_file.unlink()
-        _stop_process(finalization_worker)
-        _stop_process(worker)
-        _stop_process(api)
-        await engine.dispose()
+        cleanup_error = None
+        try:
+            _stop_owned_processes((beat, *reversed(workers), api))
+        except RuntimeError as error:
+            cleanup_error = error
+        try:
+            for schedule_file in root.glob("beat-schedule*"):
+                schedule_file.unlink()
+        finally:
+            await engine.dispose()
+        if cleanup_error is not None:
+            raise cleanup_error
 
 
 def main() -> int:

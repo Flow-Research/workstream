@@ -11083,3 +11083,28 @@ not a clean-head hosted run. Ruff, links, Commitrail and whitespace pass. Root
 inspected the scoped diff with no blocker; independent ARCH review and combined
 25-lane hosted completion remain pending. No schema test was executed or skipped
 locally for this partition change, and no other workstream/PR was touched.
+
+The existing native public journey launcher also needs this topology. Its
+former guide worker selected both `celery` and `workstream.outbox`, which the
+singleton guard now rejects. The launcher starts one owned prefork process
+for each of the seven exact workload queues, using recorded guide composition
+only for project setup and the production app for the other roles. Fault
+callbacks pause and restart only POST/outbox delivery; the scanner and T5
+finalizer remain live so accepted-source publication can continue. Every
+source-cleanup child receives the separately supplied private deletion
+credential and explicit bounded profile; the upload/API credential remains
+with the other workers. The profile must identify that upload principal, and
+the deletion key must differ. Every
+started process is registered before readiness is awaited, and final cleanup
+attempts every owned process group even after a prior stop failure. A real
+exited-leader/remaining-child regression checks that group cleanup does not
+leave a worker behind. Focused command tests pin the complete role/queue/app
+map. This is caller closure for a future combined native journey; no new
+native trial or deployed worker qualification is claimed by these tests.
+The affected hosted-attachment test module passed all 44 cases and 87 subtests;
+the focused four-case worker custody subset passed separately. Replacing the
+group stop in memory with the previous leader-only return made the real
+exited-leader child regression fail, and its `finally` removed that owned
+child. Ruff, whitespace and changed Markdown links passed. The two Python
+files predate this change with Ruff-format differences, so the edit did not
+claim a file-wide format pass.

@@ -136,7 +136,12 @@ traces and retained source/PRE facts supply the fault evidence. Supply the
 existing parser socket through `WORKSTREAM_GUIDE_DOCUMENT_PARSER_SOCKET`, the
 canonical remote TLS runner settings, and an explicit
 `WORKSTREAM_SUBMISSION_EXECUTION_PROFILE`; no parser or runner is provisioned
-by this launcher.
+by this launcher. The seven dedicated workers also require an explicit
+`WORKSTREAM_SUBMISSION_SOURCE_CLEANUP_PROFILE` whose `upload_principal` matches
+the isolated upload key, plus the existing journey fixture's distinct
+`WORKSTREAM_CLI_JOURNEY_CLEANUP_ACCESS_KEY_ID` and private mode-0600
+`WORKSTREAM_CLI_JOURNEY_CLEANUP_SECRET_FILE`. Only the cleanup child receives
+that separate credential.
 
 ```sh
 PYTHONPATH=.:tests:.. .venv/bin/python scripts/run_isolated_tests.py \
@@ -152,7 +157,7 @@ PYTHONPATH=.:tests:.. .venv/bin/python scripts/run_isolated_tests.py \
 
 Use a new metadata path, work directory and private broker for each run. The
 isolated runner owns database/role/bucket/prefix cleanup. The probe stops its API,
-worker and Beat; the host supervisor owns node configuration and restart. Remove
+seven dedicated workers and Beat; the host supervisor owns node configuration and restart. Remove
 only the drill's own infrastructure after verifying both cleanup receipts. Do
 not remove retained product evidence or use broad container/volume pruning.
 
