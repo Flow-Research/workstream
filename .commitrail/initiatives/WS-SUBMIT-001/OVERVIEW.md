@@ -4,6 +4,38 @@
 - Target: the complete [submission execution specification](../../../docs/spec_submission_execution.md).
 - Delivery: one PR, #708, with focused commits; no merge request before complete verification.
 
+## Current delivery scope — user decision, 2026-11-26
+
+The user explicitly defers scalability until the existing deployment works end
+to end, is reviewed/merged, and launch verification finishes. This instruction
+supersedes specification completion requirements for the deferred scope.
+A28 multi-API/multi-runner races, scale-out/restart qualification, a temporary
+second EC2 runner, and broad saturation/load campaigns are deferred, not passed.
+No additional AWS provisioning permission is required for current delivery.
+Retain existing dedicated queues and correctness/resource guards; do not remove
+working scale-out code merely because its deployment qualification is deferred.
+
+Current finish list, in execution order:
+
+- [x] Reconcile main cleanup and preserve required owners/tests in PR708.
+- [x] Prove the connected raw-ZIP PRE -> T5 -> POST -> same-assignment revision
+  -> acceptance journey through CLI/MCP with the separate runner.
+- [ ] Integrate/review the prepared preclaim-guide and pending-status assertions.
+- [ ] Finish essential native isolation, bounded failure and cleanup proof for
+  the existing runner; fix only observed defects needed for this deployment.
+- [ ] Stage the existing hosted API release, set its explicit operational
+  profiles, back up retained data, migrate and activate dedicated workers/MCP.
+- [ ] Prove the hosted contributor journey, actionable failure/retry feedback,
+  retained ZIP custody and actual S3 cleanup; verify supported upload bounds.
+- [ ] Run required final-head checks, resolve actual failures, and present PR708
+  for explicit merge approval. Merge and post-merge smoke require that approval.
+- [ ] Complete post-deployment/merge verification and hand over the release.
+
+Live email delivery remains separately dependent on the user's sender DNS/key
+setup. Keep notifications disabled until qualified. Live human review and a paid
+sandbox provider remain outside current implementation scope. Do not reopen
+completed proofs without a relevant change, failed check or uncovered requirement.
+
 ## Implemented on this branch
 
 Checked items describe implementation with focused proof. They do not mean the
@@ -124,8 +156,8 @@ journey. The remaining cleanup and verification requirements below still apply.
 | --- | --- | --- |
 | 1 | Reproduce the connected proof on the deployed API | The maintained paired journey at `73d81da66` passes real PRE/T5/POST, same-assignment correction, automatic acceptance, exact ZIP/Contribution export, rejection, replay and default review_pending with an isolated real identity provider, local API and separate AWS runner. The actual deployed API/consumers remain to activate and prove. |
 | 2 | Finish affected qualification callers | Preparation API/materialization and the admission-only TASK writer are removed. PR722 retires the experimental harness; the maintained native CLI/MCP journey passes; complete its remaining fault proof through the same owners using raw ZIP acceptance and dedicated finalization. Do not restore the old harness. |
-| 3 | Complete separate-runner integration and runtime/provider/resource qualification | Activate the prepared authenticated remote configuration on the app deployment; actual Smol one-session/isolation proof on runner infrastructure; representative maxima, cold paths, concurrency and timing measurements; applicable AWS exact-version/uncertain multipart proof. Portable/MinIO evidence is insufficient for these claims. |
-| 4 | Execute final full-system verification and close the acceptance matrix | Full backend lanes, CLI/MCP contracts and CI at the final head; every A01–A35 row linked to an executed, scope-matching result. Fix actual failures without weakening requirements. |
+| 3 | Complete separate-runner integration and runtime/provider/resource qualification | Activate the prepared authenticated remote configuration on the app deployment; actual Smol one-session/isolation proof on runner infrastructure; supported input bounds, bounded failure/cleanup and timing measurements on the existing runner; applicable AWS exact-version/uncertain multipart proof. Portable/MinIO evidence is insufficient for these claims. |
+| 4 | Execute final full-system verification and close the acceptance matrix | Full backend lanes, CLI/MCP contracts and CI at the final head; each current-scope acceptance row linked to an executed, scope-matching result, with user-deferred scalability explicitly excluded. Fix actual failures without weakening requirements. |
 | 5 | Reconcile configuration and delivery documentation | Resolve C01–C07 using measured/approved values; update affected roadmap/overview/index and local spreadsheet exports; preserve the distinction between implemented, exposed and deployed. |
 
 The historical connected public journey passed at 85ce76e17 (V14): 573 CLI invocations,
@@ -166,7 +198,8 @@ This is the final qualification queue, not a claim that all listed code is absen
 | A09–A13 | T5 rollback/redelivery, actual local SIGKILL recovery, accepted authority, pending reads and old-POST guard | Real Redis publication outage and Celery child-redelivery proofs passed; reconcile the remaining exact cases at the final head. |
 | A14–A18 | Cleanup lock/retention/charge owners, Local/MinIO tests and live AWS exact-version/lost-ack cleanup with retained-source survival | Production worker sweeps and exact acceptance-case reconciliation. |
 | A19–A23 | Streaming/framing, safe archives, semantic identity and findings tests; local A19 496 MiB slow-provider memory/backpressure drill | Full permitted maxima and safety matrix, native/deployment scope where required. |
-| A24–A30 | Source/result/fence contracts and runtime/capacity/substitution tests | Actual native isolation/failure/cleanup, multiple replicas/nodes, saturation and adapter qualification. |
+| A24–A27, A29–A30 | Source/result/fence contracts, dedicated queue and managed-style substitution tests | Essential native isolation/failure/cleanup and single-runner queue correctness remain; broad saturation/load qualification is user-deferred. |
+| A28 | Multi-replica/multi-runner implementation and focused tests | User-deferred until after existing deployment delivery; no second instance is required now. Not claimed passed. |
 | A31–A32 | V14 proves real POST automatic acceptance, exact Contribution/export and default review_pending; focused tests cover applicable awards/replay | Deployed release and final downstream tests. Keep default review_pending guards; live human review remains explicitly deferred by the user. |
 | A33–A35 | Retained migrations, cardinality guards and API/CLI/MCP cutover | Affected old writers are retired; finish current-head migration/client convergence and remaining qualification callers. |
 
@@ -183,5 +216,7 @@ submission work must not reinstate the retired activation subsystem.
 Request only concrete missing access or decisions after the corresponding drill
 and proposed values are prepared.
 
-The full goal includes D01–D18, I01–I12, T1–T5 and A01–A35. A partial green
-suite, fixture capture, review approval or a single commit does not complete it.
+The original specification includes D01–D18, I01–I12, T1–T5 and A01–A35.
+Apply the explicit user scope decision above when assessing current delivery;
+do not claim deferred scalability is complete. A partial green suite, fixture
+capture, review approval or a single commit does not complete current delivery.

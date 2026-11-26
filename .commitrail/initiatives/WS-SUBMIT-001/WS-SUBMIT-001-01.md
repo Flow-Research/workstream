@@ -12716,3 +12716,15 @@ and produced a canonical archive and image configuration. Private build receipt:
 `/tmp/workstream-pre-qualification-7e566ae2f/build-receipt.json`.
 This is build and focused-test evidence only: no runner configuration changed,
 and actual native deadline/isolation execution remains pending.
+
+
+### User delivery boundary: defer scalability
+
+On 2026-11-26 the user explicitly directed finishing the existing API and single
+runner end to end before scalability work, regardless of the original spec.
+A28 multiple API replicas/execution nodes and broad saturation campaigns are
+deferred, not passed. The temporary EC2 instance and its proposed IAM grant are
+not needed for current delivery and must not be provisioned/applied on this
+workstream now. Existing implemented correctness guards and dedicated queues
+remain. The overview carries the ordered remaining delivery checklist.
+No live deployment or infrastructure changed for this scope reconciliation.
