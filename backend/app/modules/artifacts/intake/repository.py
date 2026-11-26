@@ -61,7 +61,7 @@ class SubmissionIntakeRepository:
         if not isinstance(operation_id, UUID) or operation_id.version != 7:
             raise ValueError("intake operation requires a generated UUIDv7")
         snapshot = await self._tasks.claim(TaskSubmissionContextRequest(
-            metadata.task_id, metadata.assignment_id, actor_id, metadata.predecessor_submission_id,
+            metadata.task_id, metadata.assignment_id, actor_id, select_predecessor=True,
         ), operation_id)
         namespace = await self._session.get(ArtifactStorageNamespace, "primary")
         if namespace is None:
@@ -72,11 +72,17 @@ class SubmissionIntakeRepository:
             provider_profile=namespace.provider_profile,
         )
         context = json.loads(snapshot.context_json)
+        command_metadata = metadata.model_dump(mode="json")
+        command_metadata.update(
+            predecessor_submission_id=str(snapshot.predecessor_submission_id) if snapshot.predecessor_submission_id else None,
+            revision_preparation_id=str(snapshot.revision_preparation_id) if snapshot.revision_preparation_id else None,
+            revision_preparation_sha256=snapshot.revision_preparation_sha256,
+        )
         row = SubmissionIntakeOperation(
             id=str(operation_id), project_id=str(snapshot.project_id),
             task_id=str(metadata.task_id), assignment_id=str(metadata.assignment_id),
             actor_profile_id=str(actor_id), identity_link_id=str(identity_link_id),
-            idempotency_key=str(idempotency_key), command_metadata=metadata.model_dump(mode="json"),
+            idempotency_key=str(idempotency_key), command_metadata=command_metadata,
             metadata_sha256=metadata.metadata_sha256(), locked_task_context=context,
             locked_context_sha256=canonical_json_hash(context), eligible_task_status=snapshot.eligible_status,
             namespace_id=location.namespace_id, namespace_fingerprint=location.namespace_fingerprint,
@@ -272,12 +278,11 @@ class SubmissionIntakeRepository:
         """
         target = TaskRevisionExpiryTarget.model_validate(target)
         row = await self._lock(operation_id)
-        metadata = SubmissionIntakeMetadata.model_validate_json(json.dumps(row.command_metadata))
         if (row.state not in {"receiving", "pre_checking"}
                 or row.eligible_task_status != "needs_revision"
                 or (row.project_id, row.task_id, row.assignment_id, row.actor_profile_id) != (
                     str(target.project_id), str(target.task_id), str(target.assignment_id), str(target.contributor_id))
-                or metadata.predecessor_submission_id != target.source_submission_id):
+                or row.command_metadata["predecessor_submission_id"] != str(target.source_submission_id)):
             raise IntakeCustodyConflict("revision_intake_expiry_mismatch")
         await self._tasks.require_active(target.task_id, operation_id)
         now = await self._session.scalar(select(func.clock_timestamp()))
@@ -288,12 +293,11 @@ class SubmissionIntakeRepository:
         """End exact initial intake inside the authorized TASK invalidation root."""
         target = AssignmentInvalidationTarget.model_validate(target)
         row = await self._lock(operation_id)
-        metadata = SubmissionIntakeMetadata.model_validate_json(json.dumps(row.command_metadata))
         if (row.state not in {"receiving", "pre_checking"}
                 or row.eligible_task_status != "in_progress"
                 or (row.project_id, row.task_id, row.assignment_id, row.actor_profile_id) != (
                     str(target.project_id), str(target.task_id), str(target.assignment_id), str(target.contributor_id))
-                or metadata.predecessor_submission_id is not None):
+                or row.command_metadata["predecessor_submission_id"] is not None):
             raise IntakeCustodyConflict("assignment_intake_cancellation_mismatch")
         await self._tasks.require_active(target.task_id, operation_id)
         now = await self._session.scalar(select(func.clock_timestamp()))

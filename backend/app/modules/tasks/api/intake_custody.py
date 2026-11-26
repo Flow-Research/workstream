@@ -15,6 +15,9 @@ class IntakeTaskSnapshot:
     project_id: UUID
     eligible_status: str
     context_json: str
+    predecessor_submission_id: UUID | None
+    revision_preparation_id: UUID | None
+    revision_preparation_sha256: str | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -52,5 +55,5 @@ class IntakeTaskCustodyPort(Protocol):
         self, request: TaskSubmissionContextRequest, *, project_id: UUID,
         reader_id: UUID, management: bool, own_submitter: bool,
     ) -> IntakeTaskReadContext:
-        """After AUTH, read visibility and a candidate needing locked policy/ack checks."""
+        """After AUTH, read visibility and a candidate needing locked policy checks."""
         ...

@@ -105,10 +105,8 @@ class SubmissionOperationReadService:
         self._projects, self._events, self._deliveries = projects, events, deliveries
 
     async def read(self, task_id, selector, *, actor_id):
-        import json
         from sqlalchemy import text
         from app.modules.artifacts.api.submission_command import SubmissionOperationResponse
-        from app.modules.artifacts.api.submission_intake import SubmissionIntakeMetadata
         from app.modules.artifacts.intake.repository import SubmissionIntakeRepository
         from app.modules.authorization.api.submission_intake import IntakeAuthorityDenied, IntakeOperationReadFacts
         from app.modules.tasks.api.submission_context import TaskSubmissionContextRequest
@@ -130,13 +128,10 @@ class SubmissionOperationReadService:
             raise IntakeAuthorityDenied("submission intake is unavailable")
         access = await self._authority.authorize_operation_read(IntakeOperationReadFacts(
             UUID(row.id), UUID(row.project_id), task_id, UUID(row.actor_profile_id)))
-        metadata = SubmissionIntakeMetadata.model_validate_json(json.dumps(row.command_metadata))
-        if (metadata.task_id != task_id or metadata.assignment_id != UUID(row.assignment_id)
-                or metadata.metadata_sha256() != row.metadata_sha256):
-            raise IntakeCustodyConflict("submission_operation_metadata_inconsistent")
         current = await self._tasks.read_operation_context(
-            TaskSubmissionContextRequest(task_id, UUID(row.assignment_id), UUID(row.actor_profile_id),
-                                         metadata.predecessor_submission_id),
+            TaskSubmissionContextRequest(
+                task_id, UUID(row.assignment_id), UUID(row.actor_profile_id), select_predecessor=True,
+            ),
             project_id=UUID(row.project_id), reader_id=actor_id,
             management=access.management, own_submitter=access.own_submitter,
         )
@@ -178,7 +173,7 @@ class SubmissionOperationReadService:
                          "evaluation_running" if evaluation.live_worker_lease else "evaluation_pending")
         elif row.state in {"rejected", "failed", "abandoned", "cancelled"}:
             action = "inspect_governed_outcome"
-            if row.state != "cancelled" and await self._permits_new_intake(current.candidate, metadata):
+            if row.state != "cancelled" and await self._permits_new_intake(current.candidate):
                 action = "correct_and_submit_new_key" if row.state == "rejected" else "retry_new_key_after_terminal"
         code = row.failure_code
         if code is not None and code not in {
@@ -213,14 +208,14 @@ class SubmissionOperationReadService:
             raise IntakeCustodyConflict("submission_operation_pre_inconsistent")
         return public_pre_submission_results(terminal.execution)
 
-    async def _permits_new_intake(self, candidate, metadata):
+    async def _permits_new_intake(self, candidate):
         from dataclasses import asdict
         from app.modules.projects.api.locked_policy import (
             ProjectLockedPolicyContextRequest, ProjectLockedPolicyContextUnavailable,
         )
         from app.modules.projects.api.policy_lineage import RevisionPolicySemantics
         from app.modules.tasks.api.submission_context import (
-            TaskSubmissionContextUnavailable, require_revision_acknowledgement, require_revision_capacity,
+            TaskSubmissionContextUnavailable, require_revision_capacity,
         )
         if candidate is None:
             return False
@@ -233,7 +228,6 @@ class SubmissionOperationReadService:
                 require_revision_capacity(candidate, project_id=project.project_id,
                     policy_id=revision.policy_id, policy_generation=revision.generation, policy_hash=revision.policy_hash,
                     max_revision_rounds=RevisionPolicySemantics.model_validate_json(project.revision_policy.value).max_revision_rounds)
-            require_revision_acknowledgement(candidate, metadata.revision_preparation_id, metadata.revision_preparation_sha256)
         except (ProjectLockedPolicyContextUnavailable, TaskSubmissionContextUnavailable):
             return False
         return True

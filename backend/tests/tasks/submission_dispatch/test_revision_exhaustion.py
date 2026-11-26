@@ -162,9 +162,7 @@ async def _submit_initial_after_reclaim(h, client):
     assert claim.json()["task"]["status"] == "in_progress"
     h.data = revision_archive(h.data)
     headers = {"Content-Type": "application/zip", "X-Task-Assignment-Id": str(assignment),
-               "Idempotency-Key": str(new_record_id()),
-               "X-Submission-Summary": h.creation_request.summary,
-               "X-Contributor-Attestation": h.creation_request.contributor_attestation}
+               "Idempotency-Key": str(new_record_id())}
 
     async def submit_http(factory, context, command, metadata, data):
         async def submit(configured, received_metadata, chunks, **arguments):
@@ -183,8 +181,7 @@ async def _submit_initial_after_reclaim(h, client):
         h.factory, h.actor_context, h.store.wrapped, h.namespace, h.settings,
         SubmissionIntakeMetadata(
             task_id=h.request.task_id, assignment_id=assignment,
-            summary=h.creation_request.summary,
-            contributor_attestation=h.creation_request.contributor_attestation,
+            feedback=h.creation_request.summary,
         ),
         h.data, submit_source=submit_http,
     )

@@ -41,43 +41,30 @@ class _IntakeValue(BaseModel):
     )
 
 
-class SubmissionIntakeMetadata(_IntakeValue):
-    """Exact original command; actor/key namespace and locked policy are separate.
+MAXIMUM_SUBMISSION_FEEDBACK_BYTES = 4096
 
-    These selectors are validated structurally only. TASK still checks current
-    assignment, actual predecessor and the required revision acknowledgement.
-    Empty summary/attestation retain existing nonblocking warning semantics.
-    """
+
+class SubmissionIntakeMetadata(_IntakeValue):
+    """Caller inputs only. TASK selects predecessor and revision context."""
 
     task_id: UUID
     assignment_id: UUID
-    predecessor_submission_id: UUID | None = None
-    summary: str = Field(default="", max_length=64 * 1024)
-    contributor_attestation: str = Field(default="", max_length=64 * 1024)
-    revision_preparation_id: UUID | None = None
-    revision_preparation_sha256: Sha256 | None = None
+    feedback: str | None = Field(default=None, max_length=MAXIMUM_SUBMISSION_FEEDBACK_BYTES)
 
-    @field_validator("summary", "contributor_attestation")
+    @field_validator("feedback")
     @classmethod
-    def packet_text(cls, value: str) -> str:
-        """Reject unsupported header text rather than silently rewriting it."""
-        if value != value.strip() or any(not 32 <= ord(char) <= 126 for char in value):
-            raise ValueError("submission packet must be printable ASCII without edge whitespace")
+    def feedback_text(cls, value: str | None) -> str | None:
+        """Reject unsupported header text without modifying the supplied value."""
+        if value is not None and (
+            value != value.strip() or any(not 32 <= ord(char) <= 126 for char in value)
+        ):
+            raise ValueError("feedback must be printable ASCII without leading or trailing whitespace")
         return value
 
-    @model_validator(mode="after")
-    def revision_pair(self) -> Self:
-        """Require complete acknowledgement selectors and a revision predecessor."""
-        if (self.revision_preparation_id is None) != (self.revision_preparation_sha256 is None):
-            raise ValueError("revision acknowledgement requires both selectors")
-        if self.predecessor_submission_id is None and self.revision_preparation_id is not None:
-            raise ValueError("initial submission cannot acknowledge a revision")
-        return self
-
     def metadata_sha256(self) -> str:
-        """Hash exact metadata using one versioned, domain-separated schema."""
+        """Hash the caller's inputs independently of the server's selection."""
         return canonical_json_hash({
-            "schema_version": "workstream.submission_intake_metadata.v1",
+            "schema_version": "workstream.submission_intake_metadata.v2",
             **self.model_dump(mode="json"),
         })
 

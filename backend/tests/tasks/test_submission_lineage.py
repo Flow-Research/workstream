@@ -333,48 +333,31 @@ def _lineage_finalizer(h, settings, operation_id):
 
 
 async def _assert_t5_packet_refusals(h, finalizer, operation_id, claim, observation, monkeypatch):
-    from app.modules.artifacts.authorization import PreparedSubmissionFinalizationAuthorization
     from app.modules.tasks.submission_composition import TaskSubmissionCreationService
 
     before = await _t5_lineage_snapshot(h)
     create = TaskSubmissionCreationService.create_accepted
-    for field in ("admission_id", "summary", "contributor_attestation"):
-        reached = []
-        async def substitute_request(service, request, **kwargs):
-            reached.append(field)
-            value = new_record_id() if field == "admission_id" else getattr(request, field) + " Changed."
-            return await create(service, replace(request, **{field: value}), **kwargs)
-        with monkeypatch.context() as patch:
-            patch.setattr(TaskSubmissionCreationService, "create_accepted", substitute_request)
-            with pytest.raises(SubmissionAdmissionConsumptionError) as denied:
-                await finalizer._finalize(operation_id, claim, observation)
-        assert denied.value.code == "submission_bundle_admission_unavailable"
-        assert reached == [field]
-        assert await _t5_lineage_snapshot(h) == before
+    async def substitute_admission(service, request, **kwargs):
+        return await create(service, replace(request, admission_id=new_record_id()), **kwargs)
 
-    consume = PreparedSubmissionFinalizationAuthorization.consume
-    for column in ("summary", "worker_attestation"):
-        reached = []
-        async def substitute_packet(authority, *, prepared_authorization, facts):
-            decision = await consume(authority, prepared_authorization=prepared_authorization, facts=facts)
-            assert facts.phase == "commit"
-            changed = await authority._session.scalar(text(
-                f"UPDATE public.submissions SET {column}={column} || ' Changed.' "
-                "WHERE id=:id RETURNING id"), {"id": facts.submission_id})
-            assert str(changed) == str(facts.submission_id)
-            reached.append(column)
-            await authority._session.execute(text("SET CONSTRAINTS submission_packet_custody IMMEDIATE"))
-            return decision
-        with monkeypatch.context() as patch:
-            patch.setattr(PreparedSubmissionFinalizationAuthorization, "consume", substitute_packet)
-            with pytest.raises(IntegrityError, match="submission packet differs from checked evidence") as denied:
-                await finalizer._finalize(operation_id, claim, observation)
-        assert denied.value.orig.sqlstate == "23514"
-        assert reached == [column]
-        assert await _t5_lineage_snapshot(h) == before
+    with monkeypatch.context() as patch:
+        patch.setattr(TaskSubmissionCreationService, "create_accepted", substitute_admission)
+        with pytest.raises(SubmissionAdmissionConsumptionError) as denied:
+            await finalizer._finalize(operation_id, claim, observation)
+    assert denied.value.code == "submission_bundle_admission_unavailable"
+    assert await _t5_lineage_snapshot(h) == before
+
+    async def substitute_feedback(service, request, **kwargs):
+        return await create(service, replace(request, feedback=request.feedback + " Changed."), **kwargs)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(TaskSubmissionCreationService, "create_accepted", substitute_feedback)
+        with pytest.raises(IntegrityError, match="submission feedback differs from the accepted command"):
+            await finalizer._finalize(operation_id, claim, observation)
+    assert await _t5_lineage_snapshot(h) == before
 
 
-async def test_public_zip_and_t5_copy_exact_assignment_and_checked_packet(
+async def test_public_zip_and_t5_copy_exact_assignment_and_feedback(
     isolated_database_env, tmp_path, monkeypatch,
 ):
     from app.modules.artifacts.intake.models import SubmissionIntakeOperation
@@ -383,14 +366,10 @@ async def test_public_zip_and_t5_copy_exact_assignment_and_checked_packet(
     from tests.tasks.test_public_submission_intake import _client
 
     async with _submission_task(isolated_database_env, tmp_path) as h:
-        h.creation = SimpleNamespace(
-            summary=r'Completed the "required" project work in folder \results with evidence.',
-            contributor_attestation="I confirm no confidential client data, credentials, or copied source material "
-                "is included in this submission; rights_confirmed. " + " ".join(h.policy["attestation_terms"]))
+        h.creation = SimpleNamespace(feedback=r'Completed the "required" project work in folder \results with evidence.')
         headers = {
             "Content-Type": "application/zip", "Idempotency-Key": str(new_record_id()),
-            "X-Task-Assignment-Id": str(h.assignment_id), "X-Submission-Summary": h.creation.summary,
-            "X-Contributor-Attestation": h.creation.contributor_attestation,
+            "X-Task-Assignment-Id": str(h.assignment_id), "X-Submission-Feedback": h.creation.feedback,
         }
         async with _client(h, monkeypatch, isolated_database_env) as client:
             _, settings, errors, calls = await configure_source_http(
@@ -401,12 +380,13 @@ async def test_public_zip_and_t5_copy_exact_assignment_and_checked_packet(
             assert len(calls) == 1 and errors == [], errors
             operation_id = UUID(accepted.json()["operation_id"])
             before = await _t5_lineage_snapshot(h)
-            for name in ("X-Submission-Summary", "X-Contributor-Attestation"):
-                changed = await client.post(route, headers=headers | {name: headers[name] + " Changed."},
-                                            content=h.archive_bytes)
-                assert changed.status_code == 409, changed.text
-                assert changed.json()["error"]["code"] == "submission_idempotency_conflict"
-                assert await _t5_lineage_snapshot(h) == before
+            changed = await client.post(
+                route, headers=headers | {"X-Submission-Feedback": h.creation.feedback + " Changed."},
+                content=h.archive_bytes,
+            )
+            assert changed.status_code == 409, changed.text
+            assert changed.json()["error"]["code"] == "submission_idempotency_conflict"
+            assert await _t5_lineage_snapshot(h) == before
         async with h.factory() as session:
             assert await session.scalar(select(func.count()).select_from(Submission)) == 0
         finalizer = _lineage_finalizer(h, settings, operation_id)
@@ -471,8 +451,8 @@ async def _assert_bound_packet_immutable(h, created):
                 await session.execute(text(statement), {"id": admission_id, "foreign": new_record_id()})
     async with factory() as session:
         retained = await session.get(Submission, str(created.submission_id))
-        assert retained.summary == creation.summary
-        assert retained.worker_attestation == creation.contributor_attestation
+        assert retained.feedback == creation.feedback
+        assert retained.summary is retained.worker_attestation is None
         assert retained.submission_bundle_admission_id == str(admission_id)
         assert retained.artifact_binding_id == str(created.artifact_binding_id)
         assert retained.artifact_content_id == str(created.artifact_content_id)

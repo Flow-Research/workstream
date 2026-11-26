@@ -67,11 +67,7 @@ async def test_exact_consumed_preparation_and_source_are_read_without_mutation(
             SubmissionIntakeMetadata(
                 task_id=h.request.task_id,
                 assignment_id=h.request.assignment_id,
-                predecessor_submission_id=h.created.submission_id,
-                revision_preparation_id=h.revision_preparation_id,
-                revision_preparation_sha256=h.revision_preparation_sha256,
-                summary=h.creation_request.summary,
-                contributor_attestation=h.creation_request.contributor_attestation,
+                feedback=h.creation_request.summary,
             ),
             revision_archive(h.data),
         )

@@ -751,8 +751,7 @@ def derive_selected_pre_submit_input(
         "archive_sha256": source.raw_sha256, "archive_byte_count": source.raw_byte_count,
         "semantic_manifest_sha256": manifest_sha256,
         "manifest": [asdict(entry) for entry in value.entries],
-        "packet": {"summary": value.packet.summary,
-                   "contributor_attestation": value.packet.contributor_attestation},
+        "packet": value.packet.canonical_body(),
     }
     request = make_external_checker_execution_request(
         registry=selected.registry, identity=identity, configuration=selected.configuration,

@@ -163,9 +163,7 @@ async def test_retained_cap_recovery_releases_once_and_preserves_exact_routing_r
             await _assert_upgraded_incompatible_revision_blocked(
                 h, tmp_path, isolated_database_env, monkeypatch,
                 headers={"Content-Type": "application/zip", "Idempotency-Key": str(new_record_id()),
-                    "X-Task-Assignment-Id": str(assignment),
-                    "X-Submission-Summary": h.creation_request.summary,
-                    "X-Contributor-Attestation": h.creation_request.contributor_attestation})
+                    "X-Task-Assignment-Id": str(assignment)})
             async with h.factory() as session:
                 assert await session.scalar(text(
                     "SELECT public.task_revision_exhaustion_complete(:id)"

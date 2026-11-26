@@ -77,58 +77,43 @@ def source(**updates):
     })
 
 
-def test_metadata_canonical_fixture_and_round_trip_preserve_exact_packet():
-    value = metadata(summary="A  B", contributor_attestation="I did this.")
-    # Independent literal fixture fixes field names, nulls and domain separation.
+def test_metadata_canonical_fixture_and_round_trip_preserve_exact_feedback():
+    value = metadata(feedback="A  B")
     canonical = (
         '{"assignment_id":"019a0000-0000-7000-8000-000000000004",'
-        '"contributor_attestation":"I did this.","predecessor_submission_id":null,'
-        '"revision_preparation_id":null,"revision_preparation_sha256":null,'
-        '"schema_version":"workstream.submission_intake_metadata.v1",'
-        '"summary":"A  B","task_id":"019a0000-0000-7000-8000-000000000003"}'
+        '"feedback":"A  B","schema_version":"workstream.submission_intake_metadata.v2",'
+        '"task_id":"019a0000-0000-7000-8000-000000000003"}'
     )
     assert value.metadata_sha256() == "sha256:" + hashlib.sha256(canonical.encode()).hexdigest()
-    restored = SubmissionIntakeMetadata.model_validate_json(value.model_dump_json())
-    assert restored == value
-    assert restored.summary == "A  B"
-    assert metadata().summary == metadata().contributor_attestation == ""
-    assert metadata(summary="x" * 65536).summary == "x" * 65536
+    assert SubmissionIntakeMetadata.model_validate_json(value.model_dump_json()) == value
+    assert value.feedback == "A  B"
+    assert metadata().feedback is None
+    assert metadata(feedback="x" * 4096).feedback == "x" * 4096
 
 
-@pytest.mark.parametrize("field", ["task_id", "assignment_id", "predecessor_submission_id",
-                                  "summary", "contributor_attestation",
-                                  "revision_preparation_id", "revision_preparation_sha256"])
-def test_every_metadata_selector_participates_in_replay_identity(field):
-    original = metadata(predecessor_submission_id=PREDECESSOR,
-                        revision_preparation_id=REVISION, revision_preparation_sha256=SHA)
-    replacement = (
-        uuid4() if field.endswith("_id") else
-        "sha256:" + "b" * 64 if field.endswith("_sha256") else "changed"
-    )
+@pytest.mark.parametrize("field,replacement", [
+    ("task_id", uuid4()), ("assignment_id", uuid4()), ("feedback", ""), ("feedback", "changed"),
+])
+def test_every_metadata_selector_participates_in_replay_identity(field, replacement):
+    original = metadata()
     changed = SubmissionIntakeMetadata.model_validate({**original.model_dump(), field: replacement})
     assert changed.metadata_sha256() != original.metadata_sha256()
 
 
-@pytest.mark.parametrize("text", [" leading", "trailing ", "line\nbreak", "tab\tvalue",
-                                  "café", "\x7f", "x" * 65537])
-@pytest.mark.parametrize("field", ["summary", "contributor_attestation"])
-def test_packet_rejects_unrepresentable_headers_without_normalization(field, text):
+@pytest.mark.parametrize("value", [" leading", "trailing ", "line\nbreak", "tab\tvalue",
+                                  "café", "\x7f", "x" * 4097])
+def test_feedback_rejects_unrepresentable_headers_without_normalization(value):
     with pytest.raises(ValidationError):
-        metadata(**{field: text})
+        metadata(feedback=value)
 
 
-@pytest.mark.parametrize("updates", [
-    {"revision_preparation_id": REVISION},
-    {"revision_preparation_sha256": SHA},
-    {"revision_preparation_id": REVISION, "revision_preparation_sha256": SHA},
-    {"predecessor_submission_id": PREDECESSOR, "revision_preparation_id": REVISION},
-    {"predecessor_submission_id": PREDECESSOR, "revision_preparation_sha256": SHA},
+@pytest.mark.parametrize("removed_input,value", [
+    ("predecessor_submission_id", PREDECESSOR), ("revision_preparation_id", REVISION),
+    ("revision_preparation_sha256", SHA), ("summary", "text"), ("contributor_attestation", "text"),
 ])
-def test_revision_acknowledgement_cannot_be_partial_or_initial(updates):
-    with pytest.raises(ValidationError):
-        metadata(**updates)
-    # Whether a revision requires acknowledgement is still a TASK policy check.
-    assert metadata(predecessor_submission_id=PREDECESSOR).revision_preparation_id is None
+def test_submit_metadata_rejects_retired_inputs(removed_input, value):
+    with pytest.raises(ValidationError, match="extra_forbidden"):
+        metadata(**{removed_input: value})
 
 
 def test_source_address_is_operation_bound_and_opaque_generation_round_trips():
@@ -197,7 +182,7 @@ def test_frozen_values_revalidate_nested_instances_and_reject_unknown_command_fi
         metadata(bearer_token="secret")
     with pytest.raises(ValidationError):
         SubmissionIntakeMetadata.model_validate_json(json.dumps({
-            "task_id": str(TASK), "assignment_id": str(ASSIGNMENT), "summary": 1,
+            "task_id": str(TASK), "assignment_id": str(ASSIGNMENT), "feedback": 1,
         }))
 
 

@@ -339,8 +339,7 @@ async def test_public_a19_near_limit_upload_stays_bounded(admission_intake, tmp_
             headers = {
                 "Host": "workstream.example.test", "Authorization": "Bearer a19-measurement-token",
                 "Content-Type": "application/zip", "X-Task-Assignment-Id": str(fixture.assignment),
-                "X-Submission-Summary": "Measured bounded source upload",
-                "X-Contributor-Attestation": "I completed the measured work",
+                "X-Submission-Feedback": "Measured bounded source upload",
                 "Idempotency-Key": str(new_record_id()),
             }
             request = asyncio.create_task(client.post(

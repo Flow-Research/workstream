@@ -40,16 +40,15 @@ from app.modules.checkers.api.selected_pre_submit import (
     SelectedPreSubmitLeaseFacts,
     SelectedPreSubmitReservationFacts,
 )
-from app.modules.tasks.api.submission_context import require_revision_acknowledgement
-from app.modules.tasks.api import TaskSubmissionContextUnavailable
+from app.modules.checkers.api.pre_submit_material import SubmissionPacketView
 from tests.checkers.external.support import SHA, registry_entry
 
 def _hex_sha(character: str) -> str:
     return "sha256:" + character * 64
 
 
-def test_revision_acknowledgement_changes_selected_request_and_retains_old_bytes() -> None:
-    """A new acknowledgement is frozen; old selected requests keep their digest."""
+def test_selected_revision_context_changes_request_and_retains_old_bytes() -> None:
+    """A selected revision context is frozen; old selected requests keep their digest."""
     from tests.checkers.external.test_selected_pre_submit_coordination import _source_reservation
     from app.modules.checkers.api.default_checker import WorkstreamDefaultPredecessor
 
@@ -111,38 +110,6 @@ def test_revision_acknowledgement_changes_selected_request_and_retains_old_bytes
     with pytest.raises(ValueError, match="selected PRE admission lineage is invalid"):
         replace(retained.admission_lineage, revision_preparation_id=preparation_id,
                 revision_preparation_sha256=_hex_sha("b"))
-
-
-def test_revision_acknowledgement_requires_exact_current_preparation() -> None:
-    """The explicit pair is required for revisions and forbidden on initial intake."""
-    predecessor_id, manifest_id, preparation_id = (
-        new_record_id(), new_record_id(), new_record_id()
-    )
-    revision = SimpleNamespace(
-        preparation_id=preparation_id,
-        preparation_sha256=_hex_sha("c"),
-        source_submission_id=predecessor_id,
-        source_routing_manifest_id=manifest_id,
-    )
-    task = SimpleNamespace(
-        predecessor=SimpleNamespace(submission_id=predecessor_id),
-        checker_remediation_manifest_id=manifest_id,
-        revision_context=revision,
-    )
-    require_revision_acknowledgement(task, str(preparation_id), _hex_sha("c"))
-    for acknowledged_id, acknowledged_hash, code in (
-        (str(new_record_id()), _hex_sha("c"), "revision_context_changed"),
-        (None, None, "revision_acknowledgement_required"),
-        (str(preparation_id), _hex_sha("d"), "revision_context_changed"),
-    ):
-        with pytest.raises(TaskSubmissionContextUnavailable) as refused:
-            require_revision_acknowledgement(task, acknowledged_id, acknowledged_hash)
-        assert refused.value.code == code
-    with pytest.raises(TaskSubmissionContextUnavailable) as refused:
-        require_revision_acknowledgement(
-            SimpleNamespace(predecessor=None), str(preparation_id), _hex_sha("c")
-        )
-    assert refused.value.code == "revision_acknowledgement_invalid"
 
 
 def _retained_admission_reservation():
@@ -483,14 +450,8 @@ async def test_selected_admission_binds_unchanged_work_to_current_task_rules() -
     )
     project = SimpleNamespace(**vars(references), guide_id=lineage.guide_id,
         external_checker_policies=SimpleNamespace(value=policies.model_dump_json()))
-    packet = original.default_context.packet
-    metadata = SubmissionIntakeMetadata(
-        task_id=task.task_id, assignment_id=task.assignment_id,
-        predecessor_submission_id=predecessor.submission_id,
-        summary=packet.summary, contributor_attestation=packet.contributor_attestation,
-        revision_preparation_id=task.revision_context.preparation_id,
-        revision_preparation_sha256=task.revision_context.preparation_sha256,
-    )
+    packet = SubmissionPacketView()
+    metadata = SubmissionIntakeMetadata(task_id=task.task_id, assignment_id=task.assignment_id)
     source = _source_guard(original).lock_pre_source.return_value.model_copy(update={
         "metadata_sha256": metadata.metadata_sha256(),
     })

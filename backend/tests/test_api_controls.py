@@ -925,19 +925,17 @@ def _raw_submission_request(extra=(), *, omit=()):
     )
 
 
-def test_raw_submission_headers_preserve_packet_without_consuming_body():
+def test_raw_submission_headers_preserve_feedback_without_consuming_body():
     from uuid import UUID
     from app.api.submission_intake import submission_intake_headers
 
     task = UUID("019a0000-0000-7000-8000-000000000003")
     parsed = submission_intake_headers(_raw_submission_request([
-        (b"x-submission-summary", b"Exact  spacing"),
-        (b"x-contributor-attestation", b"x" * 65536),
+        (b"x-submission-feedback", b"Exact  spacing"),
         (b"transfer-encoding", b"chunked"),
     ]), task)
     assert parsed.metadata.task_id == task
-    assert parsed.metadata.summary == "Exact  spacing"
-    assert parsed.metadata.contributor_attestation == "x" * 65536
+    assert parsed.metadata.feedback == "Exact  spacing"
     assert parsed.declared_raw_bytes is None
 
 
@@ -949,9 +947,7 @@ def test_raw_submission_rejects_every_duplicate_packet_or_framing_header():
     # Deliberately independent of the parser's list: additions cannot silently
     # remove a required ambiguity check from this contract proof.
     names = (
-        b"idempotency-key", b"x-task-assignment-id", b"x-submission-summary",
-        b"x-contributor-attestation", b"x-predecessor-submission-id",
-        b"x-revision-preparation-id", b"x-revision-preparation-sha256",
+        b"idempotency-key", b"x-task-assignment-id", b"x-submission-feedback",
         b"content-type", b"content-encoding", b"content-length", b"transfer-encoding",
     )
     for name in names:
@@ -961,23 +957,16 @@ def test_raw_submission_rejects_every_duplicate_packet_or_framing_header():
         assert (caught.value.status_code, caught.value.error_code) == (422, "submission_packet_invalid")
 
 
-def test_raw_submission_headers_preserve_revision_and_declared_limit():
+def test_raw_submission_headers_preserve_declared_limit_without_optional_feedback():
     from app.api.submission_intake import submission_intake_headers
     from app.modules.artifacts.api.submission_archive import MAXIMUM_SUBMISSION_ZIP_BYTES
 
-    predecessor, revision = uuid4(), uuid4()
     parsed = submission_intake_headers(_raw_submission_request([
         (b"content-length", str(MAXIMUM_SUBMISSION_ZIP_BYTES).encode()),
         (b"content-encoding", b"identity"),
-        (b"x-predecessor-submission-id", str(predecessor).encode()),
-        (b"x-revision-preparation-id", str(revision).encode()),
-        (b"x-revision-preparation-sha256", b"sha256:" + b"a" * 64),
     ]), uuid4())
     assert parsed.declared_raw_bytes == MAXIMUM_SUBMISSION_ZIP_BYTES
-    assert parsed.metadata.predecessor_submission_id == predecessor
-    assert parsed.metadata.revision_preparation_id == revision
-    assert parsed.metadata.revision_preparation_sha256 == "sha256:" + "a" * 64
-    assert parsed.metadata.summary == parsed.metadata.contributor_attestation == ""
+    assert parsed.metadata.feedback is None
 
 
 @pytest.mark.parametrize("extra,omit,status,code", [
@@ -990,10 +979,9 @@ def test_raw_submission_headers_preserve_revision_and_declared_limit():
     ([(b"content-length", b"+12")], [], 422, "submission_packet_invalid"),
     ([(b"content-length", b"0")], [], 422, "submission_packet_invalid"),
     ([(b"content-length", b"524288001")], [], 413, "submission_archive_limit_exceeded"),
-    ([(b"x-submission-summary", b" trimmed ")], [], 422, "submission_packet_invalid"),
-    ([(b"x-contributor-attestation", b"\xff")], [], 422, "submission_packet_invalid"),
-    ([(b"x-submission-summary", b"x" * 65537)], [], 422, "submission_packet_invalid"),
-    ([(b"x-revision-preparation-sha256", b"sha256:" + b"a" * 64)], [], 422, "submission_packet_invalid"),
+    ([(b"x-submission-feedback", b" trimmed ")], [], 422, "submission_packet_invalid"),
+    ([(b"x-submission-feedback", b"\xff")], [], 422, "submission_packet_invalid"),
+    ([(b"x-submission-feedback", b"x" * 4097)], [], 422, "submission_packet_invalid"),
 ])
 def test_raw_submission_invalid_headers_refuse_before_body(extra, omit, status, code):
     from uuid import UUID
@@ -1010,11 +998,7 @@ def _casefold_packet_headers():
         (b'content-type', b'application/zip'),
         (b'idempotency-key', b'019a0000-0000-7000-8000-000000000001'),
         (b'x-task-assignment-id', b'019a0000-0000-7000-8000-000000000002'),
-        (b'x-submission-summary', b'Exact  text'),
-        (b'x-contributor-attestation', b'My work'),
-        (b'x-predecessor-submission-id', b'019a0000-0000-7000-8000-000000000003'),
-        (b'x-revision-preparation-id', b'019a0000-0000-7000-8000-000000000004'),
-        (b'x-revision-preparation-sha256', b'sha256:' + b'a' * 64),
+        (b'x-submission-feedback', b'Exact  text'),
         (b'content-encoding', b'identity'),
         (b'content-length', b'1'),
     ]
@@ -1054,8 +1038,8 @@ async def test_submission_route_refuses_ambiguous_packet_before_body_or_command(
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
         response = await client.post(f"/api/v1/tasks/{uuid4()}/submissions", content=body(), headers=[
             ("Content-Type", "application/zip"), ("Idempotency-Key", str(uuid4())),
-            ("X-Task-Assignment-Id", str(uuid4())), ("X-Submission-Summary", "one"),
-            ("x-submission-summary", "two"),
+            ("X-Task-Assignment-Id", str(uuid4())), ("X-Submission-Feedback", "one"),
+            ("x-submission-feedback", "two"),
         ])
     assert response.status_code == 422, response.text
     assert response.json()["error"]["code"] == "submission_packet_invalid"
@@ -1070,9 +1054,8 @@ def _casefold_request(headers):
 
 @pytest.mark.parametrize('header', [
     b'content-type', b'idempotency-key', b'x-task-assignment-id',
-    b'x-submission-summary', b'x-contributor-attestation',
-    b'x-predecessor-submission-id', b'x-revision-preparation-id',
-    b'x-revision-preparation-sha256', b'content-encoding', b'content-length',
+    b'x-submission-feedback',
+    b'content-encoding', b'content-length',
     b'transfer-encoding',
 ])
 def test_raw_submission_mixed_case_duplicates_reject_valid_packet(header):
@@ -1086,7 +1069,7 @@ def test_raw_submission_mixed_case_duplicates_reject_valid_packet(header):
     task = UUID(int=3)
     # Valid control prevents an unrelated packet/framing error from satisfying
     # the duplicate refusal assertion.
-    assert submission_intake_headers(_casefold_request(headers), task).metadata.summary == 'Exact  text'
+    assert submission_intake_headers(_casefold_request(headers), task).metadata.feedback == 'Exact  text'
     value = next(value for name, value in headers if name == header)
     with pytest.raises(StructuredHTTPException) as caught:
         submission_intake_headers(_casefold_request(headers + [(header.upper(), value)]), task)

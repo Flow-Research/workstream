@@ -303,7 +303,6 @@ async def test_replacement_without_routed_cause_denied_before_bytes(
             headers = {
                 'Content-Type': 'application/zip', 'Idempotency-Key': str(new_record_id()),
                 'X-Task-Assignment-Id': str(h.request.assignment_id),
-                'X-Predecessor-Submission-Id': str(h.created.submission_id),
             }
             async with h.factory() as session:
                 before_operations = await session.scalar(text('SELECT count(*) FROM submission_intake_operations'))
@@ -390,11 +389,11 @@ async def test_blocked_replacement_precheck_preserves_revision_state(
             route = f"/api/v1/tasks/{h.request.task_id}/submissions"
             _, errors, calls = await _revision_http_runtime(
                 h, client, tmp_path, monkeypatch, data, outcome="rejected")
-            headers = _revision_upload_headers(h) | {'X-Contributor-Attestation': ''}
+            headers = _revision_upload_headers(h)
             response = await client.post(route, headers=headers, content=data)
             results = await assert_public_revision_rejection(
                 h, response, UUID(headers['Idempotency-Key']), data, before, 'high_confidence_secret_detected')
-            assert [r['warning_code'] for r in results if r['status'] == 'warning'] == ['submission_attestation_missing']
+            assert [r['warning_code'] for r in results if r['status'] == 'warning'] == []
             assert len(calls) == 1 and not errors, errors
             assert provider_writes == []
             assert await _replacement_history(h, source_id, h.created.submission_id) == retained
@@ -804,10 +803,10 @@ async def test_foreign_predecessor_stops_at_task_context_before_art_effects(
                     guard.setattr(ForegroundSourceUpload, "receive", forbidden_upload)
                     refused = await client.post(
                         f"/api/v1/tasks/{local.request.task_id}/submissions",
-                        headers=headers | {"X-Predecessor-Submission-Id": str(foreign.created.submission_id)},
+                        headers=headers | {"X-Task-Assignment-Id": str(foreign.request.assignment_id)},
                         content=_forbidden_bytes())
-                assert refused.status_code == 409, refused.text
-                assert refused.json()["error"]["code"] == "task_submission_predecessor_changed"
+                assert refused.status_code == 404, refused.text
+                assert refused.json()["error"]["code"] == "submission_unavailable"
                 assert await _snapshot(local) == baseline and writes == [] and calls == []
                 async with local.factory() as session:
                     assert await session.scalar(text("SELECT count(*) FROM public.submission_intake_operations")) == intake_before
@@ -886,7 +885,6 @@ async def test_nonremediation_outcome_cannot_authorize_replacement_before_bytes(
                 headers={
                     "Content-Type": "application/zip", "Idempotency-Key": str(new_record_id()),
                     "X-Task-Assignment-Id": str(h.request.assignment_id),
-                    "X-Predecessor-Submission-Id": str(h.created.submission_id),
                 }, content=_forbidden_bytes())
             assert refused.status_code == 404, refused.text
             assert refused.json()["error"]["code"] == "submission_unavailable"

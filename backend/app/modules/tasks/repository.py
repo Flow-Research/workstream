@@ -722,7 +722,7 @@ class TaskRepository:
         """Lock TASK rows and select one owner-qualified remediation source.
 
         Args:
-            request: Exact task, assignment, contributor, and predecessor selectors.
+            request: Exact task, assignment and contributor. Internal callers may verify a retained predecessor.
 
         Returns:
             Provisional TASK facts and selected immutable routing source. The
@@ -779,7 +779,7 @@ class TaskRepository:
             if request.predecessor_submission_id is not None
             else None
         )
-        if latest_id != requested_predecessor_id:
+        if not request.select_predecessor and latest_id != requested_predecessor_id:
             raise TaskSubmissionContextUnavailable("task_submission_predecessor_changed")
         if (
             (task.status == "in_progress" and latest_assignment_submission is not None)

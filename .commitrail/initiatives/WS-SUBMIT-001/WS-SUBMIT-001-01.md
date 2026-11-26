@@ -11108,3 +11108,31 @@ exited-leader child regression fail, and its `finally` removed that owned
 child. Ruff, whitespace and changed Markdown links passed. The two Python
 files predate this change with Ruff-format differences, so the edit did not
 claim a file-wide format pass.
+## Submitter journey reconciliation
+
+The public ZIP command takes task, assignment, file and caller idempotency key,
+with optional exact project feedback. TASK chooses and retains the current
+predecessor and revision preparation under lock. Recheck that selection before
+PRE and acceptance. T5 consumes accepted evidence. Preserve historical packets
+and hashes and keep optional project feedback outside checker eligibility.
+
+Allowed files for the contract stage are ART's intake API, repository,
+foreground admission, progress, registration and finalization, its selected PRE
+binding and HTTP route and error adapter. TASK may update its submission context,
+intake custody, creation, dispatch, requirements and models. CHECKERS may extend
+the packet evidence decoder where required for exact old and new custody. A
+forward Alembic migration may update the native guards and add feedback storage.
+Directly affected contracts, owner tests, public API fixtures, CLI and MCP inputs
+and docs are in scope. The guide and exact assignment read stage extends the
+current PROJECTS, ART, AUTH, TASK, CHECKERS and contribution read compositions and
+their client contracts and tests. Preserve the T4 status transition and existing
+authorization, source custody, terminal outcome and AWARD ownership. Exclude
+queue topology, Finance fulfillment, review implementation and email.
+
+Risk class L0. Architecture, security, QA and test delta review the immutable
+inputs, native guards, authorization and replay. Documentation and product
+operations review the contributor journey and retained transport limits. Human
+review should verify revised selection, closed-assignment isolation and the
+difference between a granted award and fulfilled payment. Verification uses
+real PostgreSQL and source storage in focused integration cases, plus the
+connected CLI/MCP journey against the combined candidate.

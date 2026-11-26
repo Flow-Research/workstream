@@ -293,7 +293,6 @@ async def submission_packet(s):
     """Build raw bytes and headers for the claimed task without preparing old custody."""
     from app.modules.projects.models import EffectiveProjectSubmissionArtifactPolicy
     from tests.archive_fixtures import submission_archive
-    from tests.test_tasks import complete_submission_payload
 
     async with s.sessions() as session:
         task = await session.get(WorkstreamTask, s.task["id"])
@@ -304,7 +303,4 @@ async def submission_packet(s):
         assert [item["key"] for item in body["required_evidence"]] == ["required-evidence-001"]
     return submission_archive(path="answer.md", evidence_path="evidence/required-evidence-001"), {
         "Content-Type": "application/zip", "X-Task-Assignment-Id": s.assignment["id"],
-        "X-Submission-Summary": "Completed the required project work and included evidence.",
-        "X-Contributor-Attestation": complete_submission_payload()["worker_attestation"]
-            + " " + " ".join(body["attestation_terms"]),
     }

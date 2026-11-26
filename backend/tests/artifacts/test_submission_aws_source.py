@@ -103,11 +103,12 @@ async def test_qualified_aws_pre_source_matches_locked_sql(admission_intake):
         guarded = await submission_intake_pre_source_port(session).lock_pre_source(
             source=source, lease_id=owner.lease_id, generation=owner.generation,
         )
-        metadata = SubmissionIntakeMetadata.model_validate_json(json.dumps(row.command_metadata))
+        metadata = SubmissionIntakeMetadata(task_id=UUID(row.task_id), assignment_id=UUID(row.assignment_id),
+                                            feedback=row.command_metadata["feedback"])
         selected = bind_selected_pre_submit_admission(
             task=task, project=project, predecessor=None, predecessor_rules_sha256=None,
             predecessor_exists=False,
-            packet=SubmissionPacketView(metadata.summary, metadata.contributor_attestation),
+            packet=SubmissionPacketView(),
         )
         request = build_selected_pre_submit_reservation(
             source=guarded, metadata=metadata, task=task, project=project,

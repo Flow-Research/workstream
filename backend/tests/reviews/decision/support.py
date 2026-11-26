@@ -281,11 +281,7 @@ async def _admit_successor(h):
     metadata = SubmissionIntakeMetadata(
         task_id=h.request.task_id,
         assignment_id=h.request.assignment_id,
-        predecessor_submission_id=h.request.submission_id,
-        summary=h.creation_request.summary,
-        contributor_attestation=h.creation_request.contributor_attestation,
-        revision_preparation_id=revision.preparation_id,
-        revision_preparation_sha256=revision.preparation_sha256,
+        feedback=h.creation_request.summary,
     )
     created = await create_source_submission(
         h.factory, context, h.store.wrapped, h.namespace, h.settings, metadata, revised_data,

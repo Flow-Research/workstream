@@ -185,10 +185,7 @@ def _submission_source(task, assignment, link, packet, predecessor_id, policy, r
     context = _context(actor_profile_id=UUID(task.assigned_to), identity_link_id=UUID(link.id))
     metadata = SubmissionIntakeMetadata(
         task_id=UUID(task.id), assignment_id=UUID(assignment.id),
-        predecessor_submission_id=UUID(predecessor_id) if predecessor_id else None,
-        summary=packet.summary, contributor_attestation=packet.worker_attestation,
-        revision_preparation_id=revision_context.preparation_id if revision_context else None,
-        revision_preparation_sha256=revision_context.preparation_sha256 if revision_context else None,
+        feedback=packet.summary,
     )
     return context, metadata, content.getvalue()
 

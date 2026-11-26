@@ -63,8 +63,7 @@ async def _mounted_submission_response(error=None, *, command=None, packet_text=
         "Idempotency-Key": str(key),
     }
     if packet_text:
-        headers.update({"X-Submission-Summary": "summary",
-                        "X-Contributor-Attestation": "attestation"})
+        headers["X-Submission-Feedback"] = "feedback"
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://testserver"
     ) as client:

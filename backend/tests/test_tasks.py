@@ -1637,12 +1637,8 @@ async def test_task_context_apis_return_worker_requirements_and_operator_provena
     assert requirements.status_code == 200, requirements.text
     requirements_body = requirements.json()
     assert requirements_body["guide_version"] == "v1"
-    assert requirements_body["required_packet_fields"] == [
-        "summary",
-        "package_hash",
-        "artifact_hash_manifest",
-        "worker_attestation",
-    ]
+    assert "required_packet_fields" not in requirements_body
+    assert "attestation_terms" not in requirements_body
     assert requirements_body["required_artifacts"] == [
         {
             "key": "required-artifact-001",

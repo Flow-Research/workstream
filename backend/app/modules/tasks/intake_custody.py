@@ -46,6 +46,9 @@ class IntakeTaskCustody:
         return IntakeTaskSnapshot(
             context.locked_project_context.project_id, context.status,
             json.dumps(snapshot, sort_keys=True, separators=(",", ":")),
+            context.predecessor.submission_id if context.predecessor else None,
+            context.revision_context.preparation_id if context.revision_context else None,
+            context.revision_context.preparation_sha256 if context.revision_context else None,
         )
 
     async def require_active(self, task_id: UUID, operation_id: UUID) -> UUID:

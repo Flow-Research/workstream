@@ -87,16 +87,11 @@ async def _fail_current_submission(h, *, findings=None, route=True, terminal=Fal
 
 
 def _revision_upload_headers(h):
-    """Build the current raw-ZIP command with its exact revision acknowledgement."""
+    """Use the same minimal ZIP command for a revision."""
     return {
         "Content-Type": "application/zip",
         "X-Task-Assignment-Id": str(h.request.assignment_id),
         "Idempotency-Key": str(new_record_id()),
-        "X-Predecessor-Submission-Id": str(h.created.submission_id),
-        "X-Revision-Preparation-Id": str(h.revision_preparation_id),
-        "X-Revision-Preparation-Sha256": h.revision_preparation_sha256,
-        "X-Submission-Summary": h.creation_request.summary,
-        "X-Contributor-Attestation": h.creation_request.contributor_attestation,
     }
 
 
@@ -174,14 +169,12 @@ async def test_two_revisions_then_public_and_sql_refusal(
                         assert receipt.source_submission_id == str(h.created.submission_id)
 
             before = await _creation_snapshot(h)
-            # The exhausted assignment cannot submit a new ZIP, including with
-            # its preceding preparation acknowledgement. No pending window exists.
+            # The exhausted assignment cannot start another upload.
             async with h.factory() as session:
                 intake_ids = set(await session.scalars(select(SubmissionIntakeOperation.id)))
                 assert len(intake_ids) == 3
             denied = await client.post(route, headers=saved_headers | {
                 "Idempotency-Key": str(new_record_id()),
-                "X-Predecessor-Submission-Id": str(h.created.submission_id),
             }, content=b"not a zip")
             assert denied.status_code == 404, denied.text
             assert denied.json()["error"]["code"] == "submission_unavailable"
@@ -347,7 +340,7 @@ def test_revision_projection_preserves_deadline_and_distinguishes_policy_changes
     assert project_revision(row, row.deadline_at).disposition == "revision_limit_reached"
 
 
-async def test_rebase_keeps_history_and_requires_exact_acknowledgement(
+async def test_rebase_retains_original_attempt_and_selects_current_terms(
     tmp_path, isolated_database_env, monkeypatch,
 ):
     """A real v2 activation rebases only the next attempt and preserves v1 evidence."""
@@ -402,8 +395,7 @@ async def test_rebase_keeps_history_and_requires_exact_acknowledgement(
             replayed_initial = await client.post(route, headers={
                 "Content-Type": "application/zip", "Idempotency-Key": initial.idempotency_key,
                 "X-Task-Assignment-Id": initial.assignment_id,
-                "X-Submission-Summary": initial.command_metadata["summary"],
-                "X-Contributor-Attestation": initial.command_metadata["contributor_attestation"],
+                "X-Submission-Feedback": initial.command_metadata["feedback"],
             }, content=h.data)
             assert replayed_initial.status_code == 202, replayed_initial.text
             assert replayed_initial.json() == dict(initial.acceptance_receipt, replayed=True)
@@ -411,10 +403,10 @@ async def test_rebase_keeps_history_and_requires_exact_acknowledgement(
             before = await _creation_snapshot(h)
             headers = _revision_upload_headers(h)
             refused = await client.post(route, headers=headers | {
-                "X-Revision-Preparation-Id": str(new_record_id()),
+                "X-Task-Assignment-Id": str(new_record_id()),
             }, content=b"not a zip")
-            assert refused.status_code == 409, refused.text
-            assert refused.json()["error"]["code"] == "revision_context_changed"
+            assert refused.status_code == 404, refused.text
+            assert refused.json()["error"]["code"] == "submission_unavailable"
             assert await _creation_snapshot(h) == before and calls == []
             created = await client.post(route, headers=headers, content=data)
             assert created.status_code == 202, created.text
@@ -426,6 +418,13 @@ async def test_rebase_keeps_history_and_requires_exact_acknowledgement(
                 dispatch = await session.get(SubmissionDispatch, submission_id)
                 assert dispatch.submission_version == 2
                 assert dispatch.checker_remediation_manifest_id == source_id
+                selected = await session.get(SubmissionIntakeOperation, created.json()["operation_id"])
+                assert selected.command_metadata["predecessor_submission_id"] == str(h.created.submission_id)
+                assert selected.command_metadata["revision_preparation_id"] == str(h.revision_preparation_id)
+                assert selected.command_metadata["revision_preparation_sha256"] == h.revision_preparation_sha256
+                submission = await session.get(Submission, submission_id)
+                assert str(submission.contribution_policy_version_id) == str(assignment.submitter_contribution_policy_version_id)
+
         async with h.factory() as session:
             assert await session.scalar(text(
                 "SELECT to_jsonb(s)-ARRAY['attempt_status','status_reason','decided_at','updated_at'] FROM public.submissions s WHERE id=:id"
@@ -608,13 +607,8 @@ async def test_expired_retained_failure_recovers_without_a_new_window(
                 f"/api/v1/tasks/{h.request.task_id}/submissions",
                 headers={
                     "Content-Type": "application/zip",
-                    "X-Submission-Summary": h.creation_request.summary,
-                    "X-Contributor-Attestation": h.creation_request.contributor_attestation,
                     "X-Task-Assignment-Id": str(h.request.assignment_id),
-                    "X-Predecessor-Submission-Id": str(h.created.submission_id),
                     "Idempotency-Key": str(new_record_id()),
-                    "X-Revision-Preparation-Id": receipt["preparation_id"],
-                    "X-Revision-Preparation-Sha256": receipt["preparation_sha256"],
                 }, content=b"not a zip",
             )
             assert denied.status_code == 409, denied.text
@@ -708,8 +702,6 @@ async def test_expiry_allows_new_assignment_initial_at_next_global_version(
                 "Content-Type": "application/zip",
                 "Idempotency-Key": str(new_record_id()),
                 "X-Task-Assignment-Id": str(new_assignment_id),
-                "X-Submission-Summary": h.creation_request.summary,
-                "X-Contributor-Attestation": h.creation_request.contributor_attestation,
             }
             route = f"/api/v1/tasks/{h.request.task_id}/submissions"
             created = await client.post(route, headers=headers, content=h.data)

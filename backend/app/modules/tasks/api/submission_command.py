@@ -39,8 +39,9 @@ class SubmissionCreationRequest:
     assignment_id: UUID
     contributor_id: UUID
     predecessor_submission_id: UUID | None
-    summary: str
-    contributor_attestation: str
+    summary: str | None = None
+    contributor_attestation: str | None = None
+    feedback: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

@@ -23,13 +23,29 @@ _HEADER_PARAMETERS = [
     for name, required, schema in (
         ("Idempotency-Key", True, {"type": "string", "format": "uuid"}),
         ("X-Task-Assignment-Id", True, {"type": "string", "format": "uuid"}),
-        ("X-Submission-Summary", False, {"type": "string", "maxLength": 65536}),
-        ("X-Contributor-Attestation", False, {"type": "string", "maxLength": 65536}),
-        ("X-Predecessor-Submission-Id", False, {"type": "string", "format": "uuid"}),
-        ("X-Revision-Preparation-Id", False, {"type": "string", "format": "uuid"}),
-        ("X-Revision-Preparation-Sha256", False, {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}),
+        ("X-Submission-Feedback", False, {"type": "string", "maxLength": 4096,
+         "description": "Optional project feedback. Printable ASCII without leading or trailing whitespace."}),
     )
 ]
+
+
+_FAILURE_MESSAGES = {
+    "submission_unavailable": "Submission unavailable",
+    "submission_packet_invalid": "The submitted ZIP or request was invalid",
+    "submission_archive_limit_exceeded": "The ZIP exceeds the permitted archive limits",
+    "submission_upload_timeout": "The ZIP upload timed out",
+    "submission_capacity_exceeded": "Submission processing is at capacity. Try again later.",
+    "submission_infrastructure_unavailable": "Submission processing is temporarily unavailable",
+    "submission_outcome_unknown": "Check the original submission operation or retry with the same idempotency key",
+    "submission_operation_in_progress": "This assignment already has a submission in progress",
+    "submission_idempotency_conflict": "This idempotency key was used with different submission inputs",
+    "pre_submission_checker_failed": "The ZIP did not pass the pre-submission checks",
+    "revision_deadline_expired": "Your assignment expired. Reclaim the task if it is still available.",
+    "revision_limit_reached": "Your assignment has reached its revision limit",
+    "revision_context_blocked": "This assignment is waiting for its revision requirements",
+    "revision_context_changed": "The revision requirements or terms changed. Read your assignment before submitting again.",
+    "task_submission_predecessor_changed": "The assignment's current revision changed. Read your assignment before submitting again.",
+}
 
 
 def _failure_status(code: str) -> int:
@@ -41,7 +57,7 @@ def _failure_status(code: str) -> int:
         return 408
     if code == "submission_capacity_exceeded":
         return 429
-    if code in {"submission_packet_invalid", "pre_submission_checker_failed", "revision_acknowledgement_invalid"}:
+    if code in {"submission_packet_invalid", "pre_submission_checker_failed"}:
         return 422
     if code in {"submission_infrastructure_unavailable", "submission_outcome_unknown"}:
         return 503
@@ -88,9 +104,7 @@ async def submit_source(
             details = {"status": "failed", "eligible_to_submit": False, "results": exc.pre_submission_results or []}
         return error_response(
             request, status_code=_failure_status(exc.code), code=exc.code,
-            message=("Your assignment expired. Reclaim the task if it is still available."
-                     if exc.code == "revision_deadline_expired" else
-                     "Submission unavailable" if exc.code == "submission_unavailable" else exc.code),
+            message=_FAILURE_MESSAGES.get(exc.code, "Submission could not be completed"),
             details=details, retryable=exc.code in {"submission_capacity_exceeded", "submission_infrastructure_unavailable", "submission_outcome_unknown"},
         )
     return SubmissionAcceptedResponse.model_validate(receipt)

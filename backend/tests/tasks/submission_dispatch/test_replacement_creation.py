@@ -25,7 +25,6 @@ from tests.test_submission_predecessor_custody import (
 
 def _revision_command(h, root, data):
     """Build current foreground owners with exact routed revision acknowledgement."""
-    from uuid import UUID
     from app.modules.artifacts.api.submission_intake import SubmissionIntakeMetadata
     from tests.artifacts.test_submission_pre_source import _source_runtime
     from tests.retained_material_fixtures import _foreground
@@ -34,11 +33,7 @@ def _revision_command(h, root, data):
     command = _foreground(h.factory, h.actor_context, h.namespace, h.store.wrapped, runtime)
     metadata = SubmissionIntakeMetadata(
         task_id=h.request.task_id, assignment_id=h.request.assignment_id,
-        predecessor_submission_id=h.created.submission_id,
-        revision_preparation_id=UUID(str(h.revision_preparation_id)),
-        revision_preparation_sha256=h.revision_preparation_sha256,
-        summary=h.creation_request.summary,
-        contributor_attestation=h.creation_request.contributor_attestation,
+        feedback=h.creation_request.summary,
     )
     return command, metadata, errors
 
@@ -261,11 +256,7 @@ async def test_late_outbox_insert_failure_rolls_back_and_accepted_retry_succeeds
         command = _foreground(h.factory, h.actor_context, h.namespace, h.store.wrapped, runtime)
         metadata = SubmissionIntakeMetadata(
             task_id=h.request.task_id, assignment_id=h.request.assignment_id,
-            predecessor_submission_id=h.created.submission_id,
-            revision_preparation_id=UUID(str(h.revision_preparation_id)),
-            revision_preparation_sha256=h.revision_preparation_sha256,
-            summary=h.creation_request.summary,
-            contributor_attestation=h.creation_request.contributor_attestation,
+            feedback=h.creation_request.summary,
         )
         receipt = await _submit_current_source(h.factory, h.actor_context, command, metadata, data)
         assert receipt["status"] == "accepted" and not errors, errors

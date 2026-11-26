@@ -168,8 +168,7 @@ class WorkstreamDefaultContext:
             "current_predecessor": predecessor_body(self.current_predecessor),
             "current_rules_sha256": self.current_rules_sha256,
             "predecessor_rules_sha256": self.predecessor_rules_sha256,
-            "packet": {"summary": self.packet.summary,
-                       "contributor_attestation": self.packet.contributor_attestation},
+            "packet": self.packet.canonical_body(),
         }
 
     @classmethod

@@ -37,8 +37,8 @@ READS = (
 )
 FIELDS = {
     "task_id", "project_id", "guide_version", "policy_schema_version", "merge_algorithm_version",
-    "required_packet_fields", "required_artifacts", "required_evidence", "forbidden_artifacts",
-    "attestation_terms", "manifest_required", "artifact_hash_required", "artifact_hash_algorithm",
+    "required_artifacts", "required_evidence", "forbidden_artifacts",
+    "manifest_required", "artifact_hash_required", "artifact_hash_algorithm",
     "allowed_storage_schemes", "storage_reference_rules", "maximum_file_size_bytes",
     "maximum_package_size_bytes", "maximum_archive_entries", "maximum_archive_size_bytes", "packaging",
 }
@@ -58,8 +58,8 @@ def test_requirement_contracts():
                                     fragments_allowed=False, path_traversal_allowed=False)
     packaging = SubmissionPackagingRequirements(package_required=True, allowed_package_formats=("zip",))
     values = dict(task_id=new_record_id(), project_id=new_record_id(), guide_version="guide", policy_schema_version=None,
-                  merge_algorithm_version=None, required_packet_fields=("summary",), required_artifacts=(artifact,),
-                  required_evidence=(evidence,), forbidden_artifacts=(forbidden,), attestation_terms=("original",),
+                  merge_algorithm_version=None, required_artifacts=(artifact,),
+                  required_evidence=(evidence,), forbidden_artifacts=(forbidden,),
                   manifest_required=True, artifact_hash_required=True, artifact_hash_algorithm="sha256",
                   allowed_storage_schemes=("s3",), storage_reference_rules=storage, maximum_file_size_bytes=None,
                   maximum_package_size_bytes=None, maximum_archive_entries=None, maximum_archive_size_bytes=None,
@@ -69,7 +69,7 @@ def test_requirement_contracts():
         assert type(result) is cls and set(result.model_dump()) == FIELDS
         assert result.model_dump(mode="json")["packaging"]["allowed_package_formats"] == ["zip"]
         for field, invalid in (("task_id", "bad"), ("project_id", str(new_record_id())), ("guide_version", " "),
-                               ("required_artifacts", [artifact]), ("attestation_terms", ["mutable"])):
+                               ("required_artifacts", [artifact])):
             with pytest.raises(ValidationError):
                 cls(**{**values, field: invalid})
         with pytest.raises(ValidationError, match="extra_forbidden"):
@@ -175,7 +175,6 @@ async def test_requirement_scope_and_assignment_visibility(task_client, monkeypa
         expected = {key: value for key, value in policy.items() if key in FIELDS and value is not None}
         expected.update(task_id=ready["id"], project_id=project["id"], guide_version=stored.locked_guide_version,
                         policy_schema_version=policy["schema_version"],
-                        required_packet_fields=["summary", "package_hash", "artifact_hash_manifest", "worker_attestation"],
                         storage_reference_rules=dict(allowed_storage_schemes=policy["allowed_storage_schemes"],
                             allowed_uri_prefixes=[f"{scheme}://" for scheme in policy["allowed_storage_schemes"]],
                             credentials_allowed=False, query_strings_allowed=False, fragments_allowed=False,

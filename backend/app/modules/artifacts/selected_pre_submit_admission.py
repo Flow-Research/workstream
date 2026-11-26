@@ -98,7 +98,7 @@ def build_selected_pre_submit_reservation(
     values are comparisons only; this builder grants neither reads nor execution.
     """
     references = task.locked_project_context
-    packet = SubmissionPacketView(metadata.summary, metadata.contributor_attestation)
+    packet = SubmissionPacketView()
     if (
         type(source) is not SubmissionIntakePreSourceFacts
         or source.task_id != task.task_id or source.assignment_id != task.assignment_id
@@ -106,12 +106,6 @@ def build_selected_pre_submit_reservation(
         or source.project_id != project.project_id
         or metadata.task_id != task.task_id or metadata.assignment_id != task.assignment_id
         or metadata.metadata_sha256() != source.metadata_sha256
-        or metadata.predecessor_submission_id != (
-            task.predecessor.submission_id if task.predecessor else None)
-        or metadata.revision_preparation_id != (
-            task.revision_context.preparation_id if task.revision_context else None)
-        or metadata.revision_preparation_sha256 != (
-            task.revision_context.preparation_sha256 if task.revision_context else None)
         or references.project_id != project.project_id
         or references.guide_version != project.guide_version
         or references.source_snapshot_id != project.source_snapshot_id

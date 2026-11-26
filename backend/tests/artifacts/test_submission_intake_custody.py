@@ -428,7 +428,7 @@ async def test_sql_insert_cannot_substitute_bound_parents(intake, field, constra
                 project=values["project_id"], actor=str(intake.actor.actor_profile_id),
             ))
         metadata = SubmissionIntakeMetadata(task_id=intake.task, assignment_id=UUID(values[field]))
-        values["command_metadata"] = metadata.model_dump(mode="json")
+        values["command_metadata"] = {**values["command_metadata"], **metadata.model_dump(mode="json")}
         values["metadata_sha256"] = metadata.metadata_sha256()
     with pytest.raises(DBAPIError, match=constraint):
         async with intake.factory.begin() as session:
@@ -457,7 +457,8 @@ async def test_sql_rejects_malformed_command_selectors_even_with_matching_digest
         metadata = {**values["command_metadata"], **selectors}
         candidate = {**values, "command_metadata": metadata,
                      "metadata_sha256": canonical_json_hash({
-                         "schema_version": "workstream.submission_intake_metadata.v1", **metadata,
+                         "schema_version": "workstream.submission_intake_metadata.v2",
+                         **{field: metadata[field] for field in ("task_id", "assignment_id", "feedback")},
                      })}
         with pytest.raises(DBAPIError, match="invalid intake metadata"):
             async with intake.factory.begin() as session:

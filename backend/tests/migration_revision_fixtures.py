@@ -31,7 +31,6 @@ from app.modules.checkers.api import SelectedPostSubmissionEvaluationRequest
 from app.modules.tasks.api import SubmissionCreationRequest
 from app.modules.tasks.api.transition_audit import TaskPolicyLineage
 from app.modules.tasks.models import Submission, WorkstreamTask
-from app.modules.tasks.schemas import AdmissionBackedSubmissionResponse
 from tests.historical_submission_fixtures import (
     _restore_validated_snapshot_rows,
 )
@@ -202,13 +201,11 @@ async def historical_revision_source(tmp_path, database_url, monkeypatch, snapsh
             request=SelectedPostSubmissionEvaluationRequest.model_validate_json(
                 json.dumps(seed["request"])
             ),
-            created=AdmissionBackedSubmissionResponse.model_validate_json(
-                json.dumps(
-                    {
-                        name: seed["created"][name]
-                        for name in AdmissionBackedSubmissionResponse.model_fields
-                    }
-                )
+            created=SimpleNamespace(
+                submission_id=UUID(seed["created"]["submission_id"]),
+                submission_version=seed["created"]["submission_version"],
+                admission_id=UUID(seed["created"]["admission_id"]),
+                evaluation_request_id=UUID(seed["created"]["evaluation_request_id"]),
             ),
             actor_context=HumanAuthorizationContext.model_validate_json(
                 json.dumps(seed["actor_context"])

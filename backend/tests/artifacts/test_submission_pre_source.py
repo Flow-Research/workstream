@@ -29,7 +29,7 @@ def _assert_pre_reservation_rejects_substitution(build_values, guarded, metadata
     from app.modules.checkers.api.pre_submit_material import SubmissionPacketView
     from app.modules.artifacts.selected_pre_submit_admission import build_selected_pre_submit_reservation
     substitutions = (
-        {"metadata": metadata.model_copy(update={"summary": "substituted"})},
+        {"metadata": metadata.model_copy(update={"feedback": "substituted"})},
         {"source": guarded.model_copy(update={"actor_profile_id": new_record_id()})},
         {"source": guarded.model_copy(update={"metadata_sha256": "sha256:" + "f" * 64})},
         {"selected": replace(selected, rules_sha256="sha256:" + "f" * 64)},
@@ -209,11 +209,12 @@ async def test_selected_pre_sql_requires_exact_live_source(intake, changed):
         guarded = await submission_intake_pre_source_port(session).lock_pre_source(
             source=source, lease_id=lease, generation=1,
         )
-        metadata = SubmissionIntakeMetadata.model_validate_json(json.dumps(row.command_metadata))
+        metadata = SubmissionIntakeMetadata(task_id=UUID(row.task_id), assignment_id=UUID(row.assignment_id),
+                                            feedback=row.command_metadata["feedback"])
         selected = bind_selected_pre_submit_admission(
             task=task, project=project, predecessor=None, predecessor_rules_sha256=None,
             predecessor_exists=False,
-            packet=SubmissionPacketView(metadata.summary, metadata.contributor_attestation),
+            packet=SubmissionPacketView(),
         )
         build_values = dict(
             source=guarded, metadata=metadata, task=task, project=project,
@@ -499,7 +500,8 @@ async def _upload_pre_source(intake, payload):
     async with intake.factory.begin() as session:
         row = await reserve(intake, session, with_upload=False)
         operation, foreground_lease = UUID(row.id), UUID(row.lease_id)
-        metadata = SubmissionIntakeMetadata.model_validate_json(json.dumps(row.command_metadata))
+        metadata = SubmissionIntakeMetadata(task_id=UUID(row.task_id), assignment_id=UUID(row.assignment_id),
+                                            feedback=row.command_metadata["feedback"])
         key = UUID(row.idempotency_key)
     source = await foreground_upload(intake, store).receive(
         operation, foreground_lease, 1, upload_bytes(), **foreground_limits(),
@@ -577,7 +579,7 @@ async def test_source_pre_execution_uses_committed_authorized_local_read(intake,
         )
         selected = bind_selected_pre_submit_admission(
             task=task, project=project, predecessor=None, predecessor_rules_sha256=None,
-            predecessor_exists=False, packet=SubmissionPacketView(metadata.summary, metadata.contributor_attestation),
+            predecessor_exists=False, packet=SubmissionPacketView(),
         )
         request = build_selected_pre_submit_reservation(
             source=custody, metadata=metadata, task=task, project=project,

@@ -1044,7 +1044,6 @@ async def test_finalization_outbox_recovers_lost_ack_without_provider_replay(adm
 async def test_authorized_progress_reports_exact_exhaustion_without_reopening_intake(
     admission_intake, tmp_path, monkeypatch, effect_committed,
 ):
-    import json
     from uuid import UUID
     from sqlalchemy import select, func
     from app.adapters.artifacts import submission_finalization_handler
@@ -1070,7 +1069,8 @@ async def test_authorized_progress_reports_exact_exhaustion_without_reopening_in
     async with f.factory() as session:
         row = await session.get(SubmissionIntakeOperation, str(owner.operation_id))
         key, event_id = UUID(row.idempotency_key), UUID(row.finalization_event_id)
-        metadata = SubmissionIntakeMetadata.model_validate_json(json.dumps(row.command_metadata))
+        metadata = SubmissionIntakeMetadata(task_id=UUID(row.task_id), assignment_id=UUID(row.assignment_id),
+                                            feedback=row.command_metadata["feedback"])
     async def read():
         return await f.admission._read(metadata, f.actor.actor_profile_id, key)
     initial = await read()

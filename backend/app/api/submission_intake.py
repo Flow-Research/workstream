@@ -9,7 +9,9 @@ from starlette.requests import Request
 
 from app.core.api_controls import StructuredHTTPException
 from app.modules.artifacts.api.submission_archive import MAXIMUM_SUBMISSION_ZIP_BYTES
-from app.modules.artifacts.api.submission_intake import MAXIMUM_INGRESS_CHUNK_BYTES, SubmissionIntakeMetadata
+from app.modules.artifacts.api.submission_intake import (
+    MAXIMUM_INGRESS_CHUNK_BYTES, MAXIMUM_SUBMISSION_FEEDBACK_BYTES, SubmissionIntakeMetadata,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -20,9 +22,7 @@ class SubmissionIntakeHeaders:
 
 
 _PACKET_HEADERS = (
-    "x-task-assignment-id", "idempotency-key", "x-submission-summary",
-    "x-contributor-attestation", "x-predecessor-submission-id",
-    "x-revision-preparation-id", "x-revision-preparation-sha256",
+    "x-task-assignment-id", "idempotency-key", "x-submission-feedback",
     "content-type", "content-encoding", "content-length", "transfer-encoding",
 )
 
@@ -59,19 +59,18 @@ def submission_intake_headers(request: Request, task_id: UUID) -> SubmissionInta
         if declared == 0:
             _reject("submission_packet_invalid", 422, "Submission ZIP must be nonempty")
     try:
-        predecessor = headers.get("x-predecessor-submission-id")
-        revision = headers.get("x-revision-preparation-id")
-        metadata = SubmissionIntakeMetadata(
-            task_id=task_id, assignment_id=UUID(headers["x-task-assignment-id"]),
-            predecessor_submission_id=UUID(predecessor) if predecessor is not None else None,
-            summary=headers.get("x-submission-summary", ""),
-            contributor_attestation=headers.get("x-contributor-attestation", ""),
-            revision_preparation_id=UUID(revision) if revision is not None else None,
-            revision_preparation_sha256=headers.get("x-revision-preparation-sha256"),
-        )
+        assignment_id = UUID(headers["x-task-assignment-id"])
         key = UUID(headers["idempotency-key"])
     except ValueError:
-        _reject("submission_packet_invalid", 422, "Submission packet is invalid")
+        _reject("submission_packet_invalid", 422, "Task assignment and idempotency key must be UUIDs")
+    try:
+        metadata = SubmissionIntakeMetadata(
+            task_id=task_id, assignment_id=assignment_id, feedback=headers.get("x-submission-feedback"),
+        )
+    except ValueError:
+        _reject("submission_packet_invalid", 422,
+                f"Feedback accepts up to {MAXIMUM_SUBMISSION_FEEDBACK_BYTES} printable ASCII bytes "
+                "without leading or trailing whitespace")
     return SubmissionIntakeHeaders(metadata, key, declared)
 
 

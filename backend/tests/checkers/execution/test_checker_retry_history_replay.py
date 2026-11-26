@@ -88,11 +88,7 @@ async def test_retry_replays_after_real_later_submission_without_reopening_old_s
             h.revision_preparation_sha256 = current.revision_context.preparation_sha256
         metadata = SubmissionIntakeMetadata(
             task_id=h.request.task_id, assignment_id=h.request.assignment_id,
-            predecessor_submission_id=h.created.submission_id,
-            revision_preparation_id=current.revision_context.preparation_id,
-            revision_preparation_sha256=current.revision_context.preparation_sha256,
-            summary=h.creation_request.summary,
-            contributor_attestation=h.creation_request.contributor_attestation,
+            feedback=h.creation_request.summary,
         )
         later = await create_source_submission(
             h.factory, h.actor_context, h.store.wrapped, h.namespace, h.settings,

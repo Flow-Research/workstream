@@ -135,29 +135,6 @@ class TaskRevisionRepairRequest(BaseModel):
         return self
 
 
-class AdmissionBackedSubmissionCreate(BaseModel):
-    """Contributor packet and selectors for the canonical ready-admission POST."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    admission_id: UUID
-    assignment_id: UUID
-    predecessor_submission_id: UUID | None = None
-    summary: str | None = None
-    contributor_attestation: str | None = None
-
-
-class AdmissionBackedSubmissionResponse(BaseModel):
-    """Stable Workstream result without provider or scratch coordinates."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    submission_id: UUID
-    submission_version: int
-    admission_id: UUID
-    evaluation_request_id: UUID
-
-
 class TaskResponse(BaseModel):
     """Response schema for task records."""
 
@@ -367,11 +344,9 @@ class _TaskSubmissionRequirements(BaseModel):
     guide_version: str = Field(pattern=r"\S")
     policy_schema_version: str | None
     merge_algorithm_version: str | None
-    required_packet_fields: tuple[str, ...]
     required_artifacts: tuple[RequiredArtifactRequirement, ...]
     required_evidence: tuple[RequiredEvidenceRequirement, ...]
     forbidden_artifacts: tuple[ForbiddenArtifactRequirement, ...]
-    attestation_terms: tuple[str, ...]
     manifest_required: bool
     artifact_hash_required: bool
     artifact_hash_algorithm: Literal["sha256"]

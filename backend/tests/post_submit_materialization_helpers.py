@@ -227,9 +227,7 @@ async def _create_material_submission(
     data = archive_with_modes(policy["evidence_path"], plan.lineage.project_id)
     metadata = SubmissionIntakeMetadata(
         task_id=task_id, assignment_id=assignment_id,
-        summary="Completed the required project work and included evidence.",
-        contributor_attestation="I confirm no confidential client data, credentials, or copied source material is included in this submission; rights_confirmed. "
-        + " ".join(policy["attestation_terms"]),
+        feedback="Completed the required project work and included evidence.",
     )
     created = await create_source_submission(factory, context, store, namespace, settings, metadata, data,
                                              submit_source=submit_source)
@@ -237,7 +235,7 @@ async def _create_material_submission(
     creation_request = SubmissionCreationRequest(
         task_id=task_id, assignment_id=assignment_id, contributor_id=context.actor_profile_id,
         predecessor_submission_id=None, admission_id=admission_id,
-        summary=metadata.summary, contributor_attestation=metadata.contributor_attestation,
+        feedback=metadata.feedback,
     )
     return context, task_id, data, admission_id, creation_request, created
 

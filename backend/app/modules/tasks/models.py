@@ -437,6 +437,12 @@ class Submission(Base):
             "status_reason='checker_coverage_incomplete')",
             name="status_reason",
         ),
+        CheckConstraint(
+            '(summary IS NULL)=(worker_attestation IS NULL) AND '
+            " (feedback IS NULL OR (summary IS NULL AND octet_length(feedback)<=4096 "
+            "AND feedback COLLATE \"C\" !~ '[^ -~]' AND btrim(feedback)=feedback))",
+            name="feedback_shape",
+        ),
         Index("ix_submissions_contributor_updated", "contributor_id", "updated_at", "id"),
         ForeignKeyConstraint(
             ["task_assignment_id", "task_id", "contributor_id"],
@@ -574,11 +580,12 @@ class Submission(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now(),
         server_onupdate=FetchedValue(),
     )
-    summary: Mapped[str] = mapped_column(Text, nullable=False)
+    summary: Mapped[str | None] = mapped_column(Text)
+    feedback: Mapped[str | None] = mapped_column(Text)
     package_uri: Mapped[str | None] = mapped_column(String(1000))
     package_hash: Mapped[str | None] = mapped_column(String(128))
     artifact_hash_manifest: Mapped[list[dict]] = mapped_column(JSON, nullable=False, default=list)
-    worker_attestation: Mapped[str] = mapped_column(Text, nullable=False)
+    worker_attestation: Mapped[str | None] = mapped_column(Text)
     locked_guide_version: Mapped[str] = mapped_column(String(50), nullable=False)
     locked_post_submit_checker_policy_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), nullable=False)
     locked_post_submit_checker_policy_version: Mapped[str] = mapped_column(

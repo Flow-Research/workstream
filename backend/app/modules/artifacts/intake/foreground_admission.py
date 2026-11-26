@@ -4,8 +4,6 @@ Only a positively acknowledged reservation returns a foreground owner. A raced
 key or uncertain commit resolves the stored operation through current read
 authority and cannot acquire a replacement lease or start a second upload.
 """
-import json
-
 from collections.abc import AsyncIterator, Callable
 from contextlib import asynccontextmanager
 from dataclasses import asdict, dataclass
@@ -43,7 +41,7 @@ from app.modules.projects.api.policy_lineage import RevisionPolicySemantics
 from app.modules.tasks.api.intake_custody import IntakeTaskCustodyPort
 from app.modules.tasks.api.submission_context import (
     TaskSubmissionContextPort, TaskSubmissionContextRequest,
-    require_revision_acknowledgement, require_revision_capacity,
+    TaskSubmissionContextUnavailable, require_revision_capacity,
 )
 
 
@@ -183,7 +181,7 @@ class ForegroundIntakeAdmission:
     async def _validate_context(self, session, metadata, actor_id):
         """Require canonical lineage, selected phases and the exact qualified namespace."""
         task = await self._contexts(session).lock_submission_context(TaskSubmissionContextRequest(
-            metadata.task_id, metadata.assignment_id, actor_id, metadata.predecessor_submission_id,
+            metadata.task_id, metadata.assignment_id, actor_id, select_predecessor=True,
         ))
         references = asdict(task.locked_project_context)
         references.pop("locked_contribution_policy_version_id")
@@ -195,7 +193,6 @@ class ForegroundIntakeAdmission:
                 policy_generation=revision.generation, policy_hash=revision.policy_hash,
                 max_revision_rounds=RevisionPolicySemantics.model_validate_json(project.revision_policy.value).max_revision_rounds,
             )
-        require_revision_acknowledgement(task, metadata.revision_preparation_id, metadata.revision_preparation_sha256)
         policies = LockedExternalCheckerPolicies.model_validate_json(project.external_checker_policies.value)
         if len(policies.pre_submit.entries) != 1 or len(policies.post_submit.entries) != 1:
             raise IntakeCustodyConflict("intake_requires_one_pre_and_post_checker")
@@ -205,6 +202,29 @@ class ForegroundIntakeAdmission:
         if namespace.provider_profile not in {"local-v2", "minio-v1", "aws-s3-v1"}:
             raise IntakeCustodyConflict("intake_source_provider_unqualified")
         return task, project
+
+    @staticmethod
+    async def _require_reserved_context(session, row, task):
+        snapshot = await session.scalar(text(
+            "SELECT public.submission_intake_task_snapshot(t) "
+            "FROM public.workstream_tasks t WHERE id=:id"
+        ), {"id": task.task_id})
+        preparation = task.revision_context
+        selection = row.command_metadata
+        if (
+            task.status != row.eligible_task_status
+            or snapshot != row.locked_task_context
+            or selection["predecessor_submission_id"] != (
+                str(task.predecessor.submission_id) if task.predecessor else None
+            )
+            or selection["revision_preparation_id"] != (
+                str(preparation.preparation_id) if preparation else None
+            )
+            or selection["revision_preparation_sha256"] != (
+                preparation.preparation_sha256 if preparation else None
+            )
+        ):
+            raise TaskSubmissionContextUnavailable("revision_context_changed")
 
     async def reserve_pre(
         self, owner: IntakeReservationOwner, source: SealedSubmissionSource, *,
@@ -228,8 +248,12 @@ class ForegroundIntakeAdmission:
                 UUID(row.actor_profile_id), UUID(row.identity_link_id), UUID(row.idempotency_key),
                 row.metadata_sha256,
             ))
-            metadata = SubmissionIntakeMetadata.model_validate_json(json.dumps(row.command_metadata))
+            metadata = SubmissionIntakeMetadata(
+                task_id=UUID(row.task_id), assignment_id=UUID(row.assignment_id),
+                feedback=row.command_metadata["feedback"],
+            )
             task, project = await self._validate_context(session, metadata, UUID(row.actor_profile_id))
+            await self._require_reserved_context(session, row, task)
             custody = await repository.lock_pre_source(
                 source=source, lease_id=owner.lease_id, generation=owner.generation)
             predecessor, predecessor_rules = None, None
@@ -253,7 +277,7 @@ class ForegroundIntakeAdmission:
                 task=task, project=project, predecessor=predecessor,
                 predecessor_rules_sha256=predecessor_rules,
                 predecessor_exists=task.predecessor is not None,
-                packet=SubmissionPacketView(metadata.summary, metadata.contributor_attestation),
+                packet=SubmissionPacketView(),
             )
             reservation = build_selected_pre_submit_reservation(
                 source=custody, metadata=metadata, task=task, project=project,
@@ -328,7 +352,7 @@ class ForegroundIntakeAdmission:
             await authority.authorize_read(IntakeOperationReadFacts(
                 UUID(row.id), UUID(row.project_id), UUID(row.task_id), UUID(row.actor_profile_id)))
             if (row.actor_profile_id != str(actor_id) or row.idempotency_key != str(idempotency_key)
-                    or row.metadata_sha256 != metadata.metadata_sha256()):
+                    or not self._matches_public_command(row, metadata)):
                 raise IntakeCustodyConflict("submission_idempotency_conflict")
             released = (row.state in {"cancelled", "abandoned"}
                        and row.failure_code in {"revision_deadline_expired", "submission_unavailable"}
@@ -367,8 +391,12 @@ class ForegroundIntakeAdmission:
         await authority.preflight(IntakeReservationPreflightFacts(
             UUID(row.id), UUID(row.project_id), UUID(row.task_id), UUID(row.assignment_id),
             UUID(row.actor_profile_id), UUID(row.identity_link_id), UUID(row.idempotency_key), row.metadata_sha256))
-        metadata = SubmissionIntakeMetadata.model_validate_json(json.dumps(row.command_metadata))
+        metadata = SubmissionIntakeMetadata(
+            task_id=UUID(row.task_id), assignment_id=UUID(row.assignment_id),
+            feedback=row.command_metadata["feedback"],
+        )
         task, project = await self._validate_context(session, metadata, UUID(row.actor_profile_id))
+        await self._require_reserved_context(session, row, task)
         lineage = request.admission_lineage
         predecessor = task.predecessor
         if (task.status != row.eligible_task_status
@@ -399,6 +427,17 @@ class ForegroundIntakeAdmission:
         await self._tasks(session).accept(UUID(row.task_id), UUID(row.id), row.eligible_task_status)
         return dict(row.acceptance_receipt)
 
+    @staticmethod
+    def _matches_public_command(row, metadata):
+        if (str(metadata.task_id), str(metadata.assignment_id)) != (row.task_id, row.assignment_id):
+            return False
+        if "feedback" in row.command_metadata:
+            return row.metadata_sha256 == metadata.metadata_sha256()
+        # Retired text cannot be presented on the public wire. Operation reads
+        # still recover every historical command, even when it carried text.
+        return (metadata.feedback is None and row.command_metadata["summary"] == ""
+                and row.command_metadata["contributor_attestation"] == "")
+
     async def _read(self, metadata, actor_id, key, *, expected_operation_id=None):
         """Authorize the stored operation before comparing metadata or returning its state."""
         async with self._root() as (session, authority):
@@ -410,7 +449,7 @@ class ForegroundIntakeAdmission:
             await authority.authorize_read(IntakeOperationReadFacts(
                 UUID(row.id), UUID(row.project_id), UUID(row.task_id), UUID(row.actor_profile_id),
             ))
-            if row.metadata_sha256 != metadata.metadata_sha256():
+            if not self._matches_public_command(row, metadata):
                 raise IntakeCustodyConflict("submission_idempotency_conflict")
             if expected_operation_id is not None and UUID(row.id) != expected_operation_id:
                 raise IntakeCustodyConflict("submission_idempotency_conflict")
@@ -432,7 +471,7 @@ class ForegroundIntakeAdmission:
             await authority.authorize_read(IntakeOperationReadFacts(
                 UUID(row.id), UUID(row.project_id), UUID(row.task_id), UUID(row.actor_profile_id)))
             if (row.actor_profile_id != str(actor_id) or row.idempotency_key != str(idempotency_key)
-                    or row.metadata_sha256 != metadata.metadata_sha256()):
+                    or not self._matches_public_command(row, metadata)):
                 raise IntakeCustodyConflict("submission_idempotency_conflict")
             if row.state in {"finalization_pending", "finalized"}:
                 return await self._accepted_receipt(session, authority, row)

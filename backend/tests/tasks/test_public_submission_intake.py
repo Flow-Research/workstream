@@ -185,29 +185,10 @@ async def test_public_malformed_zip_preserves_task_and_retains_cleanup_custody(
     assert valid.json()["status"] == "accepted" and valid.json()["replayed"] is False
 
 
-def test_optional_public_text_keeps_metadata_and_retained_packet_bounds():
-    """Empty ASCII headers normalize; retained packets keep their UTF-8 bound."""
-    from app.modules.artifacts.api.submission_intake import SubmissionIntakeMetadata
-
-    base = {"task_id": new_record_id(), "assignment_id": new_record_id()}
-    omitted = SubmissionIntakeMetadata(**base)
-    empty = SubmissionIntakeMetadata(**base, summary="", contributor_attestation="")
-    assert omitted.summary == omitted.contributor_attestation == ""
-    assert omitted.metadata_sha256() == empty.metadata_sha256()
-    assert SubmissionIntakeMetadata(**base, summary="x" * 65536).summary == "x" * 65536
-    with pytest.raises(ValueError):
-        SubmissionIntakeMetadata(**base, summary="x" * 65537)
-    with pytest.raises(ValueError, match="printable ASCII"):
-        SubmissionIntakeMetadata(**base, summary="é")
-    assert SubmissionPacketView("é" * 32768, "").sha256
-    with pytest.raises(ValueError, match="submission packet text is invalid"):
-        SubmissionPacketView("é" * 32769, "")
-
-
-async def test_public_optional_packet_text_survives_acceptance_finalization_and_replay(
+async def test_public_minimal_submission_survives_acceptance_finalization_and_replay(
     admission_intake, tmp_path, monkeypatch,
 ):
-    """Omitted and empty headers retain warning-only packet facts through T5."""
+    """The four-input command emits no text warnings and retains its replay identity."""
     from uuid import UUID
     from sqlalchemy import text
     from tests.artifacts.test_submission_foreground_command import configure_source_http
@@ -231,11 +212,10 @@ async def test_public_optional_packet_text_survives_acceptance_finalization_and_
     assert receipt["status"] == "accepted" and receipt["replayed"] is False
     warnings = [item["warning_code"] for item in receipt["pre_submission_results"]
                 if item["source"] == "workstream_default" and item["status"] == "warning"]
-    assert warnings == ["submission_summary_missing", "submission_attestation_missing"]
-    empty_headers = headers | {"X-Submission-Summary": "", "X-Contributor-Attestation": ""}
-    replay = await client.post(route, headers=empty_headers, content=payload)
+    assert warnings == []
+    replay = await client.post(route, headers=headers, content=payload)
     assert replay.status_code == 202 and replay.json() == dict(receipt, replayed=True), replay.text
-    changed = await client.post(route, headers=headers | {"X-Submission-Summary": "now supplied"},
+    changed = await client.post(route, headers=headers | {"X-Submission-Feedback": "now supplied"},
                                 content=payload)
     assert changed.status_code == 409, changed.text
     assert changed.json()["error"]["code"] == "submission_idempotency_conflict"
@@ -251,16 +231,16 @@ async def test_public_optional_packet_text_survives_acceptance_finalization_and_
         ))
     finally:
         bootstrap.close()
-    replay = await client.post(route, headers=empty_headers, content=payload)
+    replay = await client.post(route, headers=headers, content=payload)
     assert replay.status_code == 202 and replay.json() == dict(receipt, replayed=True), replay.text
     assert len(calls) == 1 and not errors, errors
     async with f.factory() as session:
         stored = await session.get(Submission, submission_id)
-        assert stored.summary == stored.worker_attestation == ""
+        assert stored.summary is stored.worker_attestation is stored.feedback is None
         assert await session.scalar(select(func.count()).select_from(Submission)) == 1
         admission = (await session.scalars(select(SubmissionBundleAdmission))).one()
         assert admission.status == "consumed"
-        assert admission.packet_sha256 == SubmissionPacketView("", "").sha256
+        assert admission.packet_sha256 == SubmissionPacketView().sha256
         assert await session.scalar(select(func.count()).select_from(SelectedPreSubmitRun)) == 1
         assert await session.scalar(text("SELECT count(*) FROM submission_source_charges")) == 1
 
@@ -360,8 +340,7 @@ async def test_public_initial_submission_replays_and_recovers_accepted_upload(
     route = f"/api/v1/tasks/{f.task}/submissions"
     headers = f.access.target.headers | {
         "Content-Type": "application/zip", "X-Task-Assignment-Id": str(f.assignment),
-        "Idempotency-Key": str(new_record_id()), "X-Submission-Summary": "Completed work",
-        "X-Contributor-Attestation": "I completed this work",
+        "Idempotency-Key": str(new_record_id()), "X-Submission-Feedback": "Completed work",
     }
     duplicate = await client.post(route, headers=list(headers.items()) + [
         ("Idempotency-Key", headers["Idempotency-Key"]),
@@ -374,11 +353,11 @@ async def test_public_initial_submission_replays_and_recovers_accepted_upload(
     denied_actor = await client.post(route, headers=headers | foreign.headers, content=payload)
     assert denied_actor.status_code == 404, denied_actor.text
     assert denied_actor.json()["error"]["code"] == "submission_unavailable"
-    denied_predecessor = await client.post(route, headers=headers | {
-        "X-Predecessor-Submission-Id": str(new_record_id()),
+    denied_assignment = await client.post(route, headers=headers | {
+        "X-Task-Assignment-Id": str(new_record_id()),
     }, content=payload)
-    assert denied_predecessor.status_code == 409, denied_predecessor.text
-    assert denied_predecessor.json()["error"]["code"] == "task_submission_predecessor_changed"
+    assert denied_assignment.status_code == 404, denied_assignment.text
+    assert denied_assignment.json()["error"]["code"] == "submission_unavailable"
     denied_uri = await client.post(route, headers=headers | {"Content-Type": "application/json"},
                                   json={"package_uri": "s3://caller-controlled/bundle.zip"})
     assert denied_uri.status_code == 415, denied_uri.text
@@ -403,7 +382,7 @@ async def test_public_initial_submission_replays_and_recovers_accepted_upload(
         replay_patch.setattr(LocalStorageAdapter, "complete_source_upload", no_new_upload)
         replay = await client.post(route, headers=headers, content=payload)
         assert replay.status_code == 202 and replay.json() == dict(receipt, replayed=True), replay.text
-        changed = await client.post(route, headers=headers | {"X-Submission-Summary": "changed"},
+        changed = await client.post(route, headers=headers | {"X-Submission-Feedback": "changed"},
                                     content=payload)
         assert changed.status_code == 409, changed.text
         assert changed.json()["error"]["code"] == "submission_idempotency_conflict"
@@ -441,8 +420,8 @@ async def test_public_initial_submission_replays_and_recovers_accepted_upload(
         assert await session.scalar(select(func.count()).select_from(Submission)) == 1
         stored = await session.get(Submission, submission_id)
         assert stored.version == 1
-        assert stored.summary == headers["X-Submission-Summary"]
-        assert stored.worker_attestation == headers["X-Contributor-Attestation"]
+        assert stored.feedback == headers["X-Submission-Feedback"]
+        assert stored.summary is stored.worker_attestation is None
         assert await session.scalar(select(func.count()).select_from(CheckerRun)) == 1
         assert await session.scalar(select(func.count()).select_from(SelectedPreSubmitRun)) == 1
         assert await session.scalar(text("SELECT count(*) FROM submission_source_charges")) == 1
@@ -468,11 +447,6 @@ async def test_public_checker_remediation_uses_exact_predecessor(
             "Content-Type": "application/zip",
             "X-Task-Assignment-Id": str(h.request.assignment_id),
             "Idempotency-Key": str(new_record_id()),
-            "X-Predecessor-Submission-Id": str(h.created.submission_id),
-            "X-Revision-Preparation-Id": str(h.revision_preparation_id),
-            "X-Revision-Preparation-Sha256": h.revision_preparation_sha256,
-            "X-Submission-Summary": h.creation_request.summary,
-            "X-Contributor-Attestation": h.creation_request.contributor_attestation,
         }
         async with _client(h, monkeypatch, isolated_database_env) as client:
             client, settings, errors, calls = await configure_source_http(
@@ -485,13 +459,6 @@ async def test_public_checker_remediation_uses_exact_predecessor(
                 "capacity": {"maximum_total_bytes": 16 * 1024**2},
             }})
             monkeypatch.setattr(client._transport.app.state, "settings", settings)
-            denied = await client.post(route, headers=headers | {
-                "X-Predecessor-Submission-Id": str(new_record_id()),
-            }, content=payload)
-            assert denied.status_code == 409, denied.text
-            assert denied.json()["error"]["code"] == "task_submission_predecessor_changed"
-            assert calls == []
-
             created = await client.post(route, headers=headers, content=payload)
             assert not errors, "\n".join(errors)
             async with h.factory() as session:
@@ -548,7 +515,7 @@ async def test_confirmed_intake_deadline_persists_terminal_failure_and_replays(
     headers = f.access.target.headers | {
         "Content-Type": "application/zip", "X-Task-Assignment-Id": str(f.assignment),
         "Idempotency-Key": str(new_record_id()),
-        "X-Submission-Summary": "Completed work", "X-Contributor-Attestation": "I completed this work",
+        "X-Submission-Feedback": "Completed work",
     }
     first = await client.post(route, headers=headers, content=payload)
     assert first.status_code == 503, first.text

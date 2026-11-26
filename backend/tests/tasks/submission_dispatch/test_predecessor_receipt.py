@@ -35,11 +35,7 @@ async def test_deferred_dispatch_checks_accepted_successor_cause(
             assert local_source != foreign_source
             metadata = SubmissionIntakeMetadata(
                 task_id=local.request.task_id, assignment_id=local.request.assignment_id,
-                predecessor_submission_id=local.created.submission_id,
-                revision_preparation_id=UUID(str(local.revision_preparation_id)),
-                revision_preparation_sha256=local.revision_preparation_sha256,
-                summary=local.creation_request.summary,
-                contributor_attestation=local.creation_request.contributor_attestation,
+                feedback=local.creation_request.summary,
             )
             accepted, staged, checked = [], [], []
             original_create, original_commit = TaskSubmissionCreationService.create_accepted, AsyncSession.commit

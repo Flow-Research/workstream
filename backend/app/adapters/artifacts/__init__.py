@@ -972,8 +972,7 @@ def _submission_public_failure(exc: Exception) -> SubmissionIntakeFailure:
             code = "submission_operation_in_progress"
         elif exc.code in {
             "task_submission_predecessor_changed", "revision_limit_reached", "revision_deadline_expired",
-            "revision_context_blocked", "revision_context_changed", "revision_acknowledgement_required",
-            "revision_acknowledgement_invalid",
+            "revision_context_blocked", "revision_context_changed",
         }:
             code = exc.code
         else:
