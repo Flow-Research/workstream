@@ -58,8 +58,12 @@ async def test_model_selector_is_outside_image_request(tmp_path):
 
     async def handle(reader, writer):
         try:
-            size = struct.unpack(">I", await reader.readexactly(4))[0]
-            received.set_result(json.loads(await reader.readexactly(size)))
+            observed = await read_fixture_native_request(
+                reader, writer, fixture_placement(value.registry.image_digest, callback_relay=True),
+            )
+            if observed is None:
+                return
+            received.set_result(observed)
             body = json.dumps({
                 "protocol_version": "external_checker_service.v1",
                 "result": result.model_dump(mode="json"),
@@ -73,10 +77,10 @@ async def test_model_selector_is_outside_image_request(tmp_path):
 
     path = tmp_path / "checker.sock"
     server = await asyncio.start_unix_server(handle, path)
-    from tests.checkers.external.test_remote_node import remote_adapter_endpoint
+    from tests.checkers.external.test_remote_node import fixture_placement, read_fixture_native_request, remote_adapter_endpoint
 
     try:
-        async with remote_adapter_endpoint(tmp_path, path) as endpoint:
+        async with remote_adapter_endpoint(tmp_path, path, model_proxy_socket_path=path) as endpoint:
             adapter = external_checker_execution_factory(
                 **endpoint, timeout_seconds=90.0,
             ).create("remote_tls")
@@ -104,13 +108,11 @@ async def test_wrong_phase_or_request_cannot_open_model_transport(tmp_path, monk
     value = request(phase)
     connect = AsyncMock()
     monkeypatch.setattr(asyncio, "open_connection", connect)
-    from tests.checkers.external.test_remote_node import _certificate_files
+    from tests.checkers.external.test_remote_node import _certificate_files, fixture_runner_endpoints
 
     certificates = _certificate_files(tmp_path)
     adapter = external_checker_execution_factory(
-        host="127.0.0.1",
-        port=1,
-        server_name="runner.test",
+        endpoints=fixture_runner_endpoints(),
         ca_path=certificates["ca"],
         certificate_path=certificates["client_certificate"],
         private_key_path=certificates["client_key"],

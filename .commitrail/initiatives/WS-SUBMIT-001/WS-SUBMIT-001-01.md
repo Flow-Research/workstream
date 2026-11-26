@@ -12386,3 +12386,24 @@ and one existing matching relay case. A separate eight-case transport run
 passed the closed observations and proved that a wedged TLS read cannot
 extend selection through TLS shutdown. These checks use owned local fixtures
 with no new runtime deployment.
+
+Runtime wiring scope. Replace the active singleton settings with a bounded
+`WORKSTREAM_EXTERNAL_RUNNER_ENDPOINTS` JSON set. CHECKERS and ART share the
+transport and keep existing preparation, OAuth, lease, cleanup and retry
+owners. A POST locator and execution on one claim retain the selected node
+and its boot epoch. PRE compares its locked runtime profile and OCI identity.
+ART prepares its lease with the remaining time after selection and TLS. The
+existing mTLS edge uses the native bind frame before the canonical Unix
+request. Hosted configuration, preflight, CLI test transport and paired proof
+read the same endpoint settings. Operator drain requires the authenticated
+native observation and separate edge workspace and inventory checks.
+
+The initial loopback adapter and gateway batch had 75 passes and two fixture
+failures. Both failures were corrected in their existing test owners. One
+fixture now uses a valid approved profile ID and a local callback socket. The
+other makes the leased clock expire after actual PRE response decoding begins.
+A subsequent seven-case run passed both corrections, the typed environment
+read, the same-claim endpoint pin and the private bind rejection. Two hosted
+settings and render cases passed. These results use owned local fixtures and
+leave hardware latency, two-replica and two-node race, reload and drain
+qualification pending. No deployed service was changed.

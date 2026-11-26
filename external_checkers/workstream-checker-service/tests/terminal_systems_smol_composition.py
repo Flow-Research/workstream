@@ -1138,6 +1138,7 @@ async def _run_composition_case(
                     material_root=runner_material_root,
                     native_model_proxy_socket_path=runner_proxy_path,
                     session_timeout_seconds=720.0,
+                    config_sha256="sha256:" + hashlib.sha256(config_path.read_bytes()).hexdigest(),
                 ) as endpoint,
             ):
                 service = subprocess.Popen(

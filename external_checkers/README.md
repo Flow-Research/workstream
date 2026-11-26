@@ -332,6 +332,15 @@ the outer VM and one sequential child at their combined peak. Per-VM CPU
 ceilings still share the parent cgroup limit. Size and measure concurrency on
 the chosen host before publishing an interactive latency envelope.
 
+For a drain, the operator keeps an empty regular `.workstream-checker-drain`
+file in the checker's existing private socket directory. Use the directory
+owner and mode `0600`. An authenticated placement response with `drained`
+true confirms zero native admission usage under the active boot epoch. Hold
+the marker through restart and keep the existing guardian recovery and
+separate mTLS workspace cleanup checks. The mTLS callback host continues to
+own its own approved trial catalogue. Runner placement checks the native
+approved catalogue and exact selected entry.
+
 Each existing cache entry additionally has `smol.archive`,
 `smol.archive_sha256` and `smol.image_config`. The
 [cache preparation command](../backend/scripts/checker_smol_cache.py) verifies an already local

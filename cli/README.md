@@ -2228,9 +2228,7 @@ before running the drill. No credential or runtime profile is inferred from a
 local Docker installation:
 
 ```sh
-export WORKSTREAM_EXTERNAL_RUNNER_HOST=127.0.0.1
-export WORKSTREAM_EXTERNAL_RUNNER_PORT="$OWNED_TUNNEL_PORT"
-export WORKSTREAM_EXTERNAL_RUNNER_SERVER_NAME=runner.workstream.internal
+export WORKSTREAM_EXTERNAL_RUNNER_ENDPOINTS="$(printf '[{"host":"127.0.0.1","port":%s,"server_name":"runner.workstream.internal","config_sha256":"%s"}]' "$OWNED_TUNNEL_PORT" "$PINNED_RUNNER_CONFIG_SHA256")"
 export WORKSTREAM_EXTERNAL_RUNNER_CA_PATH="$PRIVATE_TLS/ca.crt"
 export WORKSTREAM_EXTERNAL_RUNNER_CERTIFICATE_PATH="$PRIVATE_TLS/app.crt"
 export WORKSTREAM_EXTERNAL_RUNNER_PRIVATE_KEY_PATH="$PRIVATE_TLS/app.key"

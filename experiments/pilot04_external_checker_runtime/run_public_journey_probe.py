@@ -1549,9 +1549,11 @@ async def run(database_url: str, image_reference: str, node_config: Path,
     _require(runtime_settings.artifact_scratch_root == scratch
              and runtime_settings.artifact_scratch_minimum_free_bytes == 0,
              "API/worker scratch configuration differs from fixture")
-    _require(runtime_settings.external_runner_host is not None
+    endpoints = runtime_settings.external_runner_endpoints
+    _require(endpoints is not None and len(endpoints.root) == 1
+             and endpoints.root[0].config_sha256 == "sha256:" + hashlib.sha256(node_config.read_bytes()).hexdigest()
              and runtime_settings.submission_execution_profile is not None,
-             "supply explicit remote TLS runner and source execution profile before qualification")
+             "supply one TLS runner with the exact reviewed node config and source execution profile")
     source_profile = _require_source_runtime_window(runtime_settings)
     _require(runtime_settings.submission_source_cleanup_profile is not None,
              "supply explicit source cleanup profile for the dedicated worker")

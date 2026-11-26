@@ -34,6 +34,7 @@ from app.modules.checkers.api.default_checker import (
 )
 from app.modules.checkers.api.material import SubmissionMaterialEntry
 from app.modules.checkers.api.pre_submit_material import SubmissionPacketView
+from tests.checkers.external.test_remote_node import fixture_placement, fixture_runner_endpoints
 
 _SPEC = importlib.util.spec_from_file_location(
     "trusted_intake_worker",
@@ -46,6 +47,23 @@ _POLICY = "sha256:" + "a" * 64
 _LEASE = "b" * 128
 _IMAGE = "sha256:" + "c" * 64
 _CONFIG = "sha256:" + "d" * 64
+
+def _intake_placement(**identity_changes):
+    identity = {
+        "image_digest": _IMAGE, "config_digest": _CONFIG,
+        "default_behavior_sha256": WORKSTREAM_DEFAULT_BEHAVIOR_SHA256,
+        "runtime": "smolvm", "isolation_mode": "smol-microvm",
+        "cpu_millis": 1000, "memory_bytes": 2 * 1024**3,
+    }
+    return fixture_placement(_IMAGE, _CONFIG, intake=identity | identity_changes)
+
+
+def _session_placement(adapter):
+    from app.adapters.runner import RunnerPlacement, RunnerReadiness
+
+    return RunnerPlacement(adapter._transport.endpoints.root[0], RunnerReadiness.model_validate_json(
+        json.dumps(_intake_placement() | {"fits_admission": True}),
+    ))
 
 
 async def _remote_adapter(tmp_path: Path, socket_path: Path):
@@ -64,8 +82,7 @@ async def _remote_adapter(tmp_path: Path, socket_path: Path):
     })
     server = await asyncio.start_server(node.handle, "127.0.0.1", 0, ssl=node.ssl_context)
     adapter = RemoteTlsTrustedIntakeAdapter(
-        host="127.0.0.1", port=server.sockets[0].getsockname()[1],
-        server_name="runner.test", ca_path=certificates["ca"],
+        endpoints=fixture_runner_endpoints(server.sockets[0].getsockname()[1]), ca_path=certificates["ca"],
         certificate_path=certificates["client_certificate"],
         private_key_path=certificates["client_key"], image_digest=_IMAGE,
         config_digest=_CONFIG,
@@ -78,7 +95,7 @@ def _unconnected_adapter(tmp_path: Path) -> RemoteTlsTrustedIntakeAdapter:
 
     certificates = _certificate_files(tmp_path)
     return RemoteTlsTrustedIntakeAdapter(
-        host="127.0.0.1", port=1, server_name="runner.test",
+        endpoints=fixture_runner_endpoints(),
         ca_path=certificates["ca"], certificate_path=certificates["client_certificate"],
         private_key_path=certificates["client_key"], image_digest=_IMAGE,
         config_digest=_CONFIG,
@@ -187,12 +204,22 @@ async def test_cancelled_prepare_closes_connection_and_drains_blocking_io(tmp_pa
     entered, disconnected = threading.Event(), threading.Event()
 
     def node():
-        with listener, listener.accept()[0] as connection:
-            reader = connection.makefile("rb")
-            assert _read(reader)["operation"] == "prepare"
-            entered.set()
-            assert reader.read() == b""
-            disconnected.set()
+        with listener:
+            with listener.accept()[0] as probe:
+                observed = _read(probe.makefile("rb"))
+                assert observed["operation"] == "placement" and observed["demand"]["kind"] == "intake"
+                probe.sendall(_frame(_intake_placement() | {"fits_admission": True}))
+            with listener.accept()[0] as connection:
+                reader = connection.makefile("rb")
+                placement = _intake_placement()
+                assert _read(reader) == {"protocol_version": "external_checker_service.v1", "operation": "bind_epoch",
+                                        "epoch": placement["epoch"], "config_sha256": placement["config_sha256"]}
+                command = _read(reader)
+                assert command["operation"] == "prepare"
+                assert 0 < command["payload"]["deadline_ms"] < _request().deadline_ms
+                entered.set()
+                assert reader.read() == b""
+                disconnected.set()
 
     thread = threading.Thread(target=node)
     thread.start()
@@ -220,6 +247,8 @@ async def test_cancelled_prepare_closes_connection_and_drains_blocking_io(tmp_pa
     ],
 )
 async def test_health_rejects_other_engine_or_trusted_identity(tmp_path, field, value):
+    from workstream_external_services import ExternalServiceUnavailableError
+
     path = tmp_path / "node.sock"
     listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     listener.bind(str(path))
@@ -227,33 +256,13 @@ async def test_health_rejects_other_engine_or_trusted_identity(tmp_path, field, 
 
     def node():
         with listener, listener.accept()[0] as connection:
-            assert _read(connection.makefile("rb"))["operation"] == "health"
-            identity = {
-                "image_digest": _IMAGE,
-                "config_digest": _CONFIG,
-                "default_behavior_sha256": WORKSTREAM_DEFAULT_BEHAVIOR_SHA256,
-                "runtime": "smolvm",
-                "isolation_mode": "smol-microvm",
-                "cpu_millis": 1000,
-                "memory_bytes": 2 * 1024**3,
-            }
-            identity[field] = value
-            connection.sendall(
-                _frame(
-                    {
-                        "protocol_version": _PROTOCOL,
-                        "operation": "health",
-                        "lease": None,
-                        "status": "ok",
-                        "payload": identity,
-                    }
-                )
-            )
+            assert _read(connection.makefile("rb"))["operation"] == "placement"
+            connection.sendall(_frame(_intake_placement(**{field: value})))
 
     thread = threading.Thread(target=node)
     thread.start()
     remote, adapter = await _remote_adapter(tmp_path, path)
-    with pytest.raises(ExternalServiceProtocolError):
+    with pytest.raises(ExternalServiceUnavailableError):
         await adapter.health()
     thread.join(2)
     remote.close()
@@ -311,9 +320,7 @@ def test_raw_guest_export_requires_exact_inventory_and_content(tmp_path, failure
 @pytest.mark.parametrize(
     "missing",
     [
-        "external_runner_host",
-        "external_runner_port",
-        "external_runner_server_name",
+        "external_runner_endpoints",
         "external_runner_ca_path",
         "external_runner_certificate_path",
         "external_runner_private_key_path",
@@ -327,9 +334,7 @@ def test_composition_requires_every_trusted_intake_identity(tmp_path, missing):
     from workstream_external_services import ExternalServiceConfigurationError
 
     settings = Settings(
-        external_runner_host="runner.internal",
-        external_runner_port=9443,
-        external_runner_server_name="runner.internal",
+        external_runner_endpoints=fixture_runner_endpoints(9443),
         external_runner_ca_path=tmp_path / "ca.crt",
         external_runner_certificate_path=tmp_path / "app.crt",
         external_runner_private_key_path=tmp_path / "app.key",
@@ -346,9 +351,7 @@ def test_intake_factory_is_independent_of_project_engine(tmp_path):
 
     adapter = trusted_submission_intake(
         Settings(
-            external_runner_host="runner.internal",
-            external_runner_port=9443,
-            external_runner_server_name="runner.internal",
+            external_runner_endpoints=fixture_runner_endpoints(9443),
             external_runner_ca_path=tmp_path / "ca.crt",
             external_runner_certificate_path=tmp_path / "app.crt",
             external_runner_private_key_path=tmp_path / "app.key",
@@ -372,7 +375,7 @@ async def test_interrupted_export_disconnects_before_cleanup_can_read_raw_bytes(
         BytesIO(_archive(content=content)))
     entry = inspection.entries[0]
     adapter = _unconnected_adapter(tmp_path)
-    session = _Session(adapter, time.monotonic() + 60, _request())
+    session = _Session(adapter, time.monotonic() + 60, _session_placement(adapter), _request())
     session._socket.close()
     session._socket, peer = socket.socketpair()
     session._state, session._lease, session._inspection = "inspected", _LEASE, inspection
@@ -420,7 +423,7 @@ def test_inspect_size_substitution_is_rejected_before_command_or_archive_bytes(t
 
     data = _archive()
     adapter = _unconnected_adapter(tmp_path)
-    session = _Session(adapter, time.monotonic() + 10, _request(archive_byte_count=len(data)))
+    session = _Session(adapter, time.monotonic() + 10, _session_placement(adapter), _request(archive_byte_count=len(data)))
     session._state = "prepared"
     commands = []
 

@@ -10,11 +10,13 @@ import hashlib
 from datetime import datetime, timezone
 from pathlib import Path
 import re
-import ssl
 import struct
 from typing import Literal
 
 from app.core.cancellation import await_cancellation_resistant
+from app.core.hashing import canonical_json_hash
+from app.core.runner_endpoints import ExternalRunnerEndpoints
+from app.adapters.runner import RunnerPlacement, RunnerTransport
 
 from app.interfaces.external_checker_execution import (
     ExternalCheckerExecutionOutcomeUnknown,
@@ -49,6 +51,8 @@ from app.modules.checkers.api.forge_locator import (
     ExternalCheckerForgeLocator,
     require_forge_locator_request,
 )
+from app.modules.checkers.api.external_policy import validated_trial_configuration
+from app.modules.checkers.api.model_profiles import configured_model_profile_selector
 
 EXTERNAL_CHECKER_CAPABILITY_KEY = "external_checker_execution"
 EXTERNAL_CHECKER_PROVIDER_KEY = "remote_tls"
@@ -65,9 +69,7 @@ class RemoteTlsExternalCheckerAdapter:
     def __init__(
         self,
         *,
-        host: str,
-        port: int,
-        server_name: str,
+        endpoints: ExternalRunnerEndpoints,
         ca_path: Path,
         certificate_path: Path,
         private_key_path: Path,
@@ -77,28 +79,16 @@ class RemoteTlsExternalCheckerAdapter:
     ) -> None:
         """Validate immutable endpoint settings without opening a connection."""
         if (
-            type(host) is not str
-            or not host
-            or len(host) > 255
-            or type(port) is not int
-            or not 1 <= port <= 65_535
-            or type(server_name) is not str
-            or not server_name
-            or len(server_name) > 255
-            or any(not path.is_absolute() or path.is_symlink() for path in (
-                ca_path, certificate_path, private_key_path
-            ))
-            or model_proxy_socket_path is not None
+            model_proxy_socket_path is not None
             and (not model_proxy_socket_path.is_absolute() or model_proxy_socket_path.is_symlink())
             or type(timeout_seconds) is not float
             or not 0.1 <= timeout_seconds <= 3_700.0
         ):
             raise ValueError("external checker service configuration is invalid")
         self._source_contracts = source_contracts
-        self._host, self._port, self._server_name = host, port, server_name
-        self._ca_path = ca_path
-        self._certificate_path = certificate_path
-        self._private_key_path = private_key_path
+        self._transport = RunnerTransport(endpoints, ca_path, certificate_path, private_key_path)
+        self._post_claim: tuple | None = None
+        self._post_placement: RunnerPlacement | None = None
         self._model_proxy_socket_path = model_proxy_socket_path
         self._timeout_seconds = timeout_seconds
         self._identity = ExternalServiceAdapterIdentity(
@@ -116,26 +106,8 @@ class RemoteTlsExternalCheckerAdapter:
         """The dedicated native node accepts only Smol runtime evidence."""
         return "smolvm"
 
-    def _tls_context(self) -> ssl.SSLContext:
-        context = ssl.create_default_context(
-            ssl.Purpose.SERVER_AUTH,
-            cafile=str(self._ca_path),
-        )
-        context.minimum_version = ssl.TLSVersion.TLSv1_3
-        context.check_hostname = True
-        context.load_cert_chain(
-            certfile=str(self._certificate_path),
-            keyfile=str(self._private_key_path),
-        )
-        return context
-
-    async def _open(self) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
-        return await asyncio.open_connection(
-            self._host,
-            self._port,
-            ssl=self._tls_context(),
-            server_hostname=self._server_name,
-        )
+    async def _open(self, placement: RunnerPlacement) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
+        return await self._transport.open(placement.endpoint)
 
     @staticmethod
     async def _send_frame(writer: asyncio.StreamWriter, payload: bytes) -> None:
@@ -144,17 +116,23 @@ class RemoteTlsExternalCheckerAdapter:
         writer.write(struct.pack(">I", len(payload)) + payload)
         await writer.drain()
 
-    async def _proxy_connection(self) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
-        reader, writer = await self._open()
+    async def _proxy_connection(self, placement: RunnerPlacement) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
+        reader, writer = await self._open(placement)
         control = json.dumps(
             {
                 "protocol_version": _REMOTE_PROTOCOL,
                 "operation": "proxy",
                 "capability": EXTERNAL_CHECKER_CAPABILITY_KEY,
+                **placement.binding(),
             },
             separators=(",", ":"),
         ).encode()
-        await self._send_frame(writer, control)
+        try:
+            await self._send_frame(writer, control)
+        except BaseException:
+            writer.close()
+            await await_cancellation_resistant(writer.wait_closed())
+            raise
         return reader, writer
 
     @staticmethod
@@ -198,7 +176,17 @@ class RemoteTlsExternalCheckerAdapter:
                 raise SelectedPreSubmitInfrastructureUnavailable("deadline_exceeded")
             deadline = asyncio.get_running_loop().time() + timeout
             async with asyncio.timeout_at(deadline):
-                reader, writer = await self._proxy_connection()
+                image_digest = reservation.policy.entries[0].registry.image_digest
+                profile_sha256 = canonical_json_hash(reservation.runtime_profile.model_dump(mode="json"))
+                placement = await self._transport.select(
+                    str(reservation.attempt_id), demand={"kind": "pre", "source_bytes": reservation.source.raw_byte_count},
+                    qualifies=lambda state: state.image(image_digest) is not None
+                    and state.pre is not None and state.pre.profile_sha256 == profile_sha256
+                    and state.pre.root_sha256 == reservation.runtime_profile.platform_root_sha256,
+                )
+                if placement is None:
+                    raise ExternalServiceUnavailableError(self._identity)
+                reader, writer = await self._proxy_connection(placement)
                 try:
                     writer.write(struct.pack(">I", len(payload)) + payload)
                     await writer.drain()
@@ -237,6 +225,8 @@ class RemoteTlsExternalCheckerAdapter:
             result = SelectedPreSubmitInvocationResult.from_canonical_body(body, source_contracts=self._source_contracts)
             if result.receipt.runtime.provider != "smolvm":
                 raise ValueError("PRE runtime provider differs")
+            if result.receipt.invocation.config_image_id != placement.readiness.image(image_digest).config_image_id:
+                raise ValueError("PRE image configuration differs from placement")
             result.validate_lease(lease, source_contracts=self._source_contracts)
             if (asyncio.get_running_loop().time() >= deadline
                     or datetime.now(timezone.utc) >= lease.lease_expires_at):
@@ -266,6 +256,42 @@ class RemoteTlsExternalCheckerAdapter:
     async def locate_forge_change(self, request, grant) -> ExternalCheckerForgeLocatorResponse:
         """Use the same bounded transport without issuing model or trial authority."""
         return await self._exchange(request, grant, model_grant=None, locate=True)
+
+    async def _place_post(
+        self, request: ExternalCheckerExecutionRequest, *, with_model_grant: bool,
+    ) -> RunnerPlacement:
+        identity = request.identity
+        claim = (identity.attempt_id, identity.lease_id, identity.lease_generation)
+        registry = request.registry
+        trial = validated_trial_configuration(request.configuration, registry)
+        callbacks = with_model_grant or trial is not None or configured_model_profile_selector(
+            request.configuration, stage=identity.phase,
+        ) is not None
+        if callbacks and (self._model_proxy_socket_path is None or not self._model_proxy_socket_path.is_socket()):
+            raise ExternalServiceUnavailableError(self._identity)
+        if self._post_placement is not None:
+            if (self._post_claim != claim
+                    or self._post_placement.readiness.image(request.registry.image_digest) is None
+                    or callbacks and not self._post_placement.readiness.callback_relay):
+                raise ValueError("external checker adapter is bound to another claim")
+            return self._post_placement
+
+        trial_binding = None if trial is None else {
+            "registry_entry_id": str(registry.registry_entry_id), "registry_entry_digest": registry.entry_digest,
+            "image_digest": registry.image_digest, "configuration_sha256": request.configuration_sha256,
+            "profile_digest": trial.profile.profile_digest, "projection_digest": trial.projection.projection_digest,
+        }
+        placement = await self._transport.select(
+            str(identity.attempt_id), demand={"kind": "post", "memory_bytes": registry.resources.memory_bytes,
+                                             "trial": trial_binding},
+            qualifies=lambda state: state.image(registry.image_digest) is not None
+            and (not callbacks or state.callback_relay)
+            and (trial is None or state.trial_authority_manifest_sha256 is not None),
+        )
+        if placement is None:
+            raise ExternalServiceUnavailableError(self._identity)
+        self._post_claim, self._post_placement = claim, placement
+        return placement
 
     async def _exchange(self, request, grant, *, model_grant, locate):
         """Exchange one bounded request and revalidate every returned fact."""
@@ -312,7 +338,8 @@ class RemoteTlsExternalCheckerAdapter:
             if self._timeout_seconds < required_timeout:
                 raise ExternalServiceUnavailableError(self._identity)
             async with asyncio.timeout(self._timeout_seconds):
-                reader, writer = await self._open()
+                placement = await self._place_post(checked, with_model_grant=model_grant is not None)
+                reader, writer = await self._open(placement)
                 try:
                     manifest = grant.source.manifest
                     files = grant.source.files
@@ -334,6 +361,7 @@ class RemoteTlsExternalCheckerAdapter:
                             "manifest_byte_count": len(manifest),
                             "file_count": len(files),
                             "total_byte_count": total_bytes,
+                            **placement.binding(),
                         },
                         ensure_ascii=False,
                         allow_nan=False,
@@ -423,6 +451,10 @@ class RemoteTlsExternalCheckerAdapter:
             )
             if isolation is not None and (
                 isolation.platform_manifest_digest != checked.registry.image_digest
+                or isolation.config_image_id != placement.readiness.image(checked.registry.image_digest).config_image_id
+                or any(getattr(isolation, field) != getattr(placement.readiness.health, field) for field in (
+                    "operating_system", "architecture", "runtime", "isolation_mode", "sandbox_uid", "sandbox_gid",
+                ))
             ):
                 raise ValueError("external checker isolation receipt is invalid")
             if (locator or result.outcome == "completed") and isolation is None:
@@ -441,63 +473,11 @@ class RemoteTlsExternalCheckerAdapter:
             raise
 
     async def health(self) -> ExternalCheckerServiceHealth:
-        """Require the service to recheck its configured engine and report readiness."""
-        payload = json.dumps(
-            {"protocol_version": _PROTOCOL, "operation": "health"},
-            separators=(",", ":"),
-        ).encode("utf-8")
-        try:
-            async with asyncio.timeout(self._timeout_seconds):
-                reader, writer = await self._proxy_connection()
-                try:
-                    writer.write(struct.pack(">I", len(payload)) + payload)
-                    await writer.drain()
-                    size = struct.unpack(">I", await reader.readexactly(4))[0]
-                    if size == 0 or size > 16_384:
-                        raise ExternalServiceProtocolError(self._identity)
-                    raw = await reader.readexactly(size)
-                    if await reader.read(1):
-                        raise ExternalServiceProtocolError(self._identity)
-                finally:
-                    writer.close()
-                    await writer.wait_closed()
-        except ExternalServiceProtocolError:
-            raise
-        except (TimeoutError, OSError, asyncio.IncompleteReadError) as exc:
-            raise ExternalServiceUnavailableError(self._identity) from exc
-        try:
-            body = json.loads(raw)
-            expected = {
-                "protocol_version",
-                "operation",
-                "status",
-                "operating_system",
-                "architecture",
-                "runtime",
-                "isolation_mode",
-                "cached_platform_manifests",
-                "sandbox_uid",
-                "sandbox_gid",
-            }
-            if (
-                type(body) is not dict
-                or set(body) != expected
-                or body["protocol_version"] != _PROTOCOL
-                or body["operation"] != "health"
-                or body["status"] != "ready"
-            ):
-                raise ValueError("external checker health response is invalid")
-            return ExternalCheckerServiceHealth(
-                operating_system=body["operating_system"],
-                architecture=body["architecture"],
-                runtime=body["runtime"],
-                isolation_mode=body["isolation_mode"],
-                cached_platform_manifests=body["cached_platform_manifests"],
-                sandbox_uid=body["sandbox_uid"],
-                sandbox_gid=body["sandbox_gid"],
-            )
-        except (TypeError, ValueError, UnicodeError, json.JSONDecodeError) as exc:
-            raise ExternalServiceProtocolError(self._identity) from exc
+        """Return authenticated readiness from one qualified configured node."""
+        placement = await self._transport.select("health", qualifies=lambda _state: True)
+        if placement is None:
+            raise ExternalServiceUnavailableError(self._identity)
+        return placement.readiness.health
 
 
 __all__ = (

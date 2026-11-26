@@ -102,9 +102,7 @@ from app.modules.projects.api.guide_reads import ProjectGuideDocumentContentPort
 def trusted_submission_intake(settings: Settings) -> TrustedSubmissionIntakeAdapter:
     """Register the sole ART capability provider with explicit pinned identity."""
     if any(value is None for value in (
-        settings.external_runner_host,
-        settings.external_runner_port,
-        settings.external_runner_server_name,
+        settings.external_runner_endpoints,
         settings.external_runner_ca_path,
         settings.external_runner_certificate_path,
         settings.external_runner_private_key_path,
@@ -114,9 +112,7 @@ def trusted_submission_intake(settings: Settings) -> TrustedSubmissionIntakeAdap
         raise ExternalServiceConfigurationError()
     factory = ExternalServiceAdapterFactory[TrustedSubmissionIntakeAdapter](CAPABILITY)
     factory.register(PROVIDER, lambda: RemoteTlsTrustedIntakeAdapter(
-        host=settings.external_runner_host,
-        port=settings.external_runner_port,
-        server_name=settings.external_runner_server_name,
+        endpoints=settings.external_runner_endpoints,
         ca_path=settings.external_runner_ca_path,
         certificate_path=settings.external_runner_certificate_path,
         private_key_path=settings.external_runner_private_key_path,

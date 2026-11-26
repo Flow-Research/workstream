@@ -13,6 +13,7 @@ import pytest
 
 from app.adapters.checkers import external_checker_execution_factory
 from app.adapters.checkers.model_execution import ModelAwareExternalExecution
+from app.core.identifiers import new_record_id
 from app.interfaces.external_checker_execution import ExternalCheckerExecutionOutcomeUnknown
 from workstream_external_services import ExternalServiceProtocolError
 from app.modules.checkers.api.external import (
@@ -67,7 +68,7 @@ def _request(*, locate=True, maximum_output_bytes=32768, output_document=None, m
     configuration = {"workstream_forge_facts_version": "v1"}
     if model:
         configuration.update(
-            model_profile_id=str(uuid4()), model_profile_version=1, model_profile_digest=SHA
+            model_profile_id=str(new_record_id()), model_profile_version=1, model_profile_digest=SHA
         )
     inputs = {"task_version": "v1"}
     if locate:
@@ -119,10 +120,10 @@ def _isolation(request):
         operating_system="linux",
         architecture="amd64",
         config_image_id=SHA,
-        runtime="runc",
-        isolation_mode="docker-dev",
-        sandbox_uid=65532,
-        sandbox_gid=65532,
+        runtime="smolvm",
+        isolation_mode="smol-microvm",
+        sandbox_uid=10001,
+        sandbox_gid=10001,
     )
 
 
@@ -133,8 +134,12 @@ async def _service(tmp_path, request, result, *, isolation=True):
 
     async def handle(reader, writer):
         try:
-            size = struct.unpack(">I", await reader.readexactly(4))[0]
-            received.append(json.loads(await reader.readexactly(size)))
+            observed = await read_fixture_native_request(
+                reader, writer, fixture_placement(request.registry.image_digest, SHA, callback_relay=True),
+            )
+            if observed is None:
+                return
+            received.append(observed)
             body = json.dumps(
                 dict(
                     protocol_version="external_checker_service.v1",
@@ -151,10 +156,10 @@ async def _service(tmp_path, request, result, *, isolation=True):
             await writer.wait_closed()
 
     server = await asyncio.start_unix_server(handle, socket)
-    from tests.checkers.external.test_remote_node import remote_adapter_endpoint
+    from tests.checkers.external.test_remote_node import fixture_placement, read_fixture_native_request, remote_adapter_endpoint
 
     try:
-        async with remote_adapter_endpoint(tmp_path, socket) as endpoint:
+        async with remote_adapter_endpoint(tmp_path, socket, model_proxy_socket_path=socket) as endpoint:
             yield (
                 external_checker_execution_factory(
                     **endpoint,

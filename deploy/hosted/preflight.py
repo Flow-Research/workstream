@@ -62,20 +62,19 @@ INTAKE_DIGEST_KEYS = (
     "WORKSTREAM_ARTIFACT_INTAKE_CONFIG_DIGEST",
 )
 HOSTED_PROFILE_KEY = "WORKSTREAM_HOSTED_PROFILE"
-REMOTE_RUNNER_KEYS = (
-    "WORKSTREAM_EXTERNAL_RUNNER_HOST",
-    "WORKSTREAM_EXTERNAL_RUNNER_PORT",
-    "WORKSTREAM_EXTERNAL_RUNNER_SERVER_NAME",
+REMOTE_RUNNER_ENDPOINTS_KEY = "WORKSTREAM_EXTERNAL_RUNNER_ENDPOINTS"
+REMOTE_RUNNER_SECRET_FILE_KEYS = (
     "WORKSTREAM_EXTERNAL_RUNNER_CA_FILE",
     "WORKSTREAM_EXTERNAL_RUNNER_CERTIFICATE_FILE",
     "WORKSTREAM_EXTERNAL_RUNNER_PRIVATE_KEY_FILE",
+)
+REMOTE_RUNNER_KEYS = (
+    REMOTE_RUNNER_ENDPOINTS_KEY,
+    *REMOTE_RUNNER_SECRET_FILE_KEYS,
     *INTAKE_DIGEST_KEYS,
 )
-REMOTE_RUNNER_SECRET_FILE_KEYS = REMOTE_RUNNER_KEYS[3:6]
 REMOTE_RUNNER_ENVIRONMENT_KEYS = (
-    "WORKSTREAM_EXTERNAL_RUNNER_HOST",
-    "WORKSTREAM_EXTERNAL_RUNNER_PORT",
-    "WORKSTREAM_EXTERNAL_RUNNER_SERVER_NAME",
+    REMOTE_RUNNER_ENDPOINTS_KEY,
     "WORKSTREAM_EXTERNAL_RUNNER_CA_PATH",
     "WORKSTREAM_EXTERNAL_RUNNER_CERTIFICATE_PATH",
     "WORKSTREAM_EXTERNAL_RUNNER_PRIVATE_KEY_PATH",
@@ -145,6 +144,7 @@ SUBMISSION_PROFILE_KEYS = (
     "WORKSTREAM_SUBMISSION_SOURCE_CLEANUP_PROFILE",
 )
 DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
+RUNNER_DNS_NAME = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*")
 IMAGE_REFERENCE = re.compile(r"[^\s@]+@sha256:[0-9a-f]{64}\Z")
 ENVIRONMENT_KEY = re.compile(r"[A-Z][A-Z0-9_]*\Z")
 IAM_USER_ARN = re.compile(
@@ -596,20 +596,23 @@ def validate_environment(values: dict[str, str]) -> None:
     for key in INTAKE_DIGEST_KEYS:
         if not DIGEST.fullmatch(_required(values, key)):
             raise PreflightError(f"trusted intake requires a pinned digest: {key}")
-    runner_host = _required(values, "WORKSTREAM_EXTERNAL_RUNNER_HOST")
-    runner_name = _required(values, "WORKSTREAM_EXTERNAL_RUNNER_SERVER_NAME")
-    if (
-        len(runner_host) > 255
-        or len(runner_name) > 255
-        or any(character.isspace() for character in runner_host + runner_name)
-    ):
-        raise PreflightError("external runner endpoint is invalid")
     try:
-        runner_port = int(_required(values, "WORKSTREAM_EXTERNAL_RUNNER_PORT"))
+        endpoints = json.loads(_required(values, REMOTE_RUNNER_ENDPOINTS_KEY))
     except ValueError as exc:
-        raise PreflightError("external runner port is invalid") from exc
-    if not 1 <= runner_port <= 65_535:
-        raise PreflightError("external runner port is invalid")
+        raise PreflightError("external runner endpoints must be JSON") from exc
+    if type(endpoints) is not list or not 1 <= len(endpoints) <= 8:
+        raise PreflightError("external runner endpoint set is invalid")
+    for endpoint in endpoints:
+        if (type(endpoint) is not dict or set(endpoint) != {"host", "port", "server_name", "config_sha256"}
+                or any(type(endpoint[name]) is not str for name in ("host", "server_name", "config_sha256"))
+                or any(len(endpoint[name]) > 253 or not RUNNER_DNS_NAME.fullmatch(endpoint[name])
+                       for name in ("host", "server_name"))
+                or type(endpoint["port"]) is not int or not 1 <= endpoint["port"] <= 65_535
+                or not DIGEST.fullmatch(endpoint["config_sha256"])):
+            raise PreflightError("external runner endpoint is invalid")
+    if (len({(endpoint["host"], endpoint["port"]) for endpoint in endpoints}) != len(endpoints)
+            or len({endpoint["server_name"] for endpoint in endpoints}) != len(endpoints)):
+        raise PreflightError("external runner endpoint identities must be distinct")
     for key in FORBIDDEN_RELEASE_KEYS:
         if values.get(key):
             raise PreflightError(
@@ -2132,11 +2135,7 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
             raise PreflightError(f"Resend credential is exposed outside its email worker: {name}")
         expected_remote = (
             {
-                "WORKSTREAM_EXTERNAL_RUNNER_HOST": values["WORKSTREAM_EXTERNAL_RUNNER_HOST"],
-                "WORKSTREAM_EXTERNAL_RUNNER_PORT": values["WORKSTREAM_EXTERNAL_RUNNER_PORT"],
-                "WORKSTREAM_EXTERNAL_RUNNER_SERVER_NAME": values[
-                    "WORKSTREAM_EXTERNAL_RUNNER_SERVER_NAME"
-                ],
+                REMOTE_RUNNER_ENDPOINTS_KEY: values[REMOTE_RUNNER_ENDPOINTS_KEY],
                 "WORKSTREAM_EXTERNAL_RUNNER_CA_PATH": "/run/secrets/external_runner_ca",
                 "WORKSTREAM_EXTERNAL_RUNNER_CERTIFICATE_PATH": (
                     "/run/secrets/external_runner_certificate"

@@ -148,6 +148,7 @@ def load_journey_configuration(environment: dict[str, str]) -> dict[str, Path]:
     from jsonschema import Draft202012Validator
 
     from app.adapters.artifacts import selected_pre_submit_source_contracts
+    from app.core.runner_endpoints import ExternalRunnerEndpoints
     from app.modules.artifacts.api.submission_cleanup import (
         SubmissionSourceCleanupProfile,
     )
@@ -156,16 +157,11 @@ def load_journey_configuration(environment: dict[str, str]) -> dict[str, Path]:
     from app.modules.checkers.api.source_contracts import source_contracts_context
     from public_setup import validate_authored_rules_template
 
-    host = environment.get("WORKSTREAM_EXTERNAL_RUNNER_HOST")
-    port = environment.get("WORKSTREAM_EXTERNAL_RUNNER_PORT")
-    server_name = environment.get("WORKSTREAM_EXTERNAL_RUNNER_SERVER_NAME")
-    if (
-        host != "127.0.0.1"
-        or not port
-        or not port.isdecimal()
-        or not 1 <= int(port) <= 65_535
-        or not server_name
-    ):
+    try:
+        endpoints = ExternalRunnerEndpoints.model_validate_json(environment.get("WORKSTREAM_EXTERNAL_RUNNER_ENDPOINTS", ""))
+    except ValueError as exc:
+        raise RuntimeError("journey requires reviewed TLS runner endpoints") from exc
+    if any(endpoint.host != "127.0.0.1" for endpoint in endpoints.root):
         raise RuntimeError("journey requires an explicit loopback TLS runner tunnel")
     for name in (
         "WORKSTREAM_EXTERNAL_RUNNER_CA_PATH",

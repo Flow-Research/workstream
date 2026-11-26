@@ -55,9 +55,7 @@ def revision_feedback_port(session) -> RevisionFeedbackPort:
 
 def external_checker_execution_factory(
     *,
-    host: str,
-    port: int,
-    server_name: str,
+    endpoints,
     ca_path: Path,
     certificate_path: Path,
     private_key_path: Path,
@@ -72,9 +70,7 @@ def external_checker_execution_factory(
     factory.register(
         EXTERNAL_CHECKER_PROVIDER_KEY,
         lambda: RemoteTlsExternalCheckerAdapter(
-            host=host,
-            port=port,
-            server_name=server_name,
+            endpoints=endpoints,
             ca_path=ca_path,
             certificate_path=certificate_path,
             private_key_path=private_key_path,
@@ -160,18 +156,14 @@ def create_checker_model_provider(
 def configured_external_checker_execution_factory(settings):
     """Map configured image-execution settings into the sole adapter factory."""
     if (
-        settings.external_runner_host is None
-        or settings.external_runner_port is None
-        or settings.external_runner_server_name is None
+        settings.external_runner_endpoints is None
         or settings.external_runner_ca_path is None
         or settings.external_runner_certificate_path is None
         or settings.external_runner_private_key_path is None
     ):
         raise ValueError("external checker service is not configured")
     return external_checker_execution_factory(
-        host=settings.external_runner_host,
-        port=settings.external_runner_port,
-        server_name=settings.external_runner_server_name,
+        endpoints=settings.external_runner_endpoints,
         ca_path=settings.external_runner_ca_path,
         certificate_path=settings.external_runner_certificate_path,
         private_key_path=settings.external_runner_private_key_path,
@@ -185,6 +177,7 @@ class _ConfiguredExternalCheckerExecution:
 
     def __init__(self, settings) -> None:
         self._settings = settings
+        self._adapter: ExternalCheckerExecutionAdapter | None = None
         self._identity = ExternalServiceAdapterIdentity(
             EXTERNAL_CHECKER_CAPABILITY_KEY,
             EXTERNAL_CHECKER_PROVIDER_KEY,
@@ -202,14 +195,13 @@ class _ConfiguredExternalCheckerExecution:
 
     def _resolve(self) -> ExternalCheckerExecutionAdapter:
         """Create the fixed provider or report absent runtime configuration."""
-        if (
-            self._settings.external_runner_host is None
-            and self._settings.external_runner_port is None
-        ):
+        if self._settings.external_runner_endpoints is None:
             raise ExternalServiceUnavailableError(self._identity)
-        return configured_external_checker_execution_factory(self._settings).create(
-            EXTERNAL_CHECKER_PROVIDER_KEY
-        )
+        if self._adapter is None:
+            self._adapter = configured_external_checker_execution_factory(self._settings).create(
+                EXTERNAL_CHECKER_PROVIDER_KEY
+            )
+        return self._adapter
 
     async def execute_pre(self, lease, grant):
         """Resolve the same provider for the source-bound single PRE session."""

@@ -79,6 +79,17 @@ async def _write_frame(writer: asyncio.StreamWriter, body: bytes) -> None:
     await writer.drain()
 
 
+def _epoch_binding(control: dict[str, Any]) -> bytes:
+    epoch, config = control.get("epoch"), control.get("config_sha256")
+    if (type(epoch) is not str or re.fullmatch(r"[0-9a-f]{64}", epoch) is None
+            or type(config) is not str or _SHA256.fullmatch(config) is None):
+        raise ProtocolError("runner epoch binding is invalid")
+    return json.dumps({
+        "protocol_version": "external_checker_service.v1", "operation": "bind_epoch",
+        "epoch": epoch, "config_sha256": config,
+    }, separators=(",", ":")).encode()
+
+
 class ExecutionChannel:
     """Multiplex native callback frames over the exact owning execute connection."""
 
@@ -465,12 +476,18 @@ class RemoteNode:
                     raise ProtocolError("remote protocol differs")
                 operation = control.get("operation")
                 capability = control.get("capability")
-                if operation == "proxy":
-                    if set(control) != {"protocol_version", "operation", "capability"} or capability not in {
+                if operation == "placement":
+                    if set(control) != {"protocol_version", "operation", "demand"} or (
+                        control["demand"] is not None and type(control["demand"]) is not dict
+                    ):
+                        raise ProtocolError("placement request is invalid")
+                    await self._placement(control["demand"], writer)
+                elif operation == "proxy":
+                    if set(control) != {"protocol_version", "operation", "capability", "epoch", "config_sha256"} or capability not in {
                         CHECKER_CAPABILITY, INTAKE_CAPABILITY
                     }:
                         raise ProtocolError("proxy request is invalid")
-                    await self._proxy(reader, writer)
+                    await self._proxy(reader, writer, _epoch_binding(control))
                 elif operation == "execute":
                     if capability != CHECKER_CAPABILITY:
                         raise ProtocolError("execute capability differs")
@@ -486,7 +503,22 @@ class RemoteNode:
             except (OSError, ssl.SSLError):
                 pass
 
-    async def _proxy(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+    async def _placement(self, demand: dict[str, Any] | None, writer: asyncio.StreamWriter) -> None:
+        """Forward one closed read-only request without allowing an inner execution frame."""
+        native_reader, native_writer = await asyncio.open_unix_connection(self.socket_path)
+        try:
+            await _write_frame(native_writer, json.dumps({
+                "protocol_version": "external_checker_service.v1", "operation": "placement", "demand": demand,
+            }, separators=(",", ":")).encode())
+            response = await _read_frame(native_reader, 32_768)
+            if await native_reader.read(1):
+                raise ProtocolError("native placement reply has trailing data")
+            await _write_frame(writer, response)
+        finally:
+            native_writer.close()
+            await native_writer.wait_closed()
+
+    async def _proxy(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter, binding: bytes) -> None:
         native_reader, native_writer = await asyncio.open_unix_connection(self.socket_path)
 
         async def copy(source: asyncio.StreamReader, target: asyncio.StreamWriter) -> None:
@@ -496,6 +528,7 @@ class RemoteNode:
 
         tasks: set[asyncio.Task[None]] = set()
         try:
+            await _write_frame(native_writer, binding)
             tasks = {
                 asyncio.create_task(copy(reader, native_writer)),
                 asyncio.create_task(copy(native_reader, writer)),
@@ -520,10 +553,11 @@ class RemoteNode:
     ) -> None:
         expected = {
             "protocol_version", "operation", "capability", "service_request",
-            "manifest_byte_count", "file_count", "total_byte_count",
+            "manifest_byte_count", "file_count", "total_byte_count", "epoch", "config_sha256",
         }
         if set(control) != expected or type(control["service_request"]) is not dict:
             raise ProtocolError("execute request is invalid")
+        binding_frame = _epoch_binding(control)
         request = control["service_request"]
         if request.get("operation") not in {"execute", "locate_forge_change"}:
             raise ProtocolError("service operation is invalid")
@@ -568,7 +602,7 @@ class RemoteNode:
             raise ProtocolError("material bounds differ")
         async with self._execution:
             await self._stage_and_execute(
-                grant_id, raw_manifest, manifest, files, request, reader, writer
+                grant_id, raw_manifest, manifest, files, request, reader, writer, binding_frame
             )
 
     async def _stage_and_execute(
@@ -580,6 +614,7 @@ class RemoteNode:
         request: dict[str, Any],
         reader: asyncio.StreamReader,
         writer: asyncio.StreamWriter,
+        binding_frame: bytes,
     ) -> None:
         target = self.workspaces / grant_id
         incoming = self.workspaces / f".incoming-{uuid.uuid4().hex}"
@@ -627,6 +662,7 @@ class RemoteNode:
             if self._active_channel is not None:
                 raise ProtocolError("execute callback owner is already active")
             self._active_channel = channel
+            await _write_frame(native_writer, binding_frame)
             await _write_frame(native_writer, encoded)
             response_task = asyncio.create_task(_read_frame(native_reader, MAXIMUM_FRAME_BYTES))
             disconnect_task = asyncio.create_task(channel.closed.wait())

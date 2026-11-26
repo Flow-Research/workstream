@@ -206,9 +206,7 @@ link); the API intentionally has no model callback socket.
 The exact non-secret release additions are:
 
 ```dotenv
-WORKSTREAM_EXTERNAL_RUNNER_HOST=172.31.21.182
-WORKSTREAM_EXTERNAL_RUNNER_PORT=9443
-WORKSTREAM_EXTERNAL_RUNNER_SERVER_NAME=runner.workstream.internal
+WORKSTREAM_EXTERNAL_RUNNER_ENDPOINTS=[{"host":"172.31.21.182","port":9443,"server_name":"runner.workstream.internal","config_sha256":"sha256:<reviewed-loaded-node-config-digest>"}]
 WORKSTREAM_EXTERNAL_RUNNER_CA_FILE=/etc/workstream/runner-tls/ca.crt
 WORKSTREAM_EXTERNAL_RUNNER_CERTIFICATE_FILE=/etc/workstream/runner-tls/app.crt
 WORKSTREAM_EXTERNAL_RUNNER_PRIVATE_KEY_FILE=/etc/workstream/runner-tls/app.key

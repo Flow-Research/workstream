@@ -30,6 +30,7 @@ from app.core.s3_validation import (
     is_canonical_s3_prefix,
     is_canonical_s3_region,
 )
+from app.core.runner_endpoints import ExternalRunnerEndpoints
 from app.interfaces.forge_facts import FORGE_FACTS_MAXIMUM_READ_SECONDS
 from app.interfaces.project_guide_runtime import (
     AdapterProfileValue,
@@ -262,9 +263,7 @@ class Settings(BaseSettings):
     submission_source_cleanup_profile: dict[str, object] | None = None
     artifact_intake_image_digest: str | None = None
     artifact_intake_config_digest: str | None = None
-    external_runner_host: str | None = None
-    external_runner_port: int | None = Field(default=None, ge=1, le=65_535)
-    external_runner_server_name: str | None = None
+    external_runner_endpoints: ExternalRunnerEndpoints | None = None
     external_runner_ca_path: Path | None = None
     external_runner_certificate_path: Path | None = None
     external_runner_private_key_path: Path | None = None
@@ -704,9 +703,7 @@ class Settings(BaseSettings):
                     "artifact scratch and durable local storage roots must be separate"
                 )
         external_values = (
-            self.external_runner_host,
-            self.external_runner_port,
-            self.external_runner_server_name,
+            self.external_runner_endpoints,
             self.external_runner_ca_path,
             self.external_runner_certificate_path,
             self.external_runner_private_key_path,
@@ -714,13 +711,7 @@ class Settings(BaseSettings):
         if any(value is not None for value in external_values):
             if any(value is None for value in external_values):
                 raise ValueError("external runner TLS settings must be complete")
-            assert self.external_runner_host is not None
-            assert self.external_runner_server_name is not None
-            if not self.external_runner_host or len(self.external_runner_host) > 255:
-                raise ValueError("external runner host is invalid")
-            if not self.external_runner_server_name or len(self.external_runner_server_name) > 255:
-                raise ValueError("external runner server name is invalid")
-            for path in external_values[3:]:
+            for path in external_values[1:]:
                 assert isinstance(path, Path)
                 if not path.is_absolute():
                     raise ValueError("external runner TLS paths must be absolute")

@@ -20,7 +20,8 @@ A render, image build or preflight alone is not deployment evidence.
 
 Hosted releases set `WORKSTREAM_HOSTED_PROFILE=app`. Supply the private runner
 address, port and certificate name through
-`WORKSTREAM_EXTERNAL_RUNNER_{HOST,PORT,SERVER_NAME}`; supply the CA, client
+`WORKSTREAM_EXTERNAL_RUNNER_ENDPOINTS` with the reviewed private address, port,
+exact certificate DNS name and loaded config SHA-256 for each node. Supply the CA, client
 certificate and client key through the corresponding `*_FILE` selectors.
 Pin `WORKSTREAM_ARTIFACT_INTAKE_IMAGE_DIGEST` and
 `WORKSTREAM_ARTIFACT_INTAKE_CONFIG_DIGEST` to the images installed on the
@@ -565,8 +566,13 @@ If retained work remains, complete its recovery under the original configuration
 before changing the pool.
 
 Before restarting or stopping a runner unit, first drain producers and the
-worker through the wrapper, retain the proxy until calls settle, and independently
-confirm that the runner has no active owned leases, VMs or cgroups.
+worker through the wrapper. Keep the native drain marker in its existing
+private control directory and require an authenticated placement observation
+of the reviewed loaded config and current epoch with `drained: true`. This
+covers native reservations before their VM or lease is visible. Also require
+the remote relay workspace to be empty and its transport sessions to settle.
+Retain the proxy until its calls settle, and independently inspect the owned
+leases, VMs and cgroups.
 Preserve guardian recovery and use the exact owner-scoped inventory; never prune
 shared resources or stop another deployment. Exercise an interrupted
 job and verify the existing exact retry/reconciliation operations rather than

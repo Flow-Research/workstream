@@ -19,6 +19,8 @@ from typing import BinaryIO, TypeVar
 from pydantic import TypeAdapter
 
 from app.core.cancellation import await_cancellation_resistant
+from app.core.runner_endpoints import ExternalRunnerEndpoints
+from app.adapters.runner import RunnerPlacement, RunnerReadiness, RunnerTransport
 from workstream_external_services import (
     ExternalServiceAdapterIdentity,
     ExternalServiceProtocolError,
@@ -93,9 +95,7 @@ class RemoteTlsTrustedIntakeAdapter:
     def __init__(
         self,
         *,
-        host: str,
-        port: int,
-        server_name: str,
+        endpoints: ExternalRunnerEndpoints,
         ca_path: Path,
         certificate_path: Path,
         private_key_path: Path,
@@ -103,43 +103,12 @@ class RemoteTlsTrustedIntakeAdapter:
         config_digest: str,
     ) -> None:
         """Bind a pinned TLS identity to operator-pinned image and config identities."""
-        if (
-            type(host) is not str
-            or not host
-            or len(host) > 255
-            or type(port) is not int
-            or not 1 <= port <= 65_535
-            or type(server_name) is not str
-            or not server_name
-            or len(server_name) > 255
-            or any(not path.is_absolute() or path.is_symlink() for path in (
-                ca_path, certificate_path, private_key_path
-            ))
-            or any(
-                type(v) is not str or re.fullmatch(r"sha256:[0-9a-f]{64}", v) is None
-                for v in (image_digest, config_digest)
-            )
-        ):
+        if any(type(v) is not str or re.fullmatch(r"sha256:[0-9a-f]{64}", v) is None
+               for v in (image_digest, config_digest)):
             raise ValueError("trusted intake configuration invalid")
-        self._host, self._port, self._server_name = host, port, server_name
-        self._ca_path = ca_path
-        self._certificate_path = certificate_path
-        self._private_key_path = private_key_path
+        self._transport = RunnerTransport(endpoints, ca_path, certificate_path, private_key_path)
         self._image = image_digest
         self._config = config_digest
-
-    def _tls_context(self) -> ssl.SSLContext:
-        context = ssl.create_default_context(
-            ssl.Purpose.SERVER_AUTH,
-            cafile=str(self._ca_path),
-        )
-        context.minimum_version = ssl.TLSVersion.TLSv1_3
-        context.check_hostname = True
-        context.load_cert_chain(
-            certfile=str(self._certificate_path),
-            keyfile=str(self._private_key_path),
-        )
-        return context
 
     @property
     def identity(self) -> ExternalServiceAdapterIdentity:
@@ -163,17 +132,32 @@ class RemoteTlsTrustedIntakeAdapter:
 
     async def health(self) -> TrustedIntakeIdentity:
         """Check the pinned node identity without reserving a VM."""
-        session = _Session(self, time.monotonic() + 10)
-        try:
-            return await session._async(session._health)
-        finally:
-            session.abort()
+        placement = await self._transport.select("trusted_intake", qualifies=self._qualifies)
+        if placement is None or placement.readiness.intake is None:
+            raise ExternalServiceUnavailableError(self.identity)
+        return placement.readiness.intake
+
+    def _qualifies(self, readiness: RunnerReadiness) -> bool:
+        intake = readiness.intake
+        return intake is not None and (intake.image_digest, intake.config_digest) == (self._image, self._config)
 
     async def prepare(self, request: TrustedIntakePreparation) -> _Session:
         """Acquire one lease within the original deadline and abort failed preparation."""
         if type(request) is not TrustedIntakePreparation:
             raise ExternalServiceProtocolError(self.identity)
-        session = _Session(self, time.monotonic() + request.deadline_ms / 1000, request)
+        duration = request.deadline_ms / 1000
+        deadline = time.monotonic() + duration
+        try:
+            async with asyncio.timeout(duration):
+                placement = await self._transport.select(
+                    f"{request.phase}:{request.policy_sha256}:{request.archive_byte_count}",
+                    qualifies=self._qualifies, demand={"kind": "intake", "preparation": asdict(request)},
+                )
+        except TimeoutError as exc:
+            raise ExternalServiceUnavailableError(self.identity) from exc
+        if placement is None:
+            raise ExternalServiceUnavailableError(self.identity)
+        session = _Session(self, deadline, placement, request)
         try:
             await session._async(session._prepare)
             return session
@@ -189,11 +173,13 @@ class _Session:
         self,
         adapter: RemoteTlsTrustedIntakeAdapter,
         deadline: float,
-        request: TrustedIntakePreparation | None = None,
+        placement: RunnerPlacement,
+        request: TrustedIntakePreparation,
     ) -> None:
         """Own one socket, deadline and serialized state machine for this lease."""
         self._adapter = adapter
         self._deadline = deadline
+        self._placement = placement
         self._request = request
         self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._lock = threading.Lock()
@@ -321,16 +307,20 @@ class _Session:
         """Connect only to the authenticated runner within the lease deadline."""
         self._timeout()
         try:
-            self._socket.connect((self._adapter._host, self._adapter._port))
-            self._socket = self._adapter._tls_context().wrap_socket(
+            endpoint = self._placement.endpoint
+            transport = self._adapter._transport
+            self._socket.connect((endpoint.host, endpoint.port))
+            self._socket = transport.tls_context().wrap_socket(
                 self._socket,
-                server_hostname=self._adapter._server_name,
+                server_hostname=endpoint.server_name,
             )
+            transport.require_peer(self._socket, endpoint)
             control = json.dumps(
                 {
                     "protocol_version": _REMOTE_PROTOCOL,
                     "operation": "proxy",
                     "capability": CAPABILITY,
+                    **self._placement.binding(),
                 },
                 separators=(",", ":"),
             ).encode()
@@ -338,18 +328,17 @@ class _Session:
         except (OSError, ssl.SSLError) as exc:
             raise ExternalServiceUnavailableError(self._adapter.identity) from exc
 
-    def _health(self) -> TrustedIntakeIdentity:
-        """Read and verify the node identity on a temporary health connection."""
-        self._connect()
-        self._command("health", {})
-        return self._adapter._validate_identity(self._response("health"))
-
     def _prepare(self) -> None:
         """Accept the boot-scoped lease only after the node confirms readiness."""
         with self._lock:
             self._connect()
-            self._command("prepare", asdict(self._request))
+            remaining_ms = int((self._deadline - time.monotonic()) * 1000)
+            if remaining_ms <= 0:
+                raise ExternalServiceUnavailableError(self._adapter.identity)
+            self._command("prepare", asdict(self._request) | {"deadline_ms": remaining_ms})
             self._identity = self._adapter._validate_identity(self._response("prepare"))
+            if self._identity != self._placement.readiness.intake:
+                raise ExternalServiceProtocolError(self._adapter.identity)
             self._state = "prepared"
 
     def inspect(

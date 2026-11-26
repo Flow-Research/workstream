@@ -116,9 +116,7 @@ services:
       WORKSTREAM_API_RATE_LIMIT_KEY_SECRET_FILE: /run/secrets/api_rate_limit_key
       WORKSTREAM_PAGINATION_CURSOR_HMAC_SECRET_FILE: /run/secrets/pagination_cursor_hmac
       WORKSTREAM_ARTIFACT_S3_DIRECT_USER_CREDENTIAL_FILE: /run/workstream-artifact-credentials/aws-access-key.json
-      WORKSTREAM_EXTERNAL_RUNNER_HOST: ${WORKSTREAM_EXTERNAL_RUNNER_HOST:?set the private runner address}
-      WORKSTREAM_EXTERNAL_RUNNER_PORT: ${WORKSTREAM_EXTERNAL_RUNNER_PORT:-9443}
-      WORKSTREAM_EXTERNAL_RUNNER_SERVER_NAME: ${WORKSTREAM_EXTERNAL_RUNNER_SERVER_NAME:?set the runner certificate name}
+      WORKSTREAM_EXTERNAL_RUNNER_ENDPOINTS: ${WORKSTREAM_EXTERNAL_RUNNER_ENDPOINTS:?set reviewed runner endpoints}
       WORKSTREAM_EXTERNAL_RUNNER_CA_PATH: /run/secrets/external_runner_ca
       WORKSTREAM_EXTERNAL_RUNNER_CERTIFICATE_PATH: /run/secrets/external_runner_certificate
       WORKSTREAM_EXTERNAL_RUNNER_PRIVATE_KEY_PATH: /run/secrets/external_runner_private_key
@@ -197,9 +195,7 @@ services:
       WORKSTREAM_CELERY_BROKER_URL_FILE: /run/secrets/celery_broker_url
       WORKSTREAM_GUIDE_DOCUMENT_PARSER_SOCKET: ${WORKSTREAM_DEPLOYMENT_ROOT:-/var/lib/workstream}/guide-runtime/guide.sock
       WORKSTREAM_ARTIFACT_S3_DIRECT_USER_CREDENTIAL_FILE: /run/workstream-artifact-credentials/aws-access-key.json
-      WORKSTREAM_EXTERNAL_RUNNER_HOST: ${WORKSTREAM_EXTERNAL_RUNNER_HOST:?set the private runner address}
-      WORKSTREAM_EXTERNAL_RUNNER_PORT: ${WORKSTREAM_EXTERNAL_RUNNER_PORT:-9443}
-      WORKSTREAM_EXTERNAL_RUNNER_SERVER_NAME: ${WORKSTREAM_EXTERNAL_RUNNER_SERVER_NAME:?set the runner certificate name}
+      WORKSTREAM_EXTERNAL_RUNNER_ENDPOINTS: ${WORKSTREAM_EXTERNAL_RUNNER_ENDPOINTS:?set reviewed runner endpoints}
       WORKSTREAM_EXTERNAL_RUNNER_CA_PATH: /run/secrets/external_runner_ca
       WORKSTREAM_EXTERNAL_RUNNER_CERTIFICATE_PATH: /run/secrets/external_runner_certificate
       WORKSTREAM_EXTERNAL_RUNNER_PRIVATE_KEY_PATH: /run/secrets/external_runner_private_key

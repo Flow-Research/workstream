@@ -1946,6 +1946,19 @@ class HostedReleaseConfigTests(unittest.TestCase):
                 preflight._service_mounts(rendered["services"][role]),
             )
 
+    def test_runner_endpoints_match_the_closed_release_contract(self) -> None:
+        key = preflight.REMOTE_RUNNER_ENDPOINTS_KEY
+        endpoint = json.loads(self.environment[key])[0]
+        for invalid in (
+            [],
+            [endpoint | {"host": "a..b"}],
+            [endpoint | {"server_name": "*.test"}],
+            [endpoint | {"config_sha256": "newest"}],
+            [endpoint, endpoint | {"port": endpoint["port"] + 1}],
+        ):
+            with self.subTest(invalid=invalid), self.assertRaisesRegex(preflight.PreflightError, "external runner endpoint"):
+                preflight.validate_environment(self.environment | {key: json.dumps(invalid)})
+
 
 
 class ReleaseSecretLoaderTests(unittest.TestCase):

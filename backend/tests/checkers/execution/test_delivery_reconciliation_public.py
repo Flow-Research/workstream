@@ -38,7 +38,7 @@ from tests.reviews.lifecycle.fixtures import (
 )
 from tests.tasks.evaluation_delivery.support import delivery_fixture, invoked, outcome, state
 from tests.checkers.execution.support import ControlledSelectedExecution
-from tests.checkers.external.test_remote_node import _read_frame, remote_adapter_endpoint
+from tests.checkers.external.test_remote_node import fixture_placement, read_fixture_native_request, remote_adapter_endpoint
 from tests.tasks.post_submit_routing.outcome_support import (
     apply_outcome,
     authorized_routing_source,
@@ -423,8 +423,7 @@ async def test_public_operator_retries_proven_no_effect_request_once(
 
         settings = h.settings.model_copy(
             update={
-                "external_runner_host": None,
-                "external_runner_port": None,
+                "external_runner_endpoints": None,
             }
         )
         monkeypatch.setattr("app.core.config.get_settings", lambda: settings)
@@ -809,7 +808,11 @@ async def test_public_operator_projects_uncertain_child_as_permanently_held(
 
         async def receive_without_result(reader, writer):
             try:
-                received.append(json.loads(await _read_frame(reader)))
+                observed = await read_fixture_native_request(
+                    reader, writer, fixture_placement(h.request.policy.entries[0].registry.image_digest),
+                )
+                if observed is not None:
+                    received.append(observed)
             finally:
                 writer.close()
                 await writer.wait_closed()

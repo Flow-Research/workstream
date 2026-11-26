@@ -111,6 +111,41 @@ def _placement_body():
     }
 
 
+def fixture_runner_endpoints(port=1, *, config_sha256=None):
+    from app.core.runner_endpoints import ExternalRunnerEndpoints
+
+    return ExternalRunnerEndpoints.model_validate([{
+        "host": "127.0.0.1", "port": port, "server_name": "runner.test",
+        "config_sha256": config_sha256 or _placement_body()["config_sha256"],
+    }])
+
+
+def fixture_placement(image_digest=None, config_image_id=None, **changes):
+    data = _placement_body() | changes
+    if image_digest is not None:
+        data["images"][0]["platform_manifest_digest"] = image_digest
+    if config_image_id is not None:
+        data["images"][0]["config_image_id"] = config_image_id
+    return data
+
+
+async def read_fixture_native_request(reader, writer, placement):
+    """Distinguish the read-only native projection from one epoch-bound execution."""
+    control = json.loads(await _read_frame(reader))
+    if control["operation"] == "placement":
+        assert set(control) == {"protocol_version", "operation", "demand"}
+        assert control["protocol_version"] == "external_checker_service.v1"
+        body = placement | {"fits_admission": None if control["demand"] is None else True}
+        writer.write(_frame(json.dumps(body).encode()))
+        await writer.drain()
+        return None
+    assert control == {
+        "protocol_version": "external_checker_service.v1", "operation": "bind_epoch",
+        "config_sha256": placement["config_sha256"], "epoch": placement["epoch"],
+    }
+    return json.loads(await _read_frame(reader))
+
+
 def test_external_runner_endpoint_set_is_closed_and_unique():
     from pydantic import ValidationError
 
@@ -247,6 +282,41 @@ async def test_runner_probe_aborts_without_waiting_for_tls_shutdown(tmp_path, mo
     writer.wait_closed.assert_not_awaited()
 
 
+@pytest.mark.asyncio
+async def test_post_claim_pins_first_runner_epoch(tmp_path, monkeypatch):
+    from unittest.mock import AsyncMock
+
+    from app.adapters.artifacts import selected_pre_submit_source_contracts
+    from app.adapters.checkers.external_service import RemoteTlsExternalCheckerAdapter
+    from app.adapters.runner import RunnerPlacement, RunnerReadiness, RunnerTransport
+    from tests.checkers.external.test_model_transport import request
+    from workstream_external_services import ExternalServiceUnavailableError
+
+    value = request()
+    endpoints = fixture_runner_endpoints()
+    observed = RunnerReadiness.model_validate_json(json.dumps(fixture_placement(
+        value.registry.image_digest, fits_admission=True,
+    )))
+    first = RunnerPlacement(endpoints.root[0], observed)
+    restarted = RunnerPlacement(endpoints.root[0], observed.model_copy(update={"epoch": "a" * 64}))
+    select = AsyncMock(side_effect=[first, restarted])
+    monkeypatch.setattr(RunnerTransport, "select", select)
+    adapter = RemoteTlsExternalCheckerAdapter(
+        endpoints=endpoints, ca_path=tmp_path / "ca.pem", certificate_path=tmp_path / "client.pem",
+        private_key_path=tmp_path / "key.pem", model_proxy_socket_path=None, timeout_seconds=90.0,
+        source_contracts=selected_pre_submit_source_contracts(),
+    )
+    with pytest.raises(ExternalServiceUnavailableError):
+        await adapter._place_post(value, with_model_grant=True)
+    select.assert_not_awaited()
+    assert await adapter._place_post(value, with_model_grant=False) is first
+    assert await adapter._place_post(value, with_model_grant=False) is first
+    assert select.await_count == 1
+    with pytest.raises(ValueError, match="bound to another claim"):
+        await adapter._place_post(request(), with_model_grant=False)
+    assert select.await_count == 1
+
+
 @asynccontextmanager
 async def remote_adapter_endpoint(
     tmp_path: Path,
@@ -256,6 +326,7 @@ async def remote_adapter_endpoint(
     material_root: Path | None = None,
     native_model_proxy_socket_path: Path | None = None,
     session_timeout_seconds: float = 10.0,
+    config_sha256: str | None = None,
 ):
     """Expose one test-native service with explicit finite owner roots/windows."""
     certificates = _certificate_files(tmp_path)
@@ -286,9 +357,7 @@ async def remote_adapter_endpoint(
             node.handle, "127.0.0.1", 0, ssl=node.ssl_context
         )
         yield {
-            "host": "127.0.0.1",
-            "port": remote.sockets[0].getsockname()[1],
-            "server_name": "runner.test",
+            "endpoints": fixture_runner_endpoints(remote.sockets[0].getsockname()[1], config_sha256=config_sha256),
             "ca_path": certificates["ca"],
             "certificate_path": certificates["client_certificate"],
             "private_key_path": certificates["client_key"],
@@ -343,7 +412,11 @@ async def test_remote_adapter_endpoint_preserves_explicit_roots_and_callback_rou
                 await writer.wait_closed()
         async def native(reader, writer):
             try:
-                wire = json.loads(await _read_frame(reader))
+                wire = await read_fixture_native_request(
+                    reader, writer, fixture_placement(value.registry.image_digest, callback_relay=True),
+                )
+                if wire is None:
+                    return
                 grant_id = wire["grant"]["grant_id"]
                 assert (material / "workspaces" / grant_id).is_dir()
                 assert wire["model_grant"]["grant_id"] == "model_" + "a" * 32
@@ -394,13 +467,14 @@ async def test_remote_post_failure_preserves_possible_invocation(tmp_path, monke
 
     from app.adapters.artifacts import selected_pre_submit_source_contracts
     from app.adapters.checkers.external_service import RemoteTlsExternalCheckerAdapter
+    from app.adapters.runner import RunnerPlacement, RunnerReadiness, RunnerTransport
     from app.interfaces.external_checker_execution import ExternalCheckerExecutionOutcomeUnknown
     from tests.checkers.external.support import empty_external_material_grant
     from tests.checkers.external.test_model_transport import request
     from workstream_external_services import ExternalServiceUnavailableError
 
     adapter = RemoteTlsExternalCheckerAdapter(
-        host="127.0.0.1", port=1, server_name="runner.test",
+        endpoints=fixture_runner_endpoints(),
         ca_path=tmp_path / "ca.pem", certificate_path=tmp_path / "client.pem",
         private_key_path=tmp_path / "key.pem", model_proxy_socket_path=None,
         timeout_seconds=90.0, source_contracts=selected_pre_submit_source_contracts(),
@@ -427,6 +501,10 @@ async def test_remote_post_failure_preserves_possible_invocation(tmp_path, monke
     reader.feed_eof()
 
     value = request()
+    placement = RunnerPlacement(adapter._transport.endpoints.root[0], RunnerReadiness.model_validate_json(
+        json.dumps(fixture_placement(value.registry.image_digest, fits_admission=True)),
+    ))
+    monkeypatch.setattr(RunnerTransport, "select", AsyncMock(return_value=placement))
     task = asyncio.create_task(adapter.execute(value, empty_external_material_grant(value, suffix="c")))
     if fault == "cancel":
         await asyncio.wait_for(waiting.wait(), 1)
@@ -434,7 +512,7 @@ async def test_remote_post_failure_preserves_possible_invocation(tmp_path, monke
     expected = ExternalServiceUnavailableError if fault == "connect" else ExternalCheckerExecutionOutcomeUnknown
     with pytest.raises(expected):
         await asyncio.wait_for(task, 2)
-    connect.assert_awaited_once_with()
+    connect.assert_awaited_once_with(placement)
     if fault == "connect":
         writer.write.assert_not_called()
     else:
@@ -478,7 +556,7 @@ async def test_remote_post_stages_bound_material_and_removes_session(tmp_path: P
     observed = asyncio.Event()
 
     async def native(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
-        request = json.loads(await _read_frame(reader))
+        request = await read_fixture_native_request(reader, writer, _placement_body())
         root = material_root / "workspaces" / grant_id
         path = root / "materials" / "submission_archive" / "work.txt"
         assert request["request"]["request_digest"] == request_digest
@@ -577,6 +655,7 @@ async def test_remote_post_stages_bound_material_and_removes_session(tmp_path: P
             "manifest_byte_count": len(manifest),
             "file_count": 1,
             "total_byte_count": len(content),
+            "epoch": _placement_body()["epoch"], "config_sha256": _placement_body()["config_sha256"],
         },
         separators=(",", ":"),
     ).encode()
@@ -716,7 +795,7 @@ async def test_callback_is_pinned_to_exact_active_execute_connection(tmp_path: P
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("exit_kind", ["disconnect", "timeout"])
+@pytest.mark.parametrize("exit_kind", ["disconnect", "timeout", "unbound"])
 async def test_proxy_exit_closes_native_connection_and_copy_tasks(
     tmp_path: Path, exit_kind: str,
 ):
@@ -760,13 +839,22 @@ async def test_proxy_exit_closes_native_connection_and_copy_tasks(
             "127.0.0.1", server.sockets[0].getsockname()[1],
             ssl=client_context, server_hostname="runner.test",
         )
-        control = json.dumps({
+        control_value = {
             "protocol_version": _REMOTE.PROTOCOL,
             "operation": "proxy",
             "capability": _REMOTE.CHECKER_CAPABILITY,
-        }, separators=(",", ":")).encode()
-        writer.write(_frame(control))
+            "epoch": _placement_body()["epoch"], "config_sha256": _placement_body()["config_sha256"],
+        }
+        if exit_kind == "unbound":
+            del control_value["epoch"], control_value["config_sha256"]
+        writer.write(_frame(json.dumps(control_value).encode()))
         await writer.drain()
+        if exit_kind == "unbound":
+            assert await asyncio.wait_for(reader.read(), 2) == b""
+            writer.close()
+            await writer.wait_closed()
+            assert not native_started.is_set()
+            return
         await asyncio.wait_for(native_started.wait(), 1)
         if exit_kind == "disconnect":
             writer.close()
