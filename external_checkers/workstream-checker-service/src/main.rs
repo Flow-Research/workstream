@@ -3810,6 +3810,8 @@ esac
             "own stale container was not recovered"
         );
         drop(b_listener);
+        // A new process has no cloned descriptor for the previous listener lock.
+        b.control_root = None;
         let restarted = prepare_listener(&mut b).unwrap();
         assert_eq!(container_owner(&b).unwrap(), b_owner);
         drop(restarted);

@@ -686,3 +686,43 @@ def test_submission_transport_failure_preserves_safe_recovery_guidance(
     assert "private-provider" not in response.text
     assert "private-token" not in response.text
     assert len(received) == 1
+
+
+@pytest.mark.parametrize(
+    "malformed_code",
+    [None, 17, ["submission_outcome_unknown"], {"code": "submission_outcome_unknown"}],
+)
+def test_submission_transport_failure_rejects_nonstring_error_code(
+    adapter: Adapter, malformed_code: object
+) -> None:
+    client, received, upstream = adapter
+    upstream["status"] = 503
+    upstream["json"] = {
+        "error": {
+            "code": malformed_code,
+            "message": "private-provider-token",
+            "details": {"private_provider_diagnostic": "must not escape"},
+        }
+    }
+    response = client.post(
+        "/mcp",
+        headers={
+            "authorization": "Bearer fixture-token",
+            "accept": "application/json, text/event-stream",
+        },
+        json={
+            "jsonrpc": "2.0", "id": 1, "method": "tools/call",
+            "params": {
+                "name": "workstream_submission_create",
+                "arguments": _arguments("submission_create"),
+            },
+        },
+    )
+    result = response.json()["result"]
+    assert result["isError"] is True
+    error = result["structuredContent"]
+    assert error["status"] == 503 and error.get("code") is None
+    assert error["error"] == "workstream_execution_uncertain"
+    assert "private-provider-token" not in response.text
+    assert "must not escape" not in response.text
+    assert len(received) == 1

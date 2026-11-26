@@ -2410,6 +2410,8 @@ class WorkstreamGateway:
             if not isinstance(error, dict):
                 return failure
             code = error.get("code")
+            if not isinstance(code, str):
+                return failure
             if failure.status == 503:
                 # Proxy errors cannot authorize reflection of upstream diagnostic text.
                 recovery = {

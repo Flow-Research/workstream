@@ -12850,3 +12850,25 @@ hosted guide activation completed through the public owner, with private receipt
 The hosted contributor ZIP journey and recovery, exact-version cleanup, maximum
 supported upload and remaining single-runner native failure/isolation still
 need matching evidence. Email remains disabled pending the sender/key proof.
+
+### Old-head CI failure reconciliation
+
+The `7a1cb659a` CI run failed four selected jobs. `auth-boundary-preflight`
+and `shared_foundations_d` both rejected the same ownership partition transition;
+the merge of `origin/main` into PR708 added the exact retired
+`mutation_policy.py`/replacement `behavior_source.py` transition, and the
+current-head ownership validator passes. The shared lane artifact recorded 730
+passed and only that one ownership failure.
+
+The MCP package type gate found an upstream JSON error code typed as `Any | None`
+used as a dictionary key. The gateway now accepts only a string before looking
+up safe contributor recovery wording. Focused transport tests include malformed
+non-string codes and keep private upstream text out of the response; mypy passes.
+
+The Rust service test `startup_recovery_is_instance_scoped` kept a cloned
+socket-parent descriptor in its same-process test configuration after dropping
+the listener. That descriptor kept the exclusive lock, unlike a fresh process.
+The test releases this retained descriptor before simulating restart, preserving
+the real lock and custody checks. The exact test passes. These repairs concern
+the old-head CI run; the new-head workflow and hosted public journey must still
+finish before any full release claim.
