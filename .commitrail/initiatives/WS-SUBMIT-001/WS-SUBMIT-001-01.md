@@ -13351,3 +13351,19 @@ passed in 96.55 seconds with database and MinIO cleanup. The cases verified
 missing-byte terminalization and replay, refusal before lease work for an
 obsolete request, rollback on retry-event failure and the signed Operator path.
 The receipt is under `/tmp/workstream-post-canonical-retry.2nn3cm`.
+
+### Make the native PRE qualification checker readable
+
+The isolated PRE300 attempt restored the normal runner and cleared all test
+resources. All three fault inputs and the passing control returned outer guest
+exit 125. No completed guest or pending-delete handoff was observed. The new
+cached fixture contained a root-owned `0600` checker copied from its private
+build source. The earlier successfully qualified image had a readable checker.
+The image commands and first four uncompressed layer digests matched.
+
+This bounded fixture repair changes only the Python fixture Dockerfile and this
+record. Set the in-image checker permissions explicitly, preserving restrictive
+build staging and the native sandbox identity. Verify the resulting layer
+header and execute a single ordinary passing input in the isolated domain
+before arming the failure matrix. The normal runner must be restored after the
+control. Review exact image custody and entrypoint readability before the run.
