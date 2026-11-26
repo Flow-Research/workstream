@@ -12702,3 +12702,17 @@ The test image build and isolated KVM run are pending.
 
 31 focused CLI checks pass, including 15 qualification observer, replay and
 resource counterexamples. Ruff checks the changed files and the CLI format.
+
+
+### Reviewed native qualification fixture and verified cache build
+
+Integrated `7f7e20e11` and its independently approved correction `30ded73d9`
+as `dd6ff1492` and `7e566ae2f`. The 15 exact trace/replay regression cases pass
+on the integrated source. The pinned Python fixture built successfully; its
+platform manifest is `sha256:addfba441ef831881fb2c6563291639c385d3dd4d7c7873abc10286aeb887b0d`
+and config is `sha256:bf8ef119fca0125a6f826c23a2cd7db53f160d4fb46aa17e208d18647b8e77ad`.
+The existing cache provisioner verified the saved platform/config/layer graph
+and produced a canonical archive and image configuration. Private build receipt:
+`/tmp/workstream-pre-qualification-7e566ae2f/build-receipt.json`.
+This is build and focused-test evidence only: no runner configuration changed,
+and actual native deadline/isolation execution remains pending.
