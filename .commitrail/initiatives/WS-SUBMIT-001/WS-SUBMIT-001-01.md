@@ -11462,7 +11462,7 @@ Separate cleanup credentials are installed at
 runtime `workstream-storage` principal. Runner TLS files are installed at
 `/etc/workstream/runner-tls/{ca.crt,app.crt,app.key}`. Twelve unique preflight
 selectors remain absent: cleanup principal ARN and credential host-file path;
-submission execution and source-cleanup profile paths; runner CA, certificate,
+submission execution and source-cleanup profile JSON values; runner CA, certificate,
 private-key paths, host, port, and server name; trusted-intake image and config
 digests. Bind the runner address and server name to its installed endpoint and
 certificate, and the intake digests to its qualified custody receipt rather
