@@ -118,7 +118,7 @@ def test_closed_permission_and_action_catalogue_is_exact_and_non_executable() ->
     }
     assert all(not owner.value.startswith("WS-REV-") for owner in ActionOwner)
     assert Counter(definition.availability for definition in ACTION_DEFINITIONS) == {
-        ActionAvailability.ACTIVE: 171,
+        ActionAvailability.ACTIVE: 173,
         ActionAvailability.PLANNED: 24,
     }
     assert (
