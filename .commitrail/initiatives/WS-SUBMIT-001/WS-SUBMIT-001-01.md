@@ -11493,3 +11493,30 @@ compatibility proof. Preserve the pre-migration backup and prior image for a
 controlled restore or use a reviewed forward repair. No host mutation, image
 publication, migration, service restart, or production cutover was performed in
 this inventory.
+
+### Current TUI submission fixture feedback (2026-11-26)
+
+Intent and bounded scope: cli/tests/integration/test_tui_public_api.py and this
+record only. New0096 Backend45784976520 job139790509318 has one failure and
+24 passes: the signed TUI read/revocation test supplies retired summary and
+contributor_attestation fields to the closed current SubmissionIntakeMetadata.
+The actual local log is /tmp/pr708-0096-cli-api.log; the failure is before its
+current source producer, not a TUI authorization failure.
+
+Use the same nonempty text as current optional feedback; require its exact
+retained public value and a null historical summary. The native TUI must render
+that feedback before revocation and remove it after fresh real grant revocation.
+Preserve actual source/T5 fixture, signed identity, foreign actor404, no dependency
+overrides, exact read-only requests and product counts. No retired field alias,
+production DTO change or privacy assertion removal. PostgreSQL execution stays
+pending while the parent-owned native cold-start prerequisite holds the slot.
+
+Static verification: evaluate the exact old and new constructor AST nodes against
+the current production model. Old fails precisely on the two retired fields; new
+retains exact task/assignment IDs and nonempty feedback. AST comparison preserves
+all22 original assertions, changing only the approved privacy text selector, and
+adds exact null-summary and retained-feedback assertions; all other module nodes
+are identical. Ruff check/format and whitespace pass. No PG/native/TUI execution
+on the repaired fixture yet; the original CI failed before that fixture setup
+completed. Parent holds the slot for the native prerequisite and will obtain
+runtime evidence in the coordinated run or new CI.

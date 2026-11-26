@@ -79,8 +79,7 @@ async def test_tui_real_signed_owner_positive_reads_then_fresh_grant_revocation(
             SubmissionIntakeMetadata(
                 task_id=h.task_id,
                 assignment_id=h.assignment_id,
-                summary="Completed the required project work.",
-                contributor_attestation=" ".join(h.policy["attestation_terms"]),
+                feedback="Completed the required project work.",
             ),
             h.archive_bytes,
         )
@@ -111,6 +110,10 @@ async def test_tui_real_signed_owner_positive_reads_then_fresh_grant_revocation(
             submission_id
         ]
         assert direct["submission"]["task_id"] == task
+        assert direct["submission"]["summary"] is None
+        assert (
+            direct["submission"]["feedback"] == "Completed the required project work."
+        )
         assert (
             direct["context"]["task"]["task_id"] == direct["intake"]["task_id"] == task
         )
@@ -194,7 +197,7 @@ async def test_tui_real_signed_owner_positive_reads_then_fresh_grant_revocation(
                 await wait(direct["attempts"]["items"][0]["title"])
                 terminal.send("\r")
                 await wait(submission_id)
-                await wait(direct["submission"]["summary"])
+                await wait(direct["submission"]["feedback"])
                 async with h.factory() as session:
                     grant_id = await session.scalar(
                         select(ProjectRoleGrant.id).where(
@@ -215,7 +218,7 @@ async def test_tui_real_signed_owner_positive_reads_then_fresh_grant_revocation(
                 assert denied.status_code == 404
                 terminal.send("r")
                 await wait("Denied")
-                assert direct["submission"]["summary"] not in terminal.screen
+                assert direct["submission"]["feedback"] not in terminal.screen
                 assert submission_id not in terminal.screen
                 await asyncio.to_thread(terminal.quit)
                 assert owner.token.encode() not in terminal.raw
