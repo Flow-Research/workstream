@@ -1,7 +1,9 @@
 # Historical Planning Index
 
 These documents record how Workstream's early implementation was planned and
-validated. They are preserved for traceability. They do not define current
+validated. Removed calendar plans and early reviews remain available through
+immutable Git links below; they are not maintained working-tree documents.
+They do not define current
 priority, implementation status, contribution permission, or a delivery
 schedule.
 

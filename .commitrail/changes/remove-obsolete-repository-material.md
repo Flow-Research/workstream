@@ -4,7 +4,7 @@
 - Durable disposition: Planned
 - Intended merge outcome: Remove superseded standalone experiments and documentation without changing product behavior or active qualification coverage.
 
-## Intent and current behavior
+## Intent
 
 The repository still carries a one-tool MCP prototype, an unused gVisor build
 spike, an empty retired issuer directory, a local evidence JSON, and old planning
@@ -18,7 +18,7 @@ Allowed: delete `experiments/mcp_caller_token/`, `experiments/pilot00_gvisor_off
 `mcp-experiment-evidence.local.json`, `workstream_keyloack.md`, superseded calendar
 plans, early `docs/review_*` and `docs/internal_reviews/` records, the gVisor spike
 report and the stale architecture PDF. Update inbound Markdown links, current
-documentation navigation, stale-document exclusion lists, PDF ignore rules and
+documentation navigation, stale-document path lists, PDF ignore rules and
 this record. Historical references use immutable Git links, not replacement
 archive copies.
 
@@ -52,6 +52,15 @@ production MCP tests, backend tests and all CI selection remain unchanged.
 - Risk class: L2
 - Required reviewers: documentation and test_delta/ci_integrity (combined bounded review).
 - Human review focus: deletion scope and preservation of active verification.
+
+## Evidence
+
+Markdown link and all four stale-document scans pass. The retained-link scan
+finds no references to removed files outside immutable pre-cutover snapshots.
+The 33 lightweight-gate and stale-review tests pass. Production MCP protocol
+and gateway regressions provide the retained caller-isolation and transport
+proof; exact execution results and reviewer freshness belong in the PR.
+No workflow or test selector changes are part of this cleanup.
 
 ## Reconciliation
 
