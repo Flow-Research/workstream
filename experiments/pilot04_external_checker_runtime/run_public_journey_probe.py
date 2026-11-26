@@ -25,6 +25,7 @@ import time
 from uuid import UUID, uuid4
 
 import httpx
+from pydantic import SecretStr
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
@@ -74,7 +75,9 @@ from experiments.pilot04_external_checker_runtime.public_probe_support import ( 
 from experiments.pilot04_external_checker_runtime.public_submission_clients import (  # noqa: E402
     ContributorClients, seeded_issuer,
 )
-from cli.tests.journey.runtime import _interrupt_owned_groups, _live_group_members  # noqa: E402
+from cli.tests.journey.runtime import (  # noqa: E402
+    _interrupt_owned_groups, _live_group_members, prepare_versioned_source_bucket,
+)
 
 
 def _settings_digests(settings, nonce: bytes) -> dict[str, str]:
@@ -96,8 +99,9 @@ def _settings_digests(settings, nonce: bytes) -> dict[str, str]:
     }
 
 
-def _celery_config_mismatches(settings) -> list[str]:
-    from app.workers.celery_app import celery_app
+def _celery_config_mismatches(settings, worker_app=None) -> list[str]:
+    if worker_app is None:
+        from app.workers.celery_app import celery_app as worker_app
 
     expected = {
         "celery_broker_url": settings.celery_broker_url,
@@ -105,9 +109,9 @@ def _celery_config_mismatches(settings) -> list[str]:
         "celery_task_always_eager": settings.celery_task_always_eager,
     }
     actual = {
-        "celery_broker_url": celery_app.conf.broker_url,
-        "celery_result_backend_url": celery_app.conf.result_backend,
-        "celery_task_always_eager": celery_app.conf.task_always_eager,
+        "celery_broker_url": worker_app.conf.broker_url,
+        "celery_result_backend_url": worker_app.conf.result_backend,
+        "celery_task_always_eager": worker_app.conf.task_always_eager,
     }
     return [name for name in expected if expected[name] != actual[name]]
 
@@ -121,7 +125,10 @@ def _verify_child_configuration(role: str) -> int:
 
         actual = app.state.settings
     else:
-        from app.workers.celery_app import celery_app  # noqa: F401
+        if role == "guide":
+            from experiments.pilot04_external_checker_runtime.guide_worker import celery_app
+        else:
+            from app.workers.celery_app import celery_app
 
         actual = get_settings()
     observed = _settings_digests(actual, nonce)
@@ -130,19 +137,24 @@ def _verify_child_configuration(role: str) -> int:
         name for name in expected.keys() | observed.keys()
         if expected.get(name) != observed.get(name)
     )
-    if role == "worker":
-        mismatches.extend(_celery_config_mismatches(actual))
+    if role != "api":
+        mismatches.extend(_celery_config_mismatches(actual, celery_app))
     print(json.dumps(sorted(set(mismatches)), separators=(",", ":")))
     return 0
 
 
-def _preflight_children(settings, env: dict[str, str], root: Path) -> None:
+def _preflight_children(settings, env: dict[str, str], cleanup_env: dict[str, str], root: Path) -> None:
     """Reject API/worker drift before starting real services or public requests."""
     nonce = os.urandom(32)
-    request = json.dumps({
-        "nonce": nonce.hex(), "expected": _settings_digests(settings, nonce),
+    cleanup_settings = settings.model_copy(update={
+        "artifact_s3_access_key_id": SecretStr(cleanup_env["WORKSTREAM_ARTIFACT_S3_ACCESS_KEY_ID"]),
+        "artifact_s3_secret_access_key": SecretStr(cleanup_env["WORKSTREAM_ARTIFACT_S3_SECRET_ACCESS_KEY"]),
+        "artifact_s3_session_token": None,
     })
-    for role in ("api", "worker"):
+    for role in ("api", "guide", "worker", "source-cleanup"):
+        child_env = cleanup_env if role == "source-cleanup" else env
+        expected = cleanup_settings if role == "source-cleanup" else settings
+        request = json.dumps({"nonce": nonce.hex(), "expected": _settings_digests(expected, nonce)})
         with (root / f"preflight-{role}.log").open("wb") as errors:
             result = subprocess.run(
                 [
@@ -153,7 +165,7 @@ def _preflight_children(settings, env: dict[str, str], root: Path) -> None:
                     "raise SystemExit(_verify_child_configuration(sys.argv[3]))",
                     str(BACKEND.parent), str(BACKEND / "tests"), role,
                 ],
-                cwd=BACKEND, env=env, input=request, text=True,
+                cwd=BACKEND, env=child_env, input=request, text=True,
                 stdout=subprocess.PIPE, stderr=errors, timeout=300, check=False,
             )
         _require(result.returncode == 0,
@@ -225,6 +237,9 @@ def _source_cleanup_environment(env: dict[str, str], settings) -> dict[str, str]
     cleanup_env = dict(env)
     cleanup_env["WORKSTREAM_ARTIFACT_S3_ACCESS_KEY_ID"] = cleanup_key
     cleanup_env["WORKSTREAM_ARTIFACT_S3_SECRET_ACCESS_KEY"] = secret_file.read_text(encoding="ascii")
+    for setting in ("WORKSTREAM_ARTIFACT_S3_SESSION_TOKEN", "WORKSTREAM_CLI_JOURNEY_CLEANUP_ACCESS_KEY_ID",
+                    "WORKSTREAM_CLI_JOURNEY_CLEANUP_SECRET_FILE"):
+        cleanup_env.pop(setting, None)
     return cleanup_env
 
 
@@ -376,6 +391,9 @@ async def _provision_runtime_services(factory) -> None:
     async with factory() as session, session.begin():
         for identity in (ServiceIdentity.OUTBOX_DISPATCHER,
                          ServiceIdentity.ARTIFACT_SCHEDULER,
+                         ServiceIdentity.ARTIFACT_SOURCE_CLEANUP,
+                         ServiceIdentity.ARTIFACT_PUT_RESOLVER,
+                         ServiceIdentity.ARTIFACT_VERIFIER,
                          ServiceIdentity.ARTIFACT_GUIDE_READER, ServiceIdentity.PROJECT_SETUP):
             existing = await session.scalar(select(ActorProfile.id).where(
                 ActorProfile.service_identity == identity.value
@@ -1309,7 +1327,7 @@ async def run(database_url: str, image_reference: str, node_config: Path,
         "artifact_store_backend", "artifact_s3_provider_profile", "artifact_s3_region",
         "artifact_s3_endpoint_url", "artifact_s3_bucket", "artifact_s3_private_prefix",
         "artifact_s3_addressing_style", "artifact_s3_credential_mode",
-        "artifact_s3_access_key_id", "artifact_s3_secret_access_key",
+        "artifact_s3_access_key_id", "artifact_s3_secret_access_key", "artifact_s3_session_token",
     ):
         _require(getattr(runtime_settings, field) == getattr(settings, field),
                  "API/worker artifact provider configuration differs from fixture")
@@ -1326,7 +1344,8 @@ async def run(database_url: str, image_reference: str, node_config: Path,
     _require(not parent_celery_mismatches,
              "parent broker configuration differs from resolved Settings: "
              + ", ".join(parent_celery_mismatches))
-    _preflight_children(runtime_settings, env, root)
+    await asyncio.to_thread(prepare_versioned_source_bucket, env, lane="guide_journey")
+    _preflight_children(runtime_settings, env, cleanup_env, root)
 
     engine = create_async_engine(database_url)
     factory = async_sessionmaker(engine, expire_on_commit=False)

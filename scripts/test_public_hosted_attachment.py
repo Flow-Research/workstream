@@ -78,6 +78,7 @@ class PublicJourneyWorkerCustody(unittest.TestCase):
             original = {
                 'WORKSTREAM_ARTIFACT_S3_ACCESS_KEY_ID': 'upload-key',
                 'WORKSTREAM_ARTIFACT_S3_SECRET_ACCESS_KEY': 'upload-secret',
+                'WORKSTREAM_ARTIFACT_S3_SESSION_TOKEN': 'upload-session',
                 'WORKSTREAM_CLI_JOURNEY_CLEANUP_ACCESS_KEY_ID': 'cleanup-key',
                 'WORKSTREAM_CLI_JOURNEY_CLEANUP_SECRET_FILE': str(path),
             }
@@ -88,7 +89,11 @@ class PublicJourneyWorkerCustody(unittest.TestCase):
             self.assertEqual(original['WORKSTREAM_ARTIFACT_S3_ACCESS_KEY_ID'], 'upload-key')
             self.assertEqual(child['WORKSTREAM_ARTIFACT_S3_ACCESS_KEY_ID'], 'cleanup-key')
             self.assertEqual(child['WORKSTREAM_ARTIFACT_S3_SECRET_ACCESS_KEY'], 'deletion-secret')
-            self.assertEqual(set(child) ^ set(original), set())
+            self.assertEqual(set(original) - set(child), {
+                'WORKSTREAM_ARTIFACT_S3_SESSION_TOKEN',
+                'WORKSTREAM_CLI_JOURNEY_CLEANUP_ACCESS_KEY_ID',
+                'WORKSTREAM_CLI_JOURNEY_CLEANUP_SECRET_FILE',
+            })
             for change in (
                 {'WORKSTREAM_CLI_JOURNEY_CLEANUP_ACCESS_KEY_ID': 'upload-key'},
                 {'WORKSTREAM_CLI_JOURNEY_CLEANUP_SECRET_FILE': str(path.parent / 'missing')},
