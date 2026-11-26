@@ -10849,3 +10849,75 @@ identifier-schema failures from shared_h are separately routed to root/ARCH and
 are not claimed fixed here. Remaining lanes are still being observed. Historical
 shared receipts prove completed tests/cleanup and newly retained failure details;
 they do not turn failing CI green or qualify the full submission goal.
+
+
+### A30 completed managed-style adapter substitution (2026-11-24)
+
+Intent: pure managed PRE receipt/processor failure tests do not prove completed
+source-bound facts survive real public intake, SQL terminal custody, T4 and T5.
+SQL0072 already validates managed runtime/deployment/provider-cleanup facts with
+exact source/request/lease/profile/config binding; no provider/schema change is
+needed. The guest PreSubmitWorker constructor intentionally accepts native
+isolation only, so do not relabel a native result or weaken that worker.
+
+Allowed files exactly five: new tests/artifacts/test_submission_managed_execution.py;
+existing tests/artifacts/test_submission_foreground_command.py test-only optional
+typed external_execution injection; scripts/test_lane_catalogue.py exact shared
+module addition; tests/test_ci_lane_catalogue.py independent shared fingerprint;
+and this record. Reuse canonical inspector/manifest/default-input/derived-request
+functions used by the trusted worker and its material reader, exact live source
+grant drain/close, managed evidence from construction onward, existing signed
+HTTP fixture and production OUTBOX/T5 helper. No product adapter, provider
+registration, model, migration, native worker branch or compatibility path.
+
+Acceptance: public rawZIP202 with one managed PRE, exact persisted source/result
+and public feedback binding; matched managed deployment/config/provider cleanup
+receipt with no native binary/guest/journal/UID/path fields; no Submission at T4;
+real T5 consumes exact source admission and creates one graph; replay before and
+after T5 preserves accepted receipt without another PRE. Exact source bytes/hash
+and canonical manifest/default semantics remain real. Existing default runtime
+helper behavior unchanged. One focused PG case plus exact lane/structure/Ruff
+checks; bounded forged managed deployment or source/result must be rejected.
+Risk is test-adapter/SQL custody composition; QA/security review inspects those
+bindings. Human focus is proof limits: controlled managed-style computation, not
+a deployed managed provider, native isolation, full public journey or goal-ready
+qualification. Current CI failure repair is already frozen25f81de8d; new work is
+separate and does not alter its executed evidence.
+
+Evidence frozen on2026-11-26 from the executed2026-11-24 candidate, before the
+separate submitter-journey delta. The single managed public case passed27.51s
+(/tmp/submission-managed-public-v1.log). Its JSON receipt records launcher
+25f81de8da24a3edcb2a9fbbb475b25906e720ea, schema0091 and complete database/MinIO
+cleanup. Actual modified test bytes were present for that execution; this is
+precommit evidence, not a clean-commit, current full-head or later-contract run.
+No runtime was restarted after the pause. The saved structure session79926
+returned exit0; /tmp/submission-managed-structure.log is intentionally empty on
+success, and no missing live-session outcome was inferred.
+
+The managed adapter uses the exact canonical archive inspector, semantic manifest,
+default derivation/evaluator and project request constructors used by the trusted
+worker. It constructs managed isolation/deployment and provider cleanup receipt
+from outset, checks exact source bytes/hash, closes the actual grant and removes
+its owned private temporary processing tree. The public test compares persisted
+terminal/digest/receipt and every feedback result, rejects independently forged
+managed deployment and source observations, proves T4 has no Submission, then
+consumes the exact source admission through production OUTBOX/T5 owners. Exact
+one Submission/dispatch/checker run/binding/POST event and stable pre/post-T5
+accepted-key replay remain asserted.
+
+The T5 helper invokes the real OUTBOX delivery and finalization owners; it is not
+a live broker-consumer proof. Existing broker/child-loss qualification remains
+separate. Existing [managed receipt and processor controls](../../../backend/tests/checkers/external/test_pre_invocation.py)
+retain test_completed_worker_is_bound_to_provider_receipt, wrong selected factory,
+wrong runtime family, received failure/cancellation and malformed/bounded receipt
+refusal. This controlled provider fixture does not register a paid or deployed
+managed provider, prove provider cleanup in a remote environment, or qualify
+native isolation. No SQL/provider authorization check was relaxed.
+
+All59 catalogue tests passed4.68s (/tmp/submission-managed-catalogue.log). Exact
+shared membership is277->278; removing only the managed module reproduces the
+previous fingerprint. An isolated omission of that module is rejected by the
+existing independent family guard. No existing module or lane owner moved.
+Ruff/whitespace checks and unchanged structure passed. Root inspected the bounded
+draft with no scoped code blocker; final clean content binding follows this
+evidence-only append. Full goal/hosted CI qualification remains outside scope.

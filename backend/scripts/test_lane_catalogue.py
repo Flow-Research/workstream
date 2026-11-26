@@ -70,6 +70,7 @@ SHARED_FOUNDATION_MODULES = (
     "tests/artifacts/test_submission_intake_progress.py",
     "tests/artifacts/test_submission_finalization_worker_loss.py",
     "tests/artifacts/test_submission_foreground_command.py",
+    "tests/artifacts/test_submission_managed_execution.py",
     "tests/authorization/post_submit/test_atomicity.py",
     "tests/authorization/post_submit/test_concurrency.py",
     "tests/authorization/post_submit/test_live_authority.py",
