@@ -277,7 +277,7 @@ async def public_guide_setup(client, factory, human_review_required, call, token
         receipt = await call(client, "POST", upload, token, 202,
                              headers={"Idempotency-Key": str(uuid4()), "Content-Type": "text/markdown"},
                              content=content)
-        if (receipt["status"] != "object_confirmed"
+        if (receipt["status"] != "document_stored"
                 or receipt["document_id"] != document["document_id"]
                 or receipt["sha256"] != "sha256:" + hashlib.sha256(content).hexdigest()
                 or receipt["byte_count"] != len(content)):
