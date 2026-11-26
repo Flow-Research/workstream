@@ -12502,3 +12502,20 @@ four exact cached images, configured PRE root/profile, trusted intake and
 callback relay, with draining=false. Local receipts are under
 `/tmp/workstream-a28-runner-candidate/` (stage, activation, live-placement).
 This proves current remote readiness, not execution or multi-node qualification.
+
+
+### Maintained CLI guide-envelope correction
+
+The current-source native journey at `c0b6b5180` passed public identity/authority,
+project setup and authored guide activation, then stopped before submission.
+`claim_and_read` compared the current guide envelope as if it were the retired
+bare document list. Receipts 0080 and 0082 are identical envelopes with
+project_id, guide_id, version and documents; the four-key length caused the
+failure. Read documents through their current envelope while preserving exact
+before/after envelope equality, concealed foreign-actor denial and SHA/size
+verification of both downloaded originals. No product response or guard changes.
+A focused regression fails before the fix; afterward the valid envelope and
+both changed-version/corrupted-byte negative controls pass (3 cases). Ruff passes.
+The failed journey is retained under `/tmp/workstream-paired-native-4g1j5bbe`;
+its schema0093 database and MinIO cleanup are all confirmed. No PRE/POST outcome
+was reached by this run. Repeat the maintained journey with the corrected caller.

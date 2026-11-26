@@ -95,7 +95,7 @@ def claim_and_read(client, tokens, actors, project_id):
     task_id, assignment_id = create_claimed_task(
         client, tokens, project_id, title="Summarize the fixed incident events"
     )
-    documents = client.call(tokens["alice"], "task", "guide", task_id)
+    guide = client.call(tokens["alice"], "task", "guide", task_id)
     denied = client.call(tokens["bob"], "task", "guide", task_id, expected_exit=1)
     if denied["error"].get("status") != 404:
         raise AssertionError("unassigned actor did not receive concealed guide denial")
@@ -104,8 +104,9 @@ def claim_and_read(client, tokens, actors, project_id):
     downloaded = client.call(
         tokens["alice"], "task", "guide", task_id, "--download", str(destination)
     )
-    if downloaded != documents or len(documents) != 2:
+    if downloaded != guide or len(guide["documents"]) != 2:
         raise AssertionError("locked guide listing changed during download")
+    documents = guide["documents"]
     actual = sorted(
         ("sha256:" + hashlib.sha256(path.read_bytes()).hexdigest(), path.stat().st_size)
         for path in destination.iterdir()
