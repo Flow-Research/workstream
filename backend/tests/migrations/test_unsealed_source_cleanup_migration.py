@@ -6,8 +6,9 @@ from uuid import UUID
 
 import pytest
 from alembic import command
-from sqlalchemy import text
+from sqlalchemy import event, text
 
+from app.core.hashing import canonical_json_hash
 from app.core.identifiers import new_record_id
 from app.db import session as db_session
 from app.modules.actors.api import ServiceIdentity
@@ -25,12 +26,30 @@ pytestmark = pytest.mark.postgres_schema_contract
 
 @asynccontextmanager
 async def predecessor_submission_read_projection(intake):
-    """Allow current fixture reads, then restore the exact predecessor schema."""
+    """Construct old v1 commands, then restore the exact predecessor schema."""
+    def bind_old_metadata(_mapper, _connection, row):
+        assert row.command_metadata["feedback"] is None
+        metadata = {
+            "task_id": row.task_id,
+            "assignment_id": row.assignment_id,
+            "predecessor_submission_id": None,
+            "summary": "",
+            "contributor_attestation": "",
+            "revision_preparation_id": None,
+            "revision_preparation_sha256": None,
+        }
+        row.command_metadata = metadata
+        row.metadata_sha256 = canonical_json_hash({
+            "schema_version": "workstream.submission_intake_metadata.v1", **metadata,
+        })
+
     async with intake.engine.begin() as connection:
         await connection.execute(text("ALTER TABLE public.submissions ADD COLUMN feedback text"))
+    event.listen(SubmissionIntakeOperation, "before_insert", bind_old_metadata)
     try:
         yield
     finally:
+        event.remove(SubmissionIntakeOperation, "before_insert", bind_old_metadata)
         async with intake.engine.begin() as connection:
             assert await connection.scalar(text(
                 "SELECT count(*) FROM public.submissions WHERE feedback IS NOT NULL"

@@ -101,7 +101,7 @@ async def test_denied_read_never_loads_private_rows(task_client, monkeypatch):
 @pytest.mark.parametrize("manager", [False, True])
 async def test_nested_values_match_exact_stored_parents(task_client, monkeypatch, manager):
     from app.modules.tasks.models import EvidenceItem
-    from app.modules.checkers.models import CheckerResult, CheckerResultFinding
+    from app.modules.checkers.models import CheckerResult, CheckerResultFinding, CheckerRun
     from app.modules.checkers.execution_results import RESULT_STATUS_MESSAGES
     project = await create_active_project(task_client, post_submit_registry_spec=post_registry_spec())
     task = await create_started_task(task_client, project["id"], monkeypatch)
@@ -117,6 +117,7 @@ async def test_nested_values_match_exact_stored_parents(task_client, monkeypatch
     async with db_session.get_session_factory()() as session:
         evidence = list(await session.scalars(select(EvidenceItem).order_by(EvidenceItem.id)))
         rows = list(await session.scalars(select(CheckerResult).order_by(CheckerResult.member_order)))
+        runs = {str(item.id): item for item in await session.scalars(select(CheckerRun))}
         findings = {}
         for finding in await session.scalars(select(CheckerResultFinding).order_by(
             CheckerResultFinding.finding_order,
@@ -142,6 +143,11 @@ async def test_nested_values_match_exact_stored_parents(task_client, monkeypatch
                         else level_status[finding.level]
                     )
                     message, fix = RESULT_STATUS_MESSAGES[status]
+                    if finding is not None:
+                        retained = runs[str(row.checker_run_id)].result_json["execution"]["external_members"]
+                        text = retained[row.member_order]["result"]["findings"][finding.finding_order]["message"]
+                        if text is not None:
+                            message, fix = text, None
                     entry = {
                         "id": row.id if finding is None else finding.id,
                         "checker_name": row.checker_name,
