@@ -112,3 +112,71 @@ async def test_task_eligibility_blocks_new_effect_but_not_exact_terminal_replay(
         eligible = False
         assert await d.handler(envelope) is HandlerOutcome.ACKNOWLEDGE
         assert await state(h) == terminal and len(h.store.opens) == 1
+
+
+@pytest.mark.parametrize("rollback", [False, True])
+async def test_known_post_failure_schedules_one_delayed_service_retry(
+    tmp_path, isolated_database_env, monkeypatch, rollback,
+):
+    """Retain one exact successor for known failure, or roll it all back."""
+    from datetime import timedelta
+
+    from app.adapters.checkers import evaluation_coordinator
+    from app.modules.checkers.api.materialization import PostSubmissionMaterializationFailure
+    from app.modules.checkers.models import CheckerRetryReceipt, CheckerRun, CheckerSubmissionFence
+    from app.modules.outbox.api import OutboxPersistenceError
+    from app.modules.outbox.models import OutboxEvent
+    from app.modules.outbox.service import OutboxService
+
+    class MissingMaterial:
+        async def materialize(self, _facts, _consumer):
+            raise PostSubmissionMaterializationFailure("controlled missing material")
+
+    async with material_fixture(tmp_path, isolated_database_env) as h:
+        d = await delivery_fixture(h, materialization=MissingMaterial())
+        original_append = OutboxService.append
+
+        async def guarded_append(outbox, event):
+            if event.idempotency_key.startswith("checker-auto-retry:"):
+                raise OutboxPersistenceError("controlled retry persistence failure")
+            return await original_append(outbox, event)
+
+        if rollback:
+            monkeypatch.setattr(OutboxService, "append", guarded_append)
+        receipt = outcome(await d.delivery.deliver(h.created.evaluation_event_id, h.request.project_id, "worker"))
+        assert receipt["delivery_state"] == ("dead_letter" if rollback else "acknowledged")
+        assert receipt["invocation_unknown"] is rollback
+        async with h.factory.begin() as session:
+            runs = list(await session.scalars(select(CheckerRun).where(
+                CheckerRun.submission_id == str(h.request.submission_id),
+            ).order_by(CheckerRun.evaluation_generation)))
+            original = runs[0]
+            fence = await session.get(CheckerSubmissionFence, original.submission_id)
+            assert await session.scalar(select(func.count()).select_from(CheckerRetryReceipt)) == 0
+            assert not d.selected.requests
+            if rollback:
+                assert len(runs) == 1 and fence.current_run_id == original.id
+                assert original.status == "running" and original.result_json is None
+                return
+            assert len(runs) == 2
+            successor = runs[1]
+            assert fence.current_run_id == successor.id
+            assert original.status == "infrastructure_failed" and original.failure_code == "material_unavailable"
+            assert successor.status == "queued" and successor.supersedes_checker_run_id == original.id
+            new_event = await session.get(OutboxEvent, successor.automatic_retry_event_id)
+            assert new_event.not_before_at == original.completed_at + timedelta(seconds=5)
+            event_id, due = new_event.event_id, new_event.not_before_at
+            assert (await evaluation_coordinator(session).classify_uncertain_delivery(h.request)).classification == "committed"
+            read = await evaluation_coordinator(session).read_current_progress(
+                project_id=h.request.project_id, task_id=h.request.task_id,
+                submission_id=h.request.submission_id, original_request_id=h.request.evaluation_request_id,
+            )
+            assert read.current.reservation.evaluation_generation == 2
+            assert read.previous_failure_code == "material_unavailable"
+            assert read.retry_event_id == event_id
+            assert new_event.payload["source_finalize_evidence_id"] == original.finalize_evidence_id
+        async with h.factory() as session:
+            now = await session.scalar(select(func.clock_timestamp()))
+            if now < due:
+                assert await d.delivery.claim(event_id, h.request.project_id, "worker") is None
+        assert await d.delivery.deliver(h.created.evaluation_event_id, h.request.project_id, "duplicate") is None

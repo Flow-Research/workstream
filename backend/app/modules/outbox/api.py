@@ -152,6 +152,10 @@ class DeliveryOptions(DeliveryValue):
     retry_base_seconds: int = Field(default=5, ge=1, le=3600)
     retry_cap_seconds: int = Field(default=300, ge=1, le=86400)
 
+    def retry_delay_seconds(self, attempt: int) -> int:
+        """Return the bounded exponential delay after a one-based attempt."""
+        return min(self.retry_cap_seconds, self.retry_base_seconds * 2 ** min(attempt - 1, 30))
+
     @model_validator(mode="after")
     def ordered_limits(self) -> Self:
         """Leave a lease margin and bound retry scheduling."""

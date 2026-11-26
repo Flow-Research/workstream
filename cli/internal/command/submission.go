@@ -9,7 +9,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func postSubmissionRecovery(code *string) string {
+func postSubmissionMessage(code *string, held bool) string {
 	if code == nil {
 		return ""
 	}
@@ -25,7 +25,10 @@ func postSubmissionRecovery(code *string) string {
 	if message == "" {
 		return ""
 	}
-	return message + " Your Submission is retained. Contact an Operator for recovery."
+	if held {
+		return message + " Your Submission is retained. Contact an Operator for recovery."
+	}
+	return message + " Workstream is retrying evaluation of your retained Submission."
 }
 
 func addSubmissionCommands(root, task *cobra.Command, client func() (*api.Client, error), output *string, stdout io.Writer) {
@@ -105,10 +108,13 @@ func addSubmissionCommands(root, task *cobra.Command, client func() (*api.Client
 				{"Terms", value.Assignment.Compensation}, {"Revision", value.Assignment.Revision},
 				{"Latest submitted attempt", value.Assignment.LatestSubmission},
 			}
-			if value.NextAction == "contact_operator" {
-				fields = append(fields, contextField{"Evaluation recovery", postSubmissionRecovery(value.StatusReason)})
-			}
 			if value.Intake != nil {
+				if value.Intake.PostProgress != nil {
+					fields = append(fields, contextField{"Evaluation progress", value.Intake.PostProgress})
+					if message := postSubmissionMessage(value.StatusReason, value.Intake.Stalled); message != "" {
+						fields = append(fields, contextField{"Evaluation recovery", message})
+					}
+				}
 				fields = append(fields, contextField{"Intake stage", value.Intake.Stage},
 					contextField{"Intake feedback", api.IntakeFeedbackLines(value.Intake.Feedback)})
 			}
@@ -148,8 +154,8 @@ func addSubmissionCommands(root, task *cobra.Command, client func() (*api.Client
 				return writeSafeJSON(stdout, result.Raw)
 			}
 			fields := []contextField{{"Submission operation", result.Value}}
-			if result.Value.NextAction == "contact_operator" {
-				fields = append(fields, contextField{"Evaluation recovery", postSubmissionRecovery(result.Value.FailureCode)})
+			if message := postSubmissionMessage(result.Value.FailureCode, result.Value.Stalled); message != "" {
+				fields = append(fields, contextField{"Evaluation recovery", message})
 			}
 			return writeTaskContextFields(stdout, fields)
 		}

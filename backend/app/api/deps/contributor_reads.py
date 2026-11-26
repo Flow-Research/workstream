@@ -356,7 +356,8 @@ class ContributorReadOperation:
                 or status == "evaluation_pending" and history is not None and history.status == "infrastructure_failed"):
             return status, "processing_unavailable", "wait_for_processing"
         if status in {"submitted", "evaluation_pending", "review_pending"}:
-            return status, None, "awaiting_evaluation"
+            reason = intake.failure_code if intake is not None and intake.post_submission_progress is not None else None
+            return status, reason, "awaiting_evaluation"
         reason = intake.failure_code if intake is not None else None
         if reason is None and status == "needs_revision" and assignment.revision is not None:
             reason = (latest.status_reason if latest is not None else None) if assignment.revision.disposition == "ready" else assignment.revision.disposition

@@ -31,9 +31,11 @@ from app.modules.checkers.api.delivery_reconciliation import (
     PostSubmitRequestDeliveryFacts,
 )
 from app.modules.model_usage.api import ModelRecoveryCandidate
+from app.modules.outbox.api import DeliveryOptions
 
 REQUEST_EVENT = "PostSubmissionEvaluationRequested"
 COMPLETION_EVENT = "PostSubmissionEvaluationCompleted"
+POST_SUBMISSION_RETRY_OPTIONS = DeliveryOptions()
 
 
 class CheckerExecutionUnavailable(RuntimeError):
@@ -268,6 +270,7 @@ class CheckerRetryEventExpectation(CheckerValue):
     idempotency_key: str
     payload_json: str
     payload_digest: Sha256
+    not_before_at: AwareDatetime | None = None
 
 
 class CheckerRetryDelivery(CheckerValue):
@@ -348,6 +351,7 @@ class EvaluationProgress(CheckerValue):
     status: Literal["queued", "running", "completed", "infrastructure_failed"]
     live_worker_lease: bool
     failure_code: PostSubmissionInfrastructureFailureCode | None
+    previous_failure_code: PostSubmissionInfrastructureFailureCode | None
     retry_event_id: ResourceId | None
     completion_event_id: ResourceId | None
     delivery_event_json: str | None

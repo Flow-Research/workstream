@@ -1,5 +1,5 @@
 {
-  "canonical_sha256": "e9cf7c4c35d072287b24a985a6ffb0de246e82adad1ab6f1a78abf66c42dd01c",
+  "canonical_sha256": "16f5cb07c998b4a5c93c18fa3cc2882b9c8af83e2ea43899a309f7d3a57bbf20",
   "components": {
     "schemas": {
       "ApiError": {
@@ -225,6 +225,41 @@
         "title": "ExternalCheckerFinding",
         "type": "object"
       },
+      "PostSubmissionProgress": {
+        "additionalProperties": false,
+        "description": "Current checker attempt and the due time of a scheduled retry.",
+        "properties": {
+          "attempt": {
+            "exclusiveMinimum": 0.0,
+            "title": "Attempt",
+            "type": "integer"
+          },
+          "automatic_attempt_limit": {
+            "exclusiveMinimum": 0.0,
+            "title": "Automatic Attempt Limit",
+            "type": "integer"
+          },
+          "next_attempt_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Attempt At"
+          }
+        },
+        "required": [
+          "attempt",
+          "automatic_attempt_limit",
+          "next_attempt_at"
+        ],
+        "title": "PostSubmissionProgress",
+        "type": "object"
+      },
       "ProjectIntakeCheck": {
         "additionalProperties": false,
         "properties": {
@@ -383,6 +418,16 @@
             "title": "Operationally Stalled",
             "type": "boolean"
           },
+          "post_submission_progress": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PostSubmissionProgress"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "pre_submission_results": {
             "items": {
               "anyOf": [
@@ -478,6 +523,7 @@
           "pre_submission_results",
           "failure_code",
           "operationally_stalled",
+          "post_submission_progress",
           "next_action"
         ],
         "title": "SubmissionOperationResponse",

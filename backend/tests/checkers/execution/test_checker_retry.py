@@ -119,6 +119,12 @@ async def _failed_source(
         try:
             delivery = await delivery_fixture(h, materialization=port)
             with monkeypatch.context() as patch:
+                from app.modules.checkers import execution_coordination
+
+                # Isolate the Operator path after escalation. The automatic policy
+                # and its durable retry chain are covered by delivery tests.
+                patch.setattr(execution_coordination, "POST_SUBMISSION_RETRY_OPTIONS",
+                    execution_coordination.POST_SUBMISSION_RETRY_OPTIONS.model_copy(update={"max_attempts": 1}))
                 patch.setattr(
                     LocalStorageAdapter if provider == "local" else S3CompatibleArtifactStore,
                     "open_source", missing,

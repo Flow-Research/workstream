@@ -213,6 +213,10 @@ class CheckerRun(Base):
         ),
         CheckConstraint("evaluation_generation > 0 and worker_lease_generation >= 0", name="generations"),
         CheckConstraint("status in ('queued','running','completed','infrastructure_failed')", name="state"),
+        CheckConstraint(
+            "automatic_retry_event_id IS NULL OR (supersedes_checker_run_id IS NOT NULL "
+            "AND evaluation_generation BETWEEN 2 AND 5)", name="automatic_retry_scope",
+        ),
         CheckConstraint("octet_length(request_json) <= 1048576 and request_digest = 'sha256:' || encode(sha256(convert_to(request_json, 'UTF8')), 'hex')", name="request_digest"),
         CheckConstraint("result_json is null or result_digest = 'sha256:' || encode(sha256(convert_to(result_json, 'UTF8')), 'hex')", name="result_digest"),
         Index(
@@ -263,6 +267,9 @@ class CheckerRun(Base):
     material_custody: Mapped[dict | None] = mapped_column(JSON(none_as_null=True))
     input_context_custody: Mapped[dict | None] = mapped_column(JSONB(none_as_null=True))
     completion_event_id: Mapped[UUID | None] = mapped_column(Uuid(), ForeignKey("outbox_events.event_id"))
+    automatic_retry_event_id: Mapped[UUID | None] = mapped_column(
+        Uuid(), ForeignKey("outbox_events.event_id", name="fk_checker_runs_automatic_retry_event"), unique=True,
+    )
     supersedes_checker_run_id: Mapped[str | None] = mapped_column(
         Uuid(as_uuid=False),
         index=True,
