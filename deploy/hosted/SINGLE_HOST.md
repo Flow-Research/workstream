@@ -163,5 +163,5 @@ instance, volume and deployment directories before deletion; retain unrelated
 resources, S3 objects and the stable address needed by the replacement. Confirm
 old billable compute is terminated after the replacement is qualified.
 
-The [single-host qualification report](../../docs/reports/mvp-single-host-2026-11-11.md)
+The [single-host qualification report](https://github.com/Flow-Research/workstream/blob/d713594ebf04a125917edb0ec981d380cf8047b4/docs/reports/mvp-single-host-2026-11-11.md)
 records the bounded private demo and restart proof, including its limits.

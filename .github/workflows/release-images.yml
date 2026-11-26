@@ -15,10 +15,6 @@ on:
       - 'deploy/hosted/**'
       - 'scripts/*hosted_release*.py'
       - 'scripts/test_hosted_local_data_initialization.py'
-      - 'scripts/test_public_smol_proof.py'
-      - 'scripts/test_public_hosted_attachment.py'
-      - 'scripts/test_public_hosted_model_post.py'
-      - 'experiments/pilot04_external_checker_runtime/**'
       - 'scripts/test_local_guide_runtime.py'
       - 'scripts/test_guide_document_api_drill.py'
       - 'scripts/verify_guide_parser_isolation.py'
@@ -78,15 +74,7 @@ jobs:
           backend/.venv/bin/python -m unittest -v \
             scripts.test_hosted_release_config scripts.test_hosted_release_images \
             scripts.test_local_guide_runtime scripts.test_guide_document_api_drill \
-            scripts.test_public_smol_proof scripts.test_hosted_local_data_initialization
-          test -z "$(git status --porcelain)"
-      - name: Verify hosted public journey and model qualification guards
-        timeout-minutes: 5
-        shell: bash
-        run: |
-          set -euo pipefail
-          PYTHONPATH=backend backend/.venv/bin/python -m unittest -v \
-            scripts.test_public_hosted_attachment scripts.test_public_hosted_model_post
+            scripts.test_hosted_local_data_initialization
           test -z "$(git status --porcelain)"
       - name: Build exact release images without cache or publication
         timeout-minutes: 42

@@ -51,7 +51,7 @@ only. When every original is ready, the exact-project Project Manager explicitly
 calls `POST /api/v1/projects/{project_id}/guides/{guide_id}/setup` for assistance,
 or `POST /api/v1/projects/{project_id}/guides/{guide_id}/requirements/compile`
 for provider-free uploaded rules. There is no separate source-snapshot creation
-step. The [Garden rules fixture](../pilots/garden/manager-rules.md) shows the
+step. The [Garden rules fixture](../examples/garden/manager-rules.md) shows the
 complete JSON body required in one `text/markdown` original; ordinary prose is
 not that format. Changed rules require a new guide version.
 

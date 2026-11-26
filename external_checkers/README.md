@@ -233,7 +233,7 @@ project. Task import, screening and release follow the governed task flow.
 
 See the [checker architecture](../docs/architecture_checker_framework.md) for
 the canonical execution and lifecycle contract, and the
-[Terminal Systems onboarding inputs](../pilots/terminal_systems/README.md) for
+[Terminal Systems onboarding inputs](../examples/terminal_systems/README.md) for
 the current real-project preparation. Ordinary platform regression tests protect
 this execution boundary; their passing results do not establish a live project
 journey or the correctness of a project's checker images.
@@ -453,8 +453,11 @@ PYTHONPATH=backend python external_checkers/workstream-checker-service/tests/tru
   --socket /absolute/node.sock --image sha256:... --config sha256:...
 ```
 
-This matrix proves the adapter/ART boundary. The separate
-[public lifecycle drill](../experiments/pilot04_external_checker_runtime/README.md)
-connects the same node to API uploads and durable workers, including the public
-Operator retry and both governed policy branches. Its recorded Flow/inference
-fixtures do not certify production identity, live models or hosted deployment.
+This matrix proves the adapter/ART boundary. The retired PILOT-04 harness and
+simulated hosted issuer are no longer supported qualification paths.
+Current service verification lives in `workstream-checker-service/tests/` and
+`backend/tests/checkers/`; hosted authentication uses the actual
+[Flow Identity deployment](../deploy/identity/README.md#verification-scope).
+Qualify the full public lifecycle on the intended deployment using its real
+identity provider and project-owned checker images. Component tests and past
+drill reports do not establish a fresh deployment's end-to-end readiness.

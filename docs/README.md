@@ -14,18 +14,18 @@ This index lists the main Workstream documents. Start with the
 - [Architecture Lockdown](architecture_lockdown.md)
 - [System Architecture](architecture_system_architecture.md)
 - [Glossary](glossary.md)
-- [Historical Planning Index](historical_planning.md)
 
 ## Product And Operations Documentation
 
 - [Product Principles](product_principles.md)
 - [Product Brief](product_brief.md)
 - [First User Flows](product_first_user_flows.md)
-- [Architecture Brief PDF — target architecture](architecture_brief/workstream_architecture_brief.pdf)
 - [Architecture Diagrams](diagrams/README.md)
 - [System Architecture](architecture_system_architecture.md)
 - [Data Model](architecture_data_model.md)
 - [Lifecycle State Machine](architecture_lifecycle_state_machine.md)
+- [Project Guides and Policy Approval](spec_project_guides.md)
+- [Tasks and Assignments](spec_task_assignment.md)
 - [Checker Framework](architecture_checker_framework.md)
 - [Operator Workflow](operations_operator_workflow.md)
 - [Project Operating Manual](operations_project_operating_manual.md)
@@ -43,20 +43,6 @@ This index lists the main Workstream documents. Start with the
 - [Risk Register](risk_register.md)
 - [Process Pattern Baseline](process_pattern_baseline.md)
 - [Glossary](glossary.md)
-
-## Historical Review Records
-
-These records preserve earlier product, architecture, process, and adversarial
-reviews. They are evidence and design history, not current implementation
-status. Current changes receive review through [CONTRIBUTING.md](../CONTRIBUTING.md).
-
-- [Process Baseline Operations Review](review_process_baseline_operations_review.md)
-- [Final Product Strategy Review](review_final_product_strategy_review.md)
-- [Final Architecture Review](review_final_architecture_review.md)
-- [Final Adversarial Review](review_final_adversarial_review.md)
-- [Adversarial Quality Review](review_adversarial_quality_review.md)
-- [Process Pattern Baseline Review](review_process_pattern_baseline_review.md)
-- [Review Closure](review_closure.md)
 
 ## Templates
 
@@ -88,3 +74,10 @@ status. Current changes receive review through [CONTRIBUTING.md](../CONTRIBUTING
 - [ADR 0014: External Services Use One Adapter Convention](decision_0014_external_service_adapter_convention.md)
 - [ADR 0015: Project Contributor Roles Are Independent](decision_0015_project_contributor_roles_are_independent.md)
 - [ADR 0016: Contribution Recognition Precedes External Fulfillment](decision_0016_contribution_compensation_boundary.md)
+
+## Historical sources
+
+Superseded implementation plans and drill reports are available through
+[Git history](historical_planning.md), not maintained as parallel specifications.
+Imported source specifications remain under `reference_specs/` because preserved
+Commitrail records bind those exact inputs; they do not override current contracts.

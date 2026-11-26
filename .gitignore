@@ -227,3 +227,5 @@ demos/week1_api_demo_ui/dist/
 
 # Local checker image qualification/publication receipts
 .checker-images/
+
+/mcp-experiment-evidence.local.json

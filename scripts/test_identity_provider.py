@@ -43,6 +43,38 @@ initializer = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(initializer)
 
 
+def assert_access_deadline(test, claims, received_at, lifespan):
+    """Bound signed expiry against receipt time on the same-host Docker fixture.
+
+    Keycloak 26.8.2 TokenManager.initToken reads iat before getTokenExpiration
+    reads the clock again. A second boundary can make exp - iat exceed the
+    configured lifespan; this does not extend the expiry beyond receipt + TTL.
+    """
+    test.assertLessEqual(claims["iat"], received_at)
+    test.assertGreater(claims["exp"], received_at)
+    test.assertLessEqual(claims["exp"], received_at + lifespan)
+
+
+class TokenDeadlineTests(unittest.TestCase):
+    def test_second_boundary_preserves_configured_deadline(self):
+        for lifespan in (120, 300):
+            with self.subTest(lifespan=lifespan):
+                claims = {"iat": 100, "exp": 101 + lifespan}
+                # Reproduce the rejected 301/121-second claim difference.
+                self.assertGreater(claims["exp"] - claims["iat"], lifespan)
+                assert_access_deadline(self, claims, 101, lifespan)
+
+    def test_overlong_expiry_is_rejected(self):
+        for lifespan in (120, 300):
+            with self.subTest(lifespan=lifespan), self.assertRaises(AssertionError):
+                assert_access_deadline(self, {"iat": 100, "exp": 102 + lifespan}, 101, lifespan)
+
+    def test_expired_or_future_issued_claims_are_rejected(self):
+        for claims in ({"iat": 100, "exp": 101}, {"iat": 102, "exp": 401}):
+            with self.subTest(claims=claims), self.assertRaises(AssertionError):
+                assert_access_deadline(self, claims, 101, 300)
+
+
 class IdentityProviderTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -219,22 +251,23 @@ class IdentityProviderTests(unittest.TestCase):
                 self.assertLessEqual(extra["refresh_expires_in"], 1800)
         tokens = self.probe.login(client_id, "workstream-mcp-audience", email, password,
                                  scopes="workstream:access workstream-mcp-audience offline_access", callback=callback)
+        tokens_received_at = int(time.time())
         keys = self.probe.request("/realms/flow/protocol/openid-connect/certs")["keys"]
-        def verify_access(token):
+        def verify_access(token, received_at):
             key = next(k for k in keys if k["kid"] == jwt.get_unverified_header(token)["kid"])
             claims = jwt.decode(token, jwt.PyJWK.from_dict(key).key,
                 algorithms=["RS256"], audience="workstream-mcp", issuer=self.origin + "/realms/flow")
             self.assertEqual(claims["sub"], user["id"])
             self.assertEqual(set(claims["aud"]), {"workstream-mcp", realm_config.MCP_RESOURCE})
-            self.assertLessEqual(claims["exp"] - claims["iat"], 300)
+            assert_access_deadline(self, claims, received_at, 300)
             self.assertEqual(claims["subject_kind"], "human")
-        verify_access(tokens["access_token"])
+        verify_access(tokens["access_token"], tokens_received_at)
         self.assertGreater(tokens["refresh_expires_in"], 0)
         self.assertLessEqual(tokens["refresh_expires_in"], 90 * 24 * 60 * 60)
         self.probe.request("/admin/realms/flow/users/" + user["id"] + "/logout", token=self.operator, method="POST")
         renewed = self.probe.request(endpoint, {"grant_type": "refresh_token", "client_id": client_id,
             "refresh_token": tokens["refresh_token"]}, form=True)
-        verify_access(renewed["access_token"])
+        verify_access(renewed["access_token"], int(time.time()))
         self.assertNotEqual(renewed["refresh_token"], tokens["refresh_token"])
         requester = self.probe.request("/admin/realms/flow/clients?clientId=workstream-mcp", token=self.operator)[0]
         secret = self.probe.request("/admin/realms/flow/clients/" + requester["id"] + "/client-secret", token=self.operator)["value"]
@@ -244,14 +277,16 @@ class IdentityProviderTests(unittest.TestCase):
                     realm_config.MCP_RESOURCE, self.root / "unused"), http, secret)
                 identity = await provider.verify(renewed["access_token"])
                 authorization = await provider.exchange(identity)
+                received_at = int(time.time())
                 token = authorization.removeprefix("Bearer ")
                 key = next(k for k in keys if k["kid"] == jwt.get_unverified_header(token)["kid"])
                 claims = jwt.decode(token, jwt.PyJWK.from_dict(key).key,
                     algorithms=["RS256"], audience="workstream-api", issuer=self.origin + "/realms/flow")
                 self.assertEqual(claims["sub"], user["id"])
-                self.assertLessEqual(claims["exp"] - claims["iat"], 120)
+                assert_access_deadline(self, claims, received_at, 120)
         asyncio.run(exchange_offline_source())
         current = self.probe.request("/admin/realms/flow", token=self.operator)
+        self.assertEqual(current["accessTokenLifespan"], 300)
         for field, value in realm_config.persistent_connection_settings().items():
             self.assertEqual(current[field], value)
         self.probe.request("/realms/flow/protocol/openid-connect/revoke", {
@@ -291,8 +326,9 @@ class IdentityProviderTests(unittest.TestCase):
             grant("incorrect-password")
         self.assertEqual(denied.exception.status, 400)
         tokens = grant(password)
+        tokens_received_at = int(time.time())
         keys = self.probe.request("/realms/flow/protocol/openid-connect/certs")["keys"]
-        def verified(token):
+        def verified(token, received_at):
             key = next(k for k in keys if k["kid"] == jwt.get_unverified_header(token)["kid"])
             claims = jwt.decode(token, jwt.PyJWK.from_dict(key).key,
                 algorithms=["RS256"], audience="workstream-api", issuer=self.origin + "/realms/flow")
@@ -302,12 +338,12 @@ class IdentityProviderTests(unittest.TestCase):
             self.assertEqual(claims["subject_kind"], "human")
             self.assertEqual(claims["email"], email)
             self.assertEqual(set(claims["scope"].split()), {"openid", "workstream:access"})
-            self.assertLessEqual(claims["exp"] - claims["iat"], 300)
+            assert_access_deadline(self, claims, received_at, 300)
             return claims
-        initial = verified(tokens["access_token"])
+        initial = verified(tokens["access_token"], tokens_received_at)
         renewed = self.probe.request(endpoint, {"grant_type": "refresh_token",
             "client_id": "workstream-api-login", "refresh_token": tokens["refresh_token"]}, form=True)
-        self.assertEqual(verified(renewed["access_token"])["sub"], initial["sub"])
+        self.assertEqual(verified(renewed["access_token"], int(time.time()))["sub"], initial["sub"])
         self.assertNotEqual(renewed["refresh_token"], tokens["refresh_token"])
         with self.assertRaises(ProviderRejected) as denied:
             self.probe.request(endpoint, {"grant_type": "refresh_token",
@@ -383,12 +419,13 @@ class IdentityProviderTests(unittest.TestCase):
         update_user({"attributes": {"workstream_subject_kind": ["human"]}})
         human = self.probe.login("workstream-mcp-proof", "workstream-mcp-audience", email, password)
         status, result = exchange(human["access_token"])
+        received_at = int(time.time())
         self.assertEqual(status, 200)
         actual = claims(result["access_token"], "workstream-api")
         source = claims(human["access_token"], realm_config.MCP_RESOURCE)
         self.assertEqual(actual["sub"], source["sub"])
         self.assertLessEqual(actual["exp"], source["exp"])
-        self.assertLessEqual(actual["exp"] - actual["iat"], 120)
+        assert_access_deadline(self, actual, received_at, 120)
         self.assertNotIn("refresh_token", result)
         denied(*exchange(human["access_token"], authentication=("workstream-mcp", "wrong-secret")))
         denied(*exchange(human["access_token"], authentication=None, client_id="workstream-mcp"))
