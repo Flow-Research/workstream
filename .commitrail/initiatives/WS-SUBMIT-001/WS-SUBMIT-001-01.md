@@ -12870,5 +12870,43 @@ socket-parent descriptor in its same-process test configuration after dropping
 the listener. That descriptor kept the exclusive lock, unlike a fresh process.
 The test releases this retained descriptor before simulating restart, preserving
 the real lock and custody checks. The exact test passes. These repairs concern
-the old-head CI run; the new-head workflow and hosted public journey must still
-finish before any full release claim.
+the old-head CI run; the new-head workflow must still finish before any full
+release claim.
+
+### Hosted contributor ZIP journey and paired replay passed
+
+This update records the completed contributor path and the existing review
+lifecycle prerequisite. The hosted runtime remains `2942dd4e7` at schema 0093.
+The installed CLI uses `da4912fea` and the raw-ZIP submission contract.
+
+The hosted sequence activated the provider-free guide, released its task and
+verified the approved originals before contributor claim. The first contributor
+ZIP returned HTTP 422 with `pre_submission_checker_failed` in 83.724 seconds of
+CLI elapsed time and created no Submission. A valid source produced a T4
+receipt and T5 finalized submission version 1. The assignment-only read showed
+`evaluation_pending` and identified that exact submission and intake operation.
+POST requested revision with a deadline on the same assignment.
+
+The contributor submitted the corrected ZIP through installed MCP. The exact
+CLI replay returned the same accepted receipt. Version 2 reached automatic
+acceptance on the original assignment with one unpaid submitter contribution,
+zero Reviews and zero awards. The paired replay matched the original PRE
+rejection and corrected acceptance through MCP and matched the exact CLI and
+MCP assignment status. The private evidence is under
+`/tmp/workstream-hosted-journey-2942`, including the `guide`, `release`,
+`contributor-claim`, `contributor-pre`, `contributor-revision`,
+`contributor-observe-corrected` and `contributor-paired-replay` result receipts
+and `observed-evaluation-pending.json`.
+
+The acceptance controller began at `disabled` generation 0. The persisted
+Operator used `scripts/transition_review_lifecycle.py` in the deployed API
+container to move it through `shadow` generation 1 and `live` generation 2.
+`acceptance-controller-activation.json` records both committed transitions.
+Queued completion then reached acknowledgement on normal delivery attempt 5
+and committed acceptance through its owner. The controller and completion
+used their existing authorized operations.
+
+The hosted required-review branch still needs a matching receipt. Maximum
+upload, native failure/isolation and age-eligible exact S3 deletion through the
+cleanup consumer remain open, along with the applicable final-head checks.
+Feedback email remains disabled pending sender and key configuration.

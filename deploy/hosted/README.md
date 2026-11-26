@@ -267,6 +267,21 @@ Use a stable deployment subject and keep the original key for retries. The
 cleanup startup check requires the active service actor and identity link. The
 S3 deletion credential supplies storage access separately.
 
+For automatic acceptance under a locked policy with `human_review_required=false`,
+activate the review lifecycle before exercising submission. From the authorized
+app host, run the maintained controller command in the API container with the
+profile ID of a current system Operator.
+
+```sh
+docker exec workstream-api-1 /usr/local/bin/workstream-release-entrypoint \
+  python scripts/transition_review_lifecycle.py \
+  --actor-profile-id OPERATOR_PROFILE_UUID --phase live \
+  --reason "Activate governed automatic acceptance for the reviewed release"
+```
+
+The controller verifies the Operator grant and records each transition through
+`shadow` to `live`. Running it again at `live` leaves the generation unchanged.
+
 Follow [S3 credential setup](../../docs/operations_aws_s3_credentials.md) for
 restricted policies and rotation. Qualification verifies real conditional
 upload/readback and denied destructive access before cutover. There are no
