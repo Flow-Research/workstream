@@ -118,6 +118,15 @@ async def _execute(database_url: str, statement: str, *arguments: object) -> Non
         await connection.close()
 
 
+def test_current_installed_head_admits_noop_upgrade(isolated_database_env, migration_lock):
+    """An already-upgraded database remains a supported installed starting point."""
+    before = asyncio.run(_database_snapshot(isolated_database_env))
+    assert before["versions"] == [HEAD_REVISION]
+    with migration_lock():
+        command.upgrade(_alembic_config(), "head")
+    assert asyncio.run(_database_snapshot(isolated_database_env)) == before
+
+
 @asynccontextmanager
 async def _historical_artifact_lineage_projection(database_url: str):
     """Expose null-only current ART lineage after restoring exact historical rows."""

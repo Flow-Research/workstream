@@ -11173,3 +11173,12 @@ cache and root pins were unchanged. Both runner services were active with
 reported healthy and had 93.2 GB free. This was a read-only recheck of the running
 infrastructure. Combined candidate execution and deployment qualification
 remain open.
+
+### Installed 0092 migration preflight correction
+
+CI's historical-schema lanes exposed a real migration preflight omission:
+`alembic/env.py` admitted installed `0091` but refused the new installed `0092`
+head before any migration could run. The closed list now names `0092`; its
+earlier installed revisions and fresh-database guard remain intact. A current
+database no-op upgrade regression checks the revision and public snapshot before
+and after. This correction changes no migration body or retained rows.
