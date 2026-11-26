@@ -1,8 +1,8 @@
 """Proof of the live 0091 writer handing its accepted command to the 0092 reader.
 
-Run this test from a 0091 checkout with the 0092 candidate backend path supplied
-in WORKSTREAM_SUBMISSION_FEEDBACK_CANDIDATE. The candidate process uses the same
-isolated PostgreSQL database and private local source as the predecessor.
+Invoke with pytest by explicitly naming this file. Use a 0091 checkout with the
+0092 candidate backend path in WORKSTREAM_SUBMISSION_FEEDBACK_CANDIDATE. The
+candidate uses the same isolated PostgreSQL database and private local source.
 """
 
 import asyncio
@@ -66,7 +66,6 @@ def _candidate_command(candidate, args):
 
 
 @pytest.mark.postgres_schema_contract
-@pytest.mark.skipif(not os.environ.get(_CANDIDATE_ENV), reason="requires the predecessor and candidate checkouts")
 async def test_feedback_upgrade_preserves_accepted_operation(admission_intake, tmp_path, monkeypatch):  # noqa: F811
     candidate = Path(os.environ[_CANDIDATE_ENV]).resolve(strict=True)
     f = admission_intake
