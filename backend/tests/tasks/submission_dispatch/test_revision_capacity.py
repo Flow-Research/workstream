@@ -387,7 +387,7 @@ async def test_rebase_retains_original_attempt_and_selects_current_terms(
             assert view["preparation_id"] == str(h.revision_preparation_id)
             assert view["outcome"] == "rebased" and view["disposition"] == "ready"
             assert "contribution" in {change["component"] for change in view["changes"]}
-            status = await client.get(f"/api/v1/tasks/{h.request.task_id}/assignments/{h.request.assignment_id}")
+            status = await client.get(f"/api/v1/actors/me/assignments/{h.request.assignment_id}")
             assert status.status_code == 200, status.text
             context = status.json()
             assert context["current_status"] == "needs_revision" and context["next_action"] == "revise"

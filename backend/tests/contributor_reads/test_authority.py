@@ -25,6 +25,9 @@ async def _preparation(task):
 async def test_another_contributor_never_receives_the_owners_records(task_client, monkeypatch):
     project, task, _submission = await submitted_case(task_client, monkeypatch)
     preparation = await _preparation(task)
+    [assignment] = (await get_ok(task_client, f"{ME}/assignments", project_id=project))["items"]
+    assignment_path = f"{ME}/assignments/{assignment['assignment_id']}"
+    assert (await get_ok(task_client, assignment_path))["assignment"]["task_id"] == task
     await as_actor(task_client, monkeypatch, OTHER, grant_project=project)
     for name in LISTS:
         assert (await get_ok(task_client, f"{ME}/{name}"))["items"] == []
@@ -33,6 +36,10 @@ async def test_another_contributor_never_receives_the_owners_records(task_client
     assert summary["assignments"] == {"active": 0, "closed": 0} and not any(summary["submissions"].values())
     assert await status_of(task_client, preparations_path(task)) == 404
     assert await status_of(task_client, f"{preparations_path(task)}/{preparation.id}") == 404
+    foreign = await task_client.get(assignment_path, headers=auth_headers())
+    missing = await task_client.get(f"{ME}/assignments/{new_record_id()}", headers=auth_headers())
+    assert foreign.status_code == missing.status_code == 404
+    assert foreign.json()["error"]["code"] == missing.json()["error"]["code"]
 
 
 async def test_project_filter_without_a_submitter_grant_is_not_found(task_client, monkeypatch):
@@ -54,6 +61,9 @@ async def test_project_filter_without_a_submitter_grant_is_not_found(task_client
 async def test_revoked_submitter_loses_every_own_work_read(task_client, monkeypatch):
     project, task, _submission = await submitted_case(task_client, monkeypatch)
     preparation = await _preparation(task)
+    [assignment] = (await get_ok(task_client, f"{ME}/assignments", project_id=project))["items"]
+    assignment_path = f"{ME}/assignments/{assignment['assignment_id']}"
+    assert await status_of(task_client, assignment_path) == 200
     owner = await actor_id(OWNER)
     async with db_session.get_session_factory()() as session:
         grant = await session.scalar(select(ProjectRoleGrant.id).where(
@@ -71,6 +81,7 @@ async def test_revoked_submitter_loses_every_own_work_read(task_client, monkeypa
         assert await status_of(task_client, f"{ME}/{name}", project_id=project) == 404
     assert await status_of(task_client, preparations_path(task)) == 404
     assert await status_of(task_client, f"{preparations_path(task)}/{preparation.id}") == 404
+    assert await status_of(task_client, assignment_path) == 404
     assert (await get_ok(task_client, f"{ME}/projects"))["items"] == []
 
 

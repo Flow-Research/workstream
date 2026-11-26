@@ -523,7 +523,7 @@ def test_openapi_documents_request_error_and_response_context() -> None:
     contributor_reads = {
         "GET /api/v1/actors/me/projects": "actor.project.list",
         "GET /api/v1/actors/me/assignments": "actor.assignment.list",
-        "GET /api/v1/tasks/{task_id}/assignments/{assignment_id}": "task.assignment.read",
+        "GET /api/v1/actors/me/assignments/{assignment_id}": "task.assignment.read",
         "GET /api/v1/projects/{project_id}/contributor-guide": "project.contributor_guide.read",
         "GET /api/v1/projects/{project_id}/contributor-guide/{guide_id}/documents/{document_id}/content":
             "project.contributor_guide.read",
@@ -670,7 +670,7 @@ def test_openapi_documents_request_error_and_response_context() -> None:
         assert operation["security"]
     assert len(route_inventory) == 137
     contributor_journey_routes = {
-        "GET /api/v1/tasks/{task_id}/assignments/{assignment_id}",
+        "GET /api/v1/actors/me/assignments/{assignment_id}",
         "GET /api/v1/projects/{project_id}/contributor-guide",
         "GET /api/v1/projects/{project_id}/contributor-guide/{guide_id}/documents/{document_id}/content",
     }
@@ -684,6 +684,9 @@ def test_openapi_documents_request_error_and_response_context() -> None:
         "8aa0828260680a7bccdb055ebb3f21fcd06d4e37a808b4a0a37dcbf77ffa0732"
     )
     assert "/api/v1/tasks/{task_id}/submission-precheck" not in schema["paths"]
+    assignment_route = schema["paths"]["/api/v1/actors/me/assignments/{assignment_id}"]["get"]
+    assert [p["name"] for p in assignment_route["parameters"] if p["in"] == "path"] == ["assignment_id"]
+    assert "/api/v1/tasks/{task_id}/assignments/{assignment_id}" not in schema["paths"]
     assert "/api/v1/workers/me/profile" not in schema["paths"]
     assert "post" in schema["paths"]["/api/v1/tasks/{task_id}/submissions"]
     assert "GET /api/v1/tasks/{task_id}/submissions" in protected_inventory

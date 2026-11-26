@@ -147,11 +147,11 @@ class ContributorWorkReadPort(Protocol):
     """Read-only TASK projections; the caller owns authority and the transaction."""
 
     async def resolve_own_assignment_project(
-        self, task_id: UUID, assignment_id: UUID, contributor_id: UUID,
+        self, assignment_id: UUID, contributor_id: UUID,
     ) -> UUID | None: ...
 
     async def read_own_assignment(
-        self, project_id: UUID, task_id: UUID, assignment_id: UUID, contributor_id: UUID,
+        self, project_id: UUID, assignment_id: UUID, contributor_id: UUID,
     ) -> OwnAssignmentSelection | None: ...
 
     async def read_assignments(

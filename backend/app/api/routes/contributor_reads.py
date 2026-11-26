@@ -54,15 +54,15 @@ async def list_my_assignments(
 
 
 @router.get(
-    "/tasks/{task_id}/assignments/{assignment_id}", response_model=ExactContributorAssignment,
-    tags=["tasks"], responses=_ERRORS,
+    "/actors/me/assignments/{assignment_id}", response_model=ExactContributorAssignment,
+    tags=["actors"], responses=_ERRORS,
     openapi_extra={"x-workstream-action-id": "task.assignment.read"},
 )
 async def read_my_assignment(
-    task_id: UUID, assignment_id: UUID, reads: Reads, limit: PageLimit = 25, cursor: PageCursor = None,
+    assignment_id: UUID, reads: Reads, limit: PageLimit = 25, cursor: PageCursor = None,
 ) -> ExactContributorAssignment:
-    """Read your assignment status, feedback and earned evidence by task and assignment."""
-    return await reads.assignment(task_id, assignment_id, limit=limit, cursor=cursor)
+    """Read your assignment status, feedback and earned evidence by assignment ID."""
+    return await reads.assignment(assignment_id, limit=limit, cursor=cursor)
 
 
 @router.get(

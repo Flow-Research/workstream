@@ -29,6 +29,27 @@ heads. The full specification remains unfinished.
 `interfaces/artifacts.py` derives keys from content SHA. The new design needs
 operation-based keys before bytes are known and exact durable identity afterward.
 
+### Assignment-only contributor status and feedback
+
+The assignment ID is the stable contributor reference across intake attempts,
+submitted versions and revisions. The contributor status read resolves the
+exact owned assignment by that ID, checks the current Submitter grant in its
+project, and derives the task and attempt from the existing response snapshot.
+It returns the same current PRE, POST, revision and acceptance evidence.
+
+Allowed files are the contributor status route, response composition and TASK
+read port, their CLI/MCP callers and selected contract, nearby tests, current
+user documentation, and the public journey callers. Replace the nested task
+selector with `/api/v1/actors/me/assignments/{assignment_id}` and align the CLI
+and MCP inputs in this PR. Preserve the existing authorization action, query
+scope, concealment, submission write contracts and immutable evidence IDs.
+Leave notification delivery to its separate owner in this same PR.
+
+This read-selector change affects an authorization boundary. Verify the exact
+route and clients, foreign or missing assignments, grant loss, and retained
+attempt selection. Security, architecture, QA and documentation review focus
+on owner-scoped lookup, exact current evidence and convergence of all clients.
+
 ## Bounded change
 
 ### Allowed

@@ -260,11 +260,11 @@ class ContributorReadOperation:
             await self._run(request, read)
             yield verified
 
-    async def assignment(self, task_id: UUID, assignment_id: UUID, *, limit: int, cursor: str | None):
+    async def assignment(self, assignment_id: UUID, *, limit: int, cursor: str | None):
         """Resolve only an exact owned assignment before project read authorization."""
         try:
             await start_read_snapshot(self._session)
-            project_id = await self._work.resolve_own_assignment_project(task_id, assignment_id, self._actor_id)
+            project_id = await self._work.resolve_own_assignment_project(assignment_id, self._actor_id)
         except SQLAlchemyError as exc:
             await self._session.rollback()
             raise _unavailable() from exc
@@ -272,16 +272,17 @@ class ContributorReadOperation:
             await self._session.rollback()
             raise _missing()
         request = self._request(
-            "task.assignment.read", {"task_id": str(task_id), "limit": limit},
+            "task.assignment.read", {"limit": limit},
             resource_id=assignment_id, project_id=project_id, cursor=cursor,
         )
 
         async def read(grant):
-            selected = await self._work.read_own_assignment(project_id, task_id, assignment_id, self._actor_id)
+            selected = await self._work.read_own_assignment(project_id, assignment_id, self._actor_id)
             if selected is None:
                 await self._session.commit()
                 raise _missing()
             assignment = selected.assignment
+            task_id = assignment.task_id
             intake = await self._intake.read_assignment_attempt(AssignmentIntakeQuery(
                 project_id, task_id, assignment_id, self._actor_id, selected.active_operation_id,
             ))

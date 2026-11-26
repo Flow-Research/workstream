@@ -240,24 +240,23 @@ class ContributorWorkReader:
         self._finding_counts = finding_counts
 
     @staticmethod
-    def _own_assignment_scope(task_id, assignment_id, contributor_id):
+    def _own_assignment_scope(assignment_id, contributor_id):
         return (
-            TaskAssignment.task_id == str(task_id),
             TaskAssignment.id == str(assignment_id),
             TaskAssignment.contributor_id == str(contributor_id),
         )
 
-    async def resolve_own_assignment_project(self, task_id, assignment_id, contributor_id) -> UUID | None:
+    async def resolve_own_assignment_project(self, assignment_id, contributor_id) -> UUID | None:
         project = await self._session.scalar(select(TaskAssignment.project_id).where(
-            *self._own_assignment_scope(task_id, assignment_id, contributor_id),
+            *self._own_assignment_scope(assignment_id, contributor_id),
         ))
         return UUID(project) if project is not None else None
 
     async def read_own_assignment(
-        self, project_id, task_id, assignment_id, contributor_id,
+        self, project_id, assignment_id, contributor_id,
     ) -> OwnAssignmentSelection | None:
         rows, _ = await read_assignment_page(self._session, self._tasks, (
-            *self._own_assignment_scope(task_id, assignment_id, contributor_id),
+            *self._own_assignment_scope(assignment_id, contributor_id),
             TaskAssignment.project_id == str(project_id),
         ), state=None, updated_since=None, after=None, limit=1)
         if not rows:
@@ -266,7 +265,7 @@ class ContributorWorkReader:
         operation = None
         if assignment.state == "active":
             operation = await self._session.scalar(select(WorkstreamTask.active_submission_operation_id).where(
-                WorkstreamTask.id == str(task_id), WorkstreamTask.project_id == str(project_id),
+                WorkstreamTask.id == str(assignment.task_id), WorkstreamTask.project_id == str(project_id),
                 WorkstreamTask.assigned_to == str(contributor_id),
             ))
         return OwnAssignmentSelection(assignment, UUID(operation) if operation is not None else None)

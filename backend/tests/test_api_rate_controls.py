@@ -1014,7 +1014,7 @@ ESTABLISHED_AUTHORIZATION_READ_RATE_ROUTES = {
     ("GET", "/projects/{project_id}/contribution-policies"),
     ("GET", "/projects/{project_id}/contributor-guide"),
     ("GET", "/projects/{project_id}/contributor-guide/{guide_id}/documents/{document_id}/content"),
-    ("GET", "/tasks/{task_id}/assignments/{assignment_id}"),
+    ("GET", "/actors/me/assignments/{assignment_id}"),
     ("GET", "/projects/{project_id}/guides"),
     ("GET", "/projects/{project_id}/guides/{guide_id}"),
     ("GET", "/projects/{project_id}/guides/{guide_id}/activation-readiness"),

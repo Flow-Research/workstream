@@ -154,7 +154,7 @@ async def test_public_malformed_zip_preserves_task_and_retains_cleanup_custody(
                and item.get("failure_code") == "submission_archive_malformed" for item in results)
     assert not any(item["source"] == "project_external_checker" for item in results)
     status = await client.get(
-        f"/api/v1/tasks/{f.task}/assignments/{f.assignment}", headers=f.access.target.headers,
+        f"/api/v1/actors/me/assignments/{f.assignment}", headers=f.access.target.headers,
     )
     assert status.status_code == 200, status.text
     assignment = status.json()
@@ -218,15 +218,17 @@ async def test_public_minimal_submission_survives_acceptance_finalization_and_re
     assert first.status_code == 202, first.text
     receipt = first.json()
     assert receipt["status"] == "accepted" and receipt["replayed"] is False
-    status_path = f"/api/v1/tasks/{f.task}/assignments/{f.assignment}"
+    status_path = f"/api/v1/actors/me/assignments/{f.assignment}"
     pending = await client.get(status_path, headers=f.access.target.headers)
     assert pending.status_code == 200, pending.text
     assert pending.json()["current_status"] == "evaluation_pending"
     assert pending.json()["next_action"] == "awaiting_evaluation"
+    assert pending.json()["assignment"]["task_id"] == str(f.task)
+    assert pending.json()["assignment"]["assignment_id"] == str(f.assignment)
     assert pending.json()["assignment"]["latest_submission"] is None
     assert pending.json()["intake"]["pre_submission_results"] == receipt["pre_submission_results"]
     assert (await client.get(
-        f"/api/v1/tasks/{f.task}/assignments/{new_record_id()}", headers=f.access.target.headers,
+        f"/api/v1/actors/me/assignments/{new_record_id()}", headers=f.access.target.headers,
     )).status_code == 404
     warnings = [item["warning_code"] for item in receipt["pre_submission_results"]
                 if item["source"] == "workstream_default" and item["status"] == "warning"]
