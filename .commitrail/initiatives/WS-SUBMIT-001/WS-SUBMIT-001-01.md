@@ -12749,3 +12749,22 @@ this status audit. The reviewed native fixture is built, but its raw transfer
 timed out and left an incomplete owned test archive; no test runner was started
 and normal services/configuration were unchanged. Reconcile that exact partial
 file before a subsequent transfer. Native outcomes remain unproved.
+
+
+### Hosted candidate staged; contributor time limits approved
+
+The user explicitly approved initial 120s PRE hard deadline, separate 300s
+upload total and 30s upload idle on 2026-11-26. These replace the unresolved
+C01 decision; the approximately 60s target is not claimed achieved. Candidate
+`/etc/workstream/release-708-candidate.env` is staged on the app host with the
+published c715 backend/MCP images, exact current runner endpoint/profile,
+installed TLS and separate cleanup credential selectors. Configuration-only
+validation passed. Full preflight failed at image-owned validator startup;
+activation is held pending diagnosis. Active release/environment are unchanged.
+
+An online preflight database snapshot is retained at
+`/var/backups/workstream/pr708-preflight-1795704276863695662/workstream.dump`,
+3,202,574 bytes, SHA256
+`a2d8d08dda64d804c3a73dbd6b0206ef73d84dd62cafdc96ea601758596a0e19`.
+pg_restore list verifies its archive structure, not a full restore. This is not
+a quiesced final cutover backup; take a fresh backup after draining producers.

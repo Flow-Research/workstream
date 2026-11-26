@@ -208,7 +208,7 @@ This is the final qualification queue, not a claim that all listed code is absen
 
 | Register | Current evidence | Remaining current-delivery action |
 | --- | --- | --- |
-| C01 | Connected CLI receipts observed 85.09s PRE rejection and 88.46s initial acceptance under a 120s qualification deadline; these are command durations, not isolated PRE-stage percentiles. | Set the explicit hosted hard deadline and matching HTTP envelope using measured stages; the approximately 60s target is not proved and 120s is not silently an approved production default. |
+| C01 | Connected CLI receipts observed 85.09s PRE rejection and 88.46s initial acceptance under a 120s qualification deadline; these are command durations, not isolated PRE-stage percentiles. | User approved initial 120s PRE hard deadline, 300s upload total and 30s upload idle on 2026-11-26. Activate the matching HTTP envelope and verify it on the hosted path; the approximately 60s target remains unmet. |
 | C02 | Exact native guest/root/image and resource profile passed the connected small-input journey. | Confirm the chosen existing-runner deployment profile against essential native isolation/failure and supported inputs. No new paid provider or hardware design. |
 | C03 | Bounded upload/framing owner tests exist; the earlier 496 MiB slow-provider drill did not complete successfully. | Verify supported input size, memory/backpressure, idle/total timeout and edge limits through the deployed path. A failed near-limit upload is not a pass. |
 | C04 | Dedicated queues and single-runner PRE/background resource reservations are implemented. | Verify the configured single-runner bounds and queue independence on deployment. Multi-replica/multi-runner and broad saturation testing are user-deferred. |
