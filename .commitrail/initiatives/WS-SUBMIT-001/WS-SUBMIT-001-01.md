@@ -11749,3 +11749,16 @@ container was removed, and the existing parser kept its original container
 identity and start time. All 20 release contract tests passed. Build and
 runtime receipts are in `/tmp/workstream-parser-bytecode.hUOuQAPF/`.
 The separate-runner paired submission journey remains pending.
+
+
+### Assignment-only integration review
+
+Integrated assignment lookup and client commits `21e682a9f`, `71b44b576`,
+and formatting `8ab56e9ab` into the PR 708 branch. Independent static review
+by the submitter-journey agent found no blocking authorization or caller gaps:
+lookup retains actor ownership, project grant, repeatable-read snapshot, signed
+cursor binding and assignment/submission foreign-key custody. All three native
+status checkpoints use the stable assignment ID. The retired API route and CLI
+flag occur only in rejection tests. Built the integrated Go CLI and installed
+the assignment-only MCP wheel for the next native run. Connected proof remains
+open; this review does not substitute for that run.
