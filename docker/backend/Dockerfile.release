@@ -36,12 +36,14 @@ COPY packages/external-services/ /workspace/packages/external-services/
 COPY backend/ ./
 COPY docker/backend/release-entrypoint.sh /usr/local/bin/workstream-release-entrypoint
 
+# The read-only guide parser starts a fresh Python child for each original.
 RUN --mount=type=cache,target=/root/.cache/uv \
     case "${WORKSTREAM_PROJECT_AGENT_SDK_ENVIRONMENT}" in \
         agents|omnicore) ;; \
         *) echo "WORKSTREAM_PROJECT_AGENT_SDK_ENVIRONMENT must be agents or omnicore" >&2; exit 1 ;; \
     esac \
-    && uv sync --locked --extra "${WORKSTREAM_PROJECT_AGENT_SDK_ENVIRONMENT}" --no-dev --no-editable \
+    && uv sync --locked --extra "${WORKSTREAM_PROJECT_AGENT_SDK_ENVIRONMENT}" --no-dev --no-editable --compile-bytecode \
+    && python -m compileall -q -j 2 /usr/local/lib/python3.12 /workspace/backend/app \
     && install -d -m 0755 /etc/workstream \
     && printf '%s\n' "${WORKSTREAM_PROJECT_AGENT_SDK_ENVIRONMENT}" \
         > /etc/workstream/project-agent-sdk-environment \
