@@ -224,7 +224,7 @@ async def _started_public_task(client, *, project_id: str, manager_token: str,
 
 
 async def _public_project(client, factory, env, *, human_review_required, pre_requirements=1,
-                          manager_authored=False):
+                          manager_authored=False, hold_post=False):
     """Public guide activation and submitter grant shared by every runtime trial."""
     from experiments.pilot04_external_checker_runtime.public_hosted_attachment import HostedAttachment
     from experiments.pilot04_external_checker_runtime.public_submission_clients import seeded_issuer
@@ -233,7 +233,7 @@ async def _public_project(client, factory, env, *, human_review_required, pre_re
     compilation = await public_guide_setup(
         client, factory, human_review_required, _json, lambda actor: _token(env, actor),
         pre_requirements=pre_requirements, attachment=attachment, issuer=seeded_issuer(env),
-        manager_authored=manager_authored,
+        manager_authored=manager_authored, hold_post=hold_post,
     )
     manager = compilation.manager
     guide_id = str(compilation.guide_id)
@@ -293,7 +293,7 @@ async def _public_project(client, factory, env, *, human_review_required, pre_re
     return compilation, contributor, manager_token, contributor_token
 
 
-def _locked_spec(phase: str, image: dict[str, str]) -> ExternalCheckerRegistrySpec:
+def _locked_spec(phase: str, image: dict[str, str], *, hold_post=False) -> ExternalCheckerRegistrySpec:
     source = registry_spec("pre_submit") if phase == "pre_submit" else post_registry_spec()
     values = source.model_dump(mode="json")
     if phase == "pre_submit":
@@ -304,6 +304,11 @@ def _locked_spec(phase: str, image: dict[str, str]) -> ExternalCheckerRegistrySp
             document=document,
             schema_sha256=external_checker_json_hash(document),
         ).model_dump(mode="json")
+    if phase == "post_submit" and hold_post:
+        document = {"type": "object", "properties": {"mode": {"enum": ["deadline"]}},
+                    "required": ["mode"], "additionalProperties": False}
+        values["configuration_schema"] |= {"document": document,
+                                            "schema_sha256": external_checker_json_hash(document)}
     values["image_digest"] = image["platform_manifest_digest"]
     values["resources"] |= {"deadline_ms": 30_000, "maximum_output_bytes": 8_192}
     return ExternalCheckerRegistrySpec.model_validate(values)

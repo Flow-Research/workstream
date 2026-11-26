@@ -12246,3 +12246,36 @@ Activation and post-start observations are retained in
 latency/resource approval or an overlap-test pass. The current public fixture
 prepares its current archive before running POST; predecessor-archive and
 trial policies need additional background capacity. API deployment is unchanged.
+
+### A29 native overlap fixture
+
+Prove separate-runner overlap on the reviewed one-PRE/one-Background node.
+Run a selected POST checker with the pinned fixture image's existing
+`mode=deadline` sleep, with its ordinary checker deadline. Submit another
+unmarked ZIP through public selected PRE and pause its test adapter at the
+existing native call boundary until the POST lease and populated cgroup are
+observed. Resume an already prepared third T4 through the exclusive
+finalization worker while the two native admissions overlap. Require the exact
+sealed source and original T5 outbox acknowledgement, with its POST request
+still parked. Finish the distinct PRE within the unchanged runtime budget.
+
+Use the existing separate-runner public journey, fixture image selection and
+owned worker controls. Add only an opt-in overlap probe, its read-only native
+observer and focused checks. The ordinary policy cases, production adapters,
+runner image and resource guards stay unchanged. Keep the overlap receipt
+separate from completed policy cases and require the terminal command and its
+matching isolated cleanup evidence. The implementing worktree does not start
+or change the deployed runner.
+
+The probe starts the same seven dedicated workers before waiting for their
+existing readiness checks. Beat and public workload requests still start only
+after every check passes. The native readonly sampler pins the live checker
+binary and config and binds the observed PRE journal hash to the final destroyed
+receipt. It confirms the held POST's exact durable attempt through the native
+grant and populated cgroup. No production timeout or capacity setting changed.
+
+Four focused local tests passed, including the existing exclusive policy receipt,
+the held fixture's unchanged resource limits, the native POST grant and journal
+reader, and refusal of unpopulated or mismatched background state. Compilation,
+focused Ruff and diff checks passed. Native overlap remains for the exclusive
+runner qualification; no service, broker or PostgreSQL was used for these checks.

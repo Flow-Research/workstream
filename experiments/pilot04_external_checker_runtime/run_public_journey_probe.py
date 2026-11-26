@@ -1194,6 +1194,204 @@ async def _pre_runs(factory, task_id: str) -> list[str]:
         ).order_by(SelectedPreSubmitRun.queued_at)))
 
 
+async def _overlap_consumer(host, queue, enabled):
+    """Change only the named proof worker's consumption of its own queue."""
+    from app.workers.celery_app import celery_app
+
+    control = celery_app.control.add_consumer if enabled else celery_app.control.cancel_consumer
+    replies = await asyncio.to_thread(control, queue, destination=[host], reply=True, timeout=3)
+    _require(len(replies) == 1 and set(replies[0]) == {host} and "ok" in replies[0][host],
+             "owned overlap worker did not confirm its queue transition")
+
+
+async def _overlap_snapshot(observer, custody):
+    process = await asyncio.create_subprocess_exec(
+        str(observer), custody["config_sha256"], custody["service_sha256"],
+        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
+        start_new_session=True,
+    )
+    try:
+        stdout, _ = await asyncio.wait_for(process.communicate(), timeout=6)
+    finally:
+        if process.returncode is None:
+            try:
+                os.killpg(process.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            await process.wait()
+    _require(process.returncode == 0 and len(stdout) <= 65_536, "native overlap observer failed")
+    value = json.loads(stdout)
+    _require(set(value) == {"checker_pid", "config_sha256", "service_sha256", "leases", "post_grants"}
+             and value["config_sha256"] == custody["config_sha256"]
+             and value["service_sha256"] == custody["service_sha256"]
+             and type(value["checker_pid"]) is int and value["checker_pid"] > 0,
+             "native overlap observation differs from the reviewed node")
+    return value
+
+
+def _overlap_post(snapshot, expected_grant):
+    background = [lease for lease in snapshot["leases"] if lease["pre"] is None]
+    grants = snapshot["post_grants"]
+    if len(background) == len(grants) == 1 and background[0]["populated"] is True and all(
+        grants[0].get(key) == value for key, value in expected_grant.items()
+    ):
+        return background[0], grants[0]
+    return None
+
+
+async def _assert_overlap_parked(factory, submission_id):
+    async with factory() as session:
+        dispatch = await session.get(SubmissionDispatch, submission_id)
+        event = await session.get(OutboxEvent, dispatch.evaluation_event_id)
+        run = await session.get(CheckerRun, dispatch.evaluation_attempt_id)
+        _require(event.delivery_state == "pending" and event.attempt_count == 0
+                 and run.status == "queued" and run.worker_lease_generation == 0,
+                 "parked POST escaped its dedicated consumer boundary")
+        return str(event.event_id)
+
+
+async def _run_admission_overlap(client, factory, env, root, observer, custody, hosts):
+    """Observe a selected POST, independently bounded selected PRE, and exact T5."""
+    from app.modules.artifacts.intake.models import SubmissionIntakeOperation
+    from app.workers.outbox import scan_pending
+    from app.workers.outbox_topology import FINALIZATION_QUEUE, OUTBOX_QUEUE
+
+    guide, _, manager, token = await _public_project(
+        client, factory, env, human_review_required=True, manager_authored=True, hold_post=True,
+    )
+    project = str(guide.project_id)
+    tasks = [await _started_public_task(client, project_id=project, manager_token=manager,
+             contributor_token=token, source_ref=f"admission-overlap-{role}")
+             for role in ("post", "t5", "pre")]
+    post_task, t5_task, pre_task = tasks
+    archive = archive_with_modes("evidence/results", guide.project_id)
+    pre_archive = _with_fixture_file(archive, "admission-overlap-pre.txt")
+    _require(len({task_id for task_id, _ in tasks}) == 3, "overlap requires three distinct tasks")
+
+    async def accept(task, payload):
+        task_id, assignment_id = task
+        key = str(uuid4())
+        accepted = await _json(client, "POST", f"/api/v1/tasks/{task_id}/submissions", token, 202,
+                               headers=_source_headers(assignment_id, payload, key), content=payload)
+        _require(accepted["status"] == "accepted" and accepted["replayed"] is False
+                 and accepted["task_id"] == task_id and accepted["assignment_id"] == assignment_id
+                 and accepted["pre_submission_results"], "overlap received incorrect source acceptance")
+        return {"acceptance_receipt": accepted, "idempotency_key": key}
+
+    await _overlap_consumer(hosts["outbox"], OUTBOX_QUEUE, False)
+    post = await _submit(client, factory, task_id=post_task[0], assignment_id=post_task[1],
+                         contributor_token=token, archive=archive)
+    await _assert_overlap_parked(factory, post["submission_id"])
+    await _overlap_consumer(hosts["finalization"], FINALIZATION_QUEUE, False)
+    t5_context = await accept(t5_task, archive)
+    t5_operation_id = t5_context["acceptance_receipt"]["operation_id"]
+    async with factory() as session:
+        t5_operation = await session.get(SubmissionIntakeOperation, t5_operation_id)
+        t5_event = await session.get(OutboxEvent, UUID(t5_operation.finalization_event_id))
+        _require(t5_operation.state == "finalization_pending" and t5_operation.finalized_submission_id is None
+                 and t5_event.delivery_state == "pending" and t5_event.attempt_count == 0,
+                 "T5 completed before the overlap fixture released it")
+        t5_event_id = str(t5_event.event_id)
+
+    initial = await _overlap_snapshot(observer, custody)
+    _require(initial["leases"] == initial["post_grants"] == [], "overlap node did not start idle")
+    # Stage publication while both owners are parked so overlap timing does not
+    # depend on when the next Beat scan happens to run.
+    scan = await asyncio.to_thread(scan_pending.apply_async, ignore_result=False)
+    try:
+        scanned = await asyncio.to_thread(scan.get, timeout=30, propagate=True)
+        _require(scanned["published"] >= 2, "owned scanner did not publish both initial requests")
+    finally:
+        await asyncio.to_thread(scan.forget)
+    (root / "source.sha256").write_text(_fixture_hashes(pre_archive)["archive_sha256"] + "\n")
+    pre = asyncio.create_task(accept(pre_task, pre_archive))
+    try:
+        async with asyncio.timeout(30):
+            while not (root / "pre-dispatch.json").is_file():
+                _require(not pre.done(), "PRE exited before the native dispatch barrier")
+                await asyncio.sleep(0.05)
+        expected_pre = json.loads((root / "pre-dispatch.json").read_text())
+        _require(len({post["operation_id"], t5_operation_id, expected_pre["source_operation_id"]}) == 3,
+                 "overlap reused a source operation")
+        await _overlap_consumer(hosts["outbox"], OUTBOX_QUEUE, True)
+
+        expected_post = {"project_id": project, "task_id": post_task[0], "submission_id": post["submission_id"],
+                         "evaluation_request_id": post["evaluation_request_id"]}
+        async with asyncio.timeout(60):
+            while (held := _overlap_post(await _overlap_snapshot(observer, custody), expected_post)) is None:
+                _require(not pre.done(), "PRE exhausted its original lease before POST held capacity")
+                await asyncio.sleep(0.15)
+        post_lease, post_grant = held
+        async with factory() as session:
+            run = await session.get(CheckerRun, post_grant["attempt_id"])
+            _require(run is not None and run.status == "running" and run.worker_lease_id == post_grant["lease_id"]
+                     and run.worker_lease_generation == 1, "native POST is not the retained selected attempt")
+        await _overlap_consumer(hosts["outbox"], OUTBOX_QUEUE, False)
+        released = time.monotonic()
+        (root / "release-pre").touch(exist_ok=False)
+
+        async def require_held_post():
+            snapshot = await _overlap_snapshot(observer, custody)
+            _require(snapshot["checker_pid"] == initial["checker_pid"]
+                     and _overlap_post(snapshot, expected_post) == held,
+                     "selected POST released Background capacity before the overlap was proved")
+            return snapshot
+
+        async with asyncio.timeout(20):
+            while True:
+                overlap = await require_held_post()
+                admitted = [lease for lease in overlap["leases"] if lease["pre"] == expected_pre]
+                if admitted:
+                    break
+                await asyncio.sleep(0.15)
+            pre_lease, = admitted
+            _require(pre_lease["name"] != post_lease["name"] and pre_lease["epoch"] == post_lease["epoch"],
+                     "PRE did not reserve independently on the same admission epoch")
+            await _overlap_consumer(hosts["finalization"], FINALIZATION_QUEUE, True)
+            t5 = await _await_finalized_source(client, factory, *t5_task, token, t5_context, archive)
+            async with factory() as session:
+                t5_event = await session.get(OutboxEvent, UUID(t5_event_id))
+                _require(t5_event.delivery_state == "acknowledged" and t5_event.attempt_count == 1,
+                         "overlap T5 did not acknowledge the original delivery once")
+            proved = await require_held_post()
+            _require(any(lease["name"] == pre_lease["name"] and lease["pre"] == expected_pre
+                         and lease["epoch"] == pre_lease["epoch"]
+                         and lease["journal_sha256"] == pre_lease["journal_sha256"] for lease in proved["leases"]),
+                     "selected PRE released its reservation before T5 acknowledged")
+        t5_post_event = await _assert_overlap_parked(factory, t5["submission_id"])
+        pre_context = await pre
+        elapsed = time.monotonic() - released
+        pre_acceptance = pre_context["acceptance_receipt"]
+        _require(pre_acceptance["operation_id"] == expected_pre["source_operation_id"],
+                 "accepted PRE operation differs from the admitted native lease")
+        selected = await _await_finalized_source(client, factory, *pre_task, token, pre_context, pre_archive)
+        async with factory() as session:
+            pre_run = await session.get(SelectedPreSubmitRun, expected_pre["run_id"])
+            receipt = pre_run.terminal_json["invocation_receipt"]
+            _require(receipt["provider_invocation_id"] == pre_lease["name"]
+                     and receipt["cleanup"]["journal_sha256"] == pre_lease["journal_sha256"]
+                     and receipt["cleanup"]["disposition"] == "destroyed"
+                     and receipt["timings_ms"]["total"] <= 120_000,
+                     "completed PRE did not retain exact bounded native reservation evidence")
+        await _assert_overlap_parked(factory, selected["submission_id"])
+        await _assert_overlap_parked(factory, t5["submission_id"])
+        post_attempt, completion = await _complete_post(
+            factory, submission_id=post["submission_id"], project_id=guide.project_id,
+            recommendation="allow_review", deliver_completion=False,
+        )
+        _require(post_attempt == post_grant["attempt_id"], "completed POST differs from the held run")
+        return {"fixture_post_mode": "deadline", "post_lease": post_lease, "post_grant": post_grant,
+                "pre_lease": pre_lease, "pre_seconds_after_release": round(elapsed, 3),
+                "pre_runtime_ms": receipt["timings_ms"]["total"],
+                "pre": selected, "t5_operation_id": t5_operation_id, "t5_event_id": t5_event_id,
+                "t5": t5, "t5_post_parked_event_id": t5_post_event, "post_completion_event_id": str(completion),
+                "checker_pid": initial["checker_pid"]}
+    finally:
+        if not pre.done():
+            pre.cancel()
+        await asyncio.gather(pre, return_exceptions=True)
+
+
 def _read_runner_configuration(node_config: Path, root: Path, custody: dict, *, separate_runner: bool) -> dict:
     """Bind a copied baseline config or the exact locally supervised wrapper."""
     _require(custody['source_tree'] == subprocess.check_output(
@@ -1239,13 +1437,23 @@ def _require_runner_health(execution: ExternalCheckerServiceHealth, intake: Trus
 async def run(database_url: str, image_reference: str, node_config: Path,
               broker_url: str, root: Path, expected_custody: Path,
               clients: ContributorClients | None = None, *, separate_runner: bool = False,
-              policy_case: str = "both") -> dict:
+              policy_case: str = "both", overlap_observer: Path | None = None) -> dict:
     _require(policy_case in {"both", "human", "automatic"}, "unknown policy qualification case")
     _require(policy_case == "both" or separate_runner, "single policy case requires separate runner")
+    _require(overlap_observer is None or (separate_runner and policy_case == "both"),
+             "native admission overlap requires its own separate-runner proof")
+    if overlap_observer is not None:
+        overlap_observer = overlap_observer.resolve(strict=True)
+        _require(overlap_observer.is_file() and os.access(overlap_observer, os.X_OK),
+                 "native admission observer must be executable")
     root.mkdir(parents=True, mode=0o700, exist_ok=True)
     _require(not separate_runner or clients is not None, 'separate runner proof needs both clients')
     custody = json.loads(expected_custody.read_text())
     service_config = _read_runner_configuration(node_config, root, custody, separate_runner=separate_runner)
+    if overlap_observer is not None:
+        _require(service_config["smol"]["maximum_parallel"] == 2
+                 and service_config["pre"]["reserved_capacity"]["slots"] == 1,
+                 "native overlap requires exactly one PRE and one Background slot")
     _require((service_config["runtime"], service_config["isolation_mode"])
              == ("smolvm", "smol-microvm"), "public drill requires the provisioned Smol node")
     repository, digest = image_reference.rsplit("@", 1)
@@ -1370,6 +1578,7 @@ async def run(database_url: str, image_reference: str, node_config: Path,
     factory = async_sessionmaker(engine, expire_on_commit=False)
     api = worker = beat = mcp = None
     workers: list[subprocess.Popen] = []
+    worker_hosts = {}
     processes: list[subprocess.Popen] = []
     signals = ExitStack()
     worker_generation = 0
@@ -1401,7 +1610,9 @@ async def run(database_url: str, image_reference: str, node_config: Path,
         await provision_reconciler(factory)
         await _provision_runtime_services(factory)
         for phase in ("pre_submit", "post_submit"):
-            await _register_external_checker_fixture(factory, _locked_spec(phase, image))
+            await _register_external_checker_fixture(factory, _locked_spec(
+                phase, image, hold_post=overlap_observer is not None,
+            ))
         operator, _ = await seed_review_actor(factory, None, role="operator", scope="system", issuer=seeded_issuer(env))
         from tests.reviews.lifecycle.transition_support import command_for, transition
         await transition(await command_for(operator.actor_profile_id, "shadow"))
@@ -1413,27 +1624,38 @@ async def run(database_url: str, image_reference: str, node_config: Path,
         _require_runner_health(execution_health, intake_health, len(service_config["cache"]))
         port = find_free_port()
         origin = f"http://127.0.0.1:{port}"
+        api_module, api_env = "app.main:app", env
+        if overlap_observer is not None:
+            overlap_root = root / "admission-overlap"
+            overlap_root.mkdir(mode=0o700)
+            api_module = "experiments.pilot04_external_checker_runtime.public_intake_observer:app"
+            api_env = env | {"WORKSTREAM_PROBE_INTAKE_TRACE": str(overlap_root / "adapter.jsonl"),
+                             "WORKSTREAM_PROBE_PRE_BARRIER": str(overlap_root)}
         api = launch([
             sys.executable, "-m", "uvicorn",
-            "app.main:app",
+            api_module,
             "--host", "127.0.0.1", "--port", str(port),
             "--log-level", "error", "--no-access-log",
-        ], env=env, log=root / "api.log")
+        ], env=api_env, log=root / "api.log")
         await _wait_api(origin, api)
         if clients is not None:
             clients.configure_processes(origin, find_free_port())
             mcp = launch([str(clients.mcp_executable)], env=clients.mcp_env, log=root / "mcp.log")
             await clients.wait_ready(mcp)
+        starting_workers = []
         for role, queue in WORKER_ROLES:
             process, hostname = _start_worker(
                 cleanup_env if role == "source-cleanup" else env, root, role, queue, launch=launch,
                 recorded_assistance=recorded_assistance,
             )
             workers.append(process)
-            await _wait_worker(process, hostname)
+            starting_workers.append((process, hostname))
+            worker_hosts[role] = hostname
             if role == "outbox":
                 worker = process
                 worker_generation = 1
+        for process, hostname in starting_workers:
+            await _wait_worker(process, hostname)
         scans_before_beat = await _scan_audit_count(factory)
         beat = launch([
             sys.executable, "-m", "celery", "-A", "app.workers.celery_app",
@@ -1453,15 +1675,19 @@ async def run(database_url: str, image_reference: str, node_config: Path,
                 _require((fault_root / "supervisor-ready").exists(), "owned node supervisor is absent")
                 runtime_trials = await public_runtime_trials(client, factory, env, fault_root,
                     stop_worker=stop_owned_worker, start_worker=start_owned_worker, operator_token=_token(env, operator))
-            true = false = None
-            if policy_case in {"both", "human"}:
+            true = false = admission_overlap = None
+            if overlap_observer is not None:
+                admission_overlap = await _run_admission_overlap(
+                    client, factory, env, overlap_root, overlap_observer, custody, worker_hosts,
+                )
+            if overlap_observer is None and policy_case in {"both", "human"}:
                 true = await _one_mode(client, factory, env,
                                    human_review_required=True,
                                    operator_id=operator.actor_profile_id, clients=clients,
                                    exercise_faults=not separate_runner, manager_authored=separate_runner)
                 if separate_runner:
                     _write_policy_receipt(root, "human", true, custody, bucket=bucket, prefix=prefix)
-            if policy_case in {"both", "automatic"}:
+            if overlap_observer is None and policy_case in {"both", "automatic"}:
                 false = await _one_mode(client, factory, env,
                                     human_review_required=False,
                                     operator_id=operator.actor_profile_id,
@@ -1489,12 +1715,15 @@ async def run(database_url: str, image_reference: str, node_config: Path,
                                            if outcome is not None],
                 "scheduled_artifact_scans": True,
                 "public_original_guide_setup": True,
-                "connected_submitter_clients": ["cli", "mcp"] if clients is not None else [],
+                "connected_submitter_clients": ["cli", "mcp"] if clients is not None and overlap_observer is None else [],
                 "recorded_inference": recorded_assistance,
                 "custody": {key: custody[key] for key in (
                     'source_tree', 'config_sha256', 'service_sha256', 'smol_sha256', 'guest_sha256',
                 ) + (() if separate_runner else ('wrapper_sha256',))},
-                "runtime_trials": runtime_trials, "intake_trials": intake_trials, "human": true, "automatic": false}
+                "runtime_trials": runtime_trials, "intake_trials": intake_trials,
+                "human": true, "automatic": false} | (
+                    {"admission_overlap": admission_overlap} if overlap_observer is not None else {}
+                )
     finally:
         try:
             _stop_owned_processes(tuple(reversed(processes)))
@@ -1540,6 +1769,8 @@ def main() -> int:
                         help="Use baseline remote runner custody without local host fault controls")
     parser.add_argument("--policy-case", choices=("both", "human", "automatic"), default="both",
                         help="Qualify one independent policy case on the separate runner, or both")
+    parser.add_argument("--admission-overlap-observer", type=Path,
+                        help="Run only the separate-runner overlap proof with this read-only native observer")
     parser.add_argument('--hosted-attachment', type=Path,
                         help='Private attachment manifest for an existing hosted API/worker/Beat')
     parser.add_argument('--hosted-model-post', type=Path,
@@ -1555,6 +1786,8 @@ def main() -> int:
         parser.error("the separate runner proof requires both client executables")
     if args.policy_case != "both" and not args.separate_runner:
         parser.error("a single policy case requires --separate-runner")
+    if args.admission_overlap_observer and (not args.separate_runner or args.policy_case != "both"):
+        parser.error("admission overlap requires --separate-runner and chooses its own proof")
     if args.hosted_attachment:
         if (not args.broker_url or args.image_reference or args.node_config
                 or args.work_dir or args.expected_custody or args.cli_executable or args.mcp_executable
@@ -1578,7 +1811,7 @@ def main() -> int:
         value = asyncio.run(run(
             args.database_url, args.image_reference, args.node_config,
             args.broker_url, Path(directory), args.expected_custody, clients, separate_runner=args.separate_runner,
-            policy_case=args.policy_case,
+            policy_case=args.policy_case, overlap_observer=args.admission_overlap_observer,
         ))
     print(json.dumps(value, sort_keys=True, separators=(",", ":")))
     return 0

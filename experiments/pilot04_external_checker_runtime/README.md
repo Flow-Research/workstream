@@ -161,6 +161,21 @@ configured mTLS route. The client host keeps its own artifact scratch.
 This mode records null intake and runtime fault trials. The existing remote
 PRE fault bridge covers its independently supervised fault stage.
 
+Run the A29 admission proof separately by adding `--admission-overlap-observer`
+with the absolute path of an owned executable. The executable receives the
+reviewed configuration and checker executable SHA-256 values. Have it execute
+`read_native_admission.py` on the runner through the existing private SSH route
+with the active checker config path followed by those two values, and return
+its JSON unchanged. The observer reads native journals, cgroup population, and
+the POST grant binding. It requires no runner restart or fixture image change.
+
+The proof approves the pinned project fixture's existing `mode=deadline` on
+POST and holds the independent public selected PRE at its dispatch boundary.
+It brackets the exact T5 acknowledgement with the same active Background and
+PRE reservations, then checks the completed PRE and the parked evaluation
+requests. `admission_overlap` belongs to this proof only. Retain the terminal
+result and matching isolated cleanup receipt for this run.
+
 ```sh
 PYTHONPATH=.:tests:.. .venv/bin/python scripts/run_isolated_tests.py \
   --metadata-json /tmp/guide-journey-cleanup.json --timeout-seconds 1500 \

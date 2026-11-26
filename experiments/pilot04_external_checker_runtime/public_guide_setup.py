@@ -207,7 +207,7 @@ async def _source_evidence(factory, guide, setup, package, originals, *, manager
             **({"manager_rules_sha256": original_digests[1]} if manager_authored else {})}
 
 
-async def _local_approval_attachments(factory):
+async def _local_approval_attachments(factory, *, hold_post=False):
     """Select the exact previously published fixture identities, never empty phases."""
     from app.modules.checkers.api.external_policy import ExternalCheckerImageAttachment
     from app.modules.checkers.external_registry import ExternalCheckerRegistryReader
@@ -228,14 +228,14 @@ async def _local_approval_attachments(factory):
                 requirement_id="project." + spec.phase,
                 registry_entry_id=entry.registry_entry_id,
                 registry_entry_digest=entry.entry_digest,
-                configuration={},
+                configuration={"mode": "deadline"} if hold_post and spec.phase == "post_submit" else {},
             ).model_dump(mode="json")]
     return attachments
 
 
 async def public_guide_setup(client, factory, human_review_required, call, token_for, *,
                              pre_requirements=1, attachment=None, issuer="https://identity.flowresearch.tech",
-                             manager_authored=False):
+                             manager_authored=False, hold_post=False):
     if pre_requirements != 1:
         raise ValueError("current qualification requires exactly one PRE image")
     model_post = attachment.model_post if attachment else None
@@ -297,7 +297,7 @@ async def public_guide_setup(client, factory, human_review_required, call, token
     compilation_root = root + f"/compilations/{setup['finalized_compilation_id']}"
     attachments = (model_post.approval_attachments() if model_post else
                    attachment.approval_attachments(pre_requirements) if attachment else
-                   await _local_approval_attachments(factory))
+                   await _local_approval_attachments(factory, hold_post=hold_post))
     if human_review_required and not manager_authored:
         initial = await call(client, "GET", compilation_root + "/proposal", token, 200)
         initial_setup = setup

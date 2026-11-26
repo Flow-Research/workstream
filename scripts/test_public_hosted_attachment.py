@@ -29,6 +29,70 @@ from experiments.pilot04_external_checker_runtime.public_hosted_attachment impor
 
 
 class PublicJourneyWorkerCustody(unittest.TestCase):
+    def test_overlap_holds_only_the_bound_live_post_attempt(self):
+        from experiments.pilot04_external_checker_runtime import run_public_journey_probe as probe
+
+        post = {"name": "post", "epoch": "one", "populated": True, "pre": None}
+        pre = {"name": "pre", "epoch": "one", "populated": False, "pre": {"run_id": "pre-run"}}
+        grant = {"evaluation_request_id": "evaluation", "attempt_id": "attempt", "task_id": "task"}
+        snapshot = {"leases": [post, pre], "post_grants": [grant]}
+        expected = {"evaluation_request_id": "evaluation", "task_id": "task"}
+        self.assertEqual(probe._overlap_post(snapshot, expected), (post, grant))
+        self.assertIsNone(probe._overlap_post(snapshot, expected | {"task_id": "foreign"}))
+        self.assertIsNone(probe._overlap_post(snapshot | {"leases": [post | {"populated": False}, pre]}, expected))
+        self.assertIsNone(probe._overlap_post(snapshot | {"leases": [post, post, pre]}, expected))
+
+    def test_overlap_fixture_hold_keeps_pinned_checker_resource_limits(self):
+        from app.modules.checkers.api.external import ExternalCheckerContractError
+        from experiments.pilot04_external_checker_runtime import run_public_journey_probe as probe
+
+        image = {"platform_manifest_digest": "sha256:" + "e" * 64}
+        normal = probe._locked_spec("post_submit", image)
+        held = probe._locked_spec("post_submit", image, hold_post=True)
+        self.assertEqual((held.resources, held.image_digest), (normal.resources, normal.image_digest))
+        held.configuration_schema.validate_instance({"mode": "deadline"})
+        with self.assertRaises(ExternalCheckerContractError):
+            normal.configuration_schema.validate_instance({"mode": "deadline"})
+        self.assertEqual(probe._locked_spec("pre_submit", image, hold_post=True),
+                         probe._locked_spec("pre_submit", image))
+
+    def test_overlap_native_observer_pins_the_journal_and_post_grant(self):
+        from experiments.pilot04_external_checker_runtime import read_native_admission as native
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            leases = root / "smol-leases"
+            leases.mkdir()
+            (root / ".workstream-checker-owner").write_text("fixture-owner\n")
+            vm = "ws-" + "c" * 32
+            group = root / "groups" / vm
+            group.mkdir(parents=True)
+            (group / "cgroup.events").write_text("populated 1\nfrozen 0\n")
+            journal = json.dumps({"name": vm, "owner": "fixture-owner", "epoch": "epoch", "pre": None}).encode()
+            (leases / f"{vm}.json").write_bytes(journal)
+            grant = "extract_" + "d" * 32
+            workspace = root / "workspaces" / grant
+            workspace.mkdir(parents=True)
+            manifest = {"protocol_version": "workstream.external_checker_material_grant.v2",
+                        "grant_id": grant, "request_digest": "request", "phase": "post_submit",
+                        "identity": {key: key for key in native._POST_FIELDS} | {"phase": "post_submit"}}
+            binding = native._sha(json.dumps(manifest, sort_keys=True, separators=(",", ":")).encode())
+            grant_path = workspace / ".external-checker-grant.json"
+            grant_path.write_text(json.dumps(manifest | {"binding_digest": binding}))
+            config_path = root / "config.json"
+            raw = json.dumps({"socket_path": str(root / "checker.sock"), "material_root": str(root),
+                              "smol": {"cgroup_root": str(root / "groups")}}).encode()
+            config_path.write_bytes(raw)
+            executable_sha = native._sha(Path("/proc/self/exe").read_bytes())
+            with patch.object(native, "_controller_pid", return_value=os.getpid()):
+                sample = native.observe(config_path, native._sha(raw), executable_sha)
+                self.assertEqual(sample["leases"], [{"name": vm, "epoch": "epoch", "pre": None,
+                    "populated": True, "journal_sha256": native._sha(journal)}])
+                self.assertEqual(sample["post_grants"][0]["evaluation_request_id"], "evaluation_request_id")
+                grant_path.write_text(json.dumps(manifest | {"binding_digest": "substituted"}))
+                with self.assertRaisesRegex(ValueError, "native POST grant identity differs"):
+                    native.observe(config_path, native._sha(raw), executable_sha)
+
     def test_completed_policy_receipt_cannot_overwrite_or_claim_both_cases(self):
         from experiments.pilot04_external_checker_runtime import run_public_journey_probe as probe
 
