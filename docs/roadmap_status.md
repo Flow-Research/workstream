@@ -410,7 +410,7 @@ preparation returns retryable unavailability, POST requests and reconciliation
 remain in PostgreSQL, and ordinary Celery delivery continues. Assembled split-host
 checker operation remains unqualified. The operator app-only host is deployed; public identity login, API profile access, browser OAuth/PKCE and the MCP profile tool passed after migration.
 
-The [independent MCP package](../mcp_server/README.md) implements 132
+The [independent MCP package](../mcp_server/README.md) implements 135
 self-service, administrative access, actor/identity-lifecycle, project-shell,
 project-participation, guide-metadata, draft-policy, contributor-workspace,
 contribution-evidence, contribution-policy, complete guide-lifecycle,
