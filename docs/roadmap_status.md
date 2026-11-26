@@ -1404,7 +1404,7 @@ The broader v0.1 sequence below retains later scope:
    retry owner; the supported public Operator discovery/retry path now invokes
    it. PILOT-04 selected production registration and ARCH-02I-B
    public entry and ARCH-04E3-B supported false-guide activation are delivered;
-   the bounded local public drill starts from public guide inputs with recorded inference.
+   the historical bounded local public drill started from public guide inputs with recorded inference.
    True routing may proceed after its own prerequisites to publish the exact TASK
    manifest and move `evaluation_pending -> review_pending` when no blocking
    failure exists; this does not write the REV queue. The delivered shared
@@ -1439,7 +1439,7 @@ The broader v0.1 sequence below retains later scope:
    matching Python/PostgreSQL requirements custody and corrects the selected
    production REV manifest. New false/pass effects require LIVE REV bound to that
    current manifest; a known pre-effect refusal has bounded retry, with exhaustion
-   dead-lettered. The bounded local public drill starts from public guide inputs with recorded inference, including prefork Celery process restart and late authority revocation. The milestone creates the
+   dead-lettered. The historical bounded local public drill started from public guide inputs with recorded inference, including prefork Celery process restart and late authority revocation. The milestone creates the
    submitter contribution and applicable awards without inventing a Review or
    reviewer contribution. Live human queues/leases/decisions remain later work.
 3. **Bounded local public intake through durable workers is proven.**
