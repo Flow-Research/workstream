@@ -560,10 +560,7 @@ async def test_real_celery_prefork_correlates_api_and_resets_sequential_task_con
     try:
         deadline = time.monotonic() + 45
         while time.monotonic() < deadline:
-            assert process.is_alive(), (
-                f"worker startup failed: {process.exitcode}; "
-                + log_path.read_text(encoding="utf-8")[-8192:]
-            )
+            assert process.is_alive(), f"worker startup failed: {process.exitcode}"
             if celery_app.control.ping(destination=[hostname], timeout=0.2):
                 break
             await asyncio.sleep(0.1)

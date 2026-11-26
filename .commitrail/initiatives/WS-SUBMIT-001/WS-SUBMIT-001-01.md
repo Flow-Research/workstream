@@ -11374,3 +11374,14 @@ format-check at the base, so this bounded fixture patch does not reformat those
 whole modules. Native execution has priority; the repaired real Redis/prefork
 probe and both PostgreSQL fence parameters have not run on this candidate. No
 production behavior change or aggregate runtime-pass claim.
+
+### Diagnostics startup failure disclosure correction (2026-11-26)
+
+Intent and bounded scope: remove the newly added raw worker.log tail from the
+real-prefork startup assertion in tests/test_celery_observability.py. Independent
+security review identified that early worker logs can contain a broker URL with
+credentials before safe logging is installed. Retain the original exit-code
+assertion and all dedicated queue, registration restoration, context and privacy
+guards. The private log remains available to the test's existing safe-content
+assertions; it is not copied into the public failure diagnostic. No production
+changes or PG/broker/native rerun is required for this diagnostic-only removal.
