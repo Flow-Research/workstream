@@ -12551,9 +12551,10 @@ fixture API and workers. Use its real, TLS-verified provider configuration.
 
 `WORKSTREAM_CLI_JOURNEY_REFRESH_FILE` is an absolute owned mode-0600 JSON object
 with fresh registered CLI refresh grants in `administrator`, `manager`,
-`finance`, `operator`, `alice`, and `bob`, plus `mcp` for the same Alice's
-registered MCP proof client. The maintained provider helper renews them and
-keeps rotated values in process memory. Supply `WORKSTREAM_MCP_RESOURCE_URL`
+`finance`, `operator`, `alice`, and `bob`, plus `mcp` containing `refresh_token`
+and the original `scope` from the same Alice's registered MCP proof client.
+The maintained provider helper renews them and keeps rotated values in process
+memory. Supply `WORKSTREAM_MCP_RESOURCE_URL`
 for that registered MCP audience and `WORKSTREAM_MCP_EXCHANGE_SECRET_FILE` for
 the current confidential exchange client. MCP listens only on loopback and
 calls the isolated API. This proof disables application feedback email.
@@ -12565,3 +12566,11 @@ process teardown. The earlier non-OAuth wheel did not provide that metadata.
 These local checks used no authentication request to a provider and no native
 submission. Real paired-tool, corrected same-assignment and live deployment
 qualification remain open until the maintained journey runs end to end.
+
+Independent review required the maintained MCP SDK mode `2026-07-28`, the exact
+negotiated protocol, distinct public actors before bootstrap and the original
+scope in the MCP refresh grant. The paired mode explicitly overrides any local
+dotenv HMAC setting with an empty value. 35 focused CLI cases passed after these
+corrections. An independent in-memory transport check used installed SDK 2.2.0
+and observed the current protocol and one exchanged request. No live provider
+account or token operation took place for this review.

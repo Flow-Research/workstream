@@ -169,6 +169,7 @@ def test_mcp_renewal_uses_rotated_grant_and_exact_resource(monkeypatch):
         "workstream-mcp-proof",
         "first",
         resource="https://mcp.example/mcp",
+        scope="workstream:access workstream-mcp-audience",
     )
     assert token() == token() == "access"
     now += 160
@@ -179,6 +180,20 @@ def test_mcp_renewal_uses_rotated_grant_and_exact_resource(monkeypatch):
             "client_id": "workstream-mcp-proof",
             "refresh_token": value,
             "resource": "https://mcp.example/mcp",
+            "scope": "workstream:access workstream-mcp-audience",
         }
         for value in ("first", "rotated")
     ]
+
+
+def test_public_identity_rejects_shared_role_subject_before_bootstrap(monkeypatch):
+    monkeypatch.syspath_prepend(str(PATH.parent))
+    monkeypatch.syspath_prepend(str(PATH.parents[3] / "backend"))
+    from bootstrap import ACTORS, public_actors
+
+    tokens = {name: name for name in ACTORS}
+    client = SimpleNamespace(call=lambda token, command: {"actor_profile_id": token})
+    assert public_actors(client, tokens) == tokens
+    tokens["finance"] = tokens["manager"]
+    with pytest.raises(AssertionError, match="six distinct public actor profiles"):
+        public_actors(client, tokens)

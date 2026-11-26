@@ -46,6 +46,15 @@ from urllib.parse import urlsplit  # noqa: E402
 ACTORS = ("administrator", "manager", "finance", "operator", "alice", "bob")
 
 
+def public_actors(client, tokens):
+    actors = {
+        name: client.call(tokens[name], "whoami")["actor_profile_id"] for name in ACTORS
+    }
+    if len(set(actors.values())) != len(ACTORS):
+        raise AssertionError("journey requires six distinct public actor profiles")
+    return actors
+
+
 def connected_tokens(environment):
     """Read rotating grants for isolated actors from the configured real provider."""
     issuer = environment["WORKSTREAM_TOKEN_ISSUER"]
@@ -77,17 +86,26 @@ def connected_tokens(environment):
             grants = json.loads(stream.read(65_537))
         except (ValueError, UnicodeError):
             raise RuntimeError("paired proof refresh file is invalid") from None
-    if (
-        type(grants) is not dict
-        or set(grants) != {*ACTORS, "mcp"}
-        or any(
-            type(token) is not str or not 0 < len(token) <= 8192
-            for token in grants.values()
-        )
-    ):
+    if type(grants) is not dict or set(grants) != {*ACTORS, "mcp"}:
         raise RuntimeError(
             "paired proof requires one refresh grant for each fixture actor and MCP"
         )
+    mcp = grants["mcp"]
+    if (
+        type(mcp) is not dict
+        or set(mcp) != {"refresh_token", "scope"}
+        or type(mcp["scope"]) is not str
+        or not 0 < len(mcp["scope"]) <= 128
+        or "workstream:access" not in mcp["scope"].split()
+    ):
+        raise RuntimeError(
+            "paired proof requires the original MCP refresh grant and scopes"
+        )
+    if any(
+        type(token) is not str or not 0 < len(token) <= 8192
+        for token in [*(grants[name] for name in ACTORS), mcp["refresh_token"]]
+    ):
+        raise RuntimeError("paired proof received an invalid refresh grant")
     return {
         name: RefreshingToken(provider, "workstream-cli-login", grants[name])
         for name in ACTORS
@@ -95,8 +113,9 @@ def connected_tokens(environment):
         "mcp": RefreshingToken(
             provider,
             "workstream-mcp-proof",
-            grants["mcp"],
+            mcp["refresh_token"],
             resource=environment["WORKSTREAM_MCP_RESOURCE_URL"],
+            scope=mcp["scope"],
         ),
     }
 
@@ -187,7 +206,7 @@ def main():
                 "installed MCP proof requires the isolated submission stages"
             )
         paired_tokens = connected_tokens(environment)
-        environment.pop("WORKSTREAM_FLOW_AUTH_LOCAL_HMAC_SECRET")
+        environment["WORKSTREAM_FLOW_AUTH_LOCAL_HMAC_SECRET"] = ""
     with socket.socket() as listener:
         listener.bind(("127.0.0.1", 0))
         port = listener.getsockname()[1]
@@ -252,10 +271,7 @@ def main():
                     )
                     for name in ACTORS
                 }
-                actors = {
-                    name: client.call(tokens[name], "whoami")["actor_profile_id"]
-                    for name in ACTORS
-                }
+                actors = public_actors(client, tokens)
                 mcp = None
                 if mcp_executable:
                     mcp = stack.enter_context(

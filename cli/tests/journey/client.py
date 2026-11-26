@@ -122,11 +122,13 @@ class RefreshingToken:
         refresh_token: str,
         *,
         resource: str | None = None,
+        scope: str | None = None,
     ):
         self.provider = provider
         self.client_id = client_id
         self.refresh_token = refresh_token
         self.resource = resource
+        self.scope = scope
         self.access_token = ""
         self.expires_at = 0.0
 
@@ -140,6 +142,7 @@ class RefreshingToken:
             }
             if self.resource is not None:
                 grant["resource"] = self.resource
+                grant["scope"] = self.scope
             result = self.provider.request(
                 "/realms/flow/protocol/openid-connect/token", grant, form=True
             )
@@ -168,7 +171,7 @@ class McpJourneyClient:
 
     async def _call(self, name: str, arguments: dict, rejected: bool):
         import httpx2
-        from mcp import ClientSession
+        from mcp import Client
         from mcp.client.streamable_http import streamable_http_client
         from mcp.types import CallToolResult
 
@@ -177,16 +180,20 @@ class McpJourneyClient:
             asyncio.timeout(135),
             httpx2.AsyncClient(
                 headers={"Authorization": "Bearer " + bearer},
+                follow_redirects=False,
                 timeout=130,
                 trust_env=False,
-            ) as transport,
-            streamable_http_client(
-                self.origin + "/mcp", http_client=transport
-            ) as streams,
+            ) as http_client,
         ):
-            async with ClientSession(*streams, read_timeout_seconds=130) as session:
-                await session.initialize()
-                result = await session.call_tool(name, arguments)
+            transport = streamable_http_client(
+                self.origin + "/mcp", http_client=http_client
+            )
+            async with Client(server=transport, mode="2026-07-28") as client:
+                if client.protocol_version != "2026-07-28":
+                    raise AssertionError(
+                        "installed MCP negotiated a different protocol"
+                    )
+                result = await client.call_tool(name, arguments)
         if (
             not isinstance(result, CallToolResult)
             or result.is_error is not rejected
