@@ -233,7 +233,7 @@ def test_renewable_post_upgrade_preserves_retained_custody(
     assert after == before
     assert equality is True
     assert expected_state in states
-    assert guards == (("checker_run_custody", "O"), ("outbox_events_custody", "O"))
+    assert guards == (("checker_run_custody", b"O"), ("outbox_events_custody", b"O"))
 
 
 @asynccontextmanager
