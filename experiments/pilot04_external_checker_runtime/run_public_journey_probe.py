@@ -25,7 +25,6 @@ import time
 from uuid import UUID, uuid4
 
 import httpx
-from pydantic import SecretStr
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
@@ -80,7 +79,7 @@ from cli.tests.journey.runtime import (  # noqa: E402
 )
 
 
-def _settings_digests(settings, nonce: bytes) -> dict[str, str]:
+def _settings_digests(settings, nonce: bytes, *, cleanup_env: dict[str, str] | None = None) -> dict[str, str]:
     """Compare every resolved setting across processes without exposing values."""
     values = settings.model_dump(mode="json")
     for name in (
@@ -90,6 +89,12 @@ def _settings_digests(settings, nonce: bytes) -> dict[str, str]:
     ):
         secret = getattr(settings, name)
         values[name] = None if secret is None else secret.get_secret_value()
+    if cleanup_env is not None:
+        values.update(
+            artifact_s3_access_key_id=cleanup_env["WORKSTREAM_ARTIFACT_S3_ACCESS_KEY_ID"],
+            artifact_s3_secret_access_key=cleanup_env["WORKSTREAM_ARTIFACT_S3_SECRET_ACCESS_KEY"],
+            artifact_s3_session_token=None,
+        )
     return {
         name: hmac.new(
             nonce, json.dumps(value, sort_keys=True, separators=(",", ":")).encode(),
@@ -146,15 +151,10 @@ def _verify_child_configuration(role: str) -> int:
 def _preflight_children(settings, env: dict[str, str], cleanup_env: dict[str, str], root: Path) -> None:
     """Reject API/worker drift before starting real services or public requests."""
     nonce = os.urandom(32)
-    cleanup_settings = settings.model_copy(update={
-        "artifact_s3_access_key_id": SecretStr(cleanup_env["WORKSTREAM_ARTIFACT_S3_ACCESS_KEY_ID"]),
-        "artifact_s3_secret_access_key": SecretStr(cleanup_env["WORKSTREAM_ARTIFACT_S3_SECRET_ACCESS_KEY"]),
-        "artifact_s3_session_token": None,
-    })
     for role in ("api", "guide", "worker", "source-cleanup"):
         child_env = cleanup_env if role == "source-cleanup" else env
-        expected = cleanup_settings if role == "source-cleanup" else settings
-        request = json.dumps({"nonce": nonce.hex(), "expected": _settings_digests(expected, nonce)})
+        expected = _settings_digests(settings, nonce, cleanup_env=cleanup_env if role == "source-cleanup" else None)
+        request = json.dumps({"nonce": nonce.hex(), "expected": expected})
         with (root / f"preflight-{role}.log").open("wb") as errors:
             result = subprocess.run(
                 [
