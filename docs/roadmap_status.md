@@ -136,11 +136,11 @@ Scoped PostgreSQL/MinIO, client and real Redis/Celery child-recovery proofs exis
 The connected local API/separate AWS runner journey proves automatic acceptance,
 PRE and POST rejection, exact source/contribution custody and default review_pending.
 Live AWS versioned-source permissions, cleanup and lost-acknowledgement recovery
-are qualified. The hosted API/worker release and contributor CLI/MCP journey now
-prove PRE rejection, POST revision, same-assignment correction and unpaid acceptance.
+are qualified. The contributor CLI/MCP journey through the deployed API and Celery
+services proves PRE rejection, POST revision, same-assignment correction and unpaid acceptance.
 The separate Smol deadline/isolation fixture passes with normal admission restored.
 Remaining native fault cases, supported uploads and tighter project-limit enforcement,
-age-eligible cleanup-worker deletion, the hosted required-review guard and final
+source cleanup for age-eligible objects, the hosted required-review guard and final
 release checks remain open. Multiple API replicas/runners and broad load campaigns
 are user-deferred; the completed fixture does not qualify them.
 
@@ -1592,7 +1592,7 @@ Delivered foundations (evidence scope stated per capability)
     -> dedicated durable T5 -> immutable Submission/binding -> POST
     -> locked true: review_pending; locked false: shared acceptance + contribution + applicable award
     -> hosted CLI/MCP contributor journey + separate Smol deadline/isolation verified
-    -> remaining native faults, upload/project limits and aged cleanup-worker proof
+    -> remaining native faults, upload/project limits and age-eligible source cleanup proof
   verified guide originals -> explicit PM assistance OR provider-free uploaded rules
     -> unified compilation -> separate manager pre/post approvals
     -> existing activation guards (human review defaults true; approved false supported)
