@@ -9244,6 +9244,24 @@ adjacent metadata JSON. This evidence covers local Redis and registered workers
 with controlled checker transports. The deployed release remains a separate
 qualification.
 
+### Equal content in separate finalized operations
+
+The A18 custody test seals and rejects two equal-byte sources. The public
+T5 test proves one retained binding. Add one case to
+`backend/tests/tasks/test_public_submission_intake.py` using the signed
+ZIP command, two started tasks and the existing OUTBOX finalization fixture.
+Require two committed submissions, each bound to its own exact source, and
+one logical content identity. Confirm both local object generations remain
+readable and separately charged at the actual byte count after finalization.
+
+Scope is the existing test module and this record. Reuse the approved project,
+local provider, and controlled PRE transport. Production owners, schema,
+storage configuration, live infrastructure, and notification sends are outside
+scope. Low-risk test evidence. Run the focused case in the owned PostgreSQL
+fixture and check Ruff and the diff. Focused QA and architecture review should
+verify that the assertion follows each committed binding to its own exact copy
+and charge, and that logical deduplication cannot hide physical coalescing.
+
 ### Genuine-orphan scope clarification
 
 Read-only ARCH/SEC assessment at08fd205d0 confirms that spec17.4 makes

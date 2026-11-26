@@ -193,6 +193,105 @@ async def test_public_malformed_zip_preserves_task_and_retains_cleanup_custody(
     assert valid.json()["status"] == "accepted" and valid.json()["replayed"] is False
 
 
+async def test_public_equal_content_finalizes_distinct_charged_sources(
+    admission_intake, tmp_path, monkeypatch,
+):
+    """Logical deduplication preserves both retained source objects and charges."""
+    from contextlib import aclosing
+    from uuid import UUID
+
+    from sqlalchemy import text
+
+    from app.modules.artifacts.intake.models import SubmissionIntakeOperation, SubmissionSourceCharge
+    from app.modules.artifacts.intake.repository import SubmissionIntakeRepository
+    from app.modules.artifacts.models import ArtifactBinding, ArtifactContent, ArtifactReplica
+    from app.modules.tasks.models import SubmissionDispatch
+    from tests.artifacts.test_submission_foreground_command import configure_source_http
+    from tests.retained_material_fixtures import finalize_retained_intake
+    from tests.tasks.lineage_fixtures import seed_started_task_for_artifact_test
+    from tests.test_artifact_admission import _local_store
+    from tests.test_trusted_intake import _archive
+
+    f, payload = admission_intake, _archive()
+    other_task, other_assignment = new_record_id(), new_record_id()
+    async with f.factory.kw["bind"].begin() as connection:
+        await seed_started_task_for_artifact_test(connection, dict(
+            task=str(other_task), assignment=str(other_assignment), project=str(f.project),
+            actor=str(f.actor.actor_profile_id),
+        ))
+        await connection.execute(text(
+            "UPDATE task_assignments SET accepted_at=clock_timestamp() WHERE id=:id"
+        ), {"id": other_assignment})
+
+    accepted = []
+    for task, assignment in ((f.task, f.assignment), (other_task, other_assignment)):
+        # Give each controlled PRE worker its own scratch directory on the same source store.
+        client, settings, errors, calls = await configure_source_http(
+            f.factory, f.access.signed.client, tmp_path, monkeypatch, payload, "completed",
+        )
+        response = await client.post(
+            f"/api/v1/tasks/{task}/submissions",
+            headers=f.access.target.headers | {
+                "Content-Type": "application/zip", "X-Task-Assignment-Id": str(assignment),
+                "Idempotency-Key": str(new_record_id()),
+            },
+            content=payload,
+        )
+        assert not errors, "\n".join(errors)
+        assert response.status_code == 202, response.text
+        receipt = response.json()
+        assert receipt["status"] == "accepted" and receipt["replayed"] is False
+        assert len(calls) == 1
+        operation_id = UUID(receipt["operation_id"])
+        async with f.factory() as session:
+            operation = await session.get(SubmissionIntakeOperation, str(operation_id))
+            assert operation.state == "finalization_pending"
+            source = SubmissionIntakeRepository._sealed_source(operation)
+        accepted.append((str(task), str(assignment), operation_id, source))
+
+    results = []
+    bootstrap, store = _local_store(settings, f.namespace)
+    try:
+        for task, assignment, operation_id, source in accepted:
+            submission_id = await finalize_retained_intake(f.factory, SimpleNamespace(
+                operation_id=operation_id, settings=settings, store=store, namespace=f.namespace,
+            ))
+            results.append((task, assignment, source, submission_id))
+
+        replicas, contents, bindings = set(), set(), set()
+        async with f.factory() as session:
+            for task, assignment, source, submission_id in results:
+                operation = await session.get(SubmissionIntakeOperation, str(source.location.operation_id))
+                assert SubmissionIntakeRepository._sealed_source(operation) == source
+                dispatch = await session.get(SubmissionDispatch, submission_id)
+                assert (dispatch.task_id, dispatch.assignment_id, dispatch.submission_version) == (task, assignment, 1)
+                assert dispatch.admission_id == operation.finalized_admission_id
+                binding = await session.get(ArtifactBinding, dispatch.artifact_binding_id)
+                admission = await session.get(SubmissionBundleAdmission, dispatch.admission_id)
+                replica = await session.get(ArtifactReplica, admission.verified_replica_id)
+                content = await session.get(ArtifactContent, dispatch.artifact_content_id)
+                charge = await session.get(SubmissionSourceCharge, operation.id)
+                assert binding.resource_type == "submission" and binding.resource_id == submission_id
+                assert binding.content_id == admission.artifact_content_id == replica.content_id == content.id
+                assert admission.status == "consumed" and admission.consumed_by_submission_id == submission_id
+                assert admission.source_operation_id == replica.source_operation_id == operation.id
+                assert replica.provider_object_ref == operation.object_ref == source.location.object_ref
+                assert (content.sha256, content.byte_count) == (source.raw_sha256, len(payload))
+                assert (charge.state, charge.accounted_bytes) == ("sealed", len(payload))
+                replicas.add(replica.id)
+                bindings.add(binding.id)
+                contents.add(content.id)
+
+        assert len(replicas) == len(bindings) == 2
+        assert len(contents) == 1
+        assert len({source.location.object_ref for _, _, source, _ in results}) == 2
+        for _, _, source, _ in results:
+            async with aclosing(store.open_source(source)) as reader:
+                assert b"".join([chunk async for chunk in reader]) == payload
+    finally:
+        bootstrap.close()
+
+
 async def test_public_minimal_submission_survives_acceptance_finalization_and_replay(
     admission_intake, tmp_path, monkeypatch,
 ):
