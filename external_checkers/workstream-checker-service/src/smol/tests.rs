@@ -66,6 +66,82 @@ fn trial_peak_reservation_admits_maximum_memory_and_overrun_atomically() {
 }
 
 #[test]
+fn background_disk_allocation_preserves_physical_pre_headroom() {
+    let (root, _) = super::super::tests::test_config();
+    const MIB: u64 = 1024 * 1024;
+    let pre = Capacity {
+        slots: 1,
+        memory_bytes: 1,
+        storage_bytes: 64 * MIB,
+    };
+    let post = Capacity {
+        storage_bytes: 4 * MIB,
+        ..pre
+    };
+    let total_disk = pre.storage_bytes + post.storage_bytes;
+    let smol = SmolConfig {
+        binary: root.join("unused-runtime"),
+        binary_sha256: "unused".into(),
+        home: root.clone(),
+        guest_binary: root.join("unused-guest"),
+        guest_sha256: "unused".into(),
+        cgroup_root: root.join("unused-cgroup"),
+        maximum_parallel: 2,
+        maximum_storage_bytes: total_disk,
+    };
+    let node = Arc::new(
+        Admission::new(
+            Capacity {
+                slots: 2,
+                memory_bytes: 2,
+                storage_bytes: total_disk,
+            },
+            Some(pre),
+            "test".into(),
+        )
+        .unwrap(),
+    );
+
+    let free_at_start = available_storage(&smol).unwrap();
+    // Model a smaller node budget without filling a shared test filesystem.
+    let outside_tight_budget = free_at_start.checked_sub(total_disk).unwrap();
+    let tight_free = free_at_start - outside_tight_budget;
+    assert!(node
+        .reserve_with_storage(Phase::Background, post, None, || Ok(tight_free))
+        .is_err());
+    let foreground = node
+        .reserve_with_storage(Phase::Pre, pre, None, || Ok(tight_free))
+        .unwrap();
+    drop(foreground);
+
+    let outside_sufficient_budget = free_at_start.checked_sub(2 * total_disk).unwrap();
+    let background = node
+        .reserve_with_storage(Phase::Background, post, None, || {
+            Ok(free_at_start - outside_sufficient_budget)
+        })
+        .unwrap();
+    let disk = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(root.join("background-disk"))
+        .unwrap();
+    // Unlike set_len(), fallocate actually consumes filesystem blocks.
+    let allocation =
+        unsafe { libc::posix_fallocate(disk.as_raw_fd(), 0, post.storage_bytes as i64) };
+    assert_eq!(allocation, 0);
+    disk.sync_all().unwrap();
+    assert!(disk.metadata().unwrap().blocks() * 512 >= post.storage_bytes);
+
+    let foreground = node
+        .reserve_with_storage(Phase::Pre, pre, None, || {
+            Ok(available_storage(&smol)? - outside_sufficient_budget)
+        })
+        .unwrap();
+    drop((foreground, background, disk));
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn foreign_lease_refuses_recovery_before_any_runtime_or_owned_cleanup() {
     let (root, mut config) = super::super::tests::test_config();
     let leases = config.socket_path.parent().unwrap().join("smol-leases");

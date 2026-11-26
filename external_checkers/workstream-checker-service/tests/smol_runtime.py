@@ -78,6 +78,13 @@ def exchange(address, envelope):
         return json.loads(receive(connection, length))
 
 
+def background_slots(config):
+    """Generic execute and trusted intake use background capacity for either phase label."""
+    pre = config.get("pre")
+    reserved = pre["reserved_capacity"]["slots"] if pre is not None else 0
+    return config["smol"]["maximum_parallel"] - reserved
+
+
 class Proof:
     def __init__(self, config, fixtures):
         self.config = config
@@ -158,6 +165,8 @@ def main():
     parser.add_argument("--fixtures", type=Path, required=True)
     args = parser.parse_args()
     config = json.loads(args.config.read_text())
+    if background_slots(config) < 2:
+        raise ValueError("runtime matrix requires two background slots")
     assert config["sandbox_uid"] == os.geteuid() and config["sandbox_gid"] == os.getegid()
     python = next(c for c in config["cache"] if c["repository"] == "workstream-test/smol-python")
     native = next(c for c in config["cache"] if c["repository"] == "workstream-test/smol-native")

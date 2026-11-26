@@ -47,7 +47,7 @@ pub(crate) enum Phase {
     Background,
 }
 
-#[derive(Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 struct Usage {
     pre: Capacity,
     background: Capacity,
@@ -84,16 +84,19 @@ impl Admission {
         Ok(used.pre.storage_bytes + used.background.storage_bytes)
     }
 
-    // For a background reservation, keep space for PRE even while the PRE partition is empty.
-    pub(super) fn required_storage_bytes(&self, phase: Phase) -> Result<u64, String> {
+    fn required_storage_bytes(&self, phase: Phase, used: Usage) -> Result<u64, String> {
         match phase {
-            Phase::Pre => self.reserved_storage_bytes(),
+            Phase::Pre => Ok(used.pre.storage_bytes + used.background.storage_bytes),
             Phase::Background => {
-                let used = self.used.lock().map_err(|_| "node admission unavailable")?;
-                if self.poisoned.load(Ordering::SeqCst) {
-                    return Err("node admission quarantined".into());
+                if self.pre_maximum.slots == 0 {
+                    return Ok(used.background.storage_bytes);
                 }
-                Ok(self.pre_maximum.storage_bytes + used.background.storage_bytes)
+                // The free-space sample falls as active disks are physically allocated.
+                // Leave PRE sufficient free space for the conservative live-peak check
+                // even after all declared foreground and background bytes materialize.
+                (self.pre_maximum.storage_bytes + used.background.storage_bytes)
+                    .checked_mul(2)
+                    .ok_or_else(|| "node storage capacity overflow".into())
             }
         }
     }
@@ -123,11 +126,12 @@ impl Admission {
         })
     }
 
-    pub(crate) fn reserve(
+    pub(super) fn reserve_with_storage(
         self: &Arc<Self>,
         phase: Phase,
         outer: Capacity,
         child: Option<Capacity>,
+        available_storage: impl FnOnce() -> Result<u64, String>,
     ) -> Result<Arc<Reservation>, String> {
         if outer.slots != 1
             || outer.memory_bytes == 0
@@ -150,12 +154,21 @@ impl Admission {
         };
         // Both ceilings are disjoint partitions of the node maximum. Charging either
         // under this same lock keeps their aggregate within the node maximum.
-        let phase_usage = used.for_phase(phase);
-        let next = phase_usage
+        let mut proposed = *used;
+        let phase_usage = proposed.for_phase(phase);
+        *phase_usage = phase_usage
             .checked_add(charge)
             .filter(|v| v.fits(maximum))
             .ok_or("capacity unavailable")?;
-        *phase_usage = next;
+        // The storage observation and both charges share one admission decision.
+        // A refused background request never takes even temporary PRE headroom.
+        if available_storage()? < self.required_storage_bytes(phase, proposed)? {
+            return Err("node storage unavailable".into());
+        }
+        if self.poisoned.load(Ordering::SeqCst) {
+            return Err("node admission quarantined".into());
+        }
+        *used = proposed;
         Ok(Arc::new(Reservation {
             admission: self.clone(),
             phase,
@@ -163,6 +176,16 @@ impl Admission {
             child,
             child_active: AtomicBool::new(false),
         }))
+    }
+
+    #[cfg(test)]
+    pub(crate) fn reserve(
+        self: &Arc<Self>,
+        phase: Phase,
+        outer: Capacity,
+        child: Option<Capacity>,
+    ) -> Result<Arc<Reservation>, String> {
+        self.reserve_with_storage(phase, outer, child, || Ok(u64::MAX))
     }
 }
 
@@ -284,13 +307,15 @@ mod tests {
         let pre = amount(1, 8, 16);
         let job = amount(1, 6, 7);
         let node = Arc::new(Admission::new(amount(3, 20, 30), Some(pre), "test".into()).unwrap());
-        let post = node.reserve(Phase::Background, job, Some(job)).unwrap();
+        let post = node
+            .reserve_with_storage(Phase::Background, job, Some(job), || Ok(60))
+            .unwrap();
         let child = post.child(job).unwrap();
         assert_eq!(node.reserved_storage_bytes().unwrap(), 14);
-        assert_eq!(node.required_storage_bytes(Phase::Background).unwrap(), 30);
         assert!(node.reserve(Phase::Background, job, None).is_err());
-        let foreground = node.reserve(Phase::Pre, pre, None).unwrap();
-        assert_eq!(node.required_storage_bytes(Phase::Pre).unwrap(), 30);
+        let foreground = node
+            .reserve_with_storage(Phase::Pre, pre, None, || Ok(30))
+            .unwrap();
         assert!(node.reserve(Phase::Pre, pre, None).is_err());
 
         drop(post);
@@ -300,6 +325,56 @@ mod tests {
         assert!(node.reserve(Phase::Background, job, Some(job)).is_ok());
         drop(foreground);
         assert_eq!(node.reserved_storage_bytes().unwrap(), 0);
+    }
+
+    #[test]
+    fn physical_headroom_overflow_refuses_background_without_changing_pre() {
+        let pre = amount(1, 10, 1);
+        let background = amount(1, 10, u64::MAX / 2);
+        let node =
+            Arc::new(Admission::new(amount(2, 20, u64::MAX), Some(pre), "test".into()).unwrap());
+        assert!(node.reserve(Phase::Background, background, None).is_err());
+        assert_eq!(node.reserved_storage_bytes().unwrap(), 0);
+        assert!(node
+            .reserve_with_storage(Phase::Pre, pre, None, || Ok(pre.storage_bytes))
+            .is_ok());
+    }
+
+    #[test]
+    fn tentative_background_storage_cannot_displace_foreground() {
+        let pre = amount(1, 10, 16);
+        let post = amount(1, 10, 14);
+        let node = Arc::new(Admission::new(amount(2, 20, 30), Some(pre), "test".into()).unwrap());
+        let checking_storage = Arc::new(Barrier::new(2));
+        let finish_storage_check = Arc::new(Barrier::new(2));
+        let background = {
+            let node = node.clone();
+            let checking_storage = checking_storage.clone();
+            let finish_storage_check = finish_storage_check.clone();
+            std::thread::spawn(move || {
+                node.reserve_with_storage(Phase::Background, post, None, || {
+                    checking_storage.wait();
+                    finish_storage_check.wait();
+                    Ok(30)
+                })
+            })
+        };
+        checking_storage.wait();
+        let free = 16;
+        let storage_and_usage_locked = matches!(
+            node.used.try_lock(),
+            Err(std::sync::TryLockError::WouldBlock)
+        );
+        let foreground = {
+            let node = node.clone();
+            std::thread::spawn(move || {
+                node.reserve_with_storage(Phase::Pre, pre, None, || Ok(free))
+            })
+        };
+        finish_storage_check.wait();
+        assert!(background.join().unwrap().is_err());
+        assert!(foreground.join().unwrap().is_ok());
+        assert!(storage_and_usage_locked);
     }
 
     #[test]

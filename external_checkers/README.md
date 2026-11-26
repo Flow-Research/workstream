@@ -323,11 +323,14 @@ host memory overhead and separately rounded VM and overlay disk. The remaining
 node capacity must have positive slots, memory, and storage for POST and
 trusted ART preparation. The node derives its total allocable memory from
 the delegated cgroup and checks actual disk space before creating each VM.
-Background reservations leave the configured PRE disk budget available while
-PRE is idle. POST with a trial consumes capacity for the outer VM and one
-sequential child at their combined peak. Per-VM CPU ceilings still share the
-parent cgroup limit. Size and measure concurrency on the chosen host before
-publishing an interactive latency envelope.
+Before starting POST or trusted ART preparation on a PRE-enabled node, free
+disk must cover twice the sum of the PRE disk reserve and the admitted
+background peak including the incoming job. This conservative threshold keeps
+room for the live reservations and their physical allocation. Disk use outside
+the node still reduces available space. POST with a trial consumes capacity for
+the outer VM and one sequential child at their combined peak. Per-VM CPU
+ceilings still share the parent cgroup limit. Size and measure concurrency on
+the chosen host before publishing an interactive latency envelope.
 
 Each existing cache entry additionally has `smol.archive`,
 `smol.archive_sha256` and `smol.image_config`. The
@@ -395,7 +398,9 @@ failure while checking foreign VM/cgroup survival, bounded cleanup and closed
 readiness. The [creation proof](workstream-checker-service/tests/smol_creation.py)
 checks that denied lease or cgroup creation preserves an already running check
 and keeps the controller available after confirmed cleanup. Never run either
-proof against a shared production node.
+proof against a shared production node. The runtime, recovery and creation
+drills send the generic execution operation. Their slot measurements use only
+background capacity, including steps with a PRE-shaped request.
 The [guest mount proof](workstream-checker-service/tests/smol_guest_mounts.py)
 uses a clean image and two variants built from the
 [test Dockerfile](workstream-checker-service/tests/fixtures/mount-targets/Dockerfile)

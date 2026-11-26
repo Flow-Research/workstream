@@ -11971,3 +11971,33 @@ requires a measured two-phase configuration before installing this revision.
 Use an owned saturation test to measure true POST/PRE/T5 overlap and the
 interactive tail on the existing host. A POST profile that reserves a trial
 also requires a second POST slot and its exact memory/disk peak.
+
+Admission review found a physical disk edge. At the exact combined free-space
+floor, a live POST can allocate its reserved bytes before PRE checks current
+free space. The shared physical check must still count all live commitments
+because active VM and trial disks can grow. The bounded correction stays in
+`src/smol/admission.rs`, `src/smol.rs`, their existing filesystem test owner,
+`external_checkers/README.md`, and this record. A PRE-enabled node requires
+twice the sum of the PRE pool and occupied background peak in currently free
+disk before starting background work. This leaves room for potential allocation and
+the conservative concurrent check. It assumes each admitted invocation obeys
+its existing peak and cannot guard disk use outside the node's reservations.
+The filesystem observation and reservation decision now share the admission
+lock, and a rejected proposal never becomes visible as live usage. Recheck
+whole-node quarantine after the observation.
+
+The generic `execute` fixture in `tests/smol_runtime.py` is also in scope with
+its `tests/smol_creation.py` and `tests/smol_recovery.py` callers. Use only
+background slots in all three probes, including PRE-shaped inputs. The
+creation probe passes a second check alongside the long-running control
+before fault injection, establishing physical capacity to reach the faults.
+The recovery probe matches the framed refusal to the exact extra request and
+requires an infrastructure result without guest isolation evidence.
+
+The final targeted `smol::` run passed 58 tests, including the concurrent
+refusal and real filesystem allocation regressions. One unchanged PRE
+transport fixture exceeded its 500 ms deadline during the parallel run and
+passed when rerun individually. Its deadline remains intact. The three
+Python fixtures compiled and their shared background-slot calculation passed
+both single-pool and partitioned examples. The native probes still require an
+owned runner and were not started for this review correction.

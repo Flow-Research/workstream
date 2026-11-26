@@ -199,14 +199,7 @@ fn reserve_capacity(
         .smol_admission
         .as_ref()
         .ok_or("admission unavailable")?;
-    let reservation = admission.reserve(phase, outer, child)?;
-    // Reserve atomically first, then recheck physical space. A failure drops the
-    // complete reservation; no VM or provider operation has begun.
-    let required = admission.required_storage_bytes(phase)?;
-    if available_storage(settings(config)?)? < required {
-        return Err("node storage unavailable".into());
-    }
-    Ok(reservation)
+    admission.reserve_with_storage(phase, outer, child, || available_storage(settings(config)?))
 }
 fn available_storage(s: &SmolConfig) -> Result<u64, String> {
     let directory = File::open(&s.home).map_err(|_| "Smol storage unavailable")?;

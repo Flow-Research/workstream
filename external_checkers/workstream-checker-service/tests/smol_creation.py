@@ -14,7 +14,7 @@ from pathlib import Path
 import subprocess
 
 from smol_recovery import wait_until
-from smol_runtime import Proof, exchange
+from smol_runtime import Proof, background_slots, exchange
 
 
 def main():
@@ -28,8 +28,8 @@ def main():
         raise RuntimeError('run as the non-root node identity')
     leases = Path(config['socket_path']).parent / 'smol-leases'
     groups = Path(config['smol']['cgroup_root'])
-    if groups.name != args.unit or config['smol']['maximum_parallel'] < 2:
-        raise RuntimeError('expected isolated unit with two execution slots')
+    if groups.name != args.unit or background_slots(config) < 2:
+        raise RuntimeError('expected isolated unit with two background slots')
     depth = groups / 'cgroup.max.depth'
     original_depth = depth.read_text()
     original_mode = leases.stat().st_mode & 0o777
@@ -60,6 +60,9 @@ def main():
             active = pool.submit(proof.execute, image, 'post_submit', 'sleep',
                                  expected='deadline_exceeded', deadline_ms=10000)
             wait_until(running, 'unrelated workload did not start')
+            proof.execute(image, 'pre_submit', 'pass')
+            if active.done() or not running():
+                raise AssertionError('parallel capacity control did not overlap unrelated work')
             for case in ('lease_create_denied', 'cgroup_create_denied'):
                 try:
                     if case == 'lease_create_denied':
