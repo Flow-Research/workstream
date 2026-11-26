@@ -23,7 +23,7 @@ async def test_background_invocation_survives_original_claim_expiry(delivery_har
     """A live inspected handler retains one claim without a whole-handler cutoff."""
     h = delivery_harness
     h.options = DeliveryOptions(
-        lease_seconds=1, handler_timeout_seconds=None, background_heartbeat=True,
+        lease_seconds=5, handler_timeout_seconds=None, background_heartbeat=True,
         retry_base_seconds=1,
     )
     h.delivery = h.build(HandlerRegistry([(REQUEST_EVENT, 1, h.handle)]))
@@ -38,8 +38,13 @@ async def test_background_invocation_survives_original_claim_expiry(delivery_har
     claim = await h.claim(event_type=REQUEST_EVENT, aggregate_type="submission")
     invoked = asyncio.create_task(h.delivery.invoke(claim))
     try:
-        await asyncio.wait_for(entered.wait(), 10)
-        await asyncio.sleep(1.2)
+        try:
+            await asyncio.wait_for(entered.wait(), 15)
+        except TimeoutError:
+            if invoked.done():
+                await invoked
+            raise
+        await asyncio.sleep(5.2)
         async with h.factory() as session:
             now = await database_time(session)
             event = await session.get(OutboxEvent, claim.event_id)
