@@ -38,14 +38,15 @@ execution specification and supersedes conflicting public-input/guide-access
 requirements. All implementation belongs in this PR; PR 709 is not part of this
 work. Existing reward owners remain authoritative.
 
-- [ ] Four required submission inputs and optional feedback; backend-selected revision context and exact actor-scoped replay.
-- [ ] Forward migration preserves historical accepted commands and refuses unsafe old in-flight work before mutation.
+- [x] Four required submission inputs and optional feedback; backend-selected revision context and exact actor-scoped replay.
+- [x] Forward migration preserves historical accepted commands and refuses unsafe old in-flight work before mutation.
 - [ ] Approved project and governing task guides are readable/downloadable before claim under exact contributor authority.
 - [ ] Exact task/assignment status exposes current safe feedback, processing activity, revision terms and accepted evidence without internal-ID discovery.
-- [ ] CLI/MCP use the same contract, preserve useful PRE findings and document their distinct upload limits.
+- [x] CLI/MCP use the same contract, preserve useful PRE findings and document their distinct upload limits.
 - [ ] Combined public contributor journey proves correction, revision, replay, history and applicable existing awards on the integrated code.
 
-The submission, guide, assignment status, and CLI/MCP changes are implemented.
+The checked items have focused contract and PostgreSQL proof. The guide and
+assignment status changes are implemented and await the connected native proof.
 The dedicated queue topology, isolated scanner-to-T5 regression and native
 caller conversion are integrated. Combined native execution and deployed
 qualification remain open. The managed-style adapter substitution passed through public

@@ -8,6 +8,7 @@ import os
 from itertools import count as sequence
 from pathlib import Path
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -135,6 +136,71 @@ class PublicJourneyWorkerCustody(unittest.TestCase):
         finally:
             if probe._live_group_members(launcher.pid):
                 os.killpg(launcher.pid, 9)
+
+    def test_term_reaches_owned_sessions_before_runner_kill_grace(self):
+        from experiments.pilot04_external_checker_runtime import run_public_journey_probe as probe
+
+        child = "import os,signal,time;signal.signal(signal.SIGTERM,signal.SIG_IGN);print(os.getpid(),flush=True);time.sleep(60)"
+        leader = f"import subprocess,sys;subprocess.Popen([sys.executable,'-c',{child!r}])"
+        fixture = """
+import os, signal, sys, time
+from pathlib import Path
+from experiments.pilot04_external_checker_runtime import run_public_journey_probe as probe
+
+root, leader, child = Path(sys.argv[1]), sys.argv[2], sys.argv[3]
+previous = {s: signal.getsignal(s) for s in (signal.SIGTERM, signal.SIGINT)}
+processes = []
+try:
+    with probe._owned_process_interrupts(processes) as start:
+        orphaned = start([sys.executable, '-c', leader], env=os.environ, log=root / 'orphaned.log')
+        orphaned.wait(timeout=5)
+        running = start([sys.executable, '-c', child], env=os.environ, log=root / 'running.log')
+        deadline = time.monotonic() + 5
+        while not all(path.stat().st_size for path in root.glob('*.log')):
+            assert time.monotonic() < deadline
+            time.sleep(0.01)
+        receipt = root / 'groups'
+        receipt.write_text(f'{orphaned.pid} {running.pid}')
+        receipt.rename(root / 'ready')
+        signal.pause()
+except KeyboardInterrupt:
+    assert all(signal.getsignal(s) == handler for s, handler in previous.items())
+    for process in processes:
+        process.wait(timeout=1)
+    print('restored', flush=True)
+"""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            ready = root / 'ready'
+            env = os.environ.copy()
+            env['PYTHONPATH'] = os.pathsep.join(str(ROOT / path) for path in ('backend', 'backend/tests', '.'))
+            with subprocess.Popen([sys.executable, '-c', fixture, directory, leader, child],
+                                  env=env, stdout=subprocess.PIPE, text=True,
+                                  start_new_session=True) as supervisor:
+                groups = []
+                try:
+                    deadline = time.monotonic() + 45
+                    while not ready.exists() and supervisor.poll() is None and time.monotonic() < deadline:
+                        time.sleep(.02)
+                    self.assertTrue(ready.exists(), 'signal fixture did not reach owned process readiness')
+                    groups = [int(value) for value in ready.read_text().split()]
+                    self.assertEqual(len(groups), 2)
+                    self.assertTrue(all(probe._live_group_members(group) for group in groups))
+                    os.killpg(supervisor.pid, signal.SIGTERM)
+                    output, _ = supervisor.communicate(timeout=2)
+                    self.assertEqual(supervisor.returncode, 0)
+                    self.assertEqual(output.strip(), 'restored')
+                    self.assertTrue(all(not probe._live_group_members(group) for group in groups))
+                finally:
+                    if supervisor.poll() is None:
+                        supervisor.terminate()
+                        try:
+                            supervisor.wait(timeout=2)
+                        except subprocess.TimeoutExpired:
+                            supervisor.kill()
+                    for group in groups:
+                        if probe._live_group_members(group):
+                            os.killpg(group, 9)
 
     def test_partial_startup_still_attempts_every_owned_group_cleanup(self):
         from experiments.pilot04_external_checker_runtime import run_public_journey_probe as probe

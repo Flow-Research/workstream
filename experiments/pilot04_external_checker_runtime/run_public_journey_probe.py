@@ -9,7 +9,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 from collections.abc import Awaitable, Callable
-from contextlib import ExitStack, nullcontext
+from contextlib import ExitStack, contextmanager, nullcontext
 from decimal import Decimal
 import hashlib
 import hmac
@@ -46,10 +46,6 @@ from app.modules.artifacts.service import artifact_storage_namespace_spec
 from app.modules.tasks.models import Submission, SubmissionDispatch, WorkstreamTask
 from app.adapters.artifacts import trusted_submission_intake
 from app.adapters.checkers import configured_external_checker_execution
-from experiments.pilot04_external_checker_runtime.public_probe_support import (
-    _locked_spec,
-    _secret_archive,
-)
 from tests.authorization.post_submit_routing.support import provision_router
 from tests.post_submit_materialization_helpers import (
     archive_with_modes,
@@ -71,11 +67,12 @@ from api_contract_e2e import (  # noqa: E402
 from experiments.pilot04_external_checker_runtime.public_probe_support import (  # noqa: E402
     _assert_outbox_worker_custody, _assert_task_has_no_effects, _json, _public_project,
     _require, _started_public_task, _token, _wait_outbox_acknowledged,
-    _with_fixture_file, _GOVERNED_TABLES, _fixture_hashes, _assert_input_hashes,
+    _with_fixture_file, _GOVERNED_TABLES, _fixture_hashes, _assert_input_hashes, _locked_spec, _secret_archive,
 )
 from experiments.pilot04_external_checker_runtime.public_submission_clients import (  # noqa: E402
     ContributorClients, seeded_issuer,
 )
+from cli.tests.journey.runtime import _interrupt_owned_groups, _live_group_members  # noqa: E402
 
 
 def _settings_digests(settings, nonce: bytes) -> dict[str, str]:
@@ -187,12 +184,12 @@ WORKER_ROLES = (
 
 
 def _start_worker(env: dict[str, str], root: Path, role: str, queue: str,
-                  generation: int = 1) -> tuple[subprocess.Popen, str]:
+                  generation: int = 1, *, launch=None) -> tuple[subprocess.Popen, str]:
     """Start one owned prefork worker for exactly one registered workload queue."""
     hostname = f"first-journey-{role}-{uuid4().hex}@localhost"
     celery_app = ("experiments.pilot04_external_checker_runtime.guide_worker"
                   if role == "guide" else "app.workers.celery_app")
-    process = _process([
+    process = (launch or _process)([
         sys.executable, "-m", "celery", "-A", celery_app,
         "worker", "--pool=prefork", "--concurrency=1",
         f"--queues={queue}", "--hostname", hostname,
@@ -252,19 +249,40 @@ def _require_parser_socket(settings):
     return path
 
 
-def _live_group_members(group_id: int) -> set[int]:
-    """Find live members of only this fixture's start_new_session group."""
-    members = set()
-    for entry in Path("/proc").iterdir():
-        if not entry.name.isdecimal():
-            continue
+@contextmanager
+def _owned_process_interrupts(processes: list[subprocess.Popen]):
+    """Reach the owned sessions before the isolation runner's short KILL grace."""
+    launching = interrupted = False
+
+    def stop_interrupted():
+        _interrupt_owned_groups(processes)
+        raise KeyboardInterrupt
+
+    def interrupt(_signum, _frame):
+        nonlocal interrupted
+        if interrupted:
+            return
+        interrupted = True
+        if not launching:
+            stop_interrupted()
+
+    def start(command, *, env, log):
+        nonlocal launching
+        launching = True
         try:
-            fields = (entry / "stat").read_text().rsplit(") ", 1)[1].split()
-            if int(fields[2]) == group_id and fields[0] not in {"Z", "X"}:
-                members.add(int(entry.name))
-        except (IndexError, OSError, ValueError):
-            continue
-    return members
+            process = _process(command, env=env, log=log)
+            processes.append(process)
+        finally:
+            launching = False
+            if interrupted:
+                stop_interrupted()
+        return process
+
+    with ExitStack() as restore:
+        for signum in (signal.SIGTERM, signal.SIGINT):
+            previous = signal.signal(signum, interrupt)
+            restore.callback(signal.signal, signum, previous)
+        yield start
 
 
 def _stop_process(process: subprocess.Popen | None) -> None:
@@ -1301,6 +1319,8 @@ async def run(database_url: str, image_reference: str, node_config: Path,
     factory = async_sessionmaker(engine, expire_on_commit=False)
     api = worker = beat = mcp = None
     workers: list[subprocess.Popen] = []
+    processes: list[subprocess.Popen] = []
+    signals = ExitStack()
     worker_generation = 0
 
     def stop_owned_worker() -> None:
@@ -1309,6 +1329,7 @@ async def run(database_url: str, image_reference: str, node_config: Path,
         _stop_process(worker)
         _require(worker.poll() is not None, "old POST effect worker did not exit")
         workers.remove(worker)
+        processes.remove(worker)
 
     async def start_owned_worker() -> None:
         nonlocal worker, worker_generation
@@ -1317,12 +1338,13 @@ async def run(database_url: str, image_reference: str, node_config: Path,
         previous_pid = worker.pid if worker is not None else None
         worker_generation += 1
         worker, hostname = _start_worker(env, root, "outbox", "workstream.outbox",
-                                         worker_generation)
+                                         worker_generation, launch=launch)
         workers.append(worker)
         _require(worker.pid != previous_pid, "restart reused the old POST worker process")
         await _wait_worker(worker, hostname)
 
     try:
+        launch = signals.enter_context(_owned_process_interrupts(processes))
         await provision_material_services(factory, artifacts=True, checker=True)
         await provision_router(factory)
         await provision_reconciler(factory)
@@ -1344,7 +1366,7 @@ async def run(database_url: str, image_reference: str, node_config: Path,
                  "live execution cache lacks the reviewed project checker manifest")
         port = find_free_port()
         origin = f"http://127.0.0.1:{port}"
-        api = _process([
+        api = launch([
             sys.executable, "-m", "uvicorn",
             "app.main:app",
             "--host", "127.0.0.1", "--port", str(port),
@@ -1353,11 +1375,11 @@ async def run(database_url: str, image_reference: str, node_config: Path,
         await _wait_api(origin, api)
         if clients is not None:
             clients.configure_processes(origin, find_free_port())
-            mcp = _process([str(clients.mcp_executable)], env=clients.mcp_env, log=root / "mcp.log")
+            mcp = launch([str(clients.mcp_executable)], env=clients.mcp_env, log=root / "mcp.log")
             await clients.wait_ready(mcp)
         for role, queue in WORKER_ROLES:
             process, hostname = _start_worker(
-                cleanup_env if role == "source-cleanup" else env, root, role, queue
+                cleanup_env if role == "source-cleanup" else env, root, role, queue, launch=launch,
             )
             workers.append(process)
             await _wait_worker(process, hostname)
@@ -1365,7 +1387,7 @@ async def run(database_url: str, image_reference: str, node_config: Path,
                 worker = process
                 worker_generation = 1
         scans_before_beat = await _scan_audit_count(factory)
-        beat = _process([
+        beat = launch([
             sys.executable, "-m", "celery", "-A", "app.workers.celery_app",
             "beat", "--loglevel=ERROR",
             "--schedule", str(root / "beat-schedule"),
@@ -1416,18 +1438,15 @@ async def run(database_url: str, image_reference: str, node_config: Path,
                 ) + (() if separate_runner else ('wrapper_sha256',))},
                 "runtime_trials": runtime_trials, "intake_trials": intake_trials, "human": true, "automatic": false}
     finally:
-        cleanup_error = None
         try:
-            _stop_owned_processes((mcp, beat, *reversed(workers), api))
-        except RuntimeError as error:
-            cleanup_error = error
-        try:
-            for schedule_file in root.glob("beat-schedule*"):
-                schedule_file.unlink()
+            _stop_owned_processes(tuple(reversed(processes)))
         finally:
-            await engine.dispose()
-        if cleanup_error is not None:
-            raise cleanup_error
+            try:
+                for schedule_file in root.glob("beat-schedule*"):
+                    schedule_file.unlink()
+            finally:
+                signals.close()
+                await engine.dispose()
 
 
 def main() -> int:
