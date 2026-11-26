@@ -311,7 +311,7 @@ async def test_model_profile_configuration_requires_exact_project_scope():
 
 
 @pytest.mark.asyncio
-async def test_retained_pre_and_new_post_budgets_reject_unrunnable_images():
+async def test_retained_pre_budget_and_long_post_policy():
     from app.modules.checkers.api.external_policy import validate_stored_external_pre_policy
 
     pre_entry = _entry("acme.pre", "pre_submit", deadline_ms=3_600_000)
@@ -326,11 +326,12 @@ async def test_retained_pre_and_new_post_budgets_reject_unrunnable_images():
     with pytest.raises(ValueError, match="ART custody deadline"):
         validate_stored_external_pre_policy(body | {"policy_sha256": canonical_json_hash(body)})
     post = _entry("acme.post", "post_submit", deadline_ms=3_600_000)
-    with pytest.raises(ValueError, match="durable worker deadline"):
-        await compile_external_checker_policies(
-            _request(pre=(_attachment(pre_entry, "a"),), post=(_attachment(post, "p"),)),
-            _Registry((pre_entry, post)),
-        )
+    _, locked_post = await compile_external_checker_policies(
+        _request(pre=(_attachment(pre_entry, "a"),), post=(_attachment(post, "p"),)),
+        _Registry((pre_entry, post)),
+    )
+    assert locked_post.entries[0].registry.resources.deadline_ms == 3_600_000
+    assert selected_post_submit_execution_budget_ms(locked_post) > 3_400_000
 
 
 @pytest.mark.asyncio

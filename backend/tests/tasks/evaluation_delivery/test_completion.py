@@ -12,13 +12,7 @@ from app.modules.checkers.api.execution import COMPLETION_EVENT, REQUEST_EVENT
 from app.modules.checkers.api.delivery_reconciliation import (
     POST_SUBMIT_DELIVERY_RECONCILIATION_EVENT,
 )
-from app.modules.checkers.api.external_policy import (
-    MAXIMUM_SELECTED_POST_EXECUTION_BUDGET_MS,
-    SELECTED_POST_DELIVERY_LEASE_SECONDS,
-    SELECTED_POST_FINALIZATION_MARGIN_MS,
-    SELECTED_POST_HANDLER_PRELUDE_MARGIN_MS,
-    SELECTED_POST_HANDLER_TIMEOUT_SECONDS,
-)
+from app.modules.checkers.api.external_policy import SELECTED_POST_DELIVERY_LEASE_SECONDS
 from app.modules.outbox.api import HandlerOutcome, FinalizationCause, DeliveryOptions
 from app.modules.outbox.registry import HandlerRegistry
 from app.modules.tasks.post_submit_routing.outcome import TaskPostSubmitOutcome
@@ -240,7 +234,7 @@ def test_completion_handler_is_registered_in_production_registry():
     assert delivery._options_for(COMPLETION_EVENT, 1) == DeliveryOptions()
 
 
-def test_production_request_transport_covers_maximum_selected_execution(monkeypatch):
+def test_production_post_request_renews_ownership_without_an_execution_deadline(monkeypatch):
     from app.core.config import get_settings
 
     # This checks the actual task declaration without publishing to a broker.
@@ -248,32 +242,22 @@ def test_production_request_transport_covers_maximum_selected_execution(monkeypa
     monkeypatch.setenv("WORKSTREAM_ARTIFACT_STORE_BACKEND", "disabled")
     get_settings.cache_clear()
     try:
-        _assert_production_request_transport_budget()
+        _assert_production_request_renewal()
     finally:
         get_settings.cache_clear()
 
 
-def _assert_production_request_transport_budget():
+def _assert_production_request_renewal():
     from app.workers.outbox import deliver_event
-    from app.workers.outbox_topology import OUTBOX_PROCESS_SHUTDOWN_MARGIN_SECONDS
 
     delivery = production_outbox_delivery(None)
     request = delivery._options_for(REQUEST_EVENT, 1)
 
-    assert request.handler_timeout_seconds == SELECTED_POST_HANDLER_TIMEOUT_SECONDS
+    assert request.background_heartbeat
+    assert request.handler_timeout_seconds is None
     assert request.lease_seconds == SELECTED_POST_DELIVERY_LEASE_SECONDS
-    bounded_pipeline_ms = (
-        MAXIMUM_SELECTED_POST_EXECUTION_BUDGET_MS
-        + SELECTED_POST_HANDLER_PRELUDE_MARGIN_MS
-        + SELECTED_POST_FINALIZATION_MARGIN_MS
-    )
-    assert bounded_pipeline_ms <= request.handler_timeout_seconds * 1000
-    assert request.handler_timeout_seconds < request.lease_seconds <= 3600
-    assert bounded_pipeline_ms < request.lease_seconds * 1000
-    assert deliver_event.time_limit == (
-        request.lease_seconds + OUTBOX_PROCESS_SHUTDOWN_MARGIN_SECONDS
-    )
-    assert deliver_event.time_limit > request.handler_timeout_seconds
+    assert deliver_event.time_limit is None
+    assert delivery._options_for(POST_SUBMIT_DELIVERY_RECONCILIATION_EVENT, 1) == request
     assert delivery._options_for(COMPLETION_EVENT, 1) == DeliveryOptions()
 
 

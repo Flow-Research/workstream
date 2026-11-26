@@ -1,5 +1,6 @@
 """Current invocation and call-stable private evidence custody."""
 
+from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import select
@@ -77,7 +78,7 @@ class ModelCallCurrentExecution:
         self,
         facts: ModelCallExecutionFacts,
         slot: ModelPaidSlotKey,
-    ) -> None:
+    ) -> datetime:
         """Read immutable request facts, then lock TASK before the CHECKERS fence."""
         require_transaction(self._session)
         facts = ModelCallExecutionFacts.model_validate(facts)
@@ -115,6 +116,9 @@ class ModelCallCurrentExecution:
             )
         except CheckerExecutionUnavailable:
             raise ModelCallUnavailable("model_call_execution_unavailable") from None
+        if run.worker_lease_live_until is None:
+            raise ModelCallUnavailable("model_call_execution_unavailable")
+        return run.worker_lease_live_until
 
     async def require_recovery_current(
         self, slot: ModelPaidSlotKey, parent_attempt_id: UUID

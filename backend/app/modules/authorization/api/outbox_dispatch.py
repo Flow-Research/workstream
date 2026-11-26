@@ -28,6 +28,7 @@ class OutboxDispatchPhase(StrEnum):
 
     CLAIM = "claim"
     INVOKE = "invoke"
+    RENEW = "renew"
     FINALIZE = "finalize"
 
 
@@ -49,6 +50,7 @@ class OutboxDispatchFacts:
     claim_owner: str
     claimed_at: datetime
     claim_expires_at: datetime
+    live_until: datetime | None = None
     outcome_digest: str | None = None
 
     def __post_init__(self) -> None:
@@ -73,6 +75,11 @@ class OutboxDispatchFacts:
                 raise ValueError("outbox dispatch outcome is invalid")
         elif self.outcome_digest is not None:
             raise ValueError("outbox dispatch outcome is invalid")
+        if self.phase is OutboxDispatchPhase.RENEW:
+            if type(self.live_until) is not datetime:
+                raise ValueError("outbox renewal time is invalid")
+        elif self.live_until is not None:
+            raise ValueError("outbox renewal time is invalid")
         try:
             if self.claimed_at.utcoffset() is None or self.claim_expires_at.utcoffset() is None:
                 raise ValueError("naive lease timestamp")
@@ -80,10 +87,17 @@ class OutboxDispatchFacts:
             expires = self.claim_expires_at.astimezone(timezone.utc)
             if expires <= claimed:
                 raise ValueError("non-positive lease interval")
+            if self.live_until is not None and (
+                self.live_until.utcoffset() is None
+                or self.live_until.astimezone(timezone.utc) <= expires
+            ):
+                raise ValueError("outbox renewal time is invalid")
         except Exception:
             raise ValueError("outbox dispatch lease is invalid") from None
         object.__setattr__(self, "claimed_at", claimed)
         object.__setattr__(self, "claim_expires_at", expires)
+        if self.live_until is not None:
+            object.__setattr__(self, "live_until", self.live_until.astimezone(timezone.utc))
 
 
 def outbox_dispatch_resource_digest(facts: OutboxDispatchFacts) -> str:
@@ -97,6 +111,7 @@ def outbox_dispatch_resource_digest(facts: OutboxDispatchFacts) -> str:
             else str(value) if isinstance(value, UUID) else value
         )
         for field in fields(checked)
+        if field.name != "live_until" or checked.live_until is not None
         for value in (getattr(checked, field.name),)
     }
     body = json.dumps(

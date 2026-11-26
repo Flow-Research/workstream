@@ -127,6 +127,115 @@ def test_current_installed_head_admits_noop_upgrade(isolated_database_env, migra
     assert asyncio.run(_database_snapshot(isolated_database_env)) == before
 
 
+@pytest.mark.parametrize(
+    ("archive", "predecessor", "expected_state"),
+    [
+        ("0031_routing_success_true_false", "0031_task_import_source", "claimed"),
+        ("0034_checker_retry_source", "0034_checker_replacement", "acknowledged"),
+    ],
+)
+def test_renewable_post_upgrade_preserves_retained_custody(
+    isolated_database_env, migration_lock, archive, predecessor, expected_state,
+):
+    """Upgrade populated 0095 rows with immutable and deferred guards active."""
+    from tests.historical_submission_fixtures import restore_archived_snapshot
+    from app.db import session as db_session
+
+    async def retained():
+        connection = await asyncpg.connect(isolated_database_env.replace("+asyncpg", ""))
+        try:
+            rows = {}
+            for table in (
+                "checker_runs", "outbox_events", "outbox_delivery_attempts", "audit_events",
+            ):
+                rows[table] = tuple(row["body"] for row in await connection.fetch(
+                    f"SELECT to_jsonb(r)::text body FROM public.{table} r ORDER BY body"
+                ))
+            return rows
+        finally:
+            await connection.close()
+
+    async def projected():
+        connection = await asyncpg.connect(isolated_database_env.replace("+asyncpg", ""))
+        try:
+            result = {}
+            removed = {
+                "checker_runs": "worker_lease_live_until",
+                "outbox_events": "claim_live_until",
+                "outbox_delivery_attempts": "claim_live_until,renew_decision_event_id",
+            }
+            for table in (
+                "checker_runs", "outbox_events", "outbox_delivery_attempts", "audit_events",
+            ):
+                projection = "to_jsonb(r)"
+                for column in removed.get(table, "").split(","):
+                    if column:
+                        projection += f"-'{column}'"
+                result[table] = tuple(row["body"] for row in await connection.fetch(
+                    f"SELECT ({projection})::text body FROM public.{table} r ORDER BY body"
+                ))
+            equality = await connection.fetchval("""
+                SELECT bool_and(worker_lease_live_until IS NOT DISTINCT FROM worker_lease_expires_at)
+                FROM public.checker_runs
+            """) and await connection.fetchval("""
+                SELECT bool_and(claim_live_until IS NOT DISTINCT FROM
+                  CASE WHEN delivery_state='claimed' THEN claim_expires_at ELSE NULL END)
+                FROM public.outbox_events
+            """) and await connection.fetchval("""
+                SELECT bool_and(claim_live_until=claim_expires_at
+                  AND renew_decision_event_id IS NULL)
+                FROM public.outbox_delivery_attempts
+            """)
+            states = tuple(row["delivery_state"] for row in await connection.fetch(
+                "SELECT delivery_state FROM public.outbox_events ORDER BY event_id"
+            ))
+            guards = await connection.fetch("""
+                SELECT tgname,tgenabled FROM pg_trigger WHERE tgname IN
+                  ('checker_run_custody','outbox_events_custody') ORDER BY tgname
+            """)
+            return result, equality, states, tuple((r["tgname"], r["tgenabled"]) for r in guards)
+        finally:
+            await connection.close()
+
+    config = _alembic_config()
+    with migration_lock():
+        asyncio.run(db_session.dispose_engine())
+        asyncio.run(_execute(isolated_database_env, "DROP SCHEMA public CASCADE; CREATE SCHEMA public"))
+        command.upgrade(config, predecessor)
+        asyncio.run(restore_archived_snapshot(isolated_database_env, archive))
+        command.upgrade(config, "0095_post_infrastructure_retry")
+        before = asyncio.run(retained())
+        assert all(before[table] for table in before)
+        async def predecessor_shape():
+            connection = await asyncpg.connect(isolated_database_env.replace("+asyncpg", ""))
+            try:
+                return (
+                    await connection.fetchval("""
+                        SELECT count(*) FROM public.outbox_events e
+                        JOIN public.outbox_delivery_attempts a ON a.event_id=e.event_id
+                        WHERE e.delivery_state='claimed' AND a.stage='invoked'
+                          AND e.claim_expires_at<clock_timestamp()
+                    """),
+                    await connection.fetchval("""
+                        SELECT count(*) FROM public.checker_runs
+                        WHERE status='infrastructure_failed' AND completed_at IS NOT NULL
+                    """),
+                )
+            finally:
+                await connection.close()
+        expired_unknown, terminal_checker = asyncio.run(predecessor_shape())
+        if expected_state == "claimed":
+            assert expired_unknown > 0
+        else:
+            assert terminal_checker > 0
+        command.upgrade(config, HEAD_REVISION)
+        after, equality, states, guards = asyncio.run(projected())
+    assert after == before
+    assert equality is True
+    assert expected_state in states
+    assert guards == (("checker_run_custody", "O"), ("outbox_events_custody", "O"))
+
+
 @asynccontextmanager
 async def _historical_artifact_lineage_projection(database_url: str):
     """Expose null-only current ART lineage after restoring exact historical rows."""
@@ -538,7 +647,7 @@ def test_v01_graph_has_one_root_and_head() -> None:
     assert script.get_revision("0090_merge_direct_storage").down_revision == (
         "0089_observed_upload_cleanup", "0069_remove_artifact_proof",
     )
-    assert script.get_revision(HEAD_REVISION).down_revision == "0094_project_archive_limits"
+    assert script.get_revision(HEAD_REVISION).down_revision == "0095_post_infrastructure_retry"
     assert revisions[-1].down_revision is None
     assert script.get_heads() == [HEAD_REVISION]
 
@@ -1982,7 +2091,7 @@ def test_root_upgrade_refuses_nonempty_unstamped_schema_before_product_ddl(
             "0004_task_context_authority",
             "Workstream v0.1 migrations cannot be downgraded; recreate the database",
         ),
-        (HEAD_REVISION, "POST infrastructure retry migration is forward-only"),
+        (HEAD_REVISION, "renewable POST custody is forward-only"),
     ],
 )
 def test_downgrade_refuses_without_mutation(

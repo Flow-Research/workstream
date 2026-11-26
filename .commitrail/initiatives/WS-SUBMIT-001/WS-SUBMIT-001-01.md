@@ -13367,3 +13367,49 @@ build staging and the native sandbox identity. Verify the resulting layer
 header and execute a single ordinary passing input in the isolated domain
 before arming the failure matrix. The normal runner must be restored after the
 control. Review exact image custody and entrypoint readability before the run.
+### Renewable ownership for healthy background POST
+
+The user requires no fixed aggregate lifetime for a healthy POST sequence. The
+existing checker execution, ART callback and OUTBOX delivery path now use the
+same hourly database inspection cadence. Each inspection verifies the exact
+current run or delivery generation and extends only a bounded three-hour live
+window. The original lease and claim expiry remain immutable in requests,
+receipts and historical records. A stopped inspector cannot renew; expiration
+then admits only the existing UNKNOWN/recovery path. Each selected checker
+retains its individually approved execution deadline and cleanup budget.
+
+Migration 0096 adds separate effective-liveness fields to CHECKERS and OUTBOX
+and an audited renewal decision on the delivery attempt. It is forward-only,
+requires active owners to drain before upgrade, backfills retained 0095 rows
+with exact original expiries and keeps the prior row facts unchanged. ART
+preparation and inspection retain their fixed limits; only the verified POST
+callback can continue across the former aggregate deadline. Model invocation
+grants and trial evidence use the current live lease for availability while
+binding the immutable execution identity. The dedicated OUTBOX worker's Celery
+hard limit is updated in a separate coordinated change.
+
+Required proof is a populated 0095 upgrade with terminal and expired UNKNOWN
+rows, accelerated real PostgreSQL renewal past original expiry, refusal of
+competing recovery, long single-checker callback, and existing authorization,
+model, ART and OUTBOX regressions. This private change alone does not qualify a
+remote provider's per-call timeout or a deployed worker process.
+
+The exact `b1ac8af18` build produced the `8304b99e` fixture manifest. Canonical
+cache inspection verified `/checker.py` as root-owned mode `0444` with the
+tracked payload digest. The owned build registry was removed. A single
+fault-free public CLI submission using this image accepted in 104.35 seconds,
+then finalized revision 1 and passed POST. The native trace binds the accepted
+receipt to exactly one source-first PRE execution with outer exit 0 and an
+observed delete. The durable cleanup disposition is `destroyed`. The isolated
+0094 database and MinIO cleanup checks passed. Authenticated normal runner
+placement matched before and after, its two service PIDs were unchanged, and
+both isolated test services stopped with empty lease, VM, workspace and cgroup
+inventories.
+
+The proof is under `/tmp/workstream-native-pre-control-v_8aasi4`, with the
+cross-checked summary in `pre-control-summary.json`. This run qualifies the
+passing control for the rebuilt fixture. The OOM, crash, output limit and
+pending-delete cases still require evidence. The trusted PRE worker's
+infrastructure reply currently maps to outer exit 125, which can also occur
+before selected project execution. Exact fault qualification needs a trusted
+observation of the selected project outcome.

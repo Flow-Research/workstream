@@ -126,7 +126,7 @@ class DeliveryRepository:
         query = select(e.event_id, e.project_id, e.event_type).where(or_(
             and_(e.delivery_state.in_(("pending", "retryable")), e.next_attempt_at <= now,
                  tuple_(e.event_type, e.event_version).in_(sorted(registered))),
-            and_(e.delivery_state == "claimed", e.claim_expires_at <= now),
+            and_(e.delivery_state == "claimed", e.claim_live_until <= now),
         ))
         if excluded:
             query = query.where(tuple_(e.event_type, e.event_version).not_in(sorted(excluded)))
@@ -416,7 +416,7 @@ class DeliveryRepository:
                 a.claim_owner == e.claim_owner,
                 a.claimed_at == e.claimed_at,
                 a.claim_expires_at == e.claim_expires_at,
-                e.claim_expires_at > func.statement_timestamp(),
+                e.claim_live_until > func.statement_timestamp(),
             )
         )
         observed = (await self.session.execute(query)).scalar_one_or_none()

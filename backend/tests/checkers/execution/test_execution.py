@@ -1,7 +1,8 @@
 """Execution through real verified input, immutable results and shared outbox."""
 
 import pytest
-from sqlalchemy import select, func
+from sqlalchemy import select, func, text
+from sqlalchemy.exc import DBAPIError
 
 from app.modules.checkers.api.execution import CheckerExecutionUnavailable, COMPLETION_EVENT
 from app.adapters.checkers import evaluation_coordinator
@@ -11,6 +12,102 @@ from tests.post_submit_materialization_helpers import material_fixture
 from .support import ControlledSelectedExecution, live_executor, reserve, service_link_state
 from tests.checkers.external.support import post_registry_spec
 from app.modules.actors.api import ServiceIdentity
+
+
+async def test_cancel_stops_material_work_before_inspection_rollback(monkeypatch):
+    """A blocked status rollback must not leave provider work active."""
+    import asyncio
+    import app.modules.checkers.execution as execution
+
+    inspection_entered = asyncio.Event()
+    release_inspection = asyncio.Event()
+    work_cancelled = asyncio.Event()
+
+    class Materialization:
+        async def materialize(self, _facts, _consumer):
+            try:
+                await asyncio.Event().wait()
+            except asyncio.CancelledError:
+                work_cancelled.set()
+                raise
+
+    executor = execution.PostSubmissionExecutor(
+        sessions=None, execute_authority=None, finalize_authority=None,
+        materialization=Materialization(), outbox=None, review_modes=None,
+    )
+    monkeypatch.setattr(execution, "ExecuteFacts", lambda **_facts: object())
+    monkeypatch.setattr(executor, "_consumer", lambda _request, _lease: object())
+    monkeypatch.setattr(execution, "BACKGROUND_STATUS_INSPECTION_INTERVAL_SECONDS", 0.01)
+    renewals = 0
+
+    async def renewal(_request, _lease):
+        nonlocal renewals
+        renewals += 1
+        if renewals > 1:
+            inspection_entered.set()
+            try:
+                await asyncio.Event().wait()
+            except asyncio.CancelledError:
+                await release_inspection.wait()
+                raise
+
+    monkeypatch.setattr(executor, "_renew_running_lease", renewal)
+    running = asyncio.create_task(executor._materialize_while_owned(None, None))
+    await asyncio.wait_for(inspection_entered.wait(), 1)
+    running.cancel()
+    try:
+        await asyncio.wait_for(work_cancelled.wait(), 1)
+        assert not running.done()
+    finally:
+        release_inspection.set()
+    with pytest.raises(asyncio.CancelledError):
+        await asyncio.wait_for(running, 1)
+
+
+async def test_inspection_timeout_preserves_unknown_after_native_cancellation(monkeypatch):
+    import asyncio
+    import app.modules.checkers.execution as execution
+    from app.interfaces.external_checker_execution import ExternalCheckerExecutionOutcomeUnknown
+
+    cancelled = asyncio.Event()
+    release_rollback = asyncio.Event()
+
+    class Materialization:
+        async def materialize(self, _facts, _consumer):
+            try:
+                await asyncio.Event().wait()
+            except asyncio.CancelledError:
+                cancelled.set()
+                raise ExternalCheckerExecutionOutcomeUnknown() from None
+
+    executor = execution.PostSubmissionExecutor(
+        sessions=None, execute_authority=None, finalize_authority=None,
+        materialization=Materialization(), outbox=None, review_modes=None,
+    )
+    monkeypatch.setattr(execution, "ExecuteFacts", lambda **_facts: object())
+    monkeypatch.setattr(executor, "_consumer", lambda _request, _lease: object())
+    monkeypatch.setattr(execution, "BACKGROUND_STATUS_INSPECTION_INTERVAL_SECONDS", 0.01)
+    calls = 0
+
+    async def renewal(_request, _lease):
+        nonlocal calls
+        calls += 1
+        if calls > 1:
+            try:
+                await asyncio.Event().wait()
+            except asyncio.CancelledError:
+                await release_rollback.wait()
+                raise
+
+    monkeypatch.setattr(executor, "_renew_running_lease", renewal)
+    running = asyncio.create_task(executor._materialize_while_owned(None, None))
+    try:
+        await asyncio.wait_for(cancelled.wait(), 1)
+        assert not running.done()
+    finally:
+        release_rollback.set()
+    with pytest.raises(ExternalCheckerExecutionOutcomeUnknown):
+        await asyncio.wait_for(running, 1)
 
 
 @pytest.fixture
@@ -50,17 +147,36 @@ async def test_background_materialization_can_exceed_nominal_post_estimate(
         materialize = h.service.materialize
 
         async def slower_materialization(*args, **kwargs):
-            await asyncio.sleep(1.1)
+            await asyncio.sleep(2.2)
             return await materialize(*args, **kwargs)
 
-        monkeypatch.setattr(execution, "selected_post_submit_execution_budget_ms", lambda _policy: 1000)
+        monkeypatch.setattr(execution, "SELECTED_POST_INITIAL_WORKER_WINDOW_MS", 100)
+        monkeypatch.setattr(execution, "SELECTED_POST_FINALIZATION_MARGIN_MS", 1_000)
         monkeypatch.setattr(h.service, "materialize", slower_materialization)
         result = await live_executor(h).evaluate_post_submission(h.request)
         assert result.outcome == "completed"
         async with h.factory() as session:
             run = await session.get(CheckerRun, str(result.attempt_id))
             assert run.status == "completed" and run.failure_code is None
-            assert run.worker_lease_expires_at > run.completed_at
+            assert run.worker_lease_expires_at < run.completed_at
+            assert run.worker_lease_live_until > run.completed_at
+
+
+async def test_running_checker_cannot_null_its_renewable_live_lease(tmp_path, isolated_database_env):
+    async with material_fixture(tmp_path, isolated_database_env) as h:
+        await reserve(h)
+        executor = live_executor(h)
+        lease, replay = await executor._claim(h.request)
+        assert replay is None
+        with pytest.raises(DBAPIError, match="checker renewal custody is invalid"):
+            async with h.factory() as session, session.begin():
+                await session.execute(text("""
+                    UPDATE public.checker_runs SET worker_lease_live_until=NULL WHERE id=:id
+                """), {"id": str(lease.reservation.attempt_id)})
+        async with h.factory() as session:
+            run = await session.get(CheckerRun, str(lease.reservation.attempt_id))
+            assert run.status == "running"
+            assert run.worker_lease_live_until == run.worker_lease_expires_at
 
 
 @pytest.mark.parametrize("provider", ["local", "minio"])

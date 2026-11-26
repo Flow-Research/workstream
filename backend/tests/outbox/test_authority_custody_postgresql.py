@@ -110,7 +110,7 @@ async def test_new_phase_reference_requires_current_authority(delivery_harness):
         assert attempt.stage == "claimed" and attempt.invoke_decision_event_id is None
 
 
-@pytest.mark.parametrize("phase", list(OutboxDispatchPhase))
+@pytest.mark.parametrize("phase", [OutboxDispatchPhase.CLAIM, OutboxDispatchPhase.INVOKE, OutboxDispatchPhase.FINALIZE])
 @pytest.mark.parametrize("microseconds", [0, 123400])
 async def test_sql_phase_digest_matches_exact_public_timestamp_format(
     delivery_harness, phase, microseconds
@@ -147,7 +147,7 @@ async def test_sql_phase_digest_matches_exact_public_timestamp_format(
         assert digest == outbox_dispatch_resource_digest(facts)
 
 
-@pytest.mark.parametrize("phase", list(OutboxDispatchPhase))
+@pytest.mark.parametrize("phase", [OutboxDispatchPhase.CLAIM, OutboxDispatchPhase.INVOKE, OutboxDispatchPhase.FINALIZE])
 async def test_missing_phase_decision_rolls_back_owner_write_and_audit(delivery_harness, phase):
     from sqlalchemy import event
     from sqlalchemy.orm import Session
@@ -194,7 +194,10 @@ async def test_missing_phase_decision_rolls_back_owner_write_and_audit(delivery_
                 select(AuditEvent).where(AuditEvent.action_id == "outbox.dispatch")
             )
         ).all()
-        assert len(audits) == list(OutboxDispatchPhase).index(phase)
+        assert len(audits) == (
+            [OutboxDispatchPhase.CLAIM, OutboxDispatchPhase.INVOKE, OutboxDispatchPhase.FINALIZE]
+            .index(phase)
+        )
         assert (await session.get(OutboxEvent, pending.event_id)).delivery_state == (
             "pending" if claim is None else "claimed"
         )

@@ -78,7 +78,6 @@ def production_outbox_delivery(
     from app.modules.checkers.api.execution import COMPLETION_EVENT, REQUEST_EVENT
     from app.modules.checkers.api.external_policy import (
         SELECTED_POST_DELIVERY_LEASE_SECONDS,
-        SELECTED_POST_HANDLER_TIMEOUT_SECONDS,
     )
     from app.modules.tasks.api.assignment_invalidation import ASSIGNMENT_INVALIDATION_EVENT
     from app.modules.tasks.api.revision_exhaustion import REVISION_EXHAUSTED_EVENT
@@ -196,7 +195,8 @@ def production_outbox_delivery(
     ))
     post_options = DeliveryOptions(
         lease_seconds=SELECTED_POST_DELIVERY_LEASE_SECONDS,
-        handler_timeout_seconds=SELECTED_POST_HANDLER_TIMEOUT_SECONDS,
+        handler_timeout_seconds=None,
+        background_heartbeat=True,
     )
     event_options = {
         ("SubmissionFinalizationRequested", 1): finalization_options,
