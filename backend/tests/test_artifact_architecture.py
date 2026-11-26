@@ -900,7 +900,8 @@ def test_submission_intake_metadata_never_carries_prepared_authority() -> None:
     assert "prepared_authorization" not in fields
     assert fields["task_id"] == {"UUID"}
     assert fields["assignment_id"] == {"UUID"}
-    assert fields["predecessor_submission_id"] == {"UUID"}
+    assert set(fields) == {"task_id", "assignment_id", "feedback"}
+    assert fields["feedback"] == {"str"}
     assert "actor" not in fields
     assert "idempotency_key" not in fields
 

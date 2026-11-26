@@ -614,6 +614,14 @@ async def _assert_broker_redelivery(case, f, kill_at, result):
         assert operation.state == ("finalized" if kill_at == "after_commit" else "finalization_pending")
         assert operation.acceptance_receipt == case.before[1]
         assert operation.finalized_submission_id == marker["submission_id"]
+        posts = list(await session.scalars(select(OutboxEvent).where(
+            OutboxEvent.project_id == f.project,
+            OutboxEvent.event_type == "PostSubmissionEvaluationRequested",
+        )))
+        assert len(posts) == (1 if kill_at == "after_commit" else 0)
+        for post in posts:
+            assert post.delivery_state == "pending" and post.attempt_count == 0
+            assert post.payload["submission_id"] == marker["submission_id"]
         return max(event.claim_expires_at, operation.continuation_expires_at), marker["submission_id"]
 
 
@@ -660,13 +668,14 @@ async def test_real_broker_redelivers_killed_finalizer_and_recovers_owner_lease(
         case.process.start()
         redelivery = await _next_broker_result(case)
         due, original_submission = await _assert_broker_redelivery(case, f, kill_at, redelivery)
+        expected_scan = 2 if kill_at == "after_commit" else 1
         await _wait_for_broker_database_time(f.factory, due)
-        assert await asyncio.to_thread(case.worker._scan_pending, case.worker.scan_pending) == {"selected": 1, "published": 1}
+        assert await asyncio.to_thread(case.worker._scan_pending, case.worker.scan_pending) == {"selected": expected_scan, "published": expected_scan}
         recovered = await _next_broker_result(case)
         assert recovered[2] == {"status": "delivery_recorded"}
         due = await _assert_broker_recovered_unknown(case, f)
         await _wait_for_broker_database_time(f.factory, due)
-        assert await asyncio.to_thread(case.worker._scan_pending, case.worker.scan_pending) == {"selected": 1, "published": 1}
+        assert await asyncio.to_thread(case.worker._scan_pending, case.worker.scan_pending) == {"selected": expected_scan, "published": expected_scan}
         finalized = await _next_broker_result(case)
         assert finalized[2] == {"status": "delivery_recorded"}
         submission = await _assert_broker_finalized_once(f, case.operation_id, case.before[1],

@@ -11235,3 +11235,79 @@ so their refusals cannot be satisfied by a globally broken import checker.
 This is precommit source verification over57c939a30, not hosted or public journey
 qualification. Root supplied architecture disposition; independent ARCH review
 of the frozen exception remains pending.
+
+
+###0092 current caller and projection alignment (2026-11-26)
+
+Intent: group the current-contract CI failures from45776768469 by owner, after
+the separate exact peer-edge/CLI format repair. Allowed twelve files: this
+record; artifacts/intake_recovery_support.py; test_submission_bundle_preparation_recovery.py;
+test_artifact_architecture.py; authorization/task_authority/test_task_commands.py;
+authorization/setup_finalization/test_catalogue.py; test_api_rate_controls.py;
+checkers/execution/test_storage.py; authorization/submission_history/test_absence.py;
+test_tasks.py; outbox/test_delivery_topology.py; and
+artifacts/test_submission_finalization_worker_loss.py. No production source,
+sharedconftest, historicalrestore/schema fixture, policy, skip, budget or new
+compatibility alias. ARCH separately owns genuine retained private-attestation
+witness and all historical schema/snapshot failures; preserve their assertions.
+
+Reconstruct current recovery input from exact stored task/assignment/feedback,
+not the enriched server command record as a caller DTO. Require exactly three
+current input fields and retire only the two obsolete removed helper parameters
+for required summary/attestation. Existing closed/bounded current coverage is
+test_metadata_canonical_fixture_and_round_trip_preserve_exact_feedback,
+test_feedback_rejects_unrepresentable_headers_without_normalization,
+test_submit_metadata_rejects_retired_inputs and
+test_frozen_values_revalidate_nested_instances_and_reject_unknown_command_fields
+in test_submission_intake_contracts.py. All other malformed locked-policy cases
+remain. Apply ledger change only if actual structural inventory demands it; no
+blind baseline update.
+
+Preserve mounted exact ordered/privacy-safe feedback and retained warning
+projection, while optional current input is feedback, not removed summary or
+attestation. Add exact new feedback history field, the approved two action IDs
+and three read-rate routes; keep independent exact inventories and mutation
+controls. Required guide documents now compare exact locked snapshot IDs,
+fixture byte hash/count/media/order and task-bound read references; never just
+nonempty. Stored checker finding message is verbatim with no invented fix.
+
+Cold dedicated-worker negative fixture must bind its existing explicit eager
+setting before importing Celery. After actual T5 commit, broker rescan legitimately
+sees one original finalizer lease plus one pending POST. Require that exact extra
+uninvoked POST and exacttwo counts only for after_commit; before_observation
+stays exactone. Keep authority/lease/source/redelivery/graph/cleanup assertions.
+Risk is fixture/projection/custody proof. QA/CI/ARCH review exact test preservation
+and stale-producer retirement; root coordinates one focused PG/broker run after
+native slotrelease. No new service or end-to-end completion claim; all work stays
+in PR708, never709.
+
+Focused current-contract pure cases passed42 in49.97s
+(/tmp/pr708-0092-current-contract-pure-v1.log), including mounted exact feedback
+and privacy bounds, current metadata canonical/bounded/retired-field guards,
+exact activated action/rate/history schema and twelve remaining malformed locked
+policy cases. The separate cold dedicated-worker test passed3 in17.05s
+(/tmp/pr708-0092-cold-worker-boundary.log); explicit eager configuration now
+precedes import, with no production default changed. Its plugin-disabled warning
+is unchanged and no async test was skipped.
+
+Guide-hint oracle binds exactly two locked originals (guide.pdf/rubric.pdf),
+snapshot item IDs, canonical fixture hash/count, order/media and task-bound read
+references. Finding history expects the actual retained diagnosis and no invented
+fix; fallback messages remain tested elsewhere. Retained optional packet warning
+projection remains a mounted-command response test, not a claim that new minimal
+input produces deprecated summary/attestation warnings. Only feedback is optional
+current input. All private path/storage fields remain forbidden.
+
+Full unchanged structural validator exits0
+(/tmp/pr708-0092-current-contract-structure.log). The two obsolete parameters
+shrink test_tasks.py by ten lines; no ledger entry for that file requires refresh,
+and no policy/debt file changed. Ruff and whitespace pass. Exactly twelve scoped
+files; privacy test and seed helpers, historical migrations and conftest untouched.
+
+Runtime evidence remains pending: the current accepted-recovery helper consumers,
+real guide-hint/source metadata and stored finding history, and the changed
+after_commit Redis/worker rescan assertions have not been executed on this
+candidate. Root explicitly holds heavy PG/broker work while native journey has
+priority. No source/provider/authorization owner was mocked or changed to make
+their future run pass. This clean source checkpoint is for review and later
+focused execution, not a complete QA/CI/deployed-journey verdict.

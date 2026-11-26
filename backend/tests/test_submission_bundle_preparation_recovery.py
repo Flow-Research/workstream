@@ -86,7 +86,7 @@ async def test_mounted_submission_returns_exact_ordered_bounded_feedback() -> No
     payload = response.json()
     assert set(payload) == {"error"}
     assert payload["error"]["code"] == "pre_submission_checker_failed"
-    assert payload["error"]["message"] == "pre_submission_checker_failed"
+    assert payload["error"]["message"] == "The ZIP did not pass the pre-submission checks"
     assert payload["error"]["retryable"] is False
     assert payload["error"]["details"] == {
         "status": "failed",
@@ -163,8 +163,8 @@ async def test_mounted_submission_preserves_non_feedback_error_boundaries(
 
 
 @pytest.mark.asyncio
-async def test_mounted_submission_keeps_missing_optional_packet_text_warning_only() -> None:
-    """Missing summary and attestation reach PRE as empty warning-only values."""
+async def test_mounted_submission_keeps_feedback_optional_and_projects_retained_warnings() -> None:
+    """Current optional feedback preserves returned retained warning facts."""
     from datetime import UTC, datetime
 
     async def accept(metadata, chunks, **kwargs):
@@ -180,8 +180,8 @@ async def test_mounted_submission_keeps_missing_optional_packet_text_warning_onl
     response = await _mounted_submission_response(command=command, packet_text=False)
     assert response.status_code == 202
     submitted = command.submit.await_args.args[0]
-    assert submitted.summary == ""
-    assert submitted.contributor_attestation == ""
+    assert submitted.feedback is None
+    assert set(type(submitted).model_fields) == {"task_id", "assignment_id", "feedback"}
     warnings = [item["warning_code"] for item in response.json()["pre_submission_results"]
                 if item["status"] == "warning"]
     assert warnings == ["submission_summary_missing", "submission_attestation_missing"]

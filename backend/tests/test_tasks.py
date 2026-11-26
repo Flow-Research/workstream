@@ -390,16 +390,6 @@ async def test_task_repository_delegates_audit_persistence() -> None:
         ("_policy_object", ({"rules": []}, "rules"), "effective_policy.rules"),
         ("_optional_policy_text", ({"note": ""}, "note"), "effective_policy.note"),
         ("_optional_policy_non_negative_int", ({"limit": -1}, "limit"), "effective_policy.limit"),
-        (
-            "_required_packet_fields",
-            ({"required_packet_fields": "summary"},),
-            "effective_policy.required_packet_fields",
-        ),
-        (
-            "_required_packet_fields",
-            ({"required_packet_fields": [""]},),
-            "effective_policy.required_packet_fields",
-        ),
         ("_policy_rule_text", ([], "path", "files"), "effective_policy.files"),
         (
             "_policy_rule_text",

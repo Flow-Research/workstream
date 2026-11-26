@@ -1,6 +1,7 @@
 """Real task HTTP transitions; identity tokens do not grant project authority."""
 
 from uuid import uuid4
+import hashlib
 
 import pytest
 from sqlalchemy import func, select
@@ -10,6 +11,7 @@ from app.db import session as db_session
 from app.modules.actors.models import ActorIdentityLink, ActorProfile, LegacyWorkflowEligibility
 from app.modules.actors.service import ActorService, IdentityLinkRevoked
 from app.modules.authorization.models import ProjectRoleGrant
+from app.modules.projects.models import GuideSourceSnapshotItem
 from app.modules.authorization.runtime import AuthorizationEvidenceUnavailable
 from app.modules.authorization.task_authorization import PreparedTaskAuthorization
 from app.modules.tasks.api import TaskAuthorityDenied
@@ -28,6 +30,7 @@ from tests.test_tasks import (
     auth_headers,
     set_dev_actor,
 )
+from tests.projects.guide_compilation.helpers import SOURCE_BYTES
 from tests.authorization.task_authority.test_lifecycle_races import (
     _read_task_contributor_race_snapshot,
 )
@@ -100,6 +103,10 @@ async def test_project_grant_drives_claim_and_current_action_hints(task_client, 
     async with db_session.get_session_factory()() as session:
         untouched = await session.get(WorkstreamTask, task_id)
         assert untouched.status == "ready" and untouched.assigned_to is None
+        locked_documents = list(await session.scalars(select(GuideSourceSnapshotItem).where(
+            GuideSourceSnapshotItem.source_snapshot_id == untouched.locked_guide_source_snapshot_id,
+            GuideSourceSnapshotItem.source_kind == "document",
+        ).order_by(GuideSourceSnapshotItem.item_order)))
         assert (
             await session.scalar(select(TaskAssignment).where(TaskAssignment.task_id == task_id))
             is None
@@ -115,7 +122,15 @@ async def test_project_grant_drives_claim_and_current_action_hints(task_client, 
     context = await task_client.get(f"/api/v1/tasks/{task_id}/work-context", headers=auth_headers())
     assert context.status_code == 200, context.text
     assert context.json()["lifecycle"] == {"assigned_to_current_actor": False, "next_actions": ["claim"]}
-    assert context.json()["guide_documents"] == []
+    assert [(item.source_label, item.item_order) for item in locked_documents] == [
+        ("guide.pdf", 0), ("rubric.pdf", 1),
+    ]
+    assert context.json()["guide_documents"] == [{
+        "document_id": str(item.id), "label": item.source_label, "order": item.item_order,
+        "media_type": "application/pdf", "sha256": "sha256:" + hashlib.sha256(SOURCE_BYTES).hexdigest(),
+        "byte_count": len(SOURCE_BYTES),
+        "read_reference": f"/api/v1/tasks/{task_id}/guide/documents/{item.id}/content",
+    } for item in locked_documents]
     claimed = await task_client.post(f"/api/v1/tasks/{task_id}/claim", headers=auth_headers())
     assert claimed.status_code == 200, claimed.text
     assert claimed.json()["assignment"]["contributor_id"] == actor_id

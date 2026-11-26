@@ -275,10 +275,11 @@ def test_dedicated_worker_rejects_foreign_registered_delivery_before_owner_io(
 ):
     from app.core.config import get_settings
     from app.workers import source_cleanup_topology as boundary
-    from app.workers.celery_app import create_celery_app
 
     monkeypatch.setenv("WORKSTREAM_CELERY_TASK_ALWAYS_EAGER", "true")
     get_settings.cache_clear()
+    from app.workers.celery_app import create_celery_app
+
     app = create_celery_app()
     monkeypatch.setattr(boundary, "_selected_queue_parent", os.getpid())
     monkeypatch.setattr(boundary, "_selected_queue", selected)

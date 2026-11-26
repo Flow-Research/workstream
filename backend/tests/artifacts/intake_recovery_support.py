@@ -38,7 +38,8 @@ async def recovery_intake(admission_intake, tmp_path):
     async with f.factory() as session:
         row = await session.get(SubmissionIntakeOperation, str(owner.operation_id))
         event_id = UUID(row.finalization_event_id)
-        metadata = SubmissionIntakeMetadata.model_validate_json(json.dumps(row.command_metadata))
+        metadata = SubmissionIntakeMetadata(task_id=UUID(row.task_id), assignment_id=UUID(row.assignment_id),
+                                            feedback=row.command_metadata["feedback"])
         intake_key = UUID(row.idempotency_key)
     async def lost(_envelope):
         raise RuntimeError("lost original finalizer")
