@@ -713,3 +713,114 @@ async def test_selected_pre_sql_validates_received_failure_receipt(isolated_data
                     await invoke()
     finally:
         await engine.dispose()
+
+
+@pytest.mark.parametrize("authorization_delay, commit_delay", [(0, 0), (40, 0), (40, 90)])
+async def test_source_read_deadline_charges_authorization_once(monkeypatch, authorization_delay, commit_delay):
+    """Slow authority must not shorten, or a slow commit extend, the stored expiry."""
+    import asyncio
+    from contextlib import asynccontextmanager
+    from dataclasses import replace
+    from types import SimpleNamespace
+    from app.modules.artifacts import selected_pre_submit_execution as source_reads
+    from app.modules.checkers.api.selected_pre_submit import (
+        SelectedPreSubmitInfrastructureUnavailable, SelectedPreSubmitLeaseFacts,
+    )
+    from tests.checkers.external.test_selected_pre_submit_coordination import _source_reservation
+    start = asyncio.get_running_loop().time()
+    elapsed = [0.0]
+    wall_start = datetime.now(UTC)
+    expires = wall_start + timedelta(seconds=120)
+    request = replace(_source_reservation(), pre_deadline_at=expires,
+                      source_contracts=source_reads.ArtifactPreSubmitSourceContracts())
+    lease = SelectedPreSubmitLeaseFacts(request, new_record_id(), 1, expires)
+    facts = source_reads.source_read_facts(lease)
+
+    class ClockDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return wall_start + timedelta(seconds=elapsed[0])
+
+    class ClockAsyncio:
+        def __getattr__(self, name):
+            return getattr(asyncio, name)
+
+        def get_running_loop(self):
+            return SimpleNamespace(time=lambda: start + elapsed[0])
+
+    class Session:
+        active = False
+
+        def in_transaction(self):
+            return self.active
+
+        @asynccontextmanager
+        async def begin(self):
+            self.active = True
+            try:
+                yield
+            finally:
+                elapsed[0] += commit_delay
+                self.active = False
+
+        async def scalar(self, _query):
+            # The database samples between send and receive. Sampling monotonic
+            # before this query conservatively charges its round trip.
+            elapsed[0] += 1
+            observed = wall_start + timedelta(seconds=elapsed[0])
+            elapsed[0] += 1
+            return observed
+
+    session = Session()
+    closed = []
+
+    class Authority:
+        async def prepare(self, **_kwargs):
+            elapsed[0] += authorization_delay
+            return object()
+
+        async def consume(self, **_kwargs):
+            assert session.in_transaction()
+
+        def close(self):
+            closed.append(True)
+
+    class Sources:
+        async def lock_pre_source(self, **_kwargs):
+            return SimpleNamespace(**{
+                name: getattr(facts, name) for name in (
+                    "source", "project_id", "task_id", "assignment_id", "actor_profile_id",
+                    "identity_link_id", "metadata_sha256", "locked_context_sha256", "pre_deadline_at",
+                )
+            }, lease_id=facts.foreground_lease_id, lease_generation=facts.foreground_lease_generation,
+                lease_expires_at=expires)
+
+    observed_reads = []
+
+    class Store:
+        async def open_source(self, source, **_kwargs):
+            assert not session.in_transaction() and source == request.source
+            observed_reads.append(True)
+            yield b"x" * source.raw_byte_count
+
+    monkeypatch.setattr(source_reads, "asyncio", ClockAsyncio())
+    monkeypatch.setattr(source_reads, "datetime", ClockDateTime)
+    reader = source_reads.SelectedPreSubmitSourceReads(
+        session=session, sources=Sources(), authority=Authority(), store=Store(),
+    )
+    capability = SimpleNamespace(consume=lambda **_kwargs: lease)
+    if commit_delay:
+        with pytest.raises(SelectedPreSubmitInfrastructureUnavailable, match="material_unavailable"):
+            async with reader.issue(lease=lease, execution_authority=capability):
+                pytest.fail("expired commit issued a source grant")
+        assert not observed_reads
+    else:
+        async with reader.issue(lease=lease, execution_authority=capability) as grant:
+            elapsed[0] = 90
+            stream = grant.open_source(lease=lease)
+            assert await anext(stream) == b"x" * request.source.raw_byte_count
+            elapsed[0] = 120
+            with pytest.raises(SelectedPreSubmitInfrastructureUnavailable, match="material_unavailable"):
+                await anext(stream)
+        assert observed_reads == [True]
+    assert closed == [True]

@@ -13011,3 +13011,28 @@ otherwise valid 100-byte source with a stored 1,024-byte allowance under an
 approved 256-byte compressed cap. The separate missing and widened cases
 reconstruct the supplied digest to exercise the binding rather than a stale
 digest failure.
+
+### Preserve the remaining PRE source-read deadline after authorization
+
+The source-read grant sampled its monotonic start before authorization and locks,
+but paired that start with a later database wall-clock reading. Authorization
+latency was therefore deducted twice, allowing `material_unavailable` before
+the recorded PRE deadline. This bounded repair changes only the source-read
+clock pairing and a deterministic service regression: sample monotonic time
+immediately before the database clock query. Query/commit time remains charged,
+and the absolute stored expiry and every authorization/custody check remain.
+No configured timeout, source identity, policy, SQL guard or runtime changes.
+Security review focuses on not extending the durable expiry; verification must
+show delayed authorization still permits a current read, elapsed commit time
+cannot mint a stale grant, and expiry still refuses additional reads. The
+observed hosted large-source failure is not attributed to this bug without
+matching authorization timing evidence.
+
+The deterministic service regression failed only the delayed-authorization case
+on the preceding code (one failure, two passes), then passed all three cases with
+the clock pairing repaired. It verifies reading at 90 seconds after a 40-second
+authorization delay, refusal at the unchanged 120-second expiry, and refusal to
+issue a grant after an expired commit. This is clock/owner service proof, not a
+new PostgreSQL or native-runtime claim. The hosted failed operation's materialize
+audit occurred about 0.125 seconds after PRE started, so it does not establish
+that this clock defect caused the observed large-input failure.

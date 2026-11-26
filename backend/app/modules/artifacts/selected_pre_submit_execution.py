@@ -155,7 +155,6 @@ class SelectedPreSubmitSourceReads:
         if checked != lease:
             raise SelectedPreSubmitInfrastructureUnavailable("material_unavailable")
         facts = source_read_facts(lease)
-        started = asyncio.get_running_loop().time()
         grant = None
         try:
             async with self._session.begin():
@@ -171,10 +170,13 @@ class SelectedPreSubmitSourceReads:
                         or live.lease_generation != facts.foreground_lease_generation):
                     raise SelectedPreSubmitInfrastructureUnavailable("material_unavailable")
                 expires_at = min(live.lease_expires_at, lease.lease_expires_at, live.pre_deadline_at)
+                # Pair clocks after authority/lock waits; sample before the query
+                # so its round trip and the following commit cannot extend expiry.
+                sampled_monotonic = asyncio.get_running_loop().time()
                 now = await self._session.scalar(select(func.clock_timestamp()))
                 if now is None or expires_at <= now:
                     raise SelectedPreSubmitInfrastructureUnavailable("material_unavailable")
-                deadline = started + (expires_at - now).total_seconds()
+                deadline = sampled_monotonic + (expires_at - now).total_seconds()
                 await self._authority.consume(prepared_authorization=handle, facts=facts)
             # No grant exists if commit fails, including a lost acknowledgement.
             grant = _PreSubmitSourceGrant._issued(self, lease, expires_at, deadline)
