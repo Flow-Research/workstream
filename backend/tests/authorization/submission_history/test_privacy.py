@@ -26,8 +26,8 @@ async def test_fixed_projection_and_selected_columns(task_client, monkeypatch, s
     submission = await seed_retained_submission(task["id"], complete_submission_payload())
     run = await seed_retained_checker_run(submission, state=state, verdict=verdict)
     async with db_session.get_session_factory()() as session:
-        private_attestation = (await session.get(Submission, submission)).worker_attestation
-        assert private_attestation
+        private_package_uri = (await session.get(Submission, submission)).package_uri
+        assert private_package_uri
     captured = []
     def capture(conn, cursor, statement, parameters, context, executemany):
         compiled = getattr(context, "compiled", None)
@@ -42,7 +42,7 @@ async def test_fixed_projection_and_selected_columns(task_client, monkeypatch, s
                 captured.clear()
                 response = await task_client.get(path, headers=auth_headers())
                 assert response.status_code == 200, response.text
-                assert private_attestation not in response.text
+                assert private_package_uri not in response.text
                 value = response.json()
                 item = value["items"][0] if action.endswith("list") else value
                 checker = "checker" in action

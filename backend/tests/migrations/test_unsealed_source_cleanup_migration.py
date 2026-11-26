@@ -1,5 +1,6 @@
 """Upgrade real predecessor cleanup claims without rewriting their authority."""
 import asyncio
+from contextlib import asynccontextmanager
 from datetime import timedelta
 from uuid import UUID
 
@@ -20,6 +21,21 @@ from tests.conftest import _drop_test_database_schema
 from tests.migration_fixtures import _config, current_schema_revision
 
 pytestmark = pytest.mark.postgres_schema_contract
+
+
+@asynccontextmanager
+async def predecessor_submission_read_projection(intake):
+    """Allow current fixture reads, then restore the exact predecessor schema."""
+    async with intake.engine.begin() as connection:
+        await connection.execute(text("ALTER TABLE public.submissions ADD COLUMN feedback text"))
+    try:
+        yield
+    finally:
+        async with intake.engine.begin() as connection:
+            assert await connection.scalar(text(
+                "SELECT count(*) FROM public.submissions WHERE feedback IS NOT NULL"
+            )) == 0
+            await connection.execute(text("ALTER TABLE public.submissions DROP COLUMN feedback"))
 
 
 @pytest.fixture(autouse=True, params=["0087_source_cleanup_candidates", "0088_unsealed_source_cleanup"])
@@ -57,33 +73,34 @@ async def retained_rows(factory, *, new_columns=()):
 
 
 async def test_upgrade_preserves_sealed_claims_charges_and_audit_decisions(intake, predecessor_schema):
-    await provision_post_submit_service(intake.factory, ServiceIdentity.ARTIFACT_SOURCE_CLEANUP)
     claims = []
-    for confirmed in (False, True):
-        operation = await terminal_source(intake)
-        await age_fixture(intake, operation)
-        claim_id = new_record_id()
-        async with intake.factory.begin() as session:
-            row = await session.get(SubmissionIntakeOperation, str(operation))
-            source = repository(session)._sealed_source(row).model_dump_json()
-            decision = await cleanup_decision(session, operation, claim_id)
-            # Use actual 0087 SQL guards and real authority decisions. The new
-            # Python cleanup owner cannot run against this predecessor schema.
-            await session.execute(text("INSERT INTO submission_source_cleanup_claims "
-                "(operation_id,claim_id,generation,source,claimed_at,lease_expires_at,claim_decision_id) "
-                "VALUES (:id,:claim,1,CAST(:source AS jsonb),statement_timestamp(),"
-                "statement_timestamp()+interval '5 minutes',:decision)"),
-                {"id": operation, "claim": claim_id, "source": source, "decision": decision})
-            if confirmed:
-                confirmation = await cleanup_decision(session, operation, claim_id, phase="confirm")
-                await session.execute(text("UPDATE submission_source_cleanup_claims "
-                    "SET confirmed_at=clock_timestamp(),confirmation_decision_id=:decision WHERE operation_id=:id"),
-                    {"id": operation, "decision": confirmation})
-                await session.execute(text("UPDATE submission_source_charges SET state='released',accounted_bytes=0 "
-                    "WHERE operation_id=:id"), {"id": operation})
-        claims.append((operation, claim_id, confirmed, None))
-    if predecessor_schema == "0088_unsealed_source_cleanup":
-        claims.append(await observed_version_claim(intake))
+    async with predecessor_submission_read_projection(intake):
+        await provision_post_submit_service(intake.factory, ServiceIdentity.ARTIFACT_SOURCE_CLEANUP)
+        for confirmed in (False, True):
+            operation = await terminal_source(intake)
+            await age_fixture(intake, operation)
+            claim_id = new_record_id()
+            async with intake.factory.begin() as session:
+                row = await session.get(SubmissionIntakeOperation, str(operation))
+                source = repository(session)._sealed_source(row).model_dump_json()
+                decision = await cleanup_decision(session, operation, claim_id)
+                # Use actual 0087 SQL guards and real authority decisions. The new
+                # Python cleanup owner cannot run against this predecessor schema.
+                await session.execute(text("INSERT INTO submission_source_cleanup_claims "
+                    "(operation_id,claim_id,generation,source,claimed_at,lease_expires_at,claim_decision_id) "
+                    "VALUES (:id,:claim,1,CAST(:source AS jsonb),statement_timestamp(),"
+                    "statement_timestamp()+interval '5 minutes',:decision)"),
+                    {"id": operation, "claim": claim_id, "source": source, "decision": decision})
+                if confirmed:
+                    confirmation = await cleanup_decision(session, operation, claim_id, phase="confirm")
+                    await session.execute(text("UPDATE submission_source_cleanup_claims "
+                        "SET confirmed_at=clock_timestamp(),confirmation_decision_id=:decision WHERE operation_id=:id"),
+                        {"id": operation, "decision": confirmation})
+                    await session.execute(text("UPDATE submission_source_charges SET state='released',accounted_bytes=0 "
+                        "WHERE operation_id=:id"), {"id": operation})
+            claims.append((operation, claim_id, confirmed, None))
+        if predecessor_schema == "0088_unsealed_source_cleanup":
+            claims.append(await observed_version_claim(intake))
     before = await retained_rows(intake.factory)
     await intake.engine.dispose()
     await asyncio.to_thread(command.upgrade, _config(), current_schema_revision())

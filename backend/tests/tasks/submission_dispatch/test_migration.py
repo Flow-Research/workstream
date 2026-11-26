@@ -42,7 +42,7 @@ async def test_upgrade_preserves_retained_owners_without_backfill(tmp_path, isol
                     "outbox_events": {"not_before_at"},
                     "submissions": {
                         "selected_post_submit_policy_sha256", "selected_post_submit_policy_body",
-                        "attempt_status", "status_reason", "decided_at", "updated_at",
+                        "attempt_status", "status_reason", "decided_at", "updated_at", "feedback",
                     },
                     "task_assignments": {"started_at", "updated_at"},
                     "checker_runs": {

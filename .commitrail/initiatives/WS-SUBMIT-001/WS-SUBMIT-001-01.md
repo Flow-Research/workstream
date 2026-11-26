@@ -11311,3 +11311,16 @@ candidate. Root explicitly holds heavy PG/broker work while native journey has
 priority. No source/provider/authorization owner was mocked or changed to make
 their future run pass. This clean source checkpoint is for review and later
 focused execution, not a complete QA/CI/deployed-journey verdict.
+
+### Retained 0092 history fixture correction
+
+The historical migration probes keep their predecessor schemas and rows intact.
+Where current test owners construct an older cleanup or revision source, a
+null-only `submissions.feedback` read projection is removed before the real
+upgrade; the migration snapshots then require the actual 0092 column to be
+null and preserve every preceding field. The current HTTP history privacy
+fixture uses its still-stored private package URI as the nonleak witness. A
+separate checksum-bound 0024 archive exercises the genuine old private
+attestation after upgrade through the current fixed history projection.
+These fixture changes do not relax runtime custody, authorization, or SQL
+guards. Focused PostgreSQL replay and final evidence remain pending.

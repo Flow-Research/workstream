@@ -139,15 +139,21 @@ def _admission_archive():
     return snapshots
 
 
-async def _retained_rows_and_functions(url, tables):
+async def _retained_rows_and_functions(url, tables, *, current_feedback=False):
     """Compare all captured nonempty tables and all public function definitions."""
     connection = await asyncpg.connect(url.replace('+asyncpg', ''))
     try:
         rows = {}
         for table in tables:
             if table != 'alembic_version':
+                value = 'to_jsonb(r)'
+                if current_feedback and table == 'submissions':
+                    assert await connection.fetchval(
+                        'SELECT count(*) FROM public.submissions WHERE feedback IS NOT NULL'
+                    ) == 0
+                    value += "-'feedback'"
                 rows[table] = await connection.fetchval(
-                    f'SELECT coalesce(jsonb_agg(to_jsonb(r) ORDER BY to_jsonb(r)::text),\'[]\')::text FROM public."{table}" r'
+                    f'SELECT coalesce(jsonb_agg({value} ORDER BY ({value})::text),\'[]\')::text FROM public."{table}" r'
                 )
         functions = dict(await connection.fetch("""SELECT p.oid::regprocedure::text, pg_get_functiondef(p.oid)
             FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
@@ -242,7 +248,9 @@ async def test_source_binding_cutover_preserves_history_and_closes_old_consumpti
             assert set(old_functions) == set(new_functions)
             assert {k for k in old_functions if old_functions[k] != new_functions[k]} == {'guard_submission_bundle_admission_lineage()'}
             await asyncio.to_thread(command.upgrade, _config(), current_schema_revision())
-            current_rows, _ = await _retained_rows_and_functions(isolated_database_env, snapshot['tables'])
+            current_rows, _ = await _retained_rows_and_functions(
+                isolated_database_env, snapshot['tables'], current_feedback=True,
+            )
             assert current_rows == after
             if state == 'ready':
                 await _refuse_old_consumption_and_allow_stale(
