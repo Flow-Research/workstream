@@ -11906,3 +11906,18 @@ checker coverage gaps, disabled delivery and POST provider infrastructure
 failure. Isolated database and role cleanup completed. These cases and the
 four delivery cases qualify the local routing and recovery boundaries. Live
 qualification still requires the verified sender and designated test mailbox.
+
+
+### Narrow parser cache repair; preserve exact source verification
+
+The bytecode-verifier approach is superseded. Raw marshal encodings differed
+for valid uv caches; normalized encodings do not prove reference identity.
+A disposable derivative retained only standard-library and third-party caches,
+removing Workstream app/shared caches. Under the exact existing hardened parser
+configuration, both UIDs parsed both originals in 0.533–0.657 CPU seconds; both
+real socket calls and production source-cited PRE/POST compilation passed.
+Receipt: `/tmp/workstream-parser-stdlib-only/proof.log`. The owned container was
+removed; the running parser was unchanged. The release recipe now uses this
+narrow cache scope. Original verifier and counterexample tests are restored
+exactly; there is no new bytecode admission or source-inventory exception.
+Actual recipe image build and verification remain required.

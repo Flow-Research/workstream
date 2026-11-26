@@ -5,9 +5,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import importlib.metadata
-import importlib.util
 import json
-import marshal
 import os
 from pathlib import Path
 import re
@@ -55,36 +53,12 @@ def file_hash(path: Path) -> str:
         return hashlib.sha256(content).hexdigest()
 
 
-def validate_source_cache(path: Path) -> None:
-    """Accept only fresh canonical bytecode compiled from its retained source."""
-    source = Path(importlib.util.source_from_cache(str(path)))
-    require(str(path) == importlib.util.cache_from_source(str(source)), "source cache path differs")
-    info = source.lstat()
-    require(stat.S_ISREG(info.st_mode), "source cache has no regular source")
-    require(info.st_size <= MAX_BYTES, "source cache input exceeds limit")
-    raw, content = path.read_bytes(), source.read_bytes()
-    require(len(raw) >= 16 and raw[:4] == importlib.util.MAGIC_NUMBER, "source cache header differs")
-    flags = int.from_bytes(raw[4:8], "little")
-    require(flags in {0, 1, 3}, "source cache flags differ")
-    if flags & 1:
-        require(raw[8:16] == importlib.util.source_hash(content), "source cache is stale")
-    else:
-        require(
-            int.from_bytes(raw[8:12], "little") == int(info.st_mtime) & 0xFFFFFFFF
-            and int.from_bytes(raw[12:16], "little") == len(content),
-            "source cache is stale",
-        )
-    expected = compile(content, str(source), "exec", dont_inherit=True, optimize=0)
-    require(raw[16:] == marshal.dumps(expected), "source cache code differs")
-
-
 def source_inventory(root: Path, shared_root: Path | None = None) -> dict[str, str]:
     found: dict[str, str] = {}
     total = 0
-    visited = 0
 
     def visit(path: Path, base: Path, prefix: str = "") -> None:
-        nonlocal total, visited
+        nonlocal total
         info = path.lstat()
         require(not stat.S_ISLNK(info.st_mode), "source symlink refused")
         if stat.S_ISDIR(info.st_mode):
@@ -93,11 +67,7 @@ def source_inventory(root: Path, shared_root: Path | None = None) -> dict[str, s
             return
         require(stat.S_ISREG(info.st_mode), "source special file refused")
         total += info.st_size
-        visited += 1
-        require(visited <= MAX_FILES and total <= MAX_BYTES, "source inventory limit")
-        if path.suffix == ".pyc":
-            validate_source_cache(path)
-            return
+        require(len(found) < MAX_FILES and total <= MAX_BYTES, "source inventory limit")
         found[prefix + str(path.relative_to(base))] = file_hash(path)
 
     for relative in SOURCE_PATHS:

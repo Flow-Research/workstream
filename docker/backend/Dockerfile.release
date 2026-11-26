@@ -43,7 +43,10 @@ RUN --mount=type=cache,target=/root/.cache/uv \
         *) echo "WORKSTREAM_PROJECT_AGENT_SDK_ENVIRONMENT must be agents or omnicore" >&2; exit 1 ;; \
     esac \
     && uv sync --locked --extra "${WORKSTREAM_PROJECT_AGENT_SDK_ENVIRONMENT}" --no-dev --no-editable --compile-bytecode \
-    && python -m compileall -q -j 2 /usr/local/lib/python3.12 /workspace/backend/app \
+    && python -m compileall -q -j 2 /usr/local/lib/python3.12 \
+    && find /opt/venv/lib/python3.12/site-packages/app \
+        /opt/venv/lib/python3.12/site-packages/workstream_external_services \
+        -type f -name '*.pyc' -delete \
     && install -d -m 0755 /etc/workstream \
     && printf '%s\n' "${WORKSTREAM_PROJECT_AGENT_SDK_ENVIRONMENT}" \
         > /etc/workstream/project-agent-sdk-environment \
