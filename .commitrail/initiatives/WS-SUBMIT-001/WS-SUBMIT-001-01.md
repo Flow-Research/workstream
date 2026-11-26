@@ -11323,4 +11323,10 @@ fixture uses its still-stored private package URI as the nonleak witness. A
 separate checksum-bound 0024 archive exercises the genuine old private
 attestation after upgrade through the current fixed history projection.
 These fixture changes do not relax runtime custody, authorization, or SQL
-guards. Focused PostgreSQL replay and final evidence remain pending.
+guards. The checksum-bound archived private-attestation projection passed in
+the first two-case replay; that run also exposed a predecessor 0088 INSERT
+using the new command metadata. A scoped fixture binder now writes the exact
+historical v1 metadata body and digest before the old guarded INSERT. The
+isolated 0088 replay passed in 131.62 seconds with schema 0092 and complete
+database cleanup (`/tmp/submission-0092-0088-v1.log` and `.json`). Other
+historical lane cases remain pending and are not represented by this receipt.
