@@ -11834,3 +11834,17 @@ cases after moving the handler composition to the TASK adapter root. The fake
 HTTP tests passed 10 cases including expiry, provider errors and redirect
 refusal. Live delivery still depends on the verified sender, the secret file
 and a designated verified recipient.
+
+
+### Release image bytecode custody
+
+The f480 host image builds completed, but source inventory verification rejected
+716 extra files. An exact inside-image comparison found only canonical Python
+cache paths, with no missing or changed source files. The parser performance
+repair deliberately generates these caches. Allowed changes: the existing
+release-image verifier, its counterexample tests and this record. Validate
+canonical cache/source correspondence, Python header freshness and compiled
+code equivalence before excluding generated caches from source-only inventory.
+Preserve rejection of symlinks, extra source, package drift and malformed or
+substituted bytecode. Reuse the existing built images for focused verification;
+no live deployment or backend behavior change is required by this repair.

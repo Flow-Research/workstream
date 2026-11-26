@@ -3,7 +3,9 @@
 import ast
 import copy
 import json
+import os
 from pathlib import Path
+import py_compile
 import re
 import sys
 import tempfile
@@ -413,6 +415,37 @@ class ReleaseImageProofTests(unittest.TestCase):
             self.assertNotEqual(proof.source_inventory(root), original)
             (root / "app/link").symlink_to(root / "uv.lock")
             with self.assertRaisesRegex(ValueError, "symlink"):
+                proof.source_inventory(root)
+
+    def test_inventory_checks_generated_bytecode_against_exact_source(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for name in proof.SOURCE_PATHS:
+                (root / name).parent.mkdir(parents=True, exist_ok=True)
+                (root / name).write_text("source")
+            (root / "app").unlink()
+            (root / "app").mkdir()
+            source = root / "app/example.py"
+            source.write_text("def value():\n    return 1\n")
+            original = proof.source_inventory(root)
+            cache = Path(py_compile.compile(str(source), doraise=True))
+            self.assertEqual(proof.source_inventory(root), original)
+
+            substitute = root / "substitute.py"
+            substitute.write_text("def value():\n    return 2\n")
+            os.utime(substitute, ns=(source.stat().st_atime_ns, source.stat().st_mtime_ns))
+            py_compile.compile(str(substitute), cfile=str(cache), dfile=str(source), doraise=True)
+            with self.assertRaisesRegex(ValueError, "source cache code differs"):
+                proof.source_inventory(root)
+
+            py_compile.compile(str(source), doraise=True)
+            cache.write_bytes(cache.read_bytes() + b"untracked payload")
+            with self.assertRaisesRegex(ValueError, "trailing bytes"):
+                proof.source_inventory(root)
+
+            py_compile.compile(str(source), doraise=True)
+            source.write_text("def value():\n    return 'changed source'\n")
+            with self.assertRaisesRegex(ValueError, "source cache is stale"):
                 proof.source_inventory(root)
 
     def test_evidence_is_closed_and_never_overwrites_a_symlink_target(self):
