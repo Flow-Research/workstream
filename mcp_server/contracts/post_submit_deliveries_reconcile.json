@@ -1,5 +1,5 @@
 {
-  "canonical_sha256": "d46d082b8e1a768b590ba01523f7ce4479bc777e5fd4ebf4d6ad289821b4c244",
+  "canonical_sha256": "acea09d2e3658a33581402b1363bac0f350d1ef2f4a1e193dfe610f168d3eb8c",
   "components": {
     "schemas": {
       "ApiError": {
@@ -94,7 +94,6 @@
                 "type": "null"
               }
             ],
-            "default": null,
             "title": "Action"
           },
           "reason": {

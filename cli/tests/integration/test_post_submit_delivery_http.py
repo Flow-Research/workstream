@@ -273,3 +273,17 @@ def test_delivery_reconcile_invalid_arguments_do_not_send(cli):
         ):
             assert invoke(cli, origin, "reconcile", *args).returncode != 0
         assert not requests
+
+
+def test_explicit_abandonment_binds_action_to_unknown_successor(cli):
+    with http_fixture() as (origin, response, requests):
+        unresolved = receipt()
+        unresolved["source"]["classification"] = "unresolved"
+        unresolved["successor"]["classification"] = "unresolved"
+        response.update(status=201, body=json.dumps(unresolved).encode())
+        args = ("reconcile", PROJECT, EVENT, "--reason", "Expired unresolved run",
+                "--idempotency-key", KEY)
+        assert invoke(cli, origin, *args, "--abandon-unknown").returncode == 0
+        assert response["commands"][0][2]["action"] == "abandon_unknown"
+        assert invoke(cli, origin, *args).returncode != 0
+        assert len(requests) == 2
