@@ -12768,3 +12768,28 @@ An online preflight database snapshot is retained at
 `a2d8d08dda64d804c3a73dbd6b0206ef73d84dd62cafdc96ea601758596a0e19`.
 pg_restore list verifies its archive structure, not a full restore. This is not
 a quiesced final cutover backup; take a fresh backup after draining producers.
+
+### Observe approved originals and live pending assignment activity
+
+Allowed scope. Extend the maintained CLI journey's task, submission and
+bootstrap checks and their focused regressions. Reuse the current isolated
+worker controls. The real state and existing public transport stay the
+qualification boundary. No API, queue, runner or identity changes.
+
+Acceptance. Before claim, the exact contributor reads the approved project
+and ready-task guide, verifies both originals for each public view, and sees
+concealed refusal for a contributor to another project. Claim retains the
+same locked guide. For the first accepted source, park only the fixture POST
+consumer and let the dedicated finalizer complete the exact Submission.
+Verify assignment-ID pending processing and PRE feedback through the built CLI
+and optional installed MCP, then resume the worker and finish normal revision.
+
+39 focused journey cases passed. The guide regression checks two real route
+selectors with distinct download references, denies claim after changed
+identity or bytes, and verifies the locked manifest after claim. The pending
+regression refuses unfinalized intake and operation substitution. During the
+connected fixture the existing graceful POST-worker control stops before any
+accepted source exists. Only a successful pending check restarts it. The outer
+runtime owns teardown on failure while the dedicated scanner and finalizer
+remain active. These cases verify the maintained proof owners. The new native
+preclaim and pending checks still need a matching terminal journey receipt.

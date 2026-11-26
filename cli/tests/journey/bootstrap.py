@@ -5,8 +5,9 @@ Run inside run_isolated_tests.py. This stage is not full journey certification.
 
 from __future__ import annotations
 
+import asyncio
 import base64
-from contextlib import ExitStack
+from contextlib import ExitStack, contextmanager
 import json
 import os
 from pathlib import Path
@@ -44,6 +45,14 @@ from run_isolated_tests import NAME_RE  # noqa: E402
 from urllib.parse import urlsplit  # noqa: E402
 
 ACTORS = ("administrator", "manager", "finance", "operator", "alice", "bob")
+
+
+@contextmanager
+def pause_post_delivery(stop, start):
+    """Pause the owned effect worker before POST exists; fail into runtime cleanup."""
+    stop()
+    yield
+    asyncio.run(start())
 
 
 def public_actors(client, tokens):
@@ -416,7 +425,7 @@ def main():
                             str(uuid4()),
                         )
                     project_id = project["id"]
-                    start_workers()
+                    post_worker = start_workers()
                     publish_unpaid_terms(client, tokens["finance"], project_id)
                     guide_id = configure_guide(client, tokens, project_id)
                     approve_and_activate(
@@ -446,7 +455,7 @@ def main():
                         if activation.returncode:
                             raise RuntimeError("documented lifecycle activation failed")
                         task_id, assignment_id, grant = claim_and_read(
-                            client, tokens, actors, project_id
+                            client, tokens, actors, project_id, guide_id
                         )
                         client.complete_stage("task_claim_and_guide")
                         if pre_qualification is not None:
@@ -469,6 +478,7 @@ def main():
                                 task_id,
                                 assignment_id,
                                 grant,
+                                post_delivery_pause=pause_post_delivery(*post_worker),
                                 mcp=mcp,
                             )
                             client.complete_stage(

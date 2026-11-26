@@ -194,11 +194,56 @@ def _pre_missing_has_no_submission(client, token, task_id, assignment_id, *, mcp
         raise AssertionError("PRE status lacks the exact actionable finding")
 
 
-def _require_revision(client, token, project_id, task_id, assignment_id, *, mcp=None):
+def _require_pending_assignment(
+    client, token, task_id, assignment_id, receipt, submission_id, *, mcp=None
+):
+    status = _assignment_status(client, token, task_id, assignment_id, mcp=mcp)
+    intake, latest = status["intake"], status["assignment"]["latest_submission"]
+    if (
+        status["current_status"] != "evaluation_pending"
+        or status["next_action"] != "awaiting_evaluation"
+        or status["post_submission_results"]
+        or status["accepted_evidence"] is not None
+        or status["feedback_submission_id"] not in (None, submission_id)
+        or intake is None
+        or latest is None
+        or intake["stage"] != "evaluation_pending"
+        or intake["operationally_stalled"]
+        or intake["submission_id"] != submission_id
+        or intake["operation_id"] != receipt["operation_id"]
+        or intake["pre_submission_results"] != receipt["pre_submission_results"]
+        or latest["submission_id"] != submission_id
+        or latest["status"] != "evaluation_pending"
+    ):
+        raise AssertionError(
+            "pending assignment differs from its exact finalized source"
+        )
+
+
+def _require_revision(
+    client, token, project_id, task_id, assignment_id, *, post_delivery_pause, mcp=None
+):
     archive = _package(client, "incorrect")
-    key, receipt = _submit(client, token, task_id, assignment_id, archive)
+    with post_delivery_pause:
+        key, receipt = _submit(client, token, task_id, assignment_id, archive)
+        pending = _wait_for_stage(
+            client, token, task_id, key, receipt, "evaluation_pending"
+        )
+        _require_pending_assignment(
+            client,
+            token,
+            task_id,
+            assignment_id,
+            receipt,
+            pending["submission_id"],
+            mcp=mcp,
+        )
     observed = _wait_for_stage(client, token, task_id, key, receipt, "needs_revision")
     submission_id = observed["submission_id"]
+    if submission_id != pending["submission_id"]:
+        raise AssertionError(
+            "pending assignment and POST revision refer to different submissions"
+        )
     status = _assignment_status(client, token, task_id, assignment_id, mcp=mcp)
     revision = status["assignment"]["revision"]
     if (
@@ -258,12 +303,27 @@ def observe_review_pending(client, tokens, project_id, task_id, assignment_id):
 
 
 def submit_and_observe(
-    client, tokens, actors, project_id, task_id, assignment_id, grant, *, mcp=None
+    client,
+    tokens,
+    actors,
+    project_id,
+    task_id,
+    assignment_id,
+    grant,
+    *,
+    post_delivery_pause,
+    mcp=None,
 ):
     token = tokens["alice"]
     _pre_missing_has_no_submission(client, token, task_id, assignment_id, mcp=mcp)
     predecessor = _require_revision(
-        client, token, project_id, task_id, assignment_id, mcp=mcp
+        client,
+        token,
+        project_id,
+        task_id,
+        assignment_id,
+        post_delivery_pause=post_delivery_pause,
+        mcp=mcp,
     )
     archive = _package(client, "correct")
     archive_hash = "sha256:" + hashlib.sha256(archive.read_bytes()).hexdigest()

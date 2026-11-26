@@ -148,6 +148,44 @@ def test_exact_assignment_read_rejects_mcp_feedback_substitution(journey):
         )
 
 
+@pytest.mark.parametrize("fault", [None, "early", "different_source"])
+def test_assignment_pending_binds_completed_finalization(journey, fault):
+    status = {
+        "assignment": {
+            "assignment_id": "assignment-1",
+            "task_id": "task-1",
+            "latest_submission": {
+                "submission_id": "submission-1",
+                "status": "evaluation_pending",
+            },
+        },
+        "current_status": "evaluation_pending",
+        "next_action": "awaiting_evaluation",
+        "post_submission_results": [],
+        "accepted_evidence": None,
+        "feedback_submission_id": None,
+        "intake": {
+            "stage": "evaluation_pending",
+            "operationally_stalled": False,
+            "submission_id": "submission-1",
+            "operation_id": "operation-1",
+            "pre_submission_results": PENDING["pre_submission_results"],
+        },
+    }
+    if fault == "early":
+        status["intake"]["stage"] = "finalization_pending"
+    elif fault == "different_source":
+        status["intake"]["operation_id"] = "operation-2"
+    cli = Client(status, status)
+    mcp = SimpleNamespace(call=lambda *_: status)
+    args = (cli, "token", "task-1", "assignment-1", PENDING, "submission-1")
+    if fault:
+        with pytest.raises(AssertionError, match="exact finalized source"):
+            journey._require_pending_assignment(*args, mcp=mcp)
+    else:
+        journey._require_pending_assignment(*args, mcp=mcp)
+
+
 def test_mcp_renewal_uses_rotated_grant_and_exact_resource(monkeypatch):
     spec = importlib.util.spec_from_file_location(
         "journey_refresh_client", PATH.with_name("client.py")
