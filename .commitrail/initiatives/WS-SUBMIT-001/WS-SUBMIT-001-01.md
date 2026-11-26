@@ -11805,3 +11805,18 @@ transport status mapping, bounded delivery, and queue isolation. Focused
 security, architecture, QA and operating documentation review are required.
 Human review focuses on verified recipient evidence, email wording and the
 configured authenticated feedback destination before activation.
+
+
+### Paired native duplicate-result observation repair
+
+Source `e9381afa5` passed provider-free guide setup, both PRE quality rejection
+paths, accepted/finalized v1, POST needs_revision, correction under the same
+assignment and finalized v2 reaching review_pending. The run then failed its
+duplicate-delivery observer; automatic acceptance was not reached. Isolated
+cleanup completed (`/tmp/workstream-paired-native-qqq7n4s1/cleanup.json`).
+The production Celery app intentionally ignores task results. Celery
+`AsyncResult.get()` returns immediately with None for an ignored result, so
+the probe was not observing the duplicate worker result despite configuring
+a result backend. The local probe now explicitly requests a result for this
+one duplicate publication. Production task defaults and the exact duplicate
+refusal/custody assertions remain unchanged. A connected rerun remains required.

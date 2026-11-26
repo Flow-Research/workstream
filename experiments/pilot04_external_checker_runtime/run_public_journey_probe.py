@@ -1133,7 +1133,7 @@ async def _one_mode(client, factory, env, *,
         duplicate_task_id = duplicate_receipt['task_id']
     else:
         duplicate = await asyncio.to_thread(deliver_event.apply_async,
-                                          args=(str(completion_id), project_id))
+                                          args=(str(completion_id), project_id), ignore_result=False)
         duplicate_task_id = duplicate.id
         try:
             duplicate_result = await asyncio.to_thread(
