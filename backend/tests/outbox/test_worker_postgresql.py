@@ -275,7 +275,7 @@ async def test_production_registry_claims_only_registered_features(delivery_harn
         assert (await session.get(OutboxEvent, event.event_id)).delivery_state == "pending"
 
 
-async def test_prefork_bounds_cancellation_resistant_worker(
+async def test_prefork_bounds_cancellation_resistant_finalization_worker(
     delivery_harness, worker, monkeypatch, tmp_path
 ):
     """Actual sync task shutdown is bounded after real invocation records UNKNOWN."""
@@ -308,13 +308,11 @@ async def test_prefork_bounds_cancellation_resistant_worker(
     h.handler_hook = stubborn
     h.options = DeliveryOptions(lease_seconds=30, handler_timeout_seconds=1)
     event = await h.append()
-    task = worker.deliver_event
+    task = worker.finalize_submission
     # Scale an installed process deadline only. Removing it leaves the real
     # prefork task hanging until the independent test watchdog detects it.
     if task.time_limit is not None:
         monkeypatch.setattr(task, "time_limit", 5)
-        from app.workers import outbox_topology
-        monkeypatch.setattr(outbox_topology, "OUTBOX_HARD_LIMIT_SECONDS", 5)
     monkeypatch.setenv("WORKSTREAM_ARTIFACT_STORE_BACKEND", "disabled")
     get_settings.cache_clear()
     acked = Event()
@@ -386,19 +384,9 @@ async def test_prefork_bounds_cancellation_resistant_worker(
         assert len(attempts) == 1 and attempts[0].outcome_json == original
 
 
-def test_delivery_task_has_independent_hard_limit(worker):
-    from app.modules.outbox.api import DeliveryOptions
-
+def test_post_delivery_keeps_late_ack_without_a_process_deadline(worker):
     task = worker.deliver_event
-    from app.modules.checkers.api.external_policy import (
-        SELECTED_POST_DELIVERY_LEASE_SECONDS, SELECTED_POST_HANDLER_TIMEOUT_SECONDS,
-    )
-    from app.workers.outbox_topology import OUTBOX_PROCESS_SHUTDOWN_MARGIN_SECONDS
-    assert task.time_limit == (
-        SELECTED_POST_DELIVERY_LEASE_SECONDS + OUTBOX_PROCESS_SHUTDOWN_MARGIN_SECONDS
-    )
-    assert task.time_limit > SELECTED_POST_HANDLER_TIMEOUT_SECONDS
-    assert task.time_limit > DeliveryOptions().handler_timeout_seconds
+    assert task.time_limit is None
     assert task.acks_late and task.acks_on_failure_or_timeout
     assert task.reject_on_worker_lost is True
     assert task.soft_time_limit is None

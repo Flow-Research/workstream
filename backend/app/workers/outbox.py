@@ -12,7 +12,7 @@ from app.modules.tasks.api.routing_outcome import SUBMISSION_FEEDBACK_EMAIL_EVEN
 from app.workers.async_runner import run_async_task
 from app.workers.celery_app import celery_app
 from app.workers.outbox_topology import (
-    require_outbox_worker, require_outbox_scan_worker, OUTBOX_HARD_LIMIT_SECONDS,
+    require_outbox_worker, require_outbox_scan_worker,
     OUTBOX_SCAN_TASK, OUTBOX_SCAN_HARD_LIMIT_SECONDS, FINALIZATION_HARD_LIMIT_SECONDS,
     FEEDBACK_EMAIL_DELIVERY_TASK, FEEDBACK_EMAIL_HARD_LIMIT_SECONDS, FEEDBACK_EMAIL_QUEUE,
     FINALIZATION_DELIVERY_TASK, FINALIZATION_QUEUE, OUTBOX_DELIVERY_TASK, OUTBOX_QUEUE,
@@ -33,10 +33,10 @@ def _uuid(value):
 
 @celery_app.task(
     name=OUTBOX_DELIVERY_TASK, bind=True, acks_late=True,
-    reject_on_worker_lost=True, acks_on_failure_or_timeout=True, time_limit=OUTBOX_HARD_LIMIT_SECONDS,
+    reject_on_worker_lost=True, acks_on_failure_or_timeout=True,
 )
 def deliver_event(self, event_id, project_id):
-    """Run under prefork: its hard limit also bounds async shutdown after UNKNOWN."""
+    """Process POST events under durable delivery ownership."""
     return _run_delivery(self, event_id, project_id, queue=OUTBOX_QUEUE, group="post")
 
 

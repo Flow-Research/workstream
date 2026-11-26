@@ -6,13 +6,9 @@ from celery.concurrency import get_implementation
 from celery.concurrency.prefork import TaskPool
 from celery.exceptions import WorkerShutdown
 from celery.signals import worker_init
-from app.modules.checkers.api.external_policy import SELECTED_POST_DELIVERY_LEASE_SECONDS
 from app.modules.artifacts.api.submission_finalization import SUBMISSION_FINALIZATION_DELIVERY_LEASE_SECONDS
 
 OUTBOX_PROCESS_SHUTDOWN_MARGIN_SECONDS = 60
-OUTBOX_HARD_LIMIT_SECONDS = (
-    SELECTED_POST_DELIVERY_LEASE_SECONDS + OUTBOX_PROCESS_SHUTDOWN_MARGIN_SECONDS
-)
 OUTBOX_QUEUE = "workstream.outbox"
 OUTBOX_DELIVERY_TASK = "workstream.outbox.deliver_event"
 OUTBOX_SCAN_QUEUE = "workstream.outbox_scan"
@@ -25,7 +21,7 @@ FEEDBACK_EMAIL_QUEUE = "workstream.submission_feedback_email"
 FEEDBACK_EMAIL_DELIVERY_TASK = "workstream.outbox.send_submission_feedback_email"
 FEEDBACK_EMAIL_HARD_LIMIT_SECONDS = 55
 _DELIVERY_LIMITS = {
-    OUTBOX_QUEUE: OUTBOX_HARD_LIMIT_SECONDS,
+    OUTBOX_QUEUE: None,
     FINALIZATION_QUEUE: FINALIZATION_HARD_LIMIT_SECONDS,
     FEEDBACK_EMAIL_QUEUE: FEEDBACK_EMAIL_HARD_LIMIT_SECONDS,
 }
@@ -107,6 +103,11 @@ def require_outbox_worker(task, *, queue=OUTBOX_QUEUE):
         or task.request.called_directly
     ):
         raise RuntimeError("OUTBOX delivery requires a validated prefork worker")
+    if queue == OUTBOX_QUEUE:
+        limits = (task.time_limit, task.soft_time_limit, *(task.request.timelimit or ()))
+        if any(limit is not None for limit in limits):
+            raise RuntimeError("POST worker requires renewable ownership without a process deadline")
+        return
     message_limit = (task.request.timelimit or (None, None))[0]
     expected_limit = _DELIVERY_LIMITS[queue]
     if (

@@ -69,7 +69,7 @@ def test_validated_prefork_child_enters(monkeypatch):
     topology.validate_outbox_worker(configured)
     monkeypatch.setattr(topology.os, "getppid", os.getpid)
     topology.require_outbox_worker(SimpleNamespace(app=configured.app,
-        time_limit=topology.OUTBOX_HARD_LIMIT_SECONDS,
+        time_limit=None, soft_time_limit=None,
         request=SimpleNamespace(is_eager=False, called_directly=False, timelimit=None)))
 
 
@@ -110,19 +110,18 @@ def test_delivery_routes_to_dedicated_queue(monkeypatch):
         get_settings.cache_clear()
 
 
-@pytest.mark.parametrize("task_limit,message_limit", [
-    (None, None), (300, None), (topology.OUTBOX_HARD_LIMIT_SECONDS + 1, None),
-    (topology.OUTBOX_HARD_LIMIT_SECONDS, 300),
-    (topology.OUTBOX_HARD_LIMIT_SECONDS, topology.OUTBOX_HARD_LIMIT_SECONDS + 1),
-    (topology.OUTBOX_HARD_LIMIT_SECONDS, 0),
+@pytest.mark.parametrize("hard,soft,message", [
+    (3600, None, None), (None, 3600, None),
+    (None, None, (3600, None)), (None, None, (None, 3600)),
 ])
-def test_delivery_cannot_disable_or_extend_process_bound(monkeypatch, task_limit, message_limit):
+def test_post_worker_rejects_fixed_process_deadlines(monkeypatch, hard, soft, message):
     configured = worker()
     topology.validate_outbox_worker(configured)
     monkeypatch.setattr(topology.os, "getppid", os.getpid)
-    with pytest.raises(RuntimeError, match="bounded hard time limit"):
-        topology.require_outbox_worker(SimpleNamespace(app=configured.app, time_limit=task_limit,
-            request=SimpleNamespace(is_eager=False, called_directly=False, timelimit=(message_limit, None))))
+    with pytest.raises(RuntimeError, match="process deadline"):
+        topology.require_outbox_worker(SimpleNamespace(app=configured.app, time_limit=hard,
+            soft_time_limit=soft,
+            request=SimpleNamespace(is_eager=False, called_directly=False, timelimit=message)))
 
 
 @pytest.mark.parametrize("pool,eager", [("solo", False), ("threads", False), ("prefork", True)])
