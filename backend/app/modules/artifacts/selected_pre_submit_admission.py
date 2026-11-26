@@ -2,17 +2,18 @@
 
 from __future__ import annotations
 
-from app.modules.artifacts.selected_pre_submit_source_contracts import ArtifactPreSubmitSourceContracts
-
 from dataclasses import dataclass
+import json
 from uuid import UUID
 
 from app.core.hashing import canonical_json_hash
 from app.modules.artifacts.api.submission_intake import SubmissionIntakeMetadata, SubmissionIntakePreSourceFacts
+from app.modules.artifacts.selected_pre_submit_source_contracts import ArtifactPreSubmitSourceContracts
 from app.modules.artifacts.submission_manifest import (
     SubmissionCanonicalPredecessor,
 )
 from app.modules.checkers.api.default_checker import (
+    ProjectSubmissionArchiveLimits,
     WorkstreamDefaultContext,
     WorkstreamDefaultPredecessor,
 )
@@ -81,6 +82,19 @@ class SelectedPreSubmitAdmissionContext:
     rules_sha256: str
 
 
+def project_submission_archive_limits(
+    project: ProjectLockedPolicyContextFacts,
+) -> ProjectSubmissionArchiveLimits | None:
+    """Read only archive caps from the validated locked project policy."""
+    policy = json.loads(project.effective_policy.value)
+    caps = {
+        name: policy[name]
+        for name in ProjectSubmissionArchiveLimits.model_fields
+        if policy.get(name) is not None
+    }
+    return ProjectSubmissionArchiveLimits.model_validate(caps) if caps else None
+
+
 def build_selected_pre_submit_reservation(
     *,
     source: SubmissionIntakePreSourceFacts,
@@ -114,6 +128,7 @@ def build_selected_pre_submit_reservation(
         or references.effective_policy_hash != project.effective_policy_hash
         or references.pre_submit_policy_id != project.pre_submit_policy_id
         or references.pre_submit_policy_bundle_hash != project.pre_submit_policy_bundle_hash
+        or selected.default_context.project_archive_limits != project_submission_archive_limits(project)
         or selected.default_context.packet != packet
         or selected.default_context.predecessor_exists != (task.predecessor is not None)
         or selected.default_context.current_predecessor != selected.default_context.predecessor
@@ -257,6 +272,7 @@ def bind_selected_pre_submit_admission(
             current_rules_sha256=rules_sha256,
             predecessor_rules_sha256=predecessor_rules_sha256,
             packet=packet,
+            project_archive_limits=project_submission_archive_limits(project),
         ),
         rules_sha256=rules_sha256,
     )

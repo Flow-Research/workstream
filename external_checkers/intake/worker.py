@@ -292,7 +292,7 @@ class PreSubmitWorker:
     def run(self):
         from app.modules.checkers.api.selected_pre_submit import (
             ExternalPreSubmitMemberFacts, derive_selected_pre_submit_default_input,
-            derive_selected_pre_submit_input,
+            derive_selected_pre_submit_input, selected_pre_submit_archive_limits,
         )
         from app.modules.checkers.default_checker import evaluate_rejected_archive
         if self._started:
@@ -311,7 +311,9 @@ class PreSubmitWorker:
                 digest.update(chunk)
             if size != source.raw_byte_count or "sha256:" + digest.hexdigest() != source.raw_sha256:
                 raise ValueError("PRE source identity differs")
-            inspector = SubmissionArchiveInspector(reservation.runtime_profile.archive_limits)
+            inspector = SubmissionArchiveInspector(selected_pre_submit_archive_limits(
+                reservation, ArtifactPreSubmitSourceContracts(),
+            ))
             try:
                 inspection = inspector.inspect(archive)
                 manifest = build_submission_manifest(inspection)

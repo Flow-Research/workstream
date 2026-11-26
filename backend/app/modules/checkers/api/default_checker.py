@@ -120,6 +120,23 @@ class WorkstreamDefaultPredecessor:
         _require_sha256(self.semantic_manifest_sha256)
 
 
+class ProjectSubmissionArchiveLimits(BaseModel):
+    """Approved project caps carried in the digest-bound PRE context."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+
+    maximum_archive_size_bytes: int | None = Field(default=None, gt=0)
+    maximum_file_size_bytes: int | None = Field(default=None, gt=0)
+    maximum_package_size_bytes: int | None = Field(default=None, gt=0)
+    maximum_archive_entries: int | None = Field(default=None, gt=0)
+
+    @model_validator(mode="after")
+    def require_cap(self) -> Self:
+        if not self.model_dump(exclude_none=True):
+            raise ValueError("project submission archive limits are empty")
+        return self
+
+
 @dataclass(frozen=True, slots=True)
 class WorkstreamDefaultContext:
     """Locked facts known before source inspection; no derived input identity.
@@ -134,6 +151,7 @@ class WorkstreamDefaultContext:
     current_rules_sha256: str
     predecessor_rules_sha256: str | None
     packet: SubmissionPacketView
+    project_archive_limits: ProjectSubmissionArchiveLimits | None = None
 
     def __post_init__(self) -> None:
         """Validate detached rule and predecessor facts before any source read."""
@@ -145,6 +163,8 @@ class WorkstreamDefaultContext:
                 and type(self.current_predecessor) is not WorkstreamDefaultPredecessor)
             or type(self.predecessor_exists) is not bool
             or type(self.packet) is not SubmissionPacketView
+            or (self.project_archive_limits is not None
+                and type(self.project_archive_limits) is not ProjectSubmissionArchiveLimits)
             or (self.predecessor_rules_sha256 is None) != (self.predecessor is None)
         ):
             raise ValueError("default checker context is invalid")
@@ -162,7 +182,7 @@ class WorkstreamDefaultContext:
                 "archive_sha256": value.archive_sha256,
                 "semantic_manifest_sha256": value.semantic_manifest_sha256,
             }
-        return {
+        body = {
             "predecessor": predecessor_body(self.predecessor),
             "predecessor_exists": self.predecessor_exists,
             "current_predecessor": predecessor_body(self.current_predecessor),
@@ -170,6 +190,9 @@ class WorkstreamDefaultContext:
             "predecessor_rules_sha256": self.predecessor_rules_sha256,
             "packet": self.packet.canonical_body(),
         }
+        if self.project_archive_limits is not None:
+            body["project_archive_limits"] = self.project_archive_limits.model_dump(exclude_none=True)
+        return body
 
     @classmethod
     def from_canonical_body(cls, body: object) -> WorkstreamDefaultContext:
@@ -190,6 +213,10 @@ class WorkstreamDefaultContext:
                 current_rules_sha256=body["current_rules_sha256"],
                 predecessor_rules_sha256=body["predecessor_rules_sha256"],
                 packet=SubmissionPacketView(**body["packet"]),
+                project_archive_limits=(
+                    ProjectSubmissionArchiveLimits.model_validate(body["project_archive_limits"])
+                    if "project_archive_limits" in body else None
+                ),
             )
             if value.canonical_body() != body:
                 raise ValueError("default checker context is not canonical")
@@ -406,6 +433,7 @@ __all__ = (
     "WORKSTREAM_DEFAULT_CHECK_IDS",
     "WORKSTREAM_DEFAULT_SECRET_SIGNATURES",
     "WORKSTREAM_DEFAULT_WARNING_CODES",
+    "ProjectSubmissionArchiveLimits",
     "WorkstreamDefaultArchiveFailureCode",
     "WorkstreamDefaultCheck",
     "WorkstreamDefaultCheckId",

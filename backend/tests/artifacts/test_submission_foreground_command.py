@@ -62,7 +62,13 @@ async def test_public_raw_zip_submission_uses_real_owners_and_stable_replay(admi
     f, key = admission_intake, new_record_id()
     payload = _archive("../escape") if outcome == "rejected" else _archive()
     if framing.startswith("large"):
-        payload = _archive(content=b"finished work\n" * 90_000)
+        from io import BytesIO
+        from zipfile import ZipFile
+        archive = BytesIO()
+        with ZipFile(archive, "w") as output:
+            for path in ("part-one.txt", "part-two.txt"):
+                output.writestr(path, b"finished work\n" * 45_000)
+        payload = archive.getvalue()
         assert 1024 * 1024 < len(payload) < 2 * 1024 * 1024
     def body(split):
         if not split:
@@ -133,6 +139,40 @@ async def test_public_raw_zip_submission_uses_real_owners_and_stable_replay(admi
     async with f.factory() as session:
         assert await session.scalar(text("SELECT count(*) FROM submissions WHERE task_id=:id"), {"id": f.task}) == 0
         assert await session.scalar(text("SELECT count(*) FROM submission_intake_operations WHERE task_id=:id"), {"id": f.task}) == 1
+
+
+@pytest.mark.parametrize("admission_intake", ["project_archive_cap"], indirect=True)
+async def test_public_replay_refuses_changed_length_over_locked_raw_cap(admission_intake, tmp_path, monkeypatch):
+    from tests.test_trusted_intake import _archive
+
+    f = admission_intake
+    payload = _archive()
+    assert len(payload) < 256
+    client, _, errors, calls = await configure_source_http(
+        f.factory, f.access.signed.client, tmp_path, monkeypatch, payload, "completed",
+    )
+    key = str(new_record_id())
+    headers = f.access.target.headers | {
+        "Content-Type": "application/zip",
+        "X-Task-Assignment-Id": str(f.assignment),
+        "Idempotency-Key": key,
+    }
+    path = f"/api/v1/tasks/{f.task}/submissions"
+
+    refused = await client.post(path, headers=headers | {"Idempotency-Key": str(new_record_id())}, content=b"x" * 257)
+    assert refused.status_code == 413, refused.text
+    assert refused.json()["error"]["code"] == "submission_archive_limit_exceeded"
+    assert not calls
+
+    first = await client.post(path, headers=headers, content=payload)
+    assert first.status_code == 202, first.text
+    changed = await client.post(path, headers=headers, content=b"x" * 257)
+    assert changed.status_code == 409, changed.text
+    assert changed.json()["error"]["code"] == "submission_idempotency_conflict"
+    replay = await client.post(path, headers=headers, content=payload)
+    assert replay.status_code == 202, replay.text
+    assert replay.json() == dict(first.json(), replayed=True)
+    assert len(calls) == 1 and not errors
 
 
 async def test_foreground_command_upload_timeout_retains_charge(admission_intake, tmp_path):

@@ -69,11 +69,12 @@ async def admission_intake(tmp_path, isolated_database_env, admin_access, reques
     factory = async_sessionmaker(engine, expire_on_commit=False)
     namespace = _namespace(_settings(tmp_path))
     source_store_factory = None
-    automatic_acceptance = getattr(request, "param", None) == "automatic_acceptance"
-    if getattr(request, "param", None) == "minio":
+    variant = getattr(request, "param", None)
+    automatic_acceptance = variant == "automatic_acceptance"
+    if variant == "minio":
         from tests.artifacts.intake_post_support import minio_source_fixture
         namespace, source_store_factory = await minio_source_fixture()
-    if getattr(request, "param", None) == "aws":
+    if variant == "aws":
         from app.interfaces.artifacts import ArtifactStoreNamespaceIdentity, artifact_store_namespace_material
         from workstream_external_services import ExternalServiceAdapterIdentity
         from app.modules.artifacts.service import ArtifactStorageNamespaceSpec
@@ -91,6 +92,7 @@ async def admission_intake(tmp_path, isolated_database_env, admin_access, reques
         plan, _ = await approved_selected_policy_fixture(
             factory, namespace, guide_version="v1",
             human_review_required=not automatic_acceptance,
+            maximum_archive_size_bytes=256 if variant == "project_archive_cap" else None,
             contribution_awards=("money", "project_points") if automatic_acceptance else (),
             pre_submit_registry_spec=pre_registry_spec(),
             post_submit_registry_spec=post_registry_spec(),
@@ -136,6 +138,32 @@ def intake_admission(factory, actor, namespace):
         capacity_limits=SubmissionSourceCapacityLimits(maximum_total_bytes=1_000_000), maximum_raw_bytes=1024,
         upload_duration=timedelta(seconds=300), lease_duration=timedelta(seconds=60),
     )
+
+
+@pytest.mark.parametrize("admission_intake", ["project_archive_cap"], indirect=True)
+async def test_t1_enforces_locked_project_raw_archive_cap_before_reservation(admission_intake):
+    from sqlalchemy import text
+    from app.interfaces.artifacts import ArtifactLimitExceededError
+
+    f = admission_intake
+    metadata = SubmissionIntakeMetadata(task_id=f.task, assignment_id=f.assignment)
+    actor = {"actor_id": f.actor.actor_profile_id, "identity_link_id": f.actor.identity_link_id}
+    with pytest.raises(ArtifactLimitExceededError, match="locked project raw ZIP limit"):
+        await f.admission.admit(
+            metadata, **actor, idempotency_key=new_record_id(), declared_raw_bytes=257,
+        )
+    async with f.factory() as session:
+        assert await session.scalar(text("SELECT count(*) FROM submission_intake_operations WHERE task_id=:task"),
+                                    {"task": f.task}) == 0
+    owner = await f.admission.admit(
+        metadata, **actor, idempotency_key=new_record_id(), declared_raw_bytes=None,
+    )
+    async with f.factory() as session:
+        row = (await session.execute(text(
+            "SELECT o.maximum_raw_bytes,c.accounted_bytes FROM submission_intake_operations AS o "
+            "JOIN submission_source_charges AS c ON c.operation_id=o.id WHERE o.id=:operation"
+        ), {"operation": owner.operation_id})).one()
+        assert tuple(row) == (256, 256)
 
 
 async def admit_new(fixture, *, key=None, metadata=None):

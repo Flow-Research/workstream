@@ -12954,3 +12954,39 @@ Remaining release proof includes the other required native fault/cleanup cases,
 supported upload bounds and tighter project archive-limit enforcement,
 age-eligible S3 deletion through the cleanup worker, the hosted required-review
 guard and applicable final-head checks. This update does not close those gates.
+
+### Enforce locked project archive limits in source-first intake
+
+The public Task requirements expose the locked project archive limits, but
+source-first intake used deployment limits alone. The bounded change selects
+the approved raw cap during initial ART reservation, carries the expanded
+package, file and entry bounds in the digest-bound default context, and uses
+the same narrowed inspection limits in the trusted PRE worker and server
+manifest validation. Existing runtime resource reservations, selected project
+image, and deployment ceilings keep their identities. Existing accepted
+requests and their canonical evidence remain readable.
+
+Scope includes the ART foreground reservation and locked PRE binding,
+CHECKERS default context and selected input validation, the trusted intake
+worker's PRE branch, and the existing ART and worker regressions. Verify
+compressed refusals before object allocation, expanded refusals before project
+execution, and exact accepted/replay boundaries. The changed trusted worker
+requires a rebuilt and re-pinned PRE root before deployment. Source tests and
+the existing hosted fixture do not qualify that rebuilt root.
+
+The existing trusted-root provisioner is `backend/scripts/checker_trusted_root.py`.
+Build the frozen source with `external_checkers/intake/Dockerfile`, retain its
+approved Docker-save graph and exact linux/amd64 manifest/config, then provision
+new archive, config, bundle and descriptor files under the existing verified
+bounds. Keep the default behavior digest and the selected project image. Stage
+the new content-addressed bundle and matching descriptor, update its native PRE
+profile root digest and recompute that profile's digest. Bind the application
+execution profile and authenticated runner endpoint to those same values.
+The POST intake mode and transport are unchanged. Coordinate the backend and
+PRE root cutover under the existing drain so new qualified requests never reach
+the preceding root. The new root still requires its own native qualification.
+
+The focused trusted-worker suite passed 25 tests, including each exact approved
+limit and plus-one refusal before project execution, and retained protocol and
+source substitution cases. The source changes passed production lint and diff
+checks. Hosted activation and the maximum accepted ZIP remain separate proof.

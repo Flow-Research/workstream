@@ -30,6 +30,7 @@ from app.modules.artifacts.api.submission_manifest import (
 )
 from app.modules.checkers.api.default_checker import (
     WORKSTREAM_DEFAULT_BEHAVIOR_SHA256,
+    ProjectSubmissionArchiveLimits,
     WorkstreamDefaultCheckerInput,
 )
 from app.modules.checkers.api.material import SubmissionMaterialEntry
@@ -578,6 +579,78 @@ def test_pre_worker_default_blocker_never_requests_project(tmp_path, data):
     assert result["operation"] == "completed" and result["payload"]["eligible"] is False
     assert reply.calls == 0 and result["payload"]["external_members"] == []
     assert output.read() == b"" and not (tmp_path / "escape").exists()
+
+
+@pytest.mark.parametrize(
+    "cap, boundary",
+    [
+        ("maximum_file_size_bytes", 13),
+        ("maximum_package_size_bytes", 26),
+        ("maximum_archive_entries", 2),
+    ],
+)
+@pytest.mark.parametrize("within", [True, False])
+def test_pre_worker_enforces_locked_project_archive_limits(tmp_path, cap, boundary, within):
+    from app.modules.checkers.api.selected_pre_submit import (
+        SelectedPreSubmitExecutionFacts, SelectedPreSubmitReservationFacts,
+        derive_selected_pre_submit_default_input,
+    )
+
+    archive = BytesIO()
+    with zipfile.ZipFile(archive, "w") as output:
+        for path in ("first.txt", "second.txt"):
+            output.writestr(path, b"finished work")
+    contracts = selected_pre_submit_source_contracts()
+    limits = ProjectSubmissionArchiveLimits.model_validate({cap: boundary if within else boundary - 1})
+
+    def bind(reservation):
+        return replace(
+            reservation, source_contracts=contracts,
+            default_context=replace(reservation.default_context, project_archive_limits=limits),
+        )
+
+    worker, output, project, lease = _pre_worker(
+        tmp_path, archive.getvalue(), reservation_change=bind,
+    )
+    original = lease.reservation
+    decoded = SelectedPreSubmitReservationFacts.from_canonical_body(
+        original.canonical_body(), source_contracts=contracts,
+    )
+    assert decoded.default_context.project_archive_limits == limits
+    assert decoded.runtime_profile == original.runtime_profile
+    assert decoded.request_digest == original.request_digest
+    unbounded = replace(
+        original, source_contracts=contracts,
+        default_context=replace(original.default_context, project_archive_limits=None),
+    )
+    assert unbounded.request_digest != original.request_digest
+
+    worker.run()
+    output.seek(0)
+    message = _read(output)
+    if within:
+        assert message["operation"] == "project"
+        message = _read(output)
+    assert message["operation"] == "completed"
+    assert project.calls == (1 if within else 0)
+    assert output.read() == b""
+    result = SelectedPreSubmitExecutionFacts.from_canonical_body(
+        message["payload"], source_contracts=contracts,
+    )
+    assert result.eligible is within
+    if not within:
+        assert result.manifest_body is None
+        assert result.external_members == ()
+        assert result.workstream_default.checks[0].failure_code == "submission_archive_limit_exceeded"
+        # A manifest that is safe under the unchanged profile alone cannot
+        # authorize the project stage or a forged eligible result.
+        inspection = SubmissionArchiveInspector(original.runtime_profile.archive_limits).inspect(archive)
+        manifest = build_submission_manifest(inspection)
+        with pytest.raises(ValueError, match="manifest exceeds execution limits"):
+            derive_selected_pre_submit_default_input(
+                lease, manifest_body=manifest.as_dict(), manifest_sha256=manifest.sha256,
+                source_contracts=contracts,
+            )
 
 
 @pytest.mark.parametrize("field", ["manifest", "default_input", "prepared_generation_id"])

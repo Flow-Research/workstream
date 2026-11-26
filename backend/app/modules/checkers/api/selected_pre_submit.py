@@ -689,6 +689,32 @@ class SelectedPreSubmitLeaseFacts:
             raise ValueError("selected PRE lease facts are invalid")
 
 
+def selected_pre_submit_archive_limits(
+    reservation: SelectedPreSubmitReservationFacts,
+    source_contracts: SelectedPreSubmitSourceContracts,
+) -> SubmissionArchiveLimitsView:
+    """Narrow inspection without changing the qualified runtime profile."""
+    platform = reservation.runtime_profile.archive_limits
+    project = reservation.default_context.project_archive_limits
+    if project is None:
+        return platform
+    expanded = min(
+        platform.maximum_expanded_bytes,
+        project.maximum_package_size_bytes or platform.maximum_expanded_bytes,
+    )
+    return source_contracts.parse_limits(platform.canonical_body() | {
+        "maximum_entries": min(
+            platform.maximum_entries,
+            project.maximum_archive_entries or platform.maximum_entries,
+        ),
+        "maximum_entry_bytes": min(
+            platform.maximum_entry_bytes, expanded,
+            project.maximum_file_size_bytes or platform.maximum_entry_bytes,
+        ),
+        "maximum_expanded_bytes": expanded,
+    })
+
+
 def derive_selected_pre_submit_default_input(
     lease: SelectedPreSubmitLeaseFacts, *, manifest_body: object, manifest_sha256: str,
     source_contracts: SelectedPreSubmitSourceContracts,
@@ -699,7 +725,8 @@ def derive_selected_pre_submit_default_input(
     reservation = lease.reservation
     source = reservation.source
     entries = source_contracts.validate_manifest(
-        manifest_body, sha256=manifest_sha256, limits=reservation.runtime_profile.archive_limits,
+        manifest_body, sha256=manifest_sha256,
+        limits=selected_pre_submit_archive_limits(reservation, source_contracts),
     )
     return reservation.default_context.bind_verified_input(
         archive_sha256=source.raw_sha256, archive_byte_count=source.raw_byte_count,

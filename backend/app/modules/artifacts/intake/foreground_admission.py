@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.core.cancellation import await_completion_preserving_cancellation
 from app.core.identifiers import new_record_id
 from app.db.errors import integrity_constraint_name
+from app.interfaces.artifacts import ArtifactLimitExceededError
 from app.modules.artifacts.api.submission_archive import MAXIMUM_SUBMISSION_ZIP_BYTES
 from app.modules.artifacts.api.submission_intake import SealedSubmissionSource, SubmissionIntakeFailure, SubmissionIntakeMetadata, SubmissionSourceCapacityLimits
 from app.modules.artifacts.api.submission_preparation import public_pre_submission_results
@@ -25,7 +26,9 @@ from app.modules.artifacts.intake.progress import finalization_progress
 from app.modules.artifacts.api.submission_finalization import SubmissionFinalizationProgress
 from app.modules.artifacts.intake.streaming import hash_submission_replay
 from app.modules.artifacts.models import ArtifactStorageNamespace, SubmissionBundleAdmission
-from app.modules.artifacts.selected_pre_submit_admission import bind_selected_pre_submit_admission, build_selected_pre_submit_reservation
+from app.modules.artifacts.selected_pre_submit_admission import (
+    bind_selected_pre_submit_admission, build_selected_pre_submit_reservation, project_submission_archive_limits,
+)
 from app.modules.artifacts.submission_manifest import SubmissionCanonicalPredecessor
 from app.modules.artifacts.service import ArtifactStorageNamespaceSpec
 from app.modules.authorization.api.submission_intake import (
@@ -161,12 +164,18 @@ class ForegroundIntakeAdmission:
             await authority.preflight(selectors)
             if await repository.find_actor_key(actor_id, key) is not None:
                 raise _ExistingKey()
-            await self._validate_context(session, metadata, actor_id)
+            _, project = await self._validate_context(session, metadata, actor_id)
+            caps = project_submission_archive_limits(project)
+            maximum = self._maximum
+            if caps is not None and caps.maximum_archive_size_bytes is not None:
+                maximum = min(maximum, caps.maximum_archive_size_bytes)
+            if declared is not None and declared > maximum:
+                raise ArtifactLimitExceededError("submission exceeds the locked project raw ZIP limit")
             now = await session.scalar(select(func.clock_timestamp()))
             row = await repository.reserve(
                 operation_id=selectors.operation_id, metadata=metadata, actor_id=actor_id,
                 identity_link_id=identity_link_id, idempotency_key=key,
-                maximum_raw_bytes=self._maximum, capacity_limits=self._capacity,
+                maximum_raw_bytes=maximum, capacity_limits=self._capacity,
                 declared_raw_bytes=declared, upload_deadline_at=now + self._upload_duration,
                 lease_expires_at=now + self._lease_duration,
             )
@@ -403,6 +412,7 @@ class ForegroundIntakeAdmission:
                 or (predecessor.submission_id if predecessor else None) != lineage.predecessor_submission_id
                 or (predecessor.version if predecessor else None) != lineage.predecessor_submission_version
                 or task.checker_remediation_manifest_id != lineage.checker_remediation_manifest_id
+                or request.default_context.project_archive_limits != project_submission_archive_limits(project)
                 or LockedExternalCheckerPolicies.model_validate_json(project.external_checker_policies.value).pre_submit != request.policy):
             raise IntakeCustodyConflict("intake_acceptance_context_changed")
         terminal = await checkers(session).lock_acceptance(
@@ -517,6 +527,8 @@ class ForegroundIntakeAdmission:
                 return original
             code = "submission_operation_in_progress" if original.state in {"receiving", "pre_checking"} else "submission_operation_terminal"
             raise IntakeCustodyConflict(code)
+        if declared_raw_bytes is not None and declared_raw_bytes > original.maximum_raw_bytes:
+            raise IntakeCustodyConflict("submission_idempotency_conflict")
         raw = await hash_submission_replay(
             chunks, maximum_raw_bytes=original.maximum_raw_bytes, declared_raw_bytes=declared_raw_bytes,
             idle_timeout_seconds=idle_timeout_seconds, deadline_at=datetime.now(UTC) + replay_duration,
