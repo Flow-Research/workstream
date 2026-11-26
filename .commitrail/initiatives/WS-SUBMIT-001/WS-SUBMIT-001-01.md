@@ -11848,3 +11848,12 @@ code equivalence before excluding generated caches from source-only inventory.
 Preserve rejection of symlinks, extra source, package drift and malformed or
 substituted bytecode. Reuse the existing built images for focused verification;
 no live deployment or backend behavior change is required by this repair.
+
+Independent review found that Python code-object equality omits executable
+fields. The verifier now compares the original cache payload directly with
+`marshal.dumps(compile(source))`, without deserializing it. File-count limits
+include caches. Counterexamples cover changed nested stack size, qualified
+name, filename, executable code, stale source and trailing payload; all 21
+release-verifier tests pass in the backend environment. Exact built-image
+verification remains the next check; 65 reviewer-generated cache samples
+matched the deterministic payload comparison.

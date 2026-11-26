@@ -3,6 +3,7 @@
 import ast
 import copy
 import json
+import marshal
 import os
 from pathlib import Path
 import py_compile
@@ -430,6 +431,21 @@ class ReleaseImageProofTests(unittest.TestCase):
             original = proof.source_inventory(root)
             cache = Path(py_compile.compile(str(source), doraise=True))
             self.assertEqual(proof.source_inventory(root), original)
+            with patch.object(proof, "MAX_FILES", len(original)):
+                with self.assertRaisesRegex(ValueError, "inventory limit"):
+                    proof.source_inventory(root)
+
+            valid = cache.read_bytes()
+            compiled = marshal.loads(valid[16:])
+            nested = next(value for value in compiled.co_consts if hasattr(value, "co_code"))
+            for field, value in (("co_stacksize", 1000), ("co_qualname", "substituted"),
+                                 ("co_filename", "/substituted.py")):
+                with self.subTest(field=field):
+                    constants = tuple(nested.replace(**{field: value}) if item is nested else item
+                                      for item in compiled.co_consts)
+                    cache.write_bytes(valid[:16] + marshal.dumps(compiled.replace(co_consts=constants)))
+                    with self.assertRaisesRegex(ValueError, "source cache code differs"):
+                        proof.source_inventory(root)
 
             substitute = root / "substitute.py"
             substitute.write_text("def value():\n    return 2\n")
@@ -440,7 +456,7 @@ class ReleaseImageProofTests(unittest.TestCase):
 
             py_compile.compile(str(source), doraise=True)
             cache.write_bytes(cache.read_bytes() + b"untracked payload")
-            with self.assertRaisesRegex(ValueError, "trailing bytes"):
+            with self.assertRaisesRegex(ValueError, "source cache code differs"):
                 proof.source_inventory(root)
 
             py_compile.compile(str(source), doraise=True)

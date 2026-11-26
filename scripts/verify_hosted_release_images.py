@@ -6,7 +6,6 @@ import argparse
 import hashlib
 import importlib.metadata
 import importlib.util
-import io
 import json
 import marshal
 import os
@@ -18,7 +17,6 @@ import subprocess
 import sys
 import tempfile
 import tomllib
-from types import CodeType
 import uuid
 
 
@@ -77,23 +75,16 @@ def validate_source_cache(path: Path) -> None:
             "source cache is stale",
         )
     expected = compile(content, str(source), "exec", dont_inherit=True, optimize=0)
-    payload = io.BytesIO(raw[16:])
-    actual = marshal.load(payload)
-    require(payload.tell() == len(raw) - 16, "source cache has trailing bytes")
-    require(isinstance(actual, CodeType) and actual == expected, "source cache code differs")
-    pending = [actual]
-    while pending:
-        code = pending.pop()
-        require(code.co_filename == str(source), "source cache filename differs")
-        pending.extend(value for value in code.co_consts if isinstance(value, CodeType))
+    require(raw[16:] == marshal.dumps(expected), "source cache code differs")
 
 
 def source_inventory(root: Path, shared_root: Path | None = None) -> dict[str, str]:
     found: dict[str, str] = {}
     total = 0
+    visited = 0
 
     def visit(path: Path, base: Path, prefix: str = "") -> None:
-        nonlocal total
+        nonlocal total, visited
         info = path.lstat()
         require(not stat.S_ISLNK(info.st_mode), "source symlink refused")
         if stat.S_ISDIR(info.st_mode):
@@ -102,7 +93,8 @@ def source_inventory(root: Path, shared_root: Path | None = None) -> dict[str, s
             return
         require(stat.S_ISREG(info.st_mode), "source special file refused")
         total += info.st_size
-        require(len(found) < MAX_FILES and total <= MAX_BYTES, "source inventory limit")
+        visited += 1
+        require(visited <= MAX_FILES and total <= MAX_BYTES, "source inventory limit")
         if path.suffix == ".pyc":
             validate_source_cache(path)
             return
