@@ -174,7 +174,7 @@ class SubmissionOperationResponse(BaseModel):
     operationally_stalled: bool
     next_action: Literal[
         "wait", "correct_and_submit_new_key", "retry_new_key_after_terminal",
-        "inspect_governed_outcome",
+        "inspect_governed_outcome", "contact_operator",
     ]
 
 

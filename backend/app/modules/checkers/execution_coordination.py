@@ -241,12 +241,15 @@ class EvaluationCoordinator:
                 **expected.model_dump(exclude={"payload_json", "payload_digest"}),
                 project_id=project_id, payload=json.loads(expected.payload_json),
             )
+        failure_code = None
         terminal = run.status in {"completed", "infrastructure_failed"}
         if terminal:
             result = stored_result(run)
             if (result.outcome != run.status or run.finalize_evidence_id is None
-                    or (run.status == "completed") != (run.completion_event_id is not None)):
+                    or (run.status == "completed") != (run.completion_event_id is not None)
+                    or run.failure_code != result.infrastructure_failure_code):
                 raise CheckerExecutionUnavailable(unavailable)
+            failure_code = result.infrastructure_failure_code
             if run.status == "completed":
                 if run.execute_evidence_id is None:
                     raise CheckerExecutionUnavailable(unavailable)
@@ -263,7 +266,7 @@ class EvaluationCoordinator:
                 and run.worker_lease_generation > 0 and run.worker_lease_expires_at is not None
                 and run.worker_lease_expires_at > now)
         return EvaluationProgress(
-            current=current, status=run.status, live_worker_lease=live,
+            current=current, status=run.status, live_worker_lease=live, failure_code=failure_code,
             retry_event_id=retry_event_id, completion_event_id=run.completion_event_id,
             delivery_event_json=delivery_event.model_dump_json() if delivery_event is not None else None,
         )

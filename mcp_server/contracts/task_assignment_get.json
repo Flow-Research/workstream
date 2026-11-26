@@ -884,6 +884,7 @@
               "awaiting_evaluation",
               "revise",
               "wait_for_processing",
+              "contact_operator",
               "none"
             ],
             "title": "Next Action",

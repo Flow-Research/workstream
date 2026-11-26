@@ -158,7 +158,7 @@ async def test_t5_finalizes_same_source_with_one_submission_and_post_dispatch(ad
         assert await finalizer.run(owner.operation_id) == result
         assert await f.admission.accept(owner, request, terminal.terminal_digest,
             checkers=selected_pre_submit_coordinator, outbox=outbox_append) == dict(accepted, replayed=True)
-        async def public_progress(stage, evaluation_request_id, *, stalled=False, governed=False):
+        async def public_progress(stage, evaluation_request_id, *, stalled=False, governed=False, failure_code=None):
             response = await f.access.signed.client.get(
                 f"/api/v1/tasks/{f.task}/submission-operations", headers=f.access.target.headers,
                 params={"operation_id": str(owner.operation_id)},
@@ -171,7 +171,19 @@ async def test_t5_finalizes_same_source_with_one_submission_and_post_dispatch(ad
             assert observed["evaluation_request_id"] == str(evaluation_request_id)
             assert observed["processing_stage"] == stage
             assert observed["operationally_stalled"] is stalled
-            assert observed["next_action"] == ("inspect_governed_outcome" if governed else "wait")
+            action = "contact_operator" if stalled else "inspect_governed_outcome" if governed else "wait"
+            assert observed["next_action"] == action
+            assert observed["failure_code"] == failure_code
+            if not governed:
+                assignment = await f.access.signed.client.get(
+                    f"/api/v1/actors/me/assignments/{request.assignment_id}", headers=f.access.target.headers,
+                )
+                assert assignment.status_code == 200, assignment.text
+                current = assignment.json()
+                assert current["current_status"] == "evaluation_pending"
+                assert current["intake"]["submission_id"] == str(result.submission_id)
+                assert current["intake"]["failure_code"] == current["status_reason"] == failure_code
+                assert current["next_action"] == ("contact_operator" if stalled else "awaiting_evaluation")
             return observed
 
         await public_progress("evaluation_pending", result.evaluation_request_id)
@@ -212,7 +224,8 @@ async def test_t5_finalizes_same_source_with_one_submission_and_post_dispatch(ad
                 )
                 assert pending_completion.state == "pending"
         await public_progress("operationally_stalled" if post_failure else "evaluation_pending",
-                              result.evaluation_request_id, stalled=post_failure)
+                              result.evaluation_request_id, stalled=post_failure,
+                              failure_code="post_submission_material_unavailable" if post_failure else None)
         if post_failure:
             harness = SimpleNamespace(factory=f.factory, request=queued.current.request, created=result)
             operator = await _operator_for(harness)

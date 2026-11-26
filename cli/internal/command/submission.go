@@ -9,6 +9,25 @@ import (
 	"github.com/spf13/cobra"
 )
 
+func postSubmissionRecovery(code *string) string {
+	if code == nil {
+		return ""
+	}
+	message := map[string]string{
+		"post_submission_capacity_exceeded":          "POST could not acquire enough checker capacity.",
+		"post_submission_deadline_exceeded":          "POST evaluation timed out.",
+		"post_submission_material_unavailable":       "POST could not read the retained submission material.",
+		"post_submission_implementation_unavailable": "The POST checker runtime is unavailable.",
+		"post_submission_invalid_output":             "The POST checker returned an invalid response.",
+		"post_submission_delivery_failed":            "The worker could not finish POST processing.",
+		"post_submission_outcome_unknown":            "The POST execution outcome is uncertain.",
+	}[*code]
+	if message == "" {
+		return ""
+	}
+	return message + " Your Submission is retained. Contact an Operator for recovery."
+}
+
 func addSubmissionCommands(root, task *cobra.Command, client func() (*api.Client, error), output *string, stdout io.Writer) {
 	{
 		var assignment, feedback, path, key string
@@ -86,6 +105,9 @@ func addSubmissionCommands(root, task *cobra.Command, client func() (*api.Client
 				{"Terms", value.Assignment.Compensation}, {"Revision", value.Assignment.Revision},
 				{"Latest submitted attempt", value.Assignment.LatestSubmission},
 			}
+			if value.NextAction == "contact_operator" {
+				fields = append(fields, contextField{"Evaluation recovery", postSubmissionRecovery(value.StatusReason)})
+			}
 			if value.Intake != nil {
 				fields = append(fields, contextField{"Intake stage", value.Intake.Stage},
 					contextField{"Intake feedback", api.IntakeFeedbackLines(value.Intake.Feedback)})
@@ -125,7 +147,11 @@ func addSubmissionCommands(root, task *cobra.Command, client func() (*api.Client
 			if *output == "json" {
 				return writeSafeJSON(stdout, result.Raw)
 			}
-			return writeTaskContextFields(stdout, []contextField{{"Submission operation", result.Value}})
+			fields := []contextField{{"Submission operation", result.Value}}
+			if result.Value.NextAction == "contact_operator" {
+				fields = append(fields, contextField{"Evaluation recovery", postSubmissionRecovery(result.Value.FailureCode)})
+			}
+			return writeTaskContextFields(stdout, fields)
 		}
 		task.AddCommand(progress)
 	}

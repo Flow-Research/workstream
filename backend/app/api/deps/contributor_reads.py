@@ -159,7 +159,9 @@ class ExactContributorAssignment(BaseModel):
     assignment: ContributorAssignment
     current_status: TaskStatus | Literal["closed", "rejected"]
     status_reason: str | None
-    next_action: Literal["submit", "awaiting_intake", "awaiting_evaluation", "revise", "wait_for_processing", "none"]
+    next_action: Literal[
+        "submit", "awaiting_intake", "awaiting_evaluation", "revise", "wait_for_processing", "contact_operator", "none",
+    ]
     intake: AssignmentIntakeAttempt | None
     feedback_submission_id: UUID | None
     post_submission_results: tuple[ContributorCheckerResult, ...] = Field(max_length=100)
@@ -347,6 +349,9 @@ class ContributorReadOperation:
             raise ValueError("active assignment is missing its task state")
         if intake is not None and intake.stage in {"receiving", "pre_checking"}:
             return status, "submission_in_progress", "awaiting_intake"
+        if (status == "evaluation_pending" and intake is not None and intake.operationally_stalled
+                and intake.failure_code is not None and intake.failure_code.startswith("post_submission_")):
+            return status, intake.failure_code, "contact_operator"
         if (intake is not None and intake.operationally_stalled
                 or status == "evaluation_pending" and history is not None and history.status == "infrastructure_failed"):
             return status, "processing_unavailable", "wait_for_processing"

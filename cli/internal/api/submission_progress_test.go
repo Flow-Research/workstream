@@ -77,10 +77,15 @@ func TestSubmissionProgressRefusesUnboundOrMalformedEvidence(t *testing.T) {
 		value["submission_version"] = 2
 		value["evaluation_request_id"] = testSubmission
 		value["operationally_stalled"] = stage == "operationally_stalled"
-		value["next_action"] = "inspect_governed_outcome"
+		action := "inspect_governed_outcome"
+		if stage == "operationally_stalled" {
+			action = "contact_operator"
+			value["failure_code"] = "post_submission_outcome_unknown"
+		}
+		value["next_action"] = action
 		raw, _ := json.Marshal(value)
 		got, err := decodeSubmissionProgress(raw, testTask, testRun, "")
-		if err != nil || got.Stage != stage || got.NextAction != "inspect_governed_outcome" {
+		if err != nil || got.Stage != stage || got.NextAction != action {
 			t.Fatal(stage, err)
 		}
 	}

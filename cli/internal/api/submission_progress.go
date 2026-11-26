@@ -38,7 +38,7 @@ func decodeSubmissionProgress(raw json.RawMessage, task, operation, key string) 
 		(operation != "" && !sameUUID(value.OperationID, operation)) || (key != "" && !sameUUID(value.IdempotencyKey, key)) ||
 		!oneOf(value.State, "receiving", "pre_checking", "finalization_pending", "finalized", "rejected", "failed", "abandoned", "cancelled") ||
 		!oneOf(value.Stage, "receiving", "pre_checking", "finalization_pending", "evaluation_pending", "evaluation_running", "review_pending", "needs_revision", "accepted", "rejected", "failed", "abandoned", "cancelled", "operationally_stalled") ||
-		!oneOf(value.NextAction, "wait", "correct_and_submit_new_key", "retry_new_key_after_terminal", "inspect_governed_outcome") ||
+		!oneOf(value.NextAction, "wait", "correct_and_submit_new_key", "retry_new_key_after_terminal", "inspect_governed_outcome", "contact_operator") ||
 		(value.AcceptedAt != nil && !validTime(*value.AcceptedAt)) ||
 		(value.TaskStatusAtAcceptance != nil && *value.TaskStatusAtAcceptance != "evaluation_pending") ||
 		(value.CurrentTaskStatus != nil && !oneOf(*value.CurrentTaskStatus, "draft", "screening", "ready", "in_progress", "submitted", "evaluation_pending", "review_pending", "needs_revision", "accepted")) ||

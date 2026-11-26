@@ -359,7 +359,7 @@ func (c *Client) TaskAssignment(ctx context.Context, assignment string, limit in
 	if err != nil || !requiredNullable(fields, "status_reason", "intake", "feedback_submission_id", "next_cursor", "accepted_evidence") ||
 		!c.safeMutationResponse(raw) || !validOptionalID(value.FeedbackSubmissionID) ||
 		!oneOf(value.CurrentStatus, append(append([]string{}, taskStatuses...), "closed", "rejected")...) ||
-		!oneOf(value.NextAction, "submit", "awaiting_intake", "awaiting_evaluation", "revise", "wait_for_processing", "none") ||
+		!oneOf(value.NextAction, "submit", "awaiting_intake", "awaiting_evaluation", "revise", "wait_for_processing", "contact_operator", "none") ||
 		len(value.PostFindings) > limit || !validateContributorFindings(fields["post_submission_results"], value.PostFindings) ||
 		(value.NextCursor != nil && (!validTaskCursor(*value.NextCursor) || len(value.PostFindings) == 0)) {
 		return result, &Failure{Code: "invalid_api_response"}

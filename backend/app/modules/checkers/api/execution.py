@@ -15,7 +15,9 @@ from app.modules.checkers.api.evaluation_contract import (
     PostSubmissionExecutionRequest,
     PostSubmissionExecutionResult,
 )
-from app.modules.checkers.api.selected_post_submit import SelectedPostSubmitCurrentResultReference
+from app.modules.checkers.api.selected_post_submit import (
+    PostSubmissionInfrastructureFailureCode, SelectedPostSubmitCurrentResultReference,
+)
 from app.modules.checkers.api.evaluation_context import (
     PostSubmitInputContextCustody, validate_input_context_custody,
 )
@@ -345,6 +347,7 @@ class EvaluationProgress(CheckerValue):
     current: ReservedEvaluation
     status: Literal["queued", "running", "completed", "infrastructure_failed"]
     live_worker_lease: bool
+    failure_code: PostSubmissionInfrastructureFailureCode | None
     retry_event_id: ResourceId | None
     completion_event_id: ResourceId | None
     delivery_event_json: str | None
