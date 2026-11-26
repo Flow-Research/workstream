@@ -53,7 +53,8 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     && chmod 0444 /etc/workstream/project-agent-sdk-environment \
     && rm -rf /workspace/backend/build /workspace/backend/workstream_backend.egg-info \
     && chmod 0555 /usr/local/bin/workstream-release-entrypoint \
-    && chown -R workstream:workstream /workspace /opt/venv
+    && chown -R workstream:workstream /workspace /opt/venv \
+    && chmod -R a+rX /workspace /opt/venv
 
 USER workstream
 

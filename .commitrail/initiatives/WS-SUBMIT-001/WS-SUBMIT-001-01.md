@@ -12793,3 +12793,13 @@ accepted source exists. Only a successful pending check restarts it. The outer
 runtime owns teardown on failure while the dedicated scanner and finalizer
 remain active. These cases verify the maintained proof owners. The new native
 preclaim and pending checks still need a matching terminal journey receipt.
+
+
+### Make release code readable to the isolated guide parser
+
+The hosted cutover reached schema 0093. The candidate guide parser then
+failed to import `app` because the archived source carried owner-only file
+modes. The bounded repair covers the backend release Dockerfile and its
+image verifier. The isolated parser must import the packaged code both as
+capability-restricted root and as the broker UID. Runtime and secret
+directories retain their existing permissions.
