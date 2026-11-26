@@ -11427,3 +11427,15 @@ stopped when the dedicated cleanup worker refused startup configuration; the
 other workers started. Its database/storage cleanup is complete at
 `/tmp/workstream-paired-native-n7e8wt8w/cleanup.json`. Diagnose that exact
 configuration before another full rerun; no acceptance or PRE success is claimed.
+
+
+Focused current-contract runtime closure: eight cases passed in 183.12 seconds
+with real PostgreSQL/MinIO and the dedicated Redis consumer. Receipt
+`/tmp/pr708-current-fixtures-runtime-v1.json` records 0096a744c, schema0092 and
+complete database/storage cleanup. The launch observation db9dc975 differs only
+in this record; all six executed test/helper modules match the reviewed fixture
+commit. Covered three recovery consumers, exact guide/current-authority hints,
+stored failure history, both SQL predecessor-fence parameters and the real
+prefork observability probe on its declared queue. The existing synthetic-context
+Pydantic warning remains visible. Broker-loss replay and the earlier CI OTLP
+missing-events failure are not closed by these eight cases.
