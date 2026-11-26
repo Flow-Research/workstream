@@ -10974,3 +10974,27 @@ unknown task. The launch receipt names the base commit because the working tree
 held this patch, so it is scope-compatible dirty-tree evidence, not clean-head
 qualification. Focused topology, rendered hosted/local configuration, Ruff,
 structure, Commitrail and changed Markdown links are checked separately.
+
+
+### Remaining full-suite schema execution boundary
+
+Backend run 45465160851 at PR head 65a176a69 completed with all project/task
+lanes passing. The nine shared shards executed all 6717 assigned nodes with
+no skips/deselections; their concrete contract/fixture failures are addressed
+by the reviewed local repairs. This is not a final-head CI pass.
+The schema lane exhausted its unchanged 1500-second budget: artifact 14957896305
+records 237 of 584 nodes complete, including all 56 isolated-runner admin cases
+and 65 of 70 Alembic cases, without a reported assertion failure. Root's bounded
+remaining-five-case probe at 3334fa566 also reached its 180-second bound after
+three completed cases; this is incomplete execution, not a pass or proof of a
+specific hanging test. Its receipt confirms schema 0091 and complete owned
+database/MinIO cleanup. Private evidence: `/tmp/submission-schema-65a.zip`,
+`/tmp/submission-schema-tail-65a.log`, `/tmp/submission-schema-tail-65a.json`.
+Full schema execution still needs bounded capacity diagnosis/partition and a
+complete run; do not skip cases or treat the timeout as an assertion repair.
+
+Queue isolation is integrated at db4f0a92c after scoped ARCH review and real
+scanner/finalizer proof. The native public-journey caller still needs its owned
+worker lifecycle updated before the combined live drill. The submitter handoff
+core remains in a separate reviewed candidate pending historical-upgrade and
+public read tests. All changes remain in PR 708; PR 709 is not our workstream.
