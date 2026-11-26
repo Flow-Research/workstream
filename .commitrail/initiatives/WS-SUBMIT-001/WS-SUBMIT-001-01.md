@@ -13046,14 +13046,17 @@ process exit, and output above the locked 32 KiB limit. Each failed operation
 must retain its exact source and charge, return the same-key infrastructure
 failure without a revision penalty, and bind a native create/start/exec/exit/
 delete trace. A final valid ZIP tests completed PRE with one exact lease's
-delete failure. It must retain a pending cleanup obligation while T4 accepts
-the source and T5 creates the Submission. The same isolated CLI process then
+delete failure. The existing isolated POST effect worker is stopped before this
+last submission; the finalizer and outbox scanner remain live. It must retain
+a pending cleanup obligation while T4 accepts the source and T5 creates the
+Submission without consuming POST retries. The same isolated CLI process then
 writes a private, exact-lease pending receipt and waits at most 300 seconds
 for an operator-owned matching reconciliation receipt. The operator must
 independently observe the held lease and unavailable capacity, unarm only the
 test wrapper fault, and let the existing Smol startup recovery clear the owned
-lease before acknowledging readiness. The same client then waits for real POST
-acceptance and audits the contribution before its database and bucket are
+lease before acknowledging readiness. The owned POST worker resumes only after
+that acknowledgement. The same client then waits for real POST acceptance and
+audits the contribution before its database and bucket are
 cleaned. Only afterward may the operator use the established drained test
 domain stop and normal runner restoration. The existing deadline and
 isolation selection remains unchanged.

@@ -168,14 +168,18 @@ def _verify_failure_replay(first, replay):
     assert stable(first) == stable(replay)
 
 
-def qualify(client, token, task_id, assignment_id, environment):
+def qualify(
+    client, token, task_id, assignment_id, environment, *, post_delivery_pause=None
+):
     """Exercise one closed current-source native qualification selection."""
     mode = environment.get(
         "WORKSTREAM_CLI_JOURNEY_PRE_QUALIFICATION_MODE", "deadline_isolation"
     )
     if mode == "failure_cleanup":
+        if post_delivery_pause is None:
+            raise RuntimeError("pending PRE cleanup requires an owned POST pause")
         return _qualify_failure_cleanup(
-            client, token, task_id, assignment_id, environment
+            client, token, task_id, assignment_id, environment, post_delivery_pause
         )
     if mode != "deadline_isolation":
         raise RuntimeError("unknown PRE qualification selection")
@@ -265,7 +269,9 @@ def qualify(client, token, task_id, assignment_id, environment):
         )
 
 
-def _qualify_failure_cleanup(client, token, task_id, assignment_id, environment):
+def _qualify_failure_cleanup(
+    client, token, task_id, assignment_id, environment, post_delivery_pause
+):
     """Prove failed guests, then accept one result with unresolved VM deletion."""
     from source_audit import audit_accepted_source
     from submission_work import (
@@ -316,52 +322,53 @@ def _qualify_failure_cleanup(client, token, task_id, assignment_id, environment)
             )
         )
 
-    key, receipt = _submit(client, token, task_id, assignment_id, good)
-    deadline = time.monotonic() + 180
-    while time.monotonic() < deadline:
-        observed = _progress(client, token, task_id, key, receipt["operation_id"])
-        if observed["operation_state"] == "finalized":
-            break
-        if observed["operation_state"] in {"failed", "abandoned", "cancelled"}:
+    with post_delivery_pause:
+        key, receipt = _submit(client, token, task_id, assignment_id, good)
+        deadline = time.monotonic() + 180
+        while time.monotonic() < deadline:
+            observed = _progress(client, token, task_id, key, receipt["operation_id"])
+            if observed["operation_state"] == "finalized":
+                break
+            if observed["operation_state"] in {"failed", "abandoned", "cancelled"}:
+                raise AssertionError("completed PRE did not reach durable T5")
+            time.sleep(1)
+        else:
             raise AssertionError("completed PRE did not reach durable T5")
-        time.sleep(1)
-    else:
-        raise AssertionError("completed PRE did not reach durable T5")
-    assert observed["submission_id"] and observed["submission_version"] == 1
-    assert observed["processing_stage"] in {"evaluation_pending", "evaluation_running"}
-    audit_accepted_source(
-        receipt["operation_id"],
-        observed["submission_id"],
-        task_id,
-        good,
-        accepted=False,
-    )
-    pending = asyncio.run(
-        _terminal(
-            environment,
+        assert observed["submission_id"] and observed["submission_version"] == 1
+        assert observed["processing_stage"] == "evaluation_pending"
+        audit_accepted_source(
             receipt["operation_id"],
+            observed["submission_id"],
             task_id,
-            assignment_id,
             good,
-            failed=False,
-            cleanup="pending",
+            accepted=False,
         )
-    )
-    handoff = {
-        "schema_version": "workstream.pre_qualification_restore.v1",
-        "nonce": str(uuid4()),
-        "source_operation_id": receipt["operation_id"],
-        "submission_id": observed["submission_id"],
-        "provider_invocation_id": pending["invocation"]["provider_invocation_id"],
-        "terminal_sha256": pending["terminal_sha256"],
-    }
-    handoff_path = client.evidence.parent / "pre-qualification-pending.json"
-    with handoff_path.open("x", encoding="utf-8") as stream:
-        handoff_path.chmod(0o600)
-        json.dump(handoff, stream)
-        stream.flush()
-        os.fsync(stream.fileno())
-    _await_reconciled(client.evidence.parent, handoff)
+        pending = asyncio.run(
+            _terminal(
+                environment,
+                receipt["operation_id"],
+                task_id,
+                assignment_id,
+                good,
+                failed=False,
+                cleanup="pending",
+            )
+        )
+        handoff = {
+            "schema_version": "workstream.pre_qualification_restore.v1",
+            "nonce": str(uuid4()),
+            "source_operation_id": receipt["operation_id"],
+            "submission_id": observed["submission_id"],
+            "provider_invocation_id": pending["invocation"]["provider_invocation_id"],
+            "terminal_sha256": pending["terminal_sha256"],
+        }
+        handoff_path = client.evidence.parent / "pre-qualification-pending.json"
+        with handoff_path.open("x", encoding="utf-8") as stream:
+            handoff_path.chmod(0o600)
+            json.dump(handoff, stream)
+            stream.flush()
+            os.fsync(stream.fileno())
+        _await_reconciled(client.evidence.parent, handoff)
     accepted = _wait_for_stage(client, token, task_id, key, receipt, "accepted")
     assert accepted["submission_id"] == observed["submission_id"]
     audit_accepted_source(

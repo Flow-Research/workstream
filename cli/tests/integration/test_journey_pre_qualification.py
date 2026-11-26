@@ -20,6 +20,18 @@ MODULE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MODULE)
 
 
+def test_failure_cleanup_requires_the_owned_post_delivery_pause(monkeypatch):
+    pause = object()
+    monkeypatch.setattr(MODULE, "_qualify_failure_cleanup", lambda *args: args[-1])
+    environment = {"WORKSTREAM_CLI_JOURNEY_PRE_QUALIFICATION_MODE": "failure_cleanup"}
+    with pytest.raises(RuntimeError, match="owned POST pause"):
+        MODULE.qualify(None, None, None, None, environment)
+    assert (
+        MODULE.qualify(None, None, None, None, environment, post_delivery_pause=pause)
+        is pause
+    )
+
+
 @pytest.mark.parametrize(
     "fault",
     [

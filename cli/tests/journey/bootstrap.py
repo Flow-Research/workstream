@@ -467,6 +467,7 @@ def main():
                                 task_id,
                                 assignment_id,
                                 environment,
+                                post_delivery_pause=pause_post_delivery(*post_worker),
                             )
                             client.complete_stage("source_first_pre_client_evidence")
                         elif os.environ.get("WORKSTREAM_CLI_JOURNEY_SUBMIT") == "1":
