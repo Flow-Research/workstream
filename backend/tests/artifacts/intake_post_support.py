@@ -1,4 +1,5 @@
 """T5-to-POST owner integration with real storage and a controlled checker runtime."""
+from contextlib import nullcontext
 from types import SimpleNamespace
 from uuid import UUID
 
@@ -7,7 +8,9 @@ from app.adapters.checkers import evaluation_coordinator
 from app.modules.actors.api import ServiceIdentity
 from app.modules.artifacts.api.submission_archive import SubmissionArchiveLimits
 from app.modules.artifacts.preparation import ArtifactPreparationService, ArtifactScratchManager
-from tests.checkers.execution.support import ControlledSelectedExecution, live_executor, provision_post_submit_service
+from tests.checkers.execution.support import (
+    ControlledSelectedExecution, final_post_attempt, live_executor, provision_post_submit_service,
+)
 from tests.test_checker_materialization import _limits
 from tests.trusted_intake_fixtures import LocalIntakeAdapter
 
@@ -26,7 +29,7 @@ class ExactSourceStore:
         return self.store.open_source(source, **kwargs)
 
 
-async def exercise_source_post(f, created, store, source, tmp_path, *, missing=False):
+async def exercise_source_post(f, created, store, source, tmp_path, monkeypatch, *, missing=False):
     """Execute and retain POST with fresh AUTH, exact source I/O and replay."""
     await provision_post_submit_service(f.factory, ServiceIdentity.CHECKER_POST_SUBMIT)
     await provision_post_submit_service(f.factory, ServiceIdentity.ARTIFACT_MATERIALIZER)
@@ -44,7 +47,8 @@ async def exercise_source_post(f, created, store, source, tmp_path, *, missing=F
         runtime = ControlledSelectedExecution()
         harness = SimpleNamespace(factory=f.factory, service=service, request=reserved.request)
         executor = live_executor(harness, selected_execution=runtime)
-        result = await executor.evaluate_post_submission(reserved.request)
+        with final_post_attempt(monkeypatch) if missing else nullcontext():
+            result = await executor.evaluate_post_submission(reserved.request)
         assert result.outcome == ("infrastructure_failed" if missing else "completed")
         assert len(counted.opens) == 1
         assert len(runtime.requests) == (0 if missing else 1)

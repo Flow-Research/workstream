@@ -206,7 +206,7 @@ async def test_t5_finalizes_same_source_with_one_submission_and_post_dispatch(ad
                 def missing_source(*_args, **_kwargs):
                     raise ArtifactObjectMissingError("controlled source unavailable")
                 patch.setattr(type(store), "open_source", missing_source)
-            await exercise_source_post(f, result, store, request.source, tmp_path, missing=post_failure)
+            await exercise_source_post(f, result, store, request.source, tmp_path, monkeypatch, missing=post_failure)
         assert len(running_observations) == (0 if post_failure else 1)
         async with f.factory.begin() as session:
             # Completed checker evidence alone does not change the governed attempt.

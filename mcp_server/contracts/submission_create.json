@@ -1,5 +1,5 @@
 {
-  "canonical_sha256": "4b308da1c69b44193386ba0513cd9f41de2b33016c0a898bce65512e58861f63",
+  "canonical_sha256": "b273e18412acce287b8f55917d42ff06913afaa1e5fedc2d44b7372cfa5b6b0c",
   "components": {
     "schemas": {
       "ApiError": {
@@ -703,6 +703,25 @@
       },
       "503": {
         "description": "Infrastructure unavailable or acceptance outcome unknown",
+        "headers": {
+          "X-Correlation-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          "X-Request-ID": {
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        }
+      },
+      "504": {
+        "description": "Pre-submission deadline expired and the operation durably ended",
         "headers": {
           "X-Correlation-ID": {
             "required": true,

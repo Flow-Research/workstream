@@ -159,6 +159,7 @@ async def test_unsupported_request_envelope_never_reaches_execution(monkeypatch)
     executor = owner.PostSubmissionExecutor(
         sessions=None, execute_authority=None, finalize_authority=None,
         materialization=None, outbox=None, review_modes=None,
+        retry_tasks=lambda _: pytest.fail("unsupported request reached retry reservation"),
     )
     monkeypatch.setattr(executor, "_claim", forbidden_claim)
     for schema in ("post_submit_evaluation_request", "arbitrary_request.v1"):
@@ -395,7 +396,10 @@ async def test_unreadable_stored_bytes_terminalize_and_replay(
         await service_link_state(h.factory, ServiceIdentity.CHECKER_POST_SUBMIT, active=True)
         monkeypatch.setattr(executor, "finalize", finalize)
         assert len(pending) == 1
-        result = await finalize(pending[0])
+        from tests.checkers.execution.support import final_post_attempt
+
+        with final_post_attempt(monkeypatch):
+            result = await finalize(pending[0])
         assert result.outcome == "infrastructure_failed"
         assert result.infrastructure_failure_code == "material_unavailable"
         assert result.execution is None

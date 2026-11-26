@@ -1,5 +1,7 @@
 """Real fixed-service execution fixtures and explicit forbidden phase participants."""
 
+from contextlib import contextmanager
+
 import pytest
 from sqlalchemy import select
 
@@ -166,10 +168,22 @@ async def provision_post_submit_service(factory, identity=ServiceIdentity.CHECKE
         return actor_id
 
 
+@contextmanager
+def final_post_attempt(monkeypatch):
+    """Exercise exhaustion and manual recovery with one allowed attempt in this fixture."""
+    from app.modules.checkers import execution_coordination
+
+    options = execution_coordination.POST_SUBMISSION_RETRY_OPTIONS.model_copy(update={"max_attempts": 1})
+    with monkeypatch.context() as patch:
+        patch.setattr(execution_coordination, "POST_SUBMISSION_RETRY_OPTIONS", options)
+        yield
+
+
 def live_executor(h, *, outbox=None, selected_execution=None, forge_facts=None):
     from app.adapters.auth import post_submit_execution_authority
     from app.adapters.outbox import outbox_append
     from app.adapters.projects import project_locked_policy_context_port
+    from app.adapters.tasks import evaluation_task_guard
     from app.modules.checkers.execution import PostSubmissionExecutor
 
     return PostSubmissionExecutor(
@@ -180,7 +194,7 @@ def live_executor(h, *, outbox=None, selected_execution=None, forge_facts=None):
         selected_execution=selected_execution or ControlledSelectedExecution(),
         forge_facts=forge_facts,
         outbox=outbox if outbox is not None else outbox_append,
-        review_modes=project_locked_policy_context_port,
+        review_modes=project_locked_policy_context_port, retry_tasks=evaluation_task_guard,
     )
 
 

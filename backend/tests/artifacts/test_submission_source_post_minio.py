@@ -68,7 +68,7 @@ async def test_post_uses_recorded_version_despite_newer_same_key(admission_intak
             async with original_client() as client:
                 yield ReadOnlyClient(client)
         monkeypatch.setattr(store, "_client", recorded_reads)
-        await exercise_source_post(f, created, store, source, tmp_path, missing=remove_original)
+        await exercise_source_post(f, created, store, source, tmp_path, monkeypatch, missing=remove_original)
         assert reads == [dict(Bucket=MINIO_BUCKET, Key=store._source_key(source.location),
                               VersionId=source.provider_generation)]
         assert await finalizer.run(owner.operation_id) == created
