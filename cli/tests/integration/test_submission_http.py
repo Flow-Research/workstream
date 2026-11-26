@@ -188,9 +188,18 @@ def test_submit_uses_the_same_inputs_for_revision(cli, tmp_path):
     path = tmp_path / "revision.zip"
     path.write_bytes(b"PK\x03\x04revision")
     with http_fixture() as (origin, response, requests):
-        for flag in ("--predecessor", "--revision-preparation-id", "--revision-preparation-sha256",
-                     "--summary", "--attestation"):
-            assert_failure(cli(origin, TOKEN, *submit_args(path), flag, SUBMISSION), "invalid_arguments", 2)
+        for flag in (
+            "--predecessor",
+            "--revision-preparation-id",
+            "--revision-preparation-sha256",
+            "--summary",
+            "--attestation",
+        ):
+            assert_failure(
+                cli(origin, TOKEN, *submit_args(path), flag, SUBMISSION),
+                "invalid_arguments",
+                2,
+            )
         assert requests == []
         respond(response, acceptance(), 202)
         result = cli(origin, TOKEN, *submit_args(path))

@@ -293,16 +293,30 @@ async def test_installed_cli_reads_and_downloads_real_assigned_originals(
         project_guides = tmp_path / "project-guide"
         project_guides.mkdir()
         approved = await asyncio.to_thread(
-            cli, origin, "task-token", "project", "guide", "approved",
-            guide_world.project["id"], "--download", str(project_guides), "-o", "json",
+            cli,
+            origin,
+            "task-token",
+            "project",
+            "guide",
+            "approved",
+            guide_world.project["id"],
+            "--download",
+            str(project_guides),
+            "-o",
+            "json",
         )
         assert approved.returncode == 0, approved.stderr
         approved_manifest = json.loads(approved.stdout)
         assert approved_manifest["guide_id"] == manifest["guide_id"]
         for document, original, extension in zip(
-            approved_manifest["documents"], guide_world.originals, ("md", "pdf"), strict=True,
+            approved_manifest["documents"],
+            guide_world.originals,
+            ("md", "pdf"),
+            strict=True,
         ):
-            assert (project_guides / f"{document['document_id']}.{extension}").read_bytes() == original
+            assert (
+                project_guides / f"{document['document_id']}.{extension}"
+            ).read_bytes() == original
 
         set_dev_actor(
             monkeypatch, roles="project_manager", subject="project-manager-subject"

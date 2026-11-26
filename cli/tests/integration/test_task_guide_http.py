@@ -98,9 +98,9 @@ def guide_http():
 def test_assigned_guide_list_and_verified_private_download(cli, tmp_path):
     with guide_http() as (origin, state, requests):
         listed = cli(origin, TOKEN, "task", "guide", TASK, "-o", "json")
-        assert listed.returncode == 0 and json.loads(listed.stdout)["documents"] == [DOCUMENT], (
-            listed.stderr
-        )
+        assert listed.returncode == 0 and json.loads(listed.stdout)["documents"] == [
+            DOCUMENT
+        ], listed.stderr
         terminal = cli(origin, TOKEN, "task", "guide", TASK)
         assert (
             terminal.returncode == 0
@@ -243,7 +243,9 @@ def test_full_document_list_uses_bounded_context_not_small_page_limit(cli):
         assert len(json.dumps(state["context"]).encode()) > 64 * 1024
         result = cli(origin, TOKEN, "task", "guide", TASK, "-o", "json")
         assert result.returncode == 0, result.stderr
-        assert json.loads(result.stdout)["documents"] == documents and len(requests) == 1
+        assert (
+            json.loads(result.stdout)["documents"] == documents and len(requests) == 1
+        )
 
 
 @pytest.mark.parametrize("damage", ("hash", "short", "long", "content_type"))
@@ -328,11 +330,22 @@ def test_canonical_duplicate_document_ids_are_rejected(cli):
 def test_ready_guide_can_download_before_claim_and_refuses_symlink(cli, tmp_path):
     with guide_http() as (origin, state, requests):
         state["context"]["task"]["status"] = "ready"
-        state["context"]["lifecycle"] = {"assigned_to_current_actor": False, "next_actions": ["claim"]}
+        state["context"]["lifecycle"] = {
+            "assigned_to_current_actor": False,
+            "next_actions": ["claim"],
+        }
         first_directory = tmp_path / "valid"
         first_directory.mkdir()
         result = cli(
-            origin, TOKEN, "task", "guide", TASK, "--download", str(first_directory), "-o", "json",
+            origin,
+            TOKEN,
+            "task",
+            "guide",
+            TASK,
+            "--download",
+            str(first_directory),
+            "-o",
+            "json",
         )
         assert result.returncode == 0, result.stderr
         assert json.loads(result.stdout)["documents"] == [DOCUMENT]

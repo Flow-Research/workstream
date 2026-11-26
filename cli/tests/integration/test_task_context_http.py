@@ -489,9 +489,7 @@ def test_requirements_reject_missing_null_or_substituted_facts(cli):
             ("policy_schema_version", {}),
         ):
             cases.append(REQUIREMENTS | {key: wrong})
-        for key in (
-            "allowed_storage_schemes",
-        ):
+        for key in ("allowed_storage_schemes",):
             cases.append(REQUIREMENTS | {key: [None]})
         for key, required in (
             ("required_artifacts", ("key", "path", "hash_required", "required")),

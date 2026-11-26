@@ -402,7 +402,10 @@ async def test_cli_public_submission_progress_replay_history_and_suspension(
         assert status["current_status"] == "evaluation_pending"
         assert status["next_action"] == "awaiting_evaluation"
         assert status["assignment"]["latest_submission"] is None
-        assert status["intake"]["pre_submission_results"] == receipt["pre_submission_results"]
+        assert (
+            status["intake"]["pre_submission_results"]
+            == receipt["pre_submission_results"]
+        )
         by_key = await call(
             "task", "submission-operation", str(f.task), "--idempotency-key", key
         )

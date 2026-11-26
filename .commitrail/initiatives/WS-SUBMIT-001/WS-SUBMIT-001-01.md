@@ -11182,3 +11182,56 @@ head before any migration could run. The closed list now names `0092`; its
 earlier installed revisions and fresh-database guard remain intact. A current
 database no-op upgrade regression checks the revision and public snapshot before
 and after. This correction changes no migration body or retained rows.
+
+###0092 caller integration: exact TASK peer DTO and CLI formatting (2026-11-26)
+
+Intent: Backend45776768469 for pushed46858a75d (merge6e2761218) exposes
+preflight TASK-self-only syntax assertion and CLI formatting failures before
+contract execution. Canonical public API validation already accepts TASK's
+intended reuse of PROJECTS ContributorGuideDocument from guide_reads; root
+confirmed that single immutable public owner edge avoids duplicate schemas.
+
+Allowed exactly seven files: tests/architecture/test_module_boundaries.py,
+cli/tests/integration/test_submission_http.py, test_submission_public_api.py,
+test_task_context_http.py, test_task_guide_http.py, test_task_guide_public_api.py,
+and this record. Change only exact TASK guide_documents.py peer-symbol exception
+while preserving canonical public/private/mutability checks and rejection of
+private/unrelated foreign imports. Add valid-first negative controls at that
+exact path/symbol boundary. Format only the five named CLI files; verify AST
+identity before/after and run unchanged CLI Ruff lint/format gates.
+
+Risk is architecture/CI assertion custody, not product behavior. Independent
+ARCH review applies after freeze. No production source, registry, policy, debt
+ledger, test budget, skip or broad foreign-API allowance. No PG/native run or
+CI restart/cancel/push. Grouped historical0092 fixtures and public-contract
+failures are separate bounded followups; do not weaken guards to clear them.
+The existing draftPR708 remains the sole workstream; PR709 is untouched.
+
+The exact peer exception applies only to TASK api/guide_documents.py importing
+ContributorGuideDocument without aliases from PROJECTS api/guide_reads. The
+canonical public API validator, frozen/closed model checks, nonempty import scan
+and all other TASK-self-only dependencies remain enforced. Six valid-first
+mutations reject private imports, another peer schema, mixed allowed/foreign
+symbols, wildcard, bare module import and the allowed symbol relocated to another
+TASK API file. The wildcard probe initially expected AssertionError, but the
+unchanged canonical parser correctly raised its earlier wildcard_import error;
+the oracle now asserts that exact existing rejection rather than weakening it.
+
+Focused TASK/peer/private-reexport cases passed8 in4.97s before the final
+nonempty-scan preservation tightening; final targeted replay records completion
+separately. CLI Ruff0.15.22 lint and all105file format checks pass. The exactfive
+formatted files have identical before/after ASTs
+(/tmp/pr708-cli-format-preservation.json), so no assertions/fixture behavior changed.
+No database or client runtime was rerun for formatting. Full structural validation
+is being checked unchanged; independent ARCH review remains required. This
+clears only these named early gates, not the other0092 callers or full CI.
+
+Final narrow replay passed8 in1.45s
+(/tmp/pr708-peer-boundary-repair-final.log); full unchanged structural validator
+exits0 (/tmp/pr708-0092-gate-structure.log). Ruff, changed links, Commitrail and
+whitespace pass. Exactly seven scoped files; all product/registry/policy/debt
+files unchanged. The six attack controls first pass the intended actual edge,
+so their refusals cannot be satisfied by a globally broken import checker.
+This is precommit source verification over57c939a30, not hosted or public journey
+qualification. Root supplied architecture disposition; independent ARCH review
+of the frozen exception remains pending.
