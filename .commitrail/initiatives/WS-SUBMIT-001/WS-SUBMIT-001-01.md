@@ -50,6 +50,21 @@ route and clients, foreign or missing assignments, grant loss, and retained
 attempt selection. Security, architecture, QA and documentation review focus
 on owner-scoped lookup, exact current evidence and convergence of all clients.
 
+### Sealed changed-body replay proof
+
+The durable EOF test covers changed bytes before storage seals the source. A05
+also needs the public conflict after sealing. Extend the existing accepted ZIP
+replay test with a second valid, same-length archive under the original actor,
+key and metadata. Require the exact 409 while the existing test forbids all
+provider uploads, retains a single PRE run and checks the original source
+charge. Changes are limited to that test and this record. No production code,
+deployment, new test module or transport contract changes are in scope.
+
+Run the exact existing test through isolated PostgreSQL. Risk is low for this
+test-only extension. Focused QA and human review should distinguish the new
+body digest check from the existing changed-metadata conflict and verify the
+same-body replay still succeeds.
+
 ## Bounded change
 
 ### Allowed

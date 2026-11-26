@@ -406,6 +406,11 @@ async def test_public_initial_submission_replays_and_recovers_accepted_upload(
         replay_patch.setattr(LocalStorageAdapter, "complete_source_upload", no_new_upload)
         replay = await client.post(route, headers=headers, content=payload)
         assert replay.status_code == 202 and replay.json() == dict(receipt, replayed=True), replay.text
+        changed_payload = _archive(content=b"modified work")
+        assert changed_payload != payload and len(changed_payload) == len(payload)
+        changed_body = await client.post(route, headers=headers, content=changed_payload)
+        assert changed_body.status_code == 409, changed_body.text
+        assert changed_body.json()["error"]["code"] == "submission_idempotency_conflict"
         changed = await client.post(route, headers=headers | {"X-Submission-Feedback": "changed"},
                                     content=payload)
         assert changed.status_code == 409, changed.text
@@ -450,7 +455,10 @@ async def test_public_initial_submission_replays_and_recovers_accepted_upload(
         assert stored.summary is stored.worker_attestation is None
         assert await session.scalar(select(func.count()).select_from(CheckerRun)) == 1
         assert await session.scalar(select(func.count()).select_from(SelectedPreSubmitRun)) == 1
-        assert await session.scalar(text("SELECT count(*) FROM submission_source_charges")) == 1
+        charge = (await session.execute(text(
+            "SELECT operation_id,state,accounted_bytes FROM submission_source_charges"
+        ))).one()
+        assert tuple(charge) == (UUID(receipt["operation_id"]), "sealed", len(payload))
         assert await session.scalar(text("SELECT count(*) FROM submission_intake_operations")) == 1
         admission = (await session.scalars(select(SubmissionBundleAdmission))).one()
         assert admission.status == "consumed"
