@@ -215,7 +215,7 @@ the [terminal presentation contract](../docs/design/cli-terminal-experience.md).
 | `workstream operations checker retry-sources PROJECT_ID [--limit N] [--cursor TOKEN]` | `GET /api/v1/operations/projects/PROJECT_ID/checker-retry-sources` |
 | `workstream operations checker retry PROJECT_ID SOURCE_RUN_ID --reason TEXT --idempotency-key UUID` | `POST /api/v1/operations/projects/PROJECT_ID/checker-runs/SOURCE_RUN_ID/retry` |
 | `workstream operations delivery list PROJECT_ID [--limit N] [--cursor TOKEN]` | `GET /api/v1/operations/projects/PROJECT_ID/post-submit-deliveries` |
-| `workstream operations delivery reconcile PROJECT_ID EVENT_ID --reason TEXT --idempotency-key UUID` | `POST /api/v1/operations/projects/PROJECT_ID/post-submit-deliveries/EVENT_ID/reconcile` |
+| `workstream operations delivery reconcile PROJECT_ID EVENT_ID [--abandon-unknown] --reason TEXT --idempotency-key UUID` | `POST /api/v1/operations/projects/PROJECT_ID/post-submit-deliveries/EVENT_ID/reconcile` |
 | `workstream task ready PROJECT_ID` | `GET /api/v1/projects/PROJECT_ID/tasks/ready` |
 | `workstream task submit TASK_ID --assignment UUID --file ZIP --idempotency-key UUID` | `POST /api/v1/tasks/TASK_ID/submissions` |
 | `workstream task submission-operation TASK_ID --operation-id UUID` (or `--idempotency-key UUID`) | `GET /api/v1/tasks/TASK_ID/submission-operations` |
@@ -2058,10 +2058,19 @@ UUID key. Fresh backend authority and exact source/child guards decide whether
 one immutable reconciliation child may be appended. The CLI does not classify
 the original effect, invoke a checker, infer retry safety, or silently replay
 the write. On an uncertain response, JSON has `error.outcome_unknown: true`;
-text advises manual replay only with the unchanged project, event, reason and
-key. An existing child can later be active, acknowledged or held on exact
+text advises manual replay only with the unchanged project, event, action,
+reason and key. An existing child can later be active, acknowledged or held on exact
 replay. This is distinct from `operations checker retry`, which selects a
 known-terminal infrastructure-failed checker run.
+
+For a held request whose checker lease has expired and whose outcome remains
+unknown after investigation, an Operator can explicitly request one successor
+evaluation for the same submission and assignment. The original attempt retains
+its unknown outcome.
+
+```sh
+workstream operations delivery reconcile PROJECT_ID EVENT_ID --abandon-unknown --reason 'Confirmed expired attempt with no result' --idempotency-key UUID -o json
+```
 
 ## Inspect artifact custody and explicitly retry verification
 
