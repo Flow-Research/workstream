@@ -556,8 +556,10 @@ class RemoteNode:
         expected = {
             "protocol_version", "operation", "capability", "service_request",
             "manifest_byte_count", "file_count", "total_byte_count", "epoch", "config_sha256",
+            "start_confirmation_required",
         }
-        if set(control) != expected or type(control["service_request"]) is not dict:
+        if (set(control) != expected or type(control["service_request"]) is not dict
+                or control["start_confirmation_required"] is not True):
             raise ProtocolError("execute request is invalid")
         binding_frame = _epoch_binding(control)
         request = control["service_request"]

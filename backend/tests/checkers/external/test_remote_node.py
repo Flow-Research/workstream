@@ -545,6 +545,7 @@ async def test_remote_post_failure_preserves_possible_invocation(tmp_path, monke
         writer.write.assert_not_called()
     else:
         control = json.loads(writer.write.call_args_list[0].args[0][4:])
+        assert control["start_confirmation_required"] is True
         assert control["service_request"]["request"]["request_digest"] == value.request_digest
         writer.close.assert_called_once_with()
         writer.wait_closed.assert_awaited_once_with()
@@ -571,7 +572,9 @@ async def test_remote_adapter_endpoint_invalid_explicit_root_cleans_helper_socke
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("start_mode", ["execute", "disconnect", "wrong_binding"])
+@pytest.mark.parametrize("start_mode", [
+    "execute", "disconnect", "wrong_binding", "missing_confirmation", "false_confirmation", "old_node",
+])
 async def test_remote_post_stages_bound_material_and_removes_session(tmp_path: Path, start_mode, capsys):
     certificates = _certificate_files(tmp_path)
     material_root = tmp_path / "materials"
@@ -621,6 +624,18 @@ async def test_remote_post_stages_bound_material_and_removes_session(tmp_path: P
             "session_timeout_seconds": 10,
         }
     )
+    if start_mode == "old_node":
+        # The preceding deployed protocol rejects unknown control fields before
+        # staging or native invocation. This is a refusal proof, not a fallback.
+        async def old_execute(control, _reader, _writer):
+            old_keys = {
+                "protocol_version", "operation", "capability", "service_request",
+                "manifest_byte_count", "file_count", "total_byte_count", "epoch", "config_sha256",
+            }
+            if set(control) != old_keys:
+                raise _REMOTE.ProtocolError("execute request is invalid")
+            invoked.set()
+        node._execute = old_execute
     await node.start_model_proxy()
     server = await asyncio.start_server(
         node.handle, "127.0.0.1", 0, ssl=node.ssl_context,
@@ -682,6 +697,7 @@ async def test_remote_post_stages_bound_material_and_removes_session(tmp_path: P
             "protocol_version": _REMOTE.PROTOCOL,
             "operation": "execute",
             "capability": _REMOTE.CHECKER_CAPABILITY,
+            "start_confirmation_required": True,
             "service_request": service_request,
             "manifest_byte_count": len(manifest),
             "file_count": 1,
@@ -691,12 +707,27 @@ async def test_remote_post_stages_bound_material_and_removes_session(tmp_path: P
         separators=(",", ":"),
     ).encode()
 
+    if start_mode in {"missing_confirmation", "false_confirmation"}:
+        changed = json.loads(control)
+        if start_mode == "missing_confirmation":
+            del changed["start_confirmation_required"]
+        else:
+            changed["start_confirmation_required"] = False
+        control = json.dumps(changed).encode()
+
     try:
         reader, writer = await asyncio.open_connection(
             "127.0.0.1", port, ssl=client_context, server_hostname="runner.test"
         )
         writer.write(_frame(control) + _frame(manifest) + _frame(content) + struct.pack(">I", 0))
         await writer.drain()
+        if start_mode in {"missing_confirmation", "false_confirmation", "old_node"}:
+            assert await asyncio.wait_for(reader.read(), 2) == b""
+            writer.close()
+            await writer.wait_closed()
+            assert not invoked.is_set()
+            assert list((material_root / "workspaces").iterdir()) == []
+            return
         ready = json.loads(await _read_frame(reader))
         assert ready == {
             "protocol_version": _REMOTE.PROTOCOL, "operation": "material_ready",

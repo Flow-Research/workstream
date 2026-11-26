@@ -357,6 +357,7 @@ class RemoteTlsExternalCheckerAdapter:
                             "protocol_version": _REMOTE_PROTOCOL,
                             "operation": "execute",
                             "capability": EXTERNAL_CHECKER_CAPABILITY_KEY,
+                            "start_confirmation_required": True,
                             "service_request": json.loads(payload),
                             "manifest_byte_count": len(manifest),
                             "file_count": len(files),
