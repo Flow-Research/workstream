@@ -1,7 +1,7 @@
 """Actual request delivery, exact terminal replay, and hidden production scope."""
 
 import pytest
-from sqlalchemy import select, func
+from sqlalchemy import select, func, text
 
 from app.adapters.outbox import production_outbox_delivery
 from app.modules.actors.api import ServiceIdentity
@@ -180,3 +180,31 @@ async def test_known_post_failure_schedules_one_delayed_service_retry(
             if now < due:
                 assert await d.delivery.claim(event_id, h.request.project_id, "worker") is None
         assert await d.delivery.deliver(h.created.evaluation_event_id, h.request.project_id, "duplicate") is None
+        for generation in range(2, 6):
+            # Follow the committed retry schedule without changing clock or custody.
+            async with h.factory() as session:
+                await session.execute(text(
+                    "SELECT pg_sleep(GREATEST(EXTRACT(EPOCH FROM CAST(:due AS timestamptz)-clock_timestamp()),0)+0.02)"
+                ), {"due": due})
+            receipt = outcome(await d.delivery.deliver(event_id, h.request.project_id, "retry-worker"))
+            assert receipt["delivery_state"] == "acknowledged"
+            async with h.factory.begin() as session:
+                source = await session.scalar(select(CheckerRun).where(
+                    CheckerRun.submission_id == str(h.request.submission_id),
+                    CheckerRun.evaluation_generation == generation,
+                ))
+                assert source.status == "infrastructure_failed"
+                next_run = await session.scalar(select(CheckerRun).where(CheckerRun.supersedes_checker_run_id == source.id))
+                if generation == 5:
+                    assert next_run is None
+                    progress = await evaluation_coordinator(session).read_current_progress(
+                        project_id=h.request.project_id, task_id=h.request.task_id,
+                        submission_id=h.request.submission_id, original_request_id=h.request.evaluation_request_id,
+                    )
+                    assert progress.status == "infrastructure_failed" and progress.failure_code == "material_unavailable"
+                    assert progress.current.reservation.evaluation_generation == 5
+                else:
+                    next_event = await session.get(OutboxEvent, next_run.retry_delivery_event_id)
+                    assert next_event.not_before_at == source.completed_at + timedelta(seconds=5 * 2 ** (generation - 1))
+                    event_id, due = next_event.event_id, next_event.not_before_at
+        assert not d.selected.requests
