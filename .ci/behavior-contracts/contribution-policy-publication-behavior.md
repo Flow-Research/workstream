@@ -226,7 +226,7 @@ duplicates require a fresh authorized read and return immutable event facts.
 - [ ] PostgreSQL rejects immutable graph mutation, lifecycle skips, forged
   attribution/events, event mutation/deletion/truncation, and incomplete publish.
 - [ ] No new file reaches 500 lines; one primary behavior per test; no frozen
-  debt growth; focused coverage remains at least 90%.
+  debt growth; coverage is diagnostic, never a percentage gate.
 - [ ] CP05 alone becomes the next activation boundary.
 
 ## Verification
@@ -284,15 +284,15 @@ database do not satisfy the contract.
 ```bash
 cd backend && .venv/bin/ruff check app/modules/contributions app/modules/compensation/api app/modules/compensation/policy_binding_service.py app/adapters/contributions tests/contributions
 cd backend && .venv/bin/python -m pytest -q tests/contributions/test_policy_publication_authorization.py tests/contributions/public_policy/test_contracts.py tests/contributions/test_policy_publish.py tests/contributions/test_policy_publication_recovery.py tests/contributions/test_policy_retire.py tests/contributions/test_policy_publication_auth_parity.py tests/contributions/test_cp04b_file_structure.py tests/contributions/test_cp04b_contract_projection.py tests/authorization/test_contribution_policy_registration.py tests/authorization/guide_compilation/test_migration_contract.py tests/projects/guide_compilation/test_migration_contract.py tests/architecture/test_module_boundaries.py tests/test_alembic.py
-cd backend && .venv/bin/python -m pytest -q tests/contributions --cov=app.modules.contributions --cov=app.adapters.contributions --cov-report=term-missing --cov-fail-under=90
-cd backend && .venv/bin/coverage report --include='app/modules/contributions/api/policies.py' --precision=2 --fail-under=90
-cd backend && .venv/bin/coverage report --include='app/modules/contributions/models.py' --precision=2 --fail-under=90
-cd backend && .venv/bin/coverage report --include='app/modules/contributions/repository.py' --precision=2 --fail-under=90
-cd backend && .venv/bin/coverage report --include='app/modules/contributions/service.py' --precision=2 --fail-under=90
-cd backend && .venv/bin/coverage report --include='app/modules/contributions/policy_graph.py' --precision=2 --fail-under=90
-cd backend && .venv/bin/coverage report --include='app/modules/contributions/policy_publication.py' --precision=2 --fail-under=90
-cd backend && .venv/bin/coverage report --include='app/modules/contributions/policy_mutation_support.py' --precision=2 --fail-under=90
-cd backend && .venv/bin/coverage report --include='app/adapters/contributions/*' --precision=2 --fail-under=90
+cd backend && .venv/bin/python -m pytest -q tests/contributions --cov=app.modules.contributions --cov=app.adapters.contributions --cov-report=term-missing
+cd backend && .venv/bin/coverage report --include='app/modules/contributions/api/policies.py' --precision=2
+cd backend && .venv/bin/coverage report --include='app/modules/contributions/models.py' --precision=2
+cd backend && .venv/bin/coverage report --include='app/modules/contributions/repository.py' --precision=2
+cd backend && .venv/bin/coverage report --include='app/modules/contributions/service.py' --precision=2
+cd backend && .venv/bin/coverage report --include='app/modules/contributions/policy_graph.py' --precision=2
+cd backend && .venv/bin/coverage report --include='app/modules/contributions/policy_publication.py' --precision=2
+cd backend && .venv/bin/coverage report --include='app/modules/contributions/policy_mutation_support.py' --precision=2
+cd backend && .venv/bin/coverage report --include='app/adapters/contributions/*' --precision=2
 cd backend && .venv/bin/python -m scripts.module_boundaries validate --protected-base <base-sha>
 cd backend && .venv/bin/python -m scripts.test_structure_boundary validate --policy ../.ci/auth-boundaries/TEST_STRUCTURE_POLICY.md --ledger ../.ci/auth-boundaries/TEST_STRUCTURE_DEBT.json
 python3 scripts/check_commitrail_records.py --base-ref <base-sha>

@@ -18,8 +18,7 @@ Use one of:
   plantuml -tsvg -o rendered docs/diagrams/*.puml
   PLANTUML_JAR=/path/to/plantuml.jar docs/diagrams/render_plantuml.sh
 
-The .puml files use C4-PlantUML includes from:
-  https://github.com/plantuml-stdlib/C4-PlantUML
+The .puml files are standalone; no remote includes are required.
 MSG
   exit 1
 fi

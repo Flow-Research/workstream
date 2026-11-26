@@ -207,7 +207,7 @@ SHARED_FOUNDATION_MODULES = (
     "tests/migrations/test_task_evidence_authority.py",
     "tests/migrations/test_service_identity_schema.py",
     "tests/migrations/test_project_role_schema.py",
-    "tests/test_mutation_policy.py",
+    "tests/test_behavior_source.py",
     "tests/test_submission_archive.py",
     "tests/test_submission_change_gate.py",
     "tests/test_submission_manifest.py",

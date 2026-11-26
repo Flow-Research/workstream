@@ -40,7 +40,7 @@ cloud "Flow Identity\n----\nHuman identity\nand auth tokens" as flow_auth
 database "Postgres\n----\nRecord database" as postgres
 rectangle "Immutable Artifact Storage\n----\nLocal focused dev\nMinIO local/CI proof\nAWS S3 hosted v0.1" as storage #E6FCF5
 
-rectangle "Source Systems\n----\nManual / Markdown / CSV today\nFuture applications, programs,\nmarketplaces, and task origins" as source_systems #FFF3BF
+rectangle "Source Systems\n----\nManual / Markdown / CSV / JSON today\nFuture applications, programs,\nmarketplaces, and task origins" as source_systems #FFF3BF
 
 rectangle "Consequence Consumers\n----\nPayment and project points\nReputation and eligibility\nReporting and datasets\nModel training and other uses" as consequence_consumers #FFF3BF
 
