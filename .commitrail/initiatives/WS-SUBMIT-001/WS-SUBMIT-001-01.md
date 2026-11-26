@@ -13216,3 +13216,24 @@ claimed. Existing reconciliation holds this unresolved attempt. The read-only
 receipt is `/tmp/workstream-maximum-post-stall-readback.json`; no recovery write,
 policy change or automatic retry was performed. Maximum-size PRE acceptance and
 finalization passed; maximum-size POST acceptance remains open.
+
+### Separate POST transport from execution and recover infrastructure failures
+
+The user requests explicit POST infrastructure feedback, bounded automatic retries
+before Operator escalation, and removal of the short whole-POST cutoff. The
+current remote client declares possible execution before transmitting material,
+although the remote owner only invokes native execution after staging every file.
+Replace that ambiguous handoff with an exact material-ready/start exchange. Allow
+only a confirmed start write to create execution uncertainty. Preserve uncertain
+post-start outcomes, locked checker limits, immutable results and accepted work.
+
+Allowed transport files are the existing remote checker adapter and node and
+their focused tests. No compatibility path, new queue, provider or permission
+change is authorized by this slice. Verification must prove disconnect/timeout
+before start cannot invoke native execution, failed start writes remain uncertain,
+and valid execution/callback/material cleanup still pass. Security/architecture
+review must inspect the handshake and its cancellation boundary before deployment.
+The CHECKERS retry slice must reuse current reservation, Outbox and authority
+owners with explicit service provenance; it must not fabricate an Operator actor
+or retry a running unknown invocation. Its source/result uniqueness and rollback
+remain required acceptance criteria. This is a security/workflow-risk change.

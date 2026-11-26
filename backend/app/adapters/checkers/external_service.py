@@ -367,9 +367,6 @@ class RemoteTlsExternalCheckerAdapter:
                         allow_nan=False,
                         separators=(",", ":"),
                     ).encode()
-                    # A failed drain can follow successful transmission. Treat
-                    # this call as possibly invoked before its first write.
-                    possibly_invoked = True
                     await self._send_frame(writer, control)
                     await self._send_frame(writer, manifest)
                     for item in files:
@@ -383,6 +380,22 @@ class RemoteTlsExternalCheckerAdapter:
                             await await_cancellation_resistant(stream.aclose())
                         writer.write(struct.pack(">I", 0))
                         await writer.drain()
+                    ready = {
+                        "protocol_version": _REMOTE_PROTOCOL,
+                        "operation": "material_ready",
+                        "grant_id": grant.grant_id,
+                        "binding_digest": grant.binding_digest,
+                    }
+                    if json.loads(await self._read_frame(reader, 16_384)) != ready:
+                        raise ValueError("remote material readiness differs")
+                    # The remote owner cannot invoke native execution before
+                    # this explicit start. A failed drain of this write may
+                    # still follow successful transmission, so retain uncertainty.
+                    possibly_invoked = True
+                    await self._send_frame(writer, json.dumps(
+                        dict(ready, operation="start_execution"),
+                        separators=(",", ":"),
+                    ).encode())
                     while True:
                         header = json.loads(await self._read_frame(reader, 16_384))
                         if (

@@ -461,8 +461,11 @@ async def test_remote_adapter_endpoint_preserves_explicit_roots_and_callback_rou
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("fault", ["connect", "write", "eof", "invalid_result", "timeout", "cancel"])
-async def test_remote_post_failure_preserves_possible_invocation(tmp_path, monkeypatch, fault):
+@pytest.mark.parametrize("fault,started", [("connect", False)] + [
+    (fault, started) for fault in ("write", "eof", "invalid_result", "timeout", "cancel")
+    for started in (False, True)
+])
+async def test_remote_post_failure_preserves_possible_invocation(tmp_path, monkeypatch, fault, started):
     from unittest.mock import AsyncMock, Mock
 
     from app.adapters.artifacts import selected_pre_submit_source_contracts
@@ -471,7 +474,7 @@ async def test_remote_post_failure_preserves_possible_invocation(tmp_path, monke
     from app.interfaces.external_checker_execution import ExternalCheckerExecutionOutcomeUnknown
     from tests.checkers.external.support import empty_external_material_grant
     from tests.checkers.external.test_model_transport import request
-    from workstream_external_services import ExternalServiceUnavailableError
+    from workstream_external_services import ExternalServiceProtocolError, ExternalServiceUnavailableError
 
     adapter = RemoteTlsExternalCheckerAdapter(
         endpoints=fixture_runner_endpoints(),
@@ -481,13 +484,34 @@ async def test_remote_post_failure_preserves_possible_invocation(tmp_path, monke
     )
     reader = asyncio.StreamReader()
     writer = Mock(spec=asyncio.StreamWriter)
-    writer.drain = AsyncMock(side_effect=OSError if fault == "write" else None)
+    drains = 0
+
+    async def drain():
+        nonlocal drains
+        drains += 1
+        if fault == "write" and drains == (3 if started else 1):
+            raise OSError
+
+    writer.drain = AsyncMock(side_effect=drain)
     writer.wait_closed = AsyncMock()
     connect = AsyncMock(return_value=(reader, writer), side_effect=OSError if fault == "connect" else None)
     monkeypatch.setattr(adapter, "_open", connect)
     waiting = asyncio.Event()
+    value = request()
+    grant = empty_external_material_grant(value, suffix="c")
+    if started:
+        reader.feed_data(_frame(json.dumps({
+            "protocol_version": "workstream.remote_runner.v1", "operation": "material_ready",
+            "grant_id": grant.grant_id, "binding_digest": grant.binding_digest,
+        }).encode()))
+    original_read = reader.readexactly
+    reads = 0
 
-    async def interrupt_read(_size):
+    async def interrupt_read(size):
+        nonlocal reads
+        reads += 1
+        if started and reads <= 2:
+            return await original_read(size)
         waiting.set()
         if fault == "timeout":
             raise TimeoutError
@@ -500,16 +524,20 @@ async def test_remote_post_failure_preserves_possible_invocation(tmp_path, monke
                                 b'"operation":"execution_result"}') + _frame(b'{}'))
     reader.feed_eof()
 
-    value = request()
     placement = RunnerPlacement(adapter._transport.endpoints.root[0], RunnerReadiness.model_validate_json(
         json.dumps(fixture_placement(value.registry.image_digest, fits_admission=True)),
     ))
     monkeypatch.setattr(RunnerTransport, "select", AsyncMock(return_value=placement))
-    task = asyncio.create_task(adapter.execute(value, empty_external_material_grant(value, suffix="c")))
+    task = asyncio.create_task(adapter.execute(value, grant))
     if fault == "cancel":
         await asyncio.wait_for(waiting.wait(), 1)
         task.cancel()
-    expected = ExternalServiceUnavailableError if fault == "connect" else ExternalCheckerExecutionOutcomeUnknown
+    expected = (
+        ExternalCheckerExecutionOutcomeUnknown if started
+        else asyncio.CancelledError if fault == "cancel"
+        else ExternalServiceProtocolError if fault == "invalid_result"
+        else ExternalServiceUnavailableError
+    )
     with pytest.raises(expected):
         await asyncio.wait_for(task, 2)
     connect.assert_awaited_once_with(placement)
@@ -543,7 +571,8 @@ async def test_remote_adapter_endpoint_invalid_explicit_root_cleans_helper_socke
 
 
 @pytest.mark.asyncio
-async def test_remote_post_stages_bound_material_and_removes_session(tmp_path: Path):
+@pytest.mark.parametrize("start_mode", ["execute", "disconnect", "wrong_binding"])
+async def test_remote_post_stages_bound_material_and_removes_session(tmp_path: Path, start_mode, capsys):
     certificates = _certificate_files(tmp_path)
     material_root = tmp_path / "materials"
     material_root.mkdir(mode=0o700)
@@ -554,8 +583,10 @@ async def test_remote_post_stages_bound_material_and_removes_session(tmp_path: P
     content = b"remote material\n"
     content_digest = "sha256:" + hashlib.sha256(content).hexdigest()
     observed = asyncio.Event()
+    invoked = asyncio.Event()
 
     async def native(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        invoked.set()
         request = await read_fixture_native_request(reader, writer, _placement_body())
         root = material_root / "workspaces" / grant_id
         path = root / "materials" / "submission_archive" / "work.txt"
@@ -666,6 +697,36 @@ async def test_remote_post_stages_bound_material_and_removes_session(tmp_path: P
         )
         writer.write(_frame(control) + _frame(manifest) + _frame(content) + struct.pack(">I", 0))
         await writer.drain()
+        ready = json.loads(await _read_frame(reader))
+        assert ready == {
+            "protocol_version": _REMOTE.PROTOCOL, "operation": "material_ready",
+            "grant_id": grant_id, "binding_digest": binding,
+        }
+        assert not invoked.is_set()
+        if start_mode == "disconnect":
+            writer.close()
+            await writer.wait_closed()
+        else:
+            start = dict(ready, operation="start_execution")
+            if start_mode == "wrong_binding":
+                start["binding_digest"] = "sha256:" + "0" * 64
+            writer.write(_frame(json.dumps(start).encode()))
+            await writer.drain()
+        if start_mode != "execute":
+            if start_mode == "wrong_binding":
+                assert await asyncio.wait_for(reader.read(), 2) == b""
+                writer.close()
+                await writer.wait_closed()
+            for _ in range(100):
+                if not list((material_root / "workspaces").iterdir()):
+                    break
+                await asyncio.sleep(0.01)
+            assert not invoked.is_set()
+            assert list((material_root / "workspaces").iterdir()) == []
+            records = [json.loads(line) for line in capsys.readouterr().err.splitlines()]
+            assert any(row["stage"] == "awaiting_execution_start" and row["disposition"] == "interrupted" for row in records)
+            assert records[-1]["stage"] == "material_cleanup"
+            return
         callback_header = json.loads(await _read_frame(reader))
         assert callback_header["operation"] == "callback_request"
         assert await _read_frame(reader) == b'{"protocol_version":"workstream.setup_model_proxy.v1"}'

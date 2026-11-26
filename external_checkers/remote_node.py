@@ -14,6 +14,8 @@ import shutil
 import ssl
 import stat
 import struct
+import sys
+import time
 from typing import Any
 import uuid
 
@@ -624,6 +626,24 @@ class RemoteNode:
         if target.exists():
             raise ProtocolError("grant is already active")
         incoming.mkdir(mode=0o700)
+        started = time.monotonic()
+        transferred = 0
+        stage = "material_transfer"
+
+        def record(event: str, **facts: Any) -> None:
+            # Only owner-generated stages, validated grant identity and counters;
+            # never material paths, contents, credentials or exception messages.
+            try:
+                print(json.dumps({
+                    "event": "checker_remote_stage", "grant_id": grant_id,
+                    "stage": stage, "disposition": event,
+                    "elapsed_ms": round((time.monotonic() - started) * 1000),
+                    "transferred_bytes": transferred, **facts,
+                }, separators=(",", ":")), file=sys.stderr, flush=True)
+            except (OSError, ValueError):
+                pass  # Diagnostic output never changes execution or cleanup custody.
+
+        record("started", expected_bytes=sum(item[1] for item in files))
         try:
             _mkdir_inventory(incoming, manifest)
             for relative, expected_count, expected_digest, executable in files:
@@ -638,6 +658,7 @@ class RemoteNode:
                             raise ProtocolError("material file is too large")
                         digest.update(chunk)
                         _write_descriptor(descriptor, chunk)
+                        transferred += len(chunk)
                     if count != expected_count or "sha256:" + digest.hexdigest() != expected_digest:
                         raise ProtocolError("material file content differs")
                     os.fsync(descriptor)
@@ -654,6 +675,18 @@ class RemoteNode:
             _seal_directories(incoming)
             os.chmod(incoming, 0o700, follow_symlinks=False)
             os.rename(incoming, target)
+            record("completed")
+            stage = "awaiting_execution_start"
+            ready = {
+                "protocol_version": PROTOCOL, "operation": "material_ready",
+                "grant_id": grant_id, "binding_digest": manifest["binding_digest"],
+            }
+            await _write_frame(writer, json.dumps(ready, separators=(",", ":")).encode())
+            start = _decode_object(await _read_frame(reader, 16_384))
+            if start != dict(ready, operation="start_execution"):
+                raise ProtocolError("execution start binding differs")
+            stage = "native_execution"
+            record("started")
             native_reader, native_writer = await asyncio.open_unix_connection(self.socket_path)
             encoded = json.dumps(
                 request, ensure_ascii=False, allow_nan=False, separators=(",", ":")
@@ -673,7 +706,13 @@ class RemoteNode:
             if disconnect_task in done:
                 raise ProtocolError("remote client disconnected")
             response = await response_task
+            record("completed")
+            stage = "result_delivery"
             await channel.result(response)
+            record("completed")
+        except BaseException as exc:
+            record("interrupted", error_type=type(exc).__name__)
+            raise
         finally:
             for task in wait_tasks:
                 if not task.done():
@@ -691,6 +730,8 @@ class RemoteNode:
                     pass
             _remove_tree(target)
             _remove_tree(incoming)
+            stage = "material_cleanup"
+            record("completed")
 
 
 async def _main(config_path: Path) -> None:
