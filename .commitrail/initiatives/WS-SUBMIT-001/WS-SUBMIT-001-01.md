@@ -12809,3 +12809,44 @@ the exact parser module as both identities. A local Docker fixture with
 owner-only application source reproduced the permission failure for both
 identities and the verifier rejected it. The verifier passed the readable
 release fixture, and all 20 focused verifier tests passed.
+
+
+### Hosted schema and release cutover completed
+
+This update records the observed hosted cutover and recovery, updates the
+initiative overview and status ledger, and documents the existing cleanup
+principal prerequisite. It includes the roadmap terminology correction for
+Agent Gates job 139990856480. Hosted submission qualification remains separate.
+
+The drained custom-format backup and cutover journal are retained privately at
+`/var/backups/workstream/pr708-cutover-1795705616912693356`. Alembic migrated
+`0069_remove_artifact_proof` to `0093_verified_email_observation`. All 132
+retained table counts matched before and after migration, with 137 public tables
+afterward. PostgreSQL, Redis and identity retained their original container IDs
+through activation. The deployed environment carries the approved 120s PRE,
+300s total upload and 30s idle limits. The existing single separate runner
+remains the configured mTLS execution endpoint.
+
+The repaired release was built and verified at
+`2942dd4e76b1c8a82a1d7a4070ceff79246f6732`. Publication receipt
+`/tmp/workstream-published-1795706971727723546.json` records the agents and
+omnicore repository digests, respectively
+`sha256:3379e66e69592694c0faf4009d05a5d831cb03a214cbdd9e7a01e0600bb54108` and
+`sha256:9deca7aa4df2a70f28a639a2492a8764be1e5036c48e6fdd23a82ea3ea048c0b`.
+API and model proxy use the agents image. The existing MCP artifact was recreated
+against the new API namespace, and the installed boot unit points to the verified
+source. The forward journal reached `repaired-release-healthy-pending-public-proof`
+and its owned boot guard was released.
+
+The existing Access Administrator provisioned the required fixed principal
+`workstream.artifact.source_cleanup` through the public service-actor owner,
+which returned HTTP 201. The cleanup consumer became healthy after recreation.
+Live Celery inspection returned seven distinct consumers with exactly one named
+queue each. Public CLI identity reads passed for the Project Manager, Finance and
+Operator, and the original Project Manager grant was preserved. Provider-free
+hosted guide activation completed through the public owner, with private receipt
+`/tmp/workstream-hosted-journey-2942/guide/result.json`.
+
+The hosted contributor ZIP journey and recovery, exact-version cleanup, maximum
+supported upload and remaining single-runner native failure/isolation still
+need matching evidence. Email remains disabled pending the sender/key proof.

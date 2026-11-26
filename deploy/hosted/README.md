@@ -259,6 +259,14 @@ authorized deletion identity. Only the exclusive source-cleanup worker receives
 that file; preflight rejects a reused ARN, path or inode. Beat, MCP, parser and
 checker guests receive no storage key.
 
+Before starting the source-cleanup consumer, have an Access Administrator
+provision the fixed service identity `workstream.artifact.source_cleanup` through
+`POST /api/v1/service-actors` or
+`workstream admin service-actor provision --input FILE --idempotency-key UUID`.
+Use a stable deployment subject and keep the original key for retries. The
+cleanup startup check requires the active service actor and identity link. The
+S3 deletion credential supplies storage access separately.
+
 Follow [S3 credential setup](../../docs/operations_aws_s3_credentials.md) for
 restricted policies and rotation. Qualification verifies real conditional
 upload/readback and denied destructive access before cutover. There are no
