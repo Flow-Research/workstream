@@ -88,6 +88,32 @@ docker compose --profile backend run --rm --no-deps -e WORKSTREAM_ARTIFACT_STORE
   'from app.adapters.artifacts import create_artifact_store_bootstrap; from app.core.config import get_settings; settings = get_settings(); create_artifact_store_bootstrap(settings)'
 ```
 
+## Configure optional contributor email
+
+The ordinary local pilot keeps POST feedback email disabled. To qualify email
+using designated test accounts, use the submission feedback overlay with a
+trusted external Flow issuer. Set `WORKSTREAM_TOKEN_ISSUER` and
+`WORKSTREAM_TOKEN_JWKS_URL` for that issuer. The overlay configures the API to
+use issuer-signed RS256 access tokens. It delivers through a dedicated consumer
+and uses the same mailbox claim and verified sender as hosted Workstream.
+[Hosted email configuration](../../deploy/hosted/README.md#contributor-feedback-email).
+
+Set `WORKSTREAM_SUBMISSION_FEEDBACK_EMAIL_ENABLED=true` and give
+`WORKSTREAM_RESEND_API_KEY_FILE` the private absolute key path. The file must
+be owned by `LOCAL_UID`/`LOCAL_GID` with `0400` permissions. Start the ordinary
+local submission configuration with the extra Compose file and profile.
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.submission-feedback-email.yml \
+  --profile backend --profile submission-intake --profile submission-feedback-email \
+  up --build --wait
+```
+
+Use the same files and profiles to inspect and stop the run. The email consumer
+receives only its database connection, broker connection, issuer selection and
+private sending key. Use the [local agent loop overlay](local-agent-loop.md)
+to add the runner and project-specific PRE/POST execution for a complete drill.
+
 ## Create distinct identities and grant authority
 
 The helper signs short-lived tokens using the exact local Flow-HMAC settings

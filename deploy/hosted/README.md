@@ -322,12 +322,14 @@ ID and the same authorized assignment status and feedback read available in
 the API, CLI and MCP. The assignment read remains the source of feedback and
 revision terms. Workstream continues processing assignments if email fails.
 
-Temporary Resend errors and uncertain HTTP outcomes retry through the shared
+Temporary Resend errors and uncertain transport outcomes retry through the shared
 outbox using a stable event key and an absolute 12-hour send cutoff. Outbox
 acknowledgement records a handled request, including suppression if the
 assignment no longer needs its alert or the recipient is ineligible. Resend
 acceptance acknowledges the request, and inbox delivery has separate provider
-status. [Resend's 24-hour idempotency window](https://resend.com/docs/dashboard/emails/idempotency-keys).
+status. If the verified address changes after an uncertain send, Resend can
+reject the changed payload under that key. The outbox records the rejection
+and never replaces the key. [Resend's 24-hour idempotency window](https://resend.com/docs/dashboard/emails/idempotency-keys).
 
 ## Validate without disclosure
 

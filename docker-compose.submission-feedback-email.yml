@@ -1,0 +1,67 @@
+services:
+  backend:
+    environment:
+      WORKSTREAM_FLOW_AUTH_LOCAL_HMAC_SECRET: ""
+      WORKSTREAM_TOKEN_ISSUER: ${WORKSTREAM_TOKEN_ISSUER:?set the external Flow issuer}
+      WORKSTREAM_TOKEN_AUDIENCE: ${WORKSTREAM_TOKEN_AUDIENCE:-workstream-api}
+      WORKSTREAM_TOKEN_JWKS_URL: ${WORKSTREAM_TOKEN_JWKS_URL:?set the external Flow JWKS URL}
+      WORKSTREAM_TOKEN_ALGORITHMS: RS256
+      WORKSTREAM_TOKEN_INTROSPECTION_MODE: disabled
+      WORKSTREAM_TOKEN_INTROSPECTION_DISABLED_REASON: Flow issues short-lived Workstream access tokens
+
+  submission-feedback-email-worker:
+    profiles: [submission-feedback-email]
+    image: ${COMPOSE_PROJECT_NAME}-backend:local
+    pull_policy: never
+    init: true
+    user: "${LOCAL_UID:-1000}:${LOCAL_GID:-1000}"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs:
+      - /tmp:mode=0700,uid=${LOCAL_UID:-1000},gid=${LOCAL_GID:-1000}
+    environment:
+      WORKSTREAM_ENVIRONMENT: local
+      WORKSTREAM_AUTH_PROVIDER: flow
+      WORKSTREAM_DATABASE_URL: ${WORKSTREAM_DATABASE_URL:?set WORKSTREAM_DATABASE_URL in .env}
+      WORKSTREAM_CELERY_BROKER_URL: redis://redis:6379/0
+      WORKSTREAM_SUBMISSION_FEEDBACK_EMAIL_ENABLED: ${WORKSTREAM_SUBMISSION_FEEDBACK_EMAIL_ENABLED:-false}
+      WORKSTREAM_TOKEN_ISSUER: ${WORKSTREAM_TOKEN_ISSUER:?set the external Flow issuer}
+      WORKSTREAM_RESEND_API_KEY_FILE: /run/secrets/resend_api_key
+    volumes:
+      - ./backend:/workspace/backend:ro
+    secrets:
+      - source: resend_api_key
+        target: resend_api_key
+        uid: "${LOCAL_UID:-1000}"
+        gid: "${LOCAL_GID:-1000}"
+        mode: 0400
+    command:
+      - python
+      - -m
+      - celery
+      - -A
+      - app.workers.celery_app
+      - worker
+      - --pool=prefork
+      - --concurrency=1
+      - --hostname=submission-feedback-email@%h
+      - --queues=workstream.submission_feedback_email
+      - --pidfile=/tmp/celery-submission-feedback-email.pid
+      - --loglevel=INFO
+    depends_on:
+      backend:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    stop_grace_period: 120s
+    healthcheck:
+      test: [CMD-SHELL, "test -s /tmp/celery-submission-feedback-email.pid && kill -0 $$(cat /tmp/celery-submission-feedback-email.pid)"]
+      interval: 10s
+      timeout: 8s
+      retries: 12
+      start_period: 20s
+
+secrets:
+  resend_api_key:
+    file: ${WORKSTREAM_RESEND_API_KEY_FILE:?set the private Resend API key file}

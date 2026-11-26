@@ -20,7 +20,6 @@ from app.interfaces.submission_feedback_email import (
     RESEND_PROVIDER, SUBMISSION_FEEDBACK_EMAIL_CAPABILITY,
     SubmissionFeedbackEmail, SubmissionFeedbackEmailAdapter, is_single_mailbox,
 )
-from app.modules.outbox.api import HandlerOutcome
 
 _IDENTITY = ExternalServiceAdapterIdentity(SUBMISSION_FEEDBACK_EMAIL_CAPABILITY, RESEND_PROVIDER)
 _KEY = re.compile(rb"re_[A-Za-z0-9_-]{1,256}")
@@ -128,31 +127,6 @@ def submission_feedback_email_factory(
 def validate_submission_feedback_email_worker(settings: Settings) -> None:
     """Require an explicitly enabled verified issuer and readable sending key at startup."""
     if (not settings.submission_feedback_email_enabled or settings.auth_provider != "flow"
-            or settings.flow_auth_local_hmac_secret is not None or settings.token_issuer is None):
+            or settings.flow_auth_local_hmac_secret or not settings.token_issuer):
         raise ExternalServiceConfigurationError(_IDENTITY)
     submission_feedback_email_factory(settings).create(RESEND_PROVIDER)
-
-
-def submission_feedback_email_handler(sessions, *, observer, settings: Settings):
-    """Register without loading a key on the worker that discovers pending events."""
-    from app.adapters.actors import verified_notification_email
-    from app.adapters.auth import has_submission_feedback_recipient_grant
-    from app.modules.tasks.post_submit_routing.feedback_email import TaskSubmissionFeedbackEmailHandler
-
-    issuer = settings.token_issuer
-
-    async def recipient(session, project_id, actor_id):
-        if issuer is None or not await has_submission_feedback_recipient_grant(session, project_id, actor_id):
-            return None
-        return await verified_notification_email(session, actor_id, issuer)
-
-    async def handle(envelope):
-        try:
-            adapter = submission_feedback_email_factory(settings).create(RESEND_PROVIDER)
-        except ExternalServiceConfigurationError:
-            return HandlerOutcome.REJECT
-        return await TaskSubmissionFeedbackEmailHandler(
-            sessions, observer=observer, recipient=recipient, adapter=adapter,
-        )(envelope)
-
-    return handle

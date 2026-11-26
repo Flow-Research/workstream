@@ -111,7 +111,7 @@ async def _email_events(factory):
         )))
 
 
-@pytest.mark.parametrize("case", ["retry", "stale", "unverified", "exhausted", "coverage", "disabled"])
+@pytest.mark.parametrize("case", ["retry", "unknown", "stale", "unverified", "exhausted", "coverage", "disabled"])
 async def test_only_committed_current_quality_routes_send(
     tmp_path, isolated_database_env, monkeypatch, case,
 ):
@@ -176,13 +176,26 @@ async def test_only_committed_current_quality_routes_send(
         post = production_outbox_delivery(h.factory, worker_group="post")
         assert await post.deliver(event.event_id, UUID(event.project_id), "wrong-queue", registered_only=True) is None
         assert await delivery.deliver(event.event_id, new_record_id(), "wrong-project", registered_only=True) is None
-        if case == "retry":
+        if case in {"retry", "unknown"}:
             delivery._event_options = {
-                (SUBMISSION_FEEDBACK_EMAIL_EVENT, 1): DeliveryOptions(retry_base_seconds=1),
+                (SUBMISSION_FEEDBACK_EMAIL_EVENT, 1): DeliveryOptions(
+                    lease_seconds=6, handler_timeout_seconds=4, retry_base_seconds=1,
+                ),
             }
-        receipt = await delivery.deliver(event.event_id, UUID(event.project_id), "email-worker", registered_only=True)
+        if case == "unknown":
+            claim = await delivery.claim(event.event_id, UUID(event.project_id), "pre-crash-worker")
+            envelope = await delivery._begin_invocation(claim)
+            handler = delivery._registry.get(SUBMISSION_FEEDBACK_EMAIL_EVENT, 1)
+            assert await handler(envelope) is HandlerOutcome.ACKNOWLEDGE
+            assert len(calls) == 1
+            # Commit of invocation survived the lost worker. The provider receipt did not.
+            await asyncio.sleep(6.05)
+            receipt = await delivery.recover(event.event_id, UUID(event.project_id))
+            assert json.loads(receipt.outcome_json)["invocation_unknown"] is True
+        else:
+            receipt = await delivery.deliver(event.event_id, UUID(event.project_id), "email-worker", registered_only=True)
         assert receipt is not None
-        if case == "retry":
+        if case in {"retry", "unknown"}:
             assert json.loads(receipt.outcome_json)["delivery_state"] == "retryable"
             await asyncio.sleep(1.05)
             receipt = await delivery.deliver(event.event_id, UUID(event.project_id), "email-worker", registered_only=True)
@@ -191,7 +204,7 @@ async def test_only_committed_current_quality_routes_send(
         if case in {"stale", "unverified"}:
             assert calls == []
         else:
-            assert len(calls) == (2 if case == "retry" else 1)
+            assert len(calls) == (2 if case in {"retry", "unknown"} else 1)
             assert len(set(key for key, _ in calls)) == 1
             assert all(body == calls[0][1] for _, body in calls)
             body = calls[0][1]

@@ -69,6 +69,7 @@ def production_outbox_delivery(
         TransactionalTaskRevisionExhaustedNoticeHandler,
         evaluation_completion_handler,
         evaluation_request_handler,
+        submission_feedback_email_handler,
     )
     from app.adapters.checkers import post_submit_delivery_reconciliation_handler
     from app.modules.checkers.api.delivery_reconciliation import (
@@ -84,7 +85,6 @@ def production_outbox_delivery(
     from app.modules.tasks.api.revision_expiry import (
         REVISION_EXPIRY_EVENT, REVISION_EXPIRED_EVENT, REVISION_CONTEXT_BLOCKED_EVENT,
     )
-    from app.adapters.submission_feedback_email import submission_feedback_email_handler
     from app.core.config import get_settings
     from app.modules.tasks.api.routing_outcome import SUBMISSION_FEEDBACK_EMAIL_EVENT
 

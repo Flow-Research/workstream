@@ -118,7 +118,7 @@ def _message(
     event_id: UUID, manifest: TaskPostSubmitRoutingManifest, outcome: FeedbackOutcome, recipient: str,
 ) -> SubmissionFeedbackEmail:
     if outcome == "needs_revision":
-        subject = "Action required: Workstream submission feedback available"
+        subject = "Action required for your Workstream assignment"
         status = (f"Workstream assignment {manifest.assignment_id} needs revision. "
                   "Review the feedback, fix your submission and resubmit when the assignment allows it.")
     else:
@@ -128,5 +128,5 @@ def _message(
     hint = f"workstream task status {manifest.assignment_id}"
     return SubmissionFeedbackEmail(event_id, recipient, subject, (
         f"{status}\n\nRead your assignment feedback in Workstream using the API, CLI or MCP.\n\n"
-        f"CLI: {hint}\n"
+        f"CLI command\n{hint}\n"
     ))

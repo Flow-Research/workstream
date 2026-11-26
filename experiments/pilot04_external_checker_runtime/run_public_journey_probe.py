@@ -1274,6 +1274,7 @@ async def run(database_url: str, image_reference: str, node_config: Path,
         "WORKSTREAM_CELERY_BROKER_URL": broker_url,
         "WORKSTREAM_CELERY_RESULT_BACKEND_URL": broker_url,
         "WORKSTREAM_CELERY_TASK_ALWAYS_EAGER": "false",
+        "WORKSTREAM_SUBMISSION_FEEDBACK_EMAIL_ENABLED": "false",
         "WORKSTREAM_ARTIFACT_PENDING_WORK_SCAN_INTERVAL_SECONDS": "10",
         "WORKSTREAM_ARTIFACT_SCRATCH_ROOT": str(scratch),
         "WORKSTREAM_ARTIFACT_SCRATCH_MINIMUM_FREE_BYTES": "0",
@@ -1285,6 +1286,9 @@ async def run(database_url: str, image_reference: str, node_config: Path,
     if recorded_assistance:
         configure_scripted_model_session_environment(env)
     env.pop("OPENAI_API_KEY", None)
+    # Native workload checks use qualified fixture actors, without email effects.
+    env.pop("WORKSTREAM_RESEND_API_KEY_FILE", None)
+    os.environ.pop("WORKSTREAM_RESEND_API_KEY_FILE", None)
     if clients is not None:
         env = clients.setup_authority(env)
         os.environ.pop("WORKSTREAM_FLOW_AUTH_LOCAL_HMAC_SECRET", None)

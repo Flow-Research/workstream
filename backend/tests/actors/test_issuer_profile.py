@@ -67,23 +67,25 @@ async def test_issuer_email_sync_preserves_identity_and_local_name(
                 assert read.json()["contact_email"] == "second@example.test"
                 assert read.json()["display_name"] == display_name
                 assert read.json()["actor_profile_id"] == actor_id
-        changed = await client.get("/api/v1/actors/me", headers=headers("third@example.test", issued + 3))
+        older = await client.get("/api/v1/actors/me", headers=headers("stale@example.test", issued + 3))
+        assert older.json()["contact_email"] == "second@example.test"
+        changed = await client.get("/api/v1/actors/me", headers=headers("third@example.test", issued + 11))
         assert changed.json()["contact_email"] == "third@example.test"
         assert changed.json()["actor_profile_id"] == actor_id
         for body in ({"contact_email": "forged@example.test"}, {"contact_email": None},
                      {"display_name": "Must not persist", "contact_email": "forged@example.test"}):
-            denied = await client.patch("/api/v1/actors/me", headers=headers("third@example.test", issued + 3), json=body)
+            denied = await client.patch("/api/v1/actors/me", headers=headers("third@example.test", issued + 11), json=body)
             assert denied.status_code == 422, denied.text
         other = await client.get("/api/v1/actors/me", headers=headers("third@example.test", issued + 4, subject="other-owner"))
         assert other.status_code == 200, other.text
         assert other.json()["actor_profile_id"] != actor_id
-        retained = await client.get("/api/v1/actors/me", headers=headers("third@example.test", issued + 3))
+        retained = await client.get("/api/v1/actors/me", headers=headers("third@example.test", issued + 11))
         assert retained.json()["display_name"] is None
         assert retained.json()["admin_roles"] == first.json()["admin_roles"] == []
     async with db_session.get_session_factory()() as session:
         link = await session.scalar(select(ActorIdentityLink).where(ActorIdentityLink.actor_profile_id == actor_id))
         assert link.subject == "email-owner"
-        assert link.email_observed_issued_at == issued + 3
+        assert link.email_observed_issued_at == issued + 11
 
 
 async def test_notification_recipient_follows_exact_signed_mailbox_verification(
@@ -124,7 +126,9 @@ async def test_notification_recipient_follows_exact_signed_mailbox_verification(
             (4, corrected, True, corrected),
             (5, None, None, None),
             (4, corrected, True, None),
-            (6, corrected, True, corrected),
+            (7, None, None, None),
+            (6, corrected, True, None),
+            (8, corrected, True, corrected),
         )
         for tick, email, proof, expected in phases:
             assert await observe(client, tick=tick, email=email, proof=proof) == (actor, expected)

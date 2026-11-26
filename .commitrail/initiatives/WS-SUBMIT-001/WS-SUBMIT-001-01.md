@@ -11782,6 +11782,15 @@ Email delivery is disabled by default. Use a stable event-derived Resend key
 and a retry lifetime shorter than the provider's idempotency window. The email
 identifies the assignment and gives the existing client command without a link.
 
+The existing email observation watermark advances on newer signed observations,
+including omitted addresses. Omission preserves the retained contact value and
+clears delivery eligibility. Only a positive boolean claim for the observed
+address can make it eligible. Migration 0093 adds the false-by-default proof
+bit and extends the existing closed SQL unknown-retry guard for the one email
+event version. The dedicated consumer only changes outbox delivery state. Hosted
+and local Compose mount the sending key only on this consumer. The native
+submission drill explicitly disables email for its fixture participants.
+
 Prohibited changes: PRE and human review behavior, product outcomes, awards,
 provider credentials in source, public recipient overrides, plaintext mailbox
 data in outbox payloads, private check evidence in email, new frontend work,

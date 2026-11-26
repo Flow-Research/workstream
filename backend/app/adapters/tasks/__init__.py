@@ -608,6 +608,35 @@ def evaluation_completion_handler(*, sessions):
     )
 
 
+def submission_feedback_email_handler(sessions, *, observer, settings: Settings):
+    """Compose TASK's email handler without loading a key on the outbox scanner."""
+    from workstream_external_services import ExternalServiceConfigurationError
+
+    from app.adapters.actors import verified_notification_email
+    from app.adapters.auth import has_submission_feedback_recipient_grant
+    from app.adapters.submission_feedback_email import submission_feedback_email_factory
+    from app.interfaces.submission_feedback_email import RESEND_PROVIDER
+    from app.modules.tasks.post_submit_routing.feedback_email import TaskSubmissionFeedbackEmailHandler
+
+    issuer = settings.token_issuer
+
+    async def recipient(session, project_id, actor_id):
+        if issuer is None or not await has_submission_feedback_recipient_grant(session, project_id, actor_id):
+            return None
+        return await verified_notification_email(session, actor_id, issuer)
+
+    async def handle(envelope):
+        try:
+            adapter = submission_feedback_email_factory(settings).create(RESEND_PROVIDER)
+        except ExternalServiceConfigurationError:
+            return HandlerOutcome.REJECT
+        return await TaskSubmissionFeedbackEmailHandler(
+            sessions, observer=observer, recipient=recipient, adapter=adapter,
+        )(envelope)
+
+    return handle
+
+
 def contribution_task_evidence_port(session):
     """Read exact selected source labels without claims, activation or task mutation."""
     from app.modules.tasks.contribution_evidence import ContributionTaskEvidenceRepository

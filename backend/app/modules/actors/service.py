@@ -179,7 +179,7 @@ class ActorService:
             subject_kind="human",
             status="active",
             linked_by=profile_id,
-            email_observed_issued_at=token.issued_at if token.email is not None else None,
+            email_observed_issued_at=token.issued_at,
             email_verified=token.email is not None and token.email_verified,
             last_verified_at=func.clock_timestamp(),
         )
@@ -295,10 +295,7 @@ class ActorService:
         self._require_active_human(profile)
         if token.issuer != link.issuer or token.subject != link.subject:
             raise RuntimeError("verified identity does not match resolved actor")
-        if (token.email is not None or link.email_verified) and (
-            link.email_observed_issued_at is None
-            or token.issued_at > link.email_observed_issued_at
-        ):
+        if link.email_observed_issued_at is None or token.issued_at > link.email_observed_issued_at:
             if token.email is not None:
                 profile.contact_email = token.email
             link.email_verified = token.email is not None and token.email_verified

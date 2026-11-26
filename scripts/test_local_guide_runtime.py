@@ -113,6 +113,37 @@ class LocalGuideRuntimeTests(unittest.TestCase):
         self.assertIn("guide_parser_socket:/var/lib/workstream/guide-runtime:ro", worker["volumes"])
         self.assertEqual(worker["depends_on"]["guide-document-parser"]["condition"], "service_healthy")
 
+    def test_feedback_email_is_opt_in_and_key_is_dedicated(self):
+        command = ["docker", "compose", "--env-file", ".env.example", "-f", "docker-compose.yml"]
+        environment = {
+            key: value for key, value in os.environ.items()
+            if not key.startswith(("WORKSTREAM_", "COMPOSE_"))
+        }
+        disabled = subprocess.run(
+            [*command, "--profile", "backend", "config", "--format", "json"],
+            cwd=ROOT, env=environment, capture_output=True, text=True, check=True,
+        )
+        worker = "submission-feedback-email-worker"
+        self.assertNotIn(worker, json.loads(disabled.stdout)["services"])
+        environment.update({
+            "WORKSTREAM_SUBMISSION_FEEDBACK_EMAIL_ENABLED": "true",
+            "WORKSTREAM_TOKEN_ISSUER": "https://issuer.example.test/realms/flow",
+            "WORKSTREAM_TOKEN_JWKS_URL": "https://issuer.example.test/realms/flow/certs",
+            "WORKSTREAM_RESEND_API_KEY_FILE": "/private/test-resend-key",
+        })
+        configured = subprocess.run(
+            [*command, "-f", "docker-compose.submission-feedback-email.yml", "--profile", "backend",
+             "--profile", "submission-feedback-email", "config", "--format", "json"],
+            cwd=ROOT, env=environment, capture_output=True, text=True, check=True,
+        )
+        services = json.loads(configured.stdout)["services"]
+        self.assertEqual(services["backend"]["environment"]["WORKSTREAM_FLOW_AUTH_LOCAL_HMAC_SECRET"], "")
+        self.assertIn("--queues=workstream.submission_feedback_email", services[worker]["command"])
+        self.assertEqual([name for name, service in services.items()
+                          if service.get("secrets")], [worker])
+        self.assertEqual(services[worker]["secrets"][0]["source"], "resend_api_key")
+        self.assertNotIn("WORKSTREAM_ARTIFACT_S3_SECRET_ACCESS_KEY", services[worker]["environment"])
+
     def test_finalization_consumer_requires_explicit_positive_capacity(self):
         service = self.services["submission-finalizer"]
         self.assertEqual(service["profiles"], ["submission-intake"])
