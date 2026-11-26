@@ -11136,3 +11136,40 @@ review should verify revised selection, closed-assignment isolation and the
 difference between a granted award and fulfilled payment. Verification uses
 real PostgreSQL and source storage in focused integration cases, plus the
 connected CLI/MCP journey against the combined candidate.
+
+The earlier two-source PostgreSQL drill started from `3334fa566` on Alembic
+`0091_qualified_aws_source` and advanced to the `9efd2c017` implementation of
+`0092_submission_feedback`. It refused upgrade while a receiving operation
+was live. After it settled, the approved old attempt replayed its original
+receipt, retained the two historical packet fields and digests, and finalized
+once using existing OUTBOX/T5 owners. A separate nonempty legacy command
+conflicted with the new minimal replay. The isolated database cleanup receipt
+was complete. The reproducible two-checkout drill now lives with the
+[submission qualification experiments](../../../experiments/pilot04_external_checker_runtime/submission_feedback_upgrade_drill.py).
+Run its test explicitly from a detached `0091` checkout with
+`WORKSTREAM_SUBMISSION_FEEDBACK_CANDIDATE` identifying the candidate backend,
+using the owned isolated PostgreSQL runner. It also checks the exact audit
+constraint delta and row identity across the migration.
+The expanded drill passed in 248.27 seconds using the predecessor
+`3334fa566` and the `0092` schema from `a38dee4d1` and `eb5f93de4`, with
+owned database cleanup complete.
+
+At `eb5f93de4`, the combined isolated PostgreSQL/MinIO run reached eight
+passing case markers for new intake, retained rejection, guide access and
+concealment, revised terms, the managed adapter, migration graph and the
+connected CLI. Its child reached the 540-second cap before a terminal pytest
+summary and exited 124. The isolated database and MinIO cleanup receipts both
+completed. The separate built-CLI HTTP suite passed 52 cases. The
+precommit caller check for the `124695d5e` code passed 69 cases and 100
+subtests in 68.03 seconds. The installed MCP wheel and built CLI are available to the
+native proof. The probe records a connected-client receipt only when both are
+used with the same API and worker processes and the governed checkpoints pass.
+
+The November 26 infrastructure recheck verified the same running native
+runner instance at `56.228.13.174` using its pinned original SSH host key via
+`HostKeyAlias`. The configuration digest prefix `c3f8fb85`, executable,
+cache and root pins were unchanged. Both runner services were active with
+98.1 GB free. The existing API release still used image prefix `83744f1c16dd`,
+reported healthy and had 93.2 GB free. This was a read-only recheck of the running
+infrastructure. Combined candidate execution and deployment qualification
+remain open.
