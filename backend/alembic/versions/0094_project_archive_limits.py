@@ -10,6 +10,7 @@ depends_on = None
 
 
 def upgrade() -> None:
+    """Replace the current PRE guard after excluding active source writers."""
     op.execute("SET LOCAL search_path=pg_catalog,public,pg_temp")
     op.execute(
         "LOCK TABLE public.submission_intake_operations, public.selected_pre_submit_runs "
@@ -68,4 +69,5 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    """Preserve the canonical context already committed for new requests."""
     raise RuntimeError("project archive limits migration is forward-only")

@@ -132,6 +132,7 @@ class ProjectSubmissionArchiveLimits(BaseModel):
 
     @model_validator(mode="after")
     def require_cap(self) -> Self:
+        """Represent no configured caps by omission, not an empty object."""
         if not self.model_dump(exclude_none=True):
             raise ValueError("project submission archive limits are empty")
         return self
