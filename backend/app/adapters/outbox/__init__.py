@@ -194,14 +194,16 @@ def production_outbox_delivery(
     registry = HandlerRegistry(entries, replay_safe=frozenset(
         (kind, version) for kind, version, _handler in entries if (kind, version) in replay_safe
     ))
+    post_options = DeliveryOptions(
+        lease_seconds=SELECTED_POST_DELIVERY_LEASE_SECONDS,
+        handler_timeout_seconds=SELECTED_POST_HANDLER_TIMEOUT_SECONDS,
+    )
     event_options = {
         ("SubmissionFinalizationRequested", 1): finalization_options,
         (FINALIZATION_RECOVERY_EVENT, 1): finalization_options,
         feedback_key: feedback_options,
-        (REQUEST_EVENT, 1): DeliveryOptions(
-            lease_seconds=SELECTED_POST_DELIVERY_LEASE_SECONDS,
-            handler_timeout_seconds=SELECTED_POST_HANDLER_TIMEOUT_SECONDS,
-        ),
+        (REQUEST_EVENT, 1): post_options,
+        (RECONCILIATION_EVENT, 1): post_options,
     }
     return outbox_delivery(
         session_factory, authorization_factory=outbox_dispatch_authorization,

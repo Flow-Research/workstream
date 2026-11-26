@@ -1,6 +1,5 @@
 """One async post-submit execution path over reserved CHECKERS custody."""
 
-import asyncio
 import json
 import math
 from dataclasses import asdict
@@ -33,6 +32,7 @@ from app.modules.checkers.api.evaluation_contract import (
 from app.modules.checkers.api.external import PostSubmitExternalCheckerIdentity
 from app.modules.checkers.api.evaluation_context import PostSubmitInputContextCustody
 from app.modules.checkers.api.external_policy import (
+    MAXIMUM_SELECTED_POST_EXECUTION_BUDGET_MS,
     SELECTED_POST_FINALIZATION_MARGIN_MS,
     selected_post_submit_execution_budget_ms,
 )
@@ -162,7 +162,9 @@ class PostSubmissionExecutor:
 
     @staticmethod
     def _execution_budget_seconds(request: PostSubmissionExecutionRequest) -> int:
-        return math.ceil(selected_post_submit_execution_budget_ms(request.policy) / 1000)
+        """Reserve the durable worker envelope, not a short whole-POST cutoff."""
+        selected_post_submit_execution_budget_ms(request.policy)
+        return math.ceil(MAXIMUM_SELECTED_POST_EXECUTION_BUDGET_MS / 1000)
 
     def _consumer(self, request, lease):
         if self._selected_execution is None:
@@ -237,11 +239,13 @@ class PostSubmissionExecutor:
         input_materialization_evidence_id = None
         input_context_custody = None
         try:
-            async with asyncio.timeout(self._execution_budget_seconds(request)):
-                materialized = await self._materialization.materialize(
-                    ExecuteFacts(request=request, lease=lease),
-                    self._consumer(request, lease),
-                )
+            # ART owns material/transport bounds; each registered checker owns
+            # its execution limit. Their foreground estimate is not a deadline
+            # for this background workflow.
+            materialized = await self._materialization.materialize(
+                ExecuteFacts(request=request, lease=lease),
+                self._consumer(request, lease),
+            )
             material = VerifiedMaterialFacts(
                 **{
                     k: v

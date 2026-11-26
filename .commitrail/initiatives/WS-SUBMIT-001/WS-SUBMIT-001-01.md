@@ -13237,3 +13237,23 @@ The CHECKERS retry slice must reuse current reservation, Outbox and authority
 owners with explicit service provenance; it must not fabricate an Operator actor
 or retry a running unknown invocation. Its source/result uniqueness and rollback
 remain required acceptance criteria. This is a security/workflow-risk change.
+
+The required start-confirmation control field makes the preceding strict runner
+reject the new request before execution; the new runner rejects absent or false
+confirmation requirements. This closes the mixed-release ambiguity identified
+by independent review without retaining an old execution path. All 34 focused
+remote transport cases passed, including old-admission refusal, missing/false
+flags, disconnect before start, incorrect binding, post-start uncertainty,
+callbacks and workspace cleanup. Diagnostics contain validated grant identifiers,
+byte counts, stage names and elapsed time, never artifact contents or file names.
+
+The background-time slice also permits changes to the existing CHECKERS executor,
+Outbox event options and execution regression. Remove CHECKERS' nominal aggregate
+timer; retain ART's separately configured processing guard and each approved
+checker's execution limit. Reserve the existing durable worker envelope rather
+than the nominal 60-second material estimate, and give an Operator reconciliation
+execution the same delivery envelope as an original POST. The existing 3,400-second
+ART ceiling, 3,520-second handler and 3,600-second delivery bounds remain explicit
+operational limits; this slice does not claim unbounded execution or renewable
+leases. A real PostgreSQL regression must prove successful material preparation
+beyond the nominal estimate while stale workers remain fenced after takeover.

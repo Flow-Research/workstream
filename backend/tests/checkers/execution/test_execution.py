@@ -38,6 +38,31 @@ async def test_missing_checker_principal_denies_before_access(tmp_path, isolated
         assert h.store.opens == [] and not h.preparation._active
 
 
+async def test_background_materialization_can_exceed_nominal_post_estimate(
+    tmp_path, isolated_database_env, monkeypatch,
+):
+    """Useful material work must not expire at the old estimated whole-run cap."""
+    import asyncio
+    import app.modules.checkers.execution as execution
+
+    async with material_fixture(tmp_path, isolated_database_env) as h:
+        await reserve(h)
+        materialize = h.service.materialize
+
+        async def slower_materialization(*args, **kwargs):
+            await asyncio.sleep(1.1)
+            return await materialize(*args, **kwargs)
+
+        monkeypatch.setattr(execution, "selected_post_submit_execution_budget_ms", lambda _policy: 1000)
+        monkeypatch.setattr(h.service, "materialize", slower_materialization)
+        result = await live_executor(h).evaluate_post_submission(h.request)
+        assert result.outcome == "completed"
+        async with h.factory() as session:
+            run = await session.get(CheckerRun, str(result.attempt_id))
+            assert run.status == "completed" and run.failure_code is None
+            assert run.worker_lease_expires_at > run.completed_at
+
+
 @pytest.mark.parametrize("provider", ["local", "minio"])
 async def test_verified_material_execution_and_replay(
     tmp_path, isolated_database_env, provider, autoflush_clock, monkeypatch
