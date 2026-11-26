@@ -1,5 +1,6 @@
 """Fixed SQL projections and live grant privacy over retained checker results."""
 
+import json
 from uuid import uuid4
 
 import pytest
@@ -144,7 +145,7 @@ async def test_nested_values_match_exact_stored_parents(task_client, monkeypatch
                     )
                     message, fix = RESULT_STATUS_MESSAGES[status]
                     if finding is not None:
-                        retained = runs[str(row.checker_run_id)].result_json["execution"]["external_members"]
+                        retained = json.loads(runs[str(row.checker_run_id)].result_json)["execution"]["external_members"]
                         text = retained[row.member_order]["result"]["findings"][finding.finding_order]["message"]
                         if text is not None:
                             message, fix = text, None

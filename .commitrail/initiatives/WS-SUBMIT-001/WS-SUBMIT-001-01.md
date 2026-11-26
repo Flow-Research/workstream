@@ -11544,3 +11544,31 @@ response remained in memory and the invocation's remote Docker credential file
 was removed in finally; no running service configuration was changed. The prior
 inventory's unpublished status is superseded by this staging receipt, while its
 native/configuration/migration/deployed-proof limitations remain open.
+
+### Retained history expectation JSON decoding (2026-11-26)
+
+Intent and bounded scope: authorization/submission_history/test_privacy.py and
+this record only, based on the new0096 Backend45784976520 failures, not the old
+run. Job139790509476 task_lifecycle_c has303 passes/one manager-case failure;
+job139790509472 task_lifecycle_e has325 passes/one contributor-case failure.
+Both exact test_nested_values_match_exact_stored_parents parameters abort at
+line147 indexing CheckerRun.result_json as a dictionary. The model maps it to
+Text, and production history.py explicitly casts it to JSONB before selecting
+the exact stored member/finding. Downloaded artifact logs are retained privately
+under /tmp/pr708-0096-task-{c,e}-artifact/metadata/.
+
+Decode that exact persisted JSON text in the expected-value oracle, then retain
+member_order/finding_order indexing and every exact message, fallback, parent,
+evidence, foreign-history and manager/contributor assertion. No fixture row,
+production projection or privacy guard changes. Parent authorized this narrow
+follow-up after transferring file ownership from the historical reviewer. No PG
+while the native guide proof owns the shared slot.
+
+Pure discrimination executes the exact old/new oracle AST block over stored JSON
+text containing two members and nonfirst findings. Old raises the exact CI
+TypeError; new selects the exact intended diagnosis, while null message and
+absent finding retain the original status fallback. Reversing only json import
+and json.loads makes the full module AST identical to0096, so no assertion,
+fixture or other behavior changed. Ruff/whitespace and record checks pass. Both
+actual PostgreSQL manager/contributor cases remain pending coordinated runtime
+or CI; these pure checks do not qualify their database projection or privacy.
