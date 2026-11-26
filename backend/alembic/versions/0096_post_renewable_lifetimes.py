@@ -135,6 +135,13 @@ def upgrade() -> None:
          "or new.last_attempt_at is distinct from old.last_attempt_at\n"
          "               or new.claim_live_until is not null then\n"
          "              raise exception 'outbox outcome cannot change claim generation'", 1))
+    _replace("public.guard_outbox_delivery_attempt()",
+        ("elsif tg_op = 'INSERT' then",
+         "elsif tg_op = 'UPDATE' and old.stage='invoked' and new.stage='invoked' "
+         "and new.claim_live_until is distinct from old.claim_live_until then\n"
+         "            -- The separate renewal trigger validates the exact row, event and decision.\n"
+         "            return new;\n"
+         "          elsif tg_op = 'INSERT' then", 1))
     _replace("public.check_outbox_delivery_projection()",
         ("(e.claim_owner,e.claimed_at,e.claim_expires_at,e.last_attempt_at) is distinct from\n"
          "               (a.claim_owner,a.claimed_at,a.claim_expires_at,a.claimed_at)",
