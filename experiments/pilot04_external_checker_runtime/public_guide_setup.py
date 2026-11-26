@@ -46,14 +46,14 @@ async def _public_policy_settings(client, root, token, human_review_required, ca
                    headers={**headers, "Idempotency-Key": str(uuid4())}, json=body)
 
 
-async def _finance_policy(client, factory, project_id, token_for, compensated, call, attachment=None):
+async def _finance_policy(client, factory, project_id, token_for, compensated, call, attachment, issuer):
     if attachment:
         await attachment.grant(client, 'finance', 'finance_authority', project_id)
         finance = attachment.actors['finance']
         if compensated:
             raise AssertionError('hosted runtime fixture requires unpaid policy')
     else:
-        finance, _ = await seed_review_actor(factory, project_id, role="finance_authority")
+        finance, _ = await seed_review_actor(factory, project_id, role="finance_authority", issuer=issuer)
     token = token_for(finance)
     definitions = []
     if compensated:
@@ -201,7 +201,7 @@ async def _local_approval_attachments(factory):
 
 
 async def public_guide_setup(client, factory, human_review_required, call, token_for, *,
-                             pre_requirements=1, attachment=None):
+                             pre_requirements=1, attachment=None, issuer="https://identity.flowresearch.tech"):
     if pre_requirements != 1:
         raise ValueError("current qualification requires exactly one PRE image")
     model_post = attachment.model_post if attachment else None
@@ -211,7 +211,7 @@ async def public_guide_setup(client, factory, human_review_required, call, token
     if attachment:
         manager = attachment.actors['manager']
     else:
-        manager, _ = await seed_review_actor(factory, None, scope="system")
+        manager, _ = await seed_review_actor(factory, None, scope="system", issuer=issuer)
     token = token_for(manager)
     project = await call(client, "POST", "/api/v1/projects", token, 201,
                          headers={"Idempotency-Key": str(uuid4())},
@@ -223,7 +223,7 @@ async def public_guide_setup(client, factory, human_review_required, call, token
     else:
         await seed_review_actor(factory, UUID(project["id"]), actor=manager)
         from guide_compilation_e2e import publish_scripted_model_profile
-        operator, _ = await seed_review_actor(factory, None, role="operator", scope="system")
+        operator, _ = await seed_review_actor(factory, None, role="operator", scope="system", issuer=issuer)
         profile = await publish_scripted_model_profile(client, token_for(operator), project["id"])
         if (profile["spec"]["project_id"] != project["id"]
                 or profile["spec"]["profile_version"] != 1):
@@ -278,7 +278,7 @@ async def public_guide_setup(client, factory, human_review_required, call, token
                          **attachments})
         compilation_root = root + f"/compilations/{setup['finalized_compilation_id']}"
     await _finance_policy(client, factory, UUID(project["id"]), token_for,
-                          not human_review_required and attachment is None, call, attachment)
+                          not human_review_required and attachment is None, call, attachment, issuer)
     post = await _approve_policies(client, compilation_root, token, call, attachments)
     context = post["activation_context"]
     activation = {"target": post["target"], **{field: context[field] for field in (

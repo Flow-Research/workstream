@@ -9,7 +9,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 from collections.abc import Awaitable, Callable
-from contextlib import nullcontext
+from contextlib import ExitStack, nullcontext
 from decimal import Decimal
 import hashlib
 import hmac
@@ -72,6 +72,9 @@ from experiments.pilot04_external_checker_runtime.public_probe_support import ( 
     _assert_outbox_worker_custody, _assert_task_has_no_effects, _json, _public_project,
     _require, _started_public_task, _token, _wait_outbox_acknowledged,
     _with_fixture_file, _GOVERNED_TABLES, _fixture_hashes, _assert_input_hashes,
+)
+from experiments.pilot04_external_checker_runtime.public_submission_clients import (  # noqa: E402
+    ContributorClients, seeded_issuer,
 )
 
 
@@ -572,16 +575,24 @@ async def _replay_source_submission(client, task_id, assignment_id, token, archi
 
 
 async def _submit(client, factory, *, task_id: str, assignment_id: str,
-                  contributor_token: str, archive: bytes, feedback: str | None = None) -> dict:
+                  contributor_token: str, archive: bytes, feedback: str | None = None,
+                  submit_zip=None, replay_zip=None) -> dict:
     headers = _source_headers(assignment_id, archive, str(uuid4()), feedback)
-    accepted = await _json(client, "POST", f"/api/v1/tasks/{task_id}/submissions", contributor_token, 202,
-                           headers=headers, content=archive)
+    if submit_zip is None:
+        accepted = await _json(client, "POST", f"/api/v1/tasks/{task_id}/submissions", contributor_token, 202,
+                               headers=headers, content=archive)
+    else:
+        accepted = await submit_zip(archive, headers["Idempotency-Key"])
     _require(accepted["task_id"] == task_id and accepted["assignment_id"] == assignment_id
              and accepted["status"] == "accepted" and accepted["replayed"] is False
              and accepted["pre_submission_results"], "raw ZIP command returned an invalid accepted receipt")
     context = {"operation_id": accepted["operation_id"], "acceptance_receipt": accepted,
                "idempotency_key": headers["Idempotency-Key"], "feedback": feedback}
-    await _replay_source_submission(client, task_id, assignment_id, contributor_token, archive, context)
+    if replay_zip is None:
+        await _replay_source_submission(client, task_id, assignment_id, contributor_token, archive, context)
+    else:
+        replayed = await replay_zip(archive, context["idempotency_key"])
+        _require(replayed == dict(accepted, replayed=True), "connected submission replay changed its receipt")
     return context | await _await_finalized_source(
         client, factory, task_id, assignment_id, contributor_token, context, archive)
 
@@ -807,7 +818,7 @@ async def _late_revocation_trial(client, factory, env, *, project_id: UUID,
                  "late completion advanced before the worker stopped")
 
     administrator, _ = await seed_review_actor(
-        factory, None, role="access_administrator", scope="system"
+        factory, None, role="access_administrator", scope="system", issuer=seeded_issuer(env),
     )
     async with factory() as session:
         router_link = await session.scalar(
@@ -854,7 +865,8 @@ async def _late_revocation_trial(client, factory, env, *, project_id: UUID,
 async def _one_mode(client, factory, env, *,
                     human_review_required: bool, operator_id: UUID | None,
                     stop_worker: Callable[[], None] | None = None,
-                    start_worker: Callable[[], Awaitable[None]] | None = None, fault_root=None, operator_token=None) -> dict:
+                    start_worker: Callable[[], Awaitable[None]] | None = None, fault_root=None,
+                    operator_token=None, clients: ContributorClients | None = None) -> dict:
     from experiments.pilot04_external_checker_runtime.public_hosted_attachment import HostedAttachment
 
     attachment = env if isinstance(env, HostedAttachment) else None
@@ -870,22 +882,24 @@ async def _one_mode(client, factory, env, *,
     )
     _require(approved_guide["guide_id"] == str(compilation.guide_id)
              and approved_guide["documents"], "preclaim project guide does not match the approved originals")
+    if clients is not None:
+        await clients.guide(contributor, contributor_token, project_id, approved_guide)
     task_id, assignment_id = await _started_public_task(
         client, project_id=project_id, manager_token=manager_token,
         contributor_token=contributor_token, source_ref="local-ticket-1", approved_guide=approved_guide,
     )
 
+    async def submit_zip(archive, key, *, using, failed=False):
+        if clients is None:
+            return await _json(
+                client, "POST", f"/api/v1/tasks/{task_id}/submissions", contributor_token, 422 if failed else 202,
+                headers=_source_headers(assignment_id, archive, key), content=archive,
+            )
+        return await clients.submit(contributor, contributor_token, task_id, assignment_id,
+                                    key, archive, client=using, failed=failed)
+
     archive = archive_with_modes("evidence/results", compilation.project_id)
-    bad = await _json(
-        client, "POST", f"/api/v1/tasks/{task_id}/submissions",
-        contributor_token, 422,
-        headers={
-            "Content-Type": "application/zip",
-            "X-Task-Assignment-Id": assignment_id,
-            "Idempotency-Key": str(uuid4()),
-        },
-        content=_secret_archive(archive),
-    )
+    bad = await submit_zip(_secret_archive(archive), str(uuid4()), using="cli", failed=True)
     _require(bad["error"]["code"] == "pre_submission_checker_failed",
              "public intake did not return checker feedback")
     default_details = bad["error"]["details"]
@@ -906,16 +920,8 @@ async def _one_mode(client, factory, env, *,
         ],
         "public default PRE feedback did not identify the injected private key",
     )
-    external_bad = await _json(
-        client, "POST", f"/api/v1/tasks/{task_id}/submissions",
-        contributor_token, 422,
-        headers={
-            "Content-Type": "application/zip",
-            "X-Task-Assignment-Id": assignment_id,
-            "Idempotency-Key": str(uuid4()),
-        },
-        content=_with_fixture_file(archive, "project-rejected.txt"),
-    )
+    external_bad = await submit_zip(_with_fixture_file(archive, "project-rejected.txt"), str(uuid4()),
+                                    using="mcp", failed=True)
     results = external_bad["error"]["details"]["results"]
     external = [item for item in results
                 if item["source"] == "project_external_checker"]
@@ -928,6 +934,8 @@ async def _one_mode(client, factory, env, *,
              "public external PRE rejection did not preserve passing defaults")
     status_path = f"/api/v1/tasks/{task_id}/assignments/{assignment_id}"
     rejected = await _json(client, "GET", status_path, contributor_token, 200)
+    if clients is not None:
+        await clients.status(contributor, contributor_token, task_id, assignment_id, rejected)
     _require(rejected["current_status"] == "in_progress"
              and rejected["assignment"]["latest_submission"] is None
              and rejected["next_action"] == "submit"
@@ -951,7 +959,10 @@ async def _one_mode(client, factory, env, *,
     try:
         saved = await _submit(
             client, factory, task_id=task_id, assignment_id=assignment_id,
-            contributor_token=contributor_token, archive=first_archive)
+            contributor_token=contributor_token, archive=first_archive,
+            submit_zip=lambda archive, key: submit_zip(archive, key, using="cli" if human_review_required else "mcp"),
+            replay_zip=lambda archive, key: submit_zip(archive, key, using="mcp" if human_review_required else "cli"),
+        )
         if inject_post_fault:
             await fail_post_launch()
     finally:
@@ -984,6 +995,8 @@ async def _one_mode(client, factory, env, *,
             attempt_id=first_attempt_id,
         )
         revision = await _json(client, "GET", status_path, contributor_token, 200)
+        if clients is not None:
+            await clients.status(contributor, contributor_token, task_id, assignment_id, revision)
         _require(revision["current_status"] == "needs_revision"
                  and revision["next_action"] == "revise"
                  and revision["feedback_submission_id"] == first_submission_id
@@ -995,6 +1008,8 @@ async def _one_mode(client, factory, env, *,
             client, factory, task_id=task_id, assignment_id=assignment_id,
             contributor_token=contributor_token,
             archive=replacement_archive,
+            submit_zip=lambda archive, key: submit_zip(archive, key, using="mcp"),
+            replay_zip=lambda archive, key: submit_zip(archive, key, using="cli"),
         )
         expected_inputs[saved["submission_id"]] = _fixture_hashes(replacement_archive)
         _require(saved["submission_version"] == 2,
@@ -1051,6 +1066,8 @@ async def _one_mode(client, factory, env, *,
                  for award in item["awards"]] == ([("project_points", "PTS", Decimal("7"))] if awards else []),
                  "public contribution source or award set differs")
     final_status = await _json(client, "GET", status_path, contributor_token, 200)
+    if clients is not None:
+        await clients.status(contributor, contributor_token, task_id, assignment_id, final_status)
     if human_review_required:
         _require(final_status["current_status"] == "review_pending" and final_status["accepted_evidence"] is None,
                  "the exact assignment changed required human-review custody")
@@ -1132,7 +1149,8 @@ async def _pre_runs(factory, task_id: str) -> list[str]:
 
 
 async def run(database_url: str, image_reference: str, node_config: Path,
-              broker_url: str, root: Path, expected_custody: Path) -> dict:
+              broker_url: str, root: Path, expected_custody: Path,
+              clients: ContributorClients | None = None) -> dict:
     root.mkdir(parents=True, mode=0o700, exist_ok=True)
     custody = json.loads(expected_custody.read_text())
     _require(custody['source_tree'] == subprocess.check_output(
@@ -1194,6 +1212,10 @@ async def run(database_url: str, image_reference: str, node_config: Path,
     })
     configure_scripted_model_session_environment(env)
     env.pop("OPENAI_API_KEY", None)
+    if clients is not None:
+        env = clients.setup_authority(env)
+        os.environ.pop("WORKSTREAM_FLOW_AUTH_LOCAL_HMAC_SECRET", None)
+        os.environ.pop("WORKSTREAM_E2E_FLOW_SECRET", None)
     # Infrastructure prerequisites and broker publication use the same
     # isolated database and provider settings as the API and worker children.
     for key, value in env.items():
@@ -1202,13 +1224,20 @@ async def run(database_url: str, image_reference: str, node_config: Path,
     os.environ.pop("OPENAI_API_KEY", None)
     get_settings.cache_clear()
     runtime_settings = get_settings()
-    issuer, audience, flow_secret = flow_settings(env)
     _require(runtime_settings.database_url == database_url,
              "API/worker database differs from isolated fixture")
-    _require(runtime_settings.flow_auth_issuer == issuer
-             and runtime_settings.flow_auth_audience == audience
-             and runtime_settings.flow_auth_local_hmac_secret == flow_secret,
-             "API Flow verifier differs from local test signer")
+    if clients is None:
+        issuer, audience, flow_secret = flow_settings(env)
+        _require(runtime_settings.flow_auth_issuer == issuer
+                 and runtime_settings.flow_auth_audience == audience
+                 and runtime_settings.flow_auth_local_hmac_secret == flow_secret,
+                 "API Flow verifier differs from local test signer")
+    else:
+        _require(runtime_settings.token_issuer == clients.identity.issuer
+                 and runtime_settings.token_audience == "workstream-api"
+                 and runtime_settings.token_algorithms == "RS256"
+                 and runtime_settings.flow_auth_local_hmac_secret is None,
+                 "API Flow verifier differs from the connected issuer fixture")
     _require(runtime_settings.api_rate_limit_key_secret is not None
              and runtime_settings.pagination_cursor_hmac_secret is not None,
              "API rate/cursor signing configuration is absent")
@@ -1255,7 +1284,7 @@ async def run(database_url: str, image_reference: str, node_config: Path,
 
     engine = create_async_engine(database_url)
     factory = async_sessionmaker(engine, expire_on_commit=False)
-    api = worker = beat = None
+    api = worker = beat = mcp = None
     workers: list[subprocess.Popen] = []
     worker_generation = 0
 
@@ -1285,7 +1314,7 @@ async def run(database_url: str, image_reference: str, node_config: Path,
         await _provision_runtime_services(factory)
         for phase in ("pre_submit", "post_submit"):
             await _register_external_checker_fixture(factory, _locked_spec(phase, image))
-        operator, _ = await seed_review_actor(factory, None, role="operator", scope="system")
+        operator, _ = await seed_review_actor(factory, None, role="operator", scope="system", issuer=seeded_issuer(env))
         from tests.reviews.lifecycle.transition_support import command_for, transition
         await transition(await command_for(operator.actor_profile_id, "shadow"))
 
@@ -1303,6 +1332,10 @@ async def run(database_url: str, image_reference: str, node_config: Path,
             "--log-level", "error", "--no-access-log",
         ], env=env, log=root / "api.log")
         await _wait_api(origin, api)
+        if clients is not None:
+            clients.configure_processes(origin, find_free_port())
+            mcp = _process([str(clients.mcp_executable)], env=clients.mcp_env, log=root / "mcp.log")
+            await clients.wait_ready(mcp)
         for role, queue in WORKER_ROLES:
             process, hostname = _start_worker(
                 cleanup_env if role == "source-cleanup" else env, root, role, queue
@@ -1332,16 +1365,17 @@ async def run(database_url: str, image_reference: str, node_config: Path,
                 stop_worker=stop_owned_worker, start_worker=start_owned_worker, operator_token=_token(env, operator))
             true = await _one_mode(client, factory, env,
                                    human_review_required=True,
-                                   operator_id=operator.actor_profile_id)
+                                   operator_id=operator.actor_profile_id, clients=clients)
             false = await _one_mode(client, factory, env,
                                     human_review_required=False,
                                     operator_id=operator.actor_profile_id,
                                     stop_worker=stop_owned_worker,
                                     start_worker=start_owned_worker, fault_root=fault_root,
-                                    operator_token=_token(env, operator))
+                                    operator_token=_token(env, operator), clients=clients)
         _require(api.poll() is None and beat.poll() is None
                  and all(process.poll() is None for process in workers),
                  "API, dedicated prefork worker, or Beat exited during public journey")
+        _require(mcp is None or mcp.poll() is None, "installed MCP exited during public journey")
         return {"tree_sha": subprocess.check_output(
             ["git", "rev-parse", "HEAD"], text=True, cwd=BACKEND
         ).strip(), "runtime": "smolvm/smol-microvm", "image_digest": image["platform_manifest_digest"],
@@ -1351,6 +1385,7 @@ async def run(database_url: str, image_reference: str, node_config: Path,
                 "dedicated_worker_queues": [queue for _, queue in WORKER_ROLES], "maximum_parallel": 1,
                 "scheduled_artifact_scans": True,
                 "public_original_guide_setup": True,
+                "connected_submitter_clients": ["cli", "mcp"] if clients is not None else [],
                 "recorded_inference": True,
                 "custody": {key: custody[key] for key in (
                     'source_tree', 'config_sha256', 'service_sha256', 'smol_sha256', 'guest_sha256', 'wrapper_sha256')},
@@ -1358,7 +1393,7 @@ async def run(database_url: str, image_reference: str, node_config: Path,
     finally:
         cleanup_error = None
         try:
-            _stop_owned_processes((beat, *reversed(workers), api))
+            _stop_owned_processes((mcp, beat, *reversed(workers), api))
         except RuntimeError as error:
             cleanup_error = error
         try:
@@ -1379,6 +1414,8 @@ def main() -> int:
     parser.add_argument("--expected-custody", type=Path)
     parser.add_argument("--work-dir", type=Path,
                         help="Unique private directory retaining API and worker diagnostics")
+    parser.add_argument("--cli-executable", type=Path, help="Built CLI for connected submitter verification")
+    parser.add_argument("--mcp-executable", type=Path, help="Installed MCP for connected submitter verification")
     parser.add_argument('--hosted-attachment', type=Path,
                         help='Private attachment manifest for an existing hosted API/worker/Beat')
     parser.add_argument('--hosted-model-post', type=Path,
@@ -1388,9 +1425,11 @@ def main() -> int:
         parser.error("isolated --database-url or WORKSTREAM_TEST_DATABASE_URL is required")
     if args.hosted_model_post and not args.hosted_attachment:
         parser.error('model POST qualification requires explicit hosted attachment')
+    if bool(args.cli_executable) != bool(args.mcp_executable):
+        parser.error("connected submitter verification requires both client executables")
     if args.hosted_attachment:
         if (not args.broker_url or args.image_reference or args.node_config
-                or args.work_dir or args.expected_custody):
+                or args.work_dir or args.expected_custody or args.cli_executable or args.mcp_executable):
             parser.error('hosted attachment requires broker URL and excludes local launch arguments')
         from experiments.pilot04_external_checker_runtime.public_hosted_attachment import HostedAttachment, run as attach
         attachment = HostedAttachment.read(args.hosted_attachment)
@@ -1402,10 +1441,14 @@ def main() -> int:
         parser.error("full drill requires image, node config, and broker URL")
     workspace = (nullcontext(args.work_dir) if args.work_dir else
                  tempfile.TemporaryDirectory(prefix="ws-pilot04-public-"))
-    with workspace as directory:
+    with workspace as directory, ExitStack() as cleanup:
+        clients = None
+        if args.cli_executable:
+            clients = ContributorClients(args.cli_executable, args.mcp_executable, Path(directory) / "submitter-clients")
+            cleanup.callback(clients.identity.close)
         value = asyncio.run(run(
             args.database_url, args.image_reference, args.node_config,
-            args.broker_url, Path(directory), args.expected_custody,
+            args.broker_url, Path(directory), args.expected_custody, clients,
         ))
     print(json.dumps(value, sort_keys=True, separators=(",", ":")))
     return 0

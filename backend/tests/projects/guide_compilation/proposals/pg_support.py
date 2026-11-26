@@ -370,7 +370,8 @@ async def finalize_corrected_attempt(
 
 
 async def seed_review_actor(
-    factory, project_id, *, actor=None, role="project_manager", scope="project"
+    factory, project_id, *, actor=None, role="project_manager", scope="project",
+    issuer="https://identity.flowresearch.tech",
 ):
     """Seed stored grant variants; request/approval authority guards remain enabled."""
     from datetime import UTC, datetime
@@ -394,7 +395,7 @@ async def seed_review_actor(
                 ActorIdentityLink(
                     id=str(actor.identity_link_id),
                     actor_profile_id=str(actor.actor_profile_id),
-                    issuer="https://identity.flowresearch.tech",
+                    issuer=issuer,
                     subject=str(actor.actor_profile_id),
                     subject_kind="human",
                     status="active",

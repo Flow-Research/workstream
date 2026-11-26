@@ -143,6 +143,15 @@ the isolated upload key, plus the existing journey fixture's distinct
 `WORKSTREAM_CLI_JOURNEY_CLEANUP_SECRET_FILE`. Only the cleanup child receives
 that separate credential.
 
+For the connected contributor proof, build the CLI and install the current
+MCP wheel into its own environment. Pass both executable paths. The probe
+uses the existing local HTTPS issuer and token-exchange fixture, and both
+clients address the same public API while the dedicated workers process
+submissions. The clean run receipt includes `connected_submitter_clients`
+after guide download, PRE rejection, cross-client replay, POST revision,
+resubmission, and final assignment reads complete. Hosted Flow Identity and
+deployed service qualification remain separate.
+
 ```sh
 PYTHONPATH=.:tests:.. .venv/bin/python scripts/run_isolated_tests.py \
   --metadata-json /tmp/guide-journey-cleanup.json --timeout-seconds 1500 \
@@ -152,7 +161,9 @@ PYTHONPATH=.:tests:.. .venv/bin/python scripts/run_isolated_tests.py \
   --node-config /absolute/private-node/service.json \
   --expected-custody /absolute/private-node/custody.json \
   --broker-url redis://127.0.0.1:<owned-port>/0 \
-  --work-dir /absolute/private-guide-journey
+  --work-dir /absolute/private-guide-journey \
+  --cli-executable /absolute/bin/workstream \
+  --mcp-executable /absolute/mcp-wheel/bin/workstream-mcp
 ```
 
 Use a new metadata path, work directory and private broker for each run. The

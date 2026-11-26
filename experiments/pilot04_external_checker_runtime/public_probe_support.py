@@ -50,9 +50,12 @@ def _assert_input_hashes(row, expected):
 
 def _token(env: dict[str, str], actor) -> str:
     from experiments.pilot04_external_checker_runtime.public_hosted_attachment import HostedAttachment
+    from experiments.pilot04_external_checker_runtime.public_submission_clients import ConnectedEnvironment
 
     if isinstance(env, HostedAttachment):
         return env.token(actor)
+    if isinstance(env, ConnectedEnvironment):
+        return env.identity.issue(str(actor.actor_profile_id), api_lifetime_seconds=1800).api
     issuer, audience, secret = flow_settings(env)
     return issue_flow_token(
         str(actor.actor_profile_id), [], issuer=issuer, audience=audience, secret=secret
@@ -84,7 +87,7 @@ async def _json(client: httpx.AsyncClient, method: str, path: str, token: str,
     return response.json()
 
 
-async def _seed_contributor(factory) -> ActorIdentityFacts:
+async def _seed_contributor(factory, issuer) -> ActorIdentityFacts:
     """Create a Flow-linked human without an administrator role grant."""
     actor = ActorIdentityFacts(new_record_id(), new_record_id(), ActorKind.HUMAN)
     async with factory() as session, session.begin():
@@ -95,7 +98,7 @@ async def _seed_contributor(factory) -> ActorIdentityFacts:
         await session.flush()
         session.add(ActorIdentityLink(
             id=str(actor.identity_link_id), actor_profile_id=str(actor.actor_profile_id),
-            issuer="https://identity.flowresearch.tech",
+            issuer=issuer,
             subject=str(actor.actor_profile_id), subject_kind="human",
             status="active", linked_by="public-probe-fixture",
             last_verified_at=datetime.now(UTC),
@@ -223,15 +226,16 @@ async def _started_public_task(client, *, project_id: str, manager_token: str,
 async def _public_project(client, factory, env, *, human_review_required, pre_requirements=1):
     """Public guide activation and submitter grant shared by every runtime trial."""
     from experiments.pilot04_external_checker_runtime.public_hosted_attachment import HostedAttachment
+    from experiments.pilot04_external_checker_runtime.public_submission_clients import seeded_issuer
 
     attachment = env if isinstance(env, HostedAttachment) else None
     compilation = await public_guide_setup(
         client, factory, human_review_required, _json, lambda actor: _token(env, actor),
-        pre_requirements=pre_requirements, attachment=attachment,
+        pre_requirements=pre_requirements, attachment=attachment, issuer=seeded_issuer(env),
     )
     manager = compilation.manager
     guide_id = str(compilation.guide_id)
-    contributor = attachment.actors['contributor'] if attachment else await _seed_contributor(factory)
+    contributor = attachment.actors['contributor'] if attachment else await _seed_contributor(factory, seeded_issuer(env))
 
     manager_token, contributor_token = _token(env, manager), _token(env, contributor)
     project_id = str(compilation.project_id)
