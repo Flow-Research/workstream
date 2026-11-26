@@ -968,7 +968,13 @@ async def _one_mode(client, factory, env, *,
     )
     external_bad = await submit_zip(_with_fixture_file(archive, "project-rejected.txt"), str(uuid4()),
                                     using="mcp", failed=True)
-    results = external_bad["error"]["details"]["results"]
+    failure = external_bad["error"]
+    diagnostic = {key: failure.get(key) for key in ("error", "code", "status", "correlation_id")}
+    _require(failure.get("code") == "pre_submission_checker_failed"
+             and (clients is None or failure.get("status") == 422)
+             and isinstance(failure.get("details"), dict),
+             "public external PRE returned a different failure: " + json.dumps(diagnostic, sort_keys=True))
+    results = failure["details"]["results"]
     external = [item for item in results
                 if item["source"] == "project_external_checker"]
     _require(external_bad["error"]["code"] == "pre_submission_checker_failed"

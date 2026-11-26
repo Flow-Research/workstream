@@ -12285,3 +12285,15 @@ and permits zero new publications in that particular pass. Its positive
 evidence comes from the exact live POST request and the original T5
 acknowledgement, whether the scheduled scanner or the explicit pass
 published either parked event.
+
+### Automatic native probe failure diagnostics
+
+The frozen d4213eebd automatic-case run stopped at the MCP project-PRE negative
+case after the initial default-PRE rejection. Its response did not contain the
+expected feedback details, and the probe obscured that distinction with a
+KeyError. Database and bucket cleanup passed at schema 0093 in
+`/tmp/workstream-paired-native-mwdtw6b5/cleanup.json`. Preserve the original
+feedback assertion, but validate its envelope first and report only the safe
+error/code/status/correlation fields on mismatch. The original response was
+not retained; no specific provider or MCP failure cause is claimed from this
+run. This changes only diagnostic evidence, not accepted outcomes or deadlines.
