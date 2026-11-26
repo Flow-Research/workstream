@@ -15,6 +15,14 @@ Implementation claims require merged code, migrations, tests, and review
 evidence. A plan or open pull request is not implemented behavior. Open pull
 requests are the transient view of work currently under review.
 
+The former PILOT-04 execution harness and simulated hosted issuer are retired.
+Past drill reports remain historical evidence, not runnable current tooling.
+Use the [current Flow Identity deployment](../deploy/identity/README.md#verification-scope)
+and [production external-checker verification](../external_checkers/README.md)
+for their respective boundaries; a fresh full hosted journey still needs its own
+real-provider, project-image and durable-outcome evidence. This cleanup changes
+qualification tooling, not product lifecycle capability.
+
 Bounded contribution evidence reads expose existing immutable work and award
 facts to the current human or authorized project exporter. These reads alone do
 not activate recognition writers, establish the local contributor journey or assert payment.

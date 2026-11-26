@@ -26,7 +26,8 @@ archive copies.
 
 Not allowed: product behavior changes beyond removing the unused utility, retained data deletion, CI weakening,
 Commitrail history deletion or pre-cutover edits, pilot reorganization, removal
-of active hosted-drill/identity fixtures, or overlapping implementation from
+of current Keycloak or production external-checker verification, or changing
+the implementation branches of
 open submission/finance PRs.
 
 Also allowed: remove the superseded actor-classification migration utility
@@ -38,6 +39,28 @@ in `backend/tests/test_behavior_ownership.py`), and the semantic-family fingerpr
 `backend/tests/test_ci_lane_catalogue.py`. It reads the retired `actor_identities` layout and has no importer in
 current product code or Alembic migrations. No current schema, migration or
 authentication behavior changes.
+
+## Retire the superseded hosted experiment
+
+The user explicitly requires removal of the simulated issuer and old PILOT-04
+execution path. `HostedAttachment.inspect` requires the simulated issuer and
+`token_for_label` mints fixture tokens. This cannot qualify current Keycloak.
+The PILOT-04 directory is a standalone test harness, not the production Rust
+runner/SDK in `external_checkers/`.
+
+Allowed: remove the remaining `experiments/` tree and its exclusive
+`scripts/test_public_guide_journey.py`, `test_public_hosted_attachment.py`,
+`test_public_hosted_model_post.py`, and `test_public_smol_proof.py`; remove only
+backend test cases exclusively exercising that retired harness; reconcile
+release-image workflow references, current documentation links and historical
+links. Keep real Keycloak provider/browser/signup tests, production checker
+service/intake tests and product lifecycle/authorization tests. Do not replace
+the retired code with another fake issuer, compatibility import or renamed
+copy. Any distinct current behavior whose only proof lives here must retain
+proof in its current owner before deletion.
+
+PR #708 changes this harness. Reconcile its integration against the deletion;
+this cleanup does not edit or claim delivery of that separate implementation.
 
 ## Proof retained and obsolete proof removed
 
@@ -59,7 +82,8 @@ semantic-family count and digest are updated to match that deletion.
 - Current navigation leads to maintained documentation, not removed reports.
 - Stale-wording, Markdown, Commitrail and diff checks pass.
 - Focused production MCP regression checks pass; no suite selection is weakened.
-- No pre-cutover file or active pilot/hosted fixture changes.
+- No pre-cutover file or sample project assets change; current Keycloak and
+  production checker verification remain.
 
 ## Risk and review routing
 
@@ -74,13 +98,18 @@ finds no references to removed files outside immutable pre-cutover snapshots.
 The 33 lightweight-gate and stale-review tests pass. Production MCP protocol
 and gateway regressions provide the retained caller-isolation and transport
 proof; exact execution results and reviewer freshness belong in the PR.
-No workflow changes are part of this cleanup. Test selection changes only to
-remove the deleted classifier module; retained selection and arbitrary-removal
-rejection remain enforced.
+Workflow selection changes remove only tests and filters belonging to the
+retired experiment. Release-image build checks and current identity/checker
+verification remain. The backend catalogue removes only the deleted classifier
+module; retained selection and arbitrary-removal rejection remain enforced.
 
 ## Reconciliation
 
-The roadmap changes only its obsolete MCP experiment reference. No runtime
-capability or deployment status changes. No local spreadsheet exports are present.
-Pilot naming, active drill consolidation and Commitrail history remain separate
-follow-up work explicitly excluded by the user from this pass.
+The roadmap records retirement of the runnable simulated-issuer harness and
+updates the obsolete MCP experiment reference. No product runtime capability
+or deployed identity changes. No local spreadsheet exports are present.
+Pilot project naming and Commitrail history remain separate follow-up work.
+The retained setup/checker tests protect product behavior; removed cases only
+exercised the retired recorded runtime, harness sequencing and trace wrapper.
+Real Keycloak/provider/browser tests stay under the current identity deployment
+and production checker verification remains in its existing owners.
