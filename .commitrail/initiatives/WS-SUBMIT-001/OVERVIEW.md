@@ -45,9 +45,10 @@ work. Existing reward owners remain authoritative.
 - [ ] CLI/MCP use the same contract, preserve useful PRE findings and document their distinct upload limits.
 - [ ] Combined public contributor journey proves correction, revision, replay, history and applicable existing awards on the integrated code.
 
-Dedicated queue/consumer implementation and its real isolated scanner-to-T5
-regression are integrated; native caller conversion and deployed qualification
-remain required. The managed-style adapter substitution passed through public
+The submission, guide, assignment status, and CLI/MCP changes are implemented.
+The dedicated queue topology, isolated scanner-to-T5 regression and native
+caller conversion are integrated. Combined native execution and deployed
+qualification remain open. The managed-style adapter substitution passed through public
 ZIP acceptance, retained source custody, real T5 owner delivery and replay;
 it does not establish a deployed managed provider or broker-consumer proof.
 

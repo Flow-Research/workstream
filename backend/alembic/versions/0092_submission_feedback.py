@@ -21,6 +21,23 @@ def _replace(definition, before, after, *, expected=1):
     return definition.replace(before, after)
 
 
+def _contributor_read_audit():
+    name = "ck_audit_events_authorization_action_evidence"
+    definition = op.get_bind().execute(text(
+        "SELECT pg_catalog.pg_get_constraintdef(oid) FROM pg_catalog.pg_constraint "
+        "WHERE conrelid='public.audit_events'::regclass AND conname=:name"
+    ), {"name": name}).scalar_one()
+    anchor = ("(((action_id)::text = 'actor.assignment.list'::text) AND "
+              "((permission_id)::text = 'submission.read_own'::text))")
+    addition = "".join(
+        f" OR (((action_id)::text = '{action}'::text) AND ((permission_id)::text = 'submission.read_own'::text))"
+        for action in ("task.assignment.read", "project.contributor_guide.read")
+    )
+    updated = _replace(definition, anchor, anchor + addition, expected=2)
+    op.execute(f"ALTER TABLE public.audit_events DROP CONSTRAINT {name}")
+    op.execute(f"ALTER TABLE public.audit_events ADD CONSTRAINT {name} {updated}")
+
+
 def _intake_guard():
     definition = _definition("public.guard_submission_intake_mutation()")
     start = definition.index("    IF NOT (m ?& ARRAY")
@@ -184,6 +201,7 @@ def upgrade() -> None:
         " IF o.eligible_task_status='in_progress' THEN",
     ))
     _submission_guards()
+    _contributor_read_audit()
 
 
 def downgrade() -> None:

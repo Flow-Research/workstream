@@ -430,6 +430,7 @@ def test_v01_graph_has_one_root_and_head() -> None:
 
     assert [revision.revision for revision in revisions] == [
         HEAD_REVISION,
+        "0091_qualified_aws_source",
         "0090_merge_direct_storage",
         "0089_observed_upload_cleanup",
         "0088_unsealed_source_cleanup",
@@ -525,7 +526,7 @@ def test_v01_graph_has_one_root_and_head() -> None:
     assert script.get_revision("0090_merge_direct_storage").down_revision == (
         "0089_observed_upload_cleanup", "0069_remove_artifact_proof",
     )
-    assert script.get_revision(HEAD_REVISION).down_revision == "0090_merge_direct_storage"
+    assert script.get_revision(HEAD_REVISION).down_revision == "0091_qualified_aws_source"
     assert revisions[-1].down_revision is None
     assert script.get_heads() == [HEAD_REVISION]
 
@@ -557,7 +558,7 @@ async def test_qualified_aws_source_upgrade_only_changes_pre_profile_predicate(
             before = await definition()
             assert before.count("o.provider_profile NOT IN ('local-v2','minio-v1')") == 1
             assert before.count("WHEN 'minio-v1' THEN 's3' END") == 1
-            await asyncio.to_thread(command.upgrade, _alembic_config(), HEAD_REVISION)
+            await asyncio.to_thread(command.upgrade, _alembic_config(), "0091_qualified_aws_source")
             after = await definition()
             expected = before.replace(
                 "o.provider_profile NOT IN ('local-v2','minio-v1')",
