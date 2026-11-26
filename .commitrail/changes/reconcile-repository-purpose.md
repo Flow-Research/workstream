@@ -16,7 +16,7 @@ Allowed: README and current docs navigation/claims; restoration of the original
 hash-bound AUTH source input; removal of unused agent-gate and mutation-runner
 artifacts and obsolete documentation; relocation of mutation source-analysis
 helpers used by the active ownership gate, with their required regressions;
-exact ownership/lane inventories; current behavior contracts and Agent Gates
+exact ownership/lane inventories; repair remaining test consumers of moved example assets; current behavior contracts and Agent Gates
 selection; explicit manual identity-browser qualification documentation. Repair
 non-pre-cutover historical links to immutable source only.
 
@@ -81,3 +81,9 @@ The capability ledger already describes automatic acceptance, JSON import and
 current identity. This cleanup aligns supporting documents without changing any
 capability, public exposure, deployed qualification or next delivery boundary.
 No roadmap or spreadsheet change is warranted.
+
+The hosted run exposed one missed consumer from the preceding sample move:
+`test_documented_garden_rules_cover_both_uploaded_originals` built its path from
+separate `pilots`/`garden` segments. It now reads the existing `examples/garden`
+assets. Both the successful compilation and missing-citation rejection cases are
+retained; no fixture content or assertion is relaxed.

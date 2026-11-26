@@ -1465,9 +1465,9 @@ async def test_documented_garden_rules_cover_both_uploaded_originals(omit_guide_
     """The documented upload pair compiles; dropping guide citations reproduces its defect."""
     from pathlib import Path
 
-    pilot = Path(__file__).resolve().parents[2] / "pilots" / "garden"
-    guide = (pilot / "guide.md").read_bytes()
-    rules = (pilot / "manager-rules.md").read_bytes()
+    example = Path(__file__).resolve().parents[2] / "examples" / "garden"
+    guide = (example / "guide.md").read_bytes()
+    rules = (example / "manager-rules.md").read_bytes()
     if omit_guide_citations:
         authored = json.loads(rules)
         for requirement in authored["requirements"]:
