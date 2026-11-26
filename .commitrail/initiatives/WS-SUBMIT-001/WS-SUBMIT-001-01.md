@@ -12618,3 +12618,10 @@ replacement and stale-namespace negative control. Receipt:
 `/tmp/workstream-mcp-host-proof-c715.json`. That fixture is not real provider
 or connected submission proof. No running API service, migration, hosted
 configuration or deployed image changed in these build/publication operations.
+
+
+For the next maintained journey, private CLI receipts additionally record
+monotonic command elapsed seconds around the built subprocess. This measures
+upload/PRE round-trip latency without tokens, new product settings or a changed
+timeout, so C01 can use observed durations rather than an assumed latency target.
+It does not change CLI responses, pass criteria or execution deadlines.

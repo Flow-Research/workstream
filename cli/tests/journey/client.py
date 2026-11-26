@@ -46,6 +46,7 @@ class JourneyClient:
             if key in {"PATH", "LANG", "LC_ALL"}
         }
         environment.update(WORKSTREAM_API_URL=self.origin, WORKSTREAM_TOKEN=token)
+        started = time.monotonic()
         result = subprocess.run(
             [str(self.executable), *arguments, "--output", "json"],
             env=environment,
@@ -55,6 +56,7 @@ class JourneyClient:
             timeout=180,
             check=False,
         )
+        elapsed_seconds = time.monotonic() - started
         if token and token in result.stdout + result.stderr:
             raise AssertionError("CLI credential disclosure; output withheld")
         # Never print input contents, credentials, or arbitrary server output.
@@ -67,6 +69,7 @@ class JourneyClient:
                     {
                         "arguments": arguments,
                         "exit_code": result.returncode,
+                        "elapsed_seconds": elapsed_seconds,
                         "stdout": result.stdout,
                         "stderr": result.stderr,
                     },
