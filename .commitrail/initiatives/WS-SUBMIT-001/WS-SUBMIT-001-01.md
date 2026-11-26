@@ -12323,3 +12323,39 @@ new recovery codes do not widen accepted 4xx messages. Six focused cases passed
 (including private-text counterexamples and existing quality/uncertainty
 controls), with Ruff and whitespace checks passing. A final frozen-source
 rerun follows integration; the previous native cause remains unproven.
+
+### A28 qualify one runner endpoint per execution claim
+
+Intent. Select a currently qualified self-hosted runner without changing the
+CHECKERS, ART, TASK or OUTBOX ownership of the request. The same configuration
+supports one inexpensive node and a bounded set of nodes.
+
+Allowed scope. The first reviewed slice owns the strict endpoint and readiness
+contracts in `backend/app/core/runner_endpoints.py` and the shared mTLS runner
+adapter helper in `backend/app/adapters/runner.py`, plus focused checks in the
+existing remote-node test owner and this record. Activate those contracts with
+the existing CHECKERS and ART adapter factories and typed Settings only when
+the native gateway and admission path also enforce them. Then replace the
+existing hosted release/preflight, public proof and CLI configuration where
+they supply a singleton endpoint. Native work stays in the existing service,
+Smol admission and the mTLS gateway. The existing directly owned Unix tests
+exercise their private inner protocol unchanged. No migration, operator
+workflow or additional scheduler.
+
+Acceptance. Strict bounded settings reject duplicate endpoints and require an
+authenticated exact certificate name and loaded node config digest. Probes
+run within the existing request deadline and carry no source, material grant,
+or mutation. Readiness reports exact capability, profile and boot epoch.
+Select only one qualified endpoint. A POST claim pins the same node for its
+locator and final result. The runtime validates the selected boot epoch and
+checks authoritative drain and capacity before admitting new work. Existing
+holders can complete and retain exact lease/cleanup custody. Ambiguous
+invocation must never move elsewhere or create a terminal retry source.
+Source tests do not qualify two replicas, two real nodes, live drain or restart.
+
+The first contract passed seven focused cases. The loopback mTLS fixture
+verifies the exact certificate and the observed loaded configuration claim,
+and rejects invalid epoch, extra data, and a changed configuration digest.
+The selector test checks drain and capability exclusion, and stable selection
+after reordering the same configured endpoints. The change is staged without
+activating a new runtime path until the native authority can enforce it.

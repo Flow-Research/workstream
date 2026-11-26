@@ -96,6 +96,127 @@ def _frame(value: bytes) -> bytes:
     return struct.pack(">I", len(value)) + value
 
 
+def _placement_body():
+    return {
+        "protocol_version": "external_checker_service.v1", "operation": "placement",
+        "config_sha256": "sha256:" + "a" * 64, "epoch": "e" * 64,
+        "health": {"operating_system": "linux", "architecture": "amd64", "runtime": "smolvm",
+                   "isolation_mode": "smol-microvm", "cached_platform_manifests": 1,
+                   "sandbox_uid": 10001, "sandbox_gid": 10001},
+        "draining": False, "pre_available": True, "background_available": True,
+        "images": [{"platform_manifest_digest": "sha256:" + "b" * 64,
+                    "config_image_id": "sha256:" + "c" * 64}],
+        "pre": {"profile_sha256": "sha256:" + "d" * 64, "root_sha256": "sha256:" + "f" * 64},
+        "intake": None, "model_callbacks": False, "trial_authority_manifest_sha256": None,
+    }
+
+
+def test_external_runner_endpoint_set_is_closed_and_unique():
+    from pydantic import ValidationError
+
+    from app.core.runner_endpoints import ExternalRunnerEndpoints
+
+    endpoint = {"host": "127.0.0.1", "port": 9443, "server_name": "runner.test",
+                "config_sha256": "sha256:" + "a" * 64}
+    assert ExternalRunnerEndpoints.model_validate_json(json.dumps([endpoint])).root[0].port == 9443
+    for invalid in ([], [endpoint] * 9, [endpoint | {"port": "9443"}],
+                    [endpoint | {"host": "127.0.0.1 "}], [endpoint | {"server_name": "*.test"}],
+                    [endpoint | {"config_sha256": "stale"}], [endpoint | {"legacy_name": "x"}],
+                    [endpoint, endpoint | {"server_name": "others.test"}],
+                    [endpoint, endpoint | {"port": 9444}]):
+        with pytest.raises(ValidationError):
+            ExternalRunnerEndpoints.model_validate_json(json.dumps(invalid))
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("changed", [None, "config", "epoch", "extra", "trailing"])
+async def test_runner_placement_probe_authenticates_loaded_identity(tmp_path, changed):
+    from app.adapters.runner import RunnerTransport
+    from app.core.runner_endpoints import ExternalRunnerEndpoints
+
+    certificates = _certificate_files(tmp_path)
+    context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    context.minimum_version = ssl.TLSVersion.TLSv1_3
+    context.verify_mode = ssl.CERT_REQUIRED
+    context.load_cert_chain(certificates["server_certificate"], certificates["server_key"])
+    context.load_verify_locations(certificates["ca"])
+    body = _placement_body()
+    expected_config = body["config_sha256"]
+    if changed == "config":
+        body["config_sha256"] = "sha256:" + "0" * 64
+    if changed == "epoch":
+        body["epoch"] = "unbound"
+    if changed == "extra":
+        body["unexpected"] = "value"
+    requests = []
+
+    async def observe(reader, writer):
+        try:
+            requests.append(json.loads(await _read_frame(reader)))
+            writer.write(_frame(json.dumps(body).encode()) + (b"x" if changed == "trailing" else b""))
+            await writer.drain()
+        finally:
+            writer.close()
+            await writer.wait_closed()
+
+    server = await asyncio.start_server(observe, "127.0.0.1", 0, ssl=context)
+    async with server:
+        endpoints = ExternalRunnerEndpoints.model_validate([{
+            "host": "127.0.0.1", "port": server.sockets[0].getsockname()[1], "server_name": "runner.test",
+            "config_sha256": expected_config,
+        }])
+        transport = RunnerTransport(endpoints, certificates["ca"], certificates["client_certificate"],
+                                    certificates["client_key"])
+        matched = await transport.select("attempt-1", qualifies=lambda readiness: readiness.pre_available)
+        if changed is None:
+            assert matched is not None and matched.readiness.epoch == body["epoch"]
+            assert matched.readiness.images[0].config_image_id == body["images"][0]["config_image_id"]
+        else:
+            assert matched is None
+    assert requests == [{"protocol_version": "workstream.remote_runner.v1", "operation": "placement"}]
+
+
+@pytest.mark.asyncio
+async def test_runner_selection_uses_only_qualified_ready_targets(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    from app.adapters.runner import RunnerPlacement, RunnerReadiness, RunnerTransport
+    from app.core.runner_endpoints import ExternalRunnerEndpoints
+
+    endpoints = ExternalRunnerEndpoints.model_validate([
+        {"host": "127.0.0.1", "port": 9443 + index, "server_name": f"{name}.test",
+         "config_sha256": "sha256:" + "a" * 64}
+        for index, name in enumerate(("qualified-a", "qualified-b", "drained", "other-profile", "unreachable"))
+    ])
+    calls = []
+
+    async def probe(_transport, endpoint):
+        calls.append(endpoint.server_name)
+        state = _placement_body()
+        if endpoint.server_name == "drained.test":
+            state.update(draining=True, pre_available=False, background_available=False)
+        if endpoint.server_name == "other-profile.test":
+            state["pre"]["profile_sha256"] = "sha256:" + "0" * 64
+        if endpoint.server_name == "unreachable.test":
+            return None
+        return RunnerPlacement(endpoint, RunnerReadiness.model_validate_json(json.dumps(state)))
+
+    monkeypatch.setattr(RunnerTransport, "probe", probe)
+    transport = RunnerTransport(endpoints, tmp_path, tmp_path, tmp_path)
+    reordered = RunnerTransport(ExternalRunnerEndpoints(tuple(reversed(endpoints.root))), tmp_path, tmp_path, tmp_path)
+
+    def qualifies(readiness):
+        return readiness.pre_available and readiness.pre.profile_sha256 == "sha256:" + "d" * 64
+
+    chosen = await transport.select("stable-attempt", qualifies=qualifies)
+    assert chosen == await reordered.select("stable-attempt", qualifies=qualifies)
+    assert chosen.endpoint.server_name in {"qualified-a.test", "qualified-b.test"}
+    assert len(calls) == 2 * len(endpoints.root)
+    cert = SimpleNamespace(getpeercert=lambda: {"subjectAltName": (("DNS", "*.test"),)})
+    with pytest.raises(ssl.SSLError, match="certificate identity differs"):
+        transport.require_peer(cert, chosen.endpoint)
+
+
 @asynccontextmanager
 async def remote_adapter_endpoint(
     tmp_path: Path,
