@@ -126,6 +126,12 @@ class ExecutionChannel:
         finally:
             self._pending.pop(channel_id, None)
 
+    async def report_pending(self) -> None:
+        async with self._write_lock:
+            await _write_frame(self.writer, json.dumps({
+                "protocol_version": PROTOCOL, "operation": "native_pending",
+            }, separators=(",", ":")).encode())
+
     async def result(self, response: bytes) -> None:
         async with self._write_lock:
             if self.closed.is_set():
@@ -688,6 +694,9 @@ class RemoteNode:
             }
             await _write_frame(writer, json.dumps(ready, separators=(",", ":")).encode())
             start = _decode_object(await _read_frame(reader, 16_384))
+            idle_ms = start.pop("idle_ms", None)
+            if type(idle_ms) is not int or not 100 <= idle_ms <= 3_700_000:
+                raise ProtocolError("execution transport idle interval is invalid")
             if start != dict(ready, operation="start_execution"):
                 raise ProtocolError("execution start binding differs")
             # Native execution enforces its registered limits. Give the result
@@ -708,9 +717,17 @@ class RemoteNode:
             response_task = asyncio.create_task(_read_frame(native_reader, MAXIMUM_FRAME_BYTES))
             disconnect_task = asyncio.create_task(channel.closed.wait())
             wait_tasks = {response_task, disconnect_task}
-            done, _ = await asyncio.wait(
-                wait_tasks, return_when=asyncio.FIRST_COMPLETED
-            )
+            # The native service owns the checker deadline. An open request
+            # can span multiple transport idle intervals.
+            interval = min(self.timeout / 3, idle_ms / 3000, 600)
+            while True:
+                done, _ = await asyncio.wait(
+                    wait_tasks, timeout=interval, return_when=asyncio.FIRST_COMPLETED
+                )
+                if done:
+                    break
+                await channel.report_pending()
+                transport_watchdog.reschedule(asyncio.get_running_loop().time() + self.timeout)
             if disconnect_task in done:
                 raise ProtocolError("remote client disconnected")
             response = await response_task

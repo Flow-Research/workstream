@@ -35,7 +35,6 @@ from workstream_external_services import (
     ExternalServiceUnavailableError,
 )
 from app.modules.checkers.api.external import (
-    EXTERNAL_CHECKER_EXECUTION_CLEANUP_MARGIN_MS,
     MAX_RESULT_BYTES,
     ExternalCheckerExecutionRequest,
     ExternalCheckerExecutionResult,
@@ -59,7 +58,6 @@ EXTERNAL_CHECKER_PROVIDER_KEY = "remote_tls"
 _PROTOCOL = "external_checker_service.v1"
 _REMOTE_PROTOCOL = "workstream.remote_runner.v1"
 _MAXIMUM_RESPONSE_BYTES = MAX_RESULT_BYTES + 16_384
-_EXECUTION_OVERHEAD_SECONDS = EXTERNAL_CHECKER_EXECUTION_CLEANUP_MARGIN_MS / 1000
 _CHANNEL_ID = re.compile(r"[0-9a-f]{32}")
 
 
@@ -332,11 +330,6 @@ class RemoteTlsExternalCheckerAdapter:
             ).encode("utf-8")
             if len(payload) > 2 * 1024 * 1024:
                 raise ExternalServiceProtocolError(self._identity)
-            required_timeout = (
-                checked.registry.resources.deadline_ms / 1000 + _EXECUTION_OVERHEAD_SECONDS
-            )
-            if self._timeout_seconds < required_timeout:
-                raise ExternalServiceUnavailableError(self._identity)
             loop = asyncio.get_running_loop()
             async with asyncio.timeout(self._timeout_seconds) as transport_watchdog:
                 placement = await self._place_post(checked, with_model_grant=model_grant is not None)
@@ -394,10 +387,10 @@ class RemoteTlsExternalCheckerAdapter:
                     # The remote owner cannot invoke native execution before
                     # this explicit start. A failed drain of this write may
                     # still follow successful transmission, so retain uncertainty.
-                    transport_watchdog.reschedule(loop.time() + required_timeout)
+                    transport_watchdog.reschedule(loop.time() + self._timeout_seconds)
                     possibly_invoked = True
                     await self._send_frame(writer, json.dumps(
-                        dict(ready, operation="start_execution"),
+                        dict(ready, operation="start_execution", idle_ms=int(self._timeout_seconds * 1000)),
                         separators=(",", ":"),
                     ).encode())
                     while True:
@@ -408,6 +401,9 @@ class RemoteTlsExternalCheckerAdapter:
                         ):
                             raise ValueError("remote runner response header is invalid")
                         operation = header.get("operation")
+                        if operation == "native_pending" and set(header) == {"protocol_version", "operation"}:
+                            transport_watchdog.reschedule(loop.time() + self._timeout_seconds)
+                            continue
                         if operation == "callback_request":
                             if (
                                 set(header)

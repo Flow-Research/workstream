@@ -420,6 +420,7 @@ async def test_remote_adapter_endpoint_preserves_explicit_roots_and_callback_rou
                 grant_id = wire["grant"]["grant_id"]
                 assert (material / "workspaces" / grant_id).is_dir()
                 assert wire["model_grant"]["grant_id"] == "model_" + "a" * 32
+                await asyncio.sleep(1.3)  # Native work outlasts both transport idle intervals.
                 for payload in (b'{"callback":"model"}', b'{"callback":"trial"}'):
                     callback_reader, callback_writer = await asyncio.open_unix_connection(native_proxy)
                     callback_writer.write(_frame(payload))
@@ -440,11 +441,11 @@ async def test_remote_adapter_endpoint_preserves_explicit_roots_and_callback_rou
         try:
             async with remote_adapter_endpoint(tmp_path, native_socket, model_proxy_socket_path=app_proxy,
                     material_root=material, native_model_proxy_socket_path=native_proxy,
-                    session_timeout_seconds=720.0) as endpoint:
-                assert captured[0].timeout == 720.0
+                    session_timeout_seconds=1.0) as endpoint:
+                assert captured[0].timeout == 1.0
                 assert captured[0].material_root == material
                 assert captured[0].model_proxy_socket_path == native_proxy
-                adapter = RemoteTlsExternalCheckerAdapter(**endpoint, timeout_seconds=90.0,
+                adapter = RemoteTlsExternalCheckerAdapter(**endpoint, timeout_seconds=1.0,
                     source_contracts=selected_pre_submit_source_contracts())
                 observed = await adapter.execute(value, empty_external_material_grant(value, suffix="c"),
                     model_grant=ExternalCheckerModelGrant("model_" + "a" * 32, value.request_digest))
@@ -738,7 +739,7 @@ async def test_remote_post_stages_bound_material_and_removes_session(tmp_path: P
             writer.close()
             await writer.wait_closed()
         else:
-            start = dict(ready, operation="start_execution")
+            start = dict(ready, operation="start_execution", idle_ms=90000)
             if start_mode == "wrong_binding":
                 start["binding_digest"] = "sha256:" + "0" * 64
             writer.write(_frame(json.dumps(start).encode()))
