@@ -13012,6 +13012,26 @@ approved 256-byte compressed cap. The separate missing and widened cases
 reconstruct the supplied digest to exercise the binding rather than a stale
 digest failure.
 
+Six named PostgreSQL tests passed on `73b466b25` at `0094_project_archive_limits`.
+The exact context and source passed the SQL function and insertion trigger.
+Both denied missing caps, widened caps, and a stored compressed limit above
+policy. The public HTTP tests passed streamed submission and replay, a 413
+before reservation, a 409 for a changed replay length, and exact receipt reuse.
+An earlier batch timed out after four unnamed passing assertions. Both runs
+confirmed isolated database cleanup.
+
+An isolated PostgreSQL upgrade created an accepted operation on `9fad17a04`
+under an approved guide with archive caps. The original PRE context omitted
+those caps. The candidate migration refused both receiving and PRE-checking
+operations and preserved the 0093 head and original receipt on each refusal.
+After the old foreground owner drained, the migration and its no-op reentry
+passed. The candidate finalized the original accepted source into one immutable
+Submission. Source identities, PRE request and result bytes and digests, and
+acceptance receipt remained unchanged. The upgrade drill passed and cleaned its
+isolated database. The coordinated hosted cutover and new native PRE root
+qualification remain pending.
+
+
 ### Preserve the remaining PRE source-read deadline after authorization
 
 The source-read grant sampled its monotonic start before authorization and locks,
