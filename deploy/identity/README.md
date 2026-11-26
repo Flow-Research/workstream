@@ -288,7 +288,8 @@ Use the normal role-grant APIs afterward. See the
 
 ## Verification scope
 
-This deployment is the identity owner for hosted Workstream qualification. Use
+Flow Identity is the current v0.1 external authentication provider used for
+hosted Workstream qualification. Use
 its real Keycloak accounts and the documented CLI/API login flows; the former
 simulated issuer and hosted fixture harness have been removed. Do not provision
 an alternate issuer or locally mint participant tokens for a hosted drill.
