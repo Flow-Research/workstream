@@ -169,16 +169,21 @@ class SelectedPreSubmitSourceReads:
                         or live.lease_id != facts.foreground_lease_id
                         or live.lease_generation != facts.foreground_lease_generation):
                     raise SelectedPreSubmitInfrastructureUnavailable("material_unavailable")
-                expires_at = min(live.lease_expires_at, lease.lease_expires_at, live.pre_deadline_at)
+                expires_at = min(lease.lease_expires_at, live.pre_deadline_at)
+                issue_expires_at = min(live.lease_expires_at, expires_at)
                 # Pair clocks after authority/lock waits; sample before the query
                 # so its round trip and the following commit cannot extend expiry.
                 sampled_monotonic = asyncio.get_running_loop().time()
                 now = await self._session.scalar(select(func.clock_timestamp()))
-                if now is None or expires_at <= now:
+                if now is None or issue_expires_at <= now:
                     raise SelectedPreSubmitInfrastructureUnavailable("material_unavailable")
+                issue_deadline = sampled_monotonic + (issue_expires_at - now).total_seconds()
                 deadline = sampled_monotonic + (expires_at - now).total_seconds()
                 await self._authority.consume(prepared_authorization=handle, facts=facts)
             # No grant exists if commit fails, including a lost acknowledgement.
+            if asyncio.get_running_loop().time() >= issue_deadline:
+                raise SelectedPreSubmitInfrastructureUnavailable("material_unavailable")
+            # The foreground command watchdog continues to track committed renewal.
             grant = _PreSubmitSourceGrant._issued(self, lease, expires_at, deadline)
             grant._require_current()
             yield grant

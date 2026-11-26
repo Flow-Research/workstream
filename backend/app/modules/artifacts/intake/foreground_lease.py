@@ -51,18 +51,30 @@ class ForegroundIntakeLease:
     ) -> Result:
         """Invoke once after committed renewal; drain all work before returning."""
         budget = await self._renew(operation_id, lease_id, generation)
+        loop = asyncio.get_running_loop()
+        watchdog = asyncio.timeout(budget)
 
         async def pulse() -> None:
-            remaining = budget
             while True:
-                await asyncio.sleep(min(self._interval, remaining / 2))
+                deadline = watchdog.when()
+                assert deadline is not None
+                await asyncio.sleep(min(self._interval, (deadline - loop.time()) / 2))
                 remaining = await self._renew(operation_id, lease_id, generation)
+                renewed_at = loop.time()
+                if renewed_at >= deadline:
+                    raise IntakeCustodyConflict("intake_owner_renewal_expired")
+                watchdog.reschedule(renewed_at + remaining)
 
         command = asyncio.create_task(command_factory(operation_id, lease_id, generation),
                                       name=f"submission-foreground:{operation_id}")
         renewal = asyncio.create_task(pulse(), name=f"submission-lease:{operation_id}")
         try:
-            await asyncio.wait((command, renewal), return_when=asyncio.FIRST_COMPLETED)
+            try:
+                async with watchdog:
+                    await asyncio.wait((command, renewal), return_when=asyncio.FIRST_COMPLETED)
+            except TimeoutError as exc:
+                if not command.done():
+                    raise IntakeCustodyConflict("intake_owner_renewal_expired") from exc
             if command.done():
                 return command.result()
             renewal.result()

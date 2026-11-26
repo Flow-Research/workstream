@@ -13087,3 +13087,19 @@ the one-lease delete fault and exact bounded handoff. The real runner cases,
 physical resource custody, and post-reconciliation continuation remain required
 before A25/A26 can be marked
 qualified. The previous 9fad deadline/isolation receipt is separate evidence.
+
+### Keep PRE source reads under the renewed foreground owner
+
+Two hosted 500 MiB uploads sealed normally and ended as material unavailable
+about 80 seconds into PRE. The same immutable object streamed through the API
+host under 85 seconds of receiver backpressure with its full byte count and
+SHA-256. The issued source grant kept a snapshot of the 60-second foreground
+lease despite renewal of the same fence. An actual blocked socket drain can
+cross that snapshot before the source iterator next checks it.
+
+The bounded change belongs to the existing foreground lease and authorized PRE
+source-read owners. The foreground command runs under one local deadline that
+advances only after the same owner commits renewal. A missed deadline cancels
+that command before draining renewal cleanup. Source grant issuance still
+requires live foreground authority, and the grant uses the fixed CHECKERS and
+original PRE deadlines. The original T4 authority and replay remain in force.

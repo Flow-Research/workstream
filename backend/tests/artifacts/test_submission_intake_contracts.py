@@ -398,6 +398,74 @@ async def test_foreground_lease_committed_command_wins_simultaneous_pulse_failur
     assert await runner.run(new_record_id(), new_record_id(), 1, command) == "committed"
 
 
+@pytest.mark.parametrize("renewed", [True, False])
+async def test_foreground_lease_uses_only_the_last_committed_deadline(monkeypatch, renewed):
+    """Keep a renewed command alive and cancel an expired command before rollback drains."""
+    from app.modules.artifacts.intake.foreground_lease import ForegroundIntakeLease
+    from app.modules.artifacts.intake.repository import IntakeCustodyConflict
+
+    loop = asyncio.get_running_loop()
+    clock = loop.time()
+    monkeypatch.setattr(loop, "time", lambda: clock)
+    runner = ForegroundIntakeLease(None, None, lease_duration=timedelta(seconds=60),
+                                  heartbeat_interval=timedelta(seconds=10))
+    reading = asyncio.Event()
+    renewals = asyncio.Queue()
+    finish, cancelled = asyncio.Event(), asyncio.Event()
+    rollback, release_rollback = asyncio.Event(), asyncio.Event()
+    calls = 0
+
+    async def renew(*owner):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return 60
+        renewals.put_nowait(calls)
+        if renewed and calls <= 4:
+            return 60
+        try:
+            await loop.create_future()
+        finally:
+            rollback.set()
+            await release_rollback.wait()
+
+    async def command(*owner):
+        reading.set()
+        try:
+            await finish.wait()
+            return "committed"
+        except asyncio.CancelledError:
+            cancelled.set()
+            raise
+
+    monkeypatch.setattr(runner, "_renew", renew)
+    running = asyncio.create_task(runner.run(new_record_id(), new_record_id(), 1, command))
+    try:
+        await reading.wait()
+        for attempt in ((2, 3, 4) if renewed else (2,)):
+            clock += 10
+            assert await renewals.get() == attempt
+        clock += 50
+        # Advance scheduled timeout, owner and child cancellation callbacks.
+        for _ in range(5):
+            await asyncio.sleep(0)
+        if renewed:
+            assert not running.done() and not cancelled.is_set()
+            release_rollback.set()
+            finish.set()
+            assert await running == "committed"
+        else:
+            assert cancelled.is_set() and rollback.is_set() and not running.done()
+            release_rollback.set()
+            with pytest.raises(IntakeCustodyConflict, match="intake_owner_renewal_expired"):
+                await running
+    finally:
+        release_rollback.set()
+        if not running.done():
+            running.cancel()
+        await asyncio.gather(running, return_exceptions=True)
+
+
 @pytest.mark.asyncio
 async def test_discard_replay_hashes_exact_raw_bytes_across_chunk_boundaries():
     from app.modules.artifacts.intake.streaming import hash_submission_replay

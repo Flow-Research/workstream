@@ -715,9 +715,9 @@ async def test_selected_pre_sql_validates_received_failure_receipt(isolated_data
         await engine.dispose()
 
 
-@pytest.mark.parametrize("authorization_delay, commit_delay", [(0, 0), (40, 0), (40, 90)])
+@pytest.mark.parametrize("authorization_delay, commit_delay", [(0, 0), (40, 0), (40, 20), (60, 0)])
 async def test_source_read_deadline_charges_authorization_once(monkeypatch, authorization_delay, commit_delay):
-    """Slow authority must not shorten, or a slow commit extend, the stored expiry."""
+    """Issue under a live foreground lease and read up to the fixed execution expiry."""
     import asyncio
     from contextlib import asynccontextmanager
     from dataclasses import replace
@@ -731,6 +731,7 @@ async def test_source_read_deadline_charges_authorization_once(monkeypatch, auth
     elapsed = [0.0]
     wall_start = datetime.now(UTC)
     expires = wall_start + timedelta(seconds=120)
+    initial_foreground_expiry = wall_start + timedelta(seconds=60)
     request = replace(_source_reservation(), pre_deadline_at=expires,
                       source_contracts=source_reads.ArtifactPreSubmitSourceContracts())
     lease = SelectedPreSubmitLeaseFacts(request, new_record_id(), 1, expires)
@@ -793,7 +794,7 @@ async def test_source_read_deadline_charges_authorization_once(monkeypatch, auth
                     "identity_link_id", "metadata_sha256", "locked_context_sha256", "pre_deadline_at",
                 )
             }, lease_id=facts.foreground_lease_id, lease_generation=facts.foreground_lease_generation,
-                lease_expires_at=expires)
+                lease_expires_at=initial_foreground_expiry)
 
     observed_reads = []
 
@@ -809,14 +810,14 @@ async def test_source_read_deadline_charges_authorization_once(monkeypatch, auth
         session=session, sources=Sources(), authority=Authority(), store=Store(),
     )
     capability = SimpleNamespace(consume=lambda **_kwargs: lease)
-    if commit_delay:
+    if commit_delay or authorization_delay >= 60:
         with pytest.raises(SelectedPreSubmitInfrastructureUnavailable, match="material_unavailable"):
             async with reader.issue(lease=lease, execution_authority=capability):
                 pytest.fail("expired commit issued a source grant")
         assert not observed_reads
     else:
         async with reader.issue(lease=lease, execution_authority=capability) as grant:
-            elapsed[0] = 90
+            elapsed[0] = 80
             stream = grant.open_source(lease=lease)
             assert await anext(stream) == b"x" * request.source.raw_byte_count
             elapsed[0] = 120
