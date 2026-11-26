@@ -9341,6 +9341,14 @@ module fingerprint delta, and that each historical upgrade starts from the
 original predecessor shape. Run the selected pure checks and exact three
 historical cases in separate owned PostgreSQL after the native run releases it.
 
+The 18 selected pure checks passed in 31.80 seconds, with Ruff and Commitrail
+passing. Both cleanup migration cases passed on PostgreSQL at `2341967c4`.
+The claim-start case matched both expected unverified fixture links, then
+PostgreSQL refused to remove the projection while its deferred checks were
+pending. Complete those checks in the same transaction before the fixture DDL.
+The original validation and all predecessor guards remain active. The first
+run `/tmp/pr708-feedback-historical-isolated.log` cleaned its isolated resources.
+
 ### Refresh pending-operation MCP schema descriptions
 
 Configured backend OpenAPI comparison atc853743b6 passed142 and failed2
