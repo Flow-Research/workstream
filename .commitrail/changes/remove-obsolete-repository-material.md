@@ -102,3 +102,16 @@ contract links and distinguishes historical drill evidence from current runnable
 qualification. Runtime capability and deployed readiness are unchanged. Current
 subsystem requirements stay in maintained specifications; superseded plans remain
 accessible through Git history, not as implementation authority.
+
+## Identity CI repair
+
+The real provider test exposed an independent clock-boundary assumption:
+pinned Keycloak 26.8.2 reads issued-at and expiration time separately. Replace
+`exp - iat` duration assertions in the provider proof with deadlines measured
+at receipt of each response on the same-host Docker fixture. Preserve exact
+configured 300-second access and 120-second exchange lifetimes, signed JWT
+validation, source-token expiry bounds, renewal, revocation and restart proof.
+Allowed repair is limited to `scripts/test_identity_provider.py` and this record.
+Require deterministic boundary/overlong-expiry controls, the real provider suite
+and focused test-delta/CI review. No production lifespan, leeway, retry or gate
+change is authorized by this repair.
