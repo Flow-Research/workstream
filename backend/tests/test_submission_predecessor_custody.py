@@ -669,13 +669,17 @@ async def test_dispatch_commit_requires_current_predecessor_checker_fence(
 
     async with remediation_source(tmp_path, isolated_database_env) as h:
         source_id = await _fixture_revision_context(h)
+        explicit_request = _context_request(h)
+        selected_request = replace(explicit_request, predecessor_submission_id=None, select_predecessor=True)
         async with h.factory.begin() as session:
-            frozen = await task_submission_context_port(session).lock_submission_context(_context_request(h))
+            contexts = task_submission_context_port(session)
+            frozen = await contexts.lock_submission_context(explicit_request)
+            assert await contexts.lock_submission_context(selected_request) == frozen
         assert frozen.checker_remediation_manifest_id == source_id
 
         class FrozenTaskContextPort:
             async def lock_submission_context(self, selected):
-                assert selected == _context_request(h)
+                assert selected in (explicit_request, selected_request)
                 return frozen
 
         operations, snapshots, staged, commit_errors = [], [], [], []
@@ -687,8 +691,9 @@ async def test_dispatch_commit_requires_current_predecessor_checker_fence(
             if advance_fence:
                 await reserve(h, await next_request(h))
                 async with h.factory.begin() as session:
-                    with pytest.raises(TaskSubmissionContextUnavailable):
-                        await task_submission_context_port(session).lock_submission_context(_context_request(h))
+                    for selected in (explicit_request, selected_request):
+                        with pytest.raises(TaskSubmissionContextUnavailable):
+                            await task_submission_context_port(session).lock_submission_context(selected)
                 # Freeze only the TASK context reader. All writers and SQL guards remain real.
                 monkeypatch.setattr(admission, "_contexts", lambda _session: FrozenTaskContextPort())
                 monkeypatch.setattr(

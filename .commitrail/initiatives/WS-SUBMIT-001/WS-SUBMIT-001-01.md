@@ -11330,3 +11330,47 @@ historical v1 metadata body and digest before the old guarded INSERT. The
 isolated 0088 replay passed in 131.62 seconds with schema 0092 and complete
 database cleanup (`/tmp/submission-0092-0088-v1.log` and `.json`). Other
 historical lane cases remain pending and are not represented by this receipt.
+
+### Remaining current CI observability and fence fixtures (2026-11-26)
+
+Intent: repair only the observed real-prefork diagnostics startup fixture and the
+current predecessor-fence fault injection, and diagnose the OTLP timeout log
+assertion independently. Scope is tests/test_celery_observability.py,
+tests/test_submission_predecessor_custody.py, a possible focused OTLP test repair
+only after causal evidence, and this record. Production queue declarations,
+WorkerTaskBoundary, source custody, SQL guards, exporter deadlines and logging
+ownership remain unchanged. No historical/privacy fixture overlap.
+
+The Redis diagnostics probe must consume one declared dedicated queue using its
+real registered identity with only a temporary synthetic probe body, restoring
+the original task exactly; it qualifies diagnostics, not the scanner owner. The
+stale-fence probe must accept only the two independently validated TASK selector
+forms (public current predecessor selection and explicit CHECKERS lineage), then
+retain real post-fence application refusal and staged T4/deferred SQL rejection.
+All original correlation, context reset, failure/retry, privacy, source charge,
+rollback and valid-control assertions remain required. No PG/broker/native run
+while the parent-owned native/historical fixture slot is reserved. A permitted
+lightweight local HTTP OTLP run is diagnostic evidence only.
+
+Static-ready checkpoint: only the two named tests and this record changed. The
+diagnostics test uses the existing scanner task/queue with the production task
+base and closed route intact; its synthetic body proves diagnostics only. Original
+registration identity is asserted on restoration and startup failure includes a
+bounded tail of its private worker log. The fence test proves both reader forms
+return the same exact genuine context before advancing the fence and requires
+both genuine readers to refuse afterward; only those two selectors are frozen.
+All staged-T4, exact23514, no-mutation, charge and positive T5 assertions remain.
+
+The unchanged OTLP status/refusal/timeout matrix passed3 in7.10s with the system
+Python3.12.3 interpreter and explicit asyncio plugin, no conftest/PG/broker/native
+(/tmp/pr708-otlp-failure-baseline.log). This does not resolve the original CI
+timeout case's empty log set: even its synchronous Celery labels were absent. No
+logger ownership, deadline, expected event or exporter behavior was changed on
+that evidence. OTLP's full-lane failure remains an unresolved qualification limit.
+
+Ruff and whitespace pass; the unchanged full structure validator exits0
+(/tmp/pr708-observability-fence-structure.log). Both test files already fail Ruff
+format-check at the base, so this bounded fixture patch does not reformat those
+whole modules. Native execution has priority; the repaired real Redis/prefork
+probe and both PostgreSQL fence parameters have not run on this candidate. No
+production behavior change or aggregate runtime-pass claim.

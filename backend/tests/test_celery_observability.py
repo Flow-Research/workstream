@@ -447,25 +447,32 @@ async def test_real_celery_prefork_correlates_api_and_resets_sequential_task_con
 ) -> None:
     """Exercise actual Redis publication, worker parent, and one prefork child."""
     from app.core.config import get_settings
+    from app.workers.outbox_topology import OUTBOX_SCAN_QUEUE, OUTBOX_SCAN_TASK
+    from app.workers.source_cleanup_topology import WorkerTaskBoundary
 
     broker = os.environ["WORKSTREAM_TEST_BROKER_URL"]
     connection = redis.Redis.from_url(broker)
     assert connection.ping()
     prefix = f"workstream-observability-{uuid4()}:"
-    queue_name = f"workstream-observability-{uuid4()}"
+    queue_name, task_name = OUTBOX_SCAN_QUEUE, OUTBOX_SCAN_TASK
     observations = multiprocessing.get_context("fork").Queue()
     monkeypatch.setenv("WORKSTREAM_CELERY_BROKER_URL", broker)
     monkeypatch.setenv("WORKSTREAM_CELERY_TASK_ALWAYS_EAGER", "false")
     monkeypatch.setenv("WORKSTREAM_ARTIFACT_STORE_BACKEND", "disabled")
     get_settings.cache_clear()
-    from app.workers.celery_app import celery_app
+    from app.workers.celery_app import WORKSTREAM_TASK_ROUTES, celery_app
 
-    prior_task = celery_app.tasks.pop(KNOWN_TASK, None)
+    celery_app.loader.import_default_modules()
+    assert WORKSTREAM_TASK_ROUTES[task_name] == {"queue": queue_name}
+    assert queue_name in {declared.name for declared in celery_app.conf.task_queues}
+
+    prior_task = celery_app.tasks.pop(task_name)
+    assert isinstance(prior_task, WorkerTaskBoundary)
 
     def restore_task_registration() -> None:
-        celery_app.tasks.pop(KNOWN_TASK, None)
-        if prior_task is not None:
-            celery_app.tasks.register(prior_task)
+        celery_app.tasks.pop(task_name, None)
+        celery_app.tasks.register(prior_task)
+        assert celery_app.tasks[task_name] is prior_task
 
     request.addfinalizer(restore_task_registration)
 
@@ -476,7 +483,7 @@ async def test_real_celery_prefork_correlates_api_and_resets_sequential_task_con
 
     configure_celery_observability(
         _settings(),
-        frozenset({KNOWN_TASK}),
+        frozenset({task_name}),
         adapter_builder,
     )
 
@@ -493,7 +500,7 @@ async def test_real_celery_prefork_correlates_api_and_resets_sequential_task_con
     monkeypatch.setattr(diagnostics, "ObservabilityRuntime", runtime_factory)
     assert diagnostics._WORKER_RUNTIME is None
 
-    @celery_app.task(bind=True, name=KNOWN_TASK)
+    @celery_app.task(bind=True, name=task_name)
     def probe_task(self, mode: str):
         if mode == "failure":
             raise RuntimeError("credential=worker-failure-secret")
@@ -504,6 +511,8 @@ async def test_real_celery_prefork_correlates_api_and_resets_sequential_task_con
                 max_retries=1,
             )
         return {"status": "ok"}
+
+    assert isinstance(probe_task, WorkerTaskBoundary)
 
     def capture_after_task(task_id=None, state=None, **_kwargs):
         runtime = diagnostics._WORKER_RUNTIME
@@ -551,7 +560,10 @@ async def test_real_celery_prefork_correlates_api_and_resets_sequential_task_con
     try:
         deadline = time.monotonic() + 45
         while time.monotonic() < deadline:
-            assert process.is_alive(), f"worker startup failed: {process.exitcode}"
+            assert process.is_alive(), (
+                f"worker startup failed: {process.exitcode}; "
+                + log_path.read_text(encoding="utf-8")[-8192:]
+            )
             if celery_app.control.ping(destination=[hostname], timeout=0.2):
                 break
             await asyncio.sleep(0.1)
@@ -662,7 +674,7 @@ async def test_real_celery_prefork_correlates_api_and_resets_sequential_task_con
         assert task_metrics
         assert all(
             set(attributes) == {"messaging.destination.name", "workstream.outcome"}
-            and attributes["messaging.destination.name"] == KNOWN_TASK
+            and attributes["messaging.destination.name"] == task_name
             for _, attributes in task_metrics
         )
     finally:
