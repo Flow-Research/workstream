@@ -477,7 +477,13 @@ def _verify_failure_cleanup_trace(evidence, trace):
     """Bind three guest failures and one exact unsettled delete to current PRE leases."""
     wrapper_digest = "sha256:" + sha256(WRAPPER.read_bytes()).hexdigest()
     leases = []
-    for name in ("memory", "crash", "output", "pending"):
+    expected_faults = {
+        "memory": "oom_kill",
+        "crash": "project_exit_37",
+        "output": "output_limit",
+        "pending": None,
+    }
+    for name, expected_fault in expected_faults.items():
         item = evidence["pending"] if name == "pending" else evidence["failures"][name]
         invocation = item["invocation"]
         lease = invocation["provider_invocation_id"]
@@ -507,10 +513,10 @@ def _verify_failure_cleanup_trace(evidence, trace):
         ):
             raise AssertionError(f"{name} lacks exact native execution and cleanup")
         if name == "pending":
-            if rows[3]["exit_code"] != 0:
+            if rows[3]["exit_code"] != 0 or rows[3]["project_fault"] is not None:
                 raise AssertionError("pending cleanup did not follow a completed guest")
-        elif rows[3]["exit_code"] == 0:
-            raise AssertionError(f"{name} native failure differs")
+        elif rows[3]["exit_code"] != 125 or rows[3]["project_fault"] != expected_fault:
+            raise AssertionError(f"{name} lacks the exact trusted project fault")
         leases.append(lease)
     executions = [row for row in trace if row["operation"] == "exec"]
     if (
