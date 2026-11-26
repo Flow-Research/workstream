@@ -59,7 +59,6 @@ class RecordedGuideRuntime(E2EProjectGuideRuntime):
             submission_artifact_policy=SubmissionArtifactPolicyProposal(
                 maximum_file_size_bytes=1_000_000, maximum_package_size_bytes=5_000_000,
                 required_artifacts=("task.toml",), required_evidence=("results",),
-                attestation_terms=("rights_confirmed",),
             ).model_dump(mode="json"),
             requirements=[item.model_dump(mode="json") for item in requirements],
         )

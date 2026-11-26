@@ -108,6 +108,32 @@ async def _correct_public_proposal(client, compilation_root, package, token, cal
     return receipt
 
 
+async def _request_initial_compilation(client, root, token, call, *, manager_authored):
+    setup_path = root + "/setup-runs/latest"
+    before = await call(client, "GET", setup_path, token, 200)
+    if (before["status"] != "not_requested" or before["celery_task_id"] is not None
+            or before["finalized_compilation_id"] is not None):
+        raise AssertionError("guide upload did not leave setup unrequested")
+    path = root + ("/requirements/compile" if manager_authored else "/setup")
+    headers = {"Idempotency-Key": str(uuid4())}
+    requested = await call(client, "POST", path, token, 202, headers=headers)
+    replay = await call(client, "POST", path, token, 202, headers=headers)
+    if any(requested[field] != replay[field] for field in
+           ("operation_id", "setup_run_id", "setup_generation")):
+        raise AssertionError("guide compilation replay changed durable request identity")
+    if (requested["setup_run_id"], requested["setup_generation"]) != (
+        before["id"], before["setup_generation"],
+    ):
+        raise AssertionError("guide compilation acknowledged a different setup")
+    setup = await wait_for_guide_read(client, setup_path, token,
+                             lambda v: v["status"] == "policy_draft_ready", call)
+    if (setup["id"], setup["setup_generation"]) != (
+        requested["setup_run_id"], requested["setup_generation"],
+    ) or setup["finalized_compilation_id"] is None:
+        raise AssertionError("guide compilation finalized outside the requested setup")
+    return setup
+
+
 async def _approve_policies(client, compilation_root, token, call, attachments):
     package = await call(client, "GET", compilation_root + "/proposal", token, 200)
     if package["artifact_policy_status"] != "draft" or package["current_approval_operation_id"]:
@@ -241,18 +267,23 @@ async def public_guide_setup(client, factory, human_review_required, call, token
         raise AssertionError("guide creation replay changed source")
     root += "/" + guide["id"]
     await _public_policy_settings(client, root, token, human_review_required, call)
-    upload = root + f"/documents/{guide['documents'][0]['document_id']}/content"
-    await call(client, "POST", upload, token, 202,
-               headers={"Idempotency-Key": str(uuid4()), "Content-Type": "text/markdown"},
-               content=original)
+    originals = [original]
     if attachment:
         from experiments.pilot04_external_checker_runtime.public_hosted_attachment import manager_rules
-        await call(client, 'POST', root + f"/documents/{guide['documents'][1]['document_id']}/content",
-                   token, 202, headers={'Idempotency-Key': str(uuid4()), 'Content-Type': 'text/markdown'},
-                   content=(model_post.rules(original, pre_requirements) if model_post else
-                            manager_rules(original, pre_requirements)))
-    setup = await wait_for_guide_read(client, root + "/setup-runs/latest", token,
-                             lambda v: v["status"] == "policy_draft_ready", call)
+        originals.append(model_post.rules(original, pre_requirements) if model_post else
+                         manager_rules(original, pre_requirements))
+    for document, content in zip(guide["documents"], originals, strict=True):
+        upload = root + f"/documents/{document['document_id']}/content"
+        receipt = await call(client, "POST", upload, token, 202,
+                             headers={"Idempotency-Key": str(uuid4()), "Content-Type": "text/markdown"},
+                             content=content)
+        if (receipt["status"] != "object_confirmed"
+                or receipt["document_id"] != document["document_id"]
+                or receipt["sha256"] != "sha256:" + hashlib.sha256(content).hexdigest()
+                or receipt["byte_count"] != len(content)):
+            raise AssertionError("guide upload did not confirm the declared original bytes")
+    setup = await _request_initial_compilation(client, root, token, call,
+                                               manager_authored=attachment is not None)
     compilation_root = root + f"/compilations/{setup['finalized_compilation_id']}"
     initial = await call(client, "GET", compilation_root + "/proposal", token, 200)
     initial_setup = setup

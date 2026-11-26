@@ -8,8 +8,8 @@ TASK_EXAMPLES = [
 GUIDE_BYTES = b"""# Sample worker repair project
 
 Investigate and repair the assigned sample worker. Submit one ZIP containing
-`task.toml` and `evidence/results`. Explain the work in the submission summary
-and confirm rights_confirmed in the attestation. Individual files must be at
+`task.toml` and `evidence/results`. You can include optional feedback about
+the task or these instructions. Individual files must be at
 most 1000000 bytes and the package at most 5000000 bytes.
 
 The project intake image checks the package's project-specific rules. The

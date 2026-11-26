@@ -499,7 +499,7 @@ def manager_rules(original, count):
                                     'evidence_refs': refs}],
                        'submission_artifact_policy': {'maximum_file_size_bytes': 1_000_000,
                             'maximum_package_size_bytes': 5_000_000, 'required_artifacts': ['task.toml'],
-                            'required_evidence': ['results'], 'attestation_terms': ['rights_confirmed']},
+                            'required_evidence': ['results']},
                        'requirements': requirements,
                        'setup_notes': []}, sort_keys=True, separators=(',', ':')).encode()
 

@@ -927,6 +927,34 @@ class HostedFixtureContracts(unittest.TestCase):
             with self.subTest(count=count), self.assertRaisesRegex(ValueError, 'exactly one PRE'):
                 asyncio.run(public_guide_setup(None, None, True, None, None, pre_requirements=count))
 
+    def test_guide_setup_requires_explicit_request_and_preserves_generation(self):
+        from experiments.pilot04_external_checker_runtime.public_guide_setup import _request_initial_compilation
+
+        root = '/api/v1/projects/project/guides/guide'
+        setup_path = root + '/setup-runs/latest'
+        before = {'id': 'setup', 'setup_generation': 1, 'status': 'not_requested',
+                  'celery_task_id': None, 'finalized_compilation_id': None}
+        receipt = {'operation_id': 'operation', 'setup_run_id': 'setup', 'setup_generation': 1,
+                   'status': 'queued'}
+        ready = before | {'status': 'policy_draft_ready', 'finalized_compilation_id': 'compilation'}
+        for manager_authored, route in ((False, '/setup'), (True, '/requirements/compile')):
+            with self.subTest(manager_authored=manager_authored):
+                call = AsyncMock(side_effect=[before, receipt, receipt | {'status': ready['status']}, ready])
+                result = asyncio.run(_request_initial_compilation(None, root, 'token', call,
+                                                                  manager_authored=manager_authored))
+                self.assertEqual(result, ready)
+                reads_and_writes = call.await_args_list
+                self.assertEqual([item.args[1:] for item in reads_and_writes], [
+                    ('GET', setup_path, 'token', 200), ('POST', root + route, 'token', 202),
+                    ('POST', root + route, 'token', 202), ('GET', setup_path, 'token', 200),
+                ])
+                self.assertEqual(reads_and_writes[1].kwargs, reads_and_writes[2].kwargs)
+                self.assertIn('Idempotency-Key', reads_and_writes[1].kwargs['headers'])
+
+        call = AsyncMock(side_effect=[before, receipt, receipt, ready | {'setup_generation': 2}])
+        with self.assertRaisesRegex(AssertionError, 'finalized outside the requested setup'):
+            asyncio.run(_request_initial_compilation(None, root, 'token', call, manager_authored=False))
+
     def test_source_failure_preserves_exact_charge_and_releases_only_task_pointer(self):
         from experiments.pilot04_external_checker_runtime import public_intake_trials as intake
 

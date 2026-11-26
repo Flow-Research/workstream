@@ -79,10 +79,12 @@ class SetupPollingTests(unittest.IsolatedAsyncioTestCase):
                             for item in call.await_args_list))
 
     async def test_uncertainty_never_becomes_success_at_deadline(self):
-        call = AsyncMock(return_value={"status": "dispatch_pending",
-                                       "error_code": "provider_outcome_unresolved"})
-        with self.assertRaisesRegex(AssertionError, "did not reach"):
+        call = AsyncMock(return_value={"status": "dispatch_pending", "current_step": "queued",
+                                       "error_code": "provider_outcome_unresolved", "setup_generation": 2,
+                                       "error_summary": "private guide contents"})
+        with self.assertRaisesRegex(AssertionError, "did not reach.*dispatch_pending.*generation=2") as fault:
             await self.read(call)
+        self.assertNotIn("private guide contents", str(fault.exception))
         self.assertEqual(call.await_count, 120)
 
     async def test_terminal_errors_and_http_failure_are_not_hidden(self):
