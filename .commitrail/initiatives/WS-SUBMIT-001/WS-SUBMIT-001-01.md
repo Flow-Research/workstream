@@ -12637,3 +12637,15 @@ monotonic command elapsed seconds around the built subprocess. This measures
 upload/PRE round-trip latency without tokens, new product settings or a changed
 timeout, so C01 can use observed durations rather than an assumed latency target.
 It does not change CLI responses, pass criteria or execution deadlines.
+
+
+The matching MCP candidate was subsequently published and read back at ECR
+repository digest `sha256:47e49c0861a970d5e220187b5722d5623a0304b0deaef276cb503956c140c2f9`.
+Publisher exit0 and private receipt
+`/tmp/workstream-published-1795700199907300212.json` confirm the digest; its
+owned Docker registry credential file was removed. This is publication only.
+A fresh read-only deployed database census still reports
+`0069_remove_artifact_proof`, with zero workstream_tasks, submissions,
+contribution_records and final_acceptances. Other retained tables are not
+claimed empty. A fresh drain, backup and complete retained-data check remain
+necessary immediately before migration. No live service or schema changed.
