@@ -13367,3 +13367,23 @@ build staging and the native sandbox identity. Verify the resulting layer
 header and execute a single ordinary passing input in the isolated domain
 before arming the failure matrix. The normal runner must be restored after the
 control. Review exact image custody and entrypoint readability before the run.
+
+The exact `b1ac8af18` build produced the `8304b99e` fixture manifest. Canonical
+cache inspection verified `/checker.py` as root-owned mode `0444` with the
+tracked payload digest. The owned build registry was removed. A single
+fault-free public CLI submission using this image accepted in 104.35 seconds,
+then finalized revision 1 and passed POST. The native trace binds the accepted
+receipt to exactly one source-first PRE execution with outer exit 0 and an
+observed delete. The durable cleanup disposition is `destroyed`. The isolated
+0094 database and MinIO cleanup checks passed. Authenticated normal runner
+placement matched before and after, its two service PIDs were unchanged, and
+both isolated test services stopped with empty lease, VM, workspace and cgroup
+inventories.
+
+The proof is under `/tmp/workstream-native-pre-control-v_8aasi4`, with the
+cross-checked summary in `pre-control-summary.json`. This run qualifies the
+passing control for the rebuilt fixture. The OOM, crash, output limit and
+pending-delete cases still require evidence. The trusted PRE worker's
+infrastructure reply currently maps to outer exit 125, which can also occur
+before selected project execution. Exact fault qualification needs a trusted
+observation of the selected project outcome.
