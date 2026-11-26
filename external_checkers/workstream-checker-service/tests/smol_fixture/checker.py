@@ -14,6 +14,9 @@ import time
 
 PRE_SOURCE_SCHEMA = "workstream.external_checker_pre_submit_input.v1"
 TIMEOUT_MARKER = "pre-qualification-timeout.txt"
+MEMORY_MARKER = "pre-qualification-memory.txt"
+CRASH_MARKER = "pre-qualification-crash.txt"
+OUTPUT_MARKER = "pre-qualification-output.txt"
 
 
 def denied(operation, *, expected_errno=None):
@@ -65,6 +68,21 @@ def evaluate_source_first(request):
     if (input_root / TIMEOUT_MARKER).is_file():
         assert (input_root / TIMEOUT_MARKER).read_bytes() == b"selected PRE deadline fixture\n"
         time.sleep(30)
+    if (input_root / MEMORY_MARKER).is_file():
+        assert (input_root / MEMORY_MARKER).read_bytes() == b"selected PRE memory fixture\n"
+        # Commit more than the selected 128 MiB guest ceiling in bounded pages.
+        allocated = []
+        for _ in range(128):
+            allocated.append(bytearray(4 * 1024 * 1024))
+        raise AssertionError("guest memory ceiling was not enforced")
+    if (input_root / CRASH_MARKER).is_file():
+        assert (input_root / CRASH_MARKER).read_bytes() == b"selected PRE crash fixture\n"
+        os._exit(37)
+    if (input_root / OUTPUT_MARKER).is_file():
+        assert (input_root / OUTPUT_MARKER).read_bytes() == b"selected PRE output fixture\n"
+        sys.stdout.write("x" * 1024 * 1024)
+        sys.stdout.flush()
+        raise AssertionError("guest output ceiling was not enforced")
 
 
 def evaluate(request):

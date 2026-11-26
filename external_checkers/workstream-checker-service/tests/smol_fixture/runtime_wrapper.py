@@ -21,11 +21,19 @@ def observe_pre_exit(binary, arguments, trace, name):
             sys.stderr.buffer.write(chunk)
             sys.stderr.buffer.flush()
         code = child.wait()
+    limit_unenforced = any(
+        message in captured
+        for message in (
+            b'guest memory ceiling was not enforced',
+            b'guest output ceiling was not enforced',
+        )
+    )
     with trace.open('a') as output:
         fcntl.flock(output, fcntl.LOCK_EX)
         output.write(json.dumps({
             'operation': 'pre_exit', 'name': name, 'exit_code': code,
             'project_deadline_exceeded': diagnostic in captured.splitlines(),
+            'guest_limit_unenforced': limit_unenforced,
         }) + '\n')
         output.flush()
         os.fsync(output.fileno())
@@ -69,7 +77,18 @@ if len(arguments) >= 2 and arguments[0] == 'machine':
                     state.flush()
                     os.fsync(state.fileno())
                     sys.exit(93)
-        if operation == 'delete' and Path(settings['delete_fault']).exists():
+        if operation == 'delete' and (
+            Path(settings['delete_fault']).exists()
+            or (
+                settings.get('fault_completed_pre_delete') is True
+                and next(
+                    (row['name'] for row in
+                     (json.loads(line) for line in trace.read_text().splitlines())
+                     if row['operation'] == 'pre_exit' and row['exit_code'] == 0),
+                    None,
+                ) == name
+            )
+        ):
             sys.exit(93)
         if source_pre and settings.get('observe_pre_exit') is True:
             sys.exit(observe_pre_exit(settings['binary'], arguments, trace, name))

@@ -13036,3 +13036,31 @@ issue a grant after an expired commit. This is clock/owner service proof, not a
 new PostgreSQL or native-runtime claim. The hosted failed operation's materialize
 audit occurred about 0.125 seconds after PRE started, so it does not establish
 that this clock defect caused the observed large-input failure.
+
+### Bound the remaining current-source native failure probes
+
+The maintained PRE qualification fixture now has a separate `failure_cleanup`
+selection. It sends three bounded ZIP markers through the existing public raw
+ZIP command: committed guest memory above the locked 128 MiB limit, a guest
+process exit, and output above the locked 32 KiB limit. Each failed operation
+must retain its exact source and charge, return the same-key infrastructure
+failure without a revision penalty, and bind a native create/start/exec/exit/
+delete trace. A final valid ZIP tests completed PRE with one exact lease's
+delete failure. It must retain a pending cleanup obligation while T4 accepts
+the source and T5 creates the Submission. The same isolated CLI process then
+writes a private, exact-lease pending receipt and waits at most 300 seconds
+for an operator-owned matching reconciliation receipt. The operator must
+independently observe the held lease and unavailable capacity, unarm only the
+test wrapper fault, and let the existing Smol startup recovery clear the owned
+lease before acknowledging readiness. The same client then waits for real POST
+acceptance and audits the contribution before its database and bucket are
+cleaned. Only afterward may the operator use the established drained test
+domain stop and normal runner restoration. The existing deadline and
+isolation selection remains unchanged.
+
+The fixture and trace verifier are source preparation, not native evidence.
+Portable tests protect the exact failure and pending-cleanup trace shapes and
+the one-lease delete fault and exact bounded handoff. The real runner cases,
+physical resource custody, and post-reconciliation continuation remain required
+before A25/A26 can be marked
+qualified. The previous 9fad deadline/isolation receipt is separate evidence.
