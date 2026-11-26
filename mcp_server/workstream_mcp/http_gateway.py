@@ -1573,14 +1573,21 @@ class WorkstreamGateway:
         if name in {"submission_get", "management_submission_get"}:
             return cls._same_uuid(data.get("id"), arguments["submission_id"])
         if name == "project_contributor_guide_get":
-            return cls._same_uuid(data.get("project_id"), project_id)
-        if name == "task_assignment_get":
-            assignment = data.get("assignment")
-            return isinstance(assignment, dict) and cls._fields_match(
-                assignment, {"task_id": task_id, "assignment_id": arguments["assignment_id"]},
+            return isinstance(project_id, str) and cls._same_uuid(
+                data.get("project_id"), project_id,
             )
         if not isinstance(task_id, str):
             return False
+        if name == "task_assignment_get":
+            assignment = data.get("assignment")
+            assignment_id = arguments.get("assignment_id")
+            return (
+                isinstance(assignment, dict)
+                and isinstance(assignment_id, str)
+                and cls._fields_match(
+                    assignment, {"task_id": task_id, "assignment_id": assignment_id},
+                )
+            )
         if project_id is not None and not isinstance(project_id, str):
             return False
         if name == "submission_operation_get":
