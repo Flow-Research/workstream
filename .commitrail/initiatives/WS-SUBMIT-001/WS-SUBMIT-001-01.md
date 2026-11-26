@@ -11857,3 +11857,22 @@ name, filename, executable code, stale source and trailing payload; all 21
 release-verifier tests pass in the backend environment. Exact built-image
 verification remains the next check; 65 reviewer-generated cache samples
 matched the deterministic payload comparison.
+
+Four PostgreSQL cases passed in 409.04 seconds. They cover atomic rollback and
+retry, an expired committed invocation returning to retryable custody and
+resending the identical Resend key and payload, immediate revision-limit
+rejection, and the monotonic signed mailbox observation. The test run recorded
+launch HEAD `5788a731e` with the corrected input files later frozen in
+`d56e4230c`. The migration blob was `afecfe6aeb85d2dfaba288c8613146c63d0cd959`,
+the schema guard blob was `1adcedd5c4f6ed33ec41a99bcd81ac6065fdfa76`, and the
+feedback test blob was `229bc768fb187a7451cdef7d920d66611c2c99e8`. The catalog
+probe pinned the exact schema guard before pytest. The PostgreSQL database and
+the test role were cleaned up. The Resend transport used synthetic HTTP in
+these cases.
+
+Five further PostgreSQL cases passed in 528.81 seconds on the exact code of
+`d56e4230c`. They cover suppression for stale work, an unverified mailbox,
+checker coverage gaps, disabled delivery and POST provider infrastructure
+failure. Isolated database and role cleanup completed. These cases and the
+four delivery cases qualify the local routing and recovery boundaries. Live
+qualification still requires the verified sender and designated test mailbox.
