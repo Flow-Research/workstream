@@ -142,6 +142,35 @@ def _successor_from_receipt(receipt: CheckerRetryReceipt) -> CheckerRetrySuccess
         raise CheckerRetryOperationUnavailable("checker_retry_replay_unavailable") from exc
 
 
+def retry_successor_request(previous: PostSubmissionExecutionRequest) -> PostSubmissionExecutionRequest:
+    """Retain every locked request fact apart from identity and generation."""
+    return make_selected_post_submit_request(
+        **previous.model_dump(exclude={"evaluation_request_id", "evaluation_generation", "request_sha256"}),
+        evaluation_request_id=new_record_id(), evaluation_generation=previous.evaluation_generation + 1,
+    )
+
+
+def abandoned_retry_event(prior: CheckerRun, successor: CheckerRun, cause: UUID) -> OutboxAppendInput:
+    """Record an explicit abandonment child without asserting a checker result."""
+    if prior.status != "running" or prior.worker_lease_id is None:
+        raise CheckerRetrySourceUnavailable("checker_abandonment_source_unavailable")
+    return OutboxAppendInput(
+        event_type=REQUEST_EVENT, event_version=1, aggregate_type="submission",
+        aggregate_id=UUID(successor.submission_id), project_id=UUID(successor.project_id),
+        correlation_id=prior.id, causation_event_id=cause,
+        idempotency_key="checker-abandonment-retry:" + prior.id,
+        payload={
+            "project_id": successor.project_id, "task_id": successor.task_id,
+            "submission_id": successor.submission_id, "submission_version": successor.submission_version,
+            "request_id": successor.evaluation_request_id, "request_digest": successor.request_digest,
+            "evaluation_generation": successor.evaluation_generation, "attempt_id": successor.id,
+            "result_id": successor.result_id, "source_run_id": prior.id,
+            "source_worker_lease_id": prior.worker_lease_id,
+            "source_worker_lease_generation": prior.worker_lease_generation,
+        },
+    )
+
+
 def automatic_retry_event(prior: CheckerRun, successor: CheckerRun) -> OutboxAppendInput:
     """Use the committed fixed-service finalization as the automatic retry cause."""
     _, source = require_finalized_infrastructure_source(prior)
@@ -486,18 +515,7 @@ class CheckerRetryService:
         )
         handle = await self._authorization.prepare(preparation)
         try:
-            request_fields = {
-                **source_request.model_dump(
-                    exclude={
-                        "evaluation_request_id",
-                        "evaluation_generation",
-                        "request_sha256",
-                    }
-                ),
-                "evaluation_request_id": new_record_id(),
-                "evaluation_generation": source.source_generation + 1,
-            }
-            next_request = make_selected_post_submit_request(**request_fields)
+            next_request = retry_successor_request(source_request)
             try:
                 reserved = await self._evaluations._reserve_after_task_lock(
                     next_request,

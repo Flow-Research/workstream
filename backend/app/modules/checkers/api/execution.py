@@ -28,7 +28,7 @@ from app.modules.checkers.api.canonical_values import (
     VersionNumber,
 )
 from app.modules.checkers.api.delivery_reconciliation import (
-    PostSubmitRequestDeliveryFacts,
+    PostSubmitExpiredLease, PostSubmitRequestDeliveryFacts,
 )
 from app.modules.model_usage.api import ModelRecoveryCandidate
 from app.modules.outbox.api import DeliveryOptions
@@ -597,6 +597,16 @@ class EvaluationCoordinationPort(Protocol):
         submission_id: ResourceId, original_request_id: ResourceId,
     ) -> EvaluationProgress:
         """Observe exact current attempt under caller-owned TASK-first custody."""
+        ...
+
+    async def require_expired_unknown_lease(self, request: PostSubmissionExecutionRequest) -> PostSubmitExpiredLease:
+        """Lock exact current TASK and CHECKERS custody for explicit abandonment."""
+        ...
+
+    async def reserve_abandoned_evaluation(
+        self, request: PostSubmissionExecutionRequest, lease: PostSubmitExpiredLease, cause: ResourceId,
+    ) -> EvaluationReservation:
+        """Reserve one successor under exact authorized reconciliation child custody."""
         ...
 
     async def read_retry_delivery(

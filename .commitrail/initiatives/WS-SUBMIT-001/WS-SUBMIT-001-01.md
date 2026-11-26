@@ -13299,3 +13299,24 @@ or uncertain invocation does not qualify for a successor. Verify one exact
 backoff event after a known failure, replay or rollback behavior, bounded
 exhaustion, and the contributor's attempt numbers and recovery action. Workflow
 and authorization review should examine the transaction and SQL guard together.
+
+### Explicit Operator abandonment of an unresolved POST execution
+
+The original hosted maximum-size attempt has finalized UNKNOWN delivery custody
+and a running checker without a result. The user wants an Operator-controlled
+recovery after automated handling cannot safely conclude. Extend the existing
+POST delivery reconciliation command and child handler with an explicit
+`abandon_unknown` choice. It binds the exact expired checker lease and original
+UNKNOWN delivery to the existing audited Operator reason. The child rechecks
+TASK and CHECKERS currentness, the original delivery and its own active
+invocation before atomically inserting one successor through the existing
+reservation owner. The original run and receipt remain unchanged.
+
+Allowed additional changes are the existing reconciliation contracts, service,
+handler, authorization request composition, Operator CLI/MCP contracts and the
+0095 custody guard and tests. This security-sensitive path must deny live or
+changed leases, ordinary unresolved reconciliation, completion-delivery
+abandonment, stale Operator authority, duplicate successors and late old-owner
+writes. It does not prove the provider stopped and does not authorize automatic
+retry of an unresolved invocation. Check exact replay, whole-transaction rollback
+and late-effect fencing through the existing signed Operator and database tests.

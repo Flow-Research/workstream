@@ -27,10 +27,10 @@ from app.modules.checkers.api.evaluation_contract import (
     validate_execution_request,
 )
 from app.modules.checkers.api.delivery_reconciliation import (
-    PostSubmitRequestDeliveryFacts,
+    PostSubmitExpiredLease, PostSubmitRequestDeliveryFacts,
 )
 from app.modules.checkers.api.selected_post_submit import (
-    SelectedPostSubmitCurrentResultReference, make_selected_post_submit_request,
+    SelectedPostSubmitCurrentResultReference,
 )
 from app.modules.checkers.execution_repository import (
     ExecutionRepository,
@@ -70,23 +70,43 @@ class EvaluationCoordinator:
 
     async def schedule_automatic_retry(self, run: CheckerRun) -> None:
         """Reserve a delayed successor only from exact known terminal custody."""
-        from app.modules.checkers.checker_retry import require_finalized_infrastructure_source
+        from app.modules.checkers.checker_retry import require_finalized_infrastructure_source, retry_successor_request
 
         if run.evaluation_generation >= POST_SUBMISSION_RETRY_OPTIONS.max_attempts:
             return
         previous, source = require_finalized_infrastructure_source(run)
         await self._tasks.lock_terminal_retry_scope(previous)
-        next_request = make_selected_post_submit_request(
-            **previous.model_dump(exclude={"evaluation_request_id", "evaluation_generation", "request_sha256"}),
-            evaluation_request_id=new_record_id(), evaluation_generation=source.source_generation + 1,
-        )
         await self._reserve_after_task_lock(
-            next_request, terminal_source_id=source.source_run_id, automatic_retry=True,
+            retry_successor_request(previous), terminal_source_id=source.source_run_id, automatic_retry=True,
+        )
+
+    async def require_expired_unknown_lease(self, request: PostSubmissionExecutionRequest) -> PostSubmitExpiredLease:
+        """Require exact still-current invocation custody with no retained result."""
+        await self._tasks.lock_terminal_retry_scope(request)
+        repo = ExecutionRepository(self._session)
+        run = await repo.lock_current(request)
+        if (run.status != "running" or run.worker_lease_id is None or run.worker_lease_expires_at is None
+                or run.worker_lease_expires_at > await repo.now() or run.result_json is not None):
+            raise CheckerRetrySourceUnavailable("checker_abandonment_source_unavailable")
+        return PostSubmitExpiredLease(lease_id=UUID(run.worker_lease_id), lease_generation=run.worker_lease_generation,
+                                      expires_at=run.worker_lease_expires_at)
+
+    async def reserve_abandoned_evaluation(
+        self, request: PostSubmissionExecutionRequest, lease: PostSubmitExpiredLease, cause: UUID,
+    ) -> EvaluationReservation:
+        """Atomically displace the same exact expired worker without terminalizing it."""
+        from app.modules.checkers.checker_retry import retry_successor_request
+
+        if await self.require_expired_unknown_lease(request) != lease:
+            raise CheckerRetrySourceUnavailable("checker_abandonment_source_unavailable")
+        run = await ExecutionRepository(self._session).lock_current(request)
+        return await self._reserve_after_task_lock(
+            retry_successor_request(request), terminal_source_id=UUID(run.id), abandonment_event_id=cause,
         )
 
     async def _reserve_after_task_lock(
         self, request: PostSubmissionExecutionRequest, *, terminal_source_id: UUID | None = None,
-        automatic_retry: bool = False,
+        automatic_retry: bool = False, abandonment_event_id: UUID | None = None,
     ) -> EvaluationReservation:
         """Use the existing CHECKERS locks after the caller has retained TASK custody."""
         require_transaction(self._session)
@@ -116,10 +136,11 @@ class EvaluationCoordinator:
                 .with_for_update()
                 .execution_options(populate_existing=True)
             )
-        if terminal_source_id is not None:
+        if terminal_source_id is not None and (prior is None or prior.id != str(terminal_source_id)):
+            raise CheckerRetrySourceUnavailable("checker_retry_source_unavailable")
+        if terminal_source_id is not None and abandonment_event_id is None:
             if (
-                prior is None or prior.id != str(terminal_source_id)
-                or prior.status != "infrastructure_failed"
+                prior.status != "infrastructure_failed"
                 or prior.finalize_evidence_id is None
                 or prior.result_json is None or prior.result_digest is None
                 or prior.completion_event_id is not None
@@ -163,13 +184,16 @@ class EvaluationCoordinator:
             locked_revision_policy_generation=context.revision_generation,
             locked_revision_policy_hash=context.revision_hash,
         )
-        if automatic_retry:
-            from app.modules.checkers.checker_retry import automatic_retry_event
+        if automatic_retry or abandonment_event_id is not None:
+            from app.modules.checkers.checker_retry import abandoned_retry_event, automatic_retry_event
 
             if terminal_source_id is None or prior is None:
-                raise CheckerRetrySourceUnavailable("checker_automatic_retry_source_unavailable")
-            appended = await self._events.append(automatic_retry_event(prior, run))
-            run.automatic_retry_event_id = appended.event_id
+                raise CheckerRetrySourceUnavailable("checker_retry_source_unavailable")
+            event = (abandoned_retry_event(prior, run, abandonment_event_id) if abandonment_event_id is not None
+                     else automatic_retry_event(prior, run))
+            appended = await self._events.append(event)
+            run.retry_delivery_event_id = appended.event_id
+            run.retry_abandonment_event_id = abandonment_event_id
         self._session.add(run)
         try:
             await self._session.flush()
@@ -239,7 +263,7 @@ class EvaluationCoordinator:
         if (current.request.assignment_id != original.request.assignment_id
                 or current.request.submission_version != original.request.submission_version):
             raise CheckerExecutionUnavailable(unavailable)
-        retry_event_id = run.automatic_retry_event_id
+        retry_event_id = run.retry_delivery_event_id
         delivery_event = None
         previous_failure_code = None
         if current.reservation.attempt_id == original.reservation.attempt_id:
@@ -262,7 +286,7 @@ class EvaluationCoordinator:
                     project_id=project_id, submission_id=submission_id, event_id=retry_event_id,
                 )
             else:
-                retained, previous_failure_code = await self._read_automatic_retry(run)
+                retained, previous_failure_code = await self._read_service_retry(run)
             if retained is None or retained.request != current.request or run.evaluation_generation <= 1:
                 raise CheckerExecutionUnavailable(unavailable)
             expected = retained.expected_event
@@ -308,36 +332,38 @@ class EvaluationCoordinator:
         from app.modules.checkers.checker_retry import read_retry_delivery
         require_transaction(self._session)
         automatic = await self._session.scalar(select(CheckerRun).where(
-            CheckerRun.automatic_retry_event_id == event_id,
+            CheckerRun.retry_delivery_event_id == event_id,
             CheckerRun.project_id == str(project_id),
             CheckerRun.submission_id == str(submission_id),
         ))
         if automatic is not None:
-            retained, _ = await self._read_automatic_retry(automatic)
+            retained, _ = await self._read_service_retry(automatic)
             return retained
         return await read_retry_delivery(
             self._session, self, project_id=project_id,
             submission_id=submission_id, event_id=event_id,
         )
 
-    async def _read_automatic_retry(self, successor: CheckerRun):
-        """Verify the exact service-triggered event and immutable source before use."""
-        from app.modules.checkers.checker_retry import automatic_retry_event, retry_event_expectation
+    async def _read_service_retry(self, successor: CheckerRun):
+        """Verify the exact service-triggered event and its retained cause."""
+        from app.modules.checkers.checker_retry import abandoned_retry_event, automatic_retry_event, retry_event_expectation
 
         unavailable = "checker_automatic_retry_delivery_unavailable"
-        if successor.supersedes_checker_run_id is None or successor.automatic_retry_event_id is None:
+        if successor.supersedes_checker_run_id is None or successor.retry_delivery_event_id is None:
             raise CheckerExecutionUnavailable(unavailable)
         source = await self._session.get(CheckerRun, successor.supersedes_checker_run_id, populate_existing=True)
         if source is None:
             raise CheckerExecutionUnavailable(unavailable)
-        expected = automatic_retry_event(source, successor)
+        abandonment = successor.retry_abandonment_event_id
+        expected = (abandoned_retry_event(source, successor, abandonment) if abandonment is not None
+                    else automatic_retry_event(source, successor))
         try:
-            await self._events.require_existing(successor.automatic_retry_event_id, expected)
+            await self._events.require_existing(successor.retry_delivery_event_id, expected)
         except (OutboxIdempotencyConflict, OutboxInputError, OutboxPersistenceError) as exc:
             raise CheckerExecutionUnavailable(unavailable) from exc
         return CheckerRetryDelivery(
             request=stored_request(successor), expected_event=retry_event_expectation(expected),
-        ), stored_result(source).infrastructure_failure_code
+        ), stored_result(source).infrastructure_failure_code if abandonment is None else None
 
     async def _lock_task_scope(self, request: PostSubmissionExecutionRequest) -> bool:
         """Retain root-transaction TASK custody before any coordination fence lock."""
@@ -497,11 +523,12 @@ class EvaluationCoordinator:
             CheckerRun.submission_id == source.submission_id,
             CheckerRun.evaluation_generation == source.evaluation_generation + 1,
             CheckerRun.supersedes_checker_run_id == source.id,
-            CheckerRun.automatic_retry_event_id.is_not(None),
+            CheckerRun.retry_delivery_event_id.is_not(None),
+            CheckerRun.retry_abandonment_event_id.is_(None),
         ))
         if successor is None:
             raise CheckerExecutionUnavailable(unavailable)
-        await self._read_automatic_retry(successor)
+        await self._read_service_retry(successor)
         return source
 
     async def require_current_completion(

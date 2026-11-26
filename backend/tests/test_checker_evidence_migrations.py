@@ -107,7 +107,7 @@ async def _retained_rows(database_url: str) -> dict[str, str]:
         result = {}
         for table in _RETAINED_TABLES:
             excluded = {
-                "checker_runs": ("input_context_custody", "automatic_retry_event_id"),
+                "checker_runs": ("input_context_custody", "retry_delivery_event_id", "retry_abandonment_event_id"),
                 "artifact_put_attempts": ("checker_trial_evidence_id",),
                 "artifact_operation_receipts": ("checker_trial_evidence_id",),
                 "artifact_replicas": ("source_operation_id",),
@@ -153,7 +153,7 @@ async def _assert_head_lineage_projection(
         ) == 0
         assert (
             await connection.fetchval(
-                "select count(*) from checker_runs where input_context_custody is not null OR automatic_retry_event_id is not null"
+                "select count(*) from checker_runs where input_context_custody is not null OR retry_delivery_event_id is not null OR retry_abandonment_event_id is not null"
             )
             == 0
         )

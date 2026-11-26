@@ -163,7 +163,7 @@ async def test_known_post_failure_schedules_one_delayed_service_retry(
             assert fence.current_run_id == successor.id
             assert original.status == "infrastructure_failed" and original.failure_code == "material_unavailable"
             assert successor.status == "queued" and successor.supersedes_checker_run_id == original.id
-            new_event = await session.get(OutboxEvent, successor.automatic_retry_event_id)
+            new_event = await session.get(OutboxEvent, successor.retry_delivery_event_id)
             assert new_event.not_before_at == original.completed_at + timedelta(seconds=5)
             event_id, due = new_event.event_id, new_event.not_before_at
             assert (await evaluation_coordinator(session).classify_uncertain_delivery(h.request)).classification == "committed"

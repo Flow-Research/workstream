@@ -161,13 +161,15 @@ class PostSubmitDeliveryCommands:
         self._key, self._actor_profile_id = key, actor_profile_id
 
     async def reconcile(self, project_id, event_id, payload):
+        checked = PostSubmitDeliveryRequest.model_validate(payload)
         result = await self._service.reconcile(
             PostSubmitDeliveryCommand(
                 actor_profile_id=self._actor_profile_id,
                 project_id=project_id,
                 event_id=event_id,
                 request_key=self._key,
-                reason=PostSubmitDeliveryRequest.model_validate(payload).reason,
+                reason=checked.reason,
+                action=checked.action,
             )
         )
         await self._session.commit()
