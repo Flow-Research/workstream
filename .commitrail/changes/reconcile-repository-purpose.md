@@ -1,7 +1,7 @@
 # Reconcile repository purpose
 
 - Initiative: None
-- Durable disposition: Planned
+- Durable disposition: Complete
 - Intended merge outcome: Remove audited obsolete tooling, consolidate current documentation and retain the active proof behind each remaining tool.
 
 ## Intent
@@ -64,3 +64,20 @@ used by the ownership gate. Only those live helpers and regressions move to
 `behavior_source.py`; claim/execution/calibration-only tests are obsolete with
 the retired workflow. Native browser/CLI qualification remains an explicit manual
 proof requiring an isolated unlocked Secret Service, not a claimed CI result.
+
+## Review findings
+
+Source analysis was a live consumer of the retired mutation module. Its nine
+helpers retain identical syntax trees apart from the renamed error type; eight
+behavior tests survive, including symlink and changed-callable guards. The other
+31 test functions exclusively covered removed mutation-runner behavior.
+Documentation review corrected two stale assumptions: explicit empty PRE/POST
+attachment lists are valid, and archived AUTH input does not override the current
+canonical specification or revive token-role authority.
+
+## Reconciliation
+
+The capability ledger already describes automatic acceptance, JSON import and
+current identity. This cleanup aligns supporting documents without changing any
+capability, public exposure, deployed qualification or next delivery boundary.
+No roadmap or spreadsheet change is warranted.

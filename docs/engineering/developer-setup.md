@@ -250,8 +250,9 @@ finish within 60 seconds before Submission creation; it may still use durable
 execution and polling. Longer or model-based work belongs to background POST.
 The compiler infers checks from required outcomes rather than requiring guide
 authors to label automation or stages. Setup receives guide documents and task examples, not image registry metadata.
-The manager separately selects exact project PRE/POST images and configuration
-during approval; missing required image bindings prevent activation.
+At approval, both PRE and POST attachment lists must be present; explicit empty
+lists are valid. Each nonempty attachment binds an exact registered project image
+and configuration. Suggested requirements do not impose image membership.
 
 The runtime drafts and reviews source-cited proposals within one bounded attempt.
 The shared contract, correction feedback and failure semantics are defined in
