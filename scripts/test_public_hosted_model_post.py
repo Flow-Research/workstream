@@ -577,7 +577,9 @@ class PublicSourceCommandContracts(unittest.TestCase):
         from experiments.pilot04_external_checker_runtime import run_public_journey_probe as probe
 
         with patch.object(probe, '_process', return_value='owned') as launch:
-            process, _ = probe._start_finalization_worker({}, Path('/private/proof'))
+            process, _ = probe._start_worker(
+                {}, Path('/private/proof'), 'finalizer', 'workstream.submission_finalization',
+            )
         self.assertEqual(process, 'owned')
         command = launch.call_args.args[0]
         self.assertEqual(command[command.index('-A') + 1], 'app.workers.celery_app')
