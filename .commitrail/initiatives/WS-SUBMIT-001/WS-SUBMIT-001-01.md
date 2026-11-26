@@ -13103,3 +13103,16 @@ advances only after the same owner commits renewal. A missed deadline cancels
 that command before draining renewal cleanup. Source grant issuance still
 requires live foreground authority, and the grant uses the fixed CHECKERS and
 original PRE deadlines. The original T4 authority and replay remain in force.
+
+The hosted read-only diagnostic transferred the exact 524,288,000 bytes and
+verified SHA-256 through 64 KiB frames after an 84.521-second blocked drain.
+A second run with the deployed source grant and a shortened captured expiry
+returned `material_unavailable` on the first read after the blocked write.
+
+The same three regression cases failed on `e51ad8a1a`. Both 80-second reads
+hit the captured expiry and the stalled renewal left its command running.
+The candidate `72df337ae` passed those cases and 21 other focused cases. It
+retained the original PRE deadline and cancelled the expired command while
+renewal rollback was still held. The integrated `b9123afa4` has identical
+production and regression files. Both test processes exited. Hosted acceptance
+of the maximum-size archive remains pending.
