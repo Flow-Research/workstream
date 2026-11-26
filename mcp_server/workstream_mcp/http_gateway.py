@@ -98,7 +98,6 @@ _PUBLIC_ERROR_CODES = frozenset(
         "last_access_administrator",
         "invalid_role_scope",
         "service_unavailable",
-        "submission_preparation_headers_invalid",
         "submission_unavailable",
         "submission_packet_invalid",
         "submission_infrastructure_unavailable",

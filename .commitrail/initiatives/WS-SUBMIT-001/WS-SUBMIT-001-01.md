@@ -11674,3 +11674,20 @@ every omission. The actual durability and storage shell remains unchanged, with
 all original malformed/wrong-size/wrong-device/off-setting/error cases executed.
 Ruff/whitespace and record/link checks pass. No backward-compatibility path,
 storage relaxation, CI rerun, PostgreSQL/broker/native work or remote write.
+
+
+Bounded v0.1 retirement audit: the old public preparation mutation and retired
+submission flags remain absent; CLI references to those flags are negative tests
+requiring rejection before HTTP. Historical preparation reads protect A33 and
+have no new submission writer. One genuinely orphaned MCP public-error token,
+submission_preparation_headers_invalid, has no remaining backend emitter or
+caller. Allowed change is its removal from http_gateway.py and this record;
+no aliases, fallback behavior, historical deletion, route or permission change.
+The existing gateway error/privacy tests verify the unchanged closed error
+projection. Risk is low and root reviews the exact removal. Rebuild/reverify
+MCP before deployment because its packaged bytes change; backend images are
+unaffected.
+
+The existing MCP HTTP gateway suite passed 38 cases in 1.76 seconds after the
+retired error token removal; its existing dependency deprecation warning remains
+visible. No new mutation path or compatibility handling was introduced.
