@@ -905,8 +905,12 @@ TASK_EXECUTION_INPUT_SCHEMAS: dict[str, dict[str, Any]] = {
     },
     "task_assignment_get": {
         "type": "object",
-        "properties": {"assignment_id": _UUID_INPUT, **_TASK_PAGE_PROPERTIES},
-        "required": ["task_id", "assignment_id"],
+        "properties": {
+            "assignment_id": _UUID_INPUT,
+            "limit": _TASK_PAGE_PROPERTIES["limit"],
+            "cursor": {**_TASK_PAGE_PROPERTIES["cursor"], "maxLength": 512},
+        },
+        "required": ["assignment_id"],
         "additionalProperties": False,
     },
     "project_contributor_guide_get": {

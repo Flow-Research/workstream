@@ -387,7 +387,8 @@ async def test_rebase_retains_original_attempt_and_selects_current_terms(
             assert view["preparation_id"] == str(h.revision_preparation_id)
             assert view["outcome"] == "rebased" and view["disposition"] == "ready"
             assert "contribution" in {change["component"] for change in view["changes"]}
-            status = await client.get(f"/api/v1/actors/me/assignments/{h.request.assignment_id}")
+            status_path = f"/api/v1/actors/me/assignments/{h.request.assignment_id}"
+            status = await client.get(status_path)
             assert status.status_code == 200, status.text
             context = status.json()
             assert context["current_status"] == "needs_revision" and context["next_action"] == "revise"
@@ -423,6 +424,15 @@ async def test_rebase_retains_original_attempt_and_selects_current_terms(
             submission_id = await finalize_retained_intake(h.factory, SimpleNamespace(
                 operation_id=UUID(created.json()["operation_id"]), store=h.store.wrapped,
                 namespace=h.namespace, settings=settings))
+            updated = await client.get(status_path)
+            assert updated.status_code == 200, updated.text
+            view = updated.json()
+            assert view["current_status"] == "evaluation_pending"
+            assert view["assignment"]["assignment_id"] == str(h.request.assignment_id)
+            assert view["assignment"]["latest_submission"]["submission_id"] == str(submission_id)
+            assert view["assignment"]["latest_submission"]["version"] == 2
+            assert view["feedback_submission_id"] in (None, str(submission_id))
+            assert view["post_submission_results"] == []
             async with h.factory() as session:
                 dispatch = await session.get(SubmissionDispatch, submission_id)
                 assert dispatch.submission_version == 2

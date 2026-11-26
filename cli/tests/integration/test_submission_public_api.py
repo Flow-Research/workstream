@@ -397,7 +397,7 @@ async def test_cli_public_submission_progress_replay_history_and_suspension(
         changed = list(submit)
         changed[changed.index("--feedback") + 1] += " changed"
         await call(*changed, denied=409)
-        status_args = ("task", "status", str(f.task), "--assignment", str(f.assignment))
+        status_args = ("task", "status", str(f.assignment))
         status = await call(*status_args)
         assert status["current_status"] == "evaluation_pending"
         assert status["next_action"] == "awaiting_evaluation"

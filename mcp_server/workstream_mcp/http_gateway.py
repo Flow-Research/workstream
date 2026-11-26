@@ -391,7 +391,7 @@ TASK_EXECUTION_OPERATIONS = {
     "task_release": ("POST", "/api/v1/tasks/{task_id}/release", 200),
     "task_claim": ("POST", "/api/v1/tasks/{task_id}/claim", 200),
     "task_work_context_get": ("GET", "/api/v1/tasks/{task_id}/work-context", 200),
-    "task_assignment_get": ("GET", "/api/v1/tasks/{task_id}/assignments/{assignment_id}", 200),
+    "task_assignment_get": ("GET", "/api/v1/actors/me/assignments/{assignment_id}", 200),
     "project_contributor_guide_get": (
         "GET", "/api/v1/projects/{project_id}/contributor-guide", 200,
     ),
@@ -1575,18 +1575,16 @@ class WorkstreamGateway:
             return isinstance(project_id, str) and cls._same_uuid(
                 data.get("project_id"), project_id,
             )
-        if not isinstance(task_id, str):
-            return False
         if name == "task_assignment_get":
             assignment = data.get("assignment")
             assignment_id = arguments.get("assignment_id")
             return (
                 isinstance(assignment, dict)
                 and isinstance(assignment_id, str)
-                and cls._fields_match(
-                    assignment, {"task_id": task_id, "assignment_id": assignment_id},
-                )
+                and cls._same_uuid(assignment.get("assignment_id"), assignment_id)
             )
+        if not isinstance(task_id, str):
+            return False
         if project_id is not None and not isinstance(project_id, str):
             return False
         if name == "submission_operation_get":

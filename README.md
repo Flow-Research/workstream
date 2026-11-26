@@ -191,9 +191,9 @@ It sends your Flow token, from
 
 An eligible Submitter can read the project's approved guide before claiming work.
 The CLI uses the same ZIP command for initial work and revisions. Run
-`workstream task status TASK_ID --assignment ASSIGNMENT_ID` to read current
-status, feedback and accepted evidence. The MCP exposes the same task and
-assignment read. [Contributor CLI guide](cli/README.md#submit-and-inspect-contributor-work).
+`workstream task status ASSIGNMENT_ID` to read current status, feedback and
+accepted evidence. The API and MCP use the same assignment ID through revisions.
+[Contributor CLI guide](cli/README.md#submit-and-inspect-contributor-work).
 
 ## Repository layout
 

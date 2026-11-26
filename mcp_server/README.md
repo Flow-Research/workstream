@@ -255,9 +255,10 @@ internally.
 
 A raw-ZIP `202` means Workstream admitted the attempt for durable evaluation.
 Both successful and rejected tool responses include applicable contributor-safe
-PRE findings. Read `workstream_task_assignment_get` with `task_id` and
-`assignment_id` for current status, feedback, revision terms and accepted
-evidence. Continue larger feedback sets with the returned cursor.
+PRE findings. Use `workstream_task_assignment_get` with the `assignment_id`
+to read current status, feedback, revision terms and accepted evidence. The same
+ID works through revisions. Continue larger feedback sets with the returned
+cursor.
 Use `workstream_submission_operation_get` with `task_id` and the operation ID
 or original key to recover the precise request outcome. A write with an
 uncertain outcome is never retried automatically. Preserve the original task,

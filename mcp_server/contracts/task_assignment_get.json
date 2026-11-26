@@ -1,5 +1,5 @@
 {
-  "canonical_sha256": "520b366d4593eca5073cecba771d8321bd467750c85fe46eb8cbb5477b939a82",
+  "canonical_sha256": "4eb6fbe4174d135c9e76cf50806677ff944e3f9fafa06eb2f81d6aba73194733",
   "components": {
     "schemas": {
       "AcceptedAssignmentEvidence": {
@@ -1325,19 +1325,9 @@
     }
   },
   "operation": {
-    "description": "Read your assignment status, feedback and earned evidence by task and assignment.",
-    "operationId": "read_my_assignment_api_v1_tasks__task_id__assignments__assignment_id__get",
+    "description": "Read your assignment status, feedback and earned evidence by assignment ID.",
+    "operationId": "read_my_assignment_api_v1_actors_me_assignments__assignment_id__get",
     "parameters": [
-      {
-        "in": "path",
-        "name": "task_id",
-        "required": true,
-        "schema": {
-          "format": "uuid",
-          "title": "Task Id",
-          "type": "string"
-        }
-      },
       {
         "in": "path",
         "name": "assignment_id",
@@ -1623,7 +1613,7 @@
     ],
     "summary": "Read My Assignment",
     "tags": [
-      "tasks"
+      "actors"
     ],
     "x-workstream-action-id": "task.assignment.read"
   },
@@ -1631,7 +1621,7 @@
   "source": {
     "method": "GET",
     "openapi_version": "3.1.0",
-    "path": "/api/v1/tasks/{task_id}/assignments/{assignment_id}",
-    "repository_sha": "c853743b689a46711c13e1d800cdd27ab8230ac2"
+    "path": "/api/v1/actors/me/assignments/{assignment_id}",
+    "repository_sha": "21e682a9f878bfda6cde31152ac1122e503a9285"
   }
 }

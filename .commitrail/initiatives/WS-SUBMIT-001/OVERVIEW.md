@@ -41,7 +41,7 @@ work. Existing reward owners remain authoritative.
 - [x] Four required submission inputs and optional feedback; backend-selected revision context and exact actor-scoped replay.
 - [x] Forward migration preserves historical accepted commands and refuses unsafe old in-flight work before mutation.
 - [ ] Approved project and governing task guides are readable/downloadable before claim under exact contributor authority.
-- [ ] Exact task/assignment status exposes current safe feedback, processing activity, revision terms and accepted evidence without internal-ID discovery.
+- [ ] Assignment-ID status exposes current safe feedback, processing activity, revision terms and accepted evidence without internal-ID discovery.
 - [x] CLI/MCP use the same contract, preserve useful PRE findings and document their distinct upload limits.
 - [ ] Combined public contributor journey proves correction, revision, replay, history and applicable existing awards on the integrated code.
 - [ ] Quality-feedback email uses the stable assignment ID, with a dedicated consumer and no infrastructure-failure notifications; integrate and prove delivery after sender DNS verification and private key configuration.

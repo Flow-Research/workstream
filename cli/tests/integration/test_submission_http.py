@@ -152,6 +152,7 @@ def test_accepted_submission_shows_nonblocking_intake_feedback(cli, tmp_path):
         assert result.returncode == 0, result.stderr
         receipt_line = result.stdout.splitlines()[0]
         assert receipt_line.startswith("Submission accepted for evaluation")
+        assert f"Run workstream task status {ASSIGNMENT} to see the outcome." in result.stdout
         assert "pre_submission_results" not in receipt_line
         assert (
             "Intake feedback: coverage_incomplete coverage.files results/vendor.bin: "

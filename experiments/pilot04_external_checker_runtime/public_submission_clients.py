@@ -129,8 +129,8 @@ class ContributorClients:
         finally:
             path.unlink()
 
-    async def status(self, contributor, token, task, assignment, expected):
-        cli = await asyncio.to_thread(self.cli.call, token, "task", "status", task, "--assignment", assignment)
-        mcp = await self.mcp(contributor, "task_assignment_get", {"task_id": task, "assignment_id": assignment})
+    async def status(self, contributor, token, assignment, expected):
+        cli = await asyncio.to_thread(self.cli.call, token, "task", "status", assignment)
+        mcp = await self.mcp(contributor, "task_assignment_get", {"assignment_id": assignment})
         if cli != expected or mcp != expected:
             raise AssertionError("CLI or MCP exact assignment status differs from the governed public response")

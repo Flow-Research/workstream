@@ -978,10 +978,10 @@ async def _one_mode(client, factory, env, *,
              and all(item.get("failure_code") is None for item in results
                      if item["source"] == "workstream_default"),
              "public external PRE rejection did not preserve passing defaults")
-    status_path = f"/api/v1/tasks/{task_id}/assignments/{assignment_id}"
+    status_path = f"/api/v1/actors/me/assignments/{assignment_id}"
     rejected = await _json(client, "GET", status_path, contributor_token, 200)
     if clients is not None:
-        await clients.status(contributor, contributor_token, task_id, assignment_id, rejected)
+        await clients.status(contributor, contributor_token, assignment_id, rejected)
     _require(rejected["current_status"] == "in_progress"
              and rejected["assignment"]["latest_submission"] is None
              and rejected["next_action"] == "submit"
@@ -1042,7 +1042,7 @@ async def _one_mode(client, factory, env, *,
         )
         revision = await _json(client, "GET", status_path, contributor_token, 200)
         if clients is not None:
-            await clients.status(contributor, contributor_token, task_id, assignment_id, revision)
+            await clients.status(contributor, contributor_token, assignment_id, revision)
         _require(revision["current_status"] == "needs_revision"
                  and revision["next_action"] == "revise"
                  and revision["feedback_submission_id"] == first_submission_id
@@ -1113,7 +1113,7 @@ async def _one_mode(client, factory, env, *,
                  "public contribution source or award set differs")
     final_status = await _json(client, "GET", status_path, contributor_token, 200)
     if clients is not None:
-        await clients.status(contributor, contributor_token, task_id, assignment_id, final_status)
+        await clients.status(contributor, contributor_token, assignment_id, final_status)
     if human_review_required:
         _require(final_status["current_status"] == "review_pending" and final_status["accepted_evidence"] is None,
                  "the exact assignment changed required human-review custody")

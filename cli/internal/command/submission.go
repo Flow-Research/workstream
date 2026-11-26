@@ -55,34 +55,33 @@ func addSubmissionCommands(root, task *cobra.Command, client func() (*api.Client
 					return err
 				}
 			}
-			_, err = fmt.Fprintln(stdout, "Initial checks passed. Evaluation is pending. Use workstream task status with this task and assignment to see the outcome.")
+			_, err = fmt.Fprintf(stdout, "Initial checks passed. Evaluation is pending. Run workstream task status %s to see the outcome.\n", receipt.AssignmentID)
 			return err
 		}
 		task.AddCommand(cmd)
 	}
 
 	{
-		var assignment string
 		var page pageFlags
-		status := &cobra.Command{Use: "status TASK_ID", Short: "Read your assignment status and feedback", Args: cobra.ExactArgs(1)}
-		status.Flags().StringVar(&assignment, "assignment", "", "Required task-assignment UUID")
+		status := &cobra.Command{Use: "status ASSIGNMENT_ID", Short: "Read your assignment status and feedback", Args: cobra.ExactArgs(1)}
 		page.bind(status, 25)
 		status.RunE = func(cmd *cobra.Command, args []string) error {
-			if !api.ValidUUID(assignment) {
-				return commandError{"invalid_arguments", "--assignment must be a UUID"}
+			if !api.ValidUUID(args[0]) {
+				return commandError{"invalid_arguments", "assignment ID must be a UUID"}
 			}
 			transport, err := client()
 			if err != nil {
 				return err
 			}
 			query := page.query(cmd)
-			result, err := transport.TaskAssignment(cmd.Context(), args[0], assignment, query.Limit, query.Cursor)
+			result, err := transport.TaskAssignment(cmd.Context(), args[0], query.Limit, query.Cursor)
 			if err != nil || *output == "json" {
 				return jsonOrError(stdout, result.Raw, err)
 			}
 			value := result.Value
 			fields := []contextField{
-				{"Assignment", value.Assignment.AssignmentID}, {"Status", value.CurrentStatus},
+				{"Assignment", value.Assignment.AssignmentID}, {"Task", value.Assignment.TaskID},
+				{"Status", value.CurrentStatus},
 				{"Reason", optional(value.StatusReason)}, {"Next action", value.NextAction},
 				{"Terms", value.Assignment.Compensation}, {"Revision", value.Assignment.Revision},
 				{"Latest submitted attempt", value.Assignment.LatestSubmission},

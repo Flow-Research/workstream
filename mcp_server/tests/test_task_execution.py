@@ -44,7 +44,7 @@ def _arguments(name: str) -> dict[str, Any]:
         "task_release": {"task_id": TASK_ID, "idempotency_key": KEY},
         "task_claim": {"task_id": TASK_ID, "idempotency_key": KEY},
         "task_work_context_get": {"task_id": TASK_ID},
-        "task_assignment_get": {"task_id": TASK_ID, "assignment_id": ASSIGNMENT_ID},
+        "task_assignment_get": {"assignment_id": ASSIGNMENT_ID},
         "project_contributor_guide_get": {"project_id": PROJECT_ID},
         "project_contributor_guide_document_get": {
             "project_id": PROJECT_ID, "guide_id": PREPARATION_ID, "document_id": DOCUMENT_ID,
@@ -210,6 +210,32 @@ async def test_every_json_operation_forwards_only_its_fixed_request(
     assert captured["kwargs"]["expected_status"] == status
     assert captured["kwargs"]["json_body"] == arguments.get("body")
     assert captured["kwargs"]["idempotency_key"] == arguments.get("idempotency_key")
+
+
+@pytest.mark.asyncio
+async def test_assignment_feedback_uses_one_selector_and_rejects_substitution(monkeypatch):
+    name = "task_assignment_get"
+    args = {"assignment_id": ASSIGNMENT_ID, "limit": 2, "cursor": "next"}
+    validator = Draft202012Validator(TASK_EXECUTION_INPUT_SCHEMAS[name])
+    assert validator.is_valid(args)
+    assert not validator.is_valid(args | {"task_id": TASK_ID})
+    assert not validator.is_valid({"task_id": TASK_ID})
+    assert not validator.is_valid(args | {"cursor": "x" * 513})
+
+    async def request(_gateway, method, path, bearer, _validator, _correlation, **kwargs):
+        assert (method, path, bearer) == (
+            "GET", f"/api/v1/actors/me/assignments/{ASSIGNMENT_ID}", "Bearer caller",
+        )
+        assert kwargs["params"] == {"limit": "2", "cursor": "next"}
+        return GatewayResult(data={
+            "assignment": {"assignment_id": SUBMISSION_ID, "task_id": TASK_ID},
+        })
+
+    monkeypatch.setattr(WorkstreamGateway, "_request", request)
+    async with httpx.AsyncClient(base_url="http://workstream.test") as client:
+        gateway = WorkstreamGateway(Settings(api_url="http://127.0.0.1:8000"), client)
+        result = await gateway.task_execution_operation(name, "Bearer caller", args)
+    assert result.failure is not None and result.failure.error == "invalid_api_response"
 
 
 @pytest.mark.asyncio

@@ -339,17 +339,17 @@ func decodeContributorAssignment(raw json.RawMessage) (ContributorAssignment, bo
 }
 
 // TaskAssignment reads current status and bounded intake and evaluation feedback for an owned claim.
-func (c *Client) TaskAssignment(ctx context.Context, task, assignment string, limit int, cursor *string) (Result[AssignmentStatus], error) {
+func (c *Client) TaskAssignment(ctx context.Context, assignment string, limit int, cursor *string) (Result[AssignmentStatus], error) {
 	var result Result[AssignmentStatus]
-	if !submissionSelector(task) || !submissionSelector(assignment) ||
+	if !submissionSelector(assignment) ||
 		limit < 1 || limit > 100 || (cursor != nil && !validTaskCursor(*cursor)) {
-		return result, errors.New("task status requires task and assignment UUIDs and a valid feedback page")
+		return result, errors.New("task status requires an assignment UUID and a valid feedback page")
 	}
 	query := url.Values{"limit": {strconv.Itoa(limit)}}
 	if cursor != nil {
 		query.Set("cursor", *cursor)
 	}
-	path := "/api/v1/tasks/" + canonicalUUID(task) + "/assignments/" + canonicalUUID(assignment)
+	path := "/api/v1/actors/me/assignments/" + canonicalUUID(assignment)
 	raw, err := c.request(ctx, http.MethodGet, path, query.Encode(), nil)
 	if err != nil {
 		return result, err
@@ -365,7 +365,7 @@ func (c *Client) TaskAssignment(ctx context.Context, task, assignment string, li
 		return result, &Failure{Code: "invalid_api_response"}
 	}
 	row, ok := decodeContributorAssignment(fields["assignment"])
-	if !ok || !sameUUID(row.TaskID, task) || !sameUUID(row.AssignmentID, assignment) ||
+	if !ok || !sameUUID(row.AssignmentID, assignment) ||
 		(value.FeedbackSubmissionID != nil && (row.LatestSubmission == nil ||
 			!sameUUID(*value.FeedbackSubmissionID, row.LatestSubmission.SubmissionID))) {
 		return result, &Failure{Code: "invalid_api_response"}

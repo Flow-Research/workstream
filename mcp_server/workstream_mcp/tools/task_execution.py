@@ -31,7 +31,9 @@ _DESCRIPTIONS = {
     "task_release": "Release one screened task to the contributor queue.",
     "task_claim": "Claim and start one ready task atomically.",
     "task_work_context_get": "Read the current contributor work context for one task.",
-    "task_assignment_get": "Read your exact assignment status, feedback and earned evidence.",
+    "task_assignment_get": (
+        "Read your assignment status, feedback and earned evidence by assignment ID."
+    ),
     "project_contributor_guide_get": (
         "Read the project's approved guide before claiming a task."
     ),

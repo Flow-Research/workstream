@@ -1113,7 +1113,7 @@ delivery, worker completion, live setup inference or deployed Flow behavior.
 ```sh
 workstream task submit TASK_ID --assignment ASSIGNMENT_ID --file work.zip \
   --idempotency-key CALLER_UUID
-workstream task status TASK_ID --assignment ASSIGNMENT_ID
+workstream task status ASSIGNMENT_ID
 # After correcting work, use the same command and a new key.
 workstream task submit TASK_ID --assignment ASSIGNMENT_ID --file revision.zip \
   --idempotency-key REVISION_KEY --feedback 'Updated the examples.'
@@ -1138,11 +1138,12 @@ ID. Nullable Submission/evaluation IDs remain null before finalization. The
 operation's processing stage, PRE feedback and next-action advice come from the
 server; current task status is contextual and may differ from a historical outcome.
 
-Use `task status` with the task and assignment IDs to see current work status,
-the relevant intake and evaluation feedback, revision deadline and terms, and
-accepted contribution evidence. A status read is available throughout ordinary
-revisions and afterwards in the assignment history. The backend selects the
-current predecessor and revision terms under lock. It refuses an attempt if
+Use `task status ASSIGNMENT_ID` to see current work status, intake and evaluation
+feedback, revision deadline and terms, and accepted contribution evidence. The
+same assignment ID works throughout revisions and afterwards in the assignment
+history. API clients use `GET /api/v1/actors/me/assignments/{assignment_id}`.
+The status response includes the task ID for `task submit`. The backend selects
+the current predecessor and revision terms under lock. It refuses an attempt if
 eligibility or the selected terms change while intake is in progress.
 
 Optional `--feedback` is project feedback. The header accepts up to 4096 printable
