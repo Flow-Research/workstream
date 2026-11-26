@@ -91,4 +91,5 @@ rules; its planned boundaries do not become live merely through guide activation
 Tasks lock their applicable guide and policy identities; a later guide does not
 rewrite existing submissions. See [task and assignment contracts](spec_task_assignment.md)
 and [contribution/compensation ownership](spec_contribution_compensation.md).
-There is no guide-keyed PaymentPolicy or task-local payment-term fallback.
+Compensation uses the locked ContributionPolicyVersion; no task-local terms
+or parallel guide-keyed compensation contract substitute for it.

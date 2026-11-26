@@ -16,9 +16,9 @@ The bounded local public API and Celery service drill has passed; the
 [capability ledger](roadmap_status.md) tracks that proof.
 
 Task responses and immutable command receipts contain no task-local payment
-amount, currency, payout type or guide-keyed payment-policy stamp. Compensation
-terms are governed by the locked ContributionPolicyVersion and resulting awards.
-TASK and Submission storage do not retain a parallel PaymentPolicy lineage.
+amount, currency, payout type or separate guide-keyed compensation stamp.
+Compensation terms and lineage are governed solely by the locked
+ContributionPolicyVersion and resulting awards.
 
 ## Records and ownership
 
