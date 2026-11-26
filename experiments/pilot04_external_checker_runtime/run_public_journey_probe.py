@@ -1340,6 +1340,8 @@ async def run(database_url: str, image_reference: str, node_config: Path,
         _require((execution_health.runtime, execution_health.isolation_mode)
                  == (intake_health.runtime, intake_health.isolation_mode)
                  == ("smolvm", "smol-microvm"), "typed capability health identities disagree")
+        _require(image["platform_manifest_digest"] in execution_health.cached_platform_manifests,
+                 "live execution cache lacks the reviewed project checker manifest")
         port = find_free_port()
         origin = f"http://127.0.0.1:{port}"
         api = _process([
