@@ -621,3 +621,68 @@ def test_operation_progress_rejects_unbound_or_noncontract_response(
             "arguments": {"task_id": TASK_ID, "operation_id": OPERATION_ID}}})
     assert response.json()["result"]["isError"] is True
     assert len(received) == 1
+
+
+@pytest.mark.parametrize("private_message", [False, True])
+@pytest.mark.parametrize(
+    ("code", "message"),
+    [
+        (
+            "submission_outcome_unknown",
+            "Check the original submission operation or retry with the same idempotency key",
+        ),
+        (
+            "submission_infrastructure_unavailable",
+            "Submission processing is temporarily unavailable",
+        ),
+    ],
+)
+def test_submission_transport_failure_preserves_safe_recovery_guidance(
+    adapter: Adapter,
+    code: str,
+    message: str,
+    private_message: bool,
+) -> None:
+    client, received, upstream = adapter
+    upstream["status"] = 503
+    supplied_message = (
+        "https://private-provider.invalid?token=private-token" if private_message else message
+    )
+    upstream["json"] = {
+        "error": {
+            "code": code,
+            "message": supplied_message,
+            "details": {"private_provider_diagnostic": "must not escape"},
+        }
+    }
+    response = client.post(
+        "/mcp",
+        headers={
+            "authorization": "Bearer fixture-token",
+            "accept": "application/json, text/event-stream",
+        },
+        json={
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {
+                "name": "workstream_submission_create",
+                "arguments": _arguments("submission_create"),
+            },
+        },
+    )
+    result = response.json()["result"]
+    assert result["isError"] is True
+    error = result["structuredContent"]
+    assert (error["status"], error.get("code"), error.get("message"), error["retryable"]) == (
+        503,
+        code,
+        message,
+        False,
+    )
+    assert error["error"] == "workstream_execution_uncertain"
+    assert "details" not in error
+    assert "must not escape" not in response.text
+    assert "private-provider" not in response.text
+    assert "private-token" not in response.text
+    assert len(received) == 1

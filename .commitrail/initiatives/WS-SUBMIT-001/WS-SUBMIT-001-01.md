@@ -12297,3 +12297,29 @@ feedback assertion, but validate its envelope first and report only the safe
 error/code/status/correlation fields on mismatch. The original response was
 not retained; no specific provider or MCP failure cause is claimed from this
 run. This changes only diagnostic evidence, not accepted outcomes or deadlines.
+
+### Preserve safe MCP source recovery guidance
+
+Inspection of the unexpected MCP failure exposed a separate reproducible gap:
+raw-ZIP HTTP 503 responses lost the API's outcome-unknown code and bounded
+recovery message. Two focused caller tests reproduce missing recovery guidance.
+This is not claimed as the cause of the prior native failure. Scope is the
+existing MCP gateway and task-execution tests. Preserve the existing
+`workstream_execution_uncertain` classification and false automatic-retry hint,
+while retaining only the two current submission infrastructure/outcome-unknown
+codes and bounded printable messages on 503. Provider details remain omitted;
+other server/proxy errors and unexpected successes remain uncertain. Existing
+4xx PRE quality-feedback validation stays intact. No retries or aliases added.
+
+Independent review rejected reflecting arbitrary upstream 503 message text even
+with an allowed code. The revised branch uses fixed canonical recovery text
+for those two codes; counterexamples supply a printable private URL/token and
+assert neither it nor provider details reaches the caller. Unrelated formatting
+changes were removed. The earlier four-case run passed before this stricter
+review repair; the final six-case result is recorded separately.
+
+The final reviewed 503 mapping precedes the unchanged 4xx code allowlist; the
+new recovery codes do not widen accepted 4xx messages. Six focused cases passed
+(including private-text counterexamples and existing quality/uncertainty
+controls), with Ruff and whitespace checks passing. A final frozen-source
+rerun follows integration; the previous native cause remains unproven.

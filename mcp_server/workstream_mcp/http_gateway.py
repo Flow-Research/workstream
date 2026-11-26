@@ -2234,8 +2234,6 @@ class WorkstreamGateway:
                         correlation_id = self._correlation_id(response, request_id)
                         if response.status_code != expected_status:
                             failure = self._api_failure(response.status_code, body, correlation_id)
-                            if submission_upload and 400 <= response.status_code < 500:
-                                failure = self._submission_failure(failure, body, output_validator)
                             # Proxy errors and unexpected successes cannot prove rollback.
                             if mutation and (
                                 response.status_code < 400 or response.status_code >= 500
@@ -2246,6 +2244,10 @@ class WorkstreamGateway:
                                     code=failure.code,
                                     correlation_id=correlation_id,
                                 )
+                            if submission_upload and (
+                                400 <= response.status_code < 500 or response.status_code == 503
+                            ):
+                                failure = self._submission_failure(failure, body, output_validator)
                             return GatewayResult(failure=failure)
                         media_type = (
                             response.headers.get("content-type", "")
@@ -2405,9 +2407,24 @@ class WorkstreamGateway:
         try:
             decoded = json.loads(body)
             error = decoded["error"]
-            if not isinstance(error, dict) or error.get("code") not in _SUBMISSION_ERROR_CODES:
+            if not isinstance(error, dict):
                 return failure
-            code, details = error["code"], error.get("details")
+            code = error.get("code")
+            if failure.status == 503:
+                # Proxy errors cannot authorize reflection of upstream diagnostic text.
+                recovery = {
+                    "submission_infrastructure_unavailable": (
+                        "Submission processing is temporarily unavailable"
+                    ),
+                    "submission_outcome_unknown": (
+                        "Check the original submission operation or retry "
+                        "with the same idempotency key"
+                    ),
+                }.get(code)
+                return replace(failure, code=code, message=recovery) if recovery else failure
+            if code not in _SUBMISSION_ERROR_CODES:
+                return failure
+            details = error.get("details")
             message = error.get("message")
             if not isinstance(message, str) or len(message) > 512 or not message.isprintable():
                 message = None
