@@ -33,6 +33,7 @@ AGENT_COMPOSITION_ROOT = APP_ROOT / "adapters/project_agents/__init__.py"
 GUIDE_PARSER_COMPOSITION_ROOT = APP_ROOT / "adapters/guide_document_tools/__init__.py"
 OBSERVABILITY_COMPOSITION_ROOT = APP_ROOT / "adapters" / "observability.py"
 GITHUB_COMPOSITION_ROOT = APP_ROOT / "adapters" / "github" / "__init__.py"
+FEEDBACK_EMAIL_COMPOSITION_ROOT = APP_ROOT / "adapters" / "submission_feedback_email.py"
 AGENT_ADAPTER_MODULES = {
     "app.adapters.project_agents.manager_authored",
     "app.adapters.project_agents.omnicore_agent",
@@ -379,6 +380,7 @@ def _assert_concrete_adapter_composition(
                 "RemoteTlsTrustedIntakeAdapter",
                 "OpenAIResponsesCheckerModelProvider",
                 "OpenRouterCheckerModelProvider",
+                "ResendSubmissionFeedbackEmailAdapter",
             }
         )
         agent_calls.extend(path for name in calls if name in AGENT_RUNTIME_CONSTRUCTORS)
@@ -396,9 +398,11 @@ def _assert_concrete_adapter_composition(
         OBSERVABILITY_COMPOSITION_ROOT: 1,
         GUIDE_PARSER_COMPOSITION_ROOT: 1,
         GITHUB_COMPOSITION_ROOT: 1,
+        FEEDBACK_EMAIL_COMPOSITION_ROOT: 1,
     }
     assert Counter(adapter_calls) == {
         COMPOSITION_ROOT: 2, S3_ADAPTER_MODULE: 1, CHECKER_COMPOSITION_ROOT: 3,
+        FEEDBACK_EMAIL_COMPOSITION_ROOT: 1,
     }
     assert set(concrete_imports) == {
         COMPOSITION_ROOT,

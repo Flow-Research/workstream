@@ -9314,6 +9314,33 @@ updated the authority digest. Four targeted ownership tests passed. The
 canonical validator passed against the protected PR base
 `d713594ebf04a125917edb0ec981d380cf8047b4`. Ruff and diff checks passed.
 
+### Align existing test evidence with verified email
+
+The failed f480 lane bundles collected the complete suite and then reported
+separate assertion and fixture failures. The feedback email composition root
+and token verification field need exact test expectations. The TASK lane
+already includes the new feedback email test module. Update the independent
+fingerprint for that single addition using the same digest calculation.
+
+The cleanup migration fixture uses current actor ORM during setup on 0087
+and 0088. Supply the required false-only projection during fixture reads and
+remove it before taking the predecessor snapshot. The claim-start fixture
+uses current dev auth on 0064. Assert the exact two fixture-created identity
+links have no verified mailbox and remove only their post-0064 observation
+timestamps before dropping the existing null-only projection. Preserve the
+task, assignment, receipt, audit and migration assertions.
+
+Allowed files are the existing tests
+`test_artifact_architecture.py`, `authentication/test_token_contract.py`,
+`test_ci_lane_catalogue.py`, `migrations/test_unsealed_source_cleanup_migration.py`,
+`migrations/test_claim_starts_work.py`, and this record. Changes are confined
+to test expectations and historical fixtures. No production or migration
+changes, routing or timing allowances, workflow changes, or scope expansion.
+Focused QA should check the exact factory count, exact token fields, the single
+module fingerprint delta, and that each historical upgrade starts from the
+original predecessor shape. Run the selected pure checks and exact three
+historical cases in separate owned PostgreSQL after the native run releases it.
+
 ### Refresh pending-operation MCP schema descriptions
 
 Configured backend OpenAPI comparison atc853743b6 passed142 and failed2

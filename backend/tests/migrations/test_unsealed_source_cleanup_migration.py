@@ -26,7 +26,7 @@ pytestmark = pytest.mark.postgres_schema_contract
 
 @asynccontextmanager
 async def predecessor_submission_read_projection(intake):
-    """Construct old v1 commands, then restore the exact predecessor schema."""
+    """Construct old v1 commands and remove both current ORM projections."""
     def bind_old_metadata(_mapper, _connection, row):
         assert row.command_metadata["feedback"] is None
         metadata = {
@@ -55,6 +55,10 @@ async def predecessor_submission_read_projection(intake):
                 "SELECT count(*) FROM public.submissions WHERE feedback IS NOT NULL"
             )) == 0
             await connection.execute(text("ALTER TABLE public.submissions DROP COLUMN feedback"))
+            assert await connection.scalar(text(
+                "SELECT count(*) FROM public.actor_identity_links WHERE email_verified IS DISTINCT FROM false"
+            )) == 0
+            await connection.execute(text("ALTER TABLE public.actor_identity_links DROP COLUMN email_verified"))
 
 
 @pytest.fixture(autouse=True, params=["0087_source_cleanup_candidates", "0088_unsealed_source_cleanup"])
@@ -65,6 +69,11 @@ async def predecessor_schema(isolated_database_env, migration_lock, request):
         await _drop_test_database_schema(isolated_database_env)
         try:
             await asyncio.to_thread(command.upgrade, _config(), request.param)
+            # The intake fixture uses the current ORM to create fixture identities.
+            async with db_session.get_engine().begin() as connection:
+                await connection.execute(text(
+                    "ALTER TABLE public.actor_identity_links ADD COLUMN email_verified boolean NOT NULL DEFAULT false"
+                ))
             yield request.param
         finally:
             await db_session.dispose_engine()
