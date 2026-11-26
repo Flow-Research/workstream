@@ -65,6 +65,21 @@ test-only extension. Focused QA and human review should distinguish the new
 body digest check from the existing changed-metadata conflict and verify the
 same-body replay still succeeds.
 
+### Retained admission history at the current schema head
+
+The ready and consumed admission captures each include historical actor identity
+links. The current-head comparison must account for the false mailbox-verification
+value added by migration 0093. Require that exact value for every retained link
+and omit only the new column from the row comparison. Retain the existing
+optional-feedback treatment and exact comparison of all other captured fields
+and of the 0084 custody function delta.
+
+Scope is the fixture comparison in `backend/tests/migrations/test_source_pre_cutover.py`
+and this record. Keep migrations, production code and archived fixture bytes
+unchanged. Risk is low and verification uses both existing PostgreSQL cases.
+Focused QA and human review should check that previously retained identities
+cannot acquire verified addresses through the upgrade.
+
 ## Bounded change
 
 ### Allowed

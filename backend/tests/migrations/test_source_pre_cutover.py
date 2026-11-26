@@ -139,7 +139,7 @@ def _admission_archive():
     return snapshots
 
 
-async def _retained_rows_and_functions(url, tables, *, current_feedback=False):
+async def _retained_rows_and_functions(url, tables, *, current_schema=False):
     """Compare all captured nonempty tables and all public function definitions."""
     connection = await asyncpg.connect(url.replace('+asyncpg', ''))
     try:
@@ -147,11 +147,17 @@ async def _retained_rows_and_functions(url, tables, *, current_feedback=False):
         for table in tables:
             if table != 'alembic_version':
                 value = 'to_jsonb(r)'
-                if current_feedback and table == 'submissions':
+                if current_schema and table == 'submissions':
                     assert await connection.fetchval(
                         'SELECT count(*) FROM public.submissions WHERE feedback IS NOT NULL'
                     ) == 0
                     value += "-'feedback'"
+                if current_schema and table == 'actor_identity_links':
+                    assert await connection.fetchval(
+                        'SELECT count(*) FROM public.actor_identity_links '
+                        'WHERE email_verified IS DISTINCT FROM false'
+                    ) == 0
+                    value += "-'email_verified'"
                 rows[table] = await connection.fetchval(
                     f'SELECT coalesce(jsonb_agg({value} ORDER BY ({value})::text),\'[]\')::text FROM public."{table}" r'
                 )
@@ -249,7 +255,7 @@ async def test_source_binding_cutover_preserves_history_and_closes_old_consumpti
             assert {k for k in old_functions if old_functions[k] != new_functions[k]} == {'guard_submission_bundle_admission_lineage()'}
             await asyncio.to_thread(command.upgrade, _config(), current_schema_revision())
             current_rows, _ = await _retained_rows_and_functions(
-                isolated_database_env, snapshot['tables'], current_feedback=True,
+                isolated_database_env, snapshot['tables'], current_schema=True,
             )
             assert current_rows == after
             if state == 'ready':
