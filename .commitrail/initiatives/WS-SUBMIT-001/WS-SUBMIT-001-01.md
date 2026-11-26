@@ -11709,3 +11709,22 @@ the same source frames through hardened children and a disposable parser
 socket, using the existing resource limits, privilege drop, and file-system
 isolation. The current parser daemon stays in service while the candidate is
 measured. The paired native journey remains pending.
+
+Compiling only the image's installed dependencies still left one guarded
+parser child hitting SIGXCPU. The release recipe now compiles dependency,
+standard-library, and application bytecode at build time. The full-cache
+derivative parsed both the guide and manager rules on both child identities
+in 1.073–1.317 CPU seconds per document. Its real parser socket returned both
+originals and the production rules compiler verified their citations.
+
+The actual agents release image built from `6c2df5b7` produced
+`sha256:086b7b2c97b868ae78952b4bb1e28eea80df8a8fc73b7d51ddaadbfabe901fdb`.
+With the existing isolation and limits, the same four child checks used
+1.002–1.542 CPU seconds. The real socket returned the 686-byte guide and
+3,020-byte manager rules in 1.076 and 1.510 seconds. The production adapter
+validated the full responses and their exact source and parser hashes. The
+production compiler emitted source-cited PRE and POST rules. The disposable
+container was removed, and the existing parser kept its original container
+identity and start time. All 20 release contract tests passed. Build and
+runtime receipts are in `/tmp/workstream-parser-bytecode.hUOuQAPF/`.
+The separate-runner paired submission journey remains pending.
