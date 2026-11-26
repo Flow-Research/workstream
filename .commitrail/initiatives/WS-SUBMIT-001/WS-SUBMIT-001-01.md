@@ -13196,6 +13196,23 @@ namespace, and the public `/api/v1/health` returned 200. The updated native CLI 
 installed locally and staged on the API host. The live readback receipt is
 `/tmp/workstream-pre300-live-readback.json`; the coordinated deployment and backup
 are retained under `/var/backups/workstream/pr708-pre300-a0e389a8` on the API host.
-The hosted maximum-size retry stopped before upload because the saved CLI login
-reported an uncertain prior refresh and requires interactive login recovery.
-Maximum-size acceptance is not yet claimed.
+After interactive login recovery, the exact 500 MiB source passed PRE and received
+an accepted receipt for operation `01a21960-0907-73d4-b1db-ec72fdf4dd33`, under the
+unchanged assignment `01a2191d-4ce8-7b0c-b7fc-ac35cfea7aa0`. Upload sealed in
+19.612 seconds, with a separate 299.992-second PRE window; sealed-to-acceptance
+took 237.583 seconds. The CLI exited zero after 262.133 seconds. All four
+Workstream default checks and the approved project PRE passed. Durable finalization
+created Submission `01a21964-b3fd-7721-b479-2be35410ff00`; public operation reads
+then showed POST evaluation running. The maximum-size PRE receipt and timing are
+retained under `/tmp/workstream-hosted-maximum-qualification/maximum-submit-pre300`.
+POST subsequently reported `operationally_stalled`, retaining the task in
+`evaluation_pending`. The original evaluation event dead-lettered with
+`INVOKE_OUTCOME_UNKNOWN` 150.273 seconds after the checker started. Its checker
+row retains `running`, no result and the original 210-second lease. This matches
+the separate POST execution-budget calculation (60-second materialization,
+30-second selected checker and 60-second cleanup). The exact provider phase at
+cutoff has not been established, so no selected-checker verdict or safe retry is
+claimed. Existing reconciliation holds this unresolved attempt. The read-only
+receipt is `/tmp/workstream-maximum-post-stall-readback.json`; no recovery write,
+policy change or automatic retry was performed. Maximum-size PRE acceptance and
+finalization passed; maximum-size POST acceptance remains open.
