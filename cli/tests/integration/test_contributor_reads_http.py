@@ -141,9 +141,21 @@ def test_assignment_status_uses_only_the_assignment_id(cli):
     }
     with http_fixture() as (origin, response, requests):
         response["body"] = json.dumps(body).encode()
-        args = ("task", "status", ASSIGNMENT, "--limit", "2", "--cursor", "next", "-o", "json")
+        args = (
+            "task",
+            "status",
+            ASSIGNMENT,
+            "--limit",
+            "2",
+            "--cursor",
+            "next",
+            "-o",
+            "json",
+        )
         result = cli(origin, TOKEN, *args)
-        assert result.returncode == 0 and json.loads(result.stdout) == body, result.stderr
+        assert result.returncode == 0 and json.loads(result.stdout) == body, (
+            result.stderr
+        )
         method, target, authorization = requests[-1]
         assert method == "GET" and authorization == "Bearer " + TOKEN
         assert urlsplit(target).path == f"/api/v1/actors/me/assignments/{ASSIGNMENT}"
@@ -151,11 +163,19 @@ def test_assignment_status_uses_only_the_assignment_id(cli):
         text = cli(origin, TOKEN, "task", "status", ASSIGNMENT)
         assert text.returncode == 0 and f'Task: "{TASK}"\n' in text.stdout, text.stderr
 
-        response["body"] = json.dumps(body | {
-            "assignment": ASSIGNMENT_ROW | {"assignment_id": SUBMISSION},
-        }).encode()
+        response["body"] = json.dumps(
+            body
+            | {
+                "assignment": ASSIGNMENT_ROW | {"assignment_id": SUBMISSION},
+            }
+        ).encode()
         assert_failure(cli(origin, TOKEN, *args), "invalid_api_response")
-        assert cli(origin, TOKEN, "task", "status", TASK, "--assignment", ASSIGNMENT).returncode == 2
+        assert (
+            cli(
+                origin, TOKEN, "task", "status", TASK, "--assignment", ASSIGNMENT
+            ).returncode
+            == 2
+        )
         assert len(requests) == 3
 
 
