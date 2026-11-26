@@ -59,8 +59,8 @@ owners provide business terms but do not author the machine policy directly.
 
 ## CompensationAward
 
-CON-03C supplies immutable storage; live award creation and fulfillment remain
-separate, unavailable operations.
+Automatic acceptance creates applicable immutable awards under the locked
+contribution policy. External fulfillment remains unavailable.
 
 The immutable result of evaluating one `ContributionRecord` against its frozen
 `ContributionPolicyVersion`. Its instrument is `money` or `project_points`.
@@ -429,11 +429,11 @@ resubmission ends a window; replay, upload and repair cannot reset it.
 
 ## FinalAcceptance
 
-The internal immutable accept-only fact and sole source of a submitter's
-`accepted_submission` ContributionRecord. REV-04B delivers storage and REV-04C
-delivers its hidden FinalAcceptance/TASK/CON participant; exact AUTH custody and
-the complete canonical shared operation remain required before runtime use. See [Final Acceptance](#final-acceptance)
-for human and planned automated source boundaries.
+The immutable accept-only fact and sole source of a submitter's
+`accepted_submission` ContributionRecord. Automatic routing invokes the shared
+operation under the locked false-review policy with exact AUTH evidence and
+current-result custody. The live human Review path remains unfinished. See
+[Final Acceptance](#final-acceptance) for both governed source boundaries.
 
 ## Revision Replay
 
@@ -501,12 +501,9 @@ It is not a v0.1 review-transaction side effect.
 
 ## Contribution Record
 
-CON-03C supplies immutable storage; CON-07 supplies hidden submitter
-participation with complete frozen award staging and exact replay in the
-caller's transaction. REV-04C composes it with hidden FinalAcceptance/TASK
-effects. Live recognition still requires source authority, database closure,
-currentness proof, audit/outbox and runtime composition. Reviewer participation
-and fulfillment remain separate future work.
+Automatic acceptance commits the submitter contribution and applicable frozen
+awards atomically with FinalAcceptance and TASK effects. Live human-review
+participation and external fulfillment remain unfinished.
 
 The immutable, evidence-backed record of one completed contribution under locked
 project context. `completed_review` is created for every valid recorded human

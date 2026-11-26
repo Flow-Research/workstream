@@ -25,9 +25,7 @@ HISTORICAL_PATHS = {
     "docs/reference_specs/WS-CON-001-contribution-record-and-compensation-boundary-specification.md",
 }
 
-NON_PRODUCT_REVIEW_PATHS = {
-    "docs/operations_subagent_review_protocol.md",
-}
+NON_PRODUCT_REVIEW_PATHS: set[str] = set()
 
 # Exact active surfaces governed by this adoption. A newly named review or
 # revision document must be deliberately classified instead of escaping review.

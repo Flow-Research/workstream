@@ -10,7 +10,7 @@
 
 ## Source
 
-- source type: `manual | markdown_import | csv_import`
+- source type: `manual | markdown_import | csv_import | json_import`
 - source reference:
 - source payload hash:
 - import batch id:

@@ -72,11 +72,10 @@ checker --> storage_adapter : materialize exact artifacts
 storage_adapter --> file_store : store/read
 
 legend bottom
-  Canonical retained-history reads are delivered.
-  Hidden durable checker execution/currentness is delivered.
-  Exact input/execute/finalize service authority is delivered.
-  Automatic dispatch and routing remain unavailable.
-  Checker/job relationships below describe target integration.
+  Selected external PRE/POST execution and automatic dispatch are delivered.
+  False-policy routing commits acceptance, contribution and applicable awards.
+  Human-review runtime and external fulfillment remain unfinished.
+  The operations UI is planned; API, CLI and MCP are current entry points.
 endlegend
 
 @enduml

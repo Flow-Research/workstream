@@ -1476,6 +1476,7 @@ Source type:
 - manual
 - markdown_import
 - csv_import
+- json_import
 
 External origin adapters are later work. When added, they normalize into this task shape instead of creating a separate task lifecycle.
 
@@ -2235,13 +2236,12 @@ additional allowance.
 ## FinalAcceptance
 
 The [shared acceptance contract](spec_review_lifecycle.md#finalacceptance)
-defines both sources for this REV-owned fact. REV-04B delivers its immutable
-storage foundation; REV-04C supplies the hidden mechanical writer/participant,
-while the complete authorized operation remains planned. One schema and operation serve human accept and authorized `task.post_submit.route` with the
-exact current successful routing manifest, locked `human_review_required=false`
-policy and originating AUTH decision event. Required-check success or raw checker
-output alone cannot create FinalAcceptance. No separate automated decision entity
-or synthetic Review is introduced.
+defines both sources for this REV-owned fact. Authorized automatic routing is
+implemented for locked `human_review_required=false` policies. Passing required
+POST checks invokes the shared acceptance operation with the exact current
+routing manifest and originating AUTH evidence. Raw checker output alone cannot
+create acceptance. The default human-review branch remains guarded; its live
+Review writer is not yet delivered. No synthetic Review is introduced.
 
 Fields:
 
@@ -2252,7 +2252,7 @@ Fields:
 - `source_review_id`
 - `acceptance_source`: `human_review | task_post_submit_route`
 - `source_routing_manifest_id`
-- `authorization_decision_event_id` — mandatory future runtime custody, not yet in the storage foundation
+- `source_authorization_decision_id` — mandatory reference to the originating AUTH audit event
 - `accepted_submitter_id`
 - `accepted_at`
 - `recorded_by`
@@ -2260,12 +2260,10 @@ Fields:
 
 Purpose:
 
-The REV-04C participant creates or exactly replays this immutable REV-owned fact
-inside either caller-owned transaction and composes TASK/CON effects. It has no
-authority receipt, routing handler or production consumer, so it cannot be
-consumed as canonical acceptance.
-Before runtime, a same-table hardening migration must add exact mandatory AUTH
-custody and refuse retained pre-authority rows without backfill or deletion. Existing `Submission` is already the version
+The shared participant creates or exactly replays this immutable REV-owned fact
+in the caller-owned transaction, composing TASK state, the submitter contribution
+and applicable frozen-policy awards. Production routing validates source authority,
+currentness and lifecycle custody before invoking it. Existing `Submission` is already the version
 identity, so the stored FK is `submission_id`; no SubmissionVersion entity or
 `submission_version_id` alias is introduced. `recorded_by` is the originating
 AUTH actor: the actual reviewer or the admitted fixed TASK routing service.
@@ -2282,12 +2280,11 @@ this record.
 
 ## ContributionRecord
 
-CON-03C implements this immutable storage foundation. CON-07 adds the hidden
-submitter participant and complete frozen award staging/replay in the caller's
-transaction. REV-04C composes it with hidden FinalAcceptance/TASK effects.
-Source AUTH hardening, database complete-set enforcement, currentness proof and
-runtime composition remain unavailable; reviewer participation and fulfillment are
-separate future work.
+The immutable FinalAcceptance is the source of the submitter contribution.
+The same transaction stages any applicable frozen-policy awards with exact replay, AUTH custody and
+complete-set database enforcement. Live human Review/reviewer participation and
+external fulfillment remain separate unfinished boundaries. See the
+[capability ledger](roadmap_status.md) for current exposure and release evidence.
 
 Fields:
 
