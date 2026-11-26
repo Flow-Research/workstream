@@ -86,7 +86,8 @@ class EvaluationCoordinator:
         repo = ExecutionRepository(self._session)
         run = await repo.lock_current(request)
         if (run.status != "running" or run.worker_lease_id is None or run.worker_lease_expires_at is None
-                or run.worker_lease_expires_at > await repo.now() or run.result_json is not None):
+                or run.worker_lease_live_until is None or run.worker_lease_live_until > await repo.now()
+                or run.result_json is not None):
             raise CheckerRetrySourceUnavailable("checker_abandonment_source_unavailable")
         return PostSubmitExpiredLease(lease_id=UUID(run.worker_lease_id), lease_generation=run.worker_lease_generation,
                                       expires_at=run.worker_lease_expires_at)
@@ -316,8 +317,8 @@ class EvaluationCoordinator:
             raise CheckerExecutionUnavailable(unavailable)
         now = await self._session.scalar(select(func.clock_timestamp()))
         live = (run.status == "running" and run.worker_lease_id is not None
-                and run.worker_lease_generation > 0 and run.worker_lease_expires_at is not None
-                and run.worker_lease_expires_at > now)
+                and run.worker_lease_generation > 0 and run.worker_lease_live_until is not None
+                and run.worker_lease_live_until > now)
         return EvaluationProgress(
             current=current, status=run.status, live_worker_lease=live, failure_code=failure_code,
             previous_failure_code=previous_failure_code,

@@ -148,10 +148,10 @@ class GrantBoundaries:
 
     async def require_current(
         self,
-        _: ModelCallExecutionFacts,
+        facts: ModelCallExecutionFacts,
         __: ModelPaidSlotKey,
-    ) -> None:
-        return None
+    ):
+        return facts.worker_lease_expires_at
 
 
 def _isolated(statement: str, schema: str) -> str:

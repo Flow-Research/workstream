@@ -192,6 +192,7 @@ class BoundaryPorts:
     async def require_current(self, facts, slot):
         self.current_checks += 1
         self.events.append("current")
+        return facts.worker_lease_expires_at
 
     async def require_recovery_current(self, slot, parent_attempt_id):
         self.current_checks += 1
@@ -582,7 +583,7 @@ class DatabaseBoundaryPorts:
         )
 
     async def require_current(self, facts, slot):
-        await self._ports.require_current(facts, slot)
+        return await self._ports.require_current(facts, slot)
 
     async def require_recovery_current(self, slot, parent_attempt_id):
         await self._ports.require_recovery_current(slot, parent_attempt_id)

@@ -1095,8 +1095,8 @@ class ModelUsageInspectionPort(Protocol):
 class ModelCallCurrentExecutionPort(Protocol):
     """Require one current authorized checker execution without granting model effects."""
 
-    async def require_current(self, facts: ModelCallExecutionFacts, slot: ModelPaidSlotKey) -> None:
-        """Require current TASK and checker lease custody before attaching a paid slot."""
+    async def require_current(self, facts: ModelCallExecutionFacts, slot: ModelPaidSlotKey) -> datetime:
+        """Require current custody and return its database-timed live grant limit."""
         ...
 
     async def require_recovery_current(

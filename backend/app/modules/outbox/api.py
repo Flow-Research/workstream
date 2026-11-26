@@ -17,6 +17,10 @@ class DeliveryUnavailable(Exception):
     """Concealed invalid, stale, denied or unavailable delivery operation."""
 
 
+BACKGROUND_STATUS_INSPECTION_INTERVAL_SECONDS = 3600
+BACKGROUND_LIVE_WINDOW_SECONDS = 10_800
+
+
 class DeliveryPersistenceError(Exception):
     """Sanitized database observation or delivery failure."""
 
@@ -147,7 +151,8 @@ class DeliveryOptions(DeliveryValue):
     """Explicit bounded composition options; no environment or plugin framework."""
 
     lease_seconds: int = Field(default=300, ge=1, le=3600)
-    handler_timeout_seconds: int = Field(default=240, ge=1, le=3600)
+    handler_timeout_seconds: int | None = Field(default=240, ge=1, le=3600)
+    background_heartbeat: bool = False
     max_attempts: int = Field(default=5, ge=1, le=100)
     retry_base_seconds: int = Field(default=5, ge=1, le=3600)
     retry_cap_seconds: int = Field(default=300, ge=1, le=86400)
@@ -160,7 +165,11 @@ class DeliveryOptions(DeliveryValue):
     def ordered_limits(self) -> Self:
         """Leave a lease margin and bound retry scheduling."""
         if (
-            self.handler_timeout_seconds >= self.lease_seconds
+            (self.background_heartbeat and self.handler_timeout_seconds is not None)
+            or (not self.background_heartbeat and (
+                self.handler_timeout_seconds is None
+                or self.handler_timeout_seconds >= self.lease_seconds
+            ))
             or self.retry_cap_seconds < self.retry_base_seconds
         ):
             raise ValueError("outbox delivery limits are inconsistent")

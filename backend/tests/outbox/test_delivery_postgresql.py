@@ -10,12 +10,54 @@ from sqlalchemy import event as sqlalchemy_event, select, text
 
 from app.adapters.auth import outbox_dispatch_authorization
 from app.modules.authorization.api.outbox_dispatch import OutboxDispatchFacts, OutboxDispatchPhase
-from app.modules.outbox.api import DeliveryUnavailable, FinalizationCause, HandlerOutcome
+from app.modules.outbox.api import DeliveryOptions, DeliveryUnavailable, FinalizationCause, HandlerOutcome
 from app.modules.outbox.api import OutboxEventEnvelope
 from app.modules.outbox import delivery as delivery_module
 from app.modules.outbox.delivery_repository import DeliveryRepository, database_time
 from app.modules.outbox.models import OutboxDeliveryAttempt, OutboxEvent
 from app.modules.outbox.registry import HandlerRegistry
+from app.modules.checkers.api.execution import REQUEST_EVENT
+
+
+async def test_background_invocation_survives_original_claim_expiry(delivery_harness, monkeypatch):
+    """A live inspected handler retains one claim without a whole-handler cutoff."""
+    h = delivery_harness
+    h.options = DeliveryOptions(
+        lease_seconds=1, handler_timeout_seconds=None, background_heartbeat=True,
+        retry_base_seconds=1,
+    )
+    h.delivery = h.build(HandlerRegistry([(REQUEST_EVENT, 1, h.handle)]))
+    monkeypatch.setattr(delivery_module, "BACKGROUND_STATUS_INSPECTION_INTERVAL_SECONDS", 0.2)
+    entered, release = asyncio.Event(), asyncio.Event()
+
+    async def block(_envelope):
+        entered.set()
+        await release.wait()
+
+    h.handler_hook = block
+    claim = await h.claim(event_type=REQUEST_EVENT, aggregate_type="submission")
+    invoked = asyncio.create_task(h.delivery.invoke(claim))
+    try:
+        await asyncio.wait_for(entered.wait(), 10)
+        await asyncio.sleep(1.2)
+        async with h.factory() as session:
+            now = await database_time(session)
+            event = await session.get(OutboxEvent, claim.event_id)
+            attempt = await DeliveryRepository(session).attempt(claim)
+            assert claim.claim_expires_at < now < event.claim_live_until
+            assert attempt.claim_live_until == event.claim_live_until
+            assert attempt.renew_decision_event_id is not None
+            assert event.claim_generation == claim.claim_generation
+        assert await h.delivery.recover(claim.event_id, h.project) is None
+        assert await h.delivery.claim(claim.event_id, h.project, "competing-worker") is None
+    finally:
+        release.set()
+    receipt = await asyncio.wait_for(invoked, 10)
+    assert receipt is not None
+    assert len(h.handled) == 1
+    async with h.factory() as session:
+        event = await session.get(OutboxEvent, claim.event_id)
+        assert event.delivery_state == "acknowledged" and event.claim_live_until is None
 
 
 @pytest.mark.parametrize("hours", [-1, 168])
@@ -129,7 +171,7 @@ async def test_claim_validator_requires_committed_invocation(delivery_harness):
     assert await h.delivery.observe_invocation(envelope) is None
 
 
-@pytest.mark.parametrize("phase", list(OutboxDispatchPhase))
+@pytest.mark.parametrize("phase", [OutboxDispatchPhase.CLAIM, OutboxDispatchPhase.INVOKE, OutboxDispatchPhase.FINALIZE])
 @pytest.mark.parametrize("fault", ["phase", "facts"])
 async def test_each_phase_denies_mismatch_and_reused_authority(delivery_harness, phase, fault):
     h = delivery_harness
@@ -196,7 +238,9 @@ async def test_invoke_releases_locks_and_runs_generation_once(delivery_harness):
     results = await asyncio.gather(h.delivery.invoke(claim), h.delivery.invoke(claim))
     assert sum(result is not None for result in results) == 1
     assert len(h.handled) == 1
-    assert [f.phase for f in h.consumed] == list(OutboxDispatchPhase)
+    assert [f.phase for f in h.consumed] == [
+        OutboxDispatchPhase.CLAIM, OutboxDispatchPhase.INVOKE, OutboxDispatchPhase.FINALIZE,
+    ]
 
 
 async def test_diagnostic_annotation_follows_committed_invocation_envelope(
@@ -261,7 +305,7 @@ async def test_diagnostic_annotation_follows_committed_invocation_envelope(
     )
 
 
-@pytest.mark.parametrize("phase", list(OutboxDispatchPhase))
+@pytest.mark.parametrize("phase", [OutboxDispatchPhase.CLAIM, OutboxDispatchPhase.INVOKE, OutboxDispatchPhase.FINALIZE])
 async def test_authority_wait_cannot_commit_an_expired_live_phase(delivery_harness, phase):
     """A delay inside consume must roll back instead of committing stale live facts."""
     h = delivery_harness

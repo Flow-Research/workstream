@@ -1,5 +1,6 @@
 """One async post-submit execution path over reserved CHECKERS custody."""
 
+import asyncio
 import json
 import math
 from dataclasses import asdict
@@ -9,6 +10,7 @@ from collections.abc import Callable
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.identifiers import new_record_id
+from app.core.cancellation import await_cancellation_resistant
 from app.modules.checkers.api.execution import (
     ExecutionAuthorityPort,
     FinalizationAuthorityPort,
@@ -32,7 +34,7 @@ from app.modules.checkers.api.evaluation_contract import (
 from app.modules.checkers.api.external import PostSubmitExternalCheckerIdentity
 from app.modules.checkers.api.evaluation_context import PostSubmitInputContextCustody
 from app.modules.checkers.api.external_policy import (
-    MAXIMUM_SELECTED_POST_EXECUTION_BUDGET_MS,
+    SELECTED_POST_INITIAL_WORKER_WINDOW_MS,
     SELECTED_POST_FINALIZATION_MARGIN_MS,
     selected_post_submit_execution_budget_ms,
 )
@@ -57,7 +59,11 @@ from app.modules.checkers.api.materialization import (
     PostSubmissionMaterializationPort,
     PostSubmissionMaterializationFailure,
 )
-from app.modules.outbox.api import OutboxAppendPort
+from app.modules.outbox.api import (
+    BACKGROUND_LIVE_WINDOW_SECONDS,
+    BACKGROUND_STATUS_INSPECTION_INTERVAL_SECONDS,
+    OutboxAppendPort,
+)
 from app.modules.checkers.api.execution import EvaluationTaskGuard, ReviewModePort
 from app.modules.checkers.execution_coordination import EvaluationCoordinator
 
@@ -167,7 +173,83 @@ class PostSubmissionExecutor:
     def _execution_budget_seconds(request: PostSubmissionExecutionRequest) -> int:
         """Reserve the durable worker envelope, not a short whole-POST cutoff."""
         selected_post_submit_execution_budget_ms(request.policy)
-        return math.ceil(MAXIMUM_SELECTED_POST_EXECUTION_BUDGET_MS / 1000)
+        return math.ceil(SELECTED_POST_INITIAL_WORKER_WINDOW_MS / 1000)
+
+    async def _renew_running_lease(self, request, lease):
+        """Observe the exact current worker and extend only its live window."""
+        async with self._sessions() as session, session.begin():
+            repo = ExecutionRepository(session)
+            run = await repo.lock_current(request)
+            now = await repo.now()
+            if (
+                run.status != "running"
+                or reservation(run) != lease.reservation
+                or run.worker_lease_id != str(lease.lease_id)
+                or run.worker_lease_generation != lease.lease_generation
+                or run.worker_lease_expires_at != lease.expires_at
+                or run.worker_lease_live_until is None
+                or run.worker_lease_live_until <= now
+            ):
+                raise CheckerExecutionUnavailable("checker_execution_lease_unavailable")
+            run.worker_lease_live_until = now + timedelta(seconds=BACKGROUND_LIVE_WINDOW_SECONDS)
+            await session.flush()
+
+    async def _materialize_while_owned(self, request, lease):
+        """Check live database custody hourly while bounded provider calls run."""
+        inspection_timed_out = asyncio.Event()
+
+        async def inspect():
+            while True:
+                await asyncio.sleep(BACKGROUND_STATUS_INSPECTION_INTERVAL_SECONDS)
+                renewal = asyncio.create_task(self._renew_running_lease(request, lease))
+                try:
+                    done, _ = await asyncio.wait(
+                        (renewal,), timeout=BACKGROUND_STATUS_INSPECTION_INTERVAL_SECONDS,
+                    )
+                    if not done:
+                        # Stop native work before waiting for a blocked DB rollback.
+                        inspection_timed_out.set()
+                        work.cancel()
+                        raise CheckerExecutionUnavailable("checker_execution_lease_unavailable")
+                    try:
+                        await renewal
+                    except TimeoutError:
+                        raise CheckerExecutionUnavailable(
+                            "checker_execution_lease_unavailable"
+                        ) from None
+                finally:
+                    if not renewal.done():
+                        renewal.cancel()
+                        await asyncio.gather(renewal, return_exceptions=True)
+
+        try:
+            await asyncio.wait_for(
+                self._renew_running_lease(request, lease),
+                timeout=BACKGROUND_STATUS_INSPECTION_INTERVAL_SECONDS,
+            )
+        except TimeoutError:
+            raise CheckerExecutionUnavailable("checker_execution_lease_unavailable") from None
+        work = asyncio.create_task(self._materialization.materialize(
+            ExecuteFacts(request=request, lease=lease), self._consumer(request, lease),
+        ))
+        inspection = asyncio.create_task(inspect())
+        try:
+            while True:
+                done, _ = await asyncio.wait((work, inspection), return_when=asyncio.FIRST_COMPLETED)
+                if inspection in done or inspection_timed_out.is_set():
+                    await inspection
+                if work in done:
+                    return await work
+        finally:
+            inspection.cancel()
+            work_was_running = not work.done()
+            if work_was_running:
+                work.cancel()
+            await asyncio.gather(inspection, return_exceptions=True)
+            try:
+                await await_cancellation_resistant(work)
+            except asyncio.CancelledError:
+                pass
 
     def _consumer(self, request, lease):
         if self._selected_execution is None:
@@ -207,7 +289,7 @@ class PostSubmissionExecutor:
                         output_binding_ids=(),
                     )
                 now = await repo.now()
-                if run.status == "running" and run.worker_lease_expires_at > now:
+                if run.status == "running" and run.worker_lease_live_until > now:
                     raise CheckerExecutionUnavailable("checker_execution_lease_unavailable")
                 execution_seconds = self._execution_budget_seconds(request)
                 lease_seconds = execution_seconds + math.ceil(
@@ -224,6 +306,7 @@ class PostSubmissionExecutor:
                 run.worker_lease_id = str(lease.lease_id)
                 run.worker_lease_generation = lease.lease_generation
                 run.worker_lease_expires_at = lease.expires_at
+                run.worker_lease_live_until = lease.expires_at
                 run.started_at = run.started_at or now
                 run.status = "running"
                 run.execute_evidence_id = str(evidence_id)
@@ -245,10 +328,7 @@ class PostSubmissionExecutor:
             # ART owns material/transport bounds; each registered checker owns
             # its execution limit. Their foreground estimate is not a deadline
             # for this background workflow.
-            materialized = await self._materialization.materialize(
-                ExecuteFacts(request=request, lease=lease),
-                self._consumer(request, lease),
-            )
+            materialized = await self._materialize_while_owned(request, lease)
             material = VerifiedMaterialFacts(
                 **{
                     k: v

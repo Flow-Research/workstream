@@ -13320,3 +13320,30 @@ abandonment, stale Operator authority, duplicate successors and late old-owner
 writes. It does not prove the provider stopped and does not authorize automatic
 retry of an unresolved invocation. Check exact replay, whole-transaction rollback
 and late-effect fencing through the existing signed Operator and database tests.
+
+### Renewable ownership for healthy background POST
+
+The user requires no fixed aggregate lifetime for a healthy POST sequence. The
+existing checker execution, ART callback and OUTBOX delivery path now use the
+same hourly database inspection cadence. Each inspection verifies the exact
+current run or delivery generation and extends only a bounded three-hour live
+window. The original lease and claim expiry remain immutable in requests,
+receipts and historical records. A stopped inspector cannot renew; expiration
+then admits only the existing UNKNOWN/recovery path. Each selected checker
+retains its individually approved execution deadline and cleanup budget.
+
+Migration 0096 adds separate effective-liveness fields to CHECKERS and OUTBOX
+and an audited renewal decision on the delivery attempt. It is forward-only,
+requires active owners to drain before upgrade, backfills retained 0095 rows
+with exact original expiries and keeps the prior row facts unchanged. ART
+preparation and inspection retain their fixed limits; only the verified POST
+callback can continue across the former aggregate deadline. Model invocation
+grants and trial evidence use the current live lease for availability while
+binding the immutable execution identity. The dedicated OUTBOX worker's Celery
+hard limit is updated in a separate coordinated change.
+
+Required proof is a populated 0095 upgrade with terminal and expired UNKNOWN
+rows, accelerated real PostgreSQL renewal past original expiry, refusal of
+competing recovery, long single-checker callback, and existing authorization,
+model, ART and OUTBOX regressions. This private change alone does not qualify a
+remote provider's per-call timeout or a deployed worker process.

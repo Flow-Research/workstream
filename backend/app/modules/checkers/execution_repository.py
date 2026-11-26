@@ -139,7 +139,7 @@ class ExecutionRepository:
             or run.worker_lease_id != str(lease.lease_id)
             or run.worker_lease_generation != lease.lease_generation
             or run.worker_lease_expires_at != lease.expires_at
-            or run.worker_lease_expires_at <= await self.now()
+            or run.worker_lease_live_until <= await self.now()
         ):
             raise CheckerExecutionUnavailable("checker_execution_lease_unavailable")
         return run

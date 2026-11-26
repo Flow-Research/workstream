@@ -2679,6 +2679,7 @@ class ArtifactPreparationService:
             processor,
             reserved_bytes=reserved_bytes,
             maximum_entries=maximum_entries,
+            bound_callback=False,
         )
 
     async def _process_prepared_artifacts(
@@ -2688,6 +2689,7 @@ class ArtifactPreparationService:
         *,
         reserved_bytes: int,
         maximum_entries: int,
+        bound_callback: bool = True,
     ) -> _InspectionResult:
         """Use one quota-owned workspace and cancellation lifetime for every input."""
         if (
@@ -2782,11 +2784,17 @@ class ArtifactPreparationService:
                 raise error from None
 
         try:
-            async with asyncio.timeout_at(deadline):
+            if bound_callback:
+                async with asyncio.timeout_at(deadline):
+                    result, error = await asyncio.shield(operation)
+            else:
+                # POST preparation and inspection retain their own fixed limits.
+                # The callback runs approved checkers, each with its own limit;
+                # the whole background evaluation has no aggregate deadline.
                 result, error = await asyncio.shield(operation)
-                if error is not None:
-                    raise error
-                return cast(_InspectionResult, result)
+            if error is not None:
+                raise error
+            return cast(_InspectionResult, result)
         except TimeoutError:
             await abort_and_drain()
             raise ArtifactPreparationDeadlineError(

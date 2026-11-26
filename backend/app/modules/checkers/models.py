@@ -214,6 +214,11 @@ class CheckerRun(Base):
         CheckConstraint("evaluation_generation > 0 and worker_lease_generation >= 0", name="generations"),
         CheckConstraint("status in ('queued','running','completed','infrastructure_failed')", name="state"),
         CheckConstraint(
+            "(worker_lease_id is null and worker_lease_live_until is null) or "
+            "(worker_lease_id is not null and worker_lease_live_until>=worker_lease_expires_at)",
+            name="live_lease_shape",
+        ),
+        CheckConstraint(
             "(retry_abandonment_event_id IS NULL OR retry_delivery_event_id IS NOT NULL) AND "
             "(retry_delivery_event_id IS NULL OR (supersedes_checker_run_id IS NOT NULL "
             "AND (retry_abandonment_event_id IS NOT NULL OR evaluation_generation BETWEEN 2 AND 5)))",
@@ -253,6 +258,7 @@ class CheckerRun(Base):
     worker_lease_id: Mapped[str | None] = mapped_column(Uuid(as_uuid=False))
     worker_lease_generation: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     worker_lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    worker_lease_live_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     execute_evidence_id: Mapped[str | None] = mapped_column(
         Uuid(as_uuid=False), ForeignKey("audit_events.id", name="fk_checker_runs_execute_evidence", deferrable=True, initially="DEFERRED"),
     )
