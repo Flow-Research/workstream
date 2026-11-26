@@ -12649,3 +12649,29 @@ A fresh read-only deployed database census still reports
 contribution_records and final_acceptances. Other retained tables are not
 claimed empty. A fresh drain, backup and complete retained-data check remain
 necessary immediately before migration. No live service or schema changed.
+
+
+### Maintained real-provider CLI/MCP revision journey: passed
+
+Frozen `73d81da66` completed all seven maintained journey stages using real
+Keycloak 26.8.2, six distinct PKCE/refresh identities, same-subject MCP exchange,
+the installed OAuth MCP wheel on protocol 2026-07-28, real PostgreSQL/MinIO and
+the separate native runner. PRE rejection was shared exactly across CLI/MCP;
+wrong-count POST required revision; corrected ZIP upload through MCP reused the
+original assignment and replayed exactly through CLI. Version1 history, one
+revision preparation, version2 final acceptance and one unpaid contribution
+were verified, with no fabricated Review or award. Exact source retention,
+export/revocation, Operator custody and default review_pending checks passed.
+There were 477 CLI calls; the full command latency receipts include 85.09s PRE
+rejection, 88.46s initial acceptance and sub-two-second exact replay. These are
+observations under the qualification profile, not production latency promises.
+
+The launcher terminated exit0. Evidence is retained privately under
+`/tmp/workstream-paired-native-m66en19e`; cleanup.json confirms schema0093 and
+successful database/MinIO/overall cleanup. The real identity fixture also
+terminated exit0; `/tmp/workstream-local-flow-2f7d8d95.D5Vz8y/cleanup.json`
+confirms its containers/network are gone and shared CA bundles unchanged.
+Its private refresh grants, exchange secret and environment handoff were
+removed. Only disposable copied interpreter trust stores were modified.
+This qualifies the current connected client/runtime path with an isolated real
+provider; it does not claim the hosted API/worker release or live email delivery.

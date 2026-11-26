@@ -41,18 +41,20 @@ work. Existing reward owners remain authoritative.
 - [x] Four required submission inputs and optional feedback; backend-selected revision context and exact actor-scoped replay.
 - [x] Forward migration preserves historical accepted commands and refuses unsafe old in-flight work before mutation.
 - [ ] Approved project and governing task guides are readable/downloadable before claim under exact contributor authority.
-- [ ] Assignment-ID status exposes current safe feedback, processing activity, revision terms and accepted evidence without internal-ID discovery.
+- [x] Assignment-ID status exposes rejected intake feedback, revision terms and accepted evidence in the connected journey without internal-ID discovery.
+- [ ] Qualify live pending processing through assignment status; the connected journey observed it through operation progress.
 - [x] CLI/MCP use the same contract, preserve useful PRE findings and document their distinct upload limits.
 - [x] Maintained CLI baseline at `c715dbd47`: real remote PRE rejection, acceptance/replay, T5, automatic POST acceptance, incorrect POST revision, unpaid contribution custody and default review_pending; schema0093 test cleanup passed.
-- [ ] Combined public contributor journey proves correction, revision, replay, history and applicable existing awards on the integrated code.
+- [x] Combined CLI/MCP journey at `73d81da66` proves actionable PRE/POST feedback, same-assignment correction, replay, retained versions and exact unpaid acceptance/contribution through real isolated Keycloak and the remote runner.
 - [ ] Quality-feedback email uses the stable assignment ID for POST revision requests and revision-limit rejection, with a dedicated consumer and no infrastructure-failure notifications; qualify delivery after sender DNS verification and private key configuration.
 
-The checked items have focused contract and PostgreSQL proof. The guide and
-assignment status changes are implemented and await the connected native proof.
+The checked items have focused contract/PostgreSQL proof and the maintained
+connected CLI/MCP journey described above. Hosted deployment remains separate.
 The dedicated queue topology and isolated scanner-to-T5 regression are integrated.
 PR722 removes the retired experimental native harness, including branch-only
 extensions. Its receipts remain historical; current native qualification must
-use maintained client/runtime owners and the current authentication boundary. Combined native execution and deployed
+use maintained client/runtime owners and the current authentication boundary.
+The connected real-provider journey now passes; native fault/capacity and deployed
 qualification remain open. The managed-style adapter substitution passed through public
 ZIP acceptance, retained source custody, real T5 owner delivery and replay;
 it does not establish a deployed managed provider or broker-consumer proof.
@@ -66,7 +68,7 @@ publication must remain available while POST execution is stopped or saturated;
 it must not share the POST or submission-finalization consumer. The PRE6 drill
 accepted a fresh source but exposed publication waiting behind the paused general
 worker. Dedicated scanner delivery now has a real Redis/prefork T5 proof;
-combined native and deployed confirmation remain open.
+the connected journey passes, while saturation and deployed confirmation remain open.
 The application instance is a verified t3.large; the dedicated always-on runner
 is an m7i.large with native KVM. App-origin mTLS health and native transport
 smoke receipts establish connectivity. V14 also proves the connected local API
@@ -120,13 +122,13 @@ journey. The remaining cleanup and verification requirements below still apply.
 
 | Order | Required outcome | Concrete finishing evidence |
 | --- | --- | --- |
-| 1 | Reproduce the connected proof on the deployed API | V14 passes real PRE/T5/POST, automatic acceptance, exact ZIP/Contribution export, rejection, replay and default review_pending with a local API and separate AWS runner. The actual deployed API/consumers remain to activate and prove. |
-| 2 | Finish affected qualification callers | Preparation API/materialization and the admission-only TASK writer are removed. PR722 retires the experimental harness; complete current native journey and fault proof through maintained client/runtime owners using raw ZIP acceptance and dedicated finalization. Do not restore the old harness. |
+| 1 | Reproduce the connected proof on the deployed API | The maintained paired journey at `73d81da66` passes real PRE/T5/POST, same-assignment correction, automatic acceptance, exact ZIP/Contribution export, rejection, replay and default review_pending with an isolated real identity provider, local API and separate AWS runner. The actual deployed API/consumers remain to activate and prove. |
+| 2 | Finish affected qualification callers | Preparation API/materialization and the admission-only TASK writer are removed. PR722 retires the experimental harness; the maintained native CLI/MCP journey passes; complete its remaining fault proof through the same owners using raw ZIP acceptance and dedicated finalization. Do not restore the old harness. |
 | 3 | Complete separate-runner integration and runtime/provider/resource qualification | Activate the prepared authenticated remote configuration on the app deployment; actual Smol one-session/isolation proof on runner infrastructure; representative maxima, cold paths, concurrency and timing measurements; applicable AWS exact-version/uncertain multipart proof. Portable/MinIO evidence is insufficient for these claims. |
 | 4 | Execute final full-system verification and close the acceptance matrix | Full backend lanes, CLI/MCP contracts and CI at the final head; every A01–A35 row linked to an executed, scope-matching result. Fix actual failures without weakening requirements. |
 | 5 | Reconcile configuration and delivery documentation | Resolve C01–C07 using measured/approved values; update affected roadmap/overview/index and local spreadsheet exports; preserve the distinction between implemented, exposed and deployed. |
 
-The connected public journey passed at 85ce76e17 (V14): 573 CLI invocations,
+The historical connected public journey passed at 85ce76e17 (V14): 573 CLI invocations,
 real PRE/T4/T5/POST, exact source and Contribution/export custody, PRE/POST
 rejection and default review_pending; owned database/bucket cleanup passed.
 Live AWS source qualification passed at 074cade5e with the actual restricted
@@ -159,7 +161,7 @@ This is the final qualification queue, not a claim that all listed code is absen
 
 | IDs | Existing implementation/focused evidence | Required closure |
 | --- | --- | --- |
-| A01–A03 | V14 connected public API/CLI journey with real separate-runner PRE and POST, T4/T5 and exact source checks | Reconcile each requirement and reproduce on the deployed release. |
+| A01–A03 | Current paired CLI/MCP journey at `73d81da66` with real isolated Keycloak, separate-runner PRE and POST, T4/T5 and exact source checks | Reconcile each requirement and reproduce on the deployed release. |
 | A04–A08 | Metadata/body replay, competing custody, interruption and T4 uncertainty tests | Reconcile exact cases and execute integrated final-head failure/retry matrix. |
 | A09–A13 | T5 rollback/redelivery, actual local SIGKILL recovery, accepted authority, pending reads and old-POST guard | Real Redis publication outage and Celery child-redelivery proofs passed; reconcile the remaining exact cases at the final head. |
 | A14–A18 | Cleanup lock/retention/charge owners, Local/MinIO tests and live AWS exact-version/lost-ack cleanup with retained-source survival | Production worker sweeps and exact acceptance-case reconciliation. |
