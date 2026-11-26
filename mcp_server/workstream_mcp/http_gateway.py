@@ -1971,6 +1971,10 @@ class WorkstreamGateway:
             )
         if name == "post_submit_deliveries_reconcile":
             source = data.get("source")
+            successor = data.get("successor")
+            abandoning = arguments["body"].get("action") == "abandon_unknown"
+            if not isinstance(successor, dict) or (successor.get("classification") == "unresolved") != abandoning:
+                return False
             return isinstance(source, dict) and cls._fields_match(
                 source,
                 {

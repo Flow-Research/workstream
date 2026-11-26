@@ -203,15 +203,20 @@ raw event payloads, exception text, artifact contents or provider details.
 |---|---|
 | `committed` | The source owner verifies the exact retained checker result or routing effects. Reconciliation acknowledges those facts without another checker execution or acceptance. |
 | `retry_safe` | Current durable facts prove the original source has no execution or routing effect. Reconciliation may invoke the existing owner after checking the facts again under its locks. |
-| `unresolved` | Facts are incomplete, stale or uncertain. Keep the delivery held; this surface cannot authorize another attempt. |
+| `unresolved` | Facts are incomplete, stale or uncertain. Keep the delivery held until an Operator investigates. For an expired checker attempt, an Operator can explicitly abandon the unknown result and request a successor. |
 
 For a `committed` or `retry_safe` source without an existing child, send a bounded
 reason and one UUID `Idempotency-Key` to
 `POST /api/v1/operations/projects/{project_id}/post-submit-deliveries/{event_id}/reconcile`.
 This schedules one durable reconciliation child; it does not synchronously run
 the checker or accept the Submission. On response loss, repeat the exact project,
-event, reason and key. Fresh authority is required for replay, which returns the
+event, action, reason and key. Fresh authority is required for replay, which returns the
 same child. Every different key conflicts once a child exists.
+
+For a confirmed expired attempt whose result remains unknown, use
+`workstream operations delivery reconcile PROJECT_ID EVENT_ID --abandon-unknown --reason REASON --idempotency-key UUID`.
+API and MCP callers supply `"action": "abandon_unknown"` in the reconciliation body.
+The successor uses the same Submission. The original attempt keeps its unknown outcome.
 
 After a child is scheduled, `source.classification` records the scheduling
 decision, while `reconciliation_state` reports the child's current progress or
