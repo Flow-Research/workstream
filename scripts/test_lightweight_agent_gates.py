@@ -1007,7 +1007,7 @@ class LightweightAgentGateTests(unittest.TestCase):
             "\n    steps:", 1
         )[0]
         self.assertIn(
-            "${{ matrix.lane != 'schema_contracts' && "
+            "${{ !contains(fromJSON('[\"schema_contracts_a\",\"schema_contracts_b\",\"schema_contracts_c\"]'), matrix.lane) && "
             "'--tmpfs /var/lib/postgresql/data:rw,nosuid,nodev,noexec,size=2147483648' || '' }}",
             lane_service,
         )
@@ -1024,7 +1024,7 @@ class LightweightAgentGateTests(unittest.TestCase):
         )[1].split("\n      - name:", 1)[0]
         self.assertIn("POSTGRES_CONTAINER: ${{ job.services.postgres.id }}", step)
         self.assertIn(
-            "EXPECTED_PG_STORAGE: ${{ matrix.lane == 'schema_contracts' && 'disk' || 'tmpfs' }}",
+            "EXPECTED_PG_STORAGE: ${{ contains(fromJSON('[\"schema_contracts_a\",\"schema_contracts_b\",\"schema_contracts_c\"]'), matrix.lane) && 'disk' || 'tmpfs' }}",
             step,
         )
         guard = textwrap.dedent(step.split("        run: |\n", 1)[1])

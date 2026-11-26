@@ -11646,3 +11646,31 @@ Its two profiles validate through their current owner contracts, and the PRE
 root digest now matches the independently checked runner rather than the old
 root. This local preparation has not been applied; C01 and measured/deployed
 qualification remain outstanding.
+
+### Lightweight PostgreSQL shard predicate expectations (2026-11-26)
+
+Intent and bounded scope: scripts/test_lightweight_agent_gates.py and this
+record only. Current ddc Agent Gates45791913261 reports precisely the two
+PostgreSQL storage tests: their literals still expect retired unsuffixed
+schema_contracts, while the actual workflow correctly binds all three
+schema_contracts_a/b/c to disk. The authoritative failure log is
+/tmp/pr708-ddc-agent-gates.log; the exact two local tests reproduce the same
+literal failures (/tmp/pr708-postgres-storage-shards-before.log).
+
+Update both independent test predicates to the exact three-shard membership,
+without an unsuffixed alias. No workflow, PostgreSQL configuration, budgets,
+canonical inventory or production code changes. Retain the bounded2GiB tmpfs
+contract for non-schema lanes, disk aggregate, guard-before-execution order and
+every filesystem/size/data-directory/write-setting/error rejection. Parent owns
+the heavy native slot; all validation here is local string/shell simulation, no
+PG/broker/native process.
+
+Both exact storage tests pass in0.716s after the two literal corrections
+(/tmp/pr708-postgres-storage-shards-after.log); all31 tests in the existing
+lightweight-gates module pass in5.056s
+(/tmp/pr708-postgres-storage-lightweight-after.log). Six isolated workflow-text
+mutants omit each schema shard from both predicates; each named test rejects
+every omission. The actual durability and storage shell remains unchanged, with
+all original malformed/wrong-size/wrong-device/off-setting/error cases executed.
+Ruff/whitespace and record/link checks pass. No backward-compatibility path,
+storage relaxation, CI rerun, PostgreSQL/broker/native work or remote write.
