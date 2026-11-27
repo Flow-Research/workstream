@@ -386,6 +386,7 @@ pub(super) fn run_project_phase(
         staged,
         File::open("/dev/null")?,
         limits,
+        ProjectRuntimeStart::GuestDeadline,
     )?;
     let result = if outcome.oom_kills > 0 {
         infrastructure_result(&request, "capacity_exceeded")?
