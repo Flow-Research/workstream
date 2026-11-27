@@ -13449,3 +13449,19 @@ competitor and acknowledged once. The hosted 500 MiB assignment remained
 attempt retained. The dedicated native PRE control passed with confirmed VM
 destruction. Individual native fault and pending-delete outcomes still require
 live evidence.
+
+### Operator recovery of the hosted 500 MiB submission
+
+On 27 November the public Operator command reconciled retained delivery
+`01a21964-b5ec-7c61-82a8-5ce699683cf0`. The worker acknowledged reconciliation
+event `01a21b79-672f-79a3-aa67-d23f9f6fe321` on its first attempt. Generation 2
+ran against the original submission and assignment. Its runner receipt recorded
+524,287,258 material bytes transferred in 5.083 seconds. The native service
+returned `deadline_exceeded`. Generations 3 and 4 also returned that known
+infrastructure result, and the worker scheduled generation 5. The assignment
+remained pending evaluation throughout those retries.
+
+The registered checker specifies 30,000 ms. The native implementation starts
+that clock before image verification, VM creation, and guest staging. The
+receipt establishes successful transfer to the runner. It does not locate the
+precise point at which the deadline elapsed inside native execution.
