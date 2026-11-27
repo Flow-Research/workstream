@@ -1207,7 +1207,19 @@ Keep local file-source stability checks where needed, safe JSON/terminal output,
 
 Preserve governed revision preparation and recovery as internal selection and manager operations. Contributors resubmit through the same raw-ZIP command.
 
-MCP is an adapter to the same backend action. Its current 64 MiB transfer bound and 120-second timeout are narrower than the backend archive ceiling; update documentation and effective timeout validation honestly. Do not silently raise a base64 JSON/tool transport to 500 MiB or create a second backend upload flow. A larger MCP transport redesign needs an explicit scoped decision; it is not necessary to implement the single backend submission contract.
+MCP is an adapter to the same backend action. The inspected implementation carries
+up to 64 MiB of raw ZIP in Base64 and uses a 660-second submission timeout; the
+separate document-transfer timeout remains 120 seconds. These are bounded client
+settings, not the backend archive ceiling. Do not raise Base64 JSON/tool transport
+to 500 MiB or create a second backend upload flow.
+
+The separately scoped [remote MCP upload authorization design](spec_mcp_submission_upload.md)
+replaces that submission transport when implemented: a small authenticated MCP
+request returns a temporary, single-use credential and the external client streams
+its own local ZIP to this same raw-ZIP API. It defines exact file binding, AUTH
+provenance, atomic T1 consumption and authenticated operation-read recovery. This
+is planned transport work; it enables no new tool and is not a prerequisite for
+delivering the existing single backend submission contract.
 
 ### 21.2 Tests and current documentation
 

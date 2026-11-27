@@ -16,13 +16,14 @@
 - Contributor workspace and policies: [Workspace and contribution-policy tools](WS-MCP-002-10.md), merged in PR #669.
 - Guide, checker and artifact operations: [WS-MCP-002-11](WS-MCP-002-11.md), merged in PR #685.
 - Task execution and submissions: [WS-MCP-002-12](WS-MCP-002-12.md).
-- Current change: [Task operations and imports](WS-MCP-002-13.md).
-- Next usable boundary: assembled release proof for the complete public catalogue.
+- Task operations and imports: [WS-MCP-002-13](WS-MCP-002-13.md).
+- Remote upload design: [Single-use submission authorization](WS-MCP-002-14.md).
+- Next usable boundary: implement and qualify metadata-only MCP authorization plus direct client ZIP upload; assembled catalogue release proof remains separate.
 
 ## Current implementation
 
 [`mcp_server/`](../../../mcp_server/README.md) is an independently packaged
-Streamable HTTP adapter with 132 tools: three self-service tools for profile read,
+Streamable HTTP adapter with 135 tools: three self-service tools for profile read,
 profile update and exact-project authorization context, plus six administrative
 reads for permission/role definitions, grants and actor/identity projections, two
 administrative grant mutations, five actor/identity lifecycle mutations, two
@@ -30,7 +31,7 @@ project-shell tools, five project-participation tools, two guide-metadata tools
 and two draft-policy tools, plus twenty contributor workspace, contribution
 evidence and contribution-policy tools, twenty-six complete guide-lifecycle
 tools, ten checker/delivery/registry tools, nine operator-artifact tools and
-seventeen task-execution/submission tools and twenty-three current project-list,
+twenty task-execution/submission tools and twenty-three current project-list,
 task-management, audit, import, service-actor and model-operation tools. It includes a container,
 selected response-schema validation and additive CI. Its integration tests
 exercise the installed adapter against the real Workstream API. Workstream
@@ -41,6 +42,16 @@ not proof of a deployed public gateway, production Flow integration or the
 assembled release drill. The initiative remains Planned because that larger scope
 is unfinished. Historical hashes below describe their stated design/proof;
 each implemented binding records its current source baseline separately.
+
+The [remote MCP upload contract](../../../docs/spec_mcp_submission_upload.md)
+defines planned replacement of the current Base64 submission tool with a small
+authorization request and direct external-client upload to the existing raw-ZIP
+API. It specifies a single-use, ten-minute credential with explicit AUTH
+provenance, exact file binding and operation-read recovery. The design does not
+enable that capability or expand PR #708's delivery prerequisites. Its scoped
+credential is intentionally returned in structured tool output; ordinary OAuth
+credentials remain inside the adapter. The original catalogue and handoff
+sections below retain their historical baselines, not a second current tool list.
 
 ## 1. What I Understand We Are Building
 
