@@ -13465,3 +13465,18 @@ The registered checker specifies 30,000 ms. The native implementation starts
 that clock before image verification, VM creation, and guest staging. The
 receipt establishes successful transfer to the runner. It does not locate the
 precise point at which the deadline elapsed inside native execution.
+
+### Hosted 500 MiB automatic acceptance, 27 November 2026
+
+The dedicated runner deployed native service and guest code from `32a67dfdc`.
+A positive streamed PRE on the new guest returned eligible and confirmed VM
+destruction. The hosted trusted-intake adapter read the original 524,288,000-byte
+ZIP, inspected all six entries and closed its session.
+
+The Operator used the public checker retry command on the eligible generation
+5 infrastructure failure. Generation 6 began at 06:41:00 UTC and completed at
+06:43:42 UTC. The completion worker moved the task to `accepted` on assignment
+`01a2191d-4ce8-7b0c-b7fc-ac35cfea7aa0` using the existing submission. The API
+container restarted during the runner-pin switch and was healthy after cutover.
+The EC2 host remained online. This positive journey did not exercise the
+individual native failure fixtures or send a revision email.
