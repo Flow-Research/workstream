@@ -27,6 +27,8 @@ This index lists the main Workstream documents. Start with the
 - [Lifecycle State Machine](architecture_lifecycle_state_machine.md)
 - [Project Guides and Policy Approval](spec_project_guides.md)
 - [Tasks and Assignments](spec_task_assignment.md)
+- [Submission Execution](spec_submission_execution.md)
+- [Remote MCP Submission Upload Authorization — Planned](spec_mcp_submission_upload.md)
 - [Checker Framework](architecture_checker_framework.md)
 - [Operator Workflow](operations_operator_workflow.md)
 - [Project Operating Manual](operations_project_operating_manual.md)

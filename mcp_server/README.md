@@ -68,7 +68,7 @@ An independently installed adapter exposing 135 tools under the caller's authori
   projections plus deliberate operator retry, reconciliation and registration.
 - Nine operator-artifact tools cover readiness, bindings, replicas, receipts,
   verification/recovery, admission usage and audit events.
-- Seventeen task-execution tools cover bounded submission ZIPs, contributor and
+- Twenty task-execution tools cover bounded submission ZIPs, contributor and
   manager task context, screen/release/claim, guide-document reads and
   submission acceptance and immutable history.
 - Twenty-three project, task-management, import, audit, service-actor and model
@@ -104,8 +104,15 @@ MCP credentials, and MCP tokens are never forwarded to the API unchanged.
 Workstream independently verifies the exchanged token and applies current actor,
 identity-link and project authority. No token, client registration or OAuth scope
 grants a Workstream role. MCP stores no user refresh tokens or shared caller
-credentials. Tokens never belong in tool arguments, URLs, logs or prompts. An AI
+credentials. OAuth tokens never belong in tool arguments, results, URLs, logs or prompts. An AI
 client using a human credential acts as that human; this is not agent delegation.
+
+The [planned upload authorization](../docs/spec_mcp_submission_upload.md) has one
+explicit, narrow exception for tool output: a temporary submission-only credential
+is intentionally returned to the agent so its own runtime can upload a local ZIP.
+That feature is not implemented here yet. It does not expose OAuth credentials or
+provide a general API identity, and MCP cannot guarantee how a client retains its
+structured results.
 
 ## Local Run
 
@@ -127,10 +134,11 @@ startup refuses a missing or unsafe credential. Its default path is
 `/run/secrets/mcp-exchange-secret`. This application credential belongs only to MCP,
 not browser clients or the Workstream API.
 
-Ordinary JSON responses default to a 64 KiB bound. Guide-document reads and
-submission-bundle uploads use separate 64 MiB bounds and a 120-second operation
-timeout so binary transfers do not enlarge the allowance or timeout for every API
-call. Configure document reads independently with `WORKSTREAM_MCP_MAX_DOCUMENT_BYTES` and
+Ordinary JSON responses default to a 64 KiB bound. Document transfers use a
+separate 64 MiB bound and 120-second operation timeout. The current submission
+Base64 path has a 64 MiB raw-ZIP bound and a 660-second submission timeout. These
+bounds do not enlarge the allowance or timeout for every API call.
+Configure document reads independently with `WORKSTREAM_MCP_MAX_DOCUMENT_BYTES` and
 `WORKSTREAM_MCP_DOCUMENT_TIMEOUT_SECONDS`; the adapter still buffers one bounded
 document before returning its Base64 representation.
 
@@ -263,6 +271,25 @@ Use `workstream_submission_operation_get` with `task_id` and the operation ID
 or original key to recover the precise request outcome. A write with an
 uncertain outcome is never retried automatically. Preserve the original task,
 assignment, ZIP, feedback and key when explicitly replaying that request.
+
+### Planned remote ZIP transport
+
+[Remote MCP submission upload authorization](../docs/spec_mcp_submission_upload.md)
+specifies the replacement for `workstream_submission_create`; it is a design,
+not an available tool. `workstream_submission_upload_authorize` will take the
+task, assignment, caller key, exact byte count/SHA-256 and optional feedback. It
+will return a public HTTPS upload descriptor with a ten-minute, single-use
+submission credential. The client runtime will stream its local ZIP directly to
+the existing API and receive the normal PRE outcome or durable acceptance receipt.
+
+The token is spent when the API admits the attempt, including attempts later
+interrupted or rejected. Lost responses use `workstream_submission_operation_get`
+with the original key; a terminal failed attempt needs a new key and authorization
+before another upload. Before admission, an identical authenticated authorization
+request can replace an unused token. Clients need local-file and streaming HTTP
+tools plus structured MCP results; remote MCP alone supplies no filesystem access.
+The implementation will remove the obsolete Base64 submission tool while retaining
+unrelated bounded document and import transfers.
 
 ## Deployment Boundary
 
