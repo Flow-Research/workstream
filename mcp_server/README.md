@@ -285,7 +285,10 @@ the existing API and receive the normal PRE outcome or durable acceptance receip
 The token is spent when the API admits the attempt, including attempts later
 interrupted or rejected. Lost responses use `workstream_submission_operation_get`
 with the original key; a terminal failed attempt needs a new key and authorization
-before another upload. Before admission, an identical authenticated authorization
+before another upload while issuance budget remains. At the retained ceiling,
+use an independently Flow-authenticated direct uploader with a new unreserved key,
+or ask the project manager for a governed next step; MCP never supplies its normal
+API credential as a workaround. Before admission, an identical authenticated authorization
 request can replace an unused token within the documented issuance budget.
 The ten-minute expiry is an admission deadline, including time waiting for API
 locks. Clients need local-file and streaming HTTP

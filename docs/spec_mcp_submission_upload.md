@@ -638,19 +638,23 @@ operation, but it does not make a consumed credential replayable. Ordinary Flow
 API callers keep their existing bounded same-key replay behavior. The remote
 MCP upload flow uses current authenticated reads after admission.
 
+Every issuance or replacement in this table is subject to the remaining
+assignment budget. If that budget is exhausted, use the exhausted-budget row;
+terminal failure, correction, expiry or a new key does not restore it.
+
 | Observation | Permitted next action | Forbidden effect |
 | --- | --- | --- |
 | Authorization response lost; no operation admitted | Repeat authorization with the same exact metadata/key while issuance budget remains; the new generation replaces any unused token. | Recovering plaintext from storage or retaining two usable generations. |
 | Unused token expired | Same authenticated replacement, if current authority/eligibility and issuance budget still allow it. Starting an HTTP request before expiry does not bypass a later admission-time expiry check. | Extending expiry by merely presenting the old token. |
 | Final permitted authorization response lost, or retained budget exhausted | An already-held valid token still works. Otherwise use an independently Flow-authenticated direct uploader with a new unreserved key, or seek a governed next step from the project manager. | Unbounded recovery rotations, misleading retry-after, key/history reset, or disclosure of MCP's API token. |
-| Definite pre-T1 validation/capacity rollback | Correct framing or wait, then use the still-unused token before expiry; reauthorize if needed. | Treating a generic network error as confirmed rollback. |
+| Definite pre-T1 validation/capacity rollback | Correct framing or wait, then use the still-unused token before expiry; reauthorize if needed while budget remains, otherwise use the exhausted-budget path. | Treating a generic network error as confirmed rollback. |
 | Upload response missing, operation unknown to client | First read `workstream_submission_operation_get` with original task/key. A concealed 404 is not proof that no effect occurred. An authorized issuance retry may resolve unused state, but must refuse if any operation exists. | Automatic second body POST or new-key retry while the first operation may be active/accepted. |
 | `receiving` / PRE in progress | Read/wait with bounded client backoff; retain original key and descriptor metadata. | New token for the same key, resumed multipart upload or takeover of its lease. |
-| Disconnect/hash mismatch/timeout before T4 | Wait for retained terminal failure and released task guard, then use a new key and new authorization if retry remains eligible. | Resetting the spent credential or starting another active source. |
-| PRE rejects | Present bounded findings; correct the ZIP, compute new count/hash, choose new key and authorize again. | Rebinding an old key to corrected bytes or bypassing PRE. |
+| Disconnect/hash mismatch/timeout before T4 | Wait for retained terminal failure and released task guard, then use a new key and new authorization if retry remains eligible and budget remains. Otherwise use the exhausted-budget path. | Resetting the spent credential or starting another active source. |
+| PRE rejects | Present bounded findings; correct the ZIP, compute new count/hash, choose a new key and authorize again while budget remains. Otherwise use the exhausted-budget path. | Rebinding an old key to corrected bytes or bypassing PRE. |
 | `finalization_pending` / finalized | Read the original receipt/progress; let existing T5 recovery run. | Reupload, second Submission, or contributor-driven finalize. |
 | Authority lost | Existing reads may be concealed; restore authority through normal owners or authorized management support. | Using the token to inspect an operation or bypass local revocation. |
-| Governed revision later permitted | Prepare local corrected work and use a new attempt key; backend selects current revision lineage. | Client-selected predecessor/policy/compensation terms. |
+| Governed revision later permitted | Prepare local corrected work and use a new attempt key, with authorization while budget remains or the exhausted-budget path. The backend selects current revision lineage. | Client-selected predecessor/policy/compensation terms. |
 
 Extend `SubmissionOperationReadService._public_failure` for the new content
 mismatch code. Its current blanket exclusion of `cancelled` from new-key guidance
