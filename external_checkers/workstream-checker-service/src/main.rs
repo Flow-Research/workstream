@@ -305,8 +305,20 @@ struct OutputMeter {
 
 struct RequestExecutionBudget {
     deadline: Instant,
+    native_project: Option<NativeProjectBudget>,
     output: OutputMeter,
     cleanup: EmergencyCleanupBudget,
+}
+
+#[derive(Clone, Copy)]
+struct NativeProjectBudget {
+    runtime: Duration,
+}
+
+#[derive(Clone, Copy)]
+enum ProjectExecutionBudget {
+    PreparationSeparated(Duration),
+    Aggregate(Instant),
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -366,9 +378,16 @@ impl RequestExecutionBudget {
     fn new(deadline: Instant, maximum_output: usize) -> Self {
         Self {
             deadline,
+            native_project: None,
             output: OutputMeter::new(maximum_output),
             cleanup: EmergencyCleanupBudget::new(),
         }
+    }
+
+    fn configure_native_project(&mut self, runtime_ms: u64) {
+        self.native_project = Some(NativeProjectBudget {
+            runtime: Duration::from_millis(runtime_ms),
+        });
     }
 }
 
@@ -1187,6 +1206,9 @@ fn handle_frame(
         Instant::now() + Duration::from_millis(request.deadline_ms),
         request.maximum_output_bytes,
     );
+    if config.runtime == "smolvm" {
+        budget.configure_native_project(request.deadline_ms);
+    }
     let (result, isolation) = match verify_grant(config, &request, &envelope.grant) {
         Ok(grant) => match inspect_image(config, cache, stream, &mut budget) {
             Ok(()) => match execute_container(
@@ -2130,6 +2152,16 @@ fn execute_container(
         ));
     }
     let selected_trial = selected_trial_profile(config, request)?;
+    let native_project = if config.runtime == "smolvm" && selected_trial.is_none() {
+        Some(
+            budget
+                .native_project
+                .ok_or_else(|| ExecutionFailure::ordinary("implementation_unavailable", false))?,
+        )
+    } else {
+        None
+    };
+    let callback_deadline = budget.deadline;
     let reservation = if config.runtime == "smolvm" {
         let result = match selected_trial {
             Some(profile) => smol::trial_peak_capacity(
@@ -2166,7 +2198,7 @@ fn execute_container(
                     profile,
                     Arc::clone(held),
                     client,
-                    budget.deadline,
+                    callback_deadline,
                     Arc::clone(&invocation_cancelled),
                 )
                 .map_err(|_| ExecutionFailure::ordinary("implementation_unavailable", false))?;
@@ -2175,7 +2207,7 @@ fn execute_container(
                     Arc::clone(&receipt_registry),
                     request.request_digest.clone(),
                     profile.maximum_receipt_bytes,
-                    budget.deadline,
+                    callback_deadline,
                     Arc::clone(&invocation_cancelled),
                 )
                 .map_err(|_| ExecutionFailure::ordinary("implementation_unavailable", false))?;
@@ -2194,7 +2226,7 @@ fn execute_container(
                         engine,
                         config.sandbox_uid,
                         config.sandbox_gid,
-                        budget.deadline,
+                        callback_deadline,
                         Arc::clone(&invocation_cancelled),
                     )
                     .map_err(|failure| {
@@ -2223,16 +2255,29 @@ fn execute_container(
                     false,
                 ));
             };
-            match InvocationRelay::start_with_resolver(
-                relay_root,
-                proxy_path,
-                grant,
-                &request.request_digest,
-                Arc::clone(&receipt_registry) as Arc<dyn ModelReceiptResolver>,
-                config.sandbox_uid,
-                config.sandbox_gid,
-                budget.deadline,
-            ) {
+            let relay = if native_project.is_some() {
+                InvocationRelay::start_with_resolver_unarmed(
+                    relay_root,
+                    proxy_path,
+                    grant,
+                    &request.request_digest,
+                    Arc::clone(&receipt_registry) as Arc<dyn ModelReceiptResolver>,
+                    config.sandbox_uid,
+                    config.sandbox_gid,
+                )
+            } else {
+                InvocationRelay::start_with_resolver(
+                    relay_root,
+                    proxy_path,
+                    grant,
+                    &request.request_digest,
+                    Arc::clone(&receipt_registry) as Arc<dyn ModelReceiptResolver>,
+                    config.sandbox_uid,
+                    config.sandbox_gid,
+                    callback_deadline,
+                )
+            };
+            match relay {
                 Ok(relay) => Some(relay),
                 Err(failure) => {
                     let trial_cleanup_unsettled = trial_relay
@@ -2268,12 +2313,17 @@ fn execute_container(
                 model: model_relay
                     .as_ref()
                     .map(|relay| relay.socket_path().to_owned()),
+                model_deadline: native_project
+                    .and_then(|_| model_relay.as_ref().map(InvocationRelay::deadline)),
                 execution: trial_relay
                     .as_ref()
                     .map(|relay| relay.socket_path().to_owned()),
             },
             client,
-            budget,
+            native_project.map_or(
+                ProjectExecutionBudget::Aggregate(budget.deadline),
+                |native| ProjectExecutionBudget::PreparationSeparated(native.runtime),
+            ),
             invocation_cancelled.as_ref(),
         )
     } else {

@@ -82,6 +82,7 @@ impl Runtime {
         let cancelled = [invocation_cancelled.as_ref()];
         let guard = IoGuard {
             deadline,
+            inactivity: None,
             client: Some(&client),
             cancelled: &cancelled,
         };
@@ -670,6 +671,7 @@ impl SmolTrialRuntime for Runtime {
         let cancelled = [self.invocation_cancelled.as_ref()];
         let guard = IoGuard {
             deadline: self.deadline,
+            inactivity: None,
             client: Some(&self.client),
             cancelled: &cancelled,
         };
@@ -703,6 +705,7 @@ impl SmolTrialRuntime for Runtime {
         let cancelled = [invocation_cancelled, relay_cancelled];
         let guard = IoGuard {
             deadline,
+            inactivity: None,
             client: Some(&self.client),
             cancelled: &cancelled,
         };
@@ -936,6 +939,7 @@ impl SmolTrialRuntime for Runtime {
         let cancelled = [invocation_cancelled, relay_cancelled];
         let guard = IoGuard {
             deadline,
+            inactivity: None,
             client: Some(&self.client),
             cancelled: &cancelled,
         };

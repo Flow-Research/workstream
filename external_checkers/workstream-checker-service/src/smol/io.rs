@@ -1,10 +1,12 @@
 //! Closed host side of the private Smol guest capability stream.
 
 use super::*;
+use crate::model_relay::InvocationDeadline;
 use crate::proxy_transport::{
     connect_private, read_frame as read_proxy_frame, validate_private_socket,
     write_frame as write_proxy_frame,
 };
+use std::cell::Cell;
 use std::process::{ChildStderr, ChildStdin, ChildStdout};
 use workstream_checker_guest::{
     GuestIoChannel, GuestIoHeader, GuestJob, MaterialRoot, CAPACITY_EXIT_CODE,
@@ -27,6 +29,7 @@ pub(crate) struct ProjectMaterials<'a> {
 #[derive(Clone, Default)]
 pub(crate) struct ProjectCallbacks {
     pub(crate) model: Option<PathBuf>,
+    pub(crate) model_deadline: Option<InvocationDeadline>,
     pub(crate) execution: Option<PathBuf>,
 }
 
@@ -60,6 +63,9 @@ pub(super) fn material_source(
 }
 
 pub(super) fn validate_endpoints(endpoints: &ProjectCallbacks) -> Result<(), String> {
+    if endpoints.model_deadline.is_some() && endpoints.model.is_none() {
+        return Err("model callback deadline binding invalid".into());
+    }
     for path in [endpoints.model.as_deref(), endpoints.execution.as_deref()]
         .into_iter()
         .flatten()
@@ -71,6 +77,7 @@ pub(super) fn validate_endpoints(endpoints: &ProjectCallbacks) -> Result<(), Str
 
 pub(super) struct IoGuard<'a> {
     pub(super) deadline: Instant,
+    pub(super) inactivity: Option<(Cell<Instant>, Duration)>,
     pub(super) client: Option<&'a UnixStream>,
     pub(super) cancelled: &'a [&'a AtomicBool],
 }
@@ -82,6 +89,12 @@ impl IoGuard<'_> {
         }
     }
 
+    fn progressed(&self) {
+        if let Some((deadline, timeout)) = &self.inactivity {
+            deadline.set(Instant::now() + *timeout);
+        }
+    }
+
     pub(super) fn check(&self) -> Result<(), String> {
         if self
             .cancelled
@@ -90,7 +103,11 @@ impl IoGuard<'_> {
         {
             return Err("guest session cancelled".into());
         }
-        if Instant::now() >= self.deadline {
+        let deadline = self
+            .inactivity
+            .as_ref()
+            .map_or(self.deadline, |(deadline, _)| deadline.get());
+        if Instant::now() >= deadline {
             self.cancel();
             return Err("deadline_exceeded".into());
         }
@@ -115,7 +132,10 @@ pub(super) fn write_all(
         guard.check()?;
         match stream.write(&bytes[offset..]) {
             Ok(0) => return Err("guest input closed".into()),
-            Ok(count) => offset += count,
+            Ok(count) => {
+                offset += count;
+                guard.progressed();
+            }
             Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
                 thread::sleep(Duration::from_millis(2));
             }
@@ -135,7 +155,10 @@ pub(super) fn read_exact(
         guard.check()?;
         match stream.read(&mut bytes[offset..]) {
             Ok(0) => return Err("guest output closed".into()),
-            Ok(count) => offset += count,
+            Ok(count) => {
+                offset += count;
+                guard.progressed();
+            }
             Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
                 thread::sleep(Duration::from_millis(2));
             }
@@ -236,6 +259,7 @@ fn require_execution_eof(
 ) -> Result<(), String> {
     let guard = IoGuard {
         deadline,
+        inactivity: None,
         client: None,
         cancelled: &[cancelled],
     };
@@ -313,13 +337,36 @@ fn expected_guest_status(oom_kills: u64, output_exceeded: bool, exit_code: Optio
     }
 }
 
+fn prepared_runtime_deadline(
+    header: GuestIoHeader,
+    budget: ProjectExecutionBudget,
+    prepared_at: Instant,
+) -> Result<Instant, String> {
+    match header {
+        GuestIoHeader::Prepared { protocol_version } if protocol_version == GUEST_IO_PROTOCOL => {}
+        _ => return Err("guest preparation transition invalid".into()),
+    }
+    Ok(match budget {
+        ProjectExecutionBudget::PreparationSeparated(runtime) => prepared_at + runtime,
+        ProjectExecutionBudget::Aggregate(deadline) => deadline,
+    })
+}
+
+fn reject_duplicate_prepared(header: &GuestIoHeader) -> Result<(), String> {
+    if matches!(header, GuestIoHeader::Prepared { .. }) {
+        Err("duplicate guest preparation transition".into())
+    } else {
+        Ok(())
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 pub(super) fn run_project(
     mut child: Child,
     job: &GuestJob,
     materials: &[MaterialSource],
     endpoints: &ProjectCallbacks,
-    deadline: Instant,
+    execution_budget: ProjectExecutionBudget,
     maximum_output: usize,
     client: &UnixStream,
     cancelled: &AtomicBool,
@@ -331,18 +378,48 @@ pub(super) fn run_project(
     set_nonblocking(&output)?;
     let mut error_reader = Some(thread::spawn(move || read_process_errors(errors)));
     let cancellation = [cancelled];
-    let guard = IoGuard {
-        deadline,
+    let (preparation_deadline, progress_timeout) = match execution_budget {
+        ProjectExecutionBudget::PreparationSeparated(_) => {
+            (Instant::now() + SOCKET_IO_TIMEOUT, Some(SOCKET_IO_TIMEOUT))
+        }
+        ProjectExecutionBudget::Aggregate(deadline) => (deadline, None),
+    };
+    let preparation_guard = IoGuard {
+        deadline: preparation_deadline,
+        inactivity: progress_timeout.map(|timeout| (Cell::new(preparation_deadline), timeout)),
         client: Some(client),
         cancelled: &cancellation,
     };
     let mut child_reaped = false;
     let result = (|| {
-        write_job(&mut input, job, materials, &guard)?;
+        write_job(&mut input, job, materials, &preparation_guard)?;
+        let deadline = prepared_runtime_deadline(
+            read_header(&mut output, &preparation_guard)?,
+            execution_budget,
+            Instant::now(),
+        )?;
+        if let Some(model_deadline) = &endpoints.model_deadline {
+            model_deadline.arm(deadline)?;
+        }
+        let guard = IoGuard {
+            deadline,
+            inactivity: None,
+            client: Some(client),
+            cancelled: &cancellation,
+        };
+        write_header(
+            &mut input,
+            &GuestIoHeader::Start {
+                protocol_version: GUEST_IO_PROTOCOL.into(),
+            },
+            &guard,
+        )?;
         let mut next_sequence = 1_u32;
         let mut relay_connections = RelayConnections::default();
         loop {
-            match read_header(&mut output, &guard)? {
+            let header = read_header(&mut output, &guard)?;
+            reject_duplicate_prepared(&header)?;
+            match header {
                 GuestIoHeader::Request {
                     protocol_version,
                     sequence,
@@ -436,6 +513,8 @@ pub(super) fn run_project(
                 GuestIoHeader::Response { .. } => {
                     return Err("unsolicited guest capability response".into())
                 }
+                GuestIoHeader::Prepared { .. } => unreachable!("checked above"),
+                GuestIoHeader::Start { .. } => return Err("unsolicited guest project start".into()),
             }
         }
     })();
@@ -528,6 +607,7 @@ mod tests {
             // to close or consume an oversized body before rejecting it.
             let guard = IoGuard {
                 deadline: Instant::now() + Duration::from_secs(2),
+                inactivity: None,
                 client: None,
                 cancelled: &[],
             };
@@ -559,12 +639,68 @@ mod tests {
     }
 
     #[test]
+    fn prepared_transition_starts_only_the_declared_runtime_and_is_single_use() {
+        let prepared_at = Instant::now();
+        let runtime = Duration::from_secs(30);
+        assert_eq!(
+            prepared_runtime_deadline(
+                GuestIoHeader::Prepared {
+                    protocol_version: GUEST_IO_PROTOCOL.into(),
+                },
+                ProjectExecutionBudget::PreparationSeparated(runtime),
+                prepared_at,
+            )
+            .unwrap(),
+            prepared_at + runtime,
+        );
+        let aggregate = prepared_at + Duration::from_secs(5);
+        assert_eq!(
+            prepared_runtime_deadline(
+                GuestIoHeader::Prepared {
+                    protocol_version: GUEST_IO_PROTOCOL.into(),
+                },
+                ProjectExecutionBudget::Aggregate(aggregate),
+                prepared_at,
+            )
+            .unwrap(),
+            aggregate,
+        );
+        assert!(prepared_runtime_deadline(
+            GuestIoHeader::Prepared {
+                protocol_version: "wrong".into(),
+            },
+            ProjectExecutionBudget::PreparationSeparated(runtime),
+            prepared_at,
+        )
+        .is_err());
+        assert!(prepared_runtime_deadline(
+            GuestIoHeader::Completed {
+                protocol_version: GUEST_IO_PROTOCOL.into(),
+                exit_code: Some(0),
+                signal: None,
+                oom_kills: 0,
+                output_exceeded: false,
+                stdout_bytes: 0,
+                stderr_bytes: 0,
+            },
+            ProjectExecutionBudget::PreparationSeparated(runtime),
+            prepared_at,
+        )
+        .is_err());
+        assert!(reject_duplicate_prepared(&GuestIoHeader::Prepared {
+            protocol_version: GUEST_IO_PROTOCOL.into(),
+        })
+        .is_err());
+    }
+
+    #[test]
     fn guard_cancels_every_owner_on_terminal_deadline() {
         let first = AtomicBool::new(false);
         let second = AtomicBool::new(false);
         let cancellation = [&first, &second];
         let guard = IoGuard {
             deadline: Instant::now(),
+            inactivity: None,
             client: None,
             cancelled: &cancellation,
         };
@@ -620,6 +756,7 @@ mod tests {
         });
         let endpoints = ProjectCallbacks {
             model: Some(socket.clone()),
+            model_deadline: None,
             execution: Some(execution_socket.clone()),
         };
         let cancelled = AtomicBool::new(false);

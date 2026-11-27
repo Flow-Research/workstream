@@ -250,8 +250,6 @@ fn foreign_lease_refuses_recovery_before_any_runtime_or_owned_cleanup() {
         name: format!("ws-{}", "0".repeat(32)),
         owner: container_owner(&config).unwrap().to_owned(),
         epoch: "e".repeat(64),
-        expires_ms: 1,
-        lifetime_ms: 1,
         root: leases.clone(),
         runtime,
         private_home_root: None,
@@ -299,7 +297,7 @@ fn missing_lease_directory_does_not_poison_node_admission() {
     ));
     let request = parse_request(include_bytes!("../../../fixtures/request.json")).unwrap();
     let (client, _peer) = UnixStream::pair().unwrap();
-    let mut budget = RequestExecutionBudget::new(Instant::now() + Duration::from_secs(1), 32768);
+    let deadline = Instant::now() + Duration::from_secs(1);
     let inventory = WorkspaceInventory {
         directories: Vec::new(),
         files: Vec::new(),
@@ -315,7 +313,7 @@ fn missing_lease_directory_does_not_poison_node_admission() {
         },
         &ProjectCallbacks::default(),
         &client,
-        &mut budget,
+        ProjectExecutionBudget::Aggregate(deadline),
         &cancelled,
     );
     assert_eq!(
@@ -440,8 +438,6 @@ fn private_child_home_is_derived_from_the_exact_lease() {
         name,
         owner: "b".repeat(64),
         epoch: "c".repeat(64),
-        expires_ms: 1,
-        lifetime_ms: 1,
         root: lease_root,
         runtime,
         private_home_root: Some(child_home_root),
@@ -528,8 +524,6 @@ fn intake_overlay_is_explicit_in_runtime_argv_and_project_creation_is_unchanged(
         name: format!("ws-{}", "0".repeat(32)),
         owner: "d".repeat(64),
         epoch: "e".repeat(64),
-        expires_ms: 1,
-        lifetime_ms: 1,
         root: root.join("leases"),
         runtime,
         private_home_root: None,

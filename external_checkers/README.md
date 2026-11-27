@@ -383,6 +383,17 @@ and charges virtualization overhead separately. Results are returned only after
 VM and cgroup removal is confirmed. Unknown cleanup closes admission and requires
 startup reconciliation. Failures before lease creation or after confirmed cleanup
 return recoverable infrastructure failure without stopping other checks.
+For an ordinary native project check, the registry `deadline_ms` is checker
+runtime, not a platform-transfer allowance. VM create/start/bootstrap retain
+their individual control-operation bounds, and the host-to-guest job/material
+stream retains a progress-reset inactivity bound. After staging, mount and
+cgroup setup, the trusted guest emits one `prepared` transition and waits. The
+host validates that transition, arms any invocation-local model relay, starts
+the declared runtime clock and sends the single `start` acknowledgement before
+the guest may fork the workload. Missing, malformed, repeated or out-of-order
+transitions fail closed. Trial and selected PRE paths keep their own existing
+aggregate envelopes; trusted intake continues to cover transfer and preparation
+with its artifact deadline.
 The private trial stream carries the export header, export bytes, retained stdout,
 retained stderr and final receipt in that order. Each output length and digest is
 bound by both header and final receipt; successful exit and exact EOF are required.
@@ -394,7 +405,10 @@ incomplete suffix (at most three bytes) is trimmed, without changing the
 `output_exceeded` outcome. Intrinsically invalid UTF-8 is an explicit unsupported
 text-protocol failure; it is never replaced, silently discarded or rehashed as
 empty output.
-Independent lease guardians survive controller death;
+Independent lease guardians survive controller death while the controller's
+exact owner pipe is live; EOF or owner loss triggers cleanup. Individual native
+control and stream interactions remain finitely bounded without treating a
+renewable healthy POST as expired at its immutable original lease timestamp.
 `KillMode=process` preserves that cleanup lifetime. Preserve the private owner
 file and lease directory across restarts. Never clone them between running nodes.
 
