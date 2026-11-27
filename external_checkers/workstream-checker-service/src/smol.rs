@@ -95,8 +95,6 @@ struct Lease {
     name: String,
     owner: String,
     epoch: String,
-    expires_ms: u64,
-    lifetime_ms: u64,
     root: PathBuf,
     runtime: SmolConfig,
     #[serde(default)]
@@ -334,9 +332,10 @@ fn random_token() -> Result<String, String> {
 fn now_ms() -> Result<u64, String> {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis() as u64)
+        .map(|duration| duration.as_millis() as u64)
         .map_err(|_| "clock unavailable".into())
 }
+
 fn private_directory(path: &Path) -> Result<(), String> {
     let metadata = fs::symlink_metadata(path).map_err(|_| "private directory missing")?;
     if !private_socket_parent(&metadata)
@@ -806,6 +805,19 @@ impl Machine {
         Self::create_inner(config, resources, deadline, None, None)
     }
 
+    fn create_project(
+        config: &ServiceConfig,
+        resources: Resources,
+    ) -> Result<Self, ExecutionFailure> {
+        Self::create_inner(
+            config,
+            resources,
+            Instant::now() + SOCKET_IO_TIMEOUT,
+            None,
+            None,
+        )
+    }
+
     pub(super) fn create_child(
         config: &ServiceConfig,
         resources: Resources,
@@ -836,7 +848,7 @@ impl Machine {
     fn create_inner(
         config: &ServiceConfig,
         resources: Resources,
-        deadline: Instant,
+        operation_deadline: Instant,
         private_home_root: Option<PathBuf>,
         pre: Option<pre::Invocation>,
     ) -> Result<Self, ExecutionFailure> {
@@ -891,16 +903,6 @@ impl Machine {
                 .ok_or_else(|| ExecutionFailure::ordinary("implementation_unavailable", false))?
                 .epoch
                 .clone(),
-            expires_ms: now_ms()
-                .map_err(|_| ExecutionFailure::ordinary("implementation_unavailable", false))?
-                .saturating_add(
-                    deadline
-                        .saturating_duration_since(Instant::now())
-                        .as_millis() as u64,
-                ),
-            lifetime_ms: deadline
-                .saturating_duration_since(Instant::now())
-                .as_millis() as u64,
             root,
             runtime: s,
             private_home_root,
@@ -967,7 +969,7 @@ impl Machine {
             .ok_or_else(|| ExecutionFailure::unsettled(false))?;
         set_nonblocking(&handshake).map_err(|_| ExecutionFailure::unsettled(false))?;
         let mut bytes = Vec::new();
-        let handshake_deadline = deadline.min(Instant::now() + SOCKET_IO_TIMEOUT);
+        let handshake_deadline = operation_deadline.min(Instant::now() + SOCKET_IO_TIMEOUT);
         loop {
             read_available(&mut handshake, &mut bytes, 1)
                 .map_err(|_| ExecutionFailure::unsettled(false))?;
@@ -1029,7 +1031,23 @@ impl Machine {
             resources,
             overlay_gib,
             client,
-            deadline,
+            Some(deadline),
+            client_is_connected,
+        )
+    }
+    fn prepare_project(
+        &self,
+        cache: &CacheEntry,
+        resources: Resources,
+        overlay_gib: Option<u64>,
+        client: &UnixStream,
+    ) -> Result<(), String> {
+        self.prepare_with_connection(
+            cache,
+            resources,
+            overlay_gib,
+            client,
+            None,
             client_is_connected,
         )
     }
@@ -1039,7 +1057,7 @@ impl Machine {
         resources: Resources,
         overlay_gib: Option<u64>,
         client: &UnixStream,
-        deadline: Instant,
+        aggregate_deadline: Option<Instant>,
         connected: fn(&UnixStream) -> bool,
     ) -> Result<(), String> {
         let lease = &self.lease;
@@ -1073,6 +1091,8 @@ impl Machine {
             args.extend(["--overlay", value]);
         }
         let checked = |args: &[&str]| -> Result<(), String> {
+            let deadline =
+                aggregate_deadline.unwrap_or_else(|| Instant::now() + DOCKER_CONTROL_TIMEOUT);
             if Instant::now() >= deadline {
                 return Err("deadline_exceeded".into());
             }
@@ -1099,7 +1119,11 @@ impl Machine {
         };
         checked(&args)?;
         // Closed argv omits network enablers; verify exact-owner state before start.
-        lease.verify_network_disabled(deadline, client, connected)?;
+        lease.verify_network_disabled(
+            aggregate_deadline.unwrap_or_else(|| Instant::now() + DOCKER_CONTROL_TIMEOUT),
+            client,
+            connected,
+        )?;
         checked(&["machine", "start", "--name", &lease.name, "--no-workload"])?;
         checked(&[
             "machine",
@@ -1118,7 +1142,7 @@ impl Machine {
         materials: ProjectMaterials<'_>,
         callbacks: &ProjectCallbacks,
         client: &UnixStream,
-        deadline: Instant,
+        budget: ProjectExecutionBudget,
         cancelled: &AtomicBool,
     ) -> Result<ExecutedChecker, String> {
         if self.consumed {
@@ -1199,7 +1223,7 @@ impl Machine {
             &job,
             &sources,
             callbacks,
-            deadline,
+            budget,
             request.maximum_output_bytes,
             client,
             cancelled,
@@ -1239,14 +1263,28 @@ pub(super) fn execute(
     materials: ProjectMaterials<'_>,
     callbacks: &ProjectCallbacks,
     client: &UnixStream,
-    budget: &mut RequestExecutionBudget,
+    execution_budget: ProjectExecutionBudget,
     cancelled: &AtomicBool,
 ) -> Result<ExecutedChecker, ExecutionFailure> {
     io::validate_endpoints(callbacks)
         .map_err(|_| ExecutionFailure::ordinary("implementation_unavailable", false))?;
     for attempt in 0..3 {
-        let mut machine = Machine::create(config, request.into(), budget.deadline)?;
-        let prepared = machine.prepare(cache, request.into(), None, client, budget.deadline);
+        let mut machine = match execution_budget {
+            ProjectExecutionBudget::PreparationSeparated(_) => {
+                Machine::create_project(config, request.into())?
+            }
+            ProjectExecutionBudget::Aggregate(deadline) => {
+                Machine::create(config, request.into(), deadline)?
+            }
+        };
+        let prepared = match execution_budget {
+            ProjectExecutionBudget::PreparationSeparated(_) => {
+                machine.prepare_project(cache, request.into(), None, client)
+            }
+            ProjectExecutionBudget::Aggregate(deadline) => {
+                machine.prepare(cache, request.into(), None, client, deadline)
+            }
+        };
         let launched = prepared.is_ok();
         let result = prepared.and_then(|_| {
             machine.run(
@@ -1259,7 +1297,7 @@ pub(super) fn execute(
                 },
                 callbacks,
                 client,
-                budget.deadline,
+                execution_budget,
                 cancelled,
             )
         });
@@ -1268,7 +1306,10 @@ pub(super) fn execute(
         }
         if !launched
             && attempt < 2
-            && Instant::now() < budget.deadline
+            && !matches!(
+                execution_budget,
+                ProjectExecutionBudget::Aggregate(deadline) if Instant::now() >= deadline
+            )
             && client_is_connected(client)
         {
             continue;
@@ -1309,13 +1350,6 @@ pub(super) fn guardian() -> Result<(), String> {
         .write_all(&[1])
         .and_then(|_| std::io::stdout().flush())
         .map_err(|_| "guardian handshake failed")?;
-    let expires = Instant::now()
-        + Duration::from_millis(
-            lease
-                .expires_ms
-                .saturating_sub(now_ms()?)
-                .min(lease.lifetime_ms),
-        );
     let mut reader = input.lock();
     let mut byte = [0u8; 1];
     loop {
@@ -1323,9 +1357,6 @@ pub(super) fn guardian() -> Result<(), String> {
             Ok(_) => break,
             Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
             Err(_) => break,
-        }
-        if Instant::now() >= expires {
-            break;
         }
         thread::sleep(Duration::from_millis(20));
     }

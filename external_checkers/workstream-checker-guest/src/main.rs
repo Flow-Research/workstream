@@ -832,6 +832,16 @@ fn run_project(
         limits.maximum_processes,
     )
     .map_err(|error| format!("cgroup: {error}"))?;
+    // All host material and guest platform setup is complete. The workload is
+    // not forked until the host acknowledges this transition after arming the
+    // registry-declared checker runtime and invocation-local callbacks.
+    write_guest_header(&GuestIoHeader::Prepared {
+        protocol_version: GUEST_IO_PROTOCOL.into(),
+    })?;
+    match read_guest_header(&mut input)? {
+        GuestIoHeader::Start { protocol_version } if protocol_version == GUEST_IO_PROTOCOL => {}
+        _ => return Err("guest project start invalid".into()),
+    }
     // The supervisor retains the trusted stream and capability listeners. The
     // workload receives separate output pipes, so it cannot forge mux frames.
     let child = limits.fork_project()?;

@@ -95,6 +95,12 @@ pub enum GuestIoChannel {
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum GuestIoHeader {
+    Prepared {
+        protocol_version: String,
+    },
+    Start {
+        protocol_version: String,
+    },
     Request {
         protocol_version: String,
         sequence: u32,

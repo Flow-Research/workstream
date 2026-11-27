@@ -83,8 +83,6 @@ pub(super) fn fixture() -> (PathBuf, ServiceConfig, Lease, Journal) {
         name: format!("ws-{}", "0".repeat(32)),
         owner: container_owner(&config).unwrap().to_owned(),
         epoch: "e".repeat(64),
-        expires_ms: 1,
-        lifetime_ms: 1,
         root: leases,
         runtime,
         private_home_root: None,

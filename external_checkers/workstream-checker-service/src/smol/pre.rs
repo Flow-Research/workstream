@@ -74,7 +74,7 @@ pub(crate) fn serve(
         prepared.resources,
         Some(prepared.overlay_gib),
         &client,
-        deadline,
+        Some(deadline),
         transport::connected,
     );
     let preparation_ms = preparing.elapsed().as_millis() as u64;

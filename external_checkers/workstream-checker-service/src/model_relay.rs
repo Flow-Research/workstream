@@ -8,7 +8,7 @@ use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 use std::fs::{self, DirBuilder, File};
-use std::io::{Read, Write};
+use std::io::Read;
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::{DirBuilderExt, FileTypeExt, MetadataExt, PermissionsExt};
 use std::os::unix::net::{UnixListener, UnixStream};
@@ -290,7 +290,40 @@ struct RelayPaths {
 pub(crate) struct InvocationRelay {
     paths: RelayPaths,
     cancelled: Arc<AtomicBool>,
+    deadline: InvocationDeadline,
     worker: Option<JoinHandle<Result<(), String>>>,
+}
+
+#[derive(Clone)]
+pub(crate) struct InvocationDeadline(Arc<Mutex<Option<Instant>>>);
+
+impl InvocationDeadline {
+    fn fixed(deadline: Instant) -> Self {
+        Self(Arc::new(Mutex::new(Some(deadline))))
+    }
+
+    fn unarmed() -> Self {
+        Self(Arc::new(Mutex::new(None)))
+    }
+
+    pub(crate) fn arm(&self, deadline: Instant) -> Result<(), String> {
+        let mut current = self
+            .0
+            .lock()
+            .map_err(|_| "model relay deadline unavailable")?;
+        if current.is_some() || Instant::now() >= deadline {
+            return Err("model relay deadline invalid".into());
+        }
+        *current = Some(deadline);
+        Ok(())
+    }
+
+    fn current(&self) -> Result<Option<Instant>, String> {
+        self.0
+            .lock()
+            .map(|value| *value)
+            .map_err(|_| "model relay deadline unavailable".into())
+    }
 }
 
 impl InvocationRelay {
@@ -325,6 +358,51 @@ impl InvocationRelay {
         sandbox_uid: u32,
         sandbox_gid: u32,
         deadline: Instant,
+    ) -> Result<Self, RelayStartFailure> {
+        Self::start_with_deadline(
+            relay_root,
+            proxy_path,
+            grant,
+            request_digest,
+            receipt_resolver,
+            sandbox_uid,
+            sandbox_gid,
+            InvocationDeadline::fixed(deadline),
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(crate) fn start_with_resolver_unarmed(
+        relay_root: &Path,
+        proxy_path: &Path,
+        grant: &ModelGrant,
+        request_digest: &str,
+        receipt_resolver: Arc<dyn ModelReceiptResolver>,
+        sandbox_uid: u32,
+        sandbox_gid: u32,
+    ) -> Result<Self, RelayStartFailure> {
+        Self::start_with_deadline(
+            relay_root,
+            proxy_path,
+            grant,
+            request_digest,
+            receipt_resolver,
+            sandbox_uid,
+            sandbox_gid,
+            InvocationDeadline::unarmed(),
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn start_with_deadline(
+        relay_root: &Path,
+        proxy_path: &Path,
+        grant: &ModelGrant,
+        request_digest: &str,
+        receipt_resolver: Arc<dyn ModelReceiptResolver>,
+        sandbox_uid: u32,
+        sandbox_gid: u32,
+        deadline: InvocationDeadline,
     ) -> Result<Self, RelayStartFailure> {
         validate_proxy_socket(proxy_path).map_err(|_| RelayStartFailure::ordinary())?;
         validate_relay_root(relay_root).map_err(|_| RelayStartFailure::ordinary())?;
@@ -388,6 +466,7 @@ impl InvocationRelay {
         let proxy = proxy_path.to_owned();
         let grant = grant.clone();
         let digest = request_digest.to_owned();
+        let worker_deadline = deadline.clone();
         let worker = match thread::Builder::new()
             .name("checker-model-relay".into())
             .spawn(move || {
@@ -397,7 +476,7 @@ impl InvocationRelay {
                     &grant,
                     &digest,
                     receipt_resolver.as_ref(),
-                    deadline,
+                    worker_deadline,
                     &worker_cancelled,
                 )
             }) {
@@ -411,6 +490,7 @@ impl InvocationRelay {
         Ok(Self {
             paths,
             cancelled,
+            deadline,
             worker: Some(worker),
         })
     }
@@ -424,6 +504,10 @@ impl InvocationRelay {
 
     pub(crate) fn socket_path(&self) -> &Path {
         &self.paths.socket
+    }
+
+    pub(crate) fn deadline(&self) -> InvocationDeadline {
+        self.deadline.clone()
     }
 
     pub(crate) fn finish(mut self) -> RelayFinish {
@@ -523,12 +607,20 @@ fn relay_once(
     grant: &ModelGrant,
     request_digest: &str,
     receipt_resolver: &dyn ModelReceiptResolver,
-    deadline: Instant,
+    deadline: InvocationDeadline,
     cancelled: &AtomicBool,
 ) -> Result<(), String> {
     let image = loop {
-        if Instant::now() >= deadline {
+        let armed = deadline.current()?;
+        if armed.is_some_and(|value| Instant::now() >= value) {
             return Err("model relay deadline exceeded".into());
+        }
+        if armed.is_none() {
+            if cancelled.load(Ordering::Acquire) {
+                return Ok(());
+            }
+            thread::sleep(Duration::from_millis(2));
+            continue;
         }
         match listener.accept() {
             Ok((stream, _)) => break stream,
@@ -541,6 +633,9 @@ fn relay_once(
             Err(_) => return Err("model relay accept failed".into()),
         }
     };
+    let deadline = deadline
+        .current()?
+        .ok_or("model relay deadline unavailable")?;
     drop(listener); // one bounded session: no second connection can be accepted.
     relay_session(
         image,
@@ -759,6 +854,19 @@ fn sandbox_socket(metadata: &fs::Metadata, uid: u32, gid: u32) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::io::Write;
+
+    #[test]
+    fn invocation_deadline_arms_once_after_platform_preparation() {
+        let deadline = InvocationDeadline::unarmed();
+        assert_eq!(deadline.current().unwrap(), None);
+        let runtime_deadline = Instant::now() + Duration::from_secs(30);
+        deadline.arm(runtime_deadline).unwrap();
+        assert_eq!(deadline.current().unwrap(), Some(runtime_deadline));
+        assert!(deadline
+            .arm(runtime_deadline + Duration::from_secs(1))
+            .is_err());
+    }
     use std::sync::atomic::AtomicU64;
     use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -1215,7 +1323,7 @@ mod tests {
             &grant,
             &digest,
             &InvocationReceiptRegistry::default(),
-            Instant::now() + Duration::from_secs(2),
+            InvocationDeadline::fixed(Instant::now() + Duration::from_secs(2)),
             &AtomicBool::new(false),
         )
         .is_err());
