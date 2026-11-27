@@ -44,16 +44,11 @@ from app.modules.checkers.api.trial_profiles import (
 WORKSTREAM_DEFAULT_EXECUTION_BUDGET_MS = 60_000
 MAXIMUM_SELECTED_PRE_EXECUTION_BUDGET_MS = 7_200_000
 SELECTED_POST_MATERIALIZATION_BUDGET_MS = 60_000
-# The outbox claim is natively bounded to one hour. Keep explicit time for the
-# request reader/authority prelude, execution finalization and delivery commit.
-MAXIMUM_SELECTED_POST_EXECUTION_BUDGET_MS = 3_400_000
-SELECTED_POST_HANDLER_PRELUDE_MARGIN_MS = 60_000
+# Each selected checker retains its approved per-invocation deadline. The
+# background POST sequence is inspected and renewed rather than given one
+# aggregate execution deadline.
+SELECTED_POST_INITIAL_WORKER_WINDOW_MS = 3_400_000
 SELECTED_POST_FINALIZATION_MARGIN_MS = 60_000
-SELECTED_POST_HANDLER_TIMEOUT_SECONDS = (
-    MAXIMUM_SELECTED_POST_EXECUTION_BUDGET_MS
-    + SELECTED_POST_HANDLER_PRELUDE_MARGIN_MS
-    + SELECTED_POST_FINALIZATION_MARGIN_MS
-) // 1000
 SELECTED_POST_DELIVERY_LEASE_SECONDS = 3_600
 
 EVALUATION_CONTEXT_VERSION_KEY = "workstream_evaluation_context_version"
@@ -214,8 +209,8 @@ class ExternalCheckerImageAttachment(_PolicyValue):
 class ExternalCheckerPolicyCompileRequest(_PolicyValue):
     """Phase-separated project images, independent of setup suggestions."""
 
-    pre_submit_attachments: tuple[ExternalCheckerImageAttachment, ...] = Field(max_length=200)
-    post_submit_attachments: tuple[ExternalCheckerImageAttachment, ...] = Field(max_length=200)
+    pre_submit_attachments: tuple[ExternalCheckerImageAttachment, ...] = Field(min_length=1, max_length=1)
+    post_submit_attachments: tuple[ExternalCheckerImageAttachment, ...] = Field(min_length=1, max_length=1)
 
     @model_validator(mode="after")
     def validate_order(self) -> Self:
@@ -537,15 +532,9 @@ def selected_pre_submit_execution_budget_ms(
 
 def selected_post_submit_execution_budget_ms(
     policy: LockedExternalPostSubmitPolicy,
-    *,
-    artifact_deadline_ms: int | None = None,
 ) -> int:
-    """Bound ART materialization and every ordered POST image under one lease."""
-    if (
-        type(policy) is not LockedExternalPostSubmitPolicy
-        or artifact_deadline_ms is not None
-        and (type(artifact_deadline_ms) is not int or artifact_deadline_ms <= 0)
-    ):
+    """Estimate bounded individual work without imposing a whole-POST cutoff."""
+    if type(policy) is not LockedExternalPostSubmitPolicy:
         raise ExternalCheckerPolicyError("selected POST execution budget is invalid")
     required = SELECTED_POST_MATERIALIZATION_BUDGET_MS + sum(
         binding.registry.resources.deadline_ms
@@ -559,8 +548,4 @@ def selected_post_submit_execution_budget_ms(
         )
         for binding in policy.entries
     )
-    if required > MAXIMUM_SELECTED_POST_EXECUTION_BUDGET_MS:
-        raise ExternalCheckerPolicyError("selected POST execution exceeds durable worker deadline")
-    if artifact_deadline_ms is not None and required > artifact_deadline_ms:
-        raise ExternalCheckerPolicyError("selected POST execution exceeds ART custody deadline")
     return required

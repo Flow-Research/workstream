@@ -19,6 +19,7 @@ class SubmissionArtifactAdmissionRequest:
     task_context: TaskSubmissionContextFacts
     project_context: ProjectLockedPolicyContextFacts
     packet: SubmissionPacketView
+    accepted_operation_id: UUID
 
 
 @dataclass(frozen=True, slots=True)
@@ -45,22 +46,6 @@ class SubmissionArtifactAdmissionResult(SubmissionArtifactBindingFacts):
             raise ValueError("external POST admission policy differs")
 
 
-@dataclass(frozen=True, slots=True)
-class SubmissionArtifactReplayRequest:
-    admission_id: UUID
-    project_id: UUID
-    task_id: UUID
-    assignment_id: UUID
-    contributor_id: UUID
-    submission_id: UUID
-    submission_version: int
-    packet_sha256: str
-    task_context: TaskSubmissionContextFacts
-
-
 class SubmissionArtifactAdmissionPort(Protocol):
     async def consume(self, request: SubmissionArtifactAdmissionRequest) -> SubmissionArtifactAdmissionResult:
         """Consume once and project real material using already-locked policy facts."""
-
-    async def read_consumed(self, request: SubmissionArtifactReplayRequest) -> SubmissionArtifactBindingFacts:
-        """Select and reauthorize retained binding custody without new consumption."""

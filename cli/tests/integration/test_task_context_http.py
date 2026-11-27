@@ -83,7 +83,6 @@ REQUIREMENTS = {
     "guide_version": "guide-1",
     "policy_schema_version": "artifact-policy",
     "merge_algorithm_version": None,
-    "required_packet_fields": ["summary", "worker_attestation"],
     "required_artifacts": [
         {
             "key": "answer",
@@ -110,7 +109,6 @@ REQUIREMENTS = {
             "severity": "error",
         }
     ],
-    "attestation_terms": ["This is my work."],
     "manifest_required": False,
     "artifact_hash_required": True,
     "artifact_hash_algorithm": "sha256",
@@ -145,11 +143,9 @@ REQUIREMENT_LABELS = (
     "Guide version",
     "Policy schema version",
     "Merge algorithm version",
-    "Required packet fields",
     "Required artifacts",
     "Required evidence",
     "Forbidden artifacts",
-    "Attestation terms",
     "Manifest required",
     "Artifact hash required",
     "Artifact hash algorithm",
@@ -249,8 +245,6 @@ def test_context_reads_preserve_wire_complete_output_and_optional_fields(cli):
             "required_artifacts",
             "required_evidence",
             "forbidden_artifacts",
-            "required_packet_fields",
-            "attestation_terms",
             "allowed_storage_schemes",
         ):
             requirements[key] = []
@@ -495,11 +489,7 @@ def test_requirements_reject_missing_null_or_substituted_facts(cli):
             ("policy_schema_version", {}),
         ):
             cases.append(REQUIREMENTS | {key: wrong})
-        for key in (
-            "required_packet_fields",
-            "attestation_terms",
-            "allowed_storage_schemes",
-        ):
+        for key in ("allowed_storage_schemes",):
             cases.append(REQUIREMENTS | {key: [None]})
         for key, required in (
             ("required_artifacts", ("key", "path", "hash_required", "required")),
@@ -587,7 +577,7 @@ def test_context_reads_use_current_failure_bounds_without_partial_output(cli):
                 # content succeeds; excess still fails without partial output.
                 oversized["project"]["name"] = "x" * (2 * 1024 * 1024)
             else:
-                oversized["attestation_terms"] = ["x" * 65536]
+                oversized["required_artifacts"][0]["path"] = "x" * 65536
             response["body"] = json.dumps(oversized).encode()
             assert_failure(
                 cli(origin, TOKEN, "task", command, TASK, "-o", "json"),

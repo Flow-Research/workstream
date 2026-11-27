@@ -138,8 +138,8 @@ hosting and storage contracts remain in the bounded sections below; they
 are implementation scopes within this delivery, not separate merge gates.
 Preserve identity accounts, database state and public URLs during migration.
 Verify login/API/MCP and unavailable checker behavior before moving the Elastic
-IP and stopping the old host. Separate KVM execution qualification remains an
-explicit follow-up boundary, not a claim made by app-only startup.
+IP and stopping the old host. KVM execution runs on the separately qualified,
+always-on runner described below; the app host remains KVM-free.
 
 ## App-only hosting scope
 
@@ -159,11 +159,12 @@ delivery owner as ordinary assignment, revision and completion effects.
 ## Bounded change
 
 - Add an explicit hosted app profile in `deploy/hosted/{compose.py,preflight.py,compose.yml,release.env.example}`
-  and an overlay for native-only configuration if needed. The app profile
+  and a mutually authenticated remote-runner boundary. The app profile
   preserves existing API, parser, inference proxy, storage qualification, database,
   broker, and identity validation and activates without local checker files,
   mounts, native systemd start, or KVM readiness. Reject conflicting native or
-  trial configuration in this profile. Keep the existing single-host mode.
+  trial configuration in this profile. Remove the superseded single-host
+  API-plus-microVM deployment rather than retaining a fallback mode.
 - Compose a fixed checker-delivery exclusion in `backend/app/core/config.py`,
   `backend/app/adapters/outbox/__init__.py`,
   `backend/app/modules/outbox/delivery.py` and `delivery_repository.py`. Filter
@@ -409,3 +410,105 @@ service. PRE remains unavailable and POST requests are excluded from ordinary
 delivery, as proved by the focused API/outbox tests. Live ZIP intake and checker
 execution require a qualified checker host. The complete public OAuth and MCP
 drill passed on a clean Chrome rerun after a startup crash.
+
+## Dedicated remote runner scope — 2026-11-24
+
+Replace the unreleased shared-host checker wiring with one provider-neutral
+typed capability whose hosted provider is an always-on, on-demand AWS runner.
+Allowed implementation paths are `external_checkers/**`, the CHECKERS and
+trusted-intake adapters/interfaces, ART's descriptor-relative material export,
+hosted configuration/composition/preflight, their focused tests, and affected
+operator documentation. Submission lifecycle, TASK state, S3 source admission,
+intake cleanup ownership, and alternate managed-provider claims remain outside
+this scope.
+
+The app opens TLS 1.3 connections authenticated by a dedicated client
+certificate. PRE source and POST material bytes cross that boundary in bounded
+frames; no API-host filesystem path crosses it. The runner verifies exact
+request/source/grant bindings, stages one private runner-local workspace, invokes
+the existing native Unix service, and removes the exact session on success,
+failure, timeout or disconnect. Model, trial-evidence and setup-model callback
+frames are multiplexed over the exact invocation's authenticated execute
+connection; losing that app-process owner fails the callback and stops native
+execution without selecting another replica. Startup refuses stale staged
+material until the stopped native service and exact bounded residue have been
+reconciled. Future managed providers must implement the same typed task/source/
+result contract; no E2B, Daytona or other vendor is claimed supported here.
+
+Live evidence on instance `i-0936c305f8f67d835` proves m7i.large nested KVM,
+Smol health with two pinned manifests, a completed request-bound remote POST,
+and a completed streamed-ZIP PRE. PRE reported native Smol isolation and
+`cleanup=destroyed`; POST and PRE left material workspaces, model relays and
+Smol leases empty. Focused local remote transport/intake coverage passed 113
+tests, including cancellation while source export is blocked and after exact
+source EOF while native execution is active; both close source/transport and
+leave the remote workspace empty. Successful-checker public acceptance and a real model-callback provider
+journey remain explicit integration qualifications, not claims from the
+transport smoke tests.
+
+The hosted regression profile now contains 58 app-only/remote-runner cases. It
+proves that only API and worker receive runner TLS identity, while only the
+worker receives the read-only app-local model callback socket. Foreground PRE
+uses `execute_pre`, whose contract prohibits model, trial and build grants;
+POST and setup/trial callback execution remains worker-owned. The profile
+contains no app-host native checker/socket readiness fallback.
+
+The repaired edge was installed on the dedicated runner without changing the
+app host, network or IAM. Operator-only recovery first stopped both runner
+units, preserved their exact bytes and modes, made runtime masks effective by
+moving only the two verified local unit files outside systemd search paths,
+and required inactive/masked state before touching the stale socket. Exact
+private ownership, type, mode, link count, refusal, listener and process-owner
+checks preceded removal of only that socket inode. The unchanged bounded
+reconciler removed one controlled `.incoming-*` residue after normal startup
+refused it. Byte-identical units were restored and remain loaded, enabled and
+active; retained backup hashes match. Repaired POST and streamed-ZIP PRE both
+completed with pinned Smol isolation, PRE cleanup was destroyed, and all
+material, model-relay and Smol-lease roots were empty afterward.
+
+The app deployment handoff records the unchanged installed release and image,
+the eight exact remote-runner/trusted-intake environment additions, private TLS
+file custody, worker-only model callback mount, and one required private network
+rule. Read-only host and control-plane inspection confirmed that the app has no
+runner settings or TLS files yet and that TCP 9443 times out because the runner
+group has only SSH ingress. Activation requires a new exact-head backend image,
+an immutable release directory, one runner-group rule sourced from the app
+group, mTLS health from the app host, offline render/private-input checks, and a
+coordinated consumer-first upgrade. No app, network or IAM state changed during
+the inspection; AWS source admission remains closed pending its separate IAM
+qualification.
+
+Connection preparation then added only the runner-group TCP 9443 rule sourced
+from the app security group and installed the CA/client certificate/client key
+as private mode-0400 app files. An app-host TLS 1.3 exchange returned the exact
+runner health identity; this is host connectivity evidence, not deployed
+API/worker proof. Clean tracked source was staged under a new inactive immutable
+release directory, while the active unit, environment and containers remained
+unchanged. The deployed image records the `agents` SDK selection. It has no
+submission execution or cleanup profile, exposing a separate fail-closed hosted
+configuration gap before activation.
+
+Hosted submission activation preparation closes that configuration/wiring gap
+without choosing C01-C06 values or changing the live app. Both execution and
+source-cleanup profiles are now required JSON inputs and pass canonical strict
+typed validation in the pinned backend image before full preflight, `up` and
+reboot reconciliation. The template retains replacement sentinels rather than
+invented operational numbers. Static preflight binds the cleanup profile's
+upload principal to the runtime IAM ARN and requires a distinct cleanup IAM ARN,
+path and private credential inode. A dedicated one-queue finalization worker
+uses the runtime credential; a dedicated one-queue source-cleanup worker alone
+uses the cleanup credential. The general worker retains only its existing
+general/outbox queues, and Beat can no longer silently omit cleanup scheduling.
+Focused hosted tests passed 61 cases; compile, Ruff, whitespace and current
+hosted documentation-link checks passed. No app service, container, active
+release file, database, IAM policy or source-admission gate changed.
+
+Coordinated runner-only maintenance then added the exact incident-summary image
+as a third cache entry for the successful-checker public journey. Its manifest,
+config and canonical USTAR are pinned in the runner receipt. The prior two-entry
+config remains byte-identical in a root-private rollback backup, both existing
+entries remain first and unchanged, and only the runner edge/native units were
+stopped. App-origin TLS 1.3 health returned ready with three manifests; both
+units are active and material/model-relay roots are empty. This installed a
+test image only: it did not activate project policy or change the app, IAM,
+database, release environment or AWS source gate.

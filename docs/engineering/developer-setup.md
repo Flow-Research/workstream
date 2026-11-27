@@ -149,6 +149,17 @@ uploaded rules compilation at the same prefix's `requirements/compile` suffix.
 Both require a UUID `Idempotency-Key` and no body; manager review and separate
 approvals remain required. See the [local pilot](local-pilot.md#declare-and-upload-a-real-guide-document).
 
+The local Compose Celery workers each consume one queue: project guide compilation,
+project control, artifact work, outbox scanning, POST delivery, submission
+finalization, and source cleanup. The submission finalizer and source cleanup
+services use the opt-in `submission-intake` profile. Set `WORKSTREAM_SUBMISSION_FINALIZATION_CONCURRENCY`
+to an approved positive integer before enabling the profile. Missing or invalid
+values stop that consumer before Celery starts. No concurrency default or native
+runtime qualification is implied. Hosted consumer provisioning, public submission
+cutover and the complete
+deployment qualification remain unfinished; see the
+[execution record](../../.commitrail/initiatives/WS-SUBMIT-001/WS-SUBMIT-001-01.md).
+
 ## Logs, Shutdown, And Reset
 
 The API and prefork Celery process emit privacy-bounded structured logs and can export

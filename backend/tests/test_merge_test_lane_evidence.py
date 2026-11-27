@@ -110,7 +110,7 @@ def test_merge_bundles_emits_complete_run_summary(tmp_path: Path) -> None:
     assert len(list((tmp_path / "merged").glob(".coverage.*"))) == len(LANES)
 
 
-@pytest.mark.parametrize("lane_name", ["shared_foundations_a", "project_lifecycle_d", "project_lifecycle_e", "task_lifecycle_d"])
+@pytest.mark.parametrize("lane_name", ["shared_foundations_a", "shared_foundations_i", "schema_contracts_a", "schema_contracts_b", "schema_contracts_c", "project_lifecycle_d", "project_lifecycle_e", "task_lifecycle_d"])
 @pytest.mark.parametrize("damage", ["missing", "foreign"])
 def test_merge_bundles_rejects_missing_or_foreign_lane(tmp_path: Path, lane_name: str, damage: str) -> None:
     source = tmp_path / "source"
@@ -217,7 +217,7 @@ def test_partial_retry_selects_numeric_latest_before_validation(tmp_path: Path) 
     ("coverage", "invalid_lane_bundle_file"),
     ("head", "invalid_lane_bundle_summary"),
 ])
-@pytest.mark.parametrize("lane_name", ["shared_foundations_a", "project_lifecycle_d", "project_lifecycle_e", "task_lifecycle_d"])
+@pytest.mark.parametrize("lane_name", ["shared_foundations_a", "shared_foundations_i", "schema_contracts_a", "schema_contracts_b", "schema_contracts_c", "project_lifecycle_d", "project_lifecycle_e", "task_lifecycle_d"])
 def test_latest_invalid_attempt_never_falls_back(tmp_path: Path, damage: str, error: str, lane_name: str) -> None:
     source = tmp_path / "source"
     _bundles(source)

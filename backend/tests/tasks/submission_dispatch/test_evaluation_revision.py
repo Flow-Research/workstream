@@ -5,6 +5,7 @@ from uuid import UUID
 import pytest
 
 from app.core.identifiers import new_record_id
+from app.modules.artifacts.api.submission_command import SubmissionIntakeMetadata
 from app.modules.artifacts.models import SubmissionBundleAdmission
 from app.modules.tasks.api.evaluation_revision import TaskEvaluationRevisionRequest
 from app.modules.tasks.api.submitted_bundle import SubmittedBundleUnavailable
@@ -12,11 +13,9 @@ from app.modules.tasks.evaluation_revision import TaskEvaluationRevisionReader
 from app.modules.tasks.models import Submission
 from tests.tasks.post_submit_routing.remediation_support import remediation_source
 from tests.tasks.post_submit_routing.support import activate_successor_guide, revision_archive
+from tests.post_submit_materialization_helpers import create_source_submission
 from tests.tasks.submission_dispatch.test_replacement_creation import (
-    _create,
-    _creation_request,
     _creation_snapshot,
-    _ready_replacement,
 )
 from tests.tasks.submission_dispatch.test_revision_exhaustion import (
     _apply,
@@ -63,8 +62,15 @@ async def test_exact_consumed_preparation_and_source_are_read_without_mutation(
         if rebase:
             await activate_successor_guide(h)
         source_id = await _fixture_revision_context(h)
-        prepared, admission_id = await _ready_replacement(h, revision_archive(h.data))
-        created = await _create(h, _creation_request(h, prepared, admission_id))
+        created = await create_source_submission(
+            h.factory, h.actor_context, h.store.wrapped, h.namespace, h.settings,
+            SubmissionIntakeMetadata(
+                task_id=h.request.task_id,
+                assignment_id=h.request.assignment_id,
+                feedback=h.creation_request.summary,
+            ),
+            revision_archive(h.data),
+        )
         selector = await revision_selector(h, created.submission_id)
         before = await _creation_snapshot(h)
         context = await _read(h, selector)

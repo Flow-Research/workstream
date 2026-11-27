@@ -27,6 +27,7 @@ from app.interfaces.artifacts import (
     ArtifactScratchIntegrityError,
     ArtifactStoreUnavailableError,
 )
+from app.interfaces.external_checker_execution import ExternalCheckerExecutionOutcomeUnknown
 from app.core.cancellation import (
     await_completion_preserving_cancellation,
     await_cancellation_resistant,
@@ -39,7 +40,10 @@ from app.modules.artifacts.sources import (
     PreparedArtifact,
     PreparedArtifactInspector,
 )
-from app.modules.artifacts.submission_manifest import SubmissionManifest
+from app.core.hashing import validate_sha256
+from app.modules.artifacts.api.submission_manifest import (
+    SubmissionManifest,
+)
 
 
 HARD_MAXIMUM_ARTIFACT_BYTES = 512 * 1024 * 1024
@@ -98,6 +102,9 @@ _POST_MATERIAL_FIELDS = frozenset(
         "semantic_manifest_sha256",
     }
 )
+_POST_SOURCE_MATERIAL_FIELDS = (_POST_MATERIAL_FIELDS - {
+    "verification_receipt_id", "verification_job_id", "verification_generation",
+}) | {"source_operation_id", "accepted_source_sha256", "acceptance_receipt_sha256"}
 
 
 class PreparedSubmissionProcessor(Protocol[_InspectionResultCo]):
@@ -274,9 +281,10 @@ class PostExternalMaterialGrantItem:
 
     def __post_init__(self) -> None:
         """Validate canonical role custody and the inventory before grant publication."""
+        source_backed = getattr(self.material, "source_operation_id", None) is not None
         material = _external_grant_json(
             self.material,
-            expected_fields=_POST_MATERIAL_FIELDS,
+            expected_fields=_POST_SOURCE_MATERIAL_FIELDS if source_backed else _POST_MATERIAL_FIELDS,
             label="material",
         )
         identifiers = (
@@ -285,17 +293,19 @@ class PostExternalMaterialGrantItem:
             "content_id",
             "replica_id",
             "evidence_id",
-            "verification_receipt_id",
-            "verification_job_id",
-        )
+        ) + (("source_operation_id",) if source_backed else ("verification_receipt_id", "verification_job_id"))
+        if source_backed:
+            custody_valid = all(_valid_sha256(material[field]) for field in (
+                "accepted_source_sha256", "acceptance_receipt_sha256"))
+        else:
+            custody_valid = type(material["verification_generation"]) is int and material["verification_generation"] > 0
         if (
             material["phase"] != "post_submit"
             or material["role"] not in {"submission_archive", "predecessor_submission_archive"}
             or any(not _valid_resource_id(material[field]) for field in identifiers)
             or type(material["submission_version"]) is not int
             or material["submission_version"] <= 0
-            or type(material["verification_generation"]) is not int
-            or material["verification_generation"] <= 0
+            or not custody_valid
             or type(material["byte_count"]) is not int
             or not 0 <= material["byte_count"] <= HARD_MAXIMUM_ARTIFACT_BYTES
             or type(material["media_type"]) is not str
@@ -425,11 +435,94 @@ class PostExternalMaterialGrantRequest:
 
 
 @dataclass(frozen=True, slots=True)
+class ExternalMaterialExportFile:
+    """One sealed regular file in a callback-scoped material export."""
+
+    relative_path: str
+    byte_count: int
+    sha256: str
+    executable: bool
+
+
+@dataclass(frozen=True, slots=True)
 class ExternalMaterialGrant:
-    """Opaque grant identity safe to send across the checker service boundary."""
+    """Opaque grant plus a process-local, bounded export source."""
 
     grant_id: str
     binding_digest: str
+    manifest: bytes = field(repr=False)
+    files: tuple[ExternalMaterialExportFile, ...] = field(repr=False)
+    _root: Path = field(repr=False, compare=False)
+
+    def open_file(self, item: ExternalMaterialExportFile) -> AsyncIterator[bytes]:
+        """Read one already-sealed member without exposing its host path."""
+        if type(item) is not ExternalMaterialExportFile or item not in self.files:
+            raise ArtifactScratchIntegrityError("external material export file is invalid")
+
+        async def stream() -> AsyncIterator[bytes]:
+            parts = Path(item.relative_path).parts
+            if (
+                not parts
+                or Path(item.relative_path).is_absolute()
+                or any(part in {"", ".", ".."} for part in parts)
+            ):
+                raise ArtifactScratchIntegrityError("external material export path is invalid")
+            descriptors: list[int] = []
+            try:
+                descriptor = os.open(
+                    self._root,
+                    os.O_RDONLY | getattr(os, "O_DIRECTORY", 0) | getattr(os, "O_NOFOLLOW", 0),
+                )
+                descriptors.append(descriptor)
+                for part in parts[:-1]:
+                    descriptor = os.open(
+                        part,
+                        os.O_RDONLY
+                        | getattr(os, "O_DIRECTORY", 0)
+                        | getattr(os, "O_NOFOLLOW", 0),
+                        dir_fd=descriptor,
+                    )
+                    descriptors.append(descriptor)
+                file_descriptor = os.open(
+                    parts[-1],
+                    os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0),
+                    dir_fd=descriptor,
+                )
+                descriptors.append(file_descriptor)
+                metadata = os.fstat(file_descriptor)
+                expected_mode = 0o500 if item.executable else 0o400
+                if (
+                    not stat_module.S_ISREG(metadata.st_mode)
+                    or metadata.st_mode & 0o777 != expected_mode
+                    or metadata.st_size != item.byte_count
+                ):
+                    raise ArtifactScratchIntegrityError(
+                        "external material export identity differs"
+                    )
+                digest, count = hashlib.sha256(), 0
+                while True:
+                    chunk = await asyncio.to_thread(os.read, file_descriptor, 64 * 1024)
+                    if not chunk:
+                        break
+                    count += len(chunk)
+                    digest.update(chunk)
+                    yield chunk
+                if (
+                    count != item.byte_count
+                    or "sha256:" + digest.hexdigest() != item.sha256
+                ):
+                    raise ArtifactScratchIntegrityError(
+                        "external material export content differs"
+                    )
+            except OSError as exc:
+                raise ArtifactScratchIntegrityError(
+                    "external material export unavailable"
+                ) from exc
+            finally:
+                for descriptor in reversed(descriptors):
+                    os.close(descriptor)
+
+        return stream()
 
 
 @dataclass(frozen=True, slots=True)
@@ -988,7 +1081,22 @@ class ArtifactScratchManager:
                 os.close(workspace_fd)
         finally:
             os.close(root_fd)
-        return ExternalMaterialGrant(grant_id=grant_id, binding_digest=binding_digest)
+        export_files = tuple(
+            ExternalMaterialExportFile(
+                relative_path=f"workspace/{item.normalized_path}",
+                byte_count=item.byte_count,
+                sha256=item.sha256,
+                executable=item.executable,
+            )
+            for item in request.files
+        )
+        return ExternalMaterialGrant(
+            grant_id=grant_id,
+            binding_digest=binding_digest,
+            manifest=payload,
+            files=export_files,
+            _root=self._root / "workspaces" / grant_id,
+        )
 
     def _publish_external_post_grant_sync(
         self,
@@ -1101,7 +1209,23 @@ class ArtifactScratchManager:
             finally:
                 os.close(descriptor)
             os.fsync(root_fd)
-            return ExternalMaterialGrant(grant_id=grant_id, binding_digest=binding_digest)
+            export_files = tuple(
+                ExternalMaterialExportFile(
+                    relative_path=f"materials/{item.role}/{entry.normalized_path}",
+                    byte_count=entry.byte_count,
+                    sha256=entry.sha256,
+                    executable=entry.executable,
+                )
+                for item in request.materials
+                for entry in item.files
+            )
+            return ExternalMaterialGrant(
+                grant_id=grant_id,
+                binding_digest=binding_digest,
+                manifest=payload,
+                files=export_files,
+                _root=self._root / "workspaces" / grant_id,
+            )
         except (OSError, ValueError) as exc:
             raise ArtifactScratchIntegrityError(
                 "external POST material publication failed"
@@ -2555,6 +2679,7 @@ class ArtifactPreparationService:
             processor,
             reserved_bytes=reserved_bytes,
             maximum_entries=maximum_entries,
+            bound_callback=False,
         )
 
     async def _process_prepared_artifacts(
@@ -2564,6 +2689,7 @@ class ArtifactPreparationService:
         *,
         reserved_bytes: int,
         maximum_entries: int,
+        bound_callback: bool = True,
     ) -> _InspectionResult:
         """Use one quota-owned workspace and cancellation lifetime for every input."""
         if (
@@ -2645,27 +2771,37 @@ class ArtifactPreparationService:
                 ) from None
 
         operation = asyncio.create_task(process_and_cleanup())
-        try:
-            async with asyncio.timeout_at(deadline):
-                result, error = await asyncio.shield(operation)
-                if error is not None:
-                    raise error
-                return cast(_InspectionResult, result)
-        except TimeoutError:
+
+        async def abort_and_drain() -> None:
             processor.abort()
             try:
-                await await_cancellation_resistant(operation)
+                _, error = await await_cancellation_resistant(operation)
             except asyncio.CancelledError:
-                pass
+                return
+            # A cancelled transport can leave the checker running after local
+            # scratch cleanup. Preserve that outcome across the deadline boundary.
+            if isinstance(error, ExternalCheckerExecutionOutcomeUnknown):
+                raise error from None
+
+        try:
+            if bound_callback:
+                async with asyncio.timeout_at(deadline):
+                    result, error = await asyncio.shield(operation)
+            else:
+                # POST preparation and inspection retain their own fixed limits.
+                # The callback runs approved checkers, each with its own limit;
+                # the whole background evaluation has no aggregate deadline.
+                result, error = await asyncio.shield(operation)
+            if error is not None:
+                raise error
+            return cast(_InspectionResult, result)
+        except TimeoutError:
+            await abort_and_drain()
             raise ArtifactPreparationDeadlineError(
                 "artifact preparation deadline exceeded"
             ) from None
         except asyncio.CancelledError as cancellation:
-            processor.abort()
-            try:
-                await await_cancellation_resistant(operation)
-            except asyncio.CancelledError:
-                pass
+            await abort_and_drain()
             raise cancellation from None
 
     async def _release_unhanded_preparation(
@@ -2726,7 +2862,7 @@ class ArtifactPreparationService:
             raise ArtifactInputMismatchError("artifact media type is invalid") from None
         if expected_sha256 is not None:
             try:
-                ArtifactCommitment.validate_sha256(expected_sha256)
+                validate_sha256(expected_sha256)
             except ValueError:
                 raise ArtifactInputMismatchError("artifact expected digest is invalid") from None
         if expected_size is not None:

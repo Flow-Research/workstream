@@ -21,7 +21,7 @@ if config.config_file_name is not None:
 target_metadata = Base.metadata
 
 _BASELINE_REVISION = "0001_uuid7_v01"
-_CURRENT_HEAD_REVISION = "0069_remove_artifact_proof"
+_CURRENT_HEAD_REVISION = "0096_post_renewable_lifetimes"
 _RECREATE_GUIDANCE = (
     "Workstream v0.1 requires a fresh database; recreate this database before "
     "running the 0001_uuid7_v01 migration"
@@ -123,6 +123,34 @@ def do_run_migrations(connection: Connection) -> None:
             ("0066_guide_check_specification",),
             ("0067_canonical_json_restore_path",),
             ("0068_issuer_profile_email",),
+            ("0069_submission_intake_custody",),
+            ("0070_submission_intake_authority",),
+            ("0071_source_first_pre",),
+            ("0072_pre_invocation_receipts",),
+            ("0073_submission_acceptance",),
+            ("0074_submission_finalization",),
+            ("0075_source_post_custody",),
+            ("0076_submission_delivery_retry",),
+            ("0077_submission_recovery",),
+            ("0078_submission_cleanup",),
+            ("0079_cleanup_authority",),
+            ("0080_cleanup_decisions",),
+            ("0081_operation_read_authority",),
+            ("0082_policy_phase_cardinality",),
+            ("0083_accepted_revision",),
+            ("0084_submission_source_binding",),
+            ("0085_revision_deadline_error",),
+            ("0086_pending_checker_custody",),
+            ("0087_source_cleanup_candidates",),
+            ("0088_unsealed_source_cleanup",),
+            ("0089_observed_upload_cleanup",),
+            ("0069_remove_artifact_proof",),
+            ("0090_merge_direct_storage",),
+            ("0091_qualified_aws_source",),
+            ("0092_submission_feedback",),
+            ("0093_verified_email_observation",),
+            ("0094_project_archive_limits",),
+            ("0095_post_infrastructure_retry",),
             (_CURRENT_HEAD_REVISION,),
         ):
             raise RuntimeError(_RECREATE_GUIDANCE)

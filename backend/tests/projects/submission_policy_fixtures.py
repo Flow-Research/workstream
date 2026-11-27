@@ -140,14 +140,28 @@ async def approve_submission_artifact_policy(
     guide_id: str,
     policy_id: str | None,
     *,
-    pre_submit_attachments=(),
-    post_submit_attachments=(),
+    pre_submit_attachments=None,
+    post_submit_attachments=None,
 ) -> dict:
-    """Approve a policy with the caller's explicit phase image choices (empty by default)."""
+    """Approve explicit choices, or register the controlled fixture images when omitted."""
     from projects.guide_fixtures import read_guide_source_snapshot
     from projects.unified_policy_fixtures import (
         approve_unified_submission_policy, create_unified_submission_policy,
     )
+
+    if pre_submit_attachments is None or post_submit_attachments is None:
+        from tests.checkers.external.support import pre_registry_spec, post_registry_spec
+        from tests.projects.guide_activation.source_fixtures import _prepare_human_attachments
+        choices = await _prepare_human_attachments(
+            db_session.get_session_factory(), project_id,
+            pre_registry_spec() if pre_submit_attachments is None else None,
+            post_registry_spec() if post_submit_attachments is None else None,
+            None, None,
+        )
+        if pre_submit_attachments is None:
+            pre_submit_attachments = choices["pre_submit_attachments"]
+        if post_submit_attachments is None:
+            post_submit_attachments = choices["post_submit_attachments"]
 
     if policy_id is None:
         snapshot = await read_guide_source_snapshot(project_id, guide_id)

@@ -58,11 +58,9 @@ type SubmissionRequirements struct {
 	GuideVersion            string                `json:"guide_version"`
 	PolicySchemaVersion     *string               `json:"policy_schema_version"`
 	MergeAlgorithmVersion   *string               `json:"merge_algorithm_version"`
-	RequiredPacketFields    []string              `json:"required_packet_fields"`
 	RequiredArtifacts       []ArtifactRequirement `json:"required_artifacts"`
 	RequiredEvidence        []EvidenceRequirement `json:"required_evidence"`
 	ForbiddenArtifacts      []ForbiddenArtifact   `json:"forbidden_artifacts"`
-	AttestationTerms        []string              `json:"attestation_terms"`
 	ManifestRequired        bool                  `json:"manifest_required"`
 	ArtifactHashRequired    bool                  `json:"artifact_hash_required"`
 	ArtifactHashAlgorithm   string                `json:"artifact_hash_algorithm"`
@@ -144,8 +142,8 @@ func (c *Client) WorkContext(ctx context.Context, selector string) (Result[WorkC
 	}
 	if err := decodeTaskFields(fields["task"], &value.Task,
 		[]string{"task_id", "project_id", "title", "description", "status", "created_at", "updated_at"},
-		[]string{"skill_tags", "compensation"}); err != nil || !sameUUID(value.Task.TaskID, selector) ||
-		!validTask(value.Task.TaskSummary, value.Project.ID) || !ValidCompensation(value.Task.Compensation) {
+		[]string{"skill_tags", "compensation", "pending_submission_operation"}); err != nil || !sameUUID(value.Task.TaskID, selector) ||
+		!validTask(value.Task.TaskSummary, value.Project.ID) || !ValidCompensation(value.Task.Compensation) || !validPendingSubmission(value.Task.PendingSubmissionOperation) {
 		return result, &Failure{Code: "invalid_api_response"}
 	}
 	if _, err := contextObject(fields["project"], &value.Project, []string{"id", "name", "slug"}, nil); err != nil {
@@ -174,7 +172,9 @@ func (c *Client) WorkContext(ctx context.Context, selector string) (Result[WorkC
 			return result, &Failure{Code: "invalid_api_response"}
 		}
 	}
-	if err := validateGuideDocuments(fields["guide_documents"], value.GuideDocuments, value.Task.TaskID, value.Lifecycle.AssignedToCurrentActor); err != nil {
+	if err := validateGuideDocuments(fields["guide_documents"], value.GuideDocuments, func(documentID string) string {
+		return guideDocumentPath(value.Task.TaskID, documentID)
+	}); err != nil {
 		return result, &Failure{Code: "invalid_api_response"}
 	}
 	if rawRevision, present := fields["revision_context"]; present {
@@ -206,10 +206,10 @@ func decodeSubmissionRequirements(raw json.RawMessage, task, project string) (Su
 	var value SubmissionRequirements
 	bad := &Failure{Code: "invalid_api_response"}
 	fields, err := contextObject(raw, &value, []string{
-		"task_id", "project_id", "guide_version", "required_packet_fields", "required_artifacts", "required_evidence",
-		"forbidden_artifacts", "attestation_terms", "manifest_required", "artifact_hash_required", "artifact_hash_algorithm",
+		"task_id", "project_id", "guide_version", "required_artifacts", "required_evidence",
+		"forbidden_artifacts", "manifest_required", "artifact_hash_required", "artifact_hash_algorithm",
 		"allowed_storage_schemes", "storage_reference_rules", "packaging",
-	}, []string{"required_packet_fields", "attestation_terms", "allowed_storage_schemes"})
+	}, []string{"allowed_storage_schemes"})
 	if err != nil || !sameUUID(value.TaskID, task) || !validUUID(value.ProjectID) ||
 		(project != "" && !sameUUID(value.ProjectID, project)) ||
 		strings.TrimSpace(value.GuideVersion) == "" || value.ArtifactHashAlgorithm != "sha256" {

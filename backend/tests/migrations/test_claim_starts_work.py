@@ -194,6 +194,16 @@ async def test_upgrade_starts_only_retained_claim_and_preserves_evidence(predece
         assignment_id = assignment.id
         await session.commit()
     async with db_session.get_engine().begin() as connection:
+        # Only current dev-auth setup wrote these later identity observations.
+        observed = list(await connection.scalars(text("""
+            UPDATE public.actor_identity_links
+            SET email_observed_issued_at=NULL
+            WHERE issuer='flow-test' AND subject IN ('project-manager-subject', 'historical-claimant')
+              AND email_verified IS FALSE AND email_observed_issued_at IS NOT NULL
+            RETURNING subject
+        """)))
+        assert sorted(observed) == ["historical-claimant", "project-manager-subject"]
+        await connection.execute(text("SET CONSTRAINTS ALL IMMEDIATE"))
         await drop_retained_owner_read_projection(connection)
     await db_session.dispose_engine()
     await asyncio.to_thread(command.upgrade, _config(), "head")

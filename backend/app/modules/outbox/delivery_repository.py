@@ -123,17 +123,17 @@ class DeliveryRepository:
         """Select due supported work and expired claims within this worker's scope."""
         e = OutboxEvent
         now = func.statement_timestamp()
-        query = select(e.event_id, e.project_id).where(or_(
+        query = select(e.event_id, e.project_id, e.event_type).where(or_(
             and_(e.delivery_state.in_(("pending", "retryable")), e.next_attempt_at <= now,
                  tuple_(e.event_type, e.event_version).in_(sorted(registered))),
-            and_(e.delivery_state == "claimed", e.claim_expires_at <= now),
+            and_(e.delivery_state == "claimed", e.claim_live_until <= now),
         ))
         if excluded:
             query = query.where(tuple_(e.event_type, e.event_version).not_in(sorted(excluded)))
         if after is not None:
             query = query.where(e.event_id > after)
         rows = (await self.session.execute(query.order_by(e.event_id).limit(limit + 1))).all()
-        items = tuple(DeliveryCandidate(event_id=UUID(str(row.event_id)), project_id=UUID(row.project_id))
+        items = tuple(DeliveryCandidate(event_id=UUID(str(row.event_id)), project_id=UUID(row.project_id), event_type=row.event_type)
                       for row in rows[:limit])
         return DeliveryCandidatePage(items=items, next_after=items[-1].event_id if len(rows) > limit else None)
 
@@ -416,7 +416,7 @@ class DeliveryRepository:
                 a.claim_owner == e.claim_owner,
                 a.claimed_at == e.claimed_at,
                 a.claim_expires_at == e.claim_expires_at,
-                e.claim_expires_at > func.statement_timestamp(),
+                e.claim_live_until > func.statement_timestamp(),
             )
         )
         observed = (await self.session.execute(query)).scalar_one_or_none()

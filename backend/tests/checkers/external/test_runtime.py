@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from app.adapters.artifacts import selected_pre_submit_source_contracts
+
 import asyncio
 from dataclasses import replace
 import hashlib
@@ -20,26 +22,26 @@ from pydantic import ValidationError
 
 from app.adapters.checkers import (
     configured_external_checker_execution,
-    external_checker_execution_factory,
 )
 from app.adapters.checkers.external_service import (
     EXTERNAL_CHECKER_CAPABILITY_KEY,
     EXTERNAL_CHECKER_PROVIDER_KEY,
+    RemoteTlsExternalCheckerAdapter,
 )
 from app.core.config import Settings
 from app.core.hashing import canonical_json_hash
 from app.interfaces.external_checker_execution import (
+    ExternalCheckerExecutionOutcomeUnknown,
     ExternalCheckerIsolationReceipt,
-    ExternalCheckerMaterialGrant,
     ExternalCheckerServiceHealth,
 )
 from workstream_external_services import (
     ExternalServiceUnavailableError,
-    UnknownExternalServiceProviderError,
 )
 from app.modules.artifacts.preparation import (
     HARD_MAXIMUM_ARTIFACT_BYTES,
     ArtifactPreparationLimits,
+    ArtifactPreparationDeadlineError,
     ArtifactPreparationService,
     ArtifactScratchCapacityError,
     ArtifactScratchIntegrityError,
@@ -56,8 +58,12 @@ from app.modules.artifacts.api.submission_archive import (
 from app.modules.artifacts.submission_archive import (
     SubmissionArchiveInspector,
 )
-from app.modules.artifacts.submission_manifest import build_submission_manifest
-from app.modules.artifacts.submission_manifest import SUBMISSION_MANIFEST_SCHEMA_VERSION
+from app.modules.artifacts.api.submission_manifest import (
+    build_submission_manifest,
+)
+from app.modules.artifacts.api.submission_manifest import (
+    SUBMISSION_MANIFEST_SCHEMA_VERSION,
+)
 from app.modules.checkers.api.external import (
     ExternalCheckerContractError,
     ExternalCheckerExecutionRequest,
@@ -66,9 +72,9 @@ from app.modules.checkers.api.external import (
     PreSubmitExternalCheckerMaterial,
     external_checker_json_hash,
     make_external_checker_execution_request,
-    make_external_checker_execution_result,
 )
 from tests.checkers.external.support import SHA, execution_identity, registry_entry
+from tests.checkers.external.test_remote_node import fixture_placement, fixture_runner_endpoints, read_fixture_native_request
 
 
 FIXTURES = Path(__file__).parents[4] / "external_checkers" / "fixtures"
@@ -90,7 +96,8 @@ def _request(*, identity=None, archive_sha256=SHA, archive_byte_count=4):
         materials=(
             PreSubmitExternalCheckerMaterial(
                 role="submission_archive",
-                prepared_generation_id=identity.prepared_generation_id,
+                operation_id=identity.operation_id, source_sha256=identity.source_sha256,
+            lease_id=identity.lease_id, lease_generation=identity.lease_generation,
                 attempt_id=identity.attempt_id,
                 attempt_request_digest=identity.attempt_request_digest,
                 archive_sha256=archive_sha256,
@@ -112,7 +119,7 @@ def test_shared_rust_fixtures_preserve_python_contract_and_derived_digests():
     result.validate_request(request)
     assert request.configuration == {"threshold": 1e-6}
     assert request.request_digest == (
-        "sha256:a06707b14348ffe5ef22a55de8d4ec4845c9029da7180d5731fb2c120b5591f3"
+        "sha256:147cd4a72624caf97ec7ee167d00e1f76d2a9c89d0bda84134b6f1ac01a47a79"
     )
     changed = request.model_dump(mode="json")
     changed["configuration"]["threshold"] = 2e-6
@@ -125,23 +132,22 @@ def test_shared_rust_fixtures_preserve_python_contract_and_derived_digests():
         )
 
 
-def test_external_service_settings_share_the_art_scratch_root(tmp_path: Path):
-    scratch = tmp_path / "scratch"
+def test_external_service_settings_require_one_complete_remote_identity(tmp_path: Path, monkeypatch):
     settings = Settings(
-        artifact_scratch_root=scratch,
-        external_checker_service_socket=tmp_path / "service" / "checker.sock",
-        external_checker_material_root=scratch,
+        external_runner_endpoints=fixture_runner_endpoints(9443),
+        external_runner_ca_path=tmp_path / "ca.crt",
+        external_runner_certificate_path=tmp_path / "app.crt",
+        external_runner_private_key_path=tmp_path / "app.key",
     )
-    assert settings.external_checker_material_root == scratch
+    assert settings.external_runner_endpoints.root[0].server_name == "runner.test"
     assert settings.external_checker_service_timeout_seconds == 3660.0
     with pytest.raises(ValidationError, match="must be complete"):
-        Settings(external_checker_service_socket=tmp_path / "checker.sock")
-    with pytest.raises(ValidationError, match="must equal"):
-        Settings(
-            artifact_scratch_root=scratch,
-            external_checker_service_socket=tmp_path / "service" / "checker.sock",
-            external_checker_material_root=tmp_path / "other",
-        )
+        Settings(external_runner_endpoints=fixture_runner_endpoints(9443))
+    monkeypatch.setenv("WORKSTREAM_EXTERNAL_RUNNER_ENDPOINTS", settings.external_runner_endpoints.model_dump_json())
+    for key in ("ca_path", "certificate_path", "private_key_path"):
+        name = f"external_runner_{key}"
+        monkeypatch.setenv(f"WORKSTREAM_{name.upper()}", str(getattr(settings, name)))
+    assert Settings(_env_file=None).external_runner_endpoints == settings.external_runner_endpoints
     with pytest.raises(ValueError, match="isolation receipt"):
         ExternalCheckerIsolationReceipt(
             repository="--network/host",
@@ -232,155 +238,6 @@ def test_receipts_cannot_misrepresent_an_engine_as_another_isolation(runtime, is
         )
 
 
-@pytest.mark.parametrize(
-    "runtime,isolation_mode",
-    [("runsc", "gvisor"), ("runc", "docker-dev"), ("smolvm", "smol-microvm")],
-)
-@pytest.mark.asyncio
-async def test_unix_adapter_revalidates_exact_result_and_factory_is_closed(
-    tmp_path: Path,
-    runtime: str,
-    isolation_mode: str,
-):
-    request = _request()
-    result = make_external_checker_execution_result(
-        request_digest=request.request_digest,
-        registry_entry_id=request.registry.registry_entry_id,
-        registry_entry_digest=request.registry.entry_digest,
-        phase="pre_submit",
-        outcome="completed",
-        verdict="passed",
-        findings=(),
-        infrastructure_failure_code=None,
-    )
-    socket = tmp_path / "checker.sock"
-
-    async def handle(reader, writer):
-        size = struct.unpack(">I", await reader.readexactly(4))[0]
-        received = json.loads(await reader.readexactly(size))
-        if received["operation"] == "health":
-            body = json.dumps(
-                {
-                    "protocol_version": "external_checker_service.v1",
-                    "operation": "health",
-                    "status": "ready",
-                    "operating_system": "linux",
-                    "architecture": "amd64",
-                    "runtime": runtime,
-                    "isolation_mode": isolation_mode,
-                    "cached_platform_manifests": 1,
-                    "sandbox_uid": 65532,
-                    "sandbox_gid": 65532,
-                },
-                separators=(",", ":"),
-            ).encode()
-            writer.write(struct.pack(">I", len(body)) + body)
-            await writer.drain()
-            writer.close()
-            return
-        assert received["request"]["request_digest"] == request.request_digest
-        assert received["model_grant"] is None
-        body = json.dumps(
-            {
-                "protocol_version": "external_checker_service.v1",
-                "result": result.model_dump(mode="json"),
-                "isolation": {
-                    "repository": "registry.example/workstream/checker",
-                    "platform_manifest_digest": request.registry.image_digest,
-                    "platform_manifest_media_type": ("application/vnd.oci.image.manifest.v1+json"),
-                    "platform_manifest_byte_count": 1367,
-                    "operating_system": "linux",
-                    "architecture": "amd64",
-                    "config_image_id": "sha256:" + "b" * 64,
-                    "runtime": runtime,
-                    "isolation_mode": isolation_mode,
-                    "sandbox_uid": 65532,
-                    "sandbox_gid": 65532,
-                },
-            },
-            separators=(",", ":"),
-        ).encode()
-        writer.write(struct.pack(">I", len(body)) + body)
-        await writer.drain()
-        writer.close()
-
-    server = await asyncio.start_unix_server(handle, socket)
-    try:
-        factory = external_checker_execution_factory(socket_path=socket, timeout_seconds=90.0)
-        adapter = factory.create("unix_socket")
-        health = await adapter.health()
-        assert health.runtime == runtime
-        assert health.isolation_mode == isolation_mode
-        assert health.cached_platform_manifests == 1
-        response = await adapter.execute(
-            request,
-            ExternalCheckerMaterialGrant(
-                grant_id="extract_" + "a" * 32,
-                binding_digest="sha256:" + "c" * 64,
-            ),
-        )
-        assert response.result == result
-        assert response.isolation is not None
-        assert response.isolation.runtime == runtime
-        assert response.isolation.isolation_mode == isolation_mode
-        with pytest.raises(UnknownExternalServiceProviderError):
-            factory.create("docker")
-        short = external_checker_execution_factory(socket_path=socket, timeout_seconds=2.0).create(
-            "unix_socket"
-        )
-        with pytest.raises(ExternalServiceUnavailableError):
-            await short.execute(
-                request,
-                ExternalCheckerMaterialGrant(
-                    grant_id="extract_" + "a" * 32,
-                    binding_digest="sha256:" + "c" * 64,
-                ),
-            )
-    finally:
-        server.close()
-        await server.wait_closed()
-
-
-@pytest.mark.asyncio
-async def test_unix_adapter_cancellation_closes_the_service_connection(tmp_path: Path):
-    socket = tmp_path / "checker.sock"
-    received = asyncio.Event()
-    disconnected = asyncio.Event()
-
-    async def handle(reader, writer):
-        try:
-            size = struct.unpack(">I", await reader.readexactly(4))[0]
-            await reader.readexactly(size)
-            received.set()
-            assert await reader.read() == b""
-        finally:
-            disconnected.set()
-            writer.close()
-
-    server = await asyncio.start_unix_server(handle, socket)
-    try:
-        adapter = external_checker_execution_factory(
-            socket_path=socket, timeout_seconds=90.0
-        ).create("unix_socket")
-        task = asyncio.create_task(
-            adapter.execute(
-                _request(),
-                ExternalCheckerMaterialGrant(
-                    grant_id="extract_" + "a" * 32,
-                    binding_digest="sha256:" + "c" * 64,
-                ),
-            )
-        )
-        await asyncio.wait_for(received.wait(), 2)
-        task.cancel()
-        with pytest.raises(asyncio.CancelledError):
-            await task
-        await asyncio.wait_for(disconnected.wait(), 2)
-    finally:
-        server.close()
-        await server.wait_closed()
-
-
 @pytest.mark.asyncio
 async def test_prepared_zip_issues_request_bound_grant_only_inside_callback(tmp_path: Path):
     archive = io.BytesIO()
@@ -420,9 +277,8 @@ async def test_prepared_zip_issues_request_bound_grant_only_inside_callback(tmp_
     )
     inspection = await prepared.inspect(inspector)
     manifest = build_submission_manifest(inspection)
-    identity = execution_identity().model_copy(
-        update={"prepared_generation_id": prepared.generation_id}
-    )
+    # Scratch lifetime is private ART custody, not part of the source PRE wire identity.
+    identity = execution_identity()
     request = _request(
         identity=identity,
         archive_sha256=prepared.commitment.sha256,
@@ -1012,8 +868,12 @@ def test_post_aggregate_workspace_enforces_combined_quota_and_cleanup(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("interruption", ["cancelled", "deadline"])
+@pytest.mark.parametrize("unknown", [False, True])
 async def test_post_aggregate_rejects_duplicate_sources_and_drains_cancellation(
     tmp_path: Path,
+    interruption,
+    unknown,
 ) -> None:
     """Duplicate custody is rejected before scratch; cancellation drains both readers."""
     (
@@ -1059,8 +919,14 @@ async def test_post_aggregate_rejects_duplicate_sources_and_drains_cancellation(
             }
             entered.set()
             await aborted.wait()
+            if unknown:
+                raise ExternalCheckerExecutionOutcomeUnknown()
             raise RuntimeError("aborted callback result must not replace cancellation")
 
+    if interruption == "deadline":
+        deadline = asyncio.get_running_loop().time() + 1.0
+        for prepared in (current, prior):
+            service._active[prepared._binding].deadline = deadline
     task = asyncio.create_task(
         service._process_prepared_post_submission(
             (
@@ -1073,9 +939,13 @@ async def test_post_aggregate_rejects_duplicate_sources_and_drains_cancellation(
         )
     )
     await asyncio.wait_for(entered.wait(), 1)
-    task.cancel()
-    with pytest.raises(asyncio.CancelledError):
-        await asyncio.wait_for(task, 1)
+    if interruption == "cancelled":
+        task.cancel()
+    expected = ExternalCheckerExecutionOutcomeUnknown if unknown else (
+        asyncio.CancelledError if interruption == "cancelled" else ArtifactPreparationDeadlineError
+    )
+    with pytest.raises(expected):
+        await asyncio.wait_for(task, 3)
     assert aborted.is_set()
     assert list((tmp_path / "scratch" / "workspaces").iterdir()) == []
     assert not service._external_grant_workspaces
@@ -1083,3 +953,319 @@ async def test_post_aggregate_rejects_duplicate_sources_and_drains_cancellation(
     await prior.close()
     assert (await manager.usage()).reservation_count == 0
     manager.close()
+
+
+def _pre_transport_processor(lease, endpoint, changed):
+    """Exercise direct transport and both real production composition wrappers."""
+    from app.modules.checkers.selected_pre_submit_execution import SelectedPreSubmitProcessor
+    adapter = RemoteTlsExternalCheckerAdapter(
+        **endpoint,
+        model_proxy_socket_path=None,
+        timeout_seconds=5.0,
+        source_contracts=selected_pre_submit_source_contracts(),
+    )
+    if changed in {"configured", "model_wrapper"}:
+        from app.adapters.checkers import (
+            selected_pre_submit_checker_execution, configured_post_submit_external_execution,
+            SelectedPreSubmitCheckerExecutionAdapter,
+        )
+        settings = Settings(
+            external_runner_endpoints=endpoint["endpoints"],
+            external_runner_ca_path=endpoint["ca_path"],
+            external_runner_certificate_path=endpoint["certificate_path"],
+            external_runner_private_key_path=endpoint["private_key_path"],
+        )
+        if changed == "configured":
+            processor = selected_pre_submit_checker_execution(settings=settings).build(lease)
+        else:
+            def forbidden_sessions():
+                raise AssertionError("PRE must not request model authority")
+            wrapped = configured_post_submit_external_execution(settings, sessions=forbidden_sessions)
+            processor = SelectedPreSubmitCheckerExecutionAdapter(external_execution=wrapped).build(lease)
+    else:
+        processor = SelectedPreSubmitProcessor(lease=lease, execution=adapter, source_contracts=selected_pre_submit_source_contracts())
+    return processor
+
+
+def _pre_placement(reservation, config_image_id=None):
+    runtime = reservation.runtime_profile
+    return fixture_placement(
+        reservation.policy.entries[0].registry.image_digest, config_image_id,
+        pre={"profile_sha256": canonical_json_hash(runtime.model_dump(mode="json")),
+             "root_sha256": runtime.platform_root_sha256},
+    )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("changed", [None, "source_hash", "source_short", "source_long", "result_fence", "trailing", "chunk_oversized", "expired_after_decode", "managed_runtime", "provider_from_wire", "configured", "model_wrapper"])
+async def test_single_pre_transport_streams_source_and_validates_combined_result(tmp_path, monkeypatch, changed):
+    from dataclasses import replace
+    from app.modules.checkers.api.selected_pre_submit import SelectedPreSubmitLeaseFacts
+    from app.modules.checkers.api.selected_pre_submit import SelectedPreSubmitInfrastructureUnavailable
+    from tests.checkers.external.test_selected_pre_submit_coordination import (
+        _source_reservation, _source_completed_execution,
+    )
+
+    payload = b"controlled transport bytes" * 4000
+    reservation = _source_reservation()
+    reservation = replace(reservation, source_contracts=selected_pre_submit_source_contracts(), source=reservation.source.model_copy(update={
+        "raw_sha256": "sha256:" + hashlib.sha256(payload).hexdigest(),
+        "raw_byte_count": len(payload),
+    }))
+    execution = _source_completed_execution(reservation)
+    lease = SelectedPreSubmitLeaseFacts(
+        reservation, execution.lease_id, execution.lease_generation, reservation.pre_deadline_at,
+    )
+    from tests.checkers.external.test_pre_invocation import receipt_body
+    body = receipt_body(lease, managed=changed == "managed_runtime")
+    body.pop("adapter_provider_key")
+    if changed == "provider_from_wire":
+        body["adapter_provider_key"] = "unix_socket"
+    body["execution"] = execution.canonical_body()
+    if changed == "result_fence":
+        body["invocation"]["lease_generation"] += 1
+    received = bytearray()
+    sizes = []
+    finished = asyncio.Event()
+    requests = []
+
+    async def handle(reader, writer):
+        request = None
+        try:
+            request = await read_fixture_native_request(
+                reader, writer, _pre_placement(reservation, body["invocation"]["config_image_id"]),
+            )
+            if request is None:
+                return
+            requests.append(request)
+            while True:
+                size = struct.unpack(">I", await reader.readexactly(4))[0]
+                if size == 0:
+                    break
+                sizes.append(size)
+                received.extend(await reader.readexactly(size))
+            response = json.dumps(body).encode()
+            writer.write(struct.pack(">I", len(response)) + response)
+            if changed == "trailing":
+                writer.write(b"extra")
+            await writer.drain()
+        except (asyncio.IncompleteReadError, ConnectionResetError):
+            pass  # A refused source must close transport before the EOF marker.
+        finally:
+            writer.close()
+            await writer.wait_closed()
+            if request is not None:
+                finished.set()
+
+    class Grant:
+        closed = False
+        calls = 0
+
+        async def open_source(self, *, lease):
+            assert lease == expected_lease
+            self.calls += 1
+            try:
+                data = (payload[:-1] if changed == "source_short" else
+                        payload + b"!" if changed == "source_long" else
+                        b"x" * len(payload) if changed == "source_hash" else payload)
+                if changed == "chunk_oversized":
+                    yield data
+                else:
+                    for offset in range(0, len(data), 16 * 1024):
+                        yield data[offset:offset + 16 * 1024]
+            finally:
+                self.closed = True
+
+    decode_called = []
+    if changed == "expired_after_decode":
+        from datetime import datetime as real_datetime
+        from app.adapters.checkers import external_service
+        from app.modules.checkers.api.selected_pre_submit import SelectedPreSubmitExecutionFacts
+        decode = SelectedPreSubmitExecutionFacts.from_canonical_body
+        class Clock:
+            @staticmethod
+            def now(zone):
+                return lease.lease_expires_at if decode_called else real_datetime.now(zone)
+        def delayed_decode(cls, value, *, source_contracts):
+            decode_called.append(True)
+            return decode(value, source_contracts=source_contracts)
+        monkeypatch.setattr(external_service, "datetime", Clock)
+        monkeypatch.setattr(SelectedPreSubmitExecutionFacts, "from_canonical_body", classmethod(delayed_decode))
+    expected_lease = lease
+    grant = Grant()
+    socket = tmp_path / "pre.sock"
+    server = await asyncio.start_unix_server(handle, socket)
+    from tests.checkers.external.test_remote_node import _certificate_files, _REMOTE
+    certificates = _certificate_files(tmp_path)
+    materials = tmp_path / "runner-materials"
+    materials.mkdir(mode=0o700)
+    node = _REMOTE.RemoteNode({
+        "listen_host": "127.0.0.1", "listen_port": 1, "client_name": "app.test",
+        "socket_path": str(socket), "material_root": str(materials),
+        "model_proxy_socket_path": str(tmp_path / "runner-model.sock"),
+        "tls_certificate_path": str(certificates["server_certificate"]),
+        "tls_private_key_path": str(certificates["server_key"]),
+        "tls_ca_path": str(certificates["ca"]), "session_timeout_seconds": 10,
+    })
+    remote = await asyncio.start_server(node.handle, "127.0.0.1", 0, ssl=node.ssl_context)
+    endpoint = {
+        "endpoints": fixture_runner_endpoints(remote.sockets[0].getsockname()[1]), "ca_path": certificates["ca"],
+        "certificate_path": certificates["client_certificate"],
+        "private_key_path": certificates["client_key"],
+    }
+    processor = _pre_transport_processor(lease, endpoint, changed)
+    try:
+        if changed in {None, "configured", "model_wrapper"}:
+            assert (await processor.process(grant)).execution == execution
+            assert bytes(received) == payload
+            assert sizes and max(sizes) <= 64 * 1024
+            with pytest.raises(SelectedPreSubmitInfrastructureUnavailable, match="material_unavailable"):
+                await processor.process(grant)
+        else:
+            code = "deadline_exceeded" if changed == "expired_after_decode" else "invalid_output"
+            with pytest.raises(SelectedPreSubmitInfrastructureUnavailable, match=code):
+                await processor.process(grant)
+        if changed == "expired_after_decode":
+            assert decode_called == [True]
+        if changed == "chunk_oversized":
+            assert not sizes
+        await asyncio.wait_for(finished.wait(), 2)
+        assert grant.closed and grant.calls == 1
+        assert len(requests) == 1 and requests[0]["operation"] == "execute_pre"
+        assert requests[0]["reservation"] == reservation.canonical_body()
+        assert "grant" not in requests[0] and "prepared_generation_id" not in requests[0]
+    finally:
+        server.close()
+        remote.close()
+        await server.wait_closed()
+        await remote.wait_closed()
+
+
+@pytest.mark.asyncio
+async def test_single_pre_expired_lease_does_not_open_source_or_runtime(tmp_path):
+    from datetime import datetime, timedelta, timezone
+    from app.modules.checkers.api.selected_pre_submit import (
+        SelectedPreSubmitLeaseFacts, SelectedPreSubmitInfrastructureUnavailable,
+    )
+    from tests.checkers.external.test_selected_pre_submit_coordination import _source_reservation
+
+    lease = SelectedPreSubmitLeaseFacts(
+        _source_reservation(), uuid4(), 1, datetime.now(timezone.utc) - timedelta(seconds=1),
+    )
+    class NoSource:
+        def open_source(self, **kwargs):
+            raise AssertionError("expired execution opened source")
+
+    from tests.checkers.external.test_remote_node import _certificate_files
+    certificates = _certificate_files(tmp_path)
+    adapter = RemoteTlsExternalCheckerAdapter(
+        endpoints=fixture_runner_endpoints(),
+        ca_path=certificates["ca"], certificate_path=certificates["client_certificate"],
+        private_key_path=certificates["client_key"], model_proxy_socket_path=None,
+        timeout_seconds=5.0,
+        source_contracts=selected_pre_submit_source_contracts(),
+    )
+    with pytest.raises(SelectedPreSubmitInfrastructureUnavailable, match="deadline_exceeded"):
+        await adapter.execute_pre(lease, NoSource())
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("stage", ["source", "execution"])
+async def test_single_pre_cancellation_closes_source_and_transport(tmp_path, stage):
+    from dataclasses import replace
+    from app.modules.checkers.api.selected_pre_submit import SelectedPreSubmitLeaseFacts
+    from app.modules.checkers.selected_pre_submit_execution import SelectedPreSubmitProcessor
+    from tests.checkers.external.test_selected_pre_submit_coordination import _source_reservation
+
+    entered, source_closed, connection_closed = asyncio.Event(), asyncio.Event(), asyncio.Event()
+    payload = b"exact cancellation source" * 4000
+    reservation = _source_reservation()
+    if stage == "execution":
+        reservation = replace(
+            reservation,
+            source_contracts=selected_pre_submit_source_contracts(),
+            source=reservation.source.model_copy(
+                update={
+                    "raw_sha256": "sha256:" + hashlib.sha256(payload).hexdigest(),
+                    "raw_byte_count": len(payload),
+                }
+            ),
+        )
+    lease = SelectedPreSubmitLeaseFacts(reservation, uuid4(), 1, reservation.pre_deadline_at)
+    class Grant:
+        async def open_source(self, *, lease):
+            try:
+                if stage == "source":
+                    entered.set()
+                    await asyncio.Event().wait()
+                    yield b"unreachable"
+                else:
+                    for offset in range(0, len(payload), 16 * 1024):
+                        yield payload[offset:offset + 16 * 1024]
+            finally:
+                source_closed.set()
+
+    async def handle(reader, writer):
+        request = None
+        try:
+            request = await read_fixture_native_request(reader, writer, _pre_placement(reservation))
+            if request is None:
+                return
+            assert request["request_digest"] == reservation.request_digest
+            if stage == "execution":
+                received = bytearray()
+                while True:
+                    size = struct.unpack(">I", await reader.readexactly(4))[0]
+                    if size == 0:
+                        break
+                    received.extend(await reader.readexactly(size))
+                assert bytes(received) == payload
+                entered.set()
+            assert await reader.read() == b""
+        finally:
+            writer.close()
+            await writer.wait_closed()
+            if request is not None:
+                connection_closed.set()
+
+    socket = tmp_path / "cancel.sock"
+    server = await asyncio.start_unix_server(handle, socket)
+    from tests.checkers.external.test_remote_node import _certificate_files, _REMOTE
+    certificates = _certificate_files(tmp_path)
+    materials = tmp_path / "runner-materials"
+    materials.mkdir(mode=0o700)
+    node = _REMOTE.RemoteNode({
+        "listen_host": "127.0.0.1", "listen_port": 1, "client_name": "app.test",
+        "socket_path": str(socket), "material_root": str(materials),
+        "model_proxy_socket_path": str(tmp_path / "runner-model.sock"),
+        "tls_certificate_path": str(certificates["server_certificate"]),
+        "tls_private_key_path": str(certificates["server_key"]),
+        "tls_ca_path": str(certificates["ca"]), "session_timeout_seconds": 10,
+    })
+    remote = await asyncio.start_server(node.handle, "127.0.0.1", 0, ssl=node.ssl_context)
+    adapter = RemoteTlsExternalCheckerAdapter(
+        endpoints=fixture_runner_endpoints(remote.sockets[0].getsockname()[1]),
+        ca_path=certificates["ca"], certificate_path=certificates["client_certificate"],
+        private_key_path=certificates["client_key"], model_proxy_socket_path=None,
+        timeout_seconds=5.0,
+        source_contracts=selected_pre_submit_source_contracts(),
+    )
+    processor = SelectedPreSubmitProcessor(lease=lease, execution=adapter, source_contracts=selected_pre_submit_source_contracts())
+    task = asyncio.create_task(processor.process(Grant()))
+    try:
+        await asyncio.wait_for(entered.wait(), 2)
+        processor.abort()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        await asyncio.wait_for(connection_closed.wait(), 2)
+        assert source_closed.is_set()
+        assert list((materials / "workspaces").iterdir()) == []
+    finally:
+        if not task.done():
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+        server.close()
+        remote.close()
+        await server.wait_closed()
+        await remote.wait_closed()
+        await node.close()

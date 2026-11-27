@@ -1,13 +1,15 @@
 """Project work pages and the summary stay within budget on 10,000 tasks and 20,000 submissions.
 
-The preparation list is timed over 10,000 seeded runs, so its project/queued
-index carries the page and the ``failed`` filter scans every pending run. The
+The preparation list is timed over 10,000 retained-history benchmark rows, so
+its project/queued index carries the page and the ``failed`` filter scans
+completed passing runs. The
 guide list (C1) and the contribution policy list (D1) are low-cardinality per
 project and are not timed here.
 """
 
 import json
 
+from tests.test_tasks import auth_headers
 from tests.contributor_reads.test_scale import (
     BUDGET_SECONDS,
     SUBMISSIONS_PER_TASK,
@@ -47,6 +49,14 @@ async def test_project_pages_and_summary_meet_budget_at_scale(
     # A seeding miss must fail: the timed page is full, and no seeded or real run failed.
     assert len(pages["preparations"]["items"]) == 100 and pages["preparations"]["next_cursor"]
     assert pages["preparations_failed"] == {"items": [], "next_cursor": None}
+    for params in ({"limit": 2}, {"limit": 100, "outcome": "passed"}):
+        invalid = await task_client.get(
+            project_path(project, "/submission-bundle-preparations"),
+            params=params | {"cursor": pages["preparations"]["next_cursor"]},
+            headers=auth_headers(),
+        )
+        assert invalid.status_code == 422, params
+        assert invalid.json()["error"]["code"] == "project_read_cursor_invalid"
     summary = await get_ok(task_client, project_path(project, "/summary"))
     assert sum(summary["tasks"].values()) == TASKS + 1
     assert summary["assignments"]["active"] == TASKS + 1

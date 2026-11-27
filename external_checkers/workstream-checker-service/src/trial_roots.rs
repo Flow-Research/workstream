@@ -520,7 +520,7 @@ esac
             &lease,
             serde_json::to_vec(&serde_json::json!({
                 "name": name, "owner": owner, "epoch": "e".repeat(64),
-                "expires_ms": 1, "lifetime_ms": 1, "root": leases,
+                "root": leases,
                 "runtime": child_runtime, "private_home_root": runtime.child_home_root,
             }))
             .unwrap(),

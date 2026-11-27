@@ -28,13 +28,17 @@ pub(super) fn validate_child_home_root(root: &Path) -> Result<(), String> {
 }
 
 mod admission;
-pub(crate) use admission::{Admission, Capacity, Reservation};
+pub(crate) use admission::{Admission, Capacity, Phase, Reservation};
 mod intake;
 pub(crate) mod trial;
 mod trial_io;
+pub(super) use intake::identity as intake_identity;
 pub(super) use intake::{serve as serve_intake, IntakeConfig};
 mod io;
+mod pre;
 pub(super) use io::{ProjectCallbacks, ProjectMaterials};
+pub(super) use pre::admission::Config as PreConfig;
+pub(super) use pre::serve as serve_pre;
 
 #[derive(Clone, Copy)]
 struct Resources {
@@ -45,16 +49,20 @@ struct Resources {
 }
 impl From<&ValidatedRequest> for Resources {
     fn from(value: &ValidatedRequest) -> Self {
-        Self {
-            cpu_millis: value.cpu_millis,
-            memory_bytes: value.memory_bytes,
-            storage_gib: 1,
-            pids: (value.memory_bytes / (16 * 1024 * 1024)).clamp(16, 256),
-        }
+        Self::checker(value.cpu_millis, value.memory_bytes)
     }
 }
 
 impl Resources {
+    fn checker(cpu_millis: u64, memory_bytes: u64) -> Self {
+        Self {
+            cpu_millis,
+            memory_bytes,
+            storage_gib: 1,
+            pids: (memory_bytes / (16 * 1024 * 1024)).clamp(16, 256),
+        }
+    }
+
     fn host_pids(self) -> u64 {
         // The VMM needs host threads independently of the guest workload's
         // process ceiling. The pinned runtime reaches 57 during cold startup.
@@ -87,15 +95,16 @@ struct Lease {
     name: String,
     owner: String,
     epoch: String,
-    expires_ms: u64,
-    lifetime_ms: u64,
     root: PathBuf,
     runtime: SmolConfig,
     #[serde(default)]
     private_home_root: Option<PathBuf>,
+    #[serde(default)]
+    pre: Option<pre::Invocation>,
 }
 struct Machine {
     lease: Lease,
+    journal: pre::Journal,
     guardian: Child,
     keeper: Option<std::process::ChildStdin>,
     consumed: bool,
@@ -125,7 +134,12 @@ fn reserve_resources(
     config: &ServiceConfig,
     resources: Resources,
 ) -> Result<Arc<Reservation>, String> {
-    reserve_capacity(config, resource_capacity(resources, None)?, None)
+    reserve_capacity(
+        config,
+        Phase::Background,
+        resource_capacity(resources, None)?,
+        None,
+    )
 }
 pub(super) fn reserve_invocation(
     config: &ServiceConfig,
@@ -134,6 +148,7 @@ pub(super) fn reserve_invocation(
 ) -> Result<Arc<Reservation>, String> {
     reserve_capacity(
         config,
+        Phase::Background,
         resource_capacity(request.into(), None)?,
         Some(child),
     )
@@ -179,6 +194,7 @@ pub(crate) fn quarantine(config: &ServiceConfig) {
 }
 fn reserve_capacity(
     config: &ServiceConfig,
+    phase: Phase,
     outer: Capacity,
     child: Option<Capacity>,
 ) -> Result<Arc<Reservation>, String> {
@@ -186,14 +202,100 @@ fn reserve_capacity(
         .smol_admission
         .as_ref()
         .ok_or("admission unavailable")?;
-    let reservation = admission.reserve(outer, child)?;
-    // Reserve atomically first, then recheck physical space. A failure drops the
-    // complete reservation; no VM or provider operation has begun.
-    let required = admission.reserved_storage_bytes()?;
-    if available_storage(settings(config)?)? < required {
-        return Err("node storage unavailable".into());
+    admission.reserve_with_storage(phase, outer, child, || storage_open_for_admission(config))
+}
+
+fn storage_open_for_admission(config: &ServiceConfig) -> Result<u64, String> {
+    let available = available_storage(settings(config)?)?;
+    // Read the operator gate under the same lock as the final reservation.
+    if node_draining(config)? {
+        return Err("runner is draining".into());
     }
-    Ok(reservation)
+    Ok(available)
+}
+
+pub(super) fn fits_placement(
+    config: &ServiceConfig,
+    demand: &PlacementDemand,
+) -> Result<bool, String> {
+    let admission = config
+        .smol_admission
+        .as_ref()
+        .ok_or("runner epoch unavailable")?;
+    let (phase, outer, child) = match demand {
+        PlacementDemand::Pre { source_bytes } => (
+            Phase::Pre,
+            config
+                .pre
+                .as_ref()
+                .ok_or("PRE unavailable")?
+                .capacity(*source_bytes)?,
+            None,
+        ),
+        PlacementDemand::Intake { preparation } => (
+            Phase::Background,
+            intake::placement_capacity(config, preparation)?,
+            None,
+        ),
+        PlacementDemand::Post {
+            memory_bytes,
+            trial,
+        } => {
+            let child = trial
+                .as_ref()
+                .map(|binding| {
+                    let profile = config
+                        .trial_profiles
+                        .as_ref()
+                        .and_then(|catalog| catalog.resolve_placement(binding))
+                        .ok_or("trial authority unavailable")?;
+                    trial_peak_capacity(
+                        profile.maximum_memory_bytes,
+                        profile.maximum_memory_overrun_bytes,
+                        profile.maximum_disk_bytes,
+                    )
+                })
+                .transpose()?;
+            (
+                Phase::Background,
+                resource_capacity(Resources::checker(0, *memory_bytes), None)?,
+                child,
+            )
+        }
+    };
+    admission.fits_with_storage(phase, outer, child, || storage_open_for_admission(config))
+}
+
+pub(super) const DRAIN_MARKER: &str = ".workstream-checker-drain";
+
+pub(super) fn node_draining(config: &ServiceConfig) -> Result<bool, String> {
+    let root = config
+        .control_root
+        .as_ref()
+        .ok_or("runner control root unavailable")?;
+    let path = PathBuf::from(format!(
+        "/proc/self/fd/{}/{}",
+        root.as_raw_fd(),
+        DRAIN_MARKER
+    ));
+    let metadata = match fs::symlink_metadata(path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(_) => return Err("runner drain marker unavailable".into()),
+    };
+    let owner = root
+        .metadata()
+        .map_err(|_| "runner control root unavailable")?;
+    if !metadata.is_file()
+        || metadata.uid() != owner.uid()
+        || metadata.gid() != owner.gid()
+        || metadata.mode() & 0o7777 != 0o600
+        || metadata.nlink() != 1
+        || metadata.len() != 0
+    {
+        return Err("runner drain marker custody invalid".into());
+    }
+    Ok(true)
 }
 fn available_storage(s: &SmolConfig) -> Result<u64, String> {
     let directory = File::open(&s.home).map_err(|_| "Smol storage unavailable")?;
@@ -230,9 +332,10 @@ fn random_token() -> Result<String, String> {
 fn now_ms() -> Result<u64, String> {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis() as u64)
+        .map(|duration| duration.as_millis() as u64)
         .map_err(|_| "clock unavailable".into())
 }
+
 fn private_directory(path: &Path) -> Result<(), String> {
     let metadata = fs::symlink_metadata(path).map_err(|_| "private directory missing")?;
     if !private_socket_parent(&metadata)
@@ -318,18 +421,45 @@ pub(super) fn validate(config: &ServiceConfig) -> Result<(), String> {
     Ok(())
 }
 pub(super) fn inspect_image(image: &CacheEntry) -> Result<(), String> {
+    image_configuration(image).map(|_| ())
+}
+fn image_configuration(image: &CacheEntry) -> Result<Value, String> {
     let source = image.smol.as_ref().ok_or("Smol image missing")?;
-    hash_file(&source.image_config, &image.config_image_id)?;
-    let value: Value =
-        serde_json::from_slice(&read_bounded_file(&source.image_config, MAX_REQUEST_BYTES)?)
-            .map_err(|_| "image configuration invalid")?;
+    if !source.image_config.is_absolute() || !valid_digest(&image.config_image_id) {
+        return Err("image configuration identity invalid".into());
+    }
+    let mut file = OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC | libc::O_NONBLOCK)
+        .open(&source.image_config)
+        .map_err(|_| "image configuration unavailable")?;
+    let metadata = file
+        .metadata()
+        .map_err(|_| "image configuration unavailable")?;
+    if !metadata.is_file()
+        || metadata.mode() & 0o022 != 0
+        || metadata.len() > MAX_REQUEST_BYTES as u64
+    {
+        return Err("image configuration custody invalid".into());
+    }
+    let mut bytes = Vec::new();
+    Read::by_ref(&mut file)
+        .take(MAX_REQUEST_BYTES as u64 + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|_| "image configuration unavailable")?;
+    if bytes.len() > MAX_REQUEST_BYTES
+        || format!("sha256:{:x}", Sha256::digest(&bytes)) != image.config_image_id
+    {
+        return Err("image configuration identity differs".into());
+    }
+    let value: Value = serde_json::from_slice(&bytes).map_err(|_| "image configuration invalid")?;
     if value["os"].as_str() != Some(&image.operating_system)
         || value["architecture"].as_str() != Some(&image.architecture)
     {
         return Err("image platform differs".into());
     }
     image_command(&value)?;
-    Ok(())
+    Ok(value)
 }
 fn image_command(value: &Value) -> Result<Vec<String>, String> {
     let mut command = Vec::new();
@@ -436,13 +566,14 @@ fn collect(
     maximum: usize,
     client: Option<&UnixStream>,
 ) -> Result<BoundedCommandOutput, String> {
-    collect_bounded_command(child, deadline, maximum, client, None).map_err(|error| {
-        match error.as_str() {
-            "process deadline exceeded" => "deadline_exceeded".into(),
-            "process output unbounded" => "invalid_output".into(),
-            _ => "implementation_unavailable".into(),
-        }
-    })
+    collect_bounded_command(child, deadline, maximum, client, None).map_err(command_failure)
+}
+fn command_failure(error: String) -> String {
+    match error.as_str() {
+        "process deadline exceeded" => "deadline_exceeded".into(),
+        "process output unbounded" => "invalid_output".into(),
+        _ => "implementation_unavailable".into(),
+    }
 }
 fn control(
     s: &SmolConfig,
@@ -511,6 +642,10 @@ impl Lease {
                     && root != &self.root
                     && self.runtime.home == self.private_home_path()
             })
+            && self
+                .pre
+                .as_ref()
+                .is_none_or(|invocation| self.private_home_root.is_none() && invocation.valid())
     }
     fn inventory(&self, deadline: Instant) -> Result<bool, String> {
         let output = control(
@@ -544,14 +679,27 @@ impl Lease {
         }
         Ok(false)
     }
-    fn verify_network_disabled(&self, deadline: Instant) -> Result<(), String> {
-        let output = control(
-            &self.runtime,
-            &["machine", "ls", "--json"],
-            None,
+    fn verify_network_disabled(
+        &self,
+        deadline: Instant,
+        client: &UnixStream,
+        connected: fn(&UnixStream) -> bool,
+    ) -> Result<(), String> {
+        if Instant::now() >= deadline {
+            return Err("deadline_exceeded".into());
+        }
+        let child = command(&self.runtime, &["machine", "ls", "--json"], None)?
+            .spawn()
+            .map_err(|_| "runtime launch unavailable")?;
+        let output = collect_bounded_command_with_connection(
+            child,
             deadline,
+            CONTROL_OUTPUT,
+            Some(client),
             None,
-        )?;
+            connected,
+        )
+        .map_err(command_failure)?;
         if !output.status.success() {
             return Err("runtime inventory unavailable".into());
         }
@@ -654,7 +802,20 @@ impl Machine {
         resources: Resources,
         deadline: Instant,
     ) -> Result<Self, ExecutionFailure> {
-        Self::create_inner(config, resources, deadline, None)
+        Self::create_inner(config, resources, deadline, None, None)
+    }
+
+    fn create_project(
+        config: &ServiceConfig,
+        resources: Resources,
+    ) -> Result<Self, ExecutionFailure> {
+        Self::create_inner(
+            config,
+            resources,
+            Instant::now() + SOCKET_IO_TIMEOUT,
+            None,
+            None,
+        )
     }
 
     pub(super) fn create_child(
@@ -680,15 +841,25 @@ impl Machine {
             resources,
             deadline,
             Some(child_home_root.to_owned()),
+            None,
         )
     }
 
     fn create_inner(
         config: &ServiceConfig,
         resources: Resources,
-        deadline: Instant,
+        operation_deadline: Instant,
         private_home_root: Option<PathBuf>,
+        pre: Option<pre::Invocation>,
     ) -> Result<Self, ExecutionFailure> {
+        if pre.as_ref().is_some_and(|invocation| !invocation.valid())
+            || (pre.is_some() && private_home_root.is_some())
+        {
+            return Err(ExecutionFailure::ordinary(
+                "implementation_unavailable",
+                false,
+            ));
+        }
         let mut s = settings(config)
             .map_err(|_| ExecutionFailure::ordinary("implementation_unavailable", false))?
             .clone();
@@ -732,19 +903,10 @@ impl Machine {
                 .ok_or_else(|| ExecutionFailure::ordinary("implementation_unavailable", false))?
                 .epoch
                 .clone(),
-            expires_ms: now_ms()
-                .map_err(|_| ExecutionFailure::ordinary("implementation_unavailable", false))?
-                .saturating_add(
-                    deadline
-                        .saturating_duration_since(Instant::now())
-                        .as_millis() as u64,
-                ),
-            lifetime_ms: deadline
-                .saturating_duration_since(Instant::now())
-                .as_millis() as u64,
             root,
             runtime: s,
             private_home_root,
+            pre,
         };
         let bytes = match serde_json::to_vec(&lease) {
             Ok(bytes) => bytes,
@@ -786,6 +948,8 @@ impl Machine {
         File::open(&lease.root)
             .and_then(|f| f.sync_all())
             .map_err(|_| ExecutionFailure::unsettled(false))?;
+        let journal =
+            pre::Journal::capture(&file, &bytes).map_err(|_| ExecutionFailure::unsettled(false))?;
         // Persist ownership before any runtime resource is created. The guardian
         // is a distinct exec with its own lifetime and only this lease's custody.
         let mut guardian =
@@ -805,7 +969,7 @@ impl Machine {
             .ok_or_else(|| ExecutionFailure::unsettled(false))?;
         set_nonblocking(&handshake).map_err(|_| ExecutionFailure::unsettled(false))?;
         let mut bytes = Vec::new();
-        let handshake_deadline = deadline.min(Instant::now() + SOCKET_IO_TIMEOUT);
+        let handshake_deadline = operation_deadline.min(Instant::now() + SOCKET_IO_TIMEOUT);
         loop {
             read_available(&mut handshake, &mut bytes, 1)
                 .map_err(|_| ExecutionFailure::unsettled(false))?;
@@ -820,6 +984,7 @@ impl Machine {
         }
         let mut machine = Self {
             lease,
+            journal,
             guardian,
             keeper,
             consumed: false,
@@ -861,6 +1026,40 @@ impl Machine {
         client: &UnixStream,
         deadline: Instant,
     ) -> Result<(), String> {
+        self.prepare_with_connection(
+            cache,
+            resources,
+            overlay_gib,
+            client,
+            Some(deadline),
+            client_is_connected,
+        )
+    }
+    fn prepare_project(
+        &self,
+        cache: &CacheEntry,
+        resources: Resources,
+        overlay_gib: Option<u64>,
+        client: &UnixStream,
+    ) -> Result<(), String> {
+        self.prepare_with_connection(
+            cache,
+            resources,
+            overlay_gib,
+            client,
+            None,
+            client_is_connected,
+        )
+    }
+    fn prepare_with_connection(
+        &self,
+        cache: &CacheEntry,
+        resources: Resources,
+        overlay_gib: Option<u64>,
+        client: &UnixStream,
+        aggregate_deadline: Option<Instant>,
+        connected: fn(&UnixStream) -> bool,
+    ) -> Result<(), String> {
         let lease = &self.lease;
         let s = &lease.runtime;
         let group = lease.cgroup();
@@ -891,30 +1090,49 @@ impl Machine {
         if let Some(value) = overlay.as_deref() {
             args.extend(["--overlay", value]);
         }
-        checked(s, &args, Some(&group), deadline, Some(client))?;
+        let checked = |args: &[&str]| -> Result<(), String> {
+            let deadline =
+                aggregate_deadline.unwrap_or_else(|| Instant::now() + DOCKER_CONTROL_TIMEOUT);
+            if Instant::now() >= deadline {
+                return Err("deadline_exceeded".into());
+            }
+            if !connected(client) {
+                return Err("implementation_unavailable".into());
+            }
+            let child = command(s, args, Some(&group))?
+                .spawn()
+                .map_err(|_| "runtime launch unavailable")?;
+            let output = collect_bounded_command_with_connection(
+                child,
+                deadline,
+                CONTROL_OUTPUT,
+                Some(client),
+                None,
+                connected,
+            )
+            .map_err(command_failure)?;
+            if output.status.success() {
+                Ok(())
+            } else {
+                Err("runtime command failed".into())
+            }
+        };
+        checked(&args)?;
         // Closed argv omits network enablers; verify exact-owner state before start.
-        lease.verify_network_disabled(deadline)?;
-        checked(
-            s,
-            &["machine", "start", "--name", &lease.name, "--no-workload"],
-            Some(&group),
-            deadline,
-            Some(client),
+        lease.verify_network_disabled(
+            aggregate_deadline.unwrap_or_else(|| Instant::now() + DOCKER_CONTROL_TIMEOUT),
+            client,
+            connected,
         )?;
-        checked(
-            s,
-            &[
-                "machine",
-                "cp",
-                "--mode",
-                "0555",
-                s.guest_binary.to_str().ok_or("guest path invalid")?,
-                &format!("{}:/.workstream-guest", lease.name),
-            ],
-            Some(&group),
-            deadline,
-            Some(client),
-        )
+        checked(&["machine", "start", "--name", &lease.name, "--no-workload"])?;
+        checked(&[
+            "machine",
+            "cp",
+            "--mode",
+            "0555",
+            s.guest_binary.to_str().ok_or("guest path invalid")?,
+            &format!("{}:/.workstream-guest", lease.name),
+        ])
     }
     fn run(
         &mut self,
@@ -924,7 +1142,7 @@ impl Machine {
         materials: ProjectMaterials<'_>,
         callbacks: &ProjectCallbacks,
         client: &UnixStream,
-        deadline: Instant,
+        budget: ProjectExecutionBudget,
         cancelled: &AtomicBool,
     ) -> Result<ExecutedChecker, String> {
         if self.consumed {
@@ -942,10 +1160,7 @@ impl Machine {
                     .map_err(|_| "material_unavailable")?,
             );
         }
-        let source = cache.smol.as_ref().ok_or("Smol image missing")?;
-        let value: Value =
-            serde_json::from_slice(&read_bounded_file(&source.image_config, MAX_REQUEST_BYTES)?)
-                .map_err(|_| "image configuration invalid")?;
+        let value = image_configuration(cache)?;
         let environment = match value["config"]["Env"].as_array() {
             Some(items) => items
                 .iter()
@@ -1008,7 +1223,7 @@ impl Machine {
             &job,
             &sources,
             callbacks,
-            deadline,
+            budget,
             request.maximum_output_bytes,
             client,
             cancelled,
@@ -1023,12 +1238,12 @@ impl Machine {
         Ok(ExecutedChecker { value })
     }
     fn close(&mut self) -> Result<(), String> {
+        self.close_until(Instant::now() + CLEANUP_TIMEOUT + SOCKET_IO_TIMEOUT)
+    }
+    fn close_until(&mut self, deadline: Instant) -> Result<(), String> {
         // EOF transfers cleanup to the guardian; wait for durable absence.
         drop(self.keeper.take());
-        let status = reap_child(
-            &mut self.guardian,
-            Instant::now() + CLEANUP_TIMEOUT + SOCKET_IO_TIMEOUT,
-        )?;
+        let status = reap_child(&mut self.guardian, deadline)?;
         if status.success() && !self.lease.path().exists() && !self.lease.cgroup().exists() {
             Ok(())
         } else {
@@ -1048,14 +1263,28 @@ pub(super) fn execute(
     materials: ProjectMaterials<'_>,
     callbacks: &ProjectCallbacks,
     client: &UnixStream,
-    budget: &mut RequestExecutionBudget,
+    execution_budget: ProjectExecutionBudget,
     cancelled: &AtomicBool,
 ) -> Result<ExecutedChecker, ExecutionFailure> {
     io::validate_endpoints(callbacks)
         .map_err(|_| ExecutionFailure::ordinary("implementation_unavailable", false))?;
     for attempt in 0..3 {
-        let mut machine = Machine::create(config, request.into(), budget.deadline)?;
-        let prepared = machine.prepare(cache, request.into(), None, client, budget.deadline);
+        let mut machine = match execution_budget {
+            ProjectExecutionBudget::PreparationSeparated(_) => {
+                Machine::create_project(config, request.into())?
+            }
+            ProjectExecutionBudget::Aggregate(deadline) => {
+                Machine::create(config, request.into(), deadline)?
+            }
+        };
+        let prepared = match execution_budget {
+            ProjectExecutionBudget::PreparationSeparated(_) => {
+                machine.prepare_project(cache, request.into(), None, client)
+            }
+            ProjectExecutionBudget::Aggregate(deadline) => {
+                machine.prepare(cache, request.into(), None, client, deadline)
+            }
+        };
         let launched = prepared.is_ok();
         let result = prepared.and_then(|_| {
             machine.run(
@@ -1068,7 +1297,7 @@ pub(super) fn execute(
                 },
                 callbacks,
                 client,
-                budget.deadline,
+                execution_budget,
                 cancelled,
             )
         });
@@ -1077,7 +1306,10 @@ pub(super) fn execute(
         }
         if !launched
             && attempt < 2
-            && Instant::now() < budget.deadline
+            && !matches!(
+                execution_budget,
+                ProjectExecutionBudget::Aggregate(deadline) if Instant::now() >= deadline
+            )
             && client_is_connected(client)
         {
             continue;
@@ -1118,13 +1350,6 @@ pub(super) fn guardian() -> Result<(), String> {
         .write_all(&[1])
         .and_then(|_| std::io::stdout().flush())
         .map_err(|_| "guardian handshake failed")?;
-    let expires = Instant::now()
-        + Duration::from_millis(
-            lease
-                .expires_ms
-                .saturating_sub(now_ms()?)
-                .min(lease.lifetime_ms),
-        );
     let mut reader = input.lock();
     let mut byte = [0u8; 1];
     loop {
@@ -1132,9 +1357,6 @@ pub(super) fn guardian() -> Result<(), String> {
             Ok(_) => break,
             Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {}
             Err(_) => break,
-        }
-        if Instant::now() >= expires {
-            break;
         }
         thread::sleep(Duration::from_millis(20));
     }
@@ -1238,12 +1460,18 @@ where
 {
     let maximum = settings(config)?.maximum_parallel;
     let mut config = config.clone();
+    let pre_reserve = config
+        .pre
+        .as_ref()
+        .map(PreConfig::node_reserve)
+        .transpose()?;
     config.smol_admission = Some(Arc::new(Admission::new(
         Capacity {
             slots: maximum,
             memory_bytes: memory_capacity(settings(&config)?)? as u64,
             storage_bytes: settings(&config)?.maximum_storage_bytes,
         },
+        pre_reserve,
         random_token()?,
     )?));
     let config = Arc::new(config);

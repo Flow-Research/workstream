@@ -40,8 +40,8 @@ async def test_failed_external_image_history_uses_normalized_result_status(
                 member, = rows[0].results
                 assert member.checker_name == h.request.policy.entries[0].requirement_id
                 assert member.status == "failed" and member.severity == "error"
-                assert member.worker_message == "Project check failed."
-                assert member.worker_suggested_fix == "Review the project guide and check findings."
+                assert member.worker_message == "Post evidence failed."
+                assert member.worker_suggested_fix is None
                 if manager:
                     assert member.blocks_review is True
                     assert member.message == member.worker_message

@@ -24,7 +24,7 @@ from tests.test_tasks import (
     set_dev_actor,
     admit_and_grant_project_submitter,
 )
-from tests.test_tasks import task_client as task_client, task_database_env as task_database_env
+from tests import test_tasks as task_fixtures
 from tests.tasks.invalidation_support import (
     TracedFeatureAuthority,
     setup_assignment,
@@ -33,6 +33,9 @@ from tests.tasks.invalidation_support import (
     snapshot,
 )
 
+
+task_client = task_fixtures.task_client
+task_database_env = task_fixtures.task_database_env
 
 @pytest.mark.parametrize("kind", ["grant", "suspend", "deactivate", "link"])
 async def test_exact_real_cause_releases_only_pre_submit_assignment(
@@ -353,6 +356,7 @@ async def test_release_requires_root_transaction_and_exact_prior_receipt(task_cl
     from types import SimpleNamespace
     from app.adapters.audit import assignment_invalidation_audit, committed_authority_invalidation
     from app.adapters.outbox import outbox_invocation_fence
+    from app.adapters.artifacts import submission_intake_assignment_release_port
     from app.modules.audit.repository import AuditRepository
     from app.modules.tasks.assignment_invalidation import AssignmentInvalidationOperation
     from app.modules.tasks.api.assignment_invalidation import AssignmentInvalidationUnavailable
@@ -369,6 +373,7 @@ async def test_release_requires_root_transaction_and_exact_prior_receipt(task_cl
             causes=committed_authority_invalidation(s.sessions),
             authorization=TracedFeatureAuthority(session, []),
             audit=assignment_invalidation_audit(session),
+            intake=submission_intake_assignment_release_port(session),
         )
         with pytest.raises(AssignmentInvalidationUnavailable, match="root transaction"):
             await operation.reconcile(envelope)

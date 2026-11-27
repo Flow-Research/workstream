@@ -86,6 +86,7 @@ class PostSubmitDeliveryRequest(BaseModel):
 
     model_config = _STRICT
     reason: PostSubmitDeliveryReason
+    action: Literal["abandon_unknown"] | None = None
 
 
 class PostSubmitDeliveryQuery(BaseModel):
@@ -193,6 +194,16 @@ class PostSubmitDeliveryCommand(BaseModel):
     event_id: UUID
     request_key: UUID
     reason: PostSubmitDeliveryReason
+    action: Literal["abandon_unknown"] | None = Field(default=None, exclude_if=lambda value: value is None)
+
+
+class PostSubmitExpiredLease(BaseModel):
+    """Exact worker custody displaced by an explicit Operator decision."""
+
+    model_config = _STRICT
+    lease_id: UUID
+    lease_generation: int = Field(ge=1)
+    expires_at: AwareDatetime
 
 
 class PostSubmitDeliveryPreparation(BaseModel):
@@ -201,13 +212,16 @@ class PostSubmitDeliveryPreparation(BaseModel):
     model_config = _STRICT
     command: PostSubmitDeliveryCommand
     source: PostSubmitDeliverySource
+    abandonment: PostSubmitExpiredLease | None = Field(default=None, exclude_if=lambda value: value is None)
 
     @model_validator(mode="after")
     def exact_source(self):
         if (
             self.command.project_id != self.source.project_id
             or self.command.event_id != self.source.event_id
-            or self.source.classification == "unresolved"
+            or (self.source.classification == "unresolved") != (self.abandonment is not None)
+            or (self.command.action == "abandon_unknown") != (self.abandonment is not None)
+            or (self.abandonment is not None and self.source.event_type != "PostSubmissionEvaluationRequested")
             or self.source.reconciliation_event_id is not None
         ):
             raise ValueError("post-submit delivery preparation differs")
@@ -245,7 +259,8 @@ class PostSubmitDeliveryChildPayload(BaseModel):
     evaluation_request_id: UUID
     checker_run_id: UUID
     evaluation_generation: int = Field(ge=1)
-    classification: Literal["committed", "retry_safe"]
+    classification: Literal["committed", "retry_safe", "unresolved"]
+    abandonment: PostSubmitExpiredLease | None = Field(default=None, exclude_if=lambda value: value is None)
     reconciliation_request_id: UUID
     request_digest: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
     authorization_decision_id: UUID
@@ -257,6 +272,10 @@ class PostSubmitDeliveryChildPayload(BaseModel):
     @model_validator(mode="after")
     def exact_authorization_resource(self):
         """Retain one canonical bounded Operator resource receipt."""
+        if (self.classification == "unresolved") != (self.abandonment is not None) or (
+            self.abandonment is not None and self.original_event_type != "PostSubmissionEvaluationRequested"
+        ):
+            raise ValueError("delivery abandonment facts differ")
         try:
             resource = json.loads(self.authorization_resource_json)
         except (TypeError, ValueError) as exc:
@@ -276,6 +295,24 @@ class PostSubmitDeliveryChildPayload(BaseModel):
             != self.authorization_resource_digest
         ):
             raise ValueError("delivery authorization resource differs")
+        if self.abandonment is not None:
+            try:
+                preparation = PostSubmitDeliveryPreparation.model_validate_json(
+                    json.dumps(resource["resource_context"]["preparation"]),
+                )
+            except (KeyError, TypeError, ValueError) as exc:
+                raise ValueError("delivery abandonment authority is invalid") from exc
+            source, command = preparation.source, preparation.command
+            if (preparation.abandonment != self.abandonment or command.action != "abandon_unknown"
+                    or command.request_key != self.reconciliation_request_id
+                    or command.actor_profile_id != self.operator_actor_profile_id
+                    or source.event_id != self.original_event_id
+                    or source.claim_generation != self.original_claim_generation
+                    or source.payload_digest != self.original_payload_digest
+                    or source.checker_run_id != self.checker_run_id
+                    or source.evaluation_request_id != self.evaluation_request_id
+                    or source.evaluation_generation != self.evaluation_generation):
+                raise ValueError("delivery abandonment authority differs")
         return self
 
 
@@ -286,7 +323,7 @@ class PostSubmitDeliverySuccessor(BaseModel):
     event_id: UUID
     payload_digest: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
     occurred_at: AwareDatetime
-    classification: Literal["committed", "retry_safe"]
+    classification: Literal["committed", "retry_safe", "unresolved"]
 
 
 class PostSubmitDeliveryAuthorityReceipt(BaseModel):
@@ -364,3 +401,17 @@ class PostSubmitDeliveryAuthorizationPort(Protocol):
     def close(self, handle: object) -> None: ...
 
     async def restage_denial(self, error: PostSubmitDeliveryAuthorityDenied) -> bool: ...
+
+
+def post_submit_reconciliation_event_json(
+    project_id: UUID, payload: PostSubmitDeliveryChildPayload,
+) -> str:
+    """Immutable child envelope shared by publication and read-only observation."""
+    return json.dumps({
+        "event_type": POST_SUBMIT_DELIVERY_RECONCILIATION_EVENT, "event_version": 1,
+        "aggregate_type": "outbox_delivery", "aggregate_id": str(payload.original_event_id),
+        "project_id": str(project_id), "correlation_id": str(payload.reconciliation_request_id),
+        "causation_event_id": str(payload.original_event_id),
+        "idempotency_key": "post-submit-reconcile:" + str(payload.original_event_id),
+        "payload": payload.model_dump(mode="json"),
+    }, sort_keys=True, separators=(",", ":"))

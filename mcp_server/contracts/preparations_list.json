@@ -1,5 +1,5 @@
 {
-  "canonical_sha256": "d755e495999adc90b97aa50c0df632892cb902d6124be68ed5957fe3ba40a01b",
+  "canonical_sha256": "bef46520f920b5e058caf45475eb0a3012661f8cdd53f4ee11e5db7f40e27cba",
   "components": {
     "schemas": {
       "ApiError": {
@@ -284,7 +284,7 @@
     }
   },
   "operation": {
-    "description": "Your ZIP preparations for one task you hold or held, newest first.",
+    "description": "Your historical ZIP preparations for one task, newest first.",
     "operationId": "list_my_preparations_api_v1_tasks__task_id__submission_bundle_preparations_get",
     "parameters": [
       {
@@ -581,6 +581,6 @@
     "method": "GET",
     "openapi_version": "3.1.0",
     "path": "/api/v1/tasks/{task_id}/submission-bundle-preparations",
-    "repository_sha": "f0431385573eb53353c5ffc3c6cdb6a93d206b73"
+    "repository_sha": "b23b9be281cc4ec5428bdc50f097a4c4c35a7c16"
   }
 }

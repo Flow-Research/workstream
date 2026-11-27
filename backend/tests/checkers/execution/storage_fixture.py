@@ -34,6 +34,12 @@ class _UnavailableArchiveStore:
     def __init__(self, store):
         self.identity = store.identity
 
+    async def open_source(self, _source, **_kwargs):
+        from app.interfaces.artifacts import ArtifactStoreUnavailableError
+
+        raise ArtifactStoreUnavailableError()
+        yield  # Preserve the async source stream port for infrastructure failures.
+
     async def open(self, _ref, byte_range=None, **_kwargs):
         from app.interfaces.artifacts import ArtifactStoreUnavailableError
 

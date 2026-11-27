@@ -452,6 +452,7 @@ class FlowAuthVerifier:
             subject_kind=subject_kind,
             scopes=scopes,
             email=claims.get("email"),
+            email_verified=claims.get("email_verified") is True and claims.get("email") is not None,
             name=claims.get("name"),
         )
         return AuthVerificationResult(token=verified)

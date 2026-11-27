@@ -10,6 +10,7 @@ import json
 from pathlib import Path
 import re
 import socket
+import ssl
 import struct
 import threading
 import time
@@ -18,6 +19,8 @@ from typing import BinaryIO, TypeVar
 from pydantic import TypeAdapter
 
 from app.core.cancellation import await_cancellation_resistant
+from app.core.runner_endpoints import ExternalRunnerEndpoints
+from app.adapters.runner import RunnerPlacement, RunnerReadiness, RunnerTransport
 from workstream_external_services import (
     ExternalServiceAdapterIdentity,
     ExternalServiceProtocolError,
@@ -42,8 +45,9 @@ from app.modules.checkers.api.default_checker import (
 )
 
 CAPABILITY = "trusted_submission_intake"
-PROVIDER = "unix_socket"
+PROVIDER = "remote_tls"
 _PROTOCOL = "trusted_submission_intake.v1"
+_REMOTE_PROTOCOL = "workstream.remote_runner.v1"
 _MAX_FRAME = 64 * 1024 * 1024
 _MAX_COMMAND = 4 * 1024 * 1024
 _MAX_ARCHIVE = 512 * 1024 * 1024
@@ -85,21 +89,24 @@ def _entry(value: object) -> SubmissionArchiveEntry:
     )
 
 
-class UnixSocketTrustedIntakeAdapter:
-    """Construct one local session; the node owns all preparation retry decisions."""
+class RemoteTlsTrustedIntakeAdapter:
+    """Construct one authenticated remote session owned by the dedicated node."""
 
-    def __init__(self, *, socket_path: Path, image_digest: str, config_digest: str) -> None:
-        """Bind an absolute private socket to operator-pinned image and config identities."""
-        if (
-            not socket_path.is_absolute()
-            or socket_path.is_symlink()
-            or any(
-                type(v) is not str or re.fullmatch(r"sha256:[0-9a-f]{64}", v) is None
-                for v in (image_digest, config_digest)
-            )
-        ):
+    def __init__(
+        self,
+        *,
+        endpoints: ExternalRunnerEndpoints,
+        ca_path: Path,
+        certificate_path: Path,
+        private_key_path: Path,
+        image_digest: str,
+        config_digest: str,
+    ) -> None:
+        """Bind a pinned TLS identity to operator-pinned image and config identities."""
+        if any(type(v) is not str or re.fullmatch(r"sha256:[0-9a-f]{64}", v) is None
+               for v in (image_digest, config_digest)):
             raise ValueError("trusted intake configuration invalid")
-        self._path = socket_path
+        self._transport = RunnerTransport(endpoints, ca_path, certificate_path, private_key_path)
         self._image = image_digest
         self._config = config_digest
 
@@ -125,17 +132,32 @@ class UnixSocketTrustedIntakeAdapter:
 
     async def health(self) -> TrustedIntakeIdentity:
         """Check the pinned node identity without reserving a VM."""
-        session = _Session(self, time.monotonic() + 10)
-        try:
-            return await session._async(session._health)
-        finally:
-            session.abort()
+        placement = await self._transport.select("trusted_intake", qualifies=self._qualifies)
+        if placement is None or placement.readiness.intake is None:
+            raise ExternalServiceUnavailableError(self.identity)
+        return placement.readiness.intake
+
+    def _qualifies(self, readiness: RunnerReadiness) -> bool:
+        intake = readiness.intake
+        return intake is not None and (intake.image_digest, intake.config_digest) == (self._image, self._config)
 
     async def prepare(self, request: TrustedIntakePreparation) -> _Session:
         """Acquire one lease within the original deadline and abort failed preparation."""
         if type(request) is not TrustedIntakePreparation:
             raise ExternalServiceProtocolError(self.identity)
-        session = _Session(self, time.monotonic() + request.deadline_ms / 1000, request)
+        duration = request.deadline_ms / 1000
+        deadline = time.monotonic() + duration
+        try:
+            async with asyncio.timeout(duration):
+                placement = await self._transport.select(
+                    f"{request.phase}:{request.policy_sha256}:{request.archive_byte_count}",
+                    qualifies=self._qualifies, demand={"kind": "intake", "preparation": asdict(request)},
+                )
+        except TimeoutError as exc:
+            raise ExternalServiceUnavailableError(self.identity) from exc
+        if placement is None:
+            raise ExternalServiceUnavailableError(self.identity)
+        session = _Session(self, deadline, placement, request)
         try:
             await session._async(session._prepare)
             return session
@@ -149,15 +171,17 @@ class _Session:
 
     def __init__(
         self,
-        adapter: UnixSocketTrustedIntakeAdapter,
+        adapter: RemoteTlsTrustedIntakeAdapter,
         deadline: float,
-        request: TrustedIntakePreparation | None = None,
+        placement: RunnerPlacement,
+        request: TrustedIntakePreparation,
     ) -> None:
         """Own one socket, deadline and serialized state machine for this lease."""
         self._adapter = adapter
         self._deadline = deadline
+        self._placement = placement
         self._request = request
-        self._socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self._socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self._lock = threading.Lock()
         self._aborted = threading.Event()
         self._state = "new"
@@ -280,25 +304,41 @@ class _Session:
         return body["payload"]
 
     def _connect(self) -> None:
-        """Connect only to the configured private socket within the lease deadline."""
+        """Connect only to the authenticated runner within the lease deadline."""
         self._timeout()
         try:
-            self._socket.connect(str(self._adapter._path))
-        except OSError as exc:
+            endpoint = self._placement.endpoint
+            transport = self._adapter._transport
+            self._socket.connect((endpoint.host, endpoint.port))
+            self._socket = transport.tls_context().wrap_socket(
+                self._socket,
+                server_hostname=endpoint.server_name,
+            )
+            transport.require_peer(self._socket, endpoint)
+            control = json.dumps(
+                {
+                    "protocol_version": _REMOTE_PROTOCOL,
+                    "operation": "proxy",
+                    "capability": CAPABILITY,
+                    **self._placement.binding(),
+                },
+                separators=(",", ":"),
+            ).encode()
+            self._send(struct.pack(">I", len(control)) + control)
+        except (OSError, ssl.SSLError) as exc:
             raise ExternalServiceUnavailableError(self._adapter.identity) from exc
-
-    def _health(self) -> TrustedIntakeIdentity:
-        """Read and verify the node identity on a temporary health connection."""
-        self._connect()
-        self._command("health", {})
-        return self._adapter._validate_identity(self._response("health"))
 
     def _prepare(self) -> None:
         """Accept the boot-scoped lease only after the node confirms readiness."""
         with self._lock:
             self._connect()
-            self._command("prepare", asdict(self._request))
+            remaining_ms = int((self._deadline - time.monotonic()) * 1000)
+            if remaining_ms <= 0:
+                raise ExternalServiceUnavailableError(self._adapter.identity)
+            self._command("prepare", asdict(self._request) | {"deadline_ms": remaining_ms})
             self._identity = self._adapter._validate_identity(self._response("prepare"))
+            if self._identity != self._placement.readiness.intake:
+                raise ExternalServiceProtocolError(self._adapter.identity)
             self._state = "prepared"
 
     def inspect(

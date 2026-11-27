@@ -179,7 +179,8 @@ class ActorService:
             subject_kind="human",
             status="active",
             linked_by=profile_id,
-            email_observed_issued_at=token.issued_at if token.email is not None else None,
+            email_observed_issued_at=token.issued_at,
+            email_verified=token.email is not None and token.email_verified,
             last_verified_at=func.clock_timestamp(),
         )
         await self._repo.add_actor_profile(profile)
@@ -294,13 +295,17 @@ class ActorService:
         self._require_active_human(profile)
         if token.issuer != link.issuer or token.subject != link.subject:
             raise RuntimeError("verified identity does not match resolved actor")
-        if token.email is not None and (
-            link.email_observed_issued_at is None
-            or token.issued_at > link.email_observed_issued_at
-        ):
-            profile.contact_email = token.email
+        if link.email_observed_issued_at is None or token.issued_at > link.email_observed_issued_at:
+            if token.email is not None:
+                profile.contact_email = token.email
+            link.email_verified = token.email is not None and token.email_verified
             link.email_observed_issued_at = token.issued_at
-            await self._session.flush()
+        elif (link.email_verified and token.issued_at == link.email_observed_issued_at
+              and (not token.email_verified or token.email != profile.contact_email)):
+            link.email_verified = False
+        else:
+            return resolved
+        await self._session.flush()
         return resolved
 
     async def touch_after_authorization(self, resolved: ResolvedActor) -> ResolvedActor:

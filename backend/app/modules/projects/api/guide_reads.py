@@ -142,12 +142,45 @@ class GuideDocumentSelection:
     original: LabeledGuideOriginal | None
 
 
+class ContributorGuideDocument(BaseModel):
+    """Public original identity and authorized download reference."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    document_id: UUID
+    label: str
+    order: int = Field(ge=0)
+    media_type: GuideDocumentMediaType
+    sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    byte_count: int = Field(gt=0)
+    read_reference: str
+
+
+class ApprovedContributorGuide(BaseModel):
+    """The active guide's version and original documents for Submitters."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    project_id: UUID
+    guide_id: UUID
+    version: str
+    documents: tuple[ContributorGuideDocument, ...] = Field(max_length=100)
+
+
+@dataclass(frozen=True, slots=True)
+class ApprovedContributorGuideOriginals:
+    guide: ApprovedContributorGuide
+    originals: tuple[LabeledGuideOriginal, ...]
+
+
 class ProjectGuideReadUnavailable(RuntimeError):
     """Stored guide facts failed an integrity check; never includes content."""
 
 
 class ProjectGuideReadPort(Protocol):
     """Read a project's guides inside the caller's authorized read transaction."""
+
+    async def read_approved_contributor_guide(
+        self, project_id: UUID,
+    ) -> ApprovedContributorGuideOriginals | None: ...
 
     async def list_guides(
         self, project_id: UUID, *, status: GuideStatus | None,

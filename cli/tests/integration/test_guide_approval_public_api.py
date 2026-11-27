@@ -69,7 +69,7 @@ async def test_approval_public_socket_replay_and_fresh_authority(
         clean_postgres_database,
         classification="draft_ready_with_warnings",
         outcome=validated,
-    ) as (_, factory, command, actor, grant):
+    ) as (values, factory, command, actor, grant):
         outsider, _ = await seed_review_actor(
             factory, None, role="audit_authority", scope="system"
         )
@@ -188,8 +188,14 @@ async def test_approval_public_socket_replay_and_fresh_authority(
                 assert len(package["warning_hashes"]) == 1
                 body = {
                     "target": package["target"],
-                    "pre_submit_attachments": [],
-                    "post_submit_attachments": [],
+                    "pre_submit_attachments": [
+                        item.model_dump(mode="json")
+                        for item in values["pre_submit_attachments"]
+                    ],
+                    "post_submit_attachments": [
+                        item.model_dump(mode="json")
+                        for item in values["post_submit_attachments"]
+                    ],
                     "acknowledged_warning_hashes": package["warning_hashes"],
                 }
                 for warnings in ([], ["sha256:" + "f" * 64]):

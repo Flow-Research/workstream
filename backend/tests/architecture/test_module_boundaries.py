@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import ast
 import json
 from pathlib import Path
 
@@ -238,21 +239,65 @@ def test_public_api_private_reexport_fails_closed(tmp_path: Path) -> None:
         )
 
 
+def _assert_task_public_dependencies(root: Path) -> None:
+    api_files = list((root / "backend/app/modules/tasks/api").rglob("*.py"))
+    assert api_files
+    peer_path = root / "backend/app/modules/tasks/api/guide_documents.py"
+    peer_module = "app.modules.projects.api.guide_reads"
+    observed_imports: set[str] = set()
+    for path in api_files:
+        imports = boundary.exact_source_imports(path, root)
+        observed_imports.update(imports)
+        allowed = set()
+        if path == peer_path and peer_module in imports:
+            nodes = [node for node in ast.walk(ast.parse(path.read_text()))
+                     if isinstance(node, ast.ImportFrom) and node.module == peer_module]
+            assert len(nodes) == 1 and nodes[0].level == 0
+            assert [(alias.name, alias.asname) for alias in nodes[0].names] == [
+                ("ContributorGuideDocument", None)
+            ]
+            allowed.add(peer_module)
+        assert all(not target.startswith("app.modules.")
+                   or target.startswith("app.modules.tasks.api")
+                   or target in allowed for target in imports)
+    assert observed_imports
+
+
 def test_tasks_public_api_has_no_private_or_mutable_dependency() -> None:
-    """TASK facts remain dependency-safe immutable public contracts."""
+    """TASK reuses only the exact frozen PROJECTS guide-document contract."""
     boundary._validate_public_apis(  # noqa: SLF001 - architecture proof
         ROOT, boundary.load_registry(REGISTRY)
     )
-    api_files = list((ROOT / "backend/app/modules/tasks/api").rglob("*.py"))
-    assert api_files
-    imports: set[str] = set()
-    for path in api_files:
-        imports.update(boundary.exact_source_imports(path, ROOT))
-    assert imports
-    assert all(
-        not target.startswith("app.modules.") or target.startswith("app.modules.tasks.api")
-        for target in imports
-    )
+    from app.modules.projects.api.guide_reads import ContributorGuideDocument
+
+    assert ContributorGuideDocument.model_config["frozen"] is True
+    assert ContributorGuideDocument.model_config["extra"] == "forbid"
+    _assert_task_public_dependencies(ROOT)
+
+
+@pytest.mark.parametrize(("filename", "source"), [
+    ("guide_documents.py", "from app.modules.projects.repository import ProjectRepository\n"),
+    ("guide_documents.py", "from app.modules.projects.api.guide_reads import ProjectGuideRecord\n"),
+    ("guide_documents.py", "from app.modules.projects.api.guide_reads import ContributorGuideDocument, ProjectGuideRecord\n"),
+    ("guide_documents.py", "from app.modules.projects.api.guide_reads import *\n"),
+    ("guide_documents.py", "import app.modules.projects.api.guide_reads\n"),
+    ("another.py", "from app.modules.projects.api.guide_reads import ContributorGuideDocument\n"),
+])
+def test_task_peer_guide_dependency_refuses_private_foreign_or_relocated_import(
+    tmp_path: Path, filename: str, source: str,
+) -> None:
+    """Each attack first passes the one real peer-edge control."""
+    api = tmp_path / "backend/app/modules/tasks/api"
+    _write(api / "guide_documents.py",
+           "from app.modules.projects.api.guide_reads import ContributorGuideDocument\n")
+    _assert_task_public_dependencies(tmp_path)
+    _write(api / filename, source)
+    if source.endswith("import *\n"):
+        with pytest.raises(AuthorizationBoundaryError, match="^wildcard_import$"):
+            _assert_task_public_dependencies(tmp_path)
+    else:
+        with pytest.raises(AssertionError):
+            _assert_task_public_dependencies(tmp_path)
 
 
 def test_projects_public_api_has_no_private_or_mutable_dependency() -> None:
@@ -328,7 +373,7 @@ def test_checker_to_art_public_import_would_close_a_cycle(tmp_path: Path) -> Non
     )
     _write(
         tmp_path / "backend/app/modules/checkers/future_execution.py",
-        "from app.modules.artifacts.api import SubmissionBundlePreparationCommand\n",
+        "from app.modules.artifacts.api import SubmissionBundlePreparationStatus\n",
     )
     _, graph, _ = boundary.scan(tmp_path, boundary.load_registry(registry_path))
     assert graph["artifacts"] == {"checkers"}

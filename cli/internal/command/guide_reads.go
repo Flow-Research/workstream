@@ -13,6 +13,44 @@ import (
 
 // addGuideReads adds the Project Manager's read-only guide commands.
 func addGuideReads(guide *cobra.Command, client func() (*api.Client, error), output *string, stdout io.Writer) {
+	var approvedDirectory string
+	approved := &cobra.Command{
+		Use: "approved PROJECT_ID", Short: "Read or download the active approved contributor guide", Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			apiClient, err := client()
+			if err != nil {
+				return err
+			}
+			result, err := apiClient.ContributorGuide(cmd.Context(), args[0])
+			if err != nil {
+				return err
+			}
+			current := result.Value
+			if approvedDirectory != "" {
+				root, err := download.OpenRoot(approvedDirectory)
+				if err != nil {
+					return err
+				}
+				defer root.Close()
+				for _, document := range current.Documents {
+					if err := downloadGuide(root, document, func(target io.Writer) error {
+						return apiClient.DownloadContributorGuideDocument(cmd.Context(), current.ProjectID, current.GuideID, document, target)
+					}); err != nil {
+						return err
+					}
+				}
+			}
+			if *output == "json" {
+				return writeSafeJSON(stdout, result.Raw)
+			}
+			return writeTaskContextFields(stdout, []contextField{
+				{"Guide version", current.Version}, {"Guide documents", current.Documents},
+			})
+		},
+	}
+	approved.Flags().StringVar(&approvedDirectory, "download", "", "Download verified originals to an existing directory")
+	guide.AddCommand(approved)
+
 	var page pageFlags
 	list := &cobra.Command{
 		Use: "list PROJECT_ID", Short: "List the project's guide versions and their stored status", Args: cobra.ExactArgs(1),

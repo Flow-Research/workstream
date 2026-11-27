@@ -84,13 +84,19 @@ async def create_committed_document_fixture(
         assert items
         namespace = await session.get(ArtifactStorageNamespace, "primary")
         if namespace is None:
+            from app.interfaces.artifacts import ArtifactStoreNamespaceIdentity, artifact_store_namespace_material
+            from workstream_external_services import ExternalServiceAdapterIdentity
+            identity = ArtifactStoreNamespaceIdentity("local-v2", (
+                ("private_prefix", "workstream/artifacts"),
+                ("private_root_identity", sha256_hash("committed-guide-fixture")),
+            ))
+            descriptor, fingerprint = artifact_store_namespace_material(
+                backend="local", adapter_identity=ExternalServiceAdapterIdentity("artifact_store", "local"),
+                namespace_identity=identity,
+            )
             namespace = ArtifactStorageNamespace(
-                id="primary",
-                backend="local",
-                adapter="local",
-                provider_profile="test",
-                namespace_descriptor={"root": "committed-guide-fixture"},
-                namespace_fingerprint=sha256_hash("committed-guide-fixture"),
+                id="primary", backend="local", adapter="local", provider_profile=identity.provider_profile,
+                namespace_descriptor=descriptor, namespace_fingerprint=fingerprint,
             )
             session.add(namespace)
             await session.flush()

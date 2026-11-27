@@ -30,6 +30,7 @@ from app.core.s3_validation import (
     is_canonical_s3_prefix,
     is_canonical_s3_region,
 )
+from app.core.runner_endpoints import ExternalRunnerEndpoints
 from app.interfaces.forge_facts import FORGE_FACTS_MAXIMUM_READ_SECONDS
 from app.interfaces.project_guide_runtime import (
     AdapterProfileValue,
@@ -92,6 +93,8 @@ class Settings(BaseSettings):
     flow_auth_audience: str = "workstream-api"
     flow_auth_local_hmac_secret: str | None = None
     token_issuer: str | None = None
+    submission_feedback_email_enabled: bool = False
+    resend_api_key_file: Path | None = None
     token_audience: str = "workstream"
     token_jwks_url: str | None = None
     token_algorithms: str = ""
@@ -143,7 +146,7 @@ class Settings(BaseSettings):
     )
     guide_document_parser_socket: Path = Path("/var/lib/workstream/guide-runtime/guide.sock")
     celery_broker_url: str | None = None
-    hosted_profile: Literal["single-host", "app"] = "single-host"
+    hosted_profile: Literal["app"] = "app"
     celery_result_backend_url: str | None = None
     celery_task_always_eager: bool = False
     observability_log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
@@ -254,11 +257,16 @@ class Settings(BaseSettings):
         gt=0,
         le=86_400,
     )
-    artifact_intake_service_socket: Path | None = None
+    # Required source-intake envelopes and runtime/capacity profile. No old
+    # preparation timers or unmeasured deployment defaults are inherited.
+    submission_execution_profile: dict[str, object] | None = None
+    submission_source_cleanup_profile: dict[str, object] | None = None
     artifact_intake_image_digest: str | None = None
     artifact_intake_config_digest: str | None = None
-    external_checker_service_socket: Path | None = None
-    external_checker_material_root: Path | None = None
+    external_runner_endpoints: ExternalRunnerEndpoints | None = None
+    external_runner_ca_path: Path | None = None
+    external_runner_certificate_path: Path | None = None
+    external_runner_private_key_path: Path | None = None
     checker_model_proxy_socket: Path | None = None
     checker_trial_authority_manifest_path: Path | None = None
     checker_trial_authority_manifest_digest: str | None = Field(
@@ -695,32 +703,27 @@ class Settings(BaseSettings):
                     "artifact scratch and durable local storage roots must be separate"
                 )
         external_values = (
-            self.external_checker_service_socket,
-            self.external_checker_material_root,
+            self.external_runner_endpoints,
+            self.external_runner_ca_path,
+            self.external_runner_certificate_path,
+            self.external_runner_private_key_path,
         )
-        if self.hosted_profile == "app" and any(value is not None for value in (
-            *external_values,
-            self.artifact_intake_service_socket,
-            self.artifact_intake_image_digest,
-            self.artifact_intake_config_digest,
-            self.checker_trial_authority_manifest_path,
-            self.checker_trial_authority_manifest_digest,
-        )):
-            raise ValueError("the hosted app profile cannot configure native checker execution")
         if any(value is not None for value in external_values):
             if any(value is None for value in external_values):
-                raise ValueError("external checker service settings must be complete")
-            socket, material = external_values
-            assert socket is not None and material is not None
-            if not socket.is_absolute() or not material.is_absolute():
-                raise ValueError("external checker service paths must be absolute")
-            if self.artifact_scratch_root is None or (
-                material.resolve(strict=False)
-                != self.artifact_scratch_root.resolve(strict=False)
-            ):
-                raise ValueError(
-                    "external checker material root must equal the artifact scratch root"
-                )
+                raise ValueError("external runner TLS settings must be complete")
+            for path in external_values[1:]:
+                assert isinstance(path, Path)
+                if not path.is_absolute():
+                    raise ValueError("external runner TLS paths must be absolute")
+        if any(value is not None for value in (
+            self.artifact_intake_image_digest,
+            self.artifact_intake_config_digest,
+        )) and any(value is None for value in (
+            self.artifact_intake_image_digest,
+            self.artifact_intake_config_digest,
+            *external_values,
+        )):
+            raise ValueError("trusted intake requires the configured external runner")
         trial_path, trial_digest = (
             self.checker_trial_authority_manifest_path,
             self.checker_trial_authority_manifest_digest,

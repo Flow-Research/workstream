@@ -1,7 +1,7 @@
 """Actual request delivery, exact terminal replay, and hidden production scope."""
 
 import pytest
-from sqlalchemy import select, func
+from sqlalchemy import select, func, text
 
 from app.adapters.outbox import production_outbox_delivery
 from app.modules.actors.api import ServiceIdentity
@@ -33,7 +33,9 @@ async def test_shared_delivery_runs_exact_request_once(tmp_path, isolated_databa
         assert saved["run"]["worker_lease_generation"] == 1
         assert set(saved["allows"]) == {saved["run"]["execute_evidence_id"], saved["run"]["finalize_evidence_id"]}
         assert len(saved["allows"]) == 2 and saved["events"] == 1
-        assert saved["members"] == len(h.request.policy.entries)
+        assert saved["members"] == 1
+        assert len(d.selected.requests) == 1
+        assert d.selected.requests[0].identity.phase == "post_submit"
         assert saved["run"]["material_custody"] == {
             "submission_id": str(h.created.submission_id), "submission_version": h.created.submission_version,
             "admission_id": str(h.created.admission_id), "binding_id": str(h.created.artifact_binding_id),
@@ -110,3 +112,99 @@ async def test_task_eligibility_blocks_new_effect_but_not_exact_terminal_replay(
         eligible = False
         assert await d.handler(envelope) is HandlerOutcome.ACKNOWLEDGE
         assert await state(h) == terminal and len(h.store.opens) == 1
+
+
+@pytest.mark.parametrize("rollback", [False, True])
+async def test_known_post_failure_schedules_one_delayed_service_retry(
+    tmp_path, isolated_database_env, monkeypatch, rollback,
+):
+    """Retain one exact successor for known failure, or roll it all back."""
+    from datetime import timedelta
+
+    from app.adapters.checkers import evaluation_coordinator
+    from app.modules.checkers.api.materialization import PostSubmissionMaterializationFailure
+    from app.modules.checkers.models import CheckerRetryReceipt, CheckerRun, CheckerSubmissionFence
+    from app.modules.outbox.api import OutboxPersistenceError
+    from app.modules.outbox.models import OutboxEvent
+    from app.modules.outbox.service import OutboxService
+
+    class MissingMaterial:
+        async def materialize(self, _facts, _consumer):
+            raise PostSubmissionMaterializationFailure("controlled missing material")
+
+    async with material_fixture(tmp_path, isolated_database_env) as h:
+        d = await delivery_fixture(h, materialization=MissingMaterial())
+        original_append = OutboxService.append
+
+        async def guarded_append(outbox, event):
+            if event.idempotency_key.startswith("checker-auto-retry:"):
+                raise OutboxPersistenceError("controlled retry persistence failure")
+            return await original_append(outbox, event)
+
+        if rollback:
+            monkeypatch.setattr(OutboxService, "append", guarded_append)
+        receipt = outcome(await d.delivery.deliver(h.created.evaluation_event_id, h.request.project_id, "worker"))
+        assert receipt["delivery_state"] == ("dead_letter" if rollback else "acknowledged")
+        assert receipt["invocation_unknown"] is rollback
+        async with h.factory.begin() as session:
+            runs = list(await session.scalars(select(CheckerRun).where(
+                CheckerRun.submission_id == str(h.request.submission_id),
+            ).order_by(CheckerRun.evaluation_generation)))
+            original = runs[0]
+            fence = await session.get(CheckerSubmissionFence, original.submission_id)
+            assert await session.scalar(select(func.count()).select_from(CheckerRetryReceipt)) == 0
+            assert not d.selected.requests
+            if rollback:
+                assert len(runs) == 1 and fence.current_run_id == original.id
+                assert original.status == "running" and original.result_json is None
+                return
+            assert len(runs) == 2
+            successor = runs[1]
+            assert fence.current_run_id == successor.id
+            assert original.status == "infrastructure_failed" and original.failure_code == "material_unavailable"
+            assert successor.status == "queued" and successor.supersedes_checker_run_id == original.id
+            new_event = await session.get(OutboxEvent, successor.retry_delivery_event_id)
+            assert new_event.not_before_at == original.completed_at + timedelta(seconds=5)
+            event_id, due = new_event.event_id, new_event.not_before_at
+            assert (await evaluation_coordinator(session).classify_uncertain_delivery(h.request)).classification == "committed"
+            read = await evaluation_coordinator(session).read_current_progress(
+                project_id=h.request.project_id, task_id=h.request.task_id,
+                submission_id=h.request.submission_id, original_request_id=h.request.evaluation_request_id,
+            )
+            assert read.current.reservation.evaluation_generation == 2
+            assert read.previous_failure_code == "material_unavailable"
+            assert read.retry_event_id == event_id
+            assert new_event.payload["source_finalize_evidence_id"] == original.finalize_evidence_id
+        async with h.factory() as session:
+            now = await session.scalar(select(func.clock_timestamp()))
+            if now < due:
+                assert await d.delivery.claim(event_id, h.request.project_id, "worker") is None
+        assert await d.delivery.deliver(h.created.evaluation_event_id, h.request.project_id, "duplicate") is None
+        for generation in range(2, 6):
+            # Follow the committed retry schedule without changing clock or custody.
+            async with h.factory() as session:
+                await session.execute(text(
+                    "SELECT pg_sleep(GREATEST(EXTRACT(EPOCH FROM CAST(:due AS timestamptz)-clock_timestamp()),0)+0.02)"
+                ), {"due": due})
+            receipt = outcome(await d.delivery.deliver(event_id, h.request.project_id, "retry-worker"))
+            assert receipt["delivery_state"] == "acknowledged"
+            async with h.factory.begin() as session:
+                source = await session.scalar(select(CheckerRun).where(
+                    CheckerRun.submission_id == str(h.request.submission_id),
+                    CheckerRun.evaluation_generation == generation,
+                ))
+                assert source.status == "infrastructure_failed"
+                next_run = await session.scalar(select(CheckerRun).where(CheckerRun.supersedes_checker_run_id == source.id))
+                if generation == 5:
+                    assert next_run is None
+                    progress = await evaluation_coordinator(session).read_current_progress(
+                        project_id=h.request.project_id, task_id=h.request.task_id,
+                        submission_id=h.request.submission_id, original_request_id=h.request.evaluation_request_id,
+                    )
+                    assert progress.status == "infrastructure_failed" and progress.failure_code == "material_unavailable"
+                    assert progress.current.reservation.evaluation_generation == 5
+                else:
+                    next_event = await session.get(OutboxEvent, next_run.retry_delivery_event_id)
+                    assert next_event.not_before_at == source.completed_at + timedelta(seconds=5 * 2 ** (generation - 1))
+                    event_id, due = next_event.event_id, next_event.not_before_at
+        assert not d.selected.requests

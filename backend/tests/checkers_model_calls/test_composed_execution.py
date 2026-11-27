@@ -289,7 +289,11 @@ async def test_public_profile_to_private_model_call_and_completed_checker(
             reservation_ttl_seconds=150.0,
         ),
     ) as h:
-        await provision_post_submit_service(h.factory, ServiceIdentity.ARTIFACT_CHECKER_OUTPUT)
+        # Model evidence uses the retained put/verifier pipeline independently
+        # of the source-based submission that supplied the checker material.
+        for identity in (ServiceIdentity.ARTIFACT_CHECKER_OUTPUT,
+                         ServiceIdentity.ARTIFACT_PUT_RESOLVER, ServiceIdentity.ARTIFACT_VERIFIER):
+            await provision_post_submit_service(h.factory, identity)
         creates = []
         provider_requests = []
         lost_replies = []

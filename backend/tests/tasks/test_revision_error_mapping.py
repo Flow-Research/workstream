@@ -6,39 +6,12 @@ from unittest.mock import AsyncMock
 import pytest
 from sqlalchemy.exc import IntegrityError
 
-from app.adapters.tasks import TransactionalSubmissionCreationCommand
 from app.modules.artifacts.service import ArtifactStorageOrchestrator
-from app.modules.tasks.api.submission_context import TaskSubmissionContextUnavailable
 from app.modules.tasks.authorized_commands import AuthorizedTaskCommands, TaskRevisionRepairError
 
 
 def _constraint(name: str) -> IntegrityError:
     return IntegrityError("INSERT", {}, SimpleNamespace(constraint_name=name))
-
-
-@pytest.mark.parametrize(("name", "code"), [
-    ("ck_revision_submission_deadline_expired", "revision_deadline_expired"),
-    ("ck_revision_submission_context_changed", "revision_context_changed"),
-])
-async def test_submission_commit_maps_only_named_revision_races(monkeypatch, name, code):
-    class Root:
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *_):
-            raise _constraint(name)
-
-    session = SimpleNamespace(in_transaction=lambda: False, begin=Root)
-    monkeypatch.setattr(
-        "app.adapters.tasks.TaskSubmissionCreationService",
-        lambda *_args, **_kwargs: SimpleNamespace(create=AsyncMock(return_value=object())),
-    )
-    command = TransactionalSubmissionCreationCommand(
-        session, authorization=None, admissions=None, settings=None,
-    )
-    with pytest.raises(TaskSubmissionContextUnavailable) as caught:
-        await command.create(None)
-    assert caught.value.code == code
 
 
 async def test_repair_commit_maps_named_deadline_race():

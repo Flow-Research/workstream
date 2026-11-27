@@ -24,9 +24,9 @@ def test_committed_lanes_cover_recursive_inventory_exactly_once() -> None:
     runner.validate_lane_inventory(discovered)
 
     assigned = [module for lane in LANES for module in lane.modules]
-    assert len(LANES) == 17
+    assert len(LANES) == 25
     assert all(lane.requires_postgres for lane in LANES)
-    assert Counter(assigned)[catalogue.SCHEMA_MODULE] == 1
+    assert Counter(assigned)[catalogue.SCHEMA_MODULE] == 3
     assert all(
         count
         == (
@@ -38,7 +38,7 @@ def test_committed_lanes_cover_recursive_inventory_exactly_once() -> None:
     )
     assert set(assigned) == set(discovered)
     assert runner.ADMIN_RUNNER_MODULE in next(
-        lane.modules for lane in LANES if lane.name == "schema_contracts"
+        lane.modules for lane in LANES if lane.name == "schema_contracts_a"
     )
 
 
@@ -48,7 +48,7 @@ def test_architecture_inspections_share_capacity_without_losing_nodes() -> None:
         "tests/architecture/test_module_boundaries.py",
         "tests/architecture/test_test_structure_boundary.py",
     }
-    schema = next(lane for lane in LANES if lane.name == "schema_contracts")
+    schema = next(lane for lane in LANES if lane.name == "schema_contracts_a")
     assert modules.isdisjoint(schema.modules)
     for module in modules:
         assert catalogue.PARTITION_LANES_BY_MODULE[module] == catalogue.PARTITIONED_SHARED_LANES
@@ -96,11 +96,13 @@ def test_checker_delivery_and_routing_preparation_partition_every_node_once() ->
         "tests/checkers/default/test_contract.py",
         "tests/checkers/default/test_execution.py",
         "tests/checkers/external/test_contracts.py",
+        "tests/checkers/external/test_remote_node.py",
         "tests/checkers/external/test_migration.py",
         "tests/checkers/external/test_postgresql.py",
         "tests/checkers/external/test_public_api.py",
         "tests/checkers/external/test_registry.py",
         "tests/checkers/external/test_runtime.py",
+        "tests/checkers/external/test_pre_invocation.py",
         "tests/checkers/external/test_policy.py",
         "tests/checkers/external/test_selected_post_submit.py",
         "tests/checkers/external/test_forge_locator.py",
@@ -108,8 +110,6 @@ def test_checker_delivery_and_routing_preparation_partition_every_node_once() ->
         "tests/checkers/external/test_selected_pre_submit.py",
         "tests/checkers/external/test_selected_intake_lifecycle.py",
         "tests/checkers/external/test_selected_pre_submit_coordination.py",
-        "tests/checkers/external/test_selected_pre_submit_service.py",
-        "tests/checkers/external/test_selected_preparation_command.py",
         "tests/checkers/execution/test_execution.py",
         "tests/checkers/execution/test_completion_evidence.py",
         "tests/checkers/execution/test_coordination.py",
@@ -128,6 +128,8 @@ def test_checker_delivery_and_routing_preparation_partition_every_node_once() ->
         "tests/checkers/execution/test_delivery_reconciliation_custody.py",
         "tests/checkers/execution/test_delivery_reconciliation_public.py",
         "tests/test_post_submit_materialization.py",
+        "tests/artifacts/test_post_source_cleanup.py",
+        "tests/artifacts/test_post_source_manifest.py",
         "tests/test_post_submit_selection.py",
         "tests/test_checker_output_custody.py",
         "tests/test_checker_output_storage.py",
@@ -196,6 +198,12 @@ def test_expanded_lane_families_keep_exact_semantic_owners() -> None:
                 "shared_foundations_a",
                 "shared_foundations_b",
                 "shared_foundations_c",
+                "shared_foundations_d",
+                "shared_foundations_e",
+                "shared_foundations_f",
+                "shared_foundations_g",
+                "shared_foundations_h",
+                "shared_foundations_i",
             ),
             catalogue.SHARED_FOUNDATION_MODULES,
         ),
@@ -221,6 +229,10 @@ def test_expanded_lane_families_keep_exact_semantic_owners() -> None:
             ),
             catalogue.TASK_MODULES,
         ),
+        (
+            ("schema_contracts_a", "schema_contracts_b", "schema_contracts_c"),
+            catalogue.SCHEMA_CONTRACT_MODULES,
+        ),
     )
     assert catalogue.PARTITION_GROUPS == tuple(
         (lane_names, modules) for lane_names, modules in expected_families
@@ -245,7 +257,10 @@ def test_expanded_lane_families_keep_exact_semantic_owners() -> None:
     }
     partitioned_modules = set().union(*(set(modules) for _, modules in expected_families))
     assert set(catalogue.STATIC_FOUNDATION_MODULES) <= set(catalogue.SHARED_FOUNDATION_MODULES)
-    assert schema_static_contracts.isdisjoint(partitioned_modules)
+    assert schema_static_contracts <= set(catalogue.SCHEMA_CONTRACT_MODULES)
+    assert schema_static_contracts.isdisjoint(
+        partitioned_modules - set(catalogue.SCHEMA_CONTRACT_MODULES)
+    )
     assert {
         "tests/test_alembic.py",
         "tests/test_checker_evidence_migrations.py",
@@ -265,7 +280,7 @@ def test_expanded_lane_families_keep_exact_semantic_owners() -> None:
         runner.ADMIN_RUNNER_MODULE,
     } | schema_static_contracts | set(catalogue.OBSERVABILITY_MODULES) | set(
         catalogue.TASK_ROUTING_REQUEST_MODULES
-    ) == modules_by_lane["schema_contracts"]
+    ) == modules_by_lane["schema_contracts_a"]
 
 
 def test_post_submit_and_packet_custody_share_foundations_without_losing_nodes() -> None:
@@ -317,16 +332,16 @@ def test_semantic_family_membership_has_an_independent_fingerprint() -> None:
     """A catalogue-internal move across semantic families must fail this contract."""
     expected = {
         "shared": (
-            262,
-            "e2c8b4a0222fc44f0458d447842303b65277d2402b7c05a0f71f152f24417435",
+            277,
+            "f034941a5a69b4c1fc2d69ec5a351267ea1ced856e758d37cb4498c83e9f03a3",
         ),
         "project": (
-            255,
-            "8e8f8155a5e3929613fb81e5b6bc8d5ac858aa2578dab559b8f403de6298d87a",
+            258,
+            "39504157bb06c4da278a8682230d5e76ce820d7ce3c88cd59af08f8693f293c6",
         ),
         "task": (
-            94,
-            "49ae5e1b0b26ee4b71fd117e0502802a1e1439850628f1ed0d65130c38c0c4d9",
+            97,
+            "f0e63da8bf843db9a83028c428b080504ca4566c36e7764b4cb6840592166364",
         ),
     }
     actual = {
@@ -394,9 +409,9 @@ def test_project_lane_ownership_has_an_independent_fingerprint() -> None:
         )
         + "\n"
     )
-    assert len(catalogue.PROJECT_PARTITIONED_MODULES) == 255
+    assert len(catalogue.PROJECT_PARTITIONED_MODULES) == 258
     assert hashlib.sha256(canonical.encode()).hexdigest() == (
-        "3782b6f2df688f48755b50db0295f9660d9960ec7c58e1c1e3659f874f27f909"
+        "c19e85ce7e623252d6de97f6707225b92a88514dc11ef36fd16e51d5531b9020"
     )
 
 
@@ -560,20 +575,35 @@ def test_manifest_classifies_only_runner_self_tests_as_admin_kind() -> None:
         admin: runner.ADMIN_KIND,
         ordinary: runner.ORDINARY_KIND,
     }
-    assert next(row for row in rows if row["nodeid"] == admin)["lane"] == "schema_contracts"
+    assert next(row for row in rows if row["nodeid"] == admin)["lane"] == (
+        "schema_contracts_a", "schema_contracts_b", "schema_contracts_c"
+    )[hashlib.sha256(admin.encode()).digest()[0] % 3]
 
 
-def test_schema_nodes_share_one_lane() -> None:
-    nodes = [f"{catalogue.SCHEMA_MODULE}::test_migration_{index}" for index in range(100)]
-    rows = runner.build_manifest("a" * 40, nodes)["nodes"]
-    assert {row["lane"] for row in rows} == {"schema_contracts"}
-    assert [row["nodeid"] for row in rows] == sorted(nodes)
+def test_schema_nodes_partition_once_with_admin_kind_and_order_independence() -> None:
+    names = ("schema_contracts_a", "schema_contracts_b", "schema_contracts_c")
+    nodes = [f"{module}::test_schema[{index}]"
+             for module in catalogue.SCHEMA_CONTRACT_MODULES for index in range(64)]
+    first = runner.build_manifest("a" * 40, nodes)["nodes"]
+    reversed_rows = runner.build_manifest("b" * 40, list(reversed(nodes)))["nodes"]
+    assert first == reversed_rows
+    assert Counter(row["nodeid"] for row in first) == Counter(nodes)
+    assert {row["lane"] for row in first} == set(names)
+    for row in first:
+        assert row["lane"] == names[hashlib.sha256(row["nodeid"].encode()).digest()[0] % 3]
+        assert row["execution_kind"] == (
+            runner.ADMIN_KIND if row["module"] == runner.ADMIN_RUNNER_MODULE else runner.ORDINARY_KIND
+        )
+    for name in names:
+        partition = [row for row in first if row["lane"] == name]
+        assert {row["execution_kind"] for row in partition} == {runner.ADMIN_KIND, runner.ORDINARY_KIND}
+        assert any(row["module"] == catalogue.SCHEMA_MODULE for row in partition)
 
 
 @pytest.mark.parametrize(
     ("names", "modules"),
     catalogue.PARTITION_GROUPS,
-    ids=("shared", "project", "task"),
+    ids=("shared", "project", "task", "schema"),
 )
 def test_owner_nodes_partition_deterministically(names, modules) -> None:
     module = modules[0]
@@ -626,7 +656,7 @@ def test_manifest_has_no_exclusion_escape_hatch() -> None:
     assert manifest["nodes"] == [
         {
             "execution_kind": runner.ADMIN_KIND,
-            "lane": "schema_contracts",
+            "lane": "schema_contracts_a",
             "module": runner.ADMIN_RUNNER_MODULE,
             "nodeid": admin,
         }
@@ -749,7 +779,7 @@ def test_partition_rejects_inexact_ordered_owners(
     changed = {
         "missing": owners[:-1],
         "duplicate": (*owners[:-1], owners[0]),
-        "foreign": (*owners[:-1], "schema_contracts"),
+        "foreign": (*owners[:-1], "schema_contracts_a"),
     }[mutation]
     monkeypatch.setitem(runner.PARTITION_LANES_BY_MODULE, module, changed)
 
@@ -812,8 +842,8 @@ def test_workflow_lane_inventory_matches_catalogue() -> None:
     assert source.count("path: backend/.ci/download\n          merge-multiple: false") == 1
     assert '--expected-head "${GITHUB_SHA}"' in source
     assert '--run-attempt "${GITHUB_RUN_ATTEMPT}"' in source
-    assert 'test "${#coverage_files[@]}" -eq 17' in source
-    assert "len(lanes) != 17" in source
+    assert 'test "${#coverage_files[@]}" -eq 25' in source
+    assert "len(lanes) != 25" in source
     assert 'Path(".ci/download"), expected_head, int(os.environ["GITHUB_RUN_ATTEMPT"])' in source
     assert 'timing_path = bundle / "job-start-epoch.txt"' in source
     assert (
@@ -949,9 +979,10 @@ def test_routing_request_proofs_use_schema_lane_with_measured_headroom():
     assert set(catalogue.TASK_ROUTING_REQUEST_MODULES) == expected
     for lane in LANES:
         assert set(lane.modules) & expected == (
-            expected if lane.name == "schema_contracts" else set()
+            expected if lane.name in catalogue.PARTITIONED_SCHEMA_LANES else set()
         )
-    assert not expected & set(catalogue.PARTITION_LANES_BY_MODULE)
+    assert all(catalogue.PARTITION_LANES_BY_MODULE[module] == catalogue.PARTITIONED_SCHEMA_LANES
+               for module in expected)
 
 
 def test_observability_proofs_use_schema_lane_with_measured_headroom():
@@ -963,9 +994,10 @@ def test_observability_proofs_use_schema_lane_with_measured_headroom():
     assert set(catalogue.OBSERVABILITY_MODULES) == expected
     for lane in LANES:
         assert set(lane.modules) & expected == (
-            expected if lane.name == "schema_contracts" else set()
+            expected if lane.name in catalogue.PARTITIONED_SCHEMA_LANES else set()
         )
-    assert not expected & set(catalogue.PARTITION_LANES_BY_MODULE)
+    assert all(catalogue.PARTITION_LANES_BY_MODULE[module] == catalogue.PARTITIONED_SCHEMA_LANES
+               for module in expected)
 
 
 def test_routing_authorization_proofs_use_the_project_partition():
@@ -1009,3 +1041,13 @@ def test_evaluation_custody_proofs_use_project_lane_headroom():
         catalogue.PARTITION_LANES_BY_MODULE[path] == catalogue.PARTITIONED_PROJECT_LANES
         for path in expected
     )
+
+
+def test_workflow_schema_shards_keep_exact_disk_storage_and_budget() -> None:
+    source = (runner.ROOT.parent / ".github/workflows/backend.yml").read_text()
+    member = "contains(fromJSON('[\"schema_contracts_a\",\"schema_contracts_b\",\"schema_contracts_c\"]'), matrix.lane)"
+    assert source.count(member) == 2
+    assert ("${{ !" + member + " && '--tmpfs /var/lib/postgresql/data:rw,nosuid,nodev,noexec,size=2147483648' || '' }}") in source
+    assert ("EXPECTED_PG_STORAGE: ${{ " + member + " && 'disk' || 'tmpfs' }}") in source
+    assert source.count("--timeout-seconds 1500") == 2
+    assert "timeout-minutes: 45" in source

@@ -1,64 +1,77 @@
-"""Real locked-policy rejection before hidden Submission persistence or ART access."""
-
-from app.core.config import get_settings
-
-from app.adapters.tasks import task_service, task_submission_context_port
-
-from uuid import UUID, uuid4
-from unittest.mock import AsyncMock
+"""Locked-policy rejection through public raw-ZIP intake before source custody."""
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 
 from app.db import session as db_session
 from app.db import models as db_models
-from app.api.deps.authorization import compose_hidden_submission_creation_command
 from app.modules.projects.models import (
     PostSubmitCheckerPolicy,
 )
-from app.modules.authorization.prepared import PreparedSubmissionCreationAuthorization
-from app.modules.tasks.api import SubmissionCreationRequest, TaskSubmissionContextUnavailable
+from app.modules.tasks.api import TaskSubmissionContextUnavailable
+from app.modules.projects.api.locked_policy import ProjectLockedPolicyContextUnavailable
 from app.modules.tasks.models import AuditEvent, Submission, TaskAssignment, WorkstreamTask
 from app.modules.tasks.repository import TaskRepository
-from app.modules.tasks.service import TaskLockedContextInvalid
-from app.modules.tasks.submission_composition import TaskSubmissionCreationService
-from tests.authorization.task_authority.test_concurrency import actor_context
 from tests.projects.policy_read_faults import corrupt_locked_policy_reads
+from tests import test_tasks as task_fixtures
 from tests.test_tasks import (
-    task_database_env as task_database_env,
-    task_client as task_client,
+    auth_headers,
     create_active_project,
     create_started_task,
 )
 
 
-async def _create_hidden_submission(task_id: str):
-    """Exercise real TASK/AUTH composition; invalid policy must precede ART lookup.
+task_database_env = task_fixtures.task_database_env
+task_client = task_fixtures.task_client
 
-    The deliberately nonexistent admission cannot produce successful creation.
-    If policy validation regresses, admission denial is a different failure and
-    does not satisfy these tests' precise locked-policy error assertions.
-    """
-    async with db_session.get_session_factory()() as session:
+
+async def _reject_public_submission(client, task_id, tmp_path, monkeypatch, expected):
+    """Keep exact owner refusal observable while exercising the real HTTP mapping."""
+    from app.modules.artifacts.intake.foreground_admission import ForegroundIntakeAdmission
+    from tests.artifacts.test_submission_foreground_command import configure_source_http
+    factory = db_session.get_session_factory()
+    _, _, errors, calls = await configure_source_http(
+        factory, client, tmp_path, monkeypatch, b"unused", "completed")
+    tables = ("submission_intake_operations", "submission_source_charges", "submissions",
+              "checker_runs", "checker_results", "audit_events", "outbox_events")
+    async def snapshot():
+        async with factory() as session:
+            return {table: list(await session.scalars(text(
+                f"SELECT to_jsonb(r)::text FROM public.{table} r ORDER BY to_jsonb(r)::text"
+            ))) for table in tables}
+    before = await snapshot()
+    async with factory() as session:
         assignment = await session.scalar(select(TaskAssignment).where(
-            TaskAssignment.task_id == task_id, TaskAssignment.status == "active",
-        ))
-        assert assignment is not None
-        assignment_id = UUID(assignment.id)
-        contributor_id = UUID(assignment.contributor_id)
-    context = await actor_context(str(contributor_id))
-    async with db_session.get_session_factory()() as session:
-        command = compose_hidden_submission_creation_command(
-            session, context, request_id=context.request_id, correlation_id=context.correlation_id,
-        )
-        return await command.create(SubmissionCreationRequest(
-            task_id=UUID(task_id), assignment_id=assignment_id,
-            contributor_id=contributor_id, admission_id=uuid4(),
-            predecessor_submission_id=None, summary="Completed work",
-            contributor_attestation="This submission is my work.",
-        ))
+            TaskAssignment.task_id == task_id, TaskAssignment.status == "active"))
+        assignment_id = assignment.id
+    failures = []
+    validate = ForegroundIntakeAdmission._validate_context
+    async def observe(owner, *args):
+        try:
+            return await validate(owner, *args)
+        except expected as exc:
+            failures.append(exc)
+            raise
+    async def forbidden_body():
+        pytest.fail("invalid locked policy read the request body")
+        yield b"never"
+    with monkeypatch.context() as patch:
+        patch.setattr(ForegroundIntakeAdmission, "_validate_context", observe)
+        response = await client.post(f"/api/v1/tasks/{task_id}/submissions",
+            headers=auth_headers() | {"Content-Type": "application/zip",
+                "X-Task-Assignment-Id": assignment_id}, content=forbidden_body())
+    assert len(failures) == 1
+    expected_code = ("task_submission_context_invalid" if expected is TaskSubmissionContextUnavailable
+                     else "project_locked_policy_context_changed")
+    assert failures[0].code == expected_code
+    assert response.status_code == (404 if expected is TaskSubmissionContextUnavailable else 503), response.text
+    assert response.json()["error"]["code"] == (
+        "submission_unavailable" if expected is TaskSubmissionContextUnavailable
+        else "submission_infrastructure_unavailable")
+    assert await snapshot() == before
+    assert calls == [] and errors == []
 
 
 @pytest.mark.parametrize("field", [
@@ -72,17 +85,6 @@ async def test_invalid_locked_policy_never_reaches_art_or_submission(
     project = await create_active_project(task_client)
     task_response = await create_started_task(task_client, project["id"], monkeypatch)
     async with db_session.get_session_factory()() as session:
-        assignment = await session.scalar(select(TaskAssignment).where(
-            TaskAssignment.task_id == task_response["id"],
-            TaskAssignment.status == "active",
-        ))
-        assignment_id = UUID(assignment.id)
-        contributor_id = UUID(assignment.contributor_id)
-    context = await actor_context(str(contributor_id))
-    admissions = AsyncMock()
-    admissions.consume.side_effect = AssertionError("invalid policy reached ART")
-
-    async with db_session.get_session_factory()() as session:
         with pytest.raises(IntegrityError, match="task revision context lacks current preparation"):
             async with session.begin():
                 task = await session.get(WorkstreamTask, task_response["id"])
@@ -92,24 +94,6 @@ async def test_invalid_locked_policy_never_reaches_art_or_submission(
                 # guard precedes policy FK checks and any ART participation.
                 setattr(task, field, {} if field.endswith("body") else "sha256:" + "f" * 64)
                 await session.flush()
-                await TaskSubmissionCreationService(
-                    session,
-                    authorization=PreparedSubmissionCreationAuthorization(session, context),
-                    admissions=admissions, evaluations=AsyncMock(), events=AsyncMock(),
-                    contexts=task_service(session, settings=get_settings()),
-                    submission_contexts=task_submission_context_port(session),
-                ).create(
-                    SubmissionCreationRequest(
-                        task_id=UUID(task.id),
-                        assignment_id=assignment_id,
-                        contributor_id=contributor_id,
-                        admission_id=uuid4(),
-                        predecessor_submission_id=None,
-                        summary="Completed work",
-                        contributor_attestation="This submission is my work.",
-                    )
-                )
-        admissions.consume.assert_not_awaited()
         assert await session.scalar(select(Submission).where(
             Submission.task_id == task_response["id"],
         )) is None
@@ -120,17 +104,14 @@ async def test_invalid_locked_policy_never_reaches_art_or_submission(
 
 async def test_submission_pre_submit_rejects_mutated_effective_policy_body(
     task_client: AsyncClient,
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, tmp_path,
 ) -> None:
     project = await create_active_project(task_client)
     started_task = await create_started_task(task_client, project["id"], monkeypatch)
     await corrupt_locked_policy_reads(monkeypatch, started_task["id"], "stale_effective")
 
-    with pytest.raises(TaskLockedContextInvalid) as rejected:
-        await _create_hidden_submission(started_task["id"])
-    assert rejected.value.status_code == 422
-    assert rejected.value.code == "task_locked_context_invalid"
-    assert str(rejected.value) == "task locked policy custody is invalid"
+    await _reject_public_submission(task_client, started_task["id"], tmp_path, monkeypatch,
+                                    ProjectLockedPolicyContextUnavailable)
 
     async with db_session.get_session_factory()() as session:
         submissions = (
@@ -149,7 +130,7 @@ async def test_submission_pre_submit_rejects_mutated_effective_policy_body(
 
 async def test_submission_rejects_malformed_locked_post_submit_policy_body_without_side_effects(
     task_client: AsyncClient,
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, tmp_path,
 ) -> None:
     project = await create_active_project(task_client)
     started_task = await create_started_task(task_client, project["id"], monkeypatch)
@@ -177,9 +158,8 @@ async def test_submission_rejects_malformed_locked_post_submit_policy_body_witho
 
     monkeypatch.setattr(TaskRepository, "get_task", corrupt_task_read)
 
-    with pytest.raises(TaskSubmissionContextUnavailable) as rejected:
-        await _create_hidden_submission(started_task["id"])
-    assert rejected.value.code == "task_submission_context_invalid"
+    await _reject_public_submission(task_client, started_task["id"], tmp_path, monkeypatch,
+                                    TaskSubmissionContextUnavailable)
     async with db_session.get_session_factory()() as session:
         task = await session.get(WorkstreamTask, started_task["id"])
         submissions = (
@@ -236,17 +216,14 @@ async def test_submission_rejects_malformed_locked_post_submit_policy_body_witho
 
 async def test_submission_pre_submit_rejects_mutated_compiled_checker_bundle(
     task_client: AsyncClient,
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, tmp_path,
 ) -> None:
     project = await create_active_project(task_client)
     started_task = await create_started_task(task_client, project["id"], monkeypatch)
     await corrupt_locked_policy_reads(monkeypatch, started_task["id"], "stale_bundle")
 
-    with pytest.raises(TaskLockedContextInvalid) as rejected:
-        await _create_hidden_submission(started_task["id"])
-    assert rejected.value.status_code == 422
-    assert rejected.value.code == "task_locked_context_invalid"
-    assert str(rejected.value) == "task locked policy custody is invalid"
+    await _reject_public_submission(task_client, started_task["id"], tmp_path, monkeypatch,
+                                    ProjectLockedPolicyContextUnavailable)
 
     async with db_session.get_session_factory()() as session:
         submissions = (
@@ -265,7 +242,7 @@ async def test_submission_pre_submit_rejects_mutated_compiled_checker_bundle(
 
 async def test_submission_rejects_crossed_post_submit_policy_sidecar(
     task_client: AsyncClient,
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, tmp_path,
 ) -> None:
     project = await create_active_project(task_client)
     started_task = await create_started_task(task_client, project["id"], monkeypatch)
@@ -285,13 +262,10 @@ async def test_submission_rejects_crossed_post_submit_policy_sidecar(
     from tests.projects.post_submit_fixtures import crossed_post_policy_read
 
     with crossed_post_policy_read(policy_id) as seen:
-        with pytest.raises(TaskLockedContextInvalid) as rejected:
-            await _create_hidden_submission(started_task["id"])
+        await _reject_public_submission(task_client, started_task["id"], tmp_path, monkeypatch,
+                                        ProjectLockedPolicyContextUnavailable)
     assert seen
 
-    assert rejected.value.status_code == 422
-    assert rejected.value.code == "task_locked_context_invalid"
-    assert str(rejected.value) == "task locked policy custody is invalid"
 
     async with db_session.get_session_factory()() as session:
         task = await session.get(WorkstreamTask, started_task["id"])

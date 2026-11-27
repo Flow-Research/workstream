@@ -1,0 +1,53 @@
+"""One-time genuine predecessor writer against both sides of SQL cutover."""
+import asyncio
+import json
+
+import asyncpg
+import pytest
+from alembic import command
+from sqlalchemy.exc import DBAPIError
+
+from app.api.deps.authorization import compose_hidden_submission_creation_command
+from app.core.identifiers import new_record_id
+from app.db import session as db_session
+from tests.conftest import _drop_test_database_schema
+from tests.migration_fixtures import _config
+from tests.tasks.test_submission_lineage import _prepared_packet
+
+pytestmark = pytest.mark.postgres_schema_contract
+
+
+async def snapshot(url):
+    c = await asyncpg.connect(url.replace('+asyncpg', ''))
+    try:
+        result = {}
+        for row in await c.fetch("SELECT tablename FROM pg_tables WHERE schemaname='public' ORDER BY tablename"):
+            name = row['tablename']
+            result[name] = await c.fetchval(f'SELECT coalesce(jsonb_agg(to_jsonb(r) ORDER BY to_jsonb(r)::text),\'[]\')::text FROM public."{name}" r')
+        return result
+    finally:
+        await c.close()
+
+
+@pytest.mark.parametrize('cutover', [False, True])
+async def test_old_writer(isolated_database_env, tmp_path, migration_lock, cutover):
+    with migration_lock():
+        await db_session.dispose_engine()
+        await _drop_test_database_schema(isolated_database_env)
+        await asyncio.to_thread(command.upgrade, _config(), '0065_claim_starts_work')
+        async with _prepared_packet(isolated_database_env, tmp_path) as h:
+            await asyncio.to_thread(command.upgrade, _config(), '0084_submission_source_binding' if cutover else '0083_accepted_revision')
+            before = await snapshot(isolated_database_env)
+            async with h.factory() as session:
+                old = compose_hidden_submission_creation_command(session, h.context, request_id=new_record_id(), correlation_id=new_record_id())
+                if cutover:
+                    with pytest.raises(DBAPIError, match='new submission binding requires accepted source custody'):
+                        await old.create(h.creation)
+                else:
+                    await old.create(h.creation)
+            after = await snapshot(isolated_database_env)
+            if cutover:
+                assert after == before
+            else:
+                assert len(json.loads(after['submissions'])) == 1
+                assert [r['status'] for r in json.loads(after['submission_bundle_admissions'])] == ['consumed']

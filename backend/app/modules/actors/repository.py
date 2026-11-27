@@ -21,6 +21,19 @@ class ActorRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
+    async def verified_notification_email(self, actor_id: UUID, issuer: str) -> str | None:
+        """Read the active human's exact issuer-observed, verified mailbox."""
+        return await self._session.scalar(
+            select(ActorProfile.contact_email).join(
+                ActorIdentityLink, ActorIdentityLink.actor_profile_id == ActorProfile.id,
+            ).where(
+                ActorProfile.id == str(actor_id), ActorProfile.actor_kind == "human",
+                ActorProfile.status == "active", ActorIdentityLink.subject_kind == "human",
+                ActorIdentityLink.status == "active", ActorIdentityLink.issuer == issuer,
+                ActorIdentityLink.email_verified.is_(True),
+            )
+        )
+
     async def lock_external_identity(self, issuer: str, subject: str) -> None:
         """Serialize first access for one exact external identity."""
         key = self._advisory_key(issuer, subject)

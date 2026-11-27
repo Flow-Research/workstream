@@ -100,14 +100,14 @@ class QualificationEvidenceTests(unittest.TestCase):
                 )
 
     def check_result(
-        self, *, children="", count=1, metadata_update=None, fixture_update=None
+        self, *, children="", count=2, metadata_update=None, fixture_update=None, case_names=None, case_update=None
     ):
         with tempfile.TemporaryDirectory() as temporary:
             junit = Path(temporary) / "junit.xml"
-            case = f'<testcase name="{qualifier.CASE}">{children}</testcase>'
-            junit.write_text(
-                f"<testsuites><testsuite>{case * count}</testsuite></testsuites>"
-            )
+            names = case_names or [f"{qualifier.CASE}[{case}]" for case in qualifier.CASES]
+            names = (names * max(1, count))[:count]
+            cases_xml = "".join(f'<testcase name="{name}">{children}</testcase>' for name in names)
+            junit.write_text(f"<testsuites><testsuite>{cases_xml}</testsuite></testsuites>")
             metadata = {
                 "tree_sha": "a" * 40,
                 "lane": "trial_composition",
@@ -120,21 +120,73 @@ class QualificationEvidenceTests(unittest.TestCase):
                 "guide_to_contribution_proven": False,
                 "replay_additional_provider_calls": 0,
                 "owned_runtime_resources_removed": True,
-                "model_effects": [{}, {}, {}, {}],
-                "trials": [{}, {}],
+                "model_effects": [{"case": case, "index": index} for case in qualifier.CASES for index in range(2)],
+                "trials": [{"case": case} for case in qualifier.CASES],
+                "cases": {case: {
+                    "case": case, "requirement_id": requirement, "provider_mode": "controlled",
+                    "guide_to_contribution_proven": False, "replay_additional_provider_calls": 0,
+                    "owned_runtime_resources_removed": True,
+                    "model_effects": [{"case": case, "index": index} for index in range(2)],
+                    "trials": [{"case": case}],
+                } for case, requirement in qualifier.CASES.items()},
             }
             metadata.update(metadata_update or {})
             fixture.update(fixture_update or {})
+            if case_update:
+                case_update(fixture["cases"])
             qualifier.verify_results(junit, metadata, fixture, "a" * 40)
 
     def test_exact_completed_case_is_required(self):
         self.check_result()
-        for count in (0, 2):
+        for count in (0, 1, 3):
             with self.subTest(count=count), self.assertRaises(ValueError):
                 self.check_result(count=count)
         for child in ("<skipped/>", "<failure/>", "<error/>"):
             with self.subTest(child=child), self.assertRaises(ValueError):
                 self.check_result(children=child)
+
+    def test_duplicate_image_case_cannot_replace_missing_case(self):
+        self.check_result()
+        name = f"{qualifier.CASE}[author]"
+        with self.assertRaisesRegex(ValueError, "exact required case"):
+            self.check_result(case_names=[name, name])
+
+    def test_per_case_custody_cannot_be_masked_by_old_aggregate_totals(self):
+        self.check_result()
+        for case in qualifier.CASES:
+            for field, value in (("model_effects", []), ("trials", []),
+                    ("requirement_id", "foreign"), ("owned_runtime_resources_removed", False),
+                    ("replay_additional_provider_calls", 1)):
+                with self.subTest(case=case, field=field), self.assertRaises(ValueError):
+                    self.check_result(case_update=lambda cases: cases[case].update({field: value}))
+            with self.subTest(missing=case), self.assertRaises(ValueError):
+                self.check_result(case_update=lambda cases: cases.pop(case))
+        for field in ("model_effects", "trials"):
+            with self.subTest(flattened=field), self.assertRaisesRegex(ValueError, "aggregate custody"):
+                self.check_result(fixture_update={field: list(reversed(
+                    [{"case": case, "index": index} for case in qualifier.CASES for index in range(2)]
+                    if field == "model_effects" else [{"case": case} for case in qualifier.CASES]))})
+
+    def test_combiner_keeps_distinct_authorities_and_both_cases(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "fixture.json"
+            for case, requirement in qualifier.CASES.items():
+                facts = {"schema_version": "workstream.terminal_systems_composition_evidence.v1",
+                    "provider_mode": "controlled", "guide_to_contribution_proven": False,
+                    "image": {}, "profile": {}, "projection": {}, "runtime": {},
+                    "predecessor_material_exercised": False, "case": case, "requirement_id": requirement,
+                    "authority_manifest_digest": case, "model_effects": [{"case": case}] * 2,
+                    "trials": [{"case": case}], "replay_additional_provider_calls": 0,
+                    "owned_runtime_resources_removed": True}
+                path.with_name("fixture-" + case + ".json").write_text(json.dumps(facts))
+            combined = qualifier.combine_case_results(path)
+            self.assertEqual(set(combined["cases"]), set(qualifier.CASES))
+            self.assertEqual(len(combined["model_effects"]), 4)
+            self.assertEqual(len(combined["trials"]), 2)
+            self.assertEqual(combined["authority_manifest_digests"], {case: case for case in qualifier.CASES})
+            path.with_name("fixture-runtime.json").unlink()
+            with self.assertRaises(FileNotFoundError):
+                qualifier.combine_case_results(path)
 
     def test_storage_cleanup_and_exact_source_are_required(self):
         for changed in (

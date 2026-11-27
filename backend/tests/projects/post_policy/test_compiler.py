@@ -12,9 +12,11 @@ from tests.checkers.external.test_policy import _entry, _attachment, _request, _
 
 @pytest.mark.asyncio
 async def test_saved_post_policy_is_exact_approved_post_body():
+    pre = _entry("acme.intake", "pre_submit")
     entry = _entry("acme.quality_review", "post_submit")
     locked = await compile_external_checker_policy_bundle(
-        _request(post=(_attachment(entry, "project_quality"),)), _Registry((entry,)),
+        _request(pre=(_attachment(pre, "intake"),), post=(_attachment(entry, "project_quality"),)),
+        _Registry((pre, entry)),
     )
     assert compile_saved_post_policy(policies=locked) == locked.post_submit
     assert compile_saved_post_policy(
@@ -24,7 +26,12 @@ async def test_saved_post_policy_is_exact_approved_post_body():
 
 @pytest.mark.asyncio
 async def test_saved_post_policy_rejects_changed_locked_bundle_digest():
-    locked = await compile_external_checker_policy_bundle(_request(), _Registry(()))
+    pre = _entry("acme.intake", "pre_submit")
+    post = _entry("acme.quality_review", "post_submit")
+    locked = await compile_external_checker_policy_bundle(
+        _request(pre=(_attachment(pre, "intake"),), post=(_attachment(post, "quality"),)),
+        _Registry((pre, post)),
+    )
     changed = locked.model_dump(mode="json")
     changed["post_submit"]["policy_sha256"] = "sha256:" + "0" * 64
     with pytest.raises(ValueError):

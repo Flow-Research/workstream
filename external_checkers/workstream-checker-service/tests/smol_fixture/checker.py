@@ -1,5 +1,6 @@
 """Adversarial runtime fixture. Never registered as a project evaluator."""
 import errno
+import fcntl
 import hashlib
 import json
 import os
@@ -9,6 +10,13 @@ import socket
 import stat
 import sys
 import time
+
+
+PRE_SOURCE_SCHEMA = "workstream.external_checker_pre_submit_input.v1"
+TIMEOUT_MARKER = "pre-qualification-timeout.txt"
+MEMORY_MARKER = "pre-qualification-memory.txt"
+CRASH_MARKER = "pre-qualification-crash.txt"
+OUTPUT_MARKER = "pre-qualification-output.txt"
 
 
 def denied(operation, *, expected_errno=None):
@@ -23,7 +31,64 @@ def denied(operation, *, expected_errno=None):
     raise AssertionError("operation was allowed")
 
 
+def evaluate_source_first(request):
+    """Pass only after the selected PRE safety observations complete."""
+    assert request["identity"]["phase"] == "pre_submit"
+    assert request["input"]["schema_version"] == PRE_SOURCE_SCHEMA
+    assert os.getuid() != 0 and os.getgid() != 0
+    input_root = Path("/work/input")
+    manifest = request["input"]["manifest"]
+    assert all(entry["entry_type"] == "file" for entry in manifest)
+    assert {path.name for path in input_root.iterdir()} == {
+        entry["normalized_path"] for entry in manifest
+    }
+    assert os.statvfs(input_root).f_flag & os.ST_RDONLY
+    for entry in manifest:
+        path = input_root / entry["normalized_path"]
+        data = path.read_bytes()
+        assert len(data) == entry["byte_count"]
+        assert "sha256:" + hashlib.sha256(data).hexdigest() == entry["sha256"]
+        denied(lambda: path.open("ab"))
+        assert path.read_bytes() == data
+
+    assert fcntl.fcntl(0, fcntl.F_GETFL) & os.O_ACCMODE == os.O_RDONLY
+    for descriptor in Path("/proc/self/fd").iterdir():
+        if int(descriptor.name) > 2:
+            denied(lambda: os.fstat(int(descriptor.name)), expected_errno=errno.EBADF)
+    (private,) = Path("/").glob(".workstream-pre-*")
+    denied(lambda: list(private.iterdir()), expected_errno=errno.EACCES)
+    worker_control = private / "worker-view/request.json"
+    denied(lambda: worker_control.open("rb"), expected_errno=errno.EACCES)
+    denied(lambda: worker_control.open("ab"), expected_errno=errno.EACCES)
+    assert not list(Path("/run").iterdir())
+    assert not list(Path("/sys").iterdir())
+    assert "WORKSTREAM_PRE_QUALIFICATION_PRIVATE_CANARY" not in os.environ
+    denied(lambda: socket.socket(socket.AF_VSOCK, socket.SOCK_STREAM))
+
+    if (input_root / TIMEOUT_MARKER).is_file():
+        assert (input_root / TIMEOUT_MARKER).read_bytes() == b"selected PRE deadline fixture\n"
+        time.sleep(30)
+    if (input_root / MEMORY_MARKER).is_file():
+        assert (input_root / MEMORY_MARKER).read_bytes() == b"selected PRE memory fixture\n"
+        # Commit more than the selected 128 MiB guest ceiling in bounded pages.
+        allocated = []
+        for _ in range(128):
+            allocated.append(bytearray(4 * 1024 * 1024))
+        raise AssertionError("guest memory ceiling was not enforced")
+    if (input_root / CRASH_MARKER).is_file():
+        assert (input_root / CRASH_MARKER).read_bytes() == b"selected PRE crash fixture\n"
+        os._exit(37)
+    if (input_root / OUTPUT_MARKER).is_file():
+        assert (input_root / OUTPUT_MARKER).read_bytes() == b"selected PRE output fixture\n"
+        sys.stdout.write("x" * 1024 * 1024)
+        sys.stdout.flush()
+        raise AssertionError("guest output ceiling was not enforced")
+
+
 def evaluate(request):
+    if request["configuration"] == {"check": "incident_summary_layout"}:
+        evaluate_source_first(request)
+        return
     case = request["configuration"]["case"]
     if case == "sleep":
         time.sleep(30)

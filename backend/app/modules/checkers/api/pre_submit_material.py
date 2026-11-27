@@ -14,23 +14,26 @@ ALLOWED_PRE_SUBMIT_STORAGE_SCHEMES = frozenset({"local", "s3"})
 class SubmissionPacketView:
     """Bounded optional text accompanying server-owned verified ZIP facts."""
 
-    summary: str
-    contributor_attestation: str
+    summary: str | None = None
+    contributor_attestation: str | None = None
 
     def __post_init__(self) -> None:
+        if self.summary is None and self.contributor_attestation is None:
+            return
         for value in (self.summary, self.contributor_attestation):
             if type(value) is not str or len(value.encode("utf-8")) > 64 * 1024:
                 raise ValueError("submission packet text is invalid")
 
+    def canonical_body(self) -> dict[str, str]:
+        """Read retired text only from retained checker evidence."""
+        if self.summary is None or self.contributor_attestation is None:
+            return {}
+        return {"summary": self.summary, "contributor_attestation": self.contributor_attestation}
+
     @property
     def sha256(self) -> str:
         """Commit to the same exact text at preparation and Submission creation."""
-        return canonical_json_hash(
-            {
-                "summary": self.summary,
-                "contributor_attestation": self.contributor_attestation,
-            }
-        )
+        return canonical_json_hash(self.canonical_body())
 
 
 __all__ = ("ALLOWED_PRE_SUBMIT_STORAGE_SCHEMES", "SubmissionPacketView")

@@ -88,6 +88,11 @@ async def read_guide_document_content(
     read: Annotated[VerifiedGuideDocumentRead, Depends(verified_guide_document)],
 ) -> StreamingResponse:
     """Serve one uploaded guide original after its bytes are verified against committed custody."""
+    return guide_original_response(read)
+
+
+def guide_original_response(read: VerifiedGuideDocumentRead) -> StreamingResponse:
+    """Use one verified-original response contract for both project audiences."""
     return StreamingResponse(read.stream, media_type=read.media_type, headers={
         "Content-Length": str(read.byte_count),
         "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff",

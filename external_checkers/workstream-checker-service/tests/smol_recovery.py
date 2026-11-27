@@ -25,7 +25,7 @@ import time
 import tempfile
 import zipfile
 
-from smol_runtime import Proof, canonical, exchange, smol_vm_inventory
+from smol_runtime import Proof, background_slots, canonical, exchange, smol_vm_inventory
 
 
 def wait_until(predicate, description, timeout=30):
@@ -465,9 +465,9 @@ class NestedTrialRecovery:
                 assert controller.poll() is None
                 assert self.process_identity(controller.pid, service_binary) == controller_identity
 
-            # Two simultaneous real preparations fill this node's two slots.
+            # Two simultaneous real preparations fill this node's background slots.
             # A health response alone would not prove admission capacity reuse.
-            assert config["smol"]["maximum_parallel"] == 2
+            assert background_slots(config) == 2
             probe = io.BytesIO()
             with zipfile.ZipFile(probe, "w") as archive:
                 archive.writestr("capacity-probe.txt", b"bounded capacity probe")
@@ -952,6 +952,15 @@ class Recovery:
         subprocess.run(['sudo', 'systemctl', 'restart', self.unit], check=True, timeout=30)
         wait_until(self.ready, 'node failed to become ready')
 
+    def require_rejected_before_guest(self):
+        envelope = self.proof.request(self.image, 'pre_submit', 'pass')
+        response = exchange(self.config['socket_path'], envelope)
+        result = response['result']
+        assert result['request_digest'] == envelope['request']['request_digest']
+        assert result['outcome'] == 'infrastructure_failed'
+        assert result['infrastructure_failure_code'] == 'implementation_unavailable'
+        assert response['isolation'] is None
+
     def retry_proof(self):
         for remaining, expected_creates, case in (
             (1, 2, 'retry_after_confirmed_cleanup'),
@@ -961,12 +970,7 @@ class Recovery:
             self.trace.write_text('')
             self.mode.write_text(str(remaining))
             if remaining == -1:
-                envelope = self.proof.request(self.image, 'pre_submit', 'pass')
-                response = exchange(self.config['socket_path'], envelope)
-                assert response['result']['request_digest'] == envelope['request']['request_digest']
-                assert response['result']['outcome'] == 'infrastructure_failed'
-                assert response['result']['infrastructure_failure_code'] == 'implementation_unavailable'
-                assert response['isolation'] is None
+                self.require_rejected_before_guest()
             elif remaining:
                 self.proof.execute(self.image, 'pre_submit', 'pass')
             else:
@@ -1003,15 +1007,12 @@ class Recovery:
             wait_until(self.clean, 'disconnect leaked resources', timeout=15)
             self.report('disconnect_cleanup')
 
-            for _ in range(self.config['smol']['maximum_parallel']):
+            slots = background_slots(self.config)
+            for _ in range(slots):
                 self.start()
-            wait_until(lambda: self.running(self.config['smol']['maximum_parallel']), 'VMs did not overlap')
-            try:
-                extra = self.start()
-                assert extra.recv(1) == b'', 'capacity overflow was accepted'
-            except (ConnectionResetError, BrokenPipeError):
-                pass
-            assert len(self.owned()) == self.config['smol']['maximum_parallel']
+            wait_until(lambda: self.running(slots), 'VMs did not overlap')
+            self.require_rejected_before_guest()
+            assert len(self.owned()) == slots
             self.disconnect()
             wait_until(self.clean, 'capacity test leaked resources', timeout=15)
             self.report('concurrent_capacity_rejection')

@@ -19,11 +19,53 @@ from app.modules.authorization.api import (
     outbox_dispatch_resource_digest,
     PreparedAuthorizationInvalid,
 )
-from app.modules.outbox.api import DeliveryUnavailable, FinalizationCause
+from app.modules.outbox.api import DeliveryOptions, DeliveryUnavailable, FinalizationCause
 from app.modules.outbox.delivery_repository import DeliveryRepository
 from app.modules.outbox.models import OutboxDeliveryAttempt
+from app.modules.outbox.registry import HandlerRegistry
+from app.modules.checkers.api.execution import REQUEST_EVENT
 from app.modules.tasks.models import AuditEvent
-from tests.outbox.conftest import Harness
+from tests.outbox.conftest import Harness, phase_decision
+
+
+async def test_second_renewal_requires_live_dispatcher_despite_preexisting_audit(delivery_harness):
+    """A new decision cannot reuse a retired service link at the SQL boundary."""
+    import asyncio
+    h = delivery_harness
+    h.options = DeliveryOptions(lease_seconds=30, handler_timeout_seconds=None,
+                                background_heartbeat=True)
+    h.delivery = h.build(HandlerRegistry([(REQUEST_EVENT, 1, h.handle)]))
+    claim = await h.claim(event_type=REQUEST_EVENT, aggregate_type="submission")
+    assert await h.delivery._begin_invocation(claim)
+    await h.delivery._renew_invocation(claim)
+    async with h.factory() as session:
+        first = await DeliveryRepository(session).attempt(claim)
+        first_live_until = first.claim_live_until
+        first_decision = first.renew_decision_event_id
+    await asyncio.sleep(1.1)
+    later = first_live_until + timedelta(seconds=1)
+    facts = OutboxDispatchFacts(**claim.model_dump(), phase=OutboxDispatchPhase.RENEW,
+                                live_until=later)
+    async with h.factory() as session, session.begin():
+        second_decision = await phase_decision(session, facts)
+    async with h.factory() as session, session.begin():
+        await session.execute(text(
+            "UPDATE actor_identity_links SET status='revoked',revoked_by='test',"
+            "revoked_at=clock_timestamp(),revoked_reason='test' WHERE id=:id"
+        ), {"id": str(h.link_id)})
+    with pytest.raises(DBAPIError, match="outbox current dispatcher authority missing"):
+        async with h.factory() as session, session.begin():
+            await session.execute(text(
+                "UPDATE outbox_events SET claim_live_until=:later WHERE event_id=:id"
+            ), {"later": later, "id": claim.event_id})
+            await session.execute(text(
+                "UPDATE outbox_delivery_attempts SET claim_live_until=:later,"
+                "renew_decision_event_id=:decision WHERE event_id=:id"
+            ), {"later": later, "decision": second_decision, "id": claim.event_id})
+    async with h.factory() as session:
+        stored = await DeliveryRepository(session).attempt(claim)
+        assert stored.claim_live_until == first_live_until
+        assert stored.renew_decision_event_id == first_decision
 
 
 def phase_facts(claim, phase, outcome=None):
@@ -42,7 +84,10 @@ async def test_real_dispatcher_records_exact_phase_decisions(delivery_harness):
             attempt.finalize_decision_event_id,
         ]
         assert len(set(ids)) == 3 and all(ids)
-        for phase, decision_id in zip(OutboxDispatchPhase, ids, strict=True):
+        for phase, decision_id in zip(
+            (OutboxDispatchPhase.CLAIM, OutboxDispatchPhase.INVOKE, OutboxDispatchPhase.FINALIZE),
+            ids, strict=True,
+        ):
             event = await session.get(AuditEvent, decision_id)
             expected = phase_facts(
                 claim,

@@ -44,12 +44,6 @@ from app.modules.tasks.schemas import (
     TaskResponse,
 )
 
-SUBMISSION_CREATE_REQUIRED_PACKET_FIELDS = (
-    "summary",
-    "package_hash",
-    "artifact_hash_manifest",
-    "worker_attestation",
-)
 LOCKED_CONTEXT_REQUIRED_FIELDS = (
     "locked_guide_version",
     "locked_post_submit_checker_policy_id",
@@ -330,7 +324,6 @@ class TaskService:
                 policy,
                 "merge_algorithm_version",
             ),
-            required_packet_fields=tuple(self._required_packet_fields(policy)),
             required_artifacts=tuple(
                 RequiredArtifactRequirement(
                     key=self._policy_rule_text(rule, "key", "required_artifacts"),
@@ -396,7 +389,6 @@ class TaskService:
                 )
                 for rule in forbidden_artifacts
             ),
-            attestation_terms=tuple(self._policy_string_list(policy, "attestation_terms")),
             manifest_required=self._policy_bool(policy, "manifest_required"),
             artifact_hash_required=self._policy_bool(policy, "artifact_hash_required"),
             artifact_hash_algorithm="sha256",
@@ -514,26 +506,6 @@ class TaskService:
                 {"field": f"effective_policy.{field}"},
             )
         return value
-
-    def _required_packet_fields(self, policy: dict[str, Any]) -> list[str]:
-        """Return exact submission packet fields required by API and policy."""
-        required_fields: list[str] = []
-        policy_fields = policy.get("required_packet_fields", [])
-        if not isinstance(policy_fields, list):
-            raise TaskLockedContextInvalid(
-                "task locked effective project submission artifact policy is invalid",
-                {"field": "effective_policy.required_packet_fields"},
-            )
-        for field in (*SUBMISSION_CREATE_REQUIRED_PACKET_FIELDS, *policy_fields):
-            if not isinstance(field, str) or not field.strip():
-                raise TaskLockedContextInvalid(
-                    "task locked effective project submission artifact policy is invalid",
-                    {"field": "effective_policy.required_packet_fields"},
-                )
-            normalized = field.strip()
-            if normalized not in required_fields:
-                required_fields.append(normalized)
-        return required_fields
 
     def _policy_rule_text(self, rule: object, key: str, collection: str) -> str:
         """Return a required text field from a locked policy rule or fail closed."""

@@ -77,6 +77,13 @@ class PreparedTaskRevisionExpiry(ABC):
         ...
 
 
+class TaskRevisionExpiryIntakePort(Protocol):
+    """Caller-authorized participant in the same fenced TASK expiry transaction."""
+    async def expire_revision(self, operation_id: UUID, target: TaskRevisionExpiryTarget) -> None:
+        """Fence only this assignment's unaccepted intake and retain source charges."""
+        ...
+
+
 class TaskRevisionExpiryAuthorizationPort(Protocol):
     """Prepare fixed-service authority within the caller-owned transaction."""
     def prepare_revision_expiry(

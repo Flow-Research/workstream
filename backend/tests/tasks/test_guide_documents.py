@@ -5,7 +5,7 @@ import hashlib
 from uuid import UUID, uuid4
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.core.config import get_settings
 from app.core.identifiers import new_record_id
@@ -23,7 +23,7 @@ from tests.test_tasks import (
     auth_headers,
     set_dev_actor,
     admit_and_grant_project_submitter,
-    create_active_project,
+    create_active_project, create_ready_task,
 )
 from app.adapters.tasks import task_commands
 from app.adapters.audit import task_transition_audit
@@ -87,6 +87,63 @@ async def test_assigned_originals_are_ordered_and_verified(task_client, guide_wo
         )[index]
 
 
+async def test_approved_guide_and_ready_task_originals_are_available_without_claim(
+    task_client, guide_world, monkeypatch,
+):
+    from app.modules.tasks.models import TaskAssignment
+
+    world, project = guide_world, guide_world.project["id"]
+    set_dev_actor(monkeypatch, roles="project_manager", subject="project-manager-subject")
+    contributor = await admit_and_grant_project_submitter(task_client, monkeypatch, project, "guide-reader")
+    project_path = f"/api/v1/projects/{project}/contributor-guide"
+    empty = await task_client.get(f"/api/v1/projects/{project}/tasks/ready", headers=auth_headers())
+    assert empty.status_code == 200 and empty.json()["items"] == []
+    approved = await task_client.get(project_path, headers=auth_headers())
+    assert approved.status_code == 200, approved.text
+    original = approved.json()
+    assert (original["guide_id"], original["version"]) == (world.guide["id"], "v1")
+    assert set(original) == {"project_id", "guide_id", "version", "documents"}
+    read = await task_client.get(original["documents"][0]["read_reference"], headers=auth_headers())
+    assert read.status_code == 200 and read.content == world.originals[0]
+
+    set_dev_actor(monkeypatch, roles="project_manager", subject="project-manager-subject")
+    task = await create_ready_task(task_client, project)
+    newer, newer_bytes = await activate_uploaded_guide(task_client, project, monkeypatch, version="v2")
+    set_dev_actor(monkeypatch, roles="viewer", subject="guide-reader")
+    set_dev_actor(monkeypatch, roles="project_manager", subject="project-manager-subject")
+    created = await task_client.post(
+        f"/api/v1/projects/{project}/guides", headers=auth_headers(),
+        json={"version": "unapproved", "task_examples": [{"content": "Unapproved notes."}],
+              "documents": [{"label": "draft.md", "media_type": "text/markdown"}]},
+    )
+    assert created.status_code == 201, created.text
+    draft = created.json()
+    set_dev_actor(monkeypatch, roles="viewer", subject="guide-reader")
+    draft_path = f"{project_path}/{draft['id']}/documents/{draft['documents'][0]['document_id']}/content"
+    assert (await task_client.get(draft_path, headers=auth_headers())).status_code == 404
+    assert (await task_client.get(
+        f"/api/v1/projects/{project}/guides/{draft['id']}", headers=auth_headers(),
+    )).status_code == 404
+    active = await task_client.get(project_path, headers=auth_headers())
+    assert active.status_code == 200 and active.json()["guide_id"] == newer["id"]
+    refreshed = await task_client.get(active.json()["documents"][0]["read_reference"], headers=auth_headers())
+    assert refreshed.status_code == 200 and refreshed.content == newer_bytes[0]
+    obsolete_project_read = await task_client.get(original["documents"][0]["read_reference"], headers=auth_headers())
+    assert obsolete_project_read.status_code == 404
+    task_context = await task_client.get(f"/api/v1/tasks/{task['id']}/work-context", headers=auth_headers())
+    assert task_context.status_code == 200, task_context.text
+    context = task_context.json()
+    assert not context["lifecycle"]["assigned_to_current_actor"]
+    assert context["guide"]["id"] == world.guide["id"]
+    exact = await task_client.get(context["guide_documents"][0]["read_reference"], headers=auth_headers())
+    assert exact.status_code == 200 and exact.content == world.originals[0]
+    async with db_session.get_session_factory()() as session:
+        count = await session.scalar(select(func.count()).select_from(TaskAssignment).where(
+            TaskAssignment.contributor_id == contributor["actor_profile_id"],
+        ))
+        assert count == 0
+
+
 async def test_unassigned_and_foreign_actors_are_concealed(task_client, guide_world, monkeypatch):
     world = guide_world
     for subject in ("pilot13-bob", "pilot13-foreign"):
@@ -99,6 +156,10 @@ async def test_unassigned_and_foreign_actors_are_concealed(task_client, guide_wo
         await admit_and_grant_project_submitter(task_client, monkeypatch, project_id, subject)
         denied = await task_client.get(content_path(world), headers=auth_headers())
         assert denied.status_code == 404, denied.text
+        guide = await task_client.get(
+            f"/api/v1/projects/{world.project['id']}/contributor-guide", headers=auth_headers(),
+        )
+        assert guide.status_code == (200 if subject == "pilot13-bob" else 404), guide.text
         context = await task_client.get(
             f"/api/v1/tasks/{world.task['id']}/work-context", headers=auth_headers()
         )

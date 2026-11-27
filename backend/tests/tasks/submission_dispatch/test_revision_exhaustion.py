@@ -1,6 +1,7 @@
 """Terminal checker failures release one assignment without inventing a revision."""
 
 from uuid import UUID
+from unittest.mock import patch
 
 import pytest
 from pydantic import ValidationError
@@ -8,6 +9,8 @@ from sqlalchemy import select, text
 from sqlalchemy.exc import DBAPIError
 
 from app.adapters.tasks import task_post_submit_outcome
+from app.adapters.artifacts import ConfiguredSubmissionCommand
+from app.modules.artifacts.api.submission_intake import SubmissionIntakeMetadata
 from app.core.identifiers import new_record_id
 from app.modules.actors.api import ServiceIdentity
 from app.modules.authorization.runtime import AuthorizationDenied, PreparedAuthorizationUnsupported
@@ -15,14 +18,13 @@ from app.modules.outbox.service import OutboxService
 from app.modules.projects.api.policy_lineage import RevisionPolicySemantics
 from app.modules.projects.schemas import RevisionPolicyInput
 from app.modules.tasks.revision.models import TaskRevisionExhaustion
-from app.modules.tasks.schemas import AdmissionBackedSubmissionResponse
 from tests.checkers.execution.support import service_link_state
 from tests.checkers.execution.completion_fixture import completed_evidence
 from tests.tasks.post_submit_routing.outcome_support import outcome_snapshot
 from tests.tasks.post_submit_routing.remediation_support import no_economic_effects, remediation_source
 from tests.tasks.post_submit_routing.support import revision_archive
 from tests.tasks.submission_dispatch.test_revision_capacity import _fail_current_submission
-from tests.tasks.submission_lineage_support import _verify_put_attempt
+from tests.post_submit_materialization_helpers import create_source_submission
 from tests.tasks.test_public_submission_intake import _client
 
 
@@ -160,23 +162,29 @@ async def _submit_initial_after_reclaim(h, client):
     assert claim.json()["task"]["status"] == "in_progress"
     h.data = revision_archive(h.data)
     headers = {"Content-Type": "application/zip", "X-Task-Assignment-Id": str(assignment),
-               "Idempotency-Key": str(new_record_id()),
-               "X-Submission-Summary": h.creation_request.summary,
-               "X-Contributor-Attestation": h.creation_request.contributor_attestation}
-    route = f"/api/v1/tasks/{h.request.task_id}/submission-bundle-preparations"
-    prepared = await client.post(route, headers=headers, content=h.data)
-    assert prepared.status_code == 202, prepared.text
-    admission = await _verify_put_attempt(h.factory, h.store, h.namespace, h.settings,
-                                         prepared.json()["put_attempt_id"])
-    ready = await client.post(route, headers=headers, content=h.data)
-    assert ready.status_code == 202 and ready.json()["admission_id"] == str(admission), ready.text
-    created = await client.post(f"/api/v1/tasks/{h.request.task_id}/submissions", json={
-        "assignment_id": str(assignment), "admission_id": str(admission),
-        "summary": h.creation_request.summary,
-        "contributor_attestation": h.creation_request.contributor_attestation,
-    })
-    assert created.status_code == 201, created.text
-    return AdmissionBackedSubmissionResponse.model_validate(created.json())
+               "Idempotency-Key": str(new_record_id())}
+
+    async def submit_http(factory, context, command, metadata, data):
+        async def submit(configured, received_metadata, chunks, **arguments):
+            assert received_metadata == metadata
+            assert arguments["actor_id"] == context.actor_profile_id
+            return await command.submit(received_metadata, chunks, **arguments)
+
+        with patch.object(ConfiguredSubmissionCommand, "submit", submit):
+            accepted = await client.post(
+                f"/api/v1/tasks/{h.request.task_id}/submissions", headers=headers, content=data,
+            )
+        assert accepted.status_code == 202, accepted.text
+        return accepted.json()
+
+    return await create_source_submission(
+        h.factory, h.actor_context, h.store.wrapped, h.namespace, h.settings,
+        SubmissionIntakeMetadata(
+            task_id=h.request.task_id, assignment_id=assignment,
+            feedback=h.creation_request.summary,
+        ),
+        h.data, submit_source=submit_http,
+    )
 
 
 async def _other_eligible_actor(h):

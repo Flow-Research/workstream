@@ -64,6 +64,16 @@ class LocalGuideRuntimeTests(unittest.TestCase):
         self.compose = yaml.safe_load((ROOT / "docker-compose.yml").read_text())
         self.services = self.compose["services"]
 
+    def test_agent_loop_post_worker_receives_model_and_checker_sockets(self):
+        overlay = yaml.safe_load((ROOT / "docker-compose.agent-loop.yml").read_text())
+        worker = overlay["services"]["outbox-worker"]
+        self.assertEqual(worker["environment"]["WORKSTREAM_CHECKER_MODEL_PROXY_SOCKET"],
+                         "/run/ws-model-proxy/model-proxy.sock")
+        self.assertEqual(worker["environment"]["WORKSTREAM_EXTERNAL_CHECKER_SERVICE_SOCKET"],
+                         "/run/ws-checker/checker.sock")
+        self.assertIn("checker_model_proxy:/run/ws-model-proxy:ro", worker["volumes"])
+        self.assertIn("checker_socket:/run/ws-checker:ro", worker["volumes"])
+
     def test_parser_has_no_secrets_network_or_source_mount(self):
         parser = self.services["guide-document-parser"]
         self.assertEqual(parser["network_mode"], "none")
@@ -82,7 +92,7 @@ class LocalGuideRuntimeTests(unittest.TestCase):
         self.assertIn("--healthcheck", parser["healthcheck"]["test"])
 
     def test_only_model_proxy_receives_provider_keys(self):
-        for name in ("backend", "worker", "beat", "guide-document-parser"):
+        for name in ("backend", "worker", "submission-finalizer", "beat", "guide-document-parser"):
             service = self.services[name]
             self.assertFalse(
                 {"OPENAI_API_KEY", "OPENROUTER_API_KEY"} & set(service.get("environment", {})),
@@ -102,6 +112,61 @@ class LocalGuideRuntimeTests(unittest.TestCase):
         self.assertIn("10001", worker["group_add"])
         self.assertIn("guide_parser_socket:/var/lib/workstream/guide-runtime:ro", worker["volumes"])
         self.assertEqual(worker["depends_on"]["guide-document-parser"]["condition"], "service_healthy")
+
+    def test_feedback_email_is_opt_in_and_key_is_dedicated(self):
+        command = ["docker", "compose", "--env-file", ".env.example", "-f", "docker-compose.yml"]
+        environment = {
+            key: value for key, value in os.environ.items()
+            if not key.startswith(("WORKSTREAM_", "COMPOSE_"))
+        }
+        disabled = subprocess.run(
+            [*command, "--profile", "backend", "config", "--format", "json"],
+            cwd=ROOT, env=environment, capture_output=True, text=True, check=True,
+        )
+        worker = "submission-feedback-email-worker"
+        self.assertNotIn(worker, json.loads(disabled.stdout)["services"])
+        environment.update({
+            "WORKSTREAM_SUBMISSION_FEEDBACK_EMAIL_ENABLED": "true",
+            "WORKSTREAM_TOKEN_ISSUER": "https://issuer.example.test/realms/flow",
+            "WORKSTREAM_TOKEN_JWKS_URL": "https://issuer.example.test/realms/flow/certs",
+            "WORKSTREAM_RESEND_API_KEY_FILE": "/private/test-resend-key",
+        })
+        configured = subprocess.run(
+            [*command, "-f", "docker-compose.submission-feedback-email.yml", "--profile", "backend",
+             "--profile", "submission-feedback-email", "config", "--format", "json"],
+            cwd=ROOT, env=environment, capture_output=True, text=True, check=True,
+        )
+        services = json.loads(configured.stdout)["services"]
+        self.assertEqual(services["backend"]["environment"]["WORKSTREAM_FLOW_AUTH_LOCAL_HMAC_SECRET"], "")
+        self.assertIn("--queues=workstream.submission_feedback_email", services[worker]["command"])
+        self.assertEqual([name for name, service in services.items()
+                          if service.get("secrets")], [worker])
+        self.assertEqual(services[worker]["secrets"][0]["source"], "resend_api_key")
+        self.assertNotIn("WORKSTREAM_ARTIFACT_S3_SECRET_ACCESS_KEY", services[worker]["environment"])
+
+    def test_finalization_consumer_requires_explicit_positive_capacity(self):
+        service = self.services["submission-finalizer"]
+        self.assertEqual(service["profiles"], ["submission-intake"])
+        self.assertIn("--queues=workstream.project_setup", self.services["worker"]["command"])
+        # Compose turns escaped dollars into shell variables at container launch.
+        script = service["command"][2].replace("$$", "$")
+        with tempfile.TemporaryDirectory() as directory:
+            executable = Path(directory) / "python"
+            executable.write_text('#!/bin/sh\nprintf "%s\\n" "$@"\n')
+            executable.chmod(0o700)
+            for value in ("", "0", "00", "-1", "1.5", "two", "2"):
+                with self.subTest(value=value):
+                    result = subprocess.run(["/bin/sh", "-ec", script], text=True, capture_output=True,
+                        env={"PATH": directory, "WORKSTREAM_SUBMISSION_FINALIZATION_CONCURRENCY": value})
+                    if value != "2":
+                        self.assertNotEqual(result.returncode, 0)
+                        self.assertEqual(result.stdout, "")
+                    else:
+                        self.assertEqual(result.returncode, 0, result.stderr)
+                        arguments = result.stdout.splitlines()
+                        self.assertIn("--concurrency=2", arguments)
+                        self.assertIn("--pool=prefork", arguments)
+                        self.assertIn("--queues=workstream.submission_finalization", arguments)
 
     def test_images_create_private_directory_without_exposing_local_env(self):
         for name in ("dev", "release"):
@@ -134,7 +199,9 @@ class LocalGuideRuntimeTests(unittest.TestCase):
              "config", "--format", "json"],
             cwd=ROOT, env=environment, text=True, capture_output=True, check=True,
         )
-        worker = json.loads(rendered.stdout)["services"]["worker"]["environment"]
+        services = json.loads(rendered.stdout)["services"]
+        self.assertNotIn("submission-finalizer", services)
+        worker = services["worker"]["environment"]
         settings = Settings(
             project_agent_runtime=worker["WORKSTREAM_PROJECT_AGENT_RUNTIME"],
             project_agent_model_provider=worker["WORKSTREAM_PROJECT_AGENT_MODEL_PROVIDER"],

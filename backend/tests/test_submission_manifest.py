@@ -13,7 +13,10 @@ from app.modules.artifacts.api.submission_archive import (
 from app.modules.artifacts.submission_archive import (
     SubmissionArchiveInspector,
 )
-from app.modules.artifacts.submission_manifest import SubmissionManifest, build_submission_manifest
+from app.modules.artifacts.api.submission_manifest import (
+    SubmissionManifest,
+    build_submission_manifest,
+)
 from app.core.hashing import canonical_json_hash
 
 
@@ -211,3 +214,26 @@ def test_inspector_rejects_case_aliases_of_implicit_directories(paths):
 def test_inventory_preserves_distinct_unicode_and_exact_directory_parents():
     manifest = _manifest(_archive([('café/', b''), ('café/a', b'x'), ('cafe', b'y')]))
     assert SubmissionManifest.from_dict(manifest.as_dict(), sha256=manifest.sha256) == manifest
+
+
+@pytest.mark.parametrize("changed", ["digest", "limit", "shape"])
+def test_checker_manifest_port_rejects_invalid_evidence(changed):
+    from app.adapters.artifacts import selected_pre_submit_source_contracts
+
+    contracts = selected_pre_submit_source_contracts()
+    manifest = _manifest(_archive([("a.txt", b"abc")]))
+    body = manifest.as_dict()
+    digest = manifest.sha256
+    limits = SubmissionArchiveLimits()
+    entries = contracts.validate_manifest(body, sha256=digest, limits=limits)
+    assert len(entries) == 1
+    assert (entries[0].normalized_path, entries[0].byte_count) == ("a.txt", 3)
+    if changed == "digest":
+        digest = "sha256:" + "f" * 64
+    elif changed == "limit":
+        limits = replace(limits, maximum_entry_bytes=2)
+    else:
+        body["entries"][0]["byte_count"] = True
+        digest = canonical_json_hash(body)
+    with pytest.raises(ValueError):
+        contracts.validate_manifest(body, sha256=digest, limits=limits)

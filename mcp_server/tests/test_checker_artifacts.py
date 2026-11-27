@@ -158,7 +158,8 @@ def _bound_response(name: str) -> dict[str, Any]:
             "items": [{"project_id": PROJECT_ID, "event_id": EVENT_ID}],
         },
         "post_submit_deliveries_reconcile": {
-            "source": {"project_id": PROJECT_ID, "event_id": EVENT_ID}
+            "source": {"project_id": PROJECT_ID, "event_id": EVENT_ID},
+            "successor": {"classification": "retry_safe"},
         },
         "checker_registry_read": {"registry_entry_id": REGISTRY_ID},
         "checker_registry_register": {
@@ -415,6 +416,16 @@ def test_success_responses_are_bound_to_requested_selectors_and_receipts(name: s
     else:
         response[next(iter(response))] = foreign
     assert not WorkstreamGateway._checker_artifact_response_matches(name, response, arguments)
+
+
+def test_abandonment_receipt_requires_explicit_operator_action() -> None:
+    name = "post_submit_deliveries_reconcile"
+    arguments = _arguments(name)
+    response = _bound_response(name)
+    response["successor"]["classification"] = "unresolved"
+    assert not WorkstreamGateway._checker_artifact_response_matches(name, response, arguments)
+    arguments["body"]["action"] = "abandon_unknown"
+    assert WorkstreamGateway._checker_artifact_response_matches(name, response, arguments)
 
 
 def test_registry_receipt_allows_backend_defaults_but_binds_supplied_fields() -> None:

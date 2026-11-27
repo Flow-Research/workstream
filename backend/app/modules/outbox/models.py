@@ -84,6 +84,12 @@ class OutboxEvent(Base):
             name="error_code",
         ),
         CheckConstraint(
+            "(delivery_state='claimed' and claim_live_until is not null "
+            "and claim_live_until>=claim_expires_at) or "
+            "(delivery_state<>'claimed' and claim_live_until is null)",
+            name="claim_live_shape",
+        ),
+        CheckConstraint(
             "(next_attempt_at is null or next_attempt_at >= occurred_at) and "
             "(claimed_at is null or claimed_at >= occurred_at) and "
             "(last_attempt_at is null or last_attempt_at >= occurred_at) and "
@@ -120,6 +126,10 @@ class OutboxEvent(Base):
             name="delivery_state_shape",
         ),
         Index(
+            "uq_submission_finalization_recovery_original", "causation_event_id", unique=True,
+            postgresql_where=text("event_type='SubmissionFinalizationRecoveryRequested'"),
+        ),
+        Index(
             "ix_outbox_events_eligible",
             "event_type",
             "delivery_state",
@@ -130,7 +140,7 @@ class OutboxEvent(Base):
         ),
         Index(
             "ix_outbox_events_expired_claims",
-            "claim_expires_at",
+            "claim_live_until",
             "event_id",
             postgresql_where=text("delivery_state = 'claimed'"),
         ),
@@ -190,6 +200,7 @@ class OutboxEvent(Base):
     )
     claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     claim_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    claim_live_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_error_code: Mapped[str | None] = mapped_column(String(80))
     finalized_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -217,6 +228,11 @@ class OutboxDeliveryAttempt(Base):
             name="lease",
         ),
         CheckConstraint(
+            "(claim_live_until=claim_expires_at and renew_decision_event_id is null) or "
+            "(claim_live_until>claim_expires_at and renew_decision_event_id is not null)",
+            name="renewed_lease",
+        ),
+        CheckConstraint(
             "(stage = 'claimed' and invoked_at is null and outcome_json is null "
             "and outcome_digest is null) or "
             "(stage = 'invoked' and invoked_at is not null and invoked_at >= claimed_at and invoked_at < claim_expires_at "
@@ -227,7 +243,7 @@ class OutboxDeliveryAttempt(Base):
         ),
         CheckConstraint(
             "outcome_json is null or coalesce(outbox_delivery_outcome_valid("
-            "outcome_json, outcome_digest, claimed_at, claim_expires_at, invoked_at), false)",
+            "outcome_json, outcome_digest, claimed_at, claim_live_until, invoked_at), false)",
             name="outcome",
         ),
     )
@@ -235,6 +251,7 @@ class OutboxDeliveryAttempt(Base):
     claim_decision_event_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), ForeignKey("audit_events.id"), unique=True, nullable=False)
     invoke_decision_event_id: Mapped[str | None] = mapped_column(Uuid(as_uuid=False), ForeignKey("audit_events.id"), unique=True)
     finalize_decision_event_id: Mapped[str | None] = mapped_column(Uuid(as_uuid=False), ForeignKey("audit_events.id"), unique=True)
+    renew_decision_event_id: Mapped[str | None] = mapped_column(Uuid(as_uuid=False), ForeignKey("audit_events.id"))
 
     event_id: Mapped[UUID] = mapped_column(ForeignKey("outbox_events.event_id"), primary_key=True)
     claim_generation: Mapped[int] = mapped_column(BigInteger, primary_key=True)
@@ -243,6 +260,7 @@ class OutboxDeliveryAttempt(Base):
     claim_owner: Mapped[str] = mapped_column(String(120), nullable=False)
     claimed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     claim_expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    claim_live_until: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     stage: Mapped[str] = mapped_column(String(16), nullable=False)
     invoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     outcome_json: Mapped[str | None] = mapped_column(String(2048))

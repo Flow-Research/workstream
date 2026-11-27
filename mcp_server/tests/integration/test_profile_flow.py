@@ -14,8 +14,7 @@ from uuid import uuid4
 import httpx2 as httpx
 import pytest
 from integration.oauth_fixture import IdentityFixture, IdentityTokens
-from mcp import Client
-from mcp.client.streamable_http import streamable_http_client
+from integration.oauth_fixture import call_mcp as _call
 
 from workstream_mcp.tools.profile import normalize_update_input
 
@@ -76,37 +75,6 @@ async def _ready(url: str, process: subprocess.Popen[str]) -> None:
                 pass
             await asyncio.sleep(0.25)
     raise AssertionError("subprocess readiness timeout")
-
-
-async def _call(
-    mcp_url: str,
-    token: IdentityTokens,
-    *,
-    name: str = "workstream_profile_get",
-    arguments: dict[str, Any] | None = None,
-) -> tuple[dict[str, Any], bool]:
-    async with httpx.AsyncClient(
-        headers={"Authorization": f"Bearer {token.mcp}"},
-        follow_redirects=False,
-        trust_env=False,
-        timeout=20,
-    ) as http_client:
-        transport = streamable_http_client(mcp_url + "/mcp", http_client=http_client)
-        async with Client(server=transport, mode="2026-07-28") as client:
-            assert client.protocol_version == "2026-07-28"
-            result = await client.call_tool(name, arguments or {})
-    dump = result.model_dump()
-    if "structuredContent" in dump and dump["structuredContent"] is not None:
-        content = dump["structuredContent"]
-    elif "structured_content" in dump and dump["structured_content"] is not None:
-        content = dump["structured_content"]
-    else:
-        import json
-
-        content = json.loads(dump["content"][0]["text"])
-
-    is_error = dump.get("isError", dump.get("is_error", False))
-    return content, bool(is_error)
 
 
 def _bootstrap_access_administrator(actor_id: str, environment: dict[str, str]) -> None:

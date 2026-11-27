@@ -17,6 +17,10 @@ class DeliveryUnavailable(Exception):
     """Concealed invalid, stale, denied or unavailable delivery operation."""
 
 
+BACKGROUND_STATUS_INSPECTION_INTERVAL_SECONDS = 3600
+BACKGROUND_LIVE_WINDOW_SECONDS = 10_800
+
+
 class DeliveryPersistenceError(Exception):
     """Sanitized database observation or delivery failure."""
 
@@ -147,16 +151,25 @@ class DeliveryOptions(DeliveryValue):
     """Explicit bounded composition options; no environment or plugin framework."""
 
     lease_seconds: int = Field(default=300, ge=1, le=3600)
-    handler_timeout_seconds: int = Field(default=240, ge=1, le=3600)
+    handler_timeout_seconds: int | None = Field(default=240, ge=1, le=3600)
+    background_heartbeat: bool = False
     max_attempts: int = Field(default=5, ge=1, le=100)
     retry_base_seconds: int = Field(default=5, ge=1, le=3600)
     retry_cap_seconds: int = Field(default=300, ge=1, le=86400)
+
+    def retry_delay_seconds(self, attempt: int) -> int:
+        """Return the bounded exponential delay after a one-based attempt."""
+        return min(self.retry_cap_seconds, self.retry_base_seconds * 2 ** min(attempt - 1, 30))
 
     @model_validator(mode="after")
     def ordered_limits(self) -> Self:
         """Leave a lease margin and bound retry scheduling."""
         if (
-            self.handler_timeout_seconds >= self.lease_seconds
+            (self.background_heartbeat and self.handler_timeout_seconds is not None)
+            or (not self.background_heartbeat and (
+                self.handler_timeout_seconds is None
+                or self.handler_timeout_seconds >= self.lease_seconds
+            ))
             or self.retry_cap_seconds < self.retry_base_seconds
         ):
             raise ValueError("outbox delivery limits are inconsistent")
@@ -182,6 +195,7 @@ class DeliveryCandidate(DeliveryValue):
 
     event_id: UUID
     project_id: UUID
+    event_type: str
 
 
 class DeliveryCandidatePage(DeliveryValue):
@@ -492,9 +506,24 @@ class OutboxAppendResult(BaseModel):
     occurred_at: datetime
 
 
+class OutboxDeliveryObservation(DeliveryValue):
+    """Detached operational facts for an exactly matched feature-owned event."""
+
+    event_id: UUID
+    state: Literal["pending", "claimed", "retryable", "acknowledged", "dead_letter", "cancelled"]
+    attempt_count: int = Field(ge=0)
+    next_attempt_at: datetime | None
+    finalized_at: datetime | None
+    error_code: str | None = Field(pattern=r"^[A-Z][A-Z0-9_]{0,79}$")
+
+
 class OutboxAppendPort(Protocol):
     async def require_existing(self, event_id: UUID | None, value: OutboxAppendInput) -> UUID:
         """Require exact retained custody by logical key and optional record ID."""
+        ...
+
+    async def observe_delivery(self, event_id: UUID, value: OutboxAppendInput) -> OutboxDeliveryObservation:
+        """Read delivery facts only after exact immutable feature custody matches."""
         ...
 
     async def append(self, value: OutboxAppendInput) -> OutboxAppendResult:

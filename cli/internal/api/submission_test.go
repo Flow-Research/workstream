@@ -10,7 +10,7 @@ import (
 	"testing"
 )
 
-func TestPrepareSubmissionRejectsOversizedCompressedZipBeforeHTTP(t *testing.T) {
+func TestSubmitSubmissionRejectsOversizedCompressedZipBeforeHTTP(t *testing.T) {
 	var requests atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requests.Add(1)
@@ -30,8 +30,8 @@ func TestPrepareSubmissionRejectsOversizedCompressedZipBeforeHTTP(t *testing.T) 
 	if err := file.Truncate(524288001); err != nil {
 		t.Fatal(err)
 	}
-	_, err = client.PrepareSubmission(context.Background(), testTask, testRun,
-		SubmissionPacket{Assignment: testSubmission}, nil, file)
+	_, err = client.SubmitSubmission(context.Background(), testTask, testRun,
+		SubmissionInput{Assignment: testSubmission}, file)
 	if err == nil || err.Error() != "ZIP must be a nonempty regular file of at most 500MiB" {
 		t.Fatalf("expected local compressed ZIP limit rejection, got %v", err)
 	}

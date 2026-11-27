@@ -1,0 +1,42 @@
+"""One-time capture through pinned predecessor owners, never a current writer."""
+import gzip
+import json
+from pathlib import Path
+
+import asyncpg
+
+from app.api.deps.authorization import compose_hidden_submission_creation_command
+from app.core.identifiers import new_record_id
+from tests.tasks.test_submission_lineage import _prepared_packet
+
+
+async def test_capture(isolated_database_env, tmp_path, monkeypatch):
+    snapshots = {}
+
+    async def capture(status):
+        connection = await asyncpg.connect(isolated_database_env.replace('+asyncpg', ''))
+        try:
+            async with connection.transaction(isolation='repeatable_read', readonly=True):
+                assert await connection.fetchval('SHOW session_replication_role') == 'origin'
+                tables = {}
+                for table in await connection.fetch("SELECT tablename FROM pg_tables WHERE schemaname='public' ORDER BY tablename"):
+                    name = table['tablename']
+                    rows = json.loads(await connection.fetchval(f'SELECT coalesce(jsonb_agg(to_jsonb(r)),\'[]\')::text FROM public."{name}" r'))
+                    if rows:
+                        tables[name] = rows
+                runs = tables['selected_pre_submit_runs']
+                assert len(runs) == 1 and runs[0]['status'] == 'completed'
+                assert [r['status'] for r in tables['submission_bundle_admissions']] == [status]
+                snapshots[status] = dict(revision=await connection.fetchval('SELECT version_num FROM alembic_version'), seed={}, tables=tables)
+        finally:
+            await connection.close()
+
+    async with _prepared_packet(isolated_database_env, tmp_path) as h:
+        await capture('ready')
+        async with h.factory() as session:
+            await compose_hidden_submission_creation_command(
+                session, h.context, request_id=new_record_id(), correlation_id=new_record_id(),
+            ).create(h.creation)
+        await capture('consumed')
+    body = dict(schema_version='workstream.pre_cutover_admissions.v1', source_revision='e2b926288899bcd9b05e1a560ec19b6bca8cfcfc', source_test='tests/test_capture_pre_cutover_admissions.py::test_capture', snapshots=snapshots)
+    Path('/tmp/pre-cutover-admissions.json.gz').write_bytes(gzip.compress(json.dumps(body,sort_keys=True).encode(),mtime=0))

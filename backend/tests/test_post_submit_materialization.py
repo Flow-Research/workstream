@@ -8,13 +8,14 @@ from dataclasses import asdict
 
 import pytest
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 
 from app.core.identifiers import new_record_id
 from app.modules.checkers.api.materialization import (
     PostSubmissionMaterializationUnavailable, PostSubmissionMaterializationFailure,
 )
 from tests.checkers.post_submit.support import change_request
-from tests.checkers.execution.support import selected_result as result
+from tests.checkers.execution.support import ControlledSelectedExecution
 from tests.post_submit_materialization_helpers import material_fixture
 from tests.checkers.execution.support import material_execution, service_link_state
 from app.modules.actors.api import ServiceIdentity
@@ -28,14 +29,16 @@ from tests.checkers.external.support import post_registry_spec
 
 
 class Consumer:
-    def __init__(self, files):
+    def __init__(self, files, execution):
+        self.execution = execution
         self.files, self.view, self.calls = files, None, 0
         self.entered, self.release = asyncio.Event(), None
         self.failure = None
 
     async def evaluate(self, request, view):
         await self.inspect(view)
-        return result(request)
+        from app.modules.checkers.execution import _SelectedExternalConsumer
+        return await _SelectedExternalConsumer(ControlledSelectedExecution(), self.execution.lease).evaluate(request, view)
 
     async def inspect(self, view):
         """Assert current bytes and lifetime independently of the selected result."""
@@ -59,7 +62,7 @@ class ExternalGrantConsumer(Consumer):
     """Exercise the real POST lineage through ART's callback-scoped grant."""
 
     def __init__(self, files, execution, scratch):
-        super().__init__(files)
+        super().__init__(files, execution)
         self.execution = execution
         self.scratch = scratch
         self.grant_path = None
@@ -146,7 +149,7 @@ async def test_exact_materialization_reads_verified_original_and_revokes_view(tm
         await provision_minio_bucket.__wrapped__()
     async with material_fixture(tmp_path, isolated_database_env, provider=provider) as h:
         execution = await material_execution(h)
-        consumer = Consumer(h.files)
+        consumer = Consumer(h.files, execution)
         material = await h.service.materialize(execution, consumer)
         assert material.submission_id == h.created.submission_id
         assert material.submission_version == h.created.submission_version
@@ -198,7 +201,7 @@ async def test_revoked_materializer_denies_before_provider_or_scratch(tmp_path, 
     async with material_fixture(tmp_path, isolated_database_env) as h:
         execution = await material_execution(h)
         await service_link_state(h.factory, ServiceIdentity.ARTIFACT_MATERIALIZER, active=False)
-        consumer = Consumer(h.files)
+        consumer = Consumer(h.files, execution)
         with pytest.raises(PostSubmissionMaterializationUnavailable, match="authority_unavailable"):
             await h.service.materialize(execution, consumer)
         assert h.store.opens == [] and consumer.calls == 0 and not h.preparation._active
@@ -207,7 +210,7 @@ async def test_revoked_materializer_denies_before_provider_or_scratch(tmp_path, 
 async def test_foreign_or_changed_request_denies_before_provider(tmp_path, isolated_database_env):
     async with material_fixture(tmp_path, isolated_database_env) as h:
         execution = await material_execution(h)
-        consumer = Consumer(h.files)
+        consumer = Consumer(h.files, execution)
         for field in ("task_id", "assignment_id", "submission_id", "binding_id", "content_id", "submission_version", "byte_count", "content_sha256"):
             value = (2 if field == "submission_version" else h.request.byte_count + 1 if field == "byte_count"
                      else "sha256:" + "0" * 64 if field == "content_sha256" else new_record_id())
@@ -224,7 +227,7 @@ async def test_foreign_or_changed_request_denies_before_provider(tmp_path, isola
 async def test_async_exit_and_concurrent_drift_never_return_stale_material(tmp_path, isolated_database_env, outcome):
     async with material_fixture(tmp_path, isolated_database_env) as h:
         execution = await material_execution(h)
-        consumer = Consumer(h.files)
+        consumer = Consumer(h.files, execution)
         consumer.release = asyncio.Event()
         operation = asyncio.create_task(h.service.materialize(execution, consumer))
         await asyncio.wait_for(consumer.entered.wait(), 10)
@@ -256,12 +259,12 @@ async def test_wrong_provider_bytes_never_reach_consumer(tmp_path, isolated_data
     from tests.archive_fixtures import byte_source as _bytes
     async with material_fixture(tmp_path, isolated_database_env) as h:
         execution = await material_execution(h)
-        consumer = Consumer(h.files)
-        original = h.store.open
-        h.store.open = lambda _: _bytes(h.data[:-1] + bytes([h.data[-1] ^ 1]))
+        consumer = Consumer(h.files, execution)
+        original = h.store.open_source
+        h.store.open_source = lambda _: _bytes(h.data[:-1] + bytes([h.data[-1] ^ 1]))
         with pytest.raises(PostSubmissionMaterializationFailure, match="material_unavailable"):
             await h.service.materialize(execution, consumer)
-        h.store.open = original
+        h.store.open_source = original
         assert consumer.calls == 0 and not h.preparation._active
 
 
@@ -279,7 +282,7 @@ async def test_abort_during_projection_prevents_consumer_entry(tmp_path, isolate
                 assert release.wait(10)
                 yield tree
         monkeypatch.setattr(h.inspector, "_projected_tree", paused_projection)
-        consumer = Consumer(h.files)
+        consumer = Consumer(h.files, execution)
         operation = asyncio.create_task(h.service.materialize(execution, consumer))
         assert await asyncio.to_thread(entered.wait, 10)
         operation.cancel()
@@ -296,7 +299,7 @@ async def test_consumer_deadline_revokes_material_and_releases_scratch(tmp_path,
     from tests.test_checker_materialization import _limits
     async with material_fixture(tmp_path, isolated_database_env, scratch_limits=_limits(total_deadline_seconds=2)) as h:
         execution = await material_execution(h)
-        consumer = Consumer(h.files)
+        consumer = Consumer(h.files, execution)
         consumer.release = asyncio.Event()
         with pytest.raises(PostSubmissionMaterializationFailure, match="material_unavailable"):
             await asyncio.wait_for(h.service.materialize(execution, consumer), 10)
@@ -311,7 +314,7 @@ async def test_post_submit_expansion_cannot_bypass_aggregate_quota(tmp_path, iso
         aggregate_reserved_bytes=HARD_MAXIMUM_ARTIFACT_BYTES,
     )) as h:
         execution = await material_execution(h)
-        consumer = Consumer(h.files)
+        consumer = Consumer(h.files, execution)
         baseline = (await h.manager.usage()).reserved_bytes
         reservation, descriptor = await h.manager.allocate()
         try:
@@ -337,24 +340,20 @@ async def test_post_submit_expansion_cannot_bypass_aggregate_quota(tmp_path, iso
 async def test_stored_manifest_mismatch_never_reaches_consumer(tmp_path, isolated_database_env):
     async with material_fixture(tmp_path, isolated_database_env) as h:
         execution = await material_execution(h)
-        consumer = Consumer(h.files)
+        consumer = Consumer(h.files, execution)
         # Deliberately corrupt retained custody in this isolated database. Normal
-        # database guards forbid these writes; exercise ART's independent byte check.
+        # database guards forbid these writes; source custody must reject them
+        # before provider I/O, even when mutation guards were bypassed.
         async with h.factory() as session, session.begin():
-            for table in ("submission_bundle_admissions", "pre_submit_evidence_sets"):
-                await session.execute(text(f"alter table {table} disable trigger user"))
-            await session.execute(text(
-                "update pre_submit_evidence_sets set semantic_manifest_sha256=:bad where id="
-                "(select pre_submit_evidence_set_id from submission_bundle_admissions where id=:id)"
-            ), {"id": str(h.created.admission_id), "bad": "sha256:" + "0" * 64})
+            await session.execute(text("alter table submission_bundle_admissions disable trigger user"))
             await session.execute(text(
                 "update submission_bundle_admissions set semantic_manifest_sha256=:bad where id=:id"
             ), {"id": str(h.created.admission_id), "bad": "sha256:" + "0" * 64})
-            for table in ("submission_bundle_admissions", "pre_submit_evidence_sets"):
-                await session.execute(text(f"alter table {table} enable trigger user"))
-        with pytest.raises(PostSubmissionMaterializationFailure, match="manifest_mismatch"):
+            await session.execute(text("alter table submission_bundle_admissions enable trigger user"))
+        with pytest.raises(IntegrityError, match="source admission provenance mismatch") as refused:
             await h.service.materialize(execution, consumer)
-        assert len(h.store.opens) == 1 and consumer.calls == 0
+        assert refused.value.orig.sqlstate == "23514"
+        assert h.store.opens == [] and consumer.calls == 0
         assert not h.preparation._active
         assert list((h.scratch / "workspaces").iterdir()) == []
 
@@ -364,9 +363,13 @@ async def test_foreign_consumer_result_is_rejected_and_cleaned(tmp_path, isolate
         execution = await material_execution(h)
         class WrongResult(Consumer):
             async def evaluate(self, request, view):
-                await super().evaluate(request, view)
-                return result(request, evaluation_generation=request.evaluation_generation + 1)
-        consumer = WrongResult(h.files)
+                from app.modules.checkers.api.selected_post_submit import make_selected_post_submit_result
+                completed = await super().evaluate(request, view)
+                fields = {name: getattr(completed, name) for name in type(completed).model_fields
+                          if name != "result_digest"}
+                fields["evaluation_generation"] += 1
+                return make_selected_post_submit_result(**fields)
+        consumer = WrongResult(h.files, execution)
         with pytest.raises(ValueError, match="request mismatch"):
             await h.service.materialize(execution, consumer)
         assert consumer.calls == 1
@@ -385,14 +388,18 @@ async def test_provider_stream_has_no_selection_transaction_and_rejects_drift(tm
         })
         h.service._sessions = async_sessionmaker(selection_engine)
         entered, release = asyncio.Event(), asyncio.Event()
-        original = h.store.open
-        async def paused_stream(reference):
-            async for chunk in original(reference):
-                entered.set()
-                await release.wait()
-                yield chunk
-        h.store.open = paused_stream
-        consumer = Consumer(h.files)
+        original = h.store.open_source
+        async def paused_stream(source):
+            stream = original(source)
+            try:
+                async for chunk in stream:
+                    entered.set()
+                    await release.wait()
+                    yield chunk
+            finally:
+                await stream.aclose()
+        h.store.open_source = paused_stream
+        consumer = Consumer(h.files, execution)
         operation = asyncio.create_task(h.service.materialize(execution, consumer))
         try:
             await asyncio.wait_for(entered.wait(), 10)
@@ -439,6 +446,7 @@ async def test_consumption_retains_inspected_manifest_and_replays_without_provid
     async def capture(service, request):
         with monkeypatch.context() as patch:
             patch.setattr(LocalStorageAdapter, "open", forbidden_read)
+            patch.setattr(LocalStorageAdapter, "open_source", forbidden_read)
             first = await consume(service, request)
         assert not first.replayed
         observed.append((request, first))
@@ -454,6 +462,7 @@ async def test_consumption_retains_inspected_manifest_and_replays_without_provid
         async with h.factory() as session, session.begin():
             with monkeypatch.context() as patch:
                 patch.setattr(LocalStorageAdapter, "open", forbidden_read)
+                patch.setattr(LocalStorageAdapter, "open_source", forbidden_read)
                 replay = await SubmissionAdmissionConsumptionService(session, PreparedSubmissionBindingAuthorization(
                     session, request_id=new_record_id(), correlation_id=new_record_id(),
                 )).read_consumed(_replay_request(request))

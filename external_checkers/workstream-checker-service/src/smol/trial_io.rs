@@ -771,6 +771,7 @@ mod tests {
             let target = root.0.join("candidate.tar");
             let guard = IoGuard {
                 deadline: Instant::now() + Duration::from_secs(5),
+                inactivity: None,
                 client: None,
                 cancelled: &[],
             };

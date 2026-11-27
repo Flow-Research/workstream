@@ -63,10 +63,10 @@ func validOptionalHash(value *string) bool {
 func decodeManagementSubmission(raw json.RawMessage, task, submission string) (ManagementSubmission, error) {
 	var value ManagementSubmission
 	bad := &Failure{Code: "invalid_api_response"}
-	baseRequired := []string{"id", "task_id", "version", "status", "summary", "submitted_at", "finding_counts", "evidence_items"}
+	baseRequired := []string{"id", "task_id", "version", "status", "submitted_at", "finding_counts", "evidence_items"}
 	required := append(append([]string{}, baseRequired...), managementSubmissionFields[:13]...)
 	fields, err := contextObject(raw, &value, required, nil)
-	if err != nil || !requiredNullable(fields, "status_reason", "decided_at", "locked_at", "supersedes_submission_id") ||
+	if err != nil || !requiredNullable(fields, "status_reason", "decided_at", "locked_at", "supersedes_submission_id", "summary", "feedback") ||
 		!requiredNullable(fields, "locked_guide_source_snapshot_id", "locked_guide_source_snapshot_hash",
 			"locked_effective_project_submission_artifact_policy_id", "locked_effective_project_submission_artifact_policy_hash",
 			"locked_pre_submit_checker_policy_id", "locked_pre_submit_checker_bundle_hash") {

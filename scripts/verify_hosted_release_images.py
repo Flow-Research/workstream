@@ -367,15 +367,42 @@ def inspect_image(image: str, role: str, owner: str) -> dict:
 
 
 def verify_backend_entrypoint(image: str, sdk_environment: str, owner: str) -> None:
-    """Exercise neutral parser startup and fail-closed inference SDK binding."""
+    """Check restricted parser code access and fail-closed inference SDK binding."""
     require(sdk_environment in {"agents", "omnicore"}, "SDK environment differs")
     wrong_runtime = (
         "omnicore_agent" if sdk_environment == "agents" else "openai_agents_sdk"
     )
+    parser_import = (
+        "from pathlib import Path; "
+        "Path('/workspace/backend/app/__init__.py').read_bytes(); "
+        "from app.adapters.guide_document_tools import service; "
+        "assert service.__file__ == "
+        "'/workspace/backend/app/adapters/guide_document_tools/service.py'; "
+        "Path(service.__file__).read_bytes()"
+    )
     cases = (
         (
-            "parser",
+            "parser-root",
             ["WORKSTREAM_RELEASE_ROLE=parser"],
+            [
+                "--user",
+                "0:0",
+                "--cap-add",
+                "KILL",
+                "--cap-add",
+                "SETGID",
+                "--cap-add",
+                "SETUID",
+            ],
+            ["python", "-B", "-c", parser_import],
+            0,
+            b"",
+        ),
+        (
+            "parser-broker",
+            ["WORKSTREAM_RELEASE_ROLE=parser"],
+            ["--user", "10002:10001"],
+            ["python", "-B", "-c", parser_import],
             0,
             b"",
         ),
@@ -385,11 +412,13 @@ def verify_backend_entrypoint(image: str, sdk_environment: str, owner: str) -> N
                 "WORKSTREAM_RELEASE_ROLE=worker",
                 f"WORKSTREAM_PROJECT_AGENT_RUNTIME={wrong_runtime}",
             ],
+            [],
+            ["/bin/true"],
             1,
             b"project agent runtime does not match the installed SDK environment\n",
         ),
     )
-    for case, environment, expected_status, expected_stderr in cases:
+    for case, environment, identity, invocation, expected_status, expected_stderr in cases:
         name = "workstream-release-proof-" + uuid.uuid4().hex
         command = [
             "docker",
@@ -416,7 +445,7 @@ def verify_backend_entrypoint(image: str, sdk_environment: str, owner: str) -> N
         ]
         for setting in environment:
             command.extend(("--env", setting))
-        command.extend((image, "/bin/true"))
+        command.extend((*identity, image, *invocation))
         try:
             result = run(command)
             require(

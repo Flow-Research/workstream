@@ -122,3 +122,79 @@ retired upload-session/item shape and version-1 receipt contract are not an
 upgrade source. Recreate pre-v0.1 development databases; for production data,
 use a separately reviewed evidence-preserving maintenance migration rather
 than deleting, detaching, rewriting, or restamping rows.
+
+## Submission source reclamation
+
+Terminal submission sources use the dedicated
+`workstream.artifacts.sweep_submission_sources` task. Configure
+`WORKSTREAM_SUBMISSION_SOURCE_CLEANUP_PROFILE` as a JSON object with explicit
+`maximum_candidates` (1–1000), `run_seconds` (1–300), and `lease_seconds`
+(1–300, no greater than `run_seconds`). These are validation bounds, not
+recommended deployment values. Size the page and execution envelope from
+measured provider latency and terminal-source arrival rates. An absent profile
+disables the Beat entry; it does not constitute a deployed cleanup service.
+
+Supply the profile to Beat and the dedicated Celery process. Run that process with only
+its cleanup queue and the prefork pool:
+
+```bash
+celery -A app.workers.celery_app:celery_app worker --pool=prefork -Q workstream.source_cleanup
+```
+
+Other Celery processes must select their own queues explicitly. Mixed queues,
+eager execution, and other pools are rejected for cleanup. The task execution
+boundary also rejects foreign registered task names delivered to this process.
+Startup checks the
+persisted namespace, current cleanup-service authority and provider configuration
+before forking. Each sweep repeats current authority checks. The task has a
+fixed 360-second process hard limit; broker messages cannot extend it.
+
+Beat schedules a bounded sweep every 12 hours. Its recovery pass first fences
+expired receiving/PRE operations, rechecking each under its task lock and current
+service authority. This clears only the old operation's task pointer; it neither
+resumes PRE nor releases storage charges. Live and accepted operations remain
+protected. Recovery uses the sweep's explicit page/run limits and bounds each
+attempt by the configured lease interval. Foreground recovery can use at most
+half the run envelope, preserving time for unrelated source cleanup even when a
+task lock is held. This is periodic foreground recovery,
+not the prompt runtime-session reaper. Sources must have been terminal for at
+least two hours; a newly observed completed version starts a fresh two-hour
+protection period. Candidate discovery grants no deletion
+permission: the existing owner locks task/source custody, rejects accepted or
+retained sources, and commits an audited exact-generation claim before provider
+I/O. Only confirmed object absence and settled upload obligations release the
+charge. A failed or interrupted attempt retains its charge; a later sweep can
+claim a new generation after the old lease expires. Repeated sweeps do not
+release the same charge again.
+
+For S3-compatible storage, supply separate cleanup credentials to this Celery process
+through its storage settings and put the upload principal identity in the
+profile's `upload_principal`. The provider factory rejects the upload principal
+as the cleanup principal. Use the IAM user ARN for native AWS dedicated
+credentials, or the access-key identity for MinIO. Native AWS workload identity
+without an explicit comparable principal is not admitted for cleanup. Do not give these deletion credentials to API or
+ordinary Celery processes. The source path uses the same dedicated static
+credentials as other artifact operations; it does not restore the retired
+expiring provider-proof system. Native AWS source permissions and exact-version
+cleanup still require deployment qualification. MinIO tests alone do not
+establish that evidence.
+
+The sweep covers sealed sources, Local unfinished uploads and recorded MinIO
+multipart handles. Local cleanup retains an abort tombstone to reject late
+initiation. Remote cleanup requires parts absence after abort, fresh handle
+discovery and no remaining versions or delete markers. A completion discovered
+before or during abort becomes a retained exact-version target; it requires a
+fresh aged cleanup claim before deletion. An abort acknowledgment alone does not
+release storage charges. The S3 data-plane SDK makes one total attempt per call;
+durable owners control observation and retries.
+
+For remote initiation whose response was lost, discovered multipart IDs are
+saved on the existing cleanup claim before abort. A fresh authorization binds
+that retained set; newly discovered IDs invalidate the previous authorization.
+Retries check every retained handle even when discovery no longer lists it.
+Empty discovery cannot prove that an uncertain initiation never happened, so
+that case remains charged. Inventory of objects whose operation record is
+genuinely absent is an optional future enhancement under submission spec §17.4;
+this sweep does not discover or delete those objects. Reconciliation of uncertain
+writes belonging to known operations remains required.
+Do not treat this schedule as proof that every abandoned byte is reclaimed.

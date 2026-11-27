@@ -1,9 +1,11 @@
 """Each contributor read is one REPEATABLE READ snapshot; integrity gaps are retryable 503s."""
 
-import dataclasses
+from datetime import UTC, datetime
 
 from sqlalchemy import text
 
+from app.core.identifiers import new_record_id
+from app.modules.checkers.api.selected_pre_submit import SelectedPreSubmitRunView
 from app.modules.checkers.selected_pre_submit_reads import SelectedPreSubmitRunReader
 from app.modules.tasks.contributor_reads import ContributorWorkReader
 from app.modules.tasks.repository import TaskRepository
@@ -55,11 +57,14 @@ async def test_assignment_without_locked_terms_is_a_retryable_unavailable_read(t
 
 async def test_completed_preparation_without_execution_facts_is_unavailable(task_client, monkeypatch):
     _project, task, _submission = await submitted_case(task_client, monkeypatch)
-    original = SelectedPreSubmitRunReader.read_contributor_runs
-
     async def without_execution(reader, **kwargs):
-        views, more = await original(reader, **kwargs)
-        return tuple(dataclasses.replace(view, status="completed", terminal=None) for view in views), more
+        now = datetime.now(UTC)
+        return (SelectedPreSubmitRunView(
+            run_id=new_record_id(), actor_profile_id=kwargs["actor_profile_id"],
+            task_id=kwargs["task_id"], assignment_id=new_record_id(), status="completed",
+            archive_sha256="sha256:" + "a" * 64, archive_byte_count=1,
+            queued_at=now, completed_at=now, terminal=None,
+        ),), False
 
     monkeypatch.setattr(SelectedPreSubmitRunReader, "read_contributor_runs", without_execution)
     await as_actor(task_client, monkeypatch, OWNER)

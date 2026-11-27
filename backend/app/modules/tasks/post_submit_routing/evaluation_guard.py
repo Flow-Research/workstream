@@ -101,6 +101,10 @@ class TaskEvaluationGuard:
             and _context_matches(request, facts.context)
         ):
             raise CheckerExecutionUnavailable("checker_reservation_scope_unavailable")
+        if (task.status == "evaluation_pending" and task.active_submission_operation_id is not None
+                and latest.attempt_status != "evaluation_pending"):
+            # Accepted replacement owns current work until T5 inserts its new attempt.
+            return False
         if task.status in {"accepted", "rejected"}:
             return False
         if task.status not in {

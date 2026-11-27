@@ -82,6 +82,7 @@ impl Runtime {
         let cancelled = [invocation_cancelled.as_ref()];
         let guard = IoGuard {
             deadline,
+            inactivity: None,
             client: Some(&client),
             cancelled: &cancelled,
         };
@@ -670,6 +671,7 @@ impl SmolTrialRuntime for Runtime {
         let cancelled = [self.invocation_cancelled.as_ref()];
         let guard = IoGuard {
             deadline: self.deadline,
+            inactivity: None,
             client: Some(&self.client),
             cancelled: &cancelled,
         };
@@ -703,6 +705,7 @@ impl SmolTrialRuntime for Runtime {
         let cancelled = [invocation_cancelled, relay_cancelled];
         let guard = IoGuard {
             deadline,
+            inactivity: None,
             client: Some(&self.client),
             cancelled: &cancelled,
         };
@@ -936,6 +939,7 @@ impl SmolTrialRuntime for Runtime {
         let cancelled = [invocation_cancelled, relay_cancelled];
         let guard = IoGuard {
             deadline,
+            inactivity: None,
             client: Some(&self.client),
             cancelled: &cancelled,
         };
@@ -1119,7 +1123,7 @@ impl SmolTrialRuntime for Runtime {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::smol::{Admission, Capacity};
+    use crate::smol::{Admission, Capacity, Phase};
     use crate::trial_engine::{image_archive::ValidatedImageArchive, SandboxEnforcementOverruns};
     use crate::trial_relay::TrialResources;
     use std::os::unix::fs::PermissionsExt;
@@ -1204,11 +1208,14 @@ mod tests {
                     memory_bytes: 2,
                     storage_bytes: 2,
                 },
+                None,
                 "test".into(),
             )
             .unwrap(),
         );
-        let reservation = admission.reserve(credit, Some(credit)).unwrap();
+        let reservation = admission
+            .reserve(Phase::Background, credit, Some(credit))
+            .unwrap();
         let invocation_cancelled = Arc::new(AtomicBool::new(false));
         let (client, _connected_peer) = UnixStream::pair().unwrap();
         let deadline = Instant::now() + Duration::from_secs(5);

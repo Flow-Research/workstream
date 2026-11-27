@@ -29,14 +29,16 @@ def inspect_submission_custody(client, tokens, project_id, task_id, submission_i
     # This route excludes nulls, including an exhausted page's next_cursor.
     if receipts.get("next_cursor") is not None:
         raise AssertionError("isolated custody receipts unexpectedly exceed one page")
-    verified = [
-        item for item in receipts["items"] if item["receipt_type"] == "verification"
-    ]
-    if len(verified) != 1 or verified[0]["replica_id"] != replica["id"]:
-        raise AssertionError("submission replica lacks exact verification evidence")
-    job = read("verification-job", verified[0]["verification_job_id"])
-    if job["replica_id"] != replica["id"] or job["receipt_id"] != verified[0]["id"]:
-        raise AssertionError("verification job differs from the retained receipt")
+    if (
+        replica["verification_state"] != "verified"
+        or replica["availability_state"] != "available"
+        or replica["integrity_state"] != "valid"
+    ):
+        raise AssertionError("accepted source replica lacks retained verified custody")
+    # Source-first T5 retains the sealed source itself. It does not synthesize
+    # the retired put/verification job lineage for the same provider version.
+    if any(item["receipt_type"] == "verification" for item in receipts["items"]):
+        raise AssertionError("source-first binding invented old verifier lineage")
     read("audit-events", "artifact_binding", binding["id"])
     read("admission-usage", project_id, "--task-id", task_id)
     read("readiness")

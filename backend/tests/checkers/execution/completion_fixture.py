@@ -33,7 +33,7 @@ async def completed_evidence(
     async with material_fixture(
         tmp_path,
         database_url,
-        post_submit_registry_spec=post_registry_spec() if failed or findings else None,
+        post_submit_registry_spec=post_registry_spec(),
         **options,
     ) as h:
         await reserve(h)
@@ -43,7 +43,9 @@ async def completed_evidence(
         ).evaluate_post_submission(h.request)
         async with h.factory() as session:
             h.run = await session.get(CheckerRun, str(h.result.attempt_id))
-            assert h.run.routing_recommendation == recommendation
+            assert h.run.routing_recommendation == recommendation, (
+                h.run.status, h.run.outcome_source, h.run.routing_recommendation,
+            )
             event = await session.scalar(select(OutboxEvent).where(
                 OutboxEvent.event_id == h.run.completion_event_id,
             ))

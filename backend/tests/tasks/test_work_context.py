@@ -46,7 +46,7 @@ from tests.test_tasks import (
 
 COMMON = {"task_id", "project_id", "title", "description", "task_type", "difficulty", "skill_tags",
           "estimated_time_minutes", "status", "acceptance_criteria", "rejection_criteria",
-          "deadline_at", "created_at", "updated_at"}
+          "deadline_at", "created_at", "updated_at", "pending_submission_operation"}
 MANAGEMENT = {"source_type", "source_ref", "source_payload_hash", "import_batch_id", "external_task_id",
               "created_by", "assigned_to"}
 CONTRIBUTOR = COMMON | {"compensation"}
@@ -183,6 +183,8 @@ def test_work_context_openapi():
         ("ContributorTaskDetail", "last_assignment_outcome", "TaskAssignmentOutcome"),
         ("ManagementTaskDetail", "last_assignment_outcome", "TaskAssignmentOutcome"),
         ("ManagementTaskDetail", "revision_context", "ContributorRevisionContext"),
+        ("ContributorTaskDetail", "pending_submission_operation", "PendingSubmissionOperation"),
+        ("ManagementTaskDetail", "pending_submission_operation", "PendingSubmissionOperation"),
     ):
         nullable = definitions[name]["properties"][field]
         assert nullable["anyOf"] == [{"$ref": f"#/components/schemas/{target}"}, {"type": "null"}]
@@ -264,9 +266,10 @@ async def test_work_context_public_projections(task_client, monkeypatch):
         # Nullable audience fields remain explicit; prepared revision contexts
         # are covered by their journey.
         assert body["task"]["last_assignment_outcome"] is None
+        assert body["task"]["pending_submission_operation"] is None
         assert (body["task"] if management else body)["revision_context"] is None
         assert set(body["task"]) == fields
-        for name in fields - {"created_at", "updated_at", "deadline_at", "compensation", "last_assignment_outcome", "revision_context"}:
+        for name in fields - {"created_at", "updated_at", "deadline_at", "compensation", "last_assignment_outcome", "revision_context", "pending_submission_operation"}:
             assert body["task"][name] == stored["id" if name == "task_id" else name], name
         for name in ("created_at", "updated_at", "deadline_at"):
             assert datetime.fromisoformat(body["task"][name]) == stored[name]

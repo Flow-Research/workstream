@@ -1,0 +1,28 @@
+[Unit]
+Description=Workstream authenticated remote checker edge
+Before=workstream-checker.service
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=10001
+Group=10001
+UMask=0077
+ExecStart=/usr/bin/python3 /opt/workstream/bin/workstream-remote-node --config /etc/workstream/remote-node.json
+ExecStartPost=/usr/bin/python3 -c 'import pathlib,time; p=pathlib.Path("/var/lib/workstream/checker-runtime/model-proxy.sock"); raise SystemExit(next((0 for _ in range(100) if p.is_socket() or (time.sleep(.05) and False)),1))'
+Restart=on-failure
+RestartSec=2
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/workstream/checker-runtime
+MemoryMax=512M
+MemorySwapMax=0
+TasksMax=128
+
+[Install]
+WantedBy=multi-user.target

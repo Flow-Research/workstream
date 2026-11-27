@@ -231,6 +231,8 @@ async def test_trial_receipt_is_art_retained_before_controlled_model_spend(
     ) as h:
         catalog = catalog_for(h.request)
         await provision_post_submit_service(h.factory, ServiceIdentity.ARTIFACT_CHECKER_OUTPUT)
+        await provision_post_submit_service(h.factory, ServiceIdentity.ARTIFACT_PUT_RESOLVER)
+        await provision_post_submit_service(h.factory, ServiceIdentity.ARTIFACT_VERIFIER)
         h.service = DiagnosticMaterialization(h.service)
         creates = []
         stages: list[tuple[str, float]] = []

@@ -201,14 +201,6 @@ func (m *Model) contextText() string {
 func (m *Model) intakeText() string {
 	v := m.intake
 	d := detailWriter{m: m}
-	d.heading("Required packet fields")
-	if len(v.RequiredPacketFields) == 0 {
-		d.note("None listed.")
-	} else {
-		for _, field := range v.RequiredPacketFields {
-			d.line("Field", field)
-		}
-	}
 	d.heading("Required artifacts")
 	if len(v.RequiredArtifacts) == 0 {
 		d.note("None listed.")
@@ -240,13 +232,6 @@ func (m *Model) intakeText() string {
 		d.optionalProse("Reason", a.Reason)
 		d.optionalProse("Suggested fix", a.WorkerFacingFix)
 		d.optional("Severity", a.Severity)
-	}
-	d.heading("Attestations")
-	if len(v.AttestationTerms) == 0 {
-		d.note("None listed.")
-	}
-	for _, term := range v.AttestationTerms {
-		d.line("Attestation term", term)
 	}
 	d.heading("Package and storage constraints")
 	d.line("Manifest required", fmt.Sprint(v.ManifestRequired))
@@ -345,11 +330,9 @@ func (m *Model) guideText() string {
 func (m *Model) submissionText() string {
 	v := m.submission
 	d := detailWriter{m: m}
-	title := v.Summary
-	if strings.TrimSpace(title) == "" {
-		title = "Submission"
-	}
-	d.heading(m.prose(title))
+	d.heading("Submission")
+	d.optionalProse("Historical summary", v.Summary)
+	d.optionalProse("Project feedback", v.Feedback)
 	d.heading("Stored outcome")
 	d.line("Stored outcome", v.Status)
 	d.optional("Reason", v.StatusReason)

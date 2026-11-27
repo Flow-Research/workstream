@@ -131,9 +131,11 @@ async def test_payment_cleanup_refuses_each_retained_fact_then_preserves_current
                     # Later migrations add columns; 0048 backfills unrouted attempts
                     # and unstarted assignments from their own retained timestamps.
                     added = {
+                        "workstream_tasks": {"active_submission_operation_id": None},
                         "submissions": {
                             "selected_post_submit_policy_sha256": None,
                             "selected_post_submit_policy_body": None,
+                            "feedback": None,
                             "attempt_status": "evaluation_pending", "status_reason": None,
                             "decided_at": None, "updated_at": "submitted_at",
                         },

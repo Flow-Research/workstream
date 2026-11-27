@@ -1,121 +1,61 @@
 # Hosted Release Configuration
 
-This directory prepares the Workstream API, durable Celery worker, Beat,
-fixed guide-document parser and optional trusted model proxy on one dedicated
-Linux amd64 host. The single-host profile uses the native Smol systemd node for
-project PRE/POST and trusted ZIP intake. Compose does not start a checker
-controller or grant access to its Docker socket. PostgreSQL and Redis are
-required. Use the [private backing-service overlay](SINGLE_HOST.md) or managed
-services.
-AWS S3, Flow identity and the optional OTLP collector retain their separate
-configuration and trust boundaries.
+This directory prepares the Workstream API, general Celery worker, exclusive
+submission-finalization and source-cleanup workers, Beat, fixed guide-document
+parser and optional trusted model proxy on an app-only Linux amd64 host.
+PostgreSQL and Redis may use the host-local data overlay or separately managed
+services. Project PRE/POST and trusted ZIP intake run only on the separately
+administered, always-on remote runner.
 
 The checked-in [release environment template](release.env.example),
-[Compose wrapper](compose.py), [preflight](preflight.py), native node and
-[canonical Settings](../../backend/app/core/config.py) define the source
-topology. An operator must still build and publish exact images, provision the
-host and external services, configure private assets and credentials, run the
-real S3 storage qualification, and verify the public journey for that deployment. A render,
-image build or preflight alone does not establish hosted operation or a real
-model call. The [capability ledger](../../docs/roadmap_status.md) and
+[Compose wrapper](compose.py), [preflight](preflight.py), and
+[canonical Settings](../../backend/app/core/config.py) define the app topology.
+The runner unit/config examples live under
+[external_checkers/deploy](../../external_checkers/deploy). Build and pin exact
+images, provision the app and runner hosts, install private credentials, and
+qualify S3 storage, runner health and the public journey on that deployment.
+The [capability ledger](../../docs/roadmap_status.md) and historical
 [hosted drill report](https://github.com/Flow-Research/workstream/blob/d713594ebf04a125917edb0ec981d380cf8047b4/docs/reports/garden-hosted-drill-2026-11-06.md)
-record what has actually been exercised; neither makes this directory an
-automatic installer or qualifies another host.
+describe the scope of completed evidence.
 
 ## App host without KVM
 
-Set `WORKSTREAM_HOSTED_PROFILE=app` and pin a backend image built from a release
-that includes this profile. Remove `WORKSTREAM_CHECKER_CONFIG_FILE`,
-`WORKSTREAM_CHECKER_SERVICE_BINARY`, `WORKSTREAM_CHECKER_SERVICE_BINARY_SHA256`,
-both `WORKSTREAM_ARTIFACT_INTAKE_*_DIGEST` values, and any trial-authority
-selectors from the release environment. Use the normal hosted preflight,
-migration and `compose.py ... resume` commands. The app profile
-requires the same database, broker, identity, parser, and provider setup as the
-single-host profile. It starts the configured setup model proxy before the
-ordinary worker. API and worker use local ART scratch for their other work.
+Hosted releases set `WORKSTREAM_HOSTED_PROFILE=app`. Set
+`WORKSTREAM_EXTERNAL_RUNNER_ENDPOINTS` with the reviewed private address, port,
+exact certificate DNS name and loaded config SHA-256 for each node. Supply the CA, client
+certificate and client key through the corresponding `*_FILE` selectors.
+Pin `WORKSTREAM_ARTIFACT_INTAKE_IMAGE_DIGEST` and
+`WORKSTREAM_ARTIFACT_INTAKE_CONFIG_DIGEST` to the images installed on the
+runner. Preflight refuses partial endpoint or TLS configuration.
 
-While this profile is active, the API returns a retryable HTTP 503 for ZIP
-preparation. MCP reports the upstream error as a retryable tool failure. POST
-evaluation requests and reconciliation remain in PostgreSQL until checker
-delivery is available. Artifact verification, guide
-compilation, and ordinary OUTBOX delivery, including completed evaluation
-delivery, continue. The `single-host` profile, or an unset profile, keeps the
-native Smol readiness checks and processes all delivery types. Private ingress
-and worker attachment for a second checker host require separate qualification.
+The API and worker connect directly to the runner for PRE, POST and trusted
+intake. When model execution is enabled, the worker forwards bounded callback
+frames between its app-local model-proxy socket and the same authenticated TLS
+connection that owns the remote execution.
+There is no local native checker socket, KVM device, checker binary/config or
+shared API/runner material filesystem, and there is no single-host fallback.
 
 ## Trust boundary
 
-In the single-host profile, the native node uses KVM and its delegated
-cpu/memory/pids cgroup under the same numeric UID/GID `10001:10001` as the
-ART grant issuer. It owns fresh VM execution,
-exact leases and cleanup. Neither the node nor project images receive provider
-credentials. The optional Compose model proxy alone owns those credentials;
-the native node connects to its host-visible private socket and forwards only
-invocation-bound capability traffic through the Smol guest transport.
+The runner listener requires TLS 1.3 client authentication and the configured
+application DNS SAN. The app validates the runner certificate name. PRE source
+and POST material cross this boundary in bounded frames. The runner validates
+the canonical request/source/grant binding before creating one private local
+workspace, invokes the native checker through runner-internal Unix IPC, and
+removes that exact session on success, error, timeout or disconnect.
 
-In that profile, the API and worker mount the node socket directory read-only.
-Both typed capabilities use the same host endpoint with distinct closed
-protocols and pinned images:
+The runner's native service owns KVM, delegated cpu/memory/pids cgroups, Smol
+leases and cleanup. Project guests receive only guest-local capability sockets.
+They never receive TLS keys, model-provider credentials, AWS credentials or the
+runner-global Unix sockets. The optional model proxy retains provider keys on
+the app host. Callback loss closes that invocation; the runner never selects a
+different app replica or a runner-global callback owner.
 
-```text
-/var/lib/workstream/scratch
-/var/lib/workstream/checker-runtime/checker.sock
-/var/lib/workstream/model-runtime/model.sock
-```
-
-`WORKSTREAM_DEPLOYMENT_ROOT` defaults to `/var/lib/workstream`. An independently
-owned deployment may select one canonical absolute private root; all scratch,
-checker/model/parser socket paths below it are derived together, with identical
-absolute source/target paths in the containers. The root must be mode `0700`,
-owned by `10001:10001`, and contain no config, provider secret or executable/cache
-asset. Symlink roots, ancestor aliases and data/asset overlap fail preflight.
-`WORKSTREAM_CHECKER_SERVICE_BINARY` defaults to the unit's installed path and
-selects one absolute artifact under `WORKSTREAM_CHECKER_SERVICE_BINARY_SHA256`.
-
-For an isolated proof, use a newly owned `/var/tmp/workstream-hosted-smol-*`
-prefix with a private `data` subdirectory and config/assets as separate siblings.
-Give UID `10001` traversal access to the owned prefix; do not rely on another
-user's private home ancestry. Configure the existing scoped unit's `ExecStart`
-and cgroup path for that exact binary/config and preserve its ownership. This
-uses the same release topology and preflight, without shared `/etc/workstream`
-or `/var/lib/workstream` mutation. No source here deploys or restarts that unit.
-
-These absolute paths and identities must match across native configuration,
-API/worker containers and the proxy. ART material lives under the same scratch
-root on host and clients; the native node independently verifies each opaque
-ART grant before staging. Model proxy sockets and ART material are never assumed
-to exist only inside a Docker namespace. Project guests receive guest-local
-capability sockets, never the global host socket or a provider key.
-
-Ordered non-model PRE and approved model-enabled POST retain their existing
-owners. PRE model selectors remain unsupported: PRE has no supported paid-model
-lineage/grant operation, and policy validation rejects those selectors. This
-configuration does not introduce PRE model authority.
-
-The [hosted qualification record](../../.commitrail/changes/hosted-smol-project-execution.md#live-hosted-model-continuation)
-records the actual API/Celery/AWS baseline and one live OpenRouter POST through
-this wiring. The model continuation preserves its original paid effect, reaches
-governed acceptance and proves replay without another charge. It uses fixture
-identity and a synthetic single-rubric submission; production identity and full
-project grading remain separate qualifications.
-
-Guide parsing uses a separate private Unix socket at
-`/var/lib/workstream/guide-runtime/guide.sock`. The parser uses the immutable
-backend image without network or secrets. Its bootstrap starts as root with only
-`KILL`, `SETGID` and `SETUID`, then drops the broker to UID 10002 and GID 10001
-before binding the socket. The broker retains those three capabilities only to
-isolate and terminate parser children. Each of its two concurrent children uses
-a distinct fixed identity (10003 or 10004), no supplementary groups and no
-capabilities. The broker and children verify their process protections before
-processing documents; startup fails if the required identity boundary is absent.
-The broker owns the socket directory and socket. Only the guide worker mounts that directory as
-a read-only client. API, Beat and the native node do not
-receive it. The parser process validates directory and socket ownership before
-binding. The health check drops to client UID/GID 10001 with no capabilities before
-performing a framed protocol round trip against the fixed parser build identity.
-Keep the configured capability allowlist, no-new-privileges, read-only root,
-network isolation and process limits together; do not replace this profile with
-a privileged container.
+Only the app security group needs private TCP access to runner port 9443.
+Do not publish 9443 to the internet. Install the client key as a mode-0400
+Compose secret and never place it in the release environment or command line.
+Future managed execution providers must preserve the same typed
+task/source/result contract; this release does not qualify a vendor adapter.
 
 ## Prepare source images
 
@@ -143,10 +83,11 @@ OpenAI 3.x input-count and Responses dependencies for both setup SDKs and POST
 checkers. The proxy rejects any non-`agents` image before reading the provider
 credential. `manager_authored` is accepted in either worker image with the exact
 `none/none/none` setup tuple; `WORKSTREAM_MODEL_PROXY_ENABLED` independently
-decides whether approved POST images can use the proxy. Build the native service and static guest from the same reviewed source using the
-[node instructions](../../external_checkers/README.md#smol-microvm-engine). Record the
-installed service digest in `WORKSTREAM_CHECKER_SERVICE_BINARY_SHA256`; the
-private node config pins Smol, the guest and every cached archive/config. A local build tag is build evidence only; the release file must
+decides whether approved POST images can use the proxy. Build and install the
+native service, static guest, remote edge and pinned image cache on the separate
+runner using the [node instructions](../../external_checkers/README.md#smol-microvm-engine).
+Record their exact digests in the runner qualification receipt. A local build
+tag is build evidence only; the app release file must
 contain the registry-resolved digest after publication. The backend build's uv
 package-download cache mount exists only on the builder; it is not retained in
 the image. Runtime image inspection uses `uv --no-cache pip check` and bounded
@@ -165,8 +106,8 @@ python3 scripts/verify_hosted_release_images.py --scope native-hosted \
 
 This scope proves both backend SDK images without requiring a checker controller
 OCI image. It rejects `--checker-image` and records a closed backend-only
-evidence shape. Installed native service, Smol, guest and cache identities remain
-the full preflight's responsibility. Backend-image proof establishes no native
+evidence shape. Installed runner service, Smol, guest and cache identities remain
+the runner qualification's responsibility. Backend-image proof establishes no native
 readiness or hosted journey result.
 
 The [release-image workflow](../../.github/workflows/release-images.yml)
@@ -186,82 +127,24 @@ operation remains separate evidence. The proof builds and inspects both SDK
 closures and rejects either SDK appearing in the other image. An unconditional workflow cleanup verifies
 that no smoke container owned by that run remains after inspection or timeout.
 
-## Prepare the host
+## Prepare the app host
 
-Install Docker for the backend containers and the pinned native Smol bundle
-for Linux amd64 with `/dev/kvm`, cgroup v2 and systemd 254 or later. Use the
-[existing unit](../../external_checkers/deploy/workstream-checker.service), which
-runs as `10001:10001`, places its controller in a delegated subgroup and preserves
-independent guardians with `KillMode=process`. Review its explicit deployment
-CPU/memory/PID/storage capacity against intake, checker and sequential trial
-peak demand; this configuration does not increase registered checker limits.
-
-Keep that storage capacity physically free on the native checker's filesystem,
-not merely configured as a quota. ZIP intake seals and counts the upload first,
-then reserves a data disk sized for those bytes, permitted expansion and its
-qualified image/filesystem allowance, rounded up to whole GiB. Its separate
-root overlay is explicitly limited to one GiB and charged as well. A healthy
-socket does not prove that reservation can succeed. Subsequent
-checkers require their own configured capacity. Monitor free space as well as
-service health, and remove only identified obsolete build/staging assets when
-needed. Preserve active images, credential state, database volumes and retained
-artifact/evidence data. An intake capacity refusal is an infrastructure failure,
-not a failed assessment of contributor work.
-
-Provision a dedicated host service account and group at UID/GID `10001:10001`
-before starting the unit. Numeric file ownership alone is insufficient: systemd
-must resolve this account, otherwise it can fail with `217/USER`. Inspect
-`getent passwd 10001` and `getent group 10001` first. If either ID belongs to an
-unrelated identity, stop and resolve that host allocation; do not modify or reuse
-the unrelated account. When both IDs and the name `workstream-checker` are unused:
-
-```sh
-sudo groupadd --gid 10001 workstream-checker
-sudo useradd --system --uid 10001 --gid 10001 --no-create-home \
-  --home-dir /nonexistent --shell /usr/sbin/nologin workstream-checker
-```
-
-Keep the account password locked and without a login or home directory. Grant no
-sudo or Docker access. The unit's `SupplementaryGroups=kvm` supplies KVM access;
-ensure that host group owns `/dev/kvm`. Existing dedicated service identities
-must have the same UID, primary GID and restrictions.
-
-Create canonical private roots on durable host storage:
+Install Docker for the backend containers. Provision the dedicated app runtime
+account at UID/GID `10001:10001`, then create only the app-owned durable roots:
 
 ```sh
 sudo install -d -m 0700 -o 10001 -g 10001 /var/lib/workstream
 sudo install -d -m 0700 -o 10001 -g 10001 /var/lib/workstream/scratch
-sudo install -d -m 0700 -o 10001 -g 10001 /var/lib/workstream/checker-runtime
 sudo install -d -m 0700 -o 10001 -g 10001 /var/lib/workstream/model-runtime
-sudo install -d -m 0700 -o 10001 -g 10001 /var/lib/workstream/model-relays
-sudo install -d -m 0700 -o 10001 -g 10001 /var/lib/workstream-checker/smol
-sudo install -d -m 0700 -o 10001 -g 10001 /var/lib/workstream-checker/images
 sudo install -d -m 0750 -o 10002 -g 10001 /var/lib/workstream/guide-runtime
 ```
 
-Preserve the node socket parent's persistent owner/lease custody and all trial
-root markers across restarts. Never clone them into another live deployment or
-replace them with `/run`, tmpfs or container storage. Do not delete retained
-inputs, product evidence, shared roots or unknown runtime resources during
-recovery. Unknown ownership or cleanup refuses admission.
-
-Provision project images and the pinned trusted intake image using the existing
-[Smol cache command](../../external_checkers/README.md#smol-microvm-engine).
-The native `trusted_intake` configuration selects the intake image; project
-registrations cannot select that privileged purpose. Its image/config pins must
-match the two `WORKSTREAM_ARTIFACT_INTAKE_*_DIGEST` values. Its required
-`storage_envelope` binds the archive/config and Smol/guest hashes to qualified
-entry/path limits, overhead bytes and maximum data-disk size. Use the evidence
-for the exact release image and native runtime; requalify changed images or
-limits. The example's zero overhead/size fields deliberately fail preflight
-until replaced with measured bounds. Do not copy a guessed buffer into them.
-Cold boot, archive spooling, maximum projected inventory, expanded content and
-cleanup must fit; an example upload alone does not qualify the envelope.
-The native owner disables automatic Smol image-seed creation and reuse; do not
-qualify with an extra upstream seed VM outside the node reservation. Existing
-cache data is preserved. Measure startup under the same enforced environment.
-Both typed clients
-connect through the one mode-`0600` socket in the mode-`0700` checker directory.
+Do not install KVM, Smol, a native checker unit, image cache or checker runtime
+directory on this host. Qualify the runner separately using the native and edge
+units under `external_checkers/deploy`. Restrict runner TCP 9443 ingress to the
+app security group, install the CA/client certificate/client key as private app
+secrets, and verify the certificate SAN and pinned image identities before app
+activation.
 
 Copy `release.env.example` to an operator-owned non-secret environment file and
 replace every example identity. The file contains paths and public configuration,
@@ -299,6 +182,7 @@ metadata only; the worker loader sets the adapter's existing private-key variabl
 without evaluating or logging its contents. Never put a raw private key in the
 release environment. Follow the
 [GitHub App instructions](../../examples/garden/github-app.md) for read-only permissions.
+
 `WORKSTREAM_MODEL_PROXY_ENABLED=true` starts one
 trusted model-proxy process independently of the setup runtime. Only that process
 gets the database, each configured provider credential and the runtime ART identity.
@@ -322,13 +206,13 @@ This principal admits private model request/response evidence; configuring the
 proxy and provider credentials does not provision it. The canonical journey
 service bootstrap includes it for both setup and checker model use.
 
-With the proxy enabled, the native checker service reads the global
-model socket from its canonical host path. Its separate writable
-`/var/lib/workstream/model-relays` directory is private to the native service, owned by the runtime UID/GID with mode `0700`.
-Start the proxy before the native node. The service creates an invocation relay
-and the Smol transport exposes only its guest-local capability endpoint. Project
-images receive neither the global socket nor provider credentials. API and Beat receive
-neither model directory.
+With the proxy enabled, its process owns the app-local model socket. The Celery
+worker mounts that socket read-only and forwards opaque normal-model,
+trial-evidence and setup-model frames only while its exact remote execute TLS
+connection remains active. The native service connects only to the runner-local
+model socket. The Smol transport exposes only its guest-local capability
+endpoint. Project images receive neither global socket nor provider credentials.
+API and Beat receive no model directory.
 The two provider file paths are trusted release configuration. The proxy loads
 only configured dedicated files as `OPENROUTER_API_KEY` or `OPENAI_API_KEY`; this is
 independent of the setup provider because approved POST and setup profiles may
@@ -367,8 +251,36 @@ The hosted profile uses `WORKSTREAM_ARTIFACT_S3_CREDENTIAL_MODE=aws_access_key`.
 Set `WORKSTREAM_ARTIFACT_S3_RUNTIME_USER_ARN` to the dedicated IAM user and
 `WORKSTREAM_ARTIFACT_S3_DIRECT_USER_CREDENTIAL_HOST_FILE` to its private JSON
 credential file. Compose mounts it read-only at
-`/run/workstream-artifact-credentials/aws-access-key.json` only in API, worker
-and model-proxy. Beat, MCP, parser and checker guests receive no storage key.
+`/run/workstream-artifact-credentials/aws-access-key.json` only in API, general
+worker, exclusive finalization worker and model-proxy. Set
+`WORKSTREAM_ARTIFACT_S3_CLEANUP_USER_ARN` and
+`WORKSTREAM_ARTIFACT_S3_CLEANUP_USER_CREDENTIAL_HOST_FILE` to the separately
+authorized deletion identity. Only the exclusive source-cleanup worker receives
+that file; preflight rejects a reused ARN, path or inode. Beat, MCP, parser and
+checker guests receive no storage key.
+
+Before starting the source-cleanup consumer, have an Access Administrator
+provision the fixed service identity `workstream.artifact.source_cleanup` through
+`POST /api/v1/service-actors` or
+`workstream admin service-actor provision --input FILE --idempotency-key UUID`.
+Use a stable deployment subject and keep the original key for retries. The
+cleanup startup check requires the active service actor and identity link. The
+S3 deletion credential supplies storage access separately.
+
+For automatic acceptance under a locked policy with `human_review_required=false`,
+activate the review lifecycle before exercising submission. From the authorized
+app host, run the maintained controller command in the API container with the
+profile ID of a current system Operator.
+
+```sh
+docker exec workstream-api-1 /usr/local/bin/workstream-release-entrypoint \
+  python scripts/transition_review_lifecycle.py \
+  --actor-profile-id OPERATOR_PROFILE_UUID --phase live \
+  --reason "Activate governed automatic acceptance for the reviewed release"
+```
+
+The controller verifies the Operator grant and records each transition through
+`shadow` to `live`. Running it again at `live` leaves the generation unchanged.
 
 Follow [S3 credential setup](../../docs/operations_aws_s3_credentials.md) for
 restricted policies and rotation. Qualification verifies real conditional
@@ -376,6 +288,29 @@ upload/readback and denied destructive access before cutover. There are no
 periodic proof jobs, certificate mounts or expiring database activations.
 Keep operation deadlines bounded and measured against the deployment; a network
 failure remains a recoverable storage failure, not permission to declare success.
+
+`WORKSTREAM_SUBMISSION_EXECUTION_PROFILE` and
+`WORKSTREAM_SUBMISSION_SOURCE_CLEANUP_PROFILE` are required JSON objects. The
+template intentionally contains sentinels rather than guessed values. Static
+preflight rejects missing or malformed objects and requires the cleanup
+profile's `upload_principal` to equal the runtime upload ARN. Full preflight,
+every `up`, and reboot reconciliation then run the canonical strict profile
+validators from the pinned backend image before activating services. The
+guide compilation, project control, artifact work, outbox scanning, POST delivery,
+submission finalization, and source cleanup each have one dedicated prefork
+worker consuming exactly one named queue. Beat always
+receives the required cleanup profile, so the cleanup schedule cannot disappear
+because of an omitted setting.
+
+Set the PRE window in `WORKSTREAM_SUBMISSION_EXECUTION_PROFILE` at
+`runtime.aggregate_deadline_ms`. Use `300000` for five minutes and bind the same
+approved runtime profile and digest on the runner. Keep `upload_total_seconds`
+and `upload_idle_seconds` separately configured. The CLI allows 360 seconds for
+response headers and 660 seconds overall. The MCP submission tool allows 660
+seconds overall and the hosted `/mcp` proxy allows 675 seconds for headers.
+Guide transfers retain their own deadlines. If a later deployment extends the
+upload or PRE window beyond these client budgets, adjust and qualify the matching
+submission client and proxy limits together.
 
 `WORKSTREAM_ARTIFACT_PREPARATION_TOTAL_DEADLINE_SECONDS` explicitly carries the
 existing ART processing deadline to every backend role. The
@@ -389,62 +324,65 @@ value that accommodates the selected workload; a shorter owned qualification
 may observe real expiry sooner, without resetting its original deadline or
 changing registered checker limits.
 
-Copy `checker-service.example.json` to the configured private mode-`0400`
-path. The unit reads `/etc/workstream/checker-service.json`. Replace all example
-binary, guest, archive, platform-manifest and config digests with independently
-verified values. The default-behavior digest must match the built source's
-canonical default checker. Runtime execution uses preloaded archives and never
-pulls, resolves a tag or falls back to Docker/runsc.
+Runner configuration is installed and reviewed separately. It pins the native
+service and edge binaries, Smol/guest digests, trusted intake and checker image
+manifests/configs, PRE root and capacity profile, private material/model-relay
+roots, and TLS server identity. The runner system journal and a non-secret
+qualification receipt record actual health, PRE/POST execution and cleanup.
+App preflight validates only the configured endpoint, TLS files and intake
+digests; it does not infer runner qualification from local files.
 
-For a proxy-disabled release remove both `model_proxy_socket` and
-`model_relay_root`; preflight rejects partial or substituted selectors. For a
-proxy-enabled release retain their exact host paths. The running service reads
-its configuration from JSON, not the release environment.
+### Contributor feedback email
 
-Approved POST trial selectors additionally require the optional paired
-`WORKSTREAM_CHECKER_TRIAL_AUTHORITY_MANIFEST_PATH` and
-`WORKSTREAM_CHECKER_TRIAL_AUTHORITY_MANIFEST_DIGEST`. They activate
-`compose.trials.yml`, which mounts that exact host file read-only only into the
-model proxy. Set the native JSON's `trial_authority_manifest_path` and
-`trial_authority_manifest_digest` to the same host source and digest, and supply
-its existing `trial_runtime` object: private relay/scratch/child-home/cache roots,
-pinned builder config ID, launcher/filesystem-tool paths and digests, deployment
-owner, candidate archive ceiling and exact runtime-configuration digest. Provision
-the builder cache entry and approved offline cache from the qualified runtime
-release. Do not substitute a project-selected profile or copy the runtime into
-this deployment layer. The native runtime and backend typed manifest loader
-validate the authority catalogue; preflight checks their shared byte identity
-and custody. API, worker and Beat do not read this catalogue or receive its mount.
+`WORKSTREAM_SUBMISSION_FEEDBACK_EMAIL_ENABLED` defaults to `false`. To enable
+delivery, verify `workstream.flowresearch.tech` in Resend and provide a sending
+key scoped to that domain. Set `WORKSTREAM_RESEND_API_KEY_FILE` to its private
+absolute host path outside the deployment runtime tree. Give the regular file
+the release runtime UID/GID and mode `0400`. Store only the key on one line.
+Set `WORKSTREAM_SUBMISSION_FEEDBACK_EMAIL_ENABLED=true`. Release preflight
+selects the email overlay and checks that only the dedicated
+`workstream.submission_feedback_email` worker mounts the key. This worker uses
+SQL, Redis and the fixed Resend HTTPS endpoint.
 
-Smol 1.31.4's longest Unix socket adds 48 filesystem bytes below its HOME. The
-107-byte socket limit therefore permits a global `smol.home` of at most 59
-bytes. A trial child adds `/ws-<32 hex digits>.home` first, so
-`trial_runtime.child_home_root` must be at most 18 bytes. These are filesystem
-byte limits, including multibyte characters. Use a separately owned short
-private directory such as `/var/tmp/t-<6 hex>` for the trial child root; retain
-its runtime owner marker and exact custody. Do not shorten invocation identities
-or derive this root from a long deployment prefix. Preflight rejects excess
-length before a VM is created.
+Before activation, apply the mailbox claim and verify a fresh signed contributor
+self-profile observation with a designated test account. The worker uses the
+active Workstream actor's latest signed, verified mailbox and current exact-project
+Submitter grant. Existing actors can refresh the observation through an authorized
+`GET /api/v1/actors/me` using a fresh token. Historical or unverified mailboxes
+are ineligible. [Flow Identity mailbox claim](../identity/README.md#workstream-feedback-email-claim).
+
+New governed POST quality outcomes request an email for a current revision
+return or immediate revision-limit rejection. The message uses the assignment
+ID and the same authorized assignment status and feedback read available in
+the API, CLI and MCP. The assignment read remains the source of feedback and
+revision terms. Workstream continues processing assignments if email fails.
+
+Temporary Resend errors and uncertain transport outcomes retry through the shared
+outbox using a stable event key and an absolute 12-hour send cutoff. Outbox
+acknowledgement records a handled request, including suppression if the
+assignment no longer needs its alert or the recipient is ineligible. Resend
+acceptance acknowledges the request, and inbox delivery has separate provider
+status. If the verified address changes after an uncertain send, Resend can
+reject the changed payload under that key. The outbox records the rejection
+and never replaces the key. [Resend's 24-hour idempotency window](https://resend.com/docs/dashboard/emails/idempotency-keys).
 
 ## Validate without disclosure
 
-The directory commands above describe the default production root. For another
-owned root, create its derived children with the same identities and modes, and
-replace native JSON socket/material/model paths with those exact derived paths.
-Keep source/cache/config/credential files outside that data root.
+The directory commands above describe the default app production root. Runner
+socket/material/model paths belong only to the separately administered runner;
+keep its source, cache, config and TLS files outside app-local ART scratch.
 
 Run full preflight and the Compose wrapper as the trusted root administrator or
 through approved `sudo`. That operator needs authority to traverse the
 `10001:10001`-owned `0700` deployment root, inspect private `0400` inputs and
-access Docker. This also applies to a newly owned `/var/tmp` proof root. The
-native node and health containers run as `10001:10001`; do not grant that runtime
-identity Docker group membership or daemon access to make operator checks work.
+access Docker. This also applies to a newly owned `/var/tmp` proof root. Do not
+grant the application runtime Docker group membership or daemon access to make
+operator checks work.
 Preflight never opens application secret files.
 
 The configuration-only check renders Compose and validates fixed topology,
-digest identities, Flow/AWS profile and the hosted checker selectors plus
-declared cache-identity shape needed by this topology. The application and
-checker startup owners validate their complete settings and config schemas,
+digest identities, Flow/AWS profile and the remote-runner selectors. The app
+and runner startup owners validate their complete settings and config schemas,
 including the canonical AWS credential settings described above. This check does not inspect host ownership, Docker, cache or any external
 service:
 
@@ -454,21 +392,20 @@ sudo python3 deploy/hosted/preflight.py \
   --configuration-only
 ```
 
-The full preflight additionally checks secret/config metadata without reading
-secret contents, validates private directories and the one node socket owner/mode, and
-hashes the installed native service, Smol, guest and cached archive/config assets.
-It checks delegated cpu/memory/pids controls and calls the existing typed project
-execution and trusted intake health adapters from the pinned backend image with
-no credentials or network. Configuration-only mode performs none of those live checks.
-Wrong runtime, image/config or default behavior rejects launch:
+The full preflight additionally checks app secret/config metadata without reading
+secret contents, validates private app directories, and runs the pinned image's
+strict submission execution/source-cleanup profile validators. Runner runtime, cache,
+capacity and cleanup are established by its separate qualification and the
+typed remote health/execution paths. Wrong endpoint, TLS or pinned intake
+identity rejects launch:
 
 ```sh
 sudo python3 deploy/hosted/preflight.py --env-file /etc/workstream/release.env
 ```
 
-Preflight cannot attest the active AWS identity, absence of extra IAM
-permissions, Flow token acceptance, a successful VM boot, collector delivery,
-backup recoverability or a live checker result. The
+App preflight cannot attest the active AWS identity, absence of extra IAM
+permissions, Flow token acceptance, a successful remote VM boot, collector
+delivery, backup recoverability or a live checker result. The
 [S3 operations guide](../../docs/operations_aws_s3_credentials.md) describes
 the restricted identity, bucket policy and storage qualification. Rendered
 configuration does not establish live cloud behavior.
@@ -528,19 +465,14 @@ wrapper never retries automatically or infers readiness. No award, policy
 publication or external fulfillment is performed by this operation.
 
 Cold startup orders migrations before application services. `migrate` runs the
-existing API image's Alembic command without application startup or checker
-health checks. Ordinary API startup never applies migrations. Qualify the
-configured storage credential before cutover, then start the optional model
-proxy and the native node for the single-host checker topology. Run these
-operator steps:
+existing API image's Alembic command without application startup. Ordinary API
+startup never applies migrations. Qualify the configured storage credential and
+the remote runner before cutover, including mTLS health from the app network.
+Then run these operator steps:
 
 ```sh
 sudo python3 deploy/hosted/compose.py --env-file /etc/workstream/release.env pull
 sudo python3 deploy/hosted/compose.py --env-file /etc/workstream/release.env migrate
-sudo python3 deploy/hosted/compose.py --env-file /etc/workstream/release.env \
-  up -d model-proxy
-# Wait for the proxy health check, then start the reviewed native unit explicitly.
-sudo systemctl start workstream-checker.service
 sudo python3 deploy/hosted/preflight.py --env-file /etc/workstream/release.env
 sudo python3 deploy/hosted/compose.py --env-file /etc/workstream/release.env \
   up --detach --wait
@@ -554,19 +486,19 @@ administrator and do not attest the running node's complete source custody;
 qualification separately records its actual process/binary identities.
 
 The guide parser and enabled model proxy must pass their existing health checks
-before the worker starts. Beat retains existing recovery schedules. API health
-is a lightweight endpoint; Celery health checks its processes. Typed native
-readiness verifies runtime/identity/cache-count and pinned intake/default facts;
-exact image selection is independently checked during every execution. None of
+before the guide worker starts. The exclusive finalization and cleanup
+workers must also become healthy, and Beat retains its recovery schedules. API
+health is a lightweight endpoint; Celery health checks its processes. Remote health
+verifies runtime/identity/cache-count and pinned intake/default facts; exact
+image selection is independently checked during every execution. None of
 these checks replaces a public authenticated journey, storage qualification, resource
 qualification or restart/cleanup evidence. Each Compose service has its existing
-finite restart policy; the native unit retains its own bounded systemd policy.
+finite restart policy; the runner units retain their own bounded systemd policy.
 
 ### Reconcile an installed host after reboot
 
 Docker restart policies do not enforce Compose dependency health ordering at
-host boot. The native node can exhaust its start attempts before the model proxy
-socket is ready, and MCP can retain a stopped API's network namespace. Install
+host boot, and MCP can retain a stopped API's network namespace. Install
 [workstream-hosted.service](workstream-hosted.service) after the initial schema,
 storage qualification, pinned image installation and public journey have passed. Copy
 the reviewed checkout to `/opt/workstream/source`, or edit both absolute source
@@ -583,14 +515,13 @@ sudo systemctl status workstream-hosted.service
 
 The unit runs exactly `compose.py --env-file /etc/workstream/release.env resume`
 after Docker and network startup. This reconciles optional local data and identity
-services, waits for the enabled model proxy, resets the native node's exhausted
-start counter and starts that existing unit. It waits for canonical typed native
-and intake readiness before reconciling API, workers and scheduler. MCP is held
+services and waits for the enabled model proxy. It requires configured remote
+runner and intake readiness before reconciling API, workers and scheduler. MCP is held
 out of the API health wait, then recreated against the current API namespace and
-verified. An already active native node is preserved. Each attempt has management
+verified. Each attempt has management
 deadlines; systemd retries failed reconciliation after 30 seconds and records
-failures in its journal. Inspect `journalctl -u workstream-hosted.service` and
-`journalctl -u workstream-checker.service` for diagnosis.
+failures in its journal. Inspect `journalctl -u workstream-hosted.service` on
+the app host and the two runner unit journals for diagnosis.
 
 Resume uses installed digest-pinned images with `--pull never`; registry login
 and network availability to the registry are unnecessary for reboot. A missing
@@ -607,8 +538,8 @@ before shutting down a deployment permanently. To rerun reconciliation after an
 operator repair, use `systemctl restart workstream-hosted.service`.
 
 The API binds to host loopback for an environment-owned TLS reverse proxy. Do
-not expose the checker socket, Docker socket, PostgreSQL, Redis or OTLP collector
-as public ports.
+not expose Docker, PostgreSQL, Redis or the OTLP collector as public ports. The
+runner listener is private and restricted to the app security group.
 
 ## Diagnostics
 
@@ -626,10 +557,10 @@ outage does not change product results. Configuration alone is not that proof.
 The wrapper's `stop` operation stops Beat and API first so they cannot produce
 new work, gives the prefork worker its configured 7,320-second graceful window,
 then drains the model proxy before stopping the parser. If the local backing-service
-overlay is enabled, Redis and PostgreSQL stop last, preserving their data directories. It never stops the
-native systemd node.
-Keeping all socket services alive while the worker drains lets cancellation and
-terminal persistence finish against their original dependencies. Guide inference
+overlay is enabled, Redis and PostgreSQL stop last, preserving their data directories.
+It never stops or reconfigures the separately administered runner. Keeping
+the remote runner available while the worker drains lets cancellation and
+terminal persistence finish against the invocation's original connection. Guide inference
 has a 7,260-second process backstop;
 the shared Redis transport uses a 7,380-second visibility timeout with prefetch
 disabled. The persisted guide-attempt deadline remains the ordinary, shorter
@@ -642,7 +573,7 @@ sudo python3 deploy/hosted/compose.py --env-file /etc/workstream/release.env sto
 
 For an intentional worker-only interruption, the existing wrapper also accepts
 exactly `stop worker` followed by `start worker`. Stop preserves API, Beat, proxy,
-parser and native node while allowing the configured 7,320-second worker drain;
+parser and the external runner while allowing the configured 7,320-second worker drain;
 its CLI deadline adds 60 seconds for management. This is not a full deployment
 drain: producers can continue creating durable work. Start repeats the full
 private-input and typed native readiness checks, then reconciles only the worker
@@ -664,14 +595,18 @@ do not edit its marker to make a new release start. Stop all processes mounting
 that pool, verify that no reservations or workspaces remain, and retain the old
 directory intact before provisioning a fresh private directory at the canonical
 path. Let the normal ART manager initialize it, recreate the affected container
-and systemd mounts, and verify that API, worker, proxy and native node all see
-the same new directory.
+and mounts, and verify that API and worker see the same new app-local directory.
 If retained work remains, complete its recovery under the original configuration
 before changing the pool.
 
-Before restarting or stopping the native unit, first drain producers and the
-worker through the wrapper, retain the proxy until node calls settle, and
-independently confirm that this node has no active owned leases, VMs or cgroups.
+Before restarting or stopping a runner unit, first drain producers and the
+worker through the wrapper. Keep the native drain marker in its existing
+private control directory and require an authenticated placement observation
+of the reviewed loaded config and current epoch with `drained: true`. This
+covers native reservations before their VM or lease is visible. Also require
+the remote relay workspace to be empty and its transport sessions to settle.
+Retain the proxy until its calls settle, and independently inspect the owned
+leases, VMs and cgroups.
 Preserve guardian recovery and use the exact owner-scoped inventory; never prune
 shared resources or stop another deployment. Exercise an interrupted
 job and verify the existing exact retry/reconciliation operations rather than

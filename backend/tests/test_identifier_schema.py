@@ -9,6 +9,10 @@ from app.db.base import Base
 
 # These keys express business uniqueness, not generated record identities.
 NATURAL_PRIMARY_KEYS = {
+    "submission_source_capacity_profiles": ("namespace_id",),
+    "submission_source_charges": ("operation_id",),
+    "submission_source_cleanup_claims": ("operation_id",),
+    "submission_source_upload_receipts": ("operation_id",),
     "submission_dispatches": ("submission_id",),
     "submission_binding_receipts": ("admission_id",),
     "review_packet_guide_items": ("packet_id", "source_item_id"),
@@ -57,7 +61,17 @@ def test_every_relational_uuid_reference_uses_the_same_native_type():
                 continue
             local = reference.parent.type
             assert isinstance(local, Uuid) and local.native_uuid, str(reference)
-            assert local.as_uuid == reference.column.type.as_uuid, str(reference)
+            boundary = (table.name, reference.parent.name,
+                        reference.column.table.name, reference.column.name)
+            if boundary == ("submission_intake_operations", "finalization_event_id",
+                            "outbox_events", "event_id"):
+                # ART retains string selectors; OUTBOX owns UUID objects. Their
+                # persisted relation is the same native PostgreSQL UUID type.
+                assert local.as_uuid is False and reference.column.type.as_uuid is True
+                assert str(local.compile(dialect=postgresql.dialect())) == "UUID"
+                assert str(reference.column.type.compile(dialect=postgresql.dialect())) == "UUID"
+            else:
+                assert local.as_uuid == reference.column.type.as_uuid, str(reference)
             checked += 1
     assert checked > 0
 

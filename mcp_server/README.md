@@ -1,6 +1,6 @@
 # Workstream MCP Adapter
 
-An independently installed adapter exposing 132 tools under the caller's authority:
+An independently installed adapter exposing 135 tools under the caller's authority.
 
 - `workstream_profile_get` calls `GET /api/v1/actors/me`.
 - `workstream_profile_update` calls the unkeyed `PATCH /api/v1/actors/me`.
@@ -68,9 +68,9 @@ An independently installed adapter exposing 132 tools under the caller's authori
   projections plus deliberate operator retry, reconciliation and registration.
 - Nine operator-artifact tools cover readiness, bindings, replicas, receipts,
   verification/recovery, admission usage and audit events.
-- Seventeen task-execution tools cover bounded preparation ZIPs, contributor and
+- Seventeen task-execution tools cover bounded submission ZIPs, contributor and
   manager task context, screen/release/claim, guide-document reads and
-  admission-backed submission creation/history.
+  submission acceptance and immutable history.
 - Twenty-three project, task-management, import, audit, service-actor and model
   operations complete the current public product catalogue. Task-import source
   content uses an 8 MiB exact-byte boundary; health routes remain operational
@@ -217,6 +217,11 @@ review-mode inheritance, immutable lineage, stale/malformed preconditions,
 authorization and replay. Selector recovery, approval and activation remain
 outside these two guide-policy tools.
 
+Guide proposal approval requires exactly one registered PRE image and exactly
+one registered POST image, with explicit configuration for each. Missing, empty
+or multiple selections are rejected before the adapter sends an HTTP request.
+Workstream validates the selected immutable identities and approval authority.
+
 Workspace reads accept only their documented UUID selectors, filters, bounded
 page size and opaque cursor. Contribution export is JSON-only in MCP; the
 adapter sets `format=json` and does not expose CSV bytes as structured tool
@@ -233,14 +238,31 @@ Task execution uses separate contributor and manager read tools so the adapter
 never chooses an authority path on the caller's behalf. Screen, release and claim
 require typed UUID idempotency keys. Claim atomically assigns and starts a ready
 task through one request, returning `in_progress` and the started assignment.
-Submission creation consumes caller-supplied admission and assignment
-identifiers and stays unkeyed because that is the current backend contract.
-Preparation accepts a bounded Base64 ZIP, decodes it once and forwards the
-caller's typed assignment/key and optional submission or revision fields as the
-fixed backend headers. Revision preparation ID and digest must be supplied
-together. Workstream owns ZIP validation, pre-submit checks, replay and all task
-state changes. A checker rejection is a normal safe tool failure; an unverified
-mutation success remains uncertain and is never retried automatically.
+Use `workstream_project_contributor_guide_get` to read the approved project guide
+before claiming a task. Use its version and document IDs with
+`workstream_project_contributor_guide_document_get` to retrieve verified originals.
+The contributor task context exposes the locked guide of an eligible ready task
+or an active assignment. `workstream_task_guide_document_content_get` retrieves
+that task's exact original even if a newer project guide is active.
+
+`workstream_submission_create` takes `task_id`, `assignment_id`, `zip_base64`
+and a caller-supplied UUID `idempotency_key` for both initial work and revisions.
+MCP accepts up to 64 MiB of raw ZIP bytes. The CLI ceiling is 500 MiB and project
+limits apply to both clients. The optional `feedback` field accepts up to 4096
+printable ASCII bytes without leading or trailing whitespace. Workstream retains
+the exact text as project feedback. Workstream selects revision context and terms
+internally.
+
+A raw-ZIP `202` means Workstream admitted the attempt for durable evaluation.
+Both successful and rejected tool responses include applicable contributor-safe
+PRE findings. Use `workstream_task_assignment_get` with the `assignment_id`
+to read current status, feedback, revision terms and accepted evidence. The same
+ID works through revisions. Continue larger feedback sets with the returned
+cursor.
+Use `workstream_submission_operation_get` with `task_id` and the operation ID
+or original key to recover the precise request outcome. A write with an
+uncertain outcome is never retried automatically. Preserve the original task,
+assignment, ZIP, feedback and key when explicitly replaying that request.
 
 ## Deployment Boundary
 
@@ -265,7 +287,7 @@ retries. A mutation transport failure, upstream 5xx response, or unexpected
 success/redirect response is reported as non-retryable uncertain execution.
 Connections may be pooled, but
 caller credentials and results are not shared or cached. Response validation is
-pinned to the 132 selected public contracts in `contracts/`; upstream drift
+pinned to the 135 selected public contracts in `contracts/`; upstream drift
 must be reviewed, not silently accepted. There is no fallback service or
 backend-private import.
 

@@ -41,6 +41,19 @@ services:
       - checker_material:/var/lib/docker/volumes/${COMPOSE_PROJECT_NAME}-checker-material/_data
       - checker_socket:/run/ws-checker:ro
       - checker_model_proxy:/run/ws-model-proxy:ro
+  outbox-worker:
+    environment:
+      WORKSTREAM_ARTIFACT_SCRATCH_ROOT: /var/lib/docker/volumes/${COMPOSE_PROJECT_NAME}-checker-material/_data
+      WORKSTREAM_EXTERNAL_CHECKER_MATERIAL_ROOT: /var/lib/docker/volumes/${COMPOSE_PROJECT_NAME}-checker-material/_data
+      WORKSTREAM_EXTERNAL_CHECKER_SERVICE_SOCKET: /run/ws-checker/checker.sock
+      WORKSTREAM_CHECKER_MODEL_PROXY_SOCKET: /run/ws-model-proxy/model-proxy.sock
+    volumes:
+      - checker_material:/var/lib/docker/volumes/${COMPOSE_PROJECT_NAME}-checker-material/_data
+      - checker_socket:/run/ws-checker:ro
+      - checker_model_proxy:/run/ws-model-proxy:ro
+    depends_on:
+      checker-volumes-init:
+        condition: service_completed_successfully
   beat: *agent-loop-backend
 
   model-proxy:

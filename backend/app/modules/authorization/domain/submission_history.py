@@ -5,7 +5,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.modules.authorization.catalogue import ActionAvailability, HISTORY_READ_ACTIONS
+from app.modules.authorization.catalogue import ActionAvailability, ActionId, HISTORY_READ_ACTIONS
 from app.modules.authorization.domain.audit import AuthorizationDenialCode, MatchedAuthorityKind
 from app.modules.authorization.schemas import AdminRole
 
@@ -22,7 +22,22 @@ class HistoryReadResourceContext(BaseModel):
     request_digest: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
 
 
+class OperationReadResourceContext(BaseModel):
+    """Stored intake ownership, including operations without a Submission yet."""
+    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
+    resource_type: Literal["submission_operation_read"] = "submission_operation_read"
+    resource_id: UUID
+    scope_project_id: UUID
+    task_id: UUID
+    contributor_id: UUID
+    actor_profile_id: UUID
+    request_digest: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+
+
 def _valid_target(action, resource, context):
+    if action in {ActionId.TASK_SUBMISSION_OPERATION_READ, ActionId.PROJECT_TASK_SUBMISSION_OPERATION_READ}:
+        return type(resource) is OperationReadResourceContext and resource.actor_profile_id == context.actor_profile_id
+
     if type(resource) is not HistoryReadResourceContext or resource.actor_profile_id != context.actor_profile_id:
         return False
     name = action.value.removeprefix("project.")

@@ -72,6 +72,35 @@ type ContributorAssignment struct {
 	UpdatedAt          string            `json:"updated_at"`
 }
 
+type AssignmentIntake struct {
+	OperationID  string                  `json:"operation_id"`
+	Stage        string                  `json:"stage"`
+	FailureCode  *string                 `json:"failure_code"`
+	Submission   *string                 `json:"submission_id"`
+	Feedback     []json.RawMessage       `json:"pre_submission_results"`
+	Stalled      bool                    `json:"operationally_stalled"`
+	PostProgress *PostSubmissionProgress `json:"post_submission_progress"`
+}
+
+type AcceptedAssignmentEvidence struct {
+	ContributionID string              `json:"contribution_id"`
+	SubmissionID   string              `json:"submission_id"`
+	ArtifactHash   string              `json:"artifact_hash"`
+	Awards         []ContributionAward `json:"awards"`
+}
+
+type AssignmentStatus struct {
+	Assignment           ContributorAssignment       `json:"assignment"`
+	CurrentStatus        string                      `json:"current_status"`
+	StatusReason         *string                     `json:"status_reason"`
+	NextAction           string                      `json:"next_action"`
+	Intake               *AssignmentIntake           `json:"intake"`
+	PostFindings         []ContributorFinding        `json:"post_submission_results"`
+	FeedbackSubmissionID *string                     `json:"feedback_submission_id"`
+	NextCursor           *string                     `json:"next_cursor"`
+	AcceptedEvidence     *AcceptedAssignmentEvidence `json:"accepted_evidence"`
+}
+
 type ContributorAssignmentPage struct {
 	Items  []ContributorAssignment `json:"items"`
 	Cursor *string                 `json:"next_cursor"`
@@ -308,6 +337,58 @@ func decodeContributorAssignment(raw json.RawMessage) (ContributorAssignment, bo
 		return value, false
 	}
 	return value, value.Revision == nil || validateRevisionContext(fields["revision"], value.Revision) == nil
+}
+
+// TaskAssignment reads current status and bounded intake and evaluation feedback for an owned claim.
+func (c *Client) TaskAssignment(ctx context.Context, assignment string, limit int, cursor *string) (Result[AssignmentStatus], error) {
+	var result Result[AssignmentStatus]
+	if !submissionSelector(assignment) ||
+		limit < 1 || limit > 100 || (cursor != nil && !validTaskCursor(*cursor)) {
+		return result, errors.New("task status requires an assignment UUID and a valid feedback page")
+	}
+	query := url.Values{"limit": {strconv.Itoa(limit)}}
+	if cursor != nil {
+		query.Set("cursor", *cursor)
+	}
+	path := "/api/v1/actors/me/assignments/" + canonicalUUID(assignment)
+	raw, err := c.request(ctx, http.MethodGet, path, query.Encode(), nil)
+	if err != nil {
+		return result, err
+	}
+	var value AssignmentStatus
+	fields, err := contextObject(raw, &value, []string{"assignment", "current_status", "next_action", "post_submission_results"}, nil)
+	if err != nil || !requiredNullable(fields, "status_reason", "intake", "feedback_submission_id", "next_cursor", "accepted_evidence") ||
+		!c.safeMutationResponse(raw) || !validOptionalID(value.FeedbackSubmissionID) ||
+		!oneOf(value.CurrentStatus, append(append([]string{}, taskStatuses...), "closed", "rejected")...) ||
+		!oneOf(value.NextAction, "submit", "awaiting_intake", "awaiting_evaluation", "revise", "wait_for_processing", "contact_operator", "none") ||
+		len(value.PostFindings) > limit || !validateContributorFindings(fields["post_submission_results"], value.PostFindings) ||
+		(value.NextCursor != nil && (!validTaskCursor(*value.NextCursor) || len(value.PostFindings) == 0)) {
+		return result, &Failure{Code: "invalid_api_response"}
+	}
+	row, ok := decodeContributorAssignment(fields["assignment"])
+	if !ok || !sameUUID(row.AssignmentID, assignment) ||
+		(value.FeedbackSubmissionID != nil && (row.LatestSubmission == nil ||
+			!sameUUID(*value.FeedbackSubmissionID, row.LatestSubmission.SubmissionID))) {
+		return result, &Failure{Code: "invalid_api_response"}
+	}
+	value.Assignment = row
+	if intake := value.Intake; intake != nil {
+		part, err := contextObject(fields["intake"], intake, []string{"operation_id", "stage", "pre_submission_results", "operationally_stalled"}, nil)
+		if err != nil || !requiredNullable(part, "failure_code", "submission_id", "post_submission_progress") ||
+			!validPostSubmissionProgress(part["post_submission_progress"], intake.PostProgress) || !validUUID(intake.OperationID) ||
+			!validOptionalID(intake.Submission) || intake.Feedback == nil || !validPreSubmissionResults(intake.Feedback, false) {
+			return result, &Failure{Code: "invalid_api_response"}
+		}
+	}
+	if accepted := value.AcceptedEvidence; accepted != nil {
+		if _, err := contextObject(fields["accepted_evidence"], accepted, []string{"contribution_id", "submission_id", "artifact_hash", "awards"}, nil); err != nil ||
+			value.CurrentStatus != "accepted" || !validUUID(accepted.ContributionID) ||
+			row.LatestSubmission == nil || !sameUUID(accepted.SubmissionID, row.LatestSubmission.SubmissionID) ||
+			!contextPolicyDigest.MatchString(accepted.ArtifactHash) || accepted.Awards == nil {
+			return result, &Failure{Code: "invalid_api_response"}
+		}
+	}
+	return Result[AssignmentStatus]{Raw: raw, Value: value}, nil
 }
 
 // MyAssignments lists the caller's claims in projects where it holds a Submitter grant.

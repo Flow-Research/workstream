@@ -1,170 +1,141 @@
-"""Contributor ZIP preparation through ART-owned selected intake and custody."""
-
-from typing import Annotated, Any
+"""One raw-ZIP contributor mutation through ART's foreground command."""
+from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Request, Query
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, ConfigDict
-from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.adapters.artifacts import (
-    get_submission_bundle_preparation_actor,
-    get_submission_bundle_preparation_command,
+from app.adapters.artifacts import get_submission_intake_command, get_submission_operation_reader
+from app.api.deps.authorization import get_authorization_actor_identity
+from app.api.submission_intake import SubmissionIntakeHeaders, submission_intake_headers, submission_intake_body
+from app.core.api_controls import error_response
+from app.modules.artifacts.api.submission_command import (
+    SubmissionAcceptedResponse, SubmissionIntakeCommand, SubmissionOperationReader,
+    SubmissionOperationResponse, SubmissionOperationSelector,
 )
-from app.core.api_controls import StructuredHTTPException, error_response, request_ids
-from app.db.session import get_db_session
-from app.modules.artifacts.api import (
-    SubmissionBundlePreparationCheckFailed,
-    SubmissionBundlePreparationCommand,
-    SubmissionBundlePreparationRejected,
-    SubmissionBundlePreparationInfrastructureUnavailable,
-    SubmissionBundlePreparationRequest,
-    SubmissionBundlePreparationStatus,
-    SubmissionBundlePreparationUnavailable,
-)
+from app.modules.artifacts.api.submission_intake import SubmissionIntakeFailure
 from app.modules.authorization.api import ActorIdentityFacts
 
 router = APIRouter(tags=["tasks"])
 
-
-def require_single_preparation_headers(request: Request) -> None:
-    """Reject ambiguous custody selectors before resolving actor or product rows."""
-    for name in ("X-Task-Assignment-Id", "Idempotency-Key"):
-        if len(request.headers.getlist(name)) != 1:
-            raise StructuredHTTPException(
-                status_code=422,
-                detail="Submission preparation headers invalid",
-                error_code="submission_preparation_headers_invalid",
-                error_message="Submission preparation headers invalid",
-            )
-    for name in ("X-Revision-Preparation-Id", "X-Revision-Preparation-Sha256"):
-        if len(request.headers.getlist(name)) > 1:
-            raise StructuredHTTPException(
-                status_code=422,
-                detail="Submission preparation headers invalid",
-                error_code="submission_preparation_headers_invalid",
-                error_message="Submission preparation headers invalid",
-            )
+_HEADER_PARAMETERS = [
+    {"name": name, "in": "header", "required": required, "schema": schema}
+    for name, required, schema in (
+        ("Idempotency-Key", True, {"type": "string", "format": "uuid"}),
+        ("X-Task-Assignment-Id", True, {"type": "string", "format": "uuid"}),
+        ("X-Submission-Feedback", False, {"type": "string", "maxLength": 4096,
+         "description": "Optional project feedback. Printable ASCII without leading or trailing whitespace."}),
+    )
+]
 
 
-class SubmissionBundlePreparationResponse(BaseModel):
-    """Bounded preparation state without provider or scratch coordinates."""
+_FAILURE_MESSAGES = {
+    "submission_unavailable": "Submission unavailable",
+    "submission_packet_invalid": "The submitted ZIP or request was invalid",
+    "submission_archive_limit_exceeded": "The ZIP exceeds the permitted archive limits",
+    "submission_upload_timeout": "The ZIP upload timed out",
+    "submission_pre_timeout": "The ZIP uploaded, but pre-submission checks timed out. No Submission was created. Retry this assignment with a new idempotency key.",
+    "submission_capacity_exceeded": "Submission processing is at capacity. Try again later.",
+    "submission_infrastructure_unavailable": "Submission processing is temporarily unavailable",
+    "submission_outcome_unknown": "Check the original submission operation or retry with the same idempotency key",
+    "submission_operation_in_progress": "This assignment already has a submission in progress",
+    "submission_idempotency_conflict": "This idempotency key was used with different submission inputs",
+    "pre_submission_checker_failed": "The ZIP did not pass the pre-submission checks",
+    "revision_deadline_expired": "Your assignment expired. Reclaim the task if it is still available.",
+    "revision_limit_reached": "Your assignment has reached its revision limit",
+    "revision_context_blocked": "This assignment is waiting for its revision requirements",
+    "revision_context_changed": "The revision requirements or terms changed. Read your assignment before submitting again.",
+    "task_submission_predecessor_changed": "The assignment's current revision changed. Read your assignment before submitting again.",
+}
 
-    model_config = ConfigDict(extra="forbid", from_attributes=True)
 
-    put_attempt_id: UUID
-    admission_id: UUID | None
-    submission_bundle_preparation_status: SubmissionBundlePreparationStatus
-    replayed: bool
-    # Bounded intake feedback for the admitted attempt, including nonblocking
-    # findings; the same projection as a blocked preparation's error details.
-    pre_submission_results: list[dict[str, Any]]
+def _failure_status(code: str) -> int:
+    """Map a closed submission failure code to its public HTTP status."""
+    if code == "submission_unavailable":
+        return 404
+    if code == "submission_archive_limit_exceeded":
+        return 413
+    if code == "submission_upload_timeout":
+        return 408
+    if code == "submission_pre_timeout":
+        return 504
+    if code == "submission_capacity_exceeded":
+        return 429
+    if code in {"submission_packet_invalid", "pre_submission_checker_failed"}:
+        return 422
+    if code in {"submission_infrastructure_unavailable", "submission_outcome_unknown"}:
+        return 503
+    return 409
 
 
 @router.post(
-    "/tasks/{task_id}/submission-bundle-preparations",
-    response_model=SubmissionBundlePreparationResponse,
-    status_code=status.HTTP_202_ACCEPTED,
-    dependencies=[Depends(require_single_preparation_headers)],
+    "/tasks/{task_id}/submissions", response_model=SubmissionAcceptedResponse, status_code=202,
     openapi_extra={
-        "x-workstream-action-id": "artifact.submission_bundle.prepare",
-        "requestBody": {
-            "required": True,
-            "content": {"application/zip": {"schema": {"type": "string", "format": "binary"}}},
-        },
+        "x-workstream-action-id": "submission.create",
+        "parameters": _HEADER_PARAMETERS,
+        "requestBody": {"required": True, "content": {
+            "application/zip": {"schema": {"type": "string", "format": "binary"}},
+        }},
     },
     responses={
         404: {"description": "Task or contributor authority unavailable"},
-        409: {"description": "Preparation context or replay conflicts"},
-        422: {"description": "Invalid ZIP or bounded pre-submission checker feedback"},
-        503: {"description": "Preparation custody or infrastructure unavailable"},
+        408: {"description": "Upload idle or total deadline expired"},
+        409: {"description": "Operation, idempotency or governed revision conflict"},
+        413: {"description": "Raw ZIP exceeds the permitted limit"},
+        415: {"description": "Unsupported media type or content encoding"},
+        422: {"description": "Invalid packet or bounded pre-submission QC feedback"},
+        429: {"description": "Submission capacity exhausted"},
+        503: {"description": "Infrastructure unavailable or acceptance outcome unknown"},
+        504: {"description": "Pre-submission deadline expired and the operation durably ended"},
     },
 )
-async def prepare_submission_bundle(
-    task_id: str,
+async def submit_source(
+    task_id: UUID,
     request: Request,
-    actor: Annotated[ActorIdentityFacts, Depends(get_submission_bundle_preparation_actor)],
-    command: Annotated[
-        SubmissionBundlePreparationCommand,
-        Depends(get_submission_bundle_preparation_command),
-    ],
-    session: Annotated[AsyncSession, Depends(get_db_session)],
-    assignment_id: Annotated[str, Header(alias="X-Task-Assignment-Id")],
-    idempotency_key: Annotated[str, Header(alias="Idempotency-Key")],
-    summary: Annotated[str | None, Header(alias="X-Submission-Summary")] = None,
-    contributor_attestation: Annotated[
-        str | None, Header(alias="X-Contributor-Attestation")
-    ] = None,
-    predecessor_submission_id: Annotated[
-        str | None, Header(alias="X-Predecessor-Submission-Id")
-    ] = None,
-    revision_preparation_id: Annotated[
-        str | None, Header(alias="X-Revision-Preparation-Id")
-    ] = None,
-    revision_preparation_sha256: Annotated[
-        str | None, Header(alias="X-Revision-Preparation-Sha256")
-    ] = None,
-) -> SubmissionBundlePreparationResponse | JSONResponse:
-    """Run continuous ZIP preparation under fresh contributor authority."""
+    headers: Annotated[SubmissionIntakeHeaders, Depends(submission_intake_headers)],
+    actor: Annotated[ActorIdentityFacts, Depends(get_authorization_actor_identity)],
+    command: Annotated[SubmissionIntakeCommand, Depends(get_submission_intake_command)],
+) -> SubmissionAcceptedResponse | JSONResponse:
+    """Acknowledge only committed acceptance, with no fabricated T5 identifiers."""
     try:
-        identifiers = (
-            UUID(task_id),
-            UUID(assignment_id),
-            UUID(idempotency_key),
-            UUID(predecessor_submission_id) if predecessor_submission_id else None,
+        receipt = await command.submit(
+            headers.metadata, submission_intake_body(request), actor_id=actor.actor_profile_id,
+            identity_link_id=actor.identity_link_id, idempotency_key=headers.idempotency_key,
+            declared_raw_bytes=headers.declared_raw_bytes,
         )
-    except ValueError as exc:
-        raise HTTPException(status_code=404, detail="Task not found") from exc
-    try:
-        # Actor resolution may have opened a read root; ART owns its preparation roots.
-        await session.rollback()
-        request_id, correlation_id = (UUID(value) for value in request_ids(request))
-        result = await command.prepare(
-            SubmissionBundlePreparationRequest(
-                actor=actor,
-                request_id=request_id,
-                correlation_id=correlation_id,
-                task_id=identifiers[0],
-                assignment_id=identifiers[1],
-                predecessor_submission_id=identifiers[3],
-                idempotency_key=identifiers[2],
-                summary=summary or "",
-                contributor_attestation=contributor_attestation or "",
-                media_type=request.headers.get("content-type", ""),
-                byte_source=request.stream(),
-                revision_preparation_id=revision_preparation_id,
-                revision_preparation_sha256=revision_preparation_sha256,
-            )
-        )
-    except SubmissionBundlePreparationCheckFailed as exc:
+    except SubmissionIntakeFailure as exc:
+        details = None
+        if exc.code == "pre_submission_checker_failed":
+            details = {"status": "failed", "eligible_to_submit": False, "results": exc.pre_submission_results or []}
+        elif exc.code == "submission_pre_timeout":
+            details = {"next_action": "retry_new_key_after_terminal"}
         return error_response(
-            request,
-            status_code=422,
-            code="pre_submission_checker_failed",
-            message="Pre-submission checks failed",
-            details={
-                "status": "failed",
-                "eligible_to_submit": exc.facts.eligible,
-                "results": exc.public_results(),
-            },
+            request, status_code=_failure_status(exc.code), code=exc.code,
+            message=_FAILURE_MESSAGES.get(exc.code, "Submission could not be completed"),
+            details=details, retryable=exc.code in {"submission_capacity_exceeded", "submission_infrastructure_unavailable", "submission_outcome_unknown", "submission_pre_timeout"},
         )
-    except SubmissionBundlePreparationInfrastructureUnavailable as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-    except SubmissionBundlePreparationUnavailable as exc:
-        raise HTTPException(status_code=404, detail="Task not found") from exc
-    except SubmissionBundlePreparationRejected as exc:
-        code = str(exc)
-        if code in {"revision_limit_reached", "revision_deadline_expired", "revision_context_blocked", "revision_context_changed"}:
-            raise StructuredHTTPException(
-                status_code=409, detail=code, error_code=code, error_message=code,
-            ) from exc
-        if code in {"submission_bundle_preparation_context_changed",
-                    "submission_bundle_preparation_request_conflict"}:
-            raise HTTPException(status_code=409, detail=code) from exc
-        if code in {"revision_acknowledgement_required", "revision_acknowledgement_invalid"}:
-            raise StructuredHTTPException(
-                status_code=422, detail=code, error_code=code, error_message=code,
-            ) from exc
-        raise HTTPException(status_code=422, detail=code) from exc
-    return SubmissionBundlePreparationResponse.model_validate(result, from_attributes=True)
+    return SubmissionAcceptedResponse.model_validate(receipt)
+
+
+@router.get(
+    "/tasks/{task_id}/submission-operations", response_model=SubmissionOperationResponse,
+    openapi_extra={
+        "x-workstream-action-id": "task.submission_operation.read",
+        "x-workstream-management-action-id": "project.task.submission_operation.read",
+    },
+    responses={404: {"description": "Operation or current read authority unavailable"},
+               422: {"description": "Exactly one operation UUID or actor-scoped idempotency key is required"},
+               503: {"description": "Stored operation progress cannot be verified"}},
+)
+async def read_submission_operation(
+    task_id: UUID, request: Request,
+    selector: Annotated[SubmissionOperationSelector, Query()],
+    reader: Annotated[SubmissionOperationReader, Depends(get_submission_operation_reader)],
+) -> SubmissionOperationResponse | JSONResponse:
+    """Read this operation's own evidence under current contributor or management authority."""
+    try:
+        return await reader.read(task_id, selector)
+    except SubmissionIntakeFailure as exc:
+        return error_response(request, status_code=_failure_status(exc.code), code=exc.code,
+            message="Submission unavailable" if exc.code == "submission_unavailable" else exc.code,
+            retryable=exc.code == "submission_infrastructure_unavailable")

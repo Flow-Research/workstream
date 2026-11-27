@@ -91,7 +91,8 @@
 				flush_interval -1
 				transport http {
 					dial_timeout 5s
-					response_header_timeout 180s
+					# The submission tool may spend 660s at its upstream API.
+					response_header_timeout 675s
 					max_conns_per_host 16
 				}
 			}

@@ -14,8 +14,9 @@ def test_task_public_surface_has_no_self_activation_and_one_admission_creation()
     creation = submissions["post"]
     assert creation["security"]
     assert creation["x-workstream-action-id"] == "submission.create"
-    assert "201" in creation["responses"]
+    assert "202" in creation["responses"]
     assert creation["requestBody"]["required"] is True
+    assert set(creation["requestBody"]["content"]) == {"application/zip"}
     for path, method, action in (
         ("/api/v1/tasks/{task_id}/claim", "post", "task.claim"),
         ("/api/v1/tasks/{task_id}/work-context", "get", "task.work_context.read"),

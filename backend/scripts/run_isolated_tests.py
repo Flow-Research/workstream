@@ -266,25 +266,28 @@ async def _create_minio(endpoint: str, bucket: str, prefix: str) -> None:
 
 
 async def _drop_minio(endpoint: str, bucket: str, prefix: str) -> None:
-    """Delete every object in the exact owned bucket, then prove its removal."""
+    """Remove multipart uploads and every version in the runner-owned bucket."""
     async with _minio_client(endpoint) as client:
-        continuation = None
-        while True:
-            request = {"Bucket": bucket}
-            if continuation:
-                request["ContinuationToken"] = continuation
-            response = await client.list_objects_v2(**request)
-            objects = response.get("Contents", [])
-            if objects:
-                await client.delete_objects(
-                    Bucket=bucket,
-                    Delete={"Objects": [{"Key": item["Key"]} for item in objects]},
+        # The child has exited. This is disposal of a freshly claimed test bucket,
+        # not product cleanup authority for retained submission sources.
+        uploads = client.get_paginator("list_multipart_uploads")
+        async for page in uploads.paginate(Bucket=bucket):
+            for upload in page.get("Uploads", []):
+                await client.abort_multipart_upload(
+                    Bucket=bucket, Key=upload["Key"], UploadId=upload["UploadId"],
                 )
-            if not response.get("IsTruncated"):
-                break
-            continuation = response.get("NextContinuationToken")
-            if not continuation:
-                raise RunnerError("minio_cleanup_failed")
+        versions = client.get_paginator("list_object_versions")
+        async for page in versions.paginate(Bucket=bucket):
+            objects = [
+                {"Key": item["Key"], "VersionId": item["VersionId"]}
+                for item in (*page.get("Versions", []), *page.get("DeleteMarkers", []))
+            ]
+            if objects:
+                result = await client.delete_objects(
+                    Bucket=bucket, Delete={"Objects": objects},
+                )
+                if result.get("Errors"):
+                    raise RunnerError("minio_cleanup_failed")
         await client.delete_bucket(Bucket=bucket)
         buckets = await client.list_buckets()
         if bucket in {item["Name"] for item in buckets.get("Buckets", [])}:

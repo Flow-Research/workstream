@@ -4,6 +4,8 @@ from typing import Literal
 from uuid import UUID
 from pydantic import BaseModel, ConfigDict, model_validator
 
+SUBMISSION_FEEDBACK_EMAIL_EVENT = "SubmissionFeedbackEmailRequested"
+
 
 class TaskRoutingLifecycleDeferred(RuntimeError):
     """Known pre-effect REV enablement refusal; the caller may retry after rollback."""

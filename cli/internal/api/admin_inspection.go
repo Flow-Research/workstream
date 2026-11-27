@@ -171,6 +171,7 @@ func validServiceIdentity(value string) bool {
 	return oneOf(value,
 		"workstream.artifact.verifier", "workstream.artifact.put_resolver",
 		"workstream.artifact.scheduler", "workstream.artifact.binding",
+		"workstream.artifact.source_cleanup",
 		"workstream.artifact.guide_reader", "workstream.artifact.materializer",
 		"workstream.artifact.checker_output", "workstream.task.assignment_reconciler",
 		"workstream.task.revision_expirer", "workstream.task.post_submit_router",
@@ -303,8 +304,8 @@ func (c *Client) AdminPermissions(ctx context.Context) (Result[PermissionCatalog
 	}
 	var value PermissionCatalogue
 	fields, err := contextObject(raw, &value, []string{"items", "total"}, nil)
-	// The public PermissionDefinitionsResponse schema fixes total to Literal[94].
-	if err != nil || value.Items == nil || value.Total != 94 || len(value.Items) != value.Total || !c.safeMutationResponse(raw) {
+	// The public PermissionDefinitionsResponse schema fixes total to Literal[95].
+	if err != nil || value.Items == nil || value.Total != 95 || len(value.Items) != value.Total || !c.safeMutationResponse(raw) {
 		return result, &Failure{Code: "invalid_api_response"}
 	}
 	var members []json.RawMessage

@@ -1,6 +1,7 @@
 [Unit]
 Description=Workstream private checker node
-After=local-fs.target
+Requires=workstream-remote-node.service
+After=local-fs.target workstream-remote-node.service
 StartLimitIntervalSec=60
 StartLimitBurst=5
 

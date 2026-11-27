@@ -2754,6 +2754,69 @@ def test_art_operator_ownership_accepts_only_exact_new_modules():
             ownership._validate_additive_partition_transition(wrong_group, trusted)
 
 
+def test_submission_intake_partition_addition_is_exact_and_retains_existing_targets() -> None:
+    retained = "backend/app/core/config.py"
+    target = "backend/app/modules/artifacts/api/submission_intake.py"
+    additions = {
+        "backend/app/modules/artifacts/api/submission_command.py",
+        "backend/app/modules/artifacts/intake/foreground_command.py",
+        "backend/app/api/submission_intake.py",
+        target, "backend/app/modules/artifacts/intake/models.py",
+        "backend/app/adapters/artifacts/source_cleanup.py",
+        "backend/app/adapters/artifacts/source_cleanup_worker.py",
+        "backend/app/workers/source_cleanup.py",
+        "backend/app/workers/source_cleanup_topology.py",
+        "backend/app/modules/artifacts/api/submission_cleanup.py",
+        "backend/app/modules/artifacts/api/submission_finalization.py",
+        "backend/app/modules/artifacts/api/submission_manifest.py",
+        "backend/app/modules/artifacts/api/submission_recovery.py",
+        "backend/app/modules/artifacts/intake/acceptance.py",
+        "backend/app/modules/artifacts/intake/cleanup.py",
+        "backend/app/modules/artifacts/intake/cleanup_execution.py",
+        "backend/app/modules/artifacts/intake/finalization.py",
+        "backend/app/modules/artifacts/intake/finalization_delivery.py",
+        "backend/app/modules/artifacts/intake/progress.py",
+        "backend/app/modules/artifacts/intake/recovery.py",
+        "backend/app/modules/artifacts/intake/recovery_delivery.py",
+        "backend/app/modules/artifacts/intake/registration.py",
+        "backend/app/modules/artifacts/selected_pre_submit_source_contracts.py",
+        "backend/app/modules/artifacts/selected_pre_submit_source_custody.py",
+        "backend/app/modules/authorization/api/submission_cleanup.py",
+        "backend/app/modules/authorization/api/submission_finalization.py",
+        "backend/app/modules/authorization/domain/submission_recovery.py",
+        "backend/app/modules/authorization/submission_recovery.py",
+        "backend/app/modules/checkers/api/post_material_custody.py",
+        "backend/app/modules/checkers/api/source_contracts.py",
+        "backend/app/modules/checkers/selected_pre_submit_records.py",
+        "backend/app/modules/tasks/accepted_submission.py",
+        "backend/app/modules/artifacts/intake/capacity.py",
+        "backend/app/modules/artifacts/intake/streaming.py",
+        "backend/app/modules/authorization/api/submission_intake.py",
+        "backend/app/modules/authorization/domain/submission_intake.py",
+        "backend/app/modules/authorization/prepared_preflight.py",
+        "backend/app/modules/authorization/submission_intake.py",
+        "backend/app/modules/artifacts/intake/foreground_admission.py",
+        "backend/app/modules/artifacts/intake/foreground_lease.py",
+        "backend/app/modules/artifacts/intake/foreground_upload.py",
+        "backend/app/adapters/artifacts/local_submission_source.py",
+        "backend/app/modules/artifacts/intake/repository.py",
+        "backend/app/modules/tasks/api/intake_custody.py",
+        "backend/app/modules/tasks/api/pending_submission.py",
+        "backend/app/modules/tasks/intake_custody.py",
+        "backend/app/adapters/submission_feedback_email.py",
+        "backend/app/interfaces/submission_feedback_email.py",
+        "backend/app/modules/tasks/post_submit_routing/feedback_email.py",
+        "backend/app/adapters/runner.py",
+        "backend/app/core/runner_endpoints.py",
+    }
+    assert ownership.SUBMISSION_INTAKE_TARGETS == additions
+    trusted = _partition([retained])
+    ownership._validate_additive_partition_transition(_partition(sorted({retained, *additions})), trusted)
+    for targets in (additions, {retained, *additions, "backend/app/modules/artifacts/api/intake_override.py"}):
+        with pytest.raises(ownership.BehaviorOwnershipError, match="untrusted_partition_change"):
+            ownership._validate_additive_partition_transition(_partition(sorted(targets)), trusted)
+
+
 def test_partition_allows_only_the_shared_adapter_package_relocation() -> None:
     retained = "backend/app/core/config.py"
     removed = "backend/app/interfaces/external_services.py"
@@ -2766,3 +2829,15 @@ def test_partition_allows_only_the_shared_adapter_package_relocation() -> None:
             current,
             _partition(sorted([retained, removed, "backend/app/interfaces/forge_facts.py"])),
         )
+
+
+def test_submission_replay_retirement_requires_accepted_finalization_owners() -> None:
+    owners = ownership.SUBMISSION_INTAKE_FINALIZATION_TARGETS
+    retired = "backend/app/modules/tasks/submission_replay.py"
+    trusted = _partition(sorted({retired, *owners}))
+    ownership._validate_additive_partition_transition(_partition(sorted(owners)), trusted)
+    for missing in owners:
+        with pytest.raises(ownership.BehaviorOwnershipError, match="untrusted_partition_change"):
+            ownership._validate_additive_partition_transition(
+                _partition(sorted(owners - {missing})), trusted,
+            )

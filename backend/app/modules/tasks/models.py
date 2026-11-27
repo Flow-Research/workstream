@@ -102,6 +102,12 @@ class WorkstreamTask(Base):
 
     __tablename__ = "workstream_tasks"
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["active_submission_operation_id", "id"],
+            ["submission_intake_operations.id", "submission_intake_operations.task_id"],
+            name="fk_task_active_submission_intake", deferrable=True, initially="DEFERRED",
+            use_alter=True,
+        ),
         CheckConstraint("(get_byte(uuid_send(id), 6) >> 4) = 7 and (get_byte(uuid_send(id), 8) & 192) = 128", name="id_uuid7"),
         CheckConstraint(
             "status in ('draft','screening','ready','in_progress','submitted','evaluation_pending','review_pending','needs_revision','accepted')",
@@ -328,6 +334,7 @@ class WorkstreamTask(Base):
     deadline_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_by: Mapped[str] = mapped_column(String(100), nullable=False)
     assigned_to: Mapped[str | None] = mapped_column(Uuid(as_uuid=False), index=True)
+    active_submission_operation_id: Mapped[str | None] = mapped_column(Uuid(as_uuid=False))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     # PostgreSQL owns this stamp on every committed change, including raw SQL updates.
     updated_at: Mapped[datetime] = mapped_column(
@@ -429,6 +436,12 @@ class Submission(Base):
             "(attempt_status='needs_revision' and "
             "status_reason='checker_coverage_incomplete')",
             name="status_reason",
+        ),
+        CheckConstraint(
+            '(summary IS NULL)=(worker_attestation IS NULL) AND '
+            " (feedback IS NULL OR (summary IS NULL AND octet_length(feedback)<=4096 "
+            "AND feedback COLLATE \"C\" !~ '[^ -~]' AND btrim(feedback)=feedback))",
+            name="feedback_shape",
         ),
         Index("ix_submissions_contributor_updated", "contributor_id", "updated_at", "id"),
         ForeignKeyConstraint(
@@ -567,11 +580,12 @@ class Submission(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now(),
         server_onupdate=FetchedValue(),
     )
-    summary: Mapped[str] = mapped_column(Text, nullable=False)
+    summary: Mapped[str | None] = mapped_column(Text)
+    feedback: Mapped[str | None] = mapped_column(Text)
     package_uri: Mapped[str | None] = mapped_column(String(1000))
     package_hash: Mapped[str | None] = mapped_column(String(128))
     artifact_hash_manifest: Mapped[list[dict]] = mapped_column(JSON, nullable=False, default=list)
-    worker_attestation: Mapped[str] = mapped_column(Text, nullable=False)
+    worker_attestation: Mapped[str | None] = mapped_column(Text)
     locked_guide_version: Mapped[str] = mapped_column(String(50), nullable=False)
     locked_post_submit_checker_policy_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), nullable=False)
     locked_post_submit_checker_policy_version: Mapped[str] = mapped_column(

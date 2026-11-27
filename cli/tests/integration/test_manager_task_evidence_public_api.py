@@ -1,6 +1,6 @@
 """Manager CLI reads through real HTTP/API/PostgreSQL authority and retained rows.
 
-The existing fixture arranges approved policy, a started task, admission and
+The existing fixture arranges approved policy, a started task and
 manager/Submitter grants. The tested Submission is created by the public CLI;
 this test makes no backend authority or checker decision on the CLI's behalf.
 """
@@ -10,7 +10,8 @@ from datetime import UTC, datetime
 import json
 import sys
 from pathlib import Path
-from uuid import uuid4
+from uuid import UUID, uuid4
+from types import SimpleNamespace
 
 import pytest
 from sqlalchemy import select
@@ -24,7 +25,7 @@ from tests.conftest import (  # noqa: E402
     postgres_database_url as postgres_database_url,
     isolated_database_env as isolated_database_env,
 )
-from tests.tasks.test_submission_lineage import _prepared_packet  # noqa: E402
+from tests.tasks.test_submission_lineage import _submission_task  # noqa: E402
 from tests.tasks.test_public_submission_intake import _client  # noqa: E402
 from tests.project_create_fixtures import (  # noqa: E402
     grant_fixture_admin_role,
@@ -41,8 +42,23 @@ async def test_manager_context_history_and_checker_authority(
     monkeypatch,
     cli,
 ):
-    async with _prepared_packet(isolated_database_env, tmp_path) as h:
+    async with _submission_task(isolated_database_env, tmp_path) as h:
         async with _client(h, monkeypatch, isolated_database_env) as direct:
+            from tests.artifacts.test_submission_foreground_command import (
+                configure_source_http,
+            )
+            from tests.retained_material_fixtures import finalize_retained_intake
+
+            _, settings, runtime_errors, runtime_calls = await configure_source_http(
+                h.factory,
+                direct,
+                tmp_path,
+                monkeypatch,
+                h.archive_bytes,
+                "completed",
+            )
+            archive = tmp_path / "manager-submission.zip"
+            archive.write_bytes(h.archive_bytes)
             async with socket_api(direct._transport.app) as origin:
                 project, task = str(h.project_id), str(h.task_id)
 
@@ -54,6 +70,7 @@ async def test_manager_context_history_and_checker_authority(
                         "-o",
                         "json",
                         *args,
+                        process_timeout=90 if args[:2] == ("task", "submit") else 20,
                     )
                     if status != 200:
                         assert result.returncode == 1 and result.stdout == "", (
@@ -103,14 +120,26 @@ async def test_manager_context_history_and_checker_authority(
                     task,
                     "--assignment",
                     str(h.assignment_id),
-                    "--admission",
-                    str(h.admission_id),
-                    "--summary",
-                    h.preparation_request.summary,
-                    "--attestation",
-                    h.preparation_request.contributor_attestation,
+                    "--file",
+                    str(archive),
+                    "--idempotency-key",
+                    str(uuid4()),
+                    "--feedback",
+                    "Completed the required project work and included evidence.",
                 )
-                submission = receipt["submission_id"]
+                assert receipt["status"] == "accepted" and receipt["replayed"] is False
+                assert len(runtime_calls) == 1 and not runtime_errors, runtime_errors
+                submission = str(
+                    await finalize_retained_intake(
+                        h.factory,
+                        SimpleNamespace(
+                            operation_id=UUID(receipt["operation_id"]),
+                            settings=settings,
+                            store=h.store,
+                            namespace=h.namespace,
+                        ),
+                    )
+                )
                 [item] = (
                     await call(
                         "project", "task-submissions", project, task, "--limit", "1"

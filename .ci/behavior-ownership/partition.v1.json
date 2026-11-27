@@ -14,7 +14,19 @@
     },
     {
       "group": "artifacts",
+      "target": "backend/app/adapters/artifacts/local_submission_source.py"
+    },
+    {
+      "group": "artifacts",
       "target": "backend/app/adapters/artifacts/s3_compatible.py"
+    },
+    {
+      "group": "artifacts",
+      "target": "backend/app/adapters/artifacts/source_cleanup.py"
+    },
+    {
+      "group": "artifacts",
+      "target": "backend/app/adapters/artifacts/source_cleanup_worker.py"
     },
     {
       "group": "artifacts",
@@ -167,6 +179,14 @@
     {
       "group": "lifecycle",
       "target": "backend/app/adapters/reviews/contribution_reads.py"
+    },
+    {
+      "group": "shared",
+      "target": "backend/app/adapters/runner.py"
+    },
+    {
+      "group": "lifecycle",
+      "target": "backend/app/adapters/submission_feedback_email.py"
     },
     {
       "group": "lifecycle",
@@ -329,6 +349,10 @@
       "target": "backend/app/api/routes/project_work_reads.py"
     },
     {
+      "group": "lifecycle",
+      "target": "backend/app/api/submission_intake.py"
+    },
+    {
       "group": "shared",
       "target": "backend/app/core/api_controls.py"
     },
@@ -375,6 +399,10 @@
     {
       "group": "lifecycle",
       "target": "backend/app/core/project_guide_instructions.py"
+    },
+    {
+      "group": "shared",
+      "target": "backend/app/core/runner_endpoints.py"
     },
     {
       "group": "shared",
@@ -451,6 +479,10 @@
     {
       "group": "shared",
       "target": "backend/app/interfaces/setup_model_proxy.py"
+    },
+    {
+      "group": "lifecycle",
+      "target": "backend/app/interfaces/submission_feedback_email.py"
     },
     {
       "group": "shared",
@@ -534,7 +566,31 @@
     },
     {
       "group": "artifacts",
+      "target": "backend/app/modules/artifacts/api/submission_cleanup.py"
+    },
+    {
+      "group": "artifacts",
+      "target": "backend/app/modules/artifacts/api/submission_command.py"
+    },
+    {
+      "group": "artifacts",
+      "target": "backend/app/modules/artifacts/api/submission_finalization.py"
+    },
+    {
+      "group": "artifacts",
+      "target": "backend/app/modules/artifacts/api/submission_intake.py"
+    },
+    {
+      "group": "artifacts",
+      "target": "backend/app/modules/artifacts/api/submission_manifest.py"
+    },
+    {
+      "group": "artifacts",
       "target": "backend/app/modules/artifacts/api/submission_preparation.py"
+    },
+    {
+      "group": "artifacts",
+      "target": "backend/app/modules/artifacts/api/submission_recovery.py"
     },
     {
       "group": "artifacts",
@@ -571,6 +627,74 @@
     {
       "group": "artifacts",
       "target": "backend/app/modules/artifacts/guide_formats.py"
+    },
+    {
+      "group": "artifacts",
+      "target": "backend/app/modules/artifacts/intake/acceptance.py"
+    },
+    {
+      "group": "artifacts",
+      "target": "backend/app/modules/artifacts/intake/capacity.py"
+    },
+    {
+      "group": "artifacts",
+      "target": "backend/app/modules/artifacts/intake/cleanup.py"
+    },
+    {
+      "group": "artifacts",
+      "target": "backend/app/modules/artifacts/intake/cleanup_execution.py"
+    },
+    {
+      "group": "artifacts",
+      "target": "backend/app/modules/artifacts/intake/finalization.py"
+    },
+    {
+      "group": "artifacts",
+      "target": "backend/app/modules/artifacts/intake/finalization_delivery.py"
+    },
+    {
+      "group": "artifacts",
+      "target": "backend/app/modules/artifacts/intake/foreground_admission.py"
+    },
+    {
+      "group": "artifacts",
+      "target": "backend/app/modules/artifacts/intake/foreground_command.py"
+    },
+    {
+      "group": "artifacts",
+      "target": "backend/app/modules/artifacts/intake/foreground_lease.py"
+    },
+    {
+      "group": "artifacts",
+      "target": "backend/app/modules/artifacts/intake/foreground_upload.py"
+    },
+    {
+      "group": "artifacts",
+      "target": "backend/app/modules/artifacts/intake/models.py"
+    },
+    {
+      "group": "artifacts",
+      "target": "backend/app/modules/artifacts/intake/progress.py"
+    },
+    {
+      "group": "artifacts",
+      "target": "backend/app/modules/artifacts/intake/recovery.py"
+    },
+    {
+      "group": "artifacts",
+      "target": "backend/app/modules/artifacts/intake/recovery_delivery.py"
+    },
+    {
+      "group": "artifacts",
+      "target": "backend/app/modules/artifacts/intake/registration.py"
+    },
+    {
+      "group": "artifacts",
+      "target": "backend/app/modules/artifacts/intake/repository.py"
+    },
+    {
+      "group": "artifacts",
+      "target": "backend/app/modules/artifacts/intake/streaming.py"
     },
     {
       "group": "artifacts",
@@ -622,6 +746,14 @@
     },
     {
       "group": "artifacts",
+      "target": "backend/app/modules/artifacts/selected_pre_submit_source_contracts.py"
+    },
+    {
+      "group": "artifacts",
+      "target": "backend/app/modules/artifacts/selected_pre_submit_source_custody.py"
+    },
+    {
+      "group": "artifacts",
       "target": "backend/app/modules/artifacts/service.py"
     },
     {
@@ -638,23 +770,11 @@
     },
     {
       "group": "artifacts",
-      "target": "backend/app/modules/artifacts/submission_authorization.py"
-    },
-    {
-      "group": "artifacts",
       "target": "backend/app/modules/artifacts/submission_bindings.py"
     },
     {
       "group": "artifacts",
-      "target": "backend/app/modules/artifacts/submission_custody.py"
-    },
-    {
-      "group": "artifacts",
       "target": "backend/app/modules/artifacts/submission_manifest.py"
-    },
-    {
-      "group": "artifacts",
-      "target": "backend/app/modules/artifacts/submission_materialization.py"
     },
     {
       "group": "artifacts",
@@ -779,6 +899,18 @@
     {
       "group": "auth",
       "target": "backend/app/modules/authorization/api/project_setup_finalization.py"
+    },
+    {
+      "group": "auth",
+      "target": "backend/app/modules/authorization/api/submission_cleanup.py"
+    },
+    {
+      "group": "auth",
+      "target": "backend/app/modules/authorization/api/submission_finalization.py"
+    },
+    {
+      "group": "auth",
+      "target": "backend/app/modules/authorization/api/submission_intake.py"
     },
     {
       "group": "auth",
@@ -1010,6 +1142,14 @@
     },
     {
       "group": "auth",
+      "target": "backend/app/modules/authorization/domain/submission_intake.py"
+    },
+    {
+      "group": "auth",
+      "target": "backend/app/modules/authorization/domain/submission_recovery.py"
+    },
+    {
+      "group": "auth",
       "target": "backend/app/modules/authorization/domain/task_authority.py"
     },
     {
@@ -1130,6 +1270,10 @@
     },
     {
       "group": "auth",
+      "target": "backend/app/modules/authorization/prepared_preflight.py"
+    },
+    {
+      "group": "auth",
       "target": "backend/app/modules/authorization/prepared_projection_replay.py"
     },
     {
@@ -1214,7 +1358,15 @@
     },
     {
       "group": "auth",
+      "target": "backend/app/modules/authorization/submission_intake.py"
+    },
+    {
+      "group": "auth",
       "target": "backend/app/modules/authorization/submission_preparation.py"
+    },
+    {
+      "group": "auth",
+      "target": "backend/app/modules/authorization/submission_recovery.py"
     },
     {
       "group": "auth",
@@ -1270,6 +1422,10 @@
     },
     {
       "group": "artifacts",
+      "target": "backend/app/modules/checkers/api/historical_selected_pre_submit.py"
+    },
+    {
+      "group": "artifacts",
       "target": "backend/app/modules/checkers/api/history.py"
     },
     {
@@ -1294,6 +1450,10 @@
     },
     {
       "group": "artifacts",
+      "target": "backend/app/modules/checkers/api/post_material_custody.py"
+    },
+    {
+      "group": "artifacts",
       "target": "backend/app/modules/checkers/api/pre_submit_material.py"
     },
     {
@@ -1307,6 +1467,10 @@
     {
       "group": "artifacts",
       "target": "backend/app/modules/checkers/api/selected_pre_submit.py"
+    },
+    {
+      "group": "artifacts",
+      "target": "backend/app/modules/checkers/api/source_contracts.py"
     },
     {
       "group": "artifacts",
@@ -1395,6 +1559,10 @@
     {
       "group": "artifacts",
       "target": "backend/app/modules/checkers/selected_pre_submit_reads.py"
+    },
+    {
+      "group": "artifacts",
+      "target": "backend/app/modules/checkers/selected_pre_submit_records.py"
     },
     {
       "group": "artifacts",
@@ -2062,6 +2230,10 @@
     },
     {
       "group": "lifecycle",
+      "target": "backend/app/modules/tasks/accepted_submission.py"
+    },
+    {
+      "group": "lifecycle",
       "target": "backend/app/modules/tasks/api/accepted_effects.py"
     },
     {
@@ -2098,7 +2270,15 @@
     },
     {
       "group": "lifecycle",
+      "target": "backend/app/modules/tasks/api/intake_custody.py"
+    },
+    {
+      "group": "lifecycle",
       "target": "backend/app/modules/tasks/api/management_queue.py"
+    },
+    {
+      "group": "lifecycle",
+      "target": "backend/app/modules/tasks/api/pending_submission.py"
     },
     {
       "group": "lifecycle",
@@ -2202,6 +2382,10 @@
     },
     {
       "group": "lifecycle",
+      "target": "backend/app/modules/tasks/intake_custody.py"
+    },
+    {
+      "group": "lifecycle",
       "target": "backend/app/modules/tasks/lifecycle.py"
     },
     {
@@ -2211,6 +2395,10 @@
     {
       "group": "lifecycle",
       "target": "backend/app/modules/tasks/post_submit_routing/evaluation_guard.py"
+    },
+    {
+      "group": "lifecycle",
+      "target": "backend/app/modules/tasks/post_submit_routing/feedback_email.py"
     },
     {
       "group": "lifecycle",
@@ -2338,10 +2526,6 @@
     },
     {
       "group": "lifecycle",
-      "target": "backend/app/modules/tasks/submission_replay.py"
-    },
-    {
-      "group": "lifecycle",
       "target": "backend/app/modules/tasks/submitted_bundle.py"
     },
     {
@@ -2417,6 +2601,14 @@
       "target": "backend/app/workers/revision_recovery.py"
     },
     {
+      "group": "shared",
+      "target": "backend/app/workers/source_cleanup.py"
+    },
+    {
+      "group": "shared",
+      "target": "backend/app/workers/source_cleanup_topology.py"
+    },
+    {
       "group": "lifecycle",
       "target": "backend/app/workers/task_settings.py"
     },
@@ -2470,7 +2662,15 @@
     },
     {
       "group": "artifacts",
+      "target": "backend/scripts/checker_root_layers.py"
+    },
+    {
+      "group": "artifacts",
       "target": "backend/scripts/checker_smol_cache.py"
+    },
+    {
+      "group": "artifacts",
+      "target": "backend/scripts/checker_trusted_root.py"
     },
     {
       "group": "shared",
@@ -2561,7 +2761,7 @@
       "target": "backend/scripts/validate_test_lane_evidence.py"
     }
   ],
-  "authority_digest": "356c10206e860a30b0df5f83042cff7a0f601e21ca5298874d116db44e112577",
+  "authority_digest": "50266fb372abd495b53e56d22c13017ab4dbf6202e5498f1b0c4963410373c09",
   "protected_base_commit": "7676ce4347db0c9694962a9b587a20765e16eac6",
   "schema": "workstream.behavior-ownership-partition.v1"
 }

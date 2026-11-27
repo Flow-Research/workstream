@@ -43,6 +43,7 @@ x-backend-runtime: &backend-runtime
     WORKSTREAM_PROJECT_AGENT_MODEL_API: ${WORKSTREAM_PROJECT_AGENT_MODEL_API:-chat_completions}
     WORKSTREAM_PROJECT_AGENT_MODEL: ${WORKSTREAM_PROJECT_AGENT_MODEL:-openai/gpt-5.6-terra}
     WORKSTREAM_PROJECT_AGENT_RUNTIME_OPTIONS: ${WORKSTREAM_PROJECT_AGENT_RUNTIME_OPTIONS:?set WORKSTREAM_PROJECT_AGENT_RUNTIME_OPTIONS to a JSON object}
+    WORKSTREAM_SUBMISSION_FEEDBACK_EMAIL_ENABLED: ${WORKSTREAM_SUBMISSION_FEEDBACK_EMAIL_ENABLED:-false}
   volumes:
     - ./backend:/workspace/backend
     - workstream_scratch_data:/workspace/scratch
@@ -80,10 +81,10 @@ services:
       retries: 20
       start_period: 15s
 
-  worker:
+  worker: &guide-worker
     <<: *backend-runtime
     group_add: ["10001"]
-    environment:
+    environment: &worker-environment
       <<: *backend-environment
       WORKSTREAM_GUIDE_DOCUMENT_PARSER_SOCKET: /var/lib/workstream/guide-runtime/guide.sock
     volumes:
@@ -100,6 +101,7 @@ services:
       - --pool=prefork
       - --concurrency=${WORKSTREAM_CELERY_WORKER_CONCURRENCY:-2}
       - --hostname=worker@%h
+      - --queues=workstream.project_setup
       - --pidfile=/tmp/celery-worker.pid
       - --loglevel=INFO
     depends_on:
@@ -119,6 +121,121 @@ services:
       timeout: 8s
       retries: 12
       start_period: 20s
+
+  project-control-worker:
+    <<: *guide-worker
+    command:
+      - python
+      - -m
+      - celery
+      - -A
+      - app.workers.celery_app
+      - worker
+      - --pool=prefork
+      - --concurrency=1
+      - --hostname=project-control@%h
+      - --queues=workstream.project_control
+      - --pidfile=/tmp/celery-worker.pid
+      - --loglevel=INFO
+
+  artifact-worker:
+    <<: *guide-worker
+    command:
+      - python
+      - -m
+      - celery
+      - -A
+      - app.workers.celery_app
+      - worker
+      - --pool=prefork
+      - --concurrency=1
+      - --hostname=artifacts@%h
+      - --queues=workstream.artifacts
+      - --pidfile=/tmp/celery-worker.pid
+      - --loglevel=INFO
+
+  outbox-scan-worker:
+    <<: *backend-runtime
+    environment:
+      <<: *backend-environment
+    command:
+      - python
+      - -m
+      - celery
+      - -A
+      - app.workers.celery_app
+      - worker
+      - --pool=prefork
+      - --concurrency=1
+      - --hostname=outbox-scan@%h
+      - --queues=workstream.outbox_scan
+      - --pidfile=/tmp/celery-worker.pid
+      - --loglevel=INFO
+    depends_on:
+      backend:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    stop_grace_period: 120s
+    healthcheck:
+      test: [CMD-SHELL, "test -s /tmp/celery-worker.pid && kill -0 $$(cat /tmp/celery-worker.pid)"]
+      interval: 10s
+      timeout: 8s
+      retries: 12
+      start_period: 20s
+
+  outbox-worker:
+    <<: *guide-worker
+    command:
+      - python
+      - -m
+      - celery
+      - -A
+      - app.workers.celery_app
+      - worker
+      - --pool=prefork
+      - --concurrency=1
+      - --hostname=outbox@%h
+      - --queues=workstream.outbox
+      - --pidfile=/tmp/celery-worker.pid
+      - --loglevel=INFO
+
+  submission-finalizer:
+    <<: *guide-worker
+    profiles: ["submission-intake"]
+    environment:
+      <<: *worker-environment
+      WORKSTREAM_SUBMISSION_FINALIZATION_CONCURRENCY: ${WORKSTREAM_SUBMISSION_FINALIZATION_CONCURRENCY:-}
+    command:
+      - /bin/sh
+      - -ec
+      - |
+        n="$${WORKSTREAM_SUBMISSION_FINALIZATION_CONCURRENCY:?set an approved finalization concurrency}"
+        case "$$n" in *[!0-9]*|0) echo "finalization concurrency must be positive" >&2; exit 1;; esac
+        test "$$n" -gt 0
+        exec python -m celery -A app.workers.celery_app worker --pool=prefork --concurrency="$$n" --queues=workstream.submission_finalization --hostname=submission-finalizer@%h --pidfile=/tmp/celery-worker.pid --loglevel=INFO
+    stop_grace_period: 420s
+
+  submission-source-cleanup-worker:
+    <<: *guide-worker
+    profiles: ["submission-intake"]
+    environment:
+      <<: *worker-environment
+      WORKSTREAM_SUBMISSION_SOURCE_CLEANUP_PROFILE: ${WORKSTREAM_SUBMISSION_SOURCE_CLEANUP_PROFILE:-}
+    command:
+      - python
+      - -m
+      - celery
+      - -A
+      - app.workers.celery_app
+      - worker
+      - --pool=prefork
+      - --concurrency=1
+      - --hostname=source-cleanup@%h
+      - --queues=workstream.source_cleanup
+      - --pidfile=/tmp/celery-worker.pid
+      - --loglevel=INFO
+    stop_grace_period: 420s
 
   model-proxy:
     <<: *backend-runtime

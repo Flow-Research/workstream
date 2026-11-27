@@ -17,8 +17,8 @@ from tests.architecture_ast import imported_symbols_and_calls
 BACKEND_ROOT = Path(__file__).parents[1]
 APP_ROOT = BACKEND_ROOT / "app"
 ARTIFACT_OPERATIONS = APP_ROOT / "interfaces" / "artifact_operations.py"
-SUBMISSION_PREPARATION_API = (
-    APP_ROOT / "modules" / "artifacts" / "api" / "submission_preparation.py"
+SUBMISSION_INTAKE_API = (
+    APP_ROOT / "modules" / "artifacts" / "api" / "submission_intake.py"
 )
 SUBMISSION_ADMISSION_API = APP_ROOT / "modules" / "artifacts" / "api" / "submission_admission.py"
 CHECKER_OUTPUT_CUSTODY_API = APP_ROOT / "modules" / "checkers" / "api" / "output_custody.py"
@@ -33,6 +33,7 @@ AGENT_COMPOSITION_ROOT = APP_ROOT / "adapters/project_agents/__init__.py"
 GUIDE_PARSER_COMPOSITION_ROOT = APP_ROOT / "adapters/guide_document_tools/__init__.py"
 OBSERVABILITY_COMPOSITION_ROOT = APP_ROOT / "adapters" / "observability.py"
 GITHUB_COMPOSITION_ROOT = APP_ROOT / "adapters" / "github" / "__init__.py"
+FEEDBACK_EMAIL_COMPOSITION_ROOT = APP_ROOT / "adapters" / "submission_feedback_email.py"
 AGENT_ADAPTER_MODULES = {
     "app.adapters.project_agents.manager_authored",
     "app.adapters.project_agents.omnicore_agent",
@@ -76,10 +77,11 @@ INTERNAL_ADMISSION_TYPES = {
     "ArtifactAdmissionResult",
     "CheckerOutputArtifactAdmissionRequest",
     "GuideArtifactAdmissionRequest",
-    "SubmissionBundleArtifactAdmissionRequest",
 }
 
 RETIRED_CONTRIBUTOR_INTAKE_NAMES = {
+    "SubmissionBundleArtifactAdmissionRequest",
+    "SubmissionBundlePreparedCustody",
     "ArtifactUploadItem",
     "ArtifactUploadSession",
     "ContributorArtifactAdmissionRequest",
@@ -90,7 +92,9 @@ RETIRED_CONTRIBUTOR_INTAKE_NAMES = {
     "lock_upload_session",
     "_contributor_facts",
 }
-PROVIDER_METHODS = {"put", "observe_put_result", "open", "head"}
+PROVIDER_METHODS = {"put", "observe_put_result", "open", "head", "begin_source_upload",
+                    "upload_source_part", "complete_source_upload", "open_source",
+                    "observe_source_upload", "observe_sealed_source", "discover_source_uploads", "request_source_abort", "source_upload_parts_absent"}
 CONCRETE_ADAPTER_MODULES = {
     "app.adapters.artifacts.local",
     "app.adapters.artifacts.s3_compatible",
@@ -172,8 +176,7 @@ def test_only_canonical_admission_backed_contributor_intake_routes_are_composed(
     assert not {path for path in paths if any(fragment in path for fragment in forbidden_fragments)}
     preparation_path = "/api/v1/tasks/{task_id}/submission-bundle-preparations"
     project_preparations = "/api/v1/projects/{project_id}/submission-bundle-preparations"
-    # Contributors read their own preparations back and Project Managers list a
-    # project's; only the task POST prepares.
+    # Retained preparations remain read-only; new ZIP intake uses task submissions.
     assert {path for path in paths if "submission-bundle" in path} == {
         preparation_path,
         f"{preparation_path}/{{preparation_id}}",
@@ -186,11 +189,8 @@ def test_only_canonical_admission_backed_contributor_intake_routes_are_composed(
         if "submission-bundle" in path
         for method in operations
         if method != "parameters"
-    } == {"post", "get"}
-    assert "post" not in paths[f"{preparation_path}/{{preparation_id}}"]
-    preparation = paths[preparation_path]["post"]
-    assert preparation["security"]
-    assert preparation["x-workstream-action-id"] == "artifact.submission_bundle.prepare"
+    } == {"get"}
+    assert paths[preparation_path]["get"]["security"]
 
     creation_path = "/api/v1/tasks/{task_id}/submissions"
     assert {
@@ -253,12 +253,17 @@ def test_only_artifact_custody_services_own_provider_execution() -> None:
             node.name: node
             for node in tree.body
             if isinstance(node, ast.ClassDef)
-            and node.name in {
+            and (node.name in {
                 "ArtifactStorageOrchestrator",
                 "CheckerArtifactOutputService",
                 "ScopedGuideDocumentGrant",
                 "PostSubmissionMaterializer",
-            }
+            } or (node.name == "ForegroundSourceUpload"
+                  and path == APP_ROOT / "modules/artifacts/intake/foreground_upload.py")
+                or (node.name == "_PreSubmitSourceGrant"
+                    and path == APP_ROOT / "modules/artifacts/selected_pre_submit_execution.py")
+                or (node.name == "AcceptedSubmissionFinalization"
+                    and path == APP_ROOT / "modules/artifacts/intake/finalization.py"))
         }
         for node in ast.walk(tree):
             if (
@@ -283,10 +288,13 @@ def test_only_artifact_custody_services_own_provider_execution() -> None:
                     in {
                         "CheckerArtifactOutputService",
                         "ScopedGuideDocumentGrant",
-                        "PostSubmissionMaterializer",
                     }
                     and node.func.attr != "open"
-                ):
+                ) or (owner.name == "ForegroundSourceUpload" and node.func.attr not in {
+                    "begin_source_upload", "complete_source_upload", "observe_source_upload",
+                }) or (owner.name == "_PreSubmitSourceGrant" and node.func.attr != "open_source"
+                ) or (owner.name == "PostSubmissionMaterializer" and node.func.attr not in {"open", "open_source"}
+                ) or (owner.name == "AcceptedSubmissionFinalization" and node.func.attr != "observe_sealed_source"):
                     violations.append(f"{path.relative_to(BACKEND_ROOT)} calls {node.func.attr}")
     assert violations == []
 
@@ -368,10 +376,11 @@ def _assert_concrete_adapter_composition(
             in {
                 "LocalStorageAdapter",
                 "S3CompatibleArtifactStore",
-                "UnixSocketExternalCheckerAdapter",
-                "UnixSocketTrustedIntakeAdapter",
+                "RemoteTlsExternalCheckerAdapter",
+                "RemoteTlsTrustedIntakeAdapter",
                 "OpenAIResponsesCheckerModelProvider",
                 "OpenRouterCheckerModelProvider",
+                "ResendSubmissionFeedbackEmailAdapter",
             }
         )
         agent_calls.extend(path for name in calls if name in AGENT_RUNTIME_CONSTRUCTORS)
@@ -381,17 +390,19 @@ def _assert_concrete_adapter_composition(
             if name in {"OTLPMetricExporter", "OTLPSpanExporter", "PeriodicExportingMetricReader"}
         )
     assert Counter(factory_calls) == {
-        # Immutable storage and ephemeral trusted intake are separate capabilities.
-        COMPOSITION_ROOT: 2,
+        # Storage, trusted intake and source cleanup are separate capabilities.
+        COMPOSITION_ROOT: 3,
         CHECKER_COMPOSITION_ROOT: 2,
         # Inference and retained-resource cleanup are distinct typed capabilities.
         AGENT_COMPOSITION_ROOT: 2,
         OBSERVABILITY_COMPOSITION_ROOT: 1,
         GUIDE_PARSER_COMPOSITION_ROOT: 1,
         GITHUB_COMPOSITION_ROOT: 1,
+        FEEDBACK_EMAIL_COMPOSITION_ROOT: 1,
     }
     assert Counter(adapter_calls) == {
         COMPOSITION_ROOT: 2, S3_ADAPTER_MODULE: 1, CHECKER_COMPOSITION_ROOT: 3,
+        FEEDBACK_EMAIL_COMPOSITION_ROOT: 1,
     }
     assert set(concrete_imports) == {
         COMPOSITION_ROOT,
@@ -417,8 +428,8 @@ def test_concrete_adapter_construction_has_one_composition_path(
         "from workstream_external_services import ExternalServiceAdapterFactory as factory\nfactory[object]('extra')\n",
         "from workstream_external_services import ExternalServiceAdapterFactory\nfactory: object = ExternalServiceAdapterFactory\nfactory[object]('extra')\n",
         "import workstream_external_services as external\nexternal.ExternalServiceAdapterFactory[object]('extra')\n",
-        "from app.adapters.artifacts.trusted_intake import UnixSocketTrustedIntakeAdapter as runtime\nruntime(configuration)\n",
-        "import app.adapters.artifacts.trusted_intake as intake\nintake.UnixSocketTrustedIntakeAdapter(configuration)\n",
+        "from app.adapters.artifacts.trusted_intake import RemoteTlsTrustedIntakeAdapter as runtime\nruntime(configuration)\n",
+        "import app.adapters.artifacts.trusted_intake as intake\nintake.RemoteTlsTrustedIntakeAdapter(configuration)\n",
         "from app.adapters.project_agents.openai_agent_sdk import OpenAIAgentSdkProjectGuideRuntime as runtime\nruntime(configuration)\n",
         "import app.adapters.project_agents.openai_agent_sdk as sdk\nsdk.OpenAIAgentSdkProjectGuideRuntime(configuration)\n",
         "from app.adapters.project_agents.omnicore_agent import OmniCoreAgentProjectGuideRuntime as runtime\nruntime(configuration)\n",
@@ -449,20 +460,18 @@ def test_composition_proof_rejects_aliased_factories_and_concrete_runtimes(
 
 
 def test_s3_adapter_exposes_only_required_immutable_object_operations() -> None:
-    """Keep list, delete, copy, ACL, and multipart behavior out of the provider."""
-    allowed = {"get_object", "head_object", "put_object"}
+    """Permit multipart only at typed source methods; preserve unrelated objects."""
+    allowed = {"get_object", "head_object", "put_object", "get_bucket_versioning",
+               "create_multipart_upload", "upload_part", "complete_multipart_upload",
+               "list_multipart_uploads", "abort_multipart_upload", "list_parts"}
     forbidden = {
-        "abort_multipart_upload",
-        "complete_multipart_upload",
         "copy_object",
-        "create_multipart_upload",
         "delete_object",
         "delete_objects",
         "list_buckets",
         "list_objects",
         "list_objects_v2",
         "put_object_acl",
-        "upload_part",
         "upload_part_copy",
     }
     called = {
@@ -475,6 +484,31 @@ def test_s3_adapter_exposes_only_required_immutable_object_operations() -> None:
     }
     assert called & forbidden == set()
     assert called & allowed == allowed
+    source_methods = {
+        "begin_source_upload": {"get_bucket_versioning", "create_multipart_upload"},
+        "upload_source_part": {"upload_part"},
+        "complete_source_upload": {"complete_multipart_upload", "head_object"},
+        "open_source": {"get_object"},
+        "observe_source_upload": {"head_object"},
+        "observe_sealed_source": {"head_object"},
+        "discover_source_uploads": {"list_multipart_uploads"},
+        "request_source_abort": {"abort_multipart_upload"},
+        "source_upload_parts_absent": {"list_parts"},
+    }
+    source_only = {"get_bucket_versioning", "create_multipart_upload", "upload_part",
+                   "complete_multipart_upload", "list_multipart_uploads", "abort_multipart_upload", "list_parts"}
+    store = next(node for node in _tree(S3_ADAPTER_MODULE).body
+                 if isinstance(node, ast.ClassDef) and node.name == "S3CompatibleArtifactStore")
+    for method in store.body:
+        if not isinstance(method, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        calls = {node.func.attr for node in ast.walk(method)
+                 if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute)
+                 and isinstance(node.func.value, ast.Name) and node.func.value.id == "client"}
+        if method.name in source_methods:
+            assert calls == source_methods[method.name]
+        else:
+            assert not calls & source_only
 
 
 def test_provider_methods_stay_inside_artifact_orchestration_and_adapters() -> None:
@@ -790,11 +824,8 @@ def _assert_checker_custody_consumers(
             "app/adapters/artifacts/__init__.py",
             "app/modules/artifacts/post_submit_materialization.py",
             "app/modules/artifacts/post_submit_selection.py",
-            "app/modules/artifacts/selected_pre_submit_admission.py",
-            "app/modules/artifacts/submission_materialization.py",
             "app/modules/checkers/default_checker.py",
             "app/modules/checkers/execution.py",
-            "app/modules/checkers/selected_pre_submit_execution.py",
         },
     }
     actual = {module: set() for module in expected}
@@ -858,12 +889,12 @@ def test_checker_custody_inventory_rejects_unregistered_import(
         _assert_checker_custody_consumers(injected_inventory)
 
 
-def test_submission_preparation_http_request_never_carries_prepared_authority() -> None:
-    tree = _tree(SUBMISSION_PREPARATION_API)
+def test_submission_intake_metadata_never_carries_prepared_authority() -> None:
+    tree = _tree(SUBMISSION_INTAKE_API)
     request_class = next(
         node
         for node in tree.body
-        if isinstance(node, ast.ClassDef) and node.name == "SubmissionBundlePreparationRequest"
+        if isinstance(node, ast.ClassDef) and node.name == "SubmissionIntakeMetadata"
     )
     fields = {
         node.target.id: _annotation_names(node.annotation)
@@ -871,10 +902,12 @@ def test_submission_preparation_http_request_never_carries_prepared_authority() 
         if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name)
     }
     assert "prepared_authorization" not in fields
-    assert fields["actor"] == {"ActorIdentityFacts"}
-    assert fields["request_id"] == {"UUID"}
-    assert fields["correlation_id"] == {"UUID"}
-    assert fields["idempotency_key"] == {"UUID"}
+    assert fields["task_id"] == {"UUID"}
+    assert fields["assignment_id"] == {"UUID"}
+    assert set(fields) == {"task_id", "assignment_id", "feedback"}
+    assert fields["feedback"] == {"str"}
+    assert "actor" not in fields
+    assert "idempotency_key" not in fields
 
 
 def test_prepared_handle_never_enters_public_async_or_provider_contracts() -> None:

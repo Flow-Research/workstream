@@ -61,9 +61,14 @@ def test_retiring_provider_proof_drops_only_its_tables_and_preserves_artifacts(
         before_tables, before_artifact = asyncio.run(inspect())
         command.upgrade(config, "0069_remove_artifact_proof")
         after_tables, after_artifact = asyncio.run(inspect())
+        command.upgrade(config, HEAD_REVISION)
+        joined_tables, joined_artifact = asyncio.run(inspect())
     assert before_tables - after_tables == {"artifact_provider_activations", "artifact_provider_probe_results"}
     assert after_tables - before_tables == set()
     assert before_artifact == after_artifact
+    assert joined_artifact == before_artifact
+    assert {"submission_intake_operations", "submission_source_cleanup_claims"} <= joined_tables
+    assert not {"artifact_provider_activations", "artifact_provider_probe_results"} & joined_tables
 
 
 def _alembic_config() -> Config:
@@ -111,6 +116,124 @@ async def _execute(database_url: str, statement: str, *arguments: object) -> Non
         await connection.execute(statement, *arguments)
     finally:
         await connection.close()
+
+
+def test_current_installed_head_admits_noop_upgrade(isolated_database_env, migration_lock):
+    """An already-upgraded database remains a supported installed starting point."""
+    before = asyncio.run(_database_snapshot(isolated_database_env))
+    assert before["versions"] == [HEAD_REVISION]
+    with migration_lock():
+        command.upgrade(_alembic_config(), "head")
+    assert asyncio.run(_database_snapshot(isolated_database_env)) == before
+
+
+@pytest.mark.parametrize(
+    ("archive", "predecessor", "expected_state"),
+    [
+        ("0031_routing_success_true_false", "0031_task_import_source", "claimed"),
+        ("0034_checker_retry_source", "0034_checker_replacement", "acknowledged"),
+    ],
+)
+def test_renewable_post_upgrade_preserves_retained_custody(
+    isolated_database_env, migration_lock, archive, predecessor, expected_state,
+):
+    """Upgrade populated 0095 rows with immutable and deferred guards active."""
+    from tests.historical_submission_fixtures import restore_archived_snapshot
+    from app.db import session as db_session
+
+    async def retained():
+        connection = await asyncpg.connect(isolated_database_env.replace("+asyncpg", ""))
+        try:
+            rows = {}
+            for table in (
+                "checker_runs", "outbox_events", "outbox_delivery_attempts", "audit_events",
+            ):
+                rows[table] = tuple(row["body"] for row in await connection.fetch(
+                    f"SELECT to_jsonb(r)::text body FROM public.{table} r ORDER BY body"
+                ))
+            return rows
+        finally:
+            await connection.close()
+
+    async def projected():
+        connection = await asyncpg.connect(isolated_database_env.replace("+asyncpg", ""))
+        try:
+            result = {}
+            removed = {
+                "checker_runs": "worker_lease_live_until",
+                "outbox_events": "claim_live_until",
+                "outbox_delivery_attempts": "claim_live_until,renew_decision_event_id",
+            }
+            for table in (
+                "checker_runs", "outbox_events", "outbox_delivery_attempts", "audit_events",
+            ):
+                projection = "to_jsonb(r)"
+                for column in removed.get(table, "").split(","):
+                    if column:
+                        projection += f"-'{column}'"
+                result[table] = tuple(row["body"] for row in await connection.fetch(
+                    f"SELECT ({projection})::text body FROM public.{table} r ORDER BY body"
+                ))
+            equality = await connection.fetchval("""
+                SELECT bool_and(worker_lease_live_until IS NOT DISTINCT FROM worker_lease_expires_at)
+                FROM public.checker_runs
+            """) and await connection.fetchval("""
+                SELECT bool_and(claim_live_until IS NOT DISTINCT FROM
+                  CASE WHEN delivery_state='claimed' THEN claim_expires_at ELSE NULL END)
+                FROM public.outbox_events
+            """) and await connection.fetchval("""
+                SELECT bool_and(claim_live_until=claim_expires_at
+                  AND renew_decision_event_id IS NULL)
+                FROM public.outbox_delivery_attempts
+            """)
+            states = tuple(row["delivery_state"] for row in await connection.fetch(
+                "SELECT delivery_state FROM public.outbox_events ORDER BY event_id"
+            ))
+            guards = await connection.fetch("""
+                SELECT tgname,tgenabled FROM pg_trigger WHERE tgname IN
+                  ('checker_run_custody','outbox_events_custody') ORDER BY tgname
+            """)
+            return result, equality, states, tuple((r["tgname"], r["tgenabled"]) for r in guards)
+        finally:
+            await connection.close()
+
+    config = _alembic_config()
+    with migration_lock():
+        asyncio.run(db_session.dispose_engine())
+        asyncio.run(_execute(isolated_database_env, "DROP SCHEMA public CASCADE; CREATE SCHEMA public"))
+        command.upgrade(config, predecessor)
+        asyncio.run(restore_archived_snapshot(isolated_database_env, archive))
+        command.upgrade(config, "0095_post_infrastructure_retry")
+        before = asyncio.run(retained())
+        assert all(before[table] for table in before)
+        async def predecessor_shape():
+            connection = await asyncpg.connect(isolated_database_env.replace("+asyncpg", ""))
+            try:
+                return (
+                    await connection.fetchval("""
+                        SELECT count(*) FROM public.outbox_events e
+                        JOIN public.outbox_delivery_attempts a ON a.event_id=e.event_id
+                        WHERE e.delivery_state='claimed' AND a.stage='invoked'
+                          AND e.claim_expires_at<clock_timestamp()
+                    """),
+                    await connection.fetchval("""
+                        SELECT count(*) FROM public.checker_runs
+                        WHERE status='infrastructure_failed' AND completed_at IS NOT NULL
+                    """),
+                )
+            finally:
+                await connection.close()
+        expired_unknown, terminal_checker = asyncio.run(predecessor_shape())
+        if expected_state == "claimed":
+            assert expired_unknown > 0
+        else:
+            assert terminal_checker > 0
+        command.upgrade(config, HEAD_REVISION)
+        after, equality, states, guards = asyncio.run(projected())
+    assert after == before
+    assert equality is True
+    assert expected_state in states
+    assert guards == (("checker_run_custody", b"O"), ("outbox_events_custody", b"O"))
 
 
 @asynccontextmanager
@@ -381,7 +504,7 @@ async def _migration_resume_custody(database_url: str, snapshot_id) -> dict[str,
             export = await connection.fetchrow(
                 """
                 SELECT to_jsonb(s)::text,to_jsonb(a)::text,
-                       ('{"email_observed_issued_at":null}'::jsonb || to_jsonb(l))::text,
+                       ('{"email_observed_issued_at":null,"email_verified":false}'::jsonb || to_jsonb(l))::text,
                        s.tableoid::bigint,a.tableoid::bigint,l.tableoid::bigint,
                        s.xmin::text,a.xmin::text,l.xmin::text
                 FROM public.contribution_export_snapshots s
@@ -418,13 +541,40 @@ async def _audit_validator_custody(database_url: str) -> list[tuple]:
 
 
 def test_v01_graph_has_one_root_and_head() -> None:
-    """Assert one complete linear migration chain from the v0.1 root to the current head."""
+    """Assert one joined migration history with both deployed parents retained."""
     config = _alembic_config()
     script = ScriptDirectory.from_config(config)
     revisions = list(script.walk_revisions())
 
     assert [revision.revision for revision in revisions] == [
         HEAD_REVISION,
+        "0094_project_archive_limits",
+        "0093_verified_email_observation",
+        "0092_submission_feedback",
+        "0091_qualified_aws_source",
+        "0090_merge_direct_storage",
+        "0089_observed_upload_cleanup",
+        "0088_unsealed_source_cleanup",
+        "0087_source_cleanup_candidates",
+        "0086_pending_checker_custody",
+        "0085_revision_deadline_error",
+        "0084_submission_source_binding",
+        "0083_accepted_revision",
+        "0082_policy_phase_cardinality",
+        "0081_operation_read_authority",
+        "0080_cleanup_decisions",
+        "0079_cleanup_authority",
+        "0078_submission_cleanup",
+        "0077_submission_recovery",
+        "0076_submission_delivery_retry",
+        "0075_source_post_custody",
+        "0074_submission_finalization",
+        "0073_submission_acceptance",
+        "0072_pre_invocation_receipts",
+        "0071_source_first_pre",
+        "0070_submission_intake_authority",
+        "0069_submission_intake_custody",
+        "0069_remove_artifact_proof",
         "0068_issuer_profile_email",
         "0067_canonical_json_restore_path",
         "0066_guide_check_specification",
@@ -494,8 +644,54 @@ def test_v01_graph_has_one_root_and_head() -> None:
         "0002_task_queue_authority",
         BASELINE_REVISION,
     ]
+    assert script.get_revision("0090_merge_direct_storage").down_revision == (
+        "0089_observed_upload_cleanup", "0069_remove_artifact_proof",
+    )
+    assert script.get_revision(HEAD_REVISION).down_revision == "0095_post_infrastructure_retry"
     assert revisions[-1].down_revision is None
     assert script.get_heads() == [HEAD_REVISION]
+
+
+async def test_qualified_aws_source_upgrade_only_changes_pre_profile_predicate(
+    isolated_database_env, migration_lock,
+) -> None:
+    """Compare the complete SQL guard across 0090 to 0091; retain other custody."""
+    from app.db import session as db_session
+    from tests.conftest import _drop_test_database_schema
+
+    signature = "public.require_selected_pre_source(public.selected_pre_submit_runs)"
+    url = isolated_database_env.replace("+asyncpg", "")
+
+    async def definition():
+        connection = await asyncpg.connect(url)
+        try:
+            return await connection.fetchval(
+                "SELECT pg_catalog.pg_get_functiondef(CAST($1 AS regprocedure))", signature,
+            )
+        finally:
+            await connection.close()
+
+    with migration_lock():
+        await db_session.dispose_engine()
+        await _drop_test_database_schema(isolated_database_env)
+        try:
+            await asyncio.to_thread(command.upgrade, _alembic_config(), "0090_merge_direct_storage")
+            before = await definition()
+            assert before.count("o.provider_profile NOT IN ('local-v2','minio-v1')") == 1
+            assert before.count("WHEN 'minio-v1' THEN 's3' END") == 1
+            await asyncio.to_thread(command.upgrade, _alembic_config(), "0091_qualified_aws_source")
+            after = await definition()
+            expected = before.replace(
+                "o.provider_profile NOT IN ('local-v2','minio-v1')",
+                "o.provider_profile NOT IN ('local-v2','minio-v1','aws-s3-v1')",
+            ).replace(
+                "WHEN 'minio-v1' THEN 's3' END",
+                "WHEN 'minio-v1' THEN 's3' WHEN 'aws-s3-v1' THEN 's3' END",
+            )
+            assert expected != before and after == expected
+        finally:
+            await _drop_test_database_schema(isolated_database_env)
+            await asyncio.to_thread(command.upgrade, _alembic_config(), HEAD_REVISION)
 
 
 async def test_guide_read_upgrade_targets_public_audit_with_shadow_search_path(
@@ -1197,13 +1393,74 @@ def test_neutral_runtime_upgrade_refuses_old_predispatch_inference(
 
 
 
-async def test_revision_upgrade_retains_policy_source_and_running_window(
+async def _assert_upgraded_incompatible_revision_blocked(h, tmp_path, database_url, monkeypatch, *, headers=None):
+    """Preserve zero-PRE history without admitting new work under incompatible locks."""
+    from sqlalchemy import text
+    from app.adapters.artifacts import ConfiguredSubmissionCommand
+    from app.modules.artifacts.intake.foreground_upload import ForegroundSourceUpload
+    from app.modules.artifacts.intake.repository import IntakeCustodyConflict
+    from tests.tasks.post_submit_routing.support import revision_archive
+    from tests.tasks.submission_dispatch.test_replacement_creation import _creation_snapshot
+    from tests.tasks.submission_dispatch.test_revision_capacity import (
+        _revision_http_runtime, _revision_upload_headers,
+    )
+    from tests.tasks.test_public_submission_intake import _client
+
+    async def intake_snapshot():
+        async with h.factory() as session:
+            return tuple([await session.scalar(text(
+                f"SELECT jsonb_agg(to_jsonb(r) ORDER BY {key}) FROM public.{table} r"
+            )) for table, key in (("submission_intake_operations", "id"),
+                                  ("submission_source_charges", "operation_id"),
+                                  ("selected_pre_submit_runs", "id"), ("audit_events", "id"))])
+
+    async def forbidden_body():
+        pytest.fail("incompatible locked policy consumed the request body")
+        yield b"unreachable"
+
+    async def forbidden_upload(*args, **kwargs):
+        pytest.fail("incompatible locked policy reached source upload")
+
+    command_errors, submit = [], ConfiguredSubmissionCommand._submit
+    async def observe_command(command, *args, **kwargs):
+        try:
+            return await submit(command, *args, **kwargs)
+        except IntakeCustodyConflict as exc:
+            command_errors.append(str(exc))
+            raise
+
+    async with h.factory() as session:
+        policy = await session.scalar(text("""
+            SELECT p.compiled_bundle FROM public.pre_submit_checker_policies p
+            JOIN public.workstream_tasks t ON t.locked_pre_submit_checker_policy_id=p.id
+            WHERE t.id=:task
+        """), {"task": h.request.task_id})
+        assert policy["entries"] == []
+    async with _client(h, monkeypatch, database_url) as client:
+        _, errors, calls = await _revision_http_runtime(
+            h, client, tmp_path, monkeypatch, revision_archive(h.data))
+        before, creation = await intake_snapshot(), await _creation_snapshot(h)
+        with monkeypatch.context() as patch:
+            patch.setattr(ConfiguredSubmissionCommand, "_submit", observe_command)
+            patch.setattr(ForegroundSourceUpload, "receive", forbidden_upload)
+            response = await client.post(
+                f"/api/v1/tasks/{h.request.task_id}/submissions",
+                headers=headers if headers is not None else _revision_upload_headers(h), content=forbidden_body())
+        assert response.status_code == 503, response.text
+        assert response.json()["error"]["code"] == "submission_infrastructure_unavailable"
+        assert command_errors == ["intake_requires_one_pre_and_post_checker"]
+        assert calls == [] and errors == []
+        assert await intake_snapshot() == before
+        assert await _creation_snapshot(h) == creation
+
+
+async def test_revision_upgrade_retains_window_and_blocks_incompatible_policy(
     tmp_path,
     isolated_database_env,
     migration_lock,
     monkeypatch,
 ):
-    """A genuine guarded 0047 window survives and remains usable on the new head."""
+    """A genuine 0047 window survives; incompatible locked policy cannot admit new work."""
     from sqlalchemy import select, text
     from app.adapters.tasks import task_post_submit_outcome
     from app.modules.tasks.revision.models import TaskRevisionPreparation
@@ -1217,12 +1474,6 @@ async def test_revision_upgrade_retains_policy_source_and_running_window(
         retained_revision_rows,
     )
     from tests.tasks.post_submit_routing.outcome_support import invoked_completion
-    from tests.tasks.post_submit_routing.support import revision_archive
-    from tests.tasks.submission_dispatch.test_replacement_creation import (
-        _create,
-        _creation_request,
-        _ready_replacement,
-    )
 
     with migration_lock():
         await _execute(isolated_database_env, "drop schema public cascade; create schema public")
@@ -1279,11 +1530,8 @@ async def test_revision_upgrade_retains_policy_source_and_running_window(
                 assert view.deadline_at == preparation.deadline_at
                 h.revision_preparation_id = preparation.id
                 h.revision_preparation_sha256 = preparation.preparation_sha256
-            prepared, admission_id = await _ready_replacement(h, revision_archive(h.data))
-            creation = _creation_request(h, prepared, admission_id)
-            successor = await _create(h, creation)
-            assert successor.submission_version == 2
-            assert successor.submission_id != h.created.submission_id
+            await _assert_upgraded_incompatible_revision_blocked(
+                h, tmp_path, isolated_database_env, monkeypatch)
             async with h.factory() as session:
                 retained = await retained_revision_rows(session, outcome.routing_manifest_id)
                 for owner in (
@@ -1843,7 +2091,7 @@ def test_root_upgrade_refuses_nonempty_unstamped_schema_before_product_ddl(
             "0004_task_context_authority",
             "Workstream v0.1 migrations cannot be downgraded; recreate the database",
         ),
-        (HEAD_REVISION, "Workstream v0.1 migrations cannot be downgraded; recreate the database"),
+        (HEAD_REVISION, "renewable POST custody is forward-only"),
     ],
 )
 def test_downgrade_refuses_without_mutation(
@@ -1932,3 +2180,46 @@ def test_fresh_head_installs_guide_creation_custody(
             await connection.close()
 
     assert asyncio.run(creation_guards()) == 3
+
+
+
+def test_intake_authority_upgrade_changes_only_two_audit_constraints(isolated_database_env, migration_lock):
+    config = _alembic_config()
+    with migration_lock():
+        asyncio.run(_execute(isolated_database_env, "drop schema public cascade; create schema public"))
+        command.upgrade(config, "0069_submission_intake_custody")
+        before = asyncio.run(build_manifest(isolated_database_env))
+        command.upgrade(config, "0070_submission_intake_authority")
+        after = asyncio.run(build_manifest(isolated_database_env))
+    changed = {key for key in before if before[key] != after[key]}
+    assert changed == {"constraints"}
+    old = {(row["table_name"], row["name"]): row for row in before["constraints"]}
+    new = {(row["table_name"], row["name"]): row for row in after["constraints"]}
+    assert old.keys() == new.keys()
+    assert {key for key in old if old[key] != new[key]} == {
+        ("audit_events", "ck_audit_events_authorization_action_evidence"),
+        ("audit_events", "ck_audit_events_authority_privacy_bounds"),
+    }
+    actions = new[("audit_events", "ck_audit_events_authorization_action_evidence")]["definition"]
+    assert "submission.intake.reserve" in actions and "task.submission_operation.read" in actions
+    assert "artifact.submission_bundle.prepare" in actions and "submission.create" in actions
+
+
+
+def test_operation_management_read_upgrade_preserves_other_schema(isolated_database_env, migration_lock):
+    config = _alembic_config()
+    with migration_lock():
+        asyncio.run(_execute(isolated_database_env, "drop schema public cascade; create schema public"))
+        command.upgrade(config, "0080_cleanup_decisions")
+        before = asyncio.run(build_manifest(isolated_database_env))
+        command.upgrade(config, "0081_operation_read_authority")
+        after = asyncio.run(build_manifest(isolated_database_env))
+    assert {key for key in before if before[key] != after[key]} == {"constraints"}
+    old = {(row["table_name"], row["name"]): row for row in before["constraints"]}
+    new = {(row["table_name"], row["name"]): row for row in after["constraints"]}
+    assert old.keys() == new.keys()
+    target = ("audit_events", "ck_audit_events_authorization_action_evidence")
+    assert {key for key in old if old[key] != new[key]} == {target}
+    addition = " OR action_id::text = 'project.task.submission_operation.read'::text AND permission_id::text = 'project.task.manage'::text"
+    assert new[target]["definition"].count(addition) == 2
+    assert new[target]["definition"].replace(addition, "") == old[target]["definition"]

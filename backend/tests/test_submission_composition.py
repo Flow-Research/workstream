@@ -1,8 +1,6 @@
-"""Focused behavior proof for hidden admission-backed Submission composition."""
+"""Accepted Submission composition and retained authorization fact contracts."""
 
-from app.core.config import get_settings
 
-from app.adapters.tasks import task_service
 
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
@@ -21,19 +19,6 @@ from app.modules.tasks.api import (
 from app.modules.tasks.submission_composition import TaskSubmissionCreationService
 from app.modules.authorization.catalogue import ActionId
 from app.modules.authorization.submission_consumption import parse_consumption_binding
-from app.api.deps.authorization import compose_hidden_submission_creation_command
-from app.adapters.tasks import TransactionalSubmissionCreationCommand
-from app.modules.artifacts.submission_bindings import SubmissionAdmissionConsumptionService
-from app.modules.artifacts.authorization import PreparedSubmissionBindingAuthorization
-from app.modules.authorization.prepared import (
-    PreparedSubmissionCreationAuthorization,
-)
-from app.modules.authorization.runtime import (
-    ActorKind,
-    ActorStatus,
-    HumanAuthorizationContext,
-    IdentityLinkStatus,
-)
 
 
 class _Session:
@@ -100,207 +85,61 @@ def _task():
     return SimpleNamespace(**values)
 
 
-@pytest.mark.parametrize(
-    ("actor_status", "link_status"),
-    [
-        (ActorStatus.SUSPENDED, IdentityLinkStatus.ACTIVE),
-        (ActorStatus.ACTIVE, IdentityLinkStatus.REVOKED),
-    ],
-)
 @pytest.mark.asyncio
-async def test_human_lifecycle_denial_precedes_task_state(
-    actor_status, link_status,
-):
+@pytest.mark.parametrize("failure", ["authority", "policy", "admission"])
+async def test_accepted_creation_denial_closes_authority_and_stops_dispatch(monkeypatch, failure):
+    from unittest.mock import Mock
+    from app.modules.artifacts.api.submission_finalization import SubmissionFinalizationAuthorityFacts
+
     request = _request()
-    context = HumanAuthorizationContext(
-        actor_profile_id=request.contributor_id,
-        actor_kind=ActorKind.HUMAN,
-        actor_status=actor_status,
-        identity_link_id=new_record_id(),
-        identity_link_status=link_status,
-        request_id=new_record_id(),
-        correlation_id=new_record_id(),
+    facts = SubmissionFinalizationAuthorityFacts(
+        operation_id=new_record_id(), project_id=new_record_id(),
+        task_id=request.task_id, assignment_id=request.assignment_id,
+        contributor_id=request.contributor_id, acceptance_decision_id=new_record_id(),
+        accepted_context_sha256="a" * 64, acceptance_receipt_sha256="b" * 64,
+        source_sha256="c" * 64, continuation_lease_id=new_record_id(),
+        continuation_generation=1, phase="claim",
     )
-    authority = PreparedSubmissionCreationAuthorization(object(), context)
-    service = TaskSubmissionCreationService(
-        _Session(),
-        authorization=authority,
-        evaluations=None, events=None,
-        admissions=None,
-        contexts=task_service(_Session(), settings=get_settings()),
-        submission_contexts=SimpleNamespace(lock_submission_context=AsyncMock(side_effect=AssertionError("TASK state was revealed"))),
+    monkeypatch.setattr(
+        "app.modules.tasks.accepted_submission.accepted_submission_context",
+        AsyncMock(return_value=_context(request)),
     )
-    with pytest.raises(SubmissionCreationUnavailable):
-        await service.create(request)
-
-
-@pytest.mark.asyncio
-async def test_foreign_contributor_denial_precedes_task_lookup():
-    request = _request()
-    context = HumanAuthorizationContext(
-        actor_profile_id=new_record_id(), actor_kind=ActorKind.HUMAN,
-        actor_status=ActorStatus.ACTIVE, identity_link_id=new_record_id(),
-        identity_link_status=IdentityLinkStatus.ACTIVE,
-        request_id=new_record_id(), correlation_id=new_record_id(),
-    )
-    service = TaskSubmissionCreationService(
-        _Session(),
-        authorization=PreparedSubmissionCreationAuthorization(object(), context),
-        evaluations=None, events=None,
-        admissions=None,
-        contexts=task_service(_Session(), settings=get_settings()),
-        submission_contexts=SimpleNamespace(lock_submission_context=AsyncMock(side_effect=AssertionError("foreign task was inspected"))),
-    )
-    with pytest.raises(SubmissionCreationUnavailable):
-        await service.create(request)
-
-
-@pytest.mark.asyncio
-async def test_denial_precedes_task_lock_and_all_mutation():
-    class Authority:
-        async def authorize(self, facts): raise SubmissionCreationUnavailable
-        async def prepare(self, facts): raise AssertionError("unreachable")
-        async def consume(self, handle, facts): raise AssertionError("unreachable")
-        def close(self, handle): raise AssertionError("unreachable")
-
-    service = TaskSubmissionCreationService(
-        _Session(),
-        authorization=Authority(),
-        evaluations=None, events=None,
-        admissions=None,
-        contexts=task_service(_Session(), settings=get_settings()),
-        submission_contexts=SimpleNamespace(lock_submission_context=AsyncMock(side_effect=AssertionError("TASK state was revealed"))),
-    )
-    with pytest.raises(SubmissionCreationUnavailable):
-        await service.create(_request())
-
-
-@pytest.mark.parametrize("revocation", ["identity_link_revoked", "submitter_grant_missing"])
-@pytest.mark.asyncio
-async def test_fresh_authority_denial_precedes_art_and_mutation(revocation):
-    request = _request()
-    events = []
-
-    class Authority:
-        async def authorize(self, facts): pass
-        async def prepare(self, facts):
-            events.append(revocation)
-            raise SubmissionCreationUnavailable("submission creation is unavailable")
-        async def consume(self, handle, facts): raise AssertionError("unreachable")
-        def close(self, handle): raise AssertionError("unreachable")
-
-    class Admissions:
-        async def consume(self, value):
-            raise AssertionError("ART admission state was inspected")
-
-    service = TaskSubmissionCreationService(
-        _Session(),
-        authorization=Authority(),
-        evaluations=None, events=None,
-        admissions=Admissions(),
-        contexts=task_service(_Session(), settings=get_settings()),
-        submission_contexts=SimpleNamespace(lock_submission_context=AsyncMock(return_value=_context(request))),
-    )
-    persisted = []
-
-    class Repository:
-        async def get_task(self, task_id, **kwargs): return _task()
-        async def get_latest_submission_for_task(self, task_id): return None
-        async def add_submission(self, submission): persisted.append(submission)
-
-    service._repository = Repository()
-    # This test isolates authority sequencing, not policy validation behavior.
-    service._contexts = SimpleNamespace(_load_locked_task_context=AsyncMock())
-    with pytest.raises(SubmissionCreationUnavailable):
-        await service.create(request)
-    assert events == [revocation]
-    assert persisted == []
-
-
-@pytest.mark.asyncio
-async def test_invalid_admission_result_denies_before_lineage_and_final_authority():
-    request = _request()
-    events = []
-
-    class Authority:
-        async def authorize(self, facts): events.append("authorize")
-        async def prepare(self, facts):
-            events.append("prepare")
-            return "prepared"
-        async def consume(self, handle, facts): events.append("final")
-        def close(self, handle): assert handle == "prepared"
-
-    class Admissions:
-        async def consume(self, value):
-            events.append("art")
-            return SimpleNamespace(binding_id=None, content_id=new_record_id())
-
-    service = TaskSubmissionCreationService(
-        _Session(),
-        authorization=Authority(),
-        evaluations=None, events=None,
-        admissions=Admissions(),
-        contexts=task_service(_Session(), settings=get_settings()),
-        submission_contexts=SimpleNamespace(lock_submission_context=AsyncMock(return_value=_context(request))),
-    )
-    persisted = []
-
-    class Repository:
-        async def get_task(self, task_id, **kwargs): return _task()
-        async def get_latest_submission_for_task(self, task_id): return None
-        async def add_submission(self, submission): persisted.append(submission)
-
-    service._repository = Repository()
-    # This test isolates ART result validation, not policy validation behavior.
-    service._contexts = SimpleNamespace(_load_locked_task_context=AsyncMock())
-    with pytest.raises(SubmissionCreationUnavailable, match="submission creation is unavailable"):
-        await service.create(request)
-    assert events == ["authorize", "prepare", "art"]
-    assert len(persisted) == 1
-    assert persisted[0].artifact_binding_id is None
-
-
-def test_hidden_composition_uses_both_active_authority_adapters() -> None:
-    session = SimpleNamespace()
-    context = SimpleNamespace()
-    command = compose_hidden_submission_creation_command(
-        session, context, request_id=new_record_id(), correlation_id=new_record_id()
-    )
-    assert type(command) is TransactionalSubmissionCreationCommand
-    assert type(command._authorization) is PreparedSubmissionCreationAuthorization
-    assert type(command._admissions) is SubmissionAdmissionConsumptionService
-    assert type(command._admissions._authorization) is PreparedSubmissionBindingAuthorization
-
-
-@pytest.mark.asyncio
-async def test_policy_failure_closes_prepared_authority_before_any_submission_or_art_write():
-    request = _request()
     authority = SimpleNamespace(
-        authorize=AsyncMock(), prepare=AsyncMock(return_value=object()),
-        consume=AsyncMock(), close=lambda handle: closed.append(handle),
+        prepare=AsyncMock(return_value=object()), consume=AsyncMock(), close=Mock(),
     )
-    closed = []
-    admissions = SimpleNamespace(consume=AsyncMock())
+    admissions = SimpleNamespace(consume=AsyncMock(return_value=SimpleNamespace(binding_id=None)))
+    contexts = SimpleNamespace(_load_locked_task_context=AsyncMock(return_value=SimpleNamespace(facts=object())))
+    if failure == "authority":
+        authority.prepare.side_effect = SubmissionCreationUnavailable("authority denied")
+    elif failure == "policy":
+        contexts._load_locked_task_context.side_effect = SubmissionCreationUnavailable("policy denied")
     service = TaskSubmissionCreationService(
-        _Session(),
-        authorization=authority,
-        evaluations=None, events=None,
-        admissions=admissions,
-        contexts=SimpleNamespace(
-            _load_locked_task_context=AsyncMock(side_effect=ValueError("custody changed"))
-        ),
-        submission_contexts=SimpleNamespace(lock_submission_context=AsyncMock(return_value=_context(request))),
+        _Session(), admissions=admissions, contexts=contexts,
+        evaluations=SimpleNamespace(reserve_current_evaluation=AsyncMock()),
+        events=SimpleNamespace(append=AsyncMock()),
     )
     service._repository = SimpleNamespace(
         get_task=AsyncMock(return_value=_task()), add_submission=AsyncMock(),
         get_latest_submission_for_task=AsyncMock(return_value=None),
     )
-    with pytest.raises(ValueError, match="custody changed"):
-        await service.create(request)
-    assert closed == [authority.prepare.return_value]
-    service._repository.add_submission.assert_not_awaited()
-    admissions.consume.assert_not_awaited()
+    with pytest.raises(SubmissionCreationUnavailable):
+        await service.create_accepted(request, authority_facts=facts,
+            finalization_authority=authority, snapshot_sha256="d" * 64,
+            eligible_status="in_progress", remediation_id=None)
     authority.consume.assert_not_awaited()
+    service._evaluations.reserve_current_evaluation.assert_not_awaited()
+    service._events.append.assert_not_awaited()
+    if failure == "authority":
+        authority.close.assert_not_called()  # No prepared handle was issued.
+        contexts._load_locked_task_context.assert_not_awaited()
+    else:
+        authority.close.assert_called_once_with()
+    if failure == "admission":
+        service._repository.add_submission.assert_awaited_once()
+        assert service._repository.add_submission.await_args.args[0].artifact_binding_id is None
+    else:
+        service._repository.add_submission.assert_not_awaited()
+        admissions.consume.assert_not_awaited()
 
 
 def test_task_and_assignment_policy_facts_reject_substitution():

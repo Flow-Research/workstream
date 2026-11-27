@@ -4,6 +4,8 @@ from uuid import UUID, uuid4
 
 from sqlalchemy import select
 
+from tests.checkers.external.support import pre_registry_spec, post_registry_spec
+
 from app.adapters.artifacts import guide_document_manifest_port
 from app.adapters.auth import (
     artifact_policy_projection_authorization,
@@ -51,7 +53,7 @@ async def create_unified_submission_policy(
     snapshot_id,
     *,
     proposal=None,
-    post_submit_registry_spec=None,
+    post_submit_registry_spec=post_registry_spec(),
     document_access_factory=None,
 ):
     """Project the actual scripted result, with no manual policy row replacement."""
@@ -173,8 +175,8 @@ async def create_standalone_unified_policy(
     contribution_awards=(),
     human_review_required=True,
     max_revision_rounds=2,
-    pre_submit_registry_spec=None,
-    post_submit_registry_spec=None,
+    pre_submit_registry_spec=pre_registry_spec(),
+    post_submit_registry_spec=post_registry_spec(),
     post_submit_configuration_setup=None,
     post_submit_configurations_setup=None,
     post_submit_specification=None,

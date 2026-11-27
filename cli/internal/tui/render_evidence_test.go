@@ -67,10 +67,8 @@ func renderFixture(t *testing.T, screen string) (*Model, *fakeClient) {
 		m.section = 2
 		description := "One row per conclusion, with source section, page and evidence strength."
 		m.intake = &api.SubmissionRequirements{TaskID: taskID, ProjectID: projectID, GuideVersion: "research-guide",
-			RequiredPacketFields:    []string{"summary", "attestation"},
 			RequiredArtifacts:       []api.ArtifactRequirement{{Key: "matrix", Path: "evidence-matrix.csv", Required: true, HashRequired: true, Description: &description}, {Key: "methodology", Path: "methodology.md", Required: true, HashRequired: true}},
 			RequiredEvidence:        []api.EvidenceRequirement{{Key: "sources", Label: "Source citation index", Required: true, HashRequired: true}},
-			AttestationTerms:        []string{"I have distinguished supplied evidence from my own interpretation."},
 			MaximumPackageSizeBytes: big.NewInt(10485760), Packaging: api.PackagingRequirements{PackageRequired: true, AllowedPackageFormats: []string{"zip"}}}
 		return m, f
 	}
@@ -81,7 +79,8 @@ func renderFixture(t *testing.T, screen string) (*Model, *fakeClient) {
 		return m, f
 	}
 	m.tab, m.section = submissions, 0
-	m.submission = &api.SubmissionHistory{ID: submissionID, Task: taskID, Version: big.NewInt(1), Status: "review_pending", Summary: "Evidence matrix and methodology for the coastal flood warning study", SubmittedAt: "2026-10-26T13:58:02Z", FindingCounts: api.SubmissionFindingCounts{Blocking: big.NewInt(0), Warning: big.NewInt(1), CoverageIncomplete: big.NewInt(0)}, Evidence: []api.SubmissionEvidence{{ID: findingID, Type: "document", Label: "Methodology and citation matrix", Size: big.NewInt(18520)}}}
+	summary := "Evidence matrix and methodology for the coastal flood warning study"
+	m.submission = &api.SubmissionHistory{ID: submissionID, Task: taskID, Version: big.NewInt(1), Status: "review_pending", Summary: &summary, SubmittedAt: "2026-10-26T13:58:02Z", FindingCounts: api.SubmissionFindingCounts{Blocking: big.NewInt(0), Warning: big.NewInt(1), CoverageIncomplete: big.NewInt(0)}, Evidence: []api.SubmissionEvidence{{ID: findingID, Type: "document", Label: "Methodology and citation matrix", Size: big.NewInt(18520)}}}
 	if screen == "submission" {
 		return m, f
 	}

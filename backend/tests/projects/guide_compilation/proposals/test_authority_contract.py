@@ -122,10 +122,13 @@ async def test_proposal_owner_requires_clean_caller_root_transaction(patch):
 def test_manager_commands_reject_unknown_server_owned_fields(model, extra):
     from pydantic import ValidationError
 
+    from tests.checkers.external.test_policy import _entry, _attachment
+    pre = _attachment(_entry("project.pre", "pre_submit"), "intake")
+    post = _attachment(_entry("project.post", "post_submit"), "quality")
     with pytest.raises(ValidationError, match="Extra inputs"):
         model(
             target=GuideProposalTarget(**target_values()), idempotency_key=uuid4(),
-            **({"pre_submit_attachments": (), "post_submit_attachments": ()}
+            **({"pre_submit_attachments": (pre,), "post_submit_attachments": (post,)}
                if model is GuideProposalApproval else {}),
             **extra,
         )

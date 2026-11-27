@@ -14,16 +14,15 @@ from jsonschema import (  # type: ignore[import-untyped]
 )
 from mcp.types import CallToolResult, ContentBlock, TextContent, Tool, ToolAnnotations
 
-from workstream_mcp.errors import adapter_failure
+from workstream_mcp.errors import SafeFailure, adapter_failure
 from workstream_mcp.http_gateway import WorkstreamGateway
-from workstream_mcp.limits import SUBMISSION_BUNDLE_MAX_BYTES
+from workstream_mcp.limits import SUBMISSION_BUNDLE_MAX_BASE64_CHARS, SUBMISSION_BUNDLE_MAX_BYTES
 from workstream_mcp.schemas import (
     TASK_EXECUTION_INPUT_SCHEMAS,
     task_execution_output_schema,
 )
 
 _DESCRIPTIONS = {
-    "preparation_create": "Prepare and check one bounded submission ZIP.",
     "preparations_list": "List submission-bundle preparations for one task.",
     "preparation_get": "Read one submission-bundle preparation.",
     "task_get": "Read one task available to the current contributor.",
@@ -32,8 +31,26 @@ _DESCRIPTIONS = {
     "task_release": "Release one screened task to the contributor queue.",
     "task_claim": "Claim and start one ready task atomically.",
     "task_work_context_get": "Read the current contributor work context for one task.",
-    "task_guide_document_content_get": "Read one assigned guide document as bounded bytes.",
-    "submission_create": "Create one submission from a ready admission.",
+    "task_assignment_get": (
+        "Read your assignment status, feedback and earned evidence by assignment ID."
+    ),
+    "project_contributor_guide_get": (
+        "Read the project's approved guide before claiming a task."
+    ),
+    "project_contributor_guide_document_get": (
+        "Read one approved project guide original as bounded bytes."
+    ),
+    "task_guide_document_content_get": (
+        "Read one ready or assigned task's locked guide original as bounded bytes."
+    ),
+    "submission_operation_get": (
+        "Read one authorized submission operation by operation ID or your idempotency key; "
+        "never resubmits."
+    ),
+    "submission_create": (
+        "Submit one base64 ZIP for initial work or revision. The MCP limit is 64 MiB "
+        "of raw ZIP bytes. A project can set a lower limit."
+    ),
     "task_submissions_list": "List the current contributor's submissions for one task.",
     "submission_get": "Read one submission visible to the current contributor.",
     "management_task_submissions_list": "List submissions for one managed project task.",
@@ -49,7 +66,6 @@ if tuple(_DESCRIPTIONS) != tuple(TASK_EXECUTION_INPUT_SCHEMAS):  # pragma: no co
 TOOL_NAMES = tuple(f"workstream_{name}" for name in _DESCRIPTIONS)
 _MUTATIONS = frozenset(
     {
-        "preparation_create",
         "task_screen",
         "task_release",
         "task_claim",
@@ -92,9 +108,17 @@ def _decode_bundle(arguments: dict[str, Any]) -> bytes | None:
         content = base64.b64decode(encoded, validate=True)
     except (ValueError, binascii.Error):
         return None
-    if not content or len(content) > SUBMISSION_BUNDLE_MAX_BYTES:
+    if not content:
         return None
     return content
+
+
+def _oversize_bundle() -> CallToolResult:
+    return SafeFailure(
+        "submission_archive_limit_exceeded", status=413,
+        message=("MCP accepts ZIPs up to 64 MiB of raw bytes. The CLI accepts up to 500 MiB. "
+                 "Project limits also apply."),
+    ).result()
 
 
 async def invoke(
@@ -107,16 +131,24 @@ async def invoke(
     if tool_name not in TOOL_NAMES:
         return adapter_failure("unknown_tool", status=404)
     name = tool_name.removeprefix("workstream_")
+    if name == "submission_create":
+        encoded = arguments.get("zip_base64")
+        if isinstance(encoded, str) and len(encoded) > SUBMISSION_BUNDLE_MAX_BASE64_CHARS:
+            return _oversize_bundle()
     try:
         _INPUT_VALIDATORS[name].validate(arguments)
     except ValidationError:
         return adapter_failure("invalid_tool_input", status=400)
 
     upload: bytes | None = None
-    if name == "preparation_create":
+    if name == "submission_create":
         upload = _decode_bundle(arguments)
         if upload is None:
-            return adapter_failure("invalid_tool_input", status=400)
+            return SafeFailure(
+                "invalid_tool_input", status=400, message="ZIP input must be nonempty base64",
+            ).result()
+        if len(upload) > SUBMISSION_BUNDLE_MAX_BYTES:
+            return _oversize_bundle()
     outcome = await gateway.task_execution_operation(
         name,
         bearer,
@@ -125,7 +157,10 @@ async def invoke(
         upload=upload,
     )
     if outcome.failure is not None:
-        return outcome.failure.result()
+        result = outcome.failure.result()
+        if outcome.failure.details is not None:
+            result.content.insert(0, TextContent(type="text", text=_UNTRUSTED_DATA_NOTICE))
+        return result
     data = outcome.data or {}
     content: list[ContentBlock] = [
         TextContent(type="text", text=json.dumps(data, separators=(",", ":")))

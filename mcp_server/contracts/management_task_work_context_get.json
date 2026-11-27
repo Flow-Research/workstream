@@ -1,5 +1,5 @@
 {
-  "canonical_sha256": "5f285419117ad3839e187997e3109795b0eee334f03e0cd32ca83e4b27c4415b",
+  "canonical_sha256": "08d63eb0a192e59832c2ad3199225c2e9bbfe72fd54d2cd75958cd623e34afda",
   "components": {
     "schemas": {
       "ApiError": {
@@ -424,6 +424,16 @@
               }
             ]
           },
+          "pending_submission_operation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PendingSubmissionOperation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "project_id": {
             "format": "uuid",
             "title": "Project Id",
@@ -573,6 +583,32 @@
           "task"
         ],
         "title": "ManagementTaskWorkContext",
+        "type": "object"
+      },
+      "PendingSubmissionOperation": {
+        "description": "Narrow current intake identity and stage, separate from Submission history.",
+        "properties": {
+          "operation_id": {
+            "format": "uuid",
+            "title": "Operation Id",
+            "type": "string"
+          },
+          "processing_stage": {
+            "enum": [
+              "receiving",
+              "pre_checking",
+              "finalization_pending",
+              "operationally_stalled"
+            ],
+            "title": "Processing Stage",
+            "type": "string"
+          }
+        },
+        "required": [
+          "operation_id",
+          "processing_stage"
+        ],
+        "title": "PendingSubmissionOperation",
         "type": "object"
       },
       "ProjectDisplayFacts": {
@@ -1148,6 +1184,6 @@
     "method": "GET",
     "openapi_version": "3.1.0",
     "path": "/api/v1/projects/{project_id}/tasks/{task_id}/work-context",
-    "repository_sha": "f0431385573eb53353c5ffc3c6cdb6a93d206b73"
+    "repository_sha": "c853743b689a46711c13e1d800cdd27ab8230ac2"
   }
 }

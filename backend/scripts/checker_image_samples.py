@@ -182,14 +182,20 @@ def sample_request(descriptor: Descriptor, sample: Sample, image_id: str, sample
     }
     if descriptor.phase == "pre_submit":
         identity.update(
-            prepared_generation_id=uuid4(),
+            operation_id=uuid4(),
+            source_sha256=sample_digest,
+            lease_id=uuid4(),
+            lease_generation=1,
             attempt_request_digest=sample_digest,
             effective_plan_sha256=sample_digest,
         )
         material.update(
             {
                 key: identity[key]
-                for key in ("prepared_generation_id", "attempt_id", "attempt_request_digest")
+                for key in (
+                    "operation_id", "source_sha256", "lease_id", "lease_generation",
+                    "attempt_id", "attempt_request_digest",
+                )
             }
         )
         material.update(archive_sha256=sample_digest, archive_byte_count=0)

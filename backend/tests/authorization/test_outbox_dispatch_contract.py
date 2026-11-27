@@ -36,6 +36,8 @@ def facts(phase=OutboxDispatchPhase.CLAIM):
         payload_digest='sha256:' + 'a' * 64, claim_generation=1, claim_owner='worker-1',
         claimed_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
         claim_expires_at=datetime(2026, 1, 1, 0, 5, tzinfo=timezone.utc),
+        live_until=(datetime(2026, 1, 1, 2, 0, tzinfo=timezone.utc)
+                    if phase is OutboxDispatchPhase.RENEW else None),
         outcome_digest=('sha256:' + 'b' * 64 if phase is OutboxDispatchPhase.FINALIZE else None),
     )
 
@@ -83,6 +85,21 @@ def test_dispatch_facts_validate_all_phases():
                 assert 'private' not in str(error.value) and error.value.__cause__ is None
     with pytest.raises(ValueError, match='lease is invalid'):
         replace(facts(), claimed_at=datetime.min.replace(tzinfo=timezone(timedelta(hours=1))))
+
+
+def test_renewal_binds_a_later_live_time_without_changing_original_claim():
+    original = facts(OutboxDispatchPhase.INVOKE)
+    renewed = facts(OutboxDispatchPhase.RENEW)
+    assert renewed.claimed_at == original.claimed_at
+    assert renewed.claim_expires_at == original.claim_expires_at
+    assert outbox_dispatch_resource_digest(renewed) != outbox_dispatch_resource_digest(
+        replace(renewed, live_until=renewed.live_until + timedelta(seconds=1))
+    )
+    for invalid in (None, original.claim_expires_at, original.claimed_at):
+        with pytest.raises(ValueError):
+            replace(renewed, live_until=invalid)
+    with pytest.raises(ValueError, match="renewal time"):
+        replace(original, live_until=renewed.live_until)
 
 
 @pytest.mark.parametrize("field", ["claimed_at", "claim_expires_at"])

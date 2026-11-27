@@ -20,6 +20,7 @@ import uuid
 
 
 ROOT = Path(__file__).resolve().parents[1]
+REVIEWED_TOOL_COUNT = 135
 API_FIXTURE = r'''
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import json
@@ -245,15 +246,46 @@ def main() -> None:
             with build_opener(ProxyHandler({})).open(request, timeout=15) as response:
                 return json.load(response)["result"]
 
-        def prove_calls(generation: str) -> None:
+        def prove_calls(generation: str) -> int:
             api = compose("ps", "--quiet", "api")
 
             def bearer(caller: str) -> str:
                 return run('docker', 'exec', api, 'python', '-c', TOKEN_FIXTURE, caller, env=env)
 
             tools = rpc("tools/list", {}, bearer('alice'))["tools"]
-            assert len(tools) == len({tool["name"] for tool in tools}) == 132
-            assert [tool["name"] for tool in tools][-23:] == ['workstream_projects_list', 'workstream_service_actor_create', 'workstream_task_import_batch_create', 'workstream_management_tasks_list', 'workstream_management_task_create', 'workstream_operational_tasks_list', 'workstream_task_import_batch_screen', 'workstream_task_import_batch_release', 'workstream_task_import_batch_get', 'workstream_management_task_get', 'workstream_management_task_locked_context_get', 'workstream_operational_task_locked_context_get', 'workstream_audit_task_locked_context_get', 'workstream_task_revision_context_repair', 'workstream_audit_task_evidence_get', 'workstream_project_model_profile_provision', 'workstream_project_model_budget_configure', 'workstream_project_model_usage_effect_get', 'workstream_project_model_recovery_child_create', 'workstream_task_import_source_declare', 'workstream_task_import_source_content_upload', 'workstream_task_import_source_content_get', 'workstream_task_import_source_get']
+            names = [tool["name"] for tool in tools]
+            assert len(names) == len(set(names)) == REVIEWED_TOOL_COUNT
+            assert {
+                "workstream_project_contributor_guide_get",
+                "workstream_project_contributor_guide_document_get",
+                "workstream_task_assignment_get",
+                "workstream_submission_operation_get",
+            } <= set(names)
+            assert names[-23:] == [
+                "workstream_projects_list",
+                "workstream_service_actor_create",
+                "workstream_task_import_batch_create",
+                "workstream_management_tasks_list",
+                "workstream_management_task_create",
+                "workstream_operational_tasks_list",
+                "workstream_task_import_batch_screen",
+                "workstream_task_import_batch_release",
+                "workstream_task_import_batch_get",
+                "workstream_management_task_get",
+                "workstream_management_task_locked_context_get",
+                "workstream_operational_task_locked_context_get",
+                "workstream_audit_task_locked_context_get",
+                "workstream_task_revision_context_repair",
+                "workstream_audit_task_evidence_get",
+                "workstream_project_model_profile_provision",
+                "workstream_project_model_budget_configure",
+                "workstream_project_model_usage_effect_get",
+                "workstream_project_model_recovery_child_create",
+                "workstream_task_import_source_declare",
+                "workstream_task_import_source_content_upload",
+                "workstream_task_import_source_content_get",
+                "workstream_task_import_source_get",
+            ]
             params = {"name": "workstream_profile_get", "arguments": {}}
             for caller in ("alice", "bob"):
                 result = rpc("tools/call", params, bearer(caller))
@@ -270,6 +302,7 @@ def main() -> None:
                 raise AssertionError('Unauthenticated MCP call did not reject')
             again = rpc("tools/call", params, bearer('alice'))
             assert again["structuredContent"]["display_name"] == "alice-" + generation
+            return len(names)
 
         write_fixture("initial")
         try:
@@ -299,9 +332,9 @@ def main() -> None:
             compose("up", "--detach", "--pull", "never", "--no-deps", "--force-recreate", "--wait", "--wait-timeout", "90", "mcp")
             current_api, current_mcp = healthy()
             assert current_api != original_api and current_mcp != original_mcp
-            prove_calls("replacement")
+            tools_count = prove_calls("replacement")
             print(json.dumps({"proof": "hosted MCP fixture transport", "image_id": image_id,
-                              "tools": 132, "restart": "passed", "replacement": "passed",
+                              "tools": tools_count, "restart": "passed", "replacement": "passed",
                               "stale_namespace_counterexample": "passed"}))
         finally:
             compose("down", "--volumes", "--remove-orphans", "--timeout", "10", timeout=45)

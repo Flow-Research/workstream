@@ -162,6 +162,18 @@ The confidential MCP client exchanges an MCP token into a short-lived API token
 for the same subject. Its secret is mounted only into MCP through
 `WORKSTREAM_MCP_EXCHANGE_SECRET_FILE`; it is not a backend or browser credential.
 
+## Workstream feedback email claim
+
+Fresh realm configuration includes the `account-email-verified` mapper on the
+`workstream-identity` client scope. For an existing realm, add that one mapper
+from the rendered `realm_config.py` output to the existing scope through the
+authenticated Keycloak administration interface. Preserve the other mappings
+and realm settings. The stock user-property mapper reads `emailVerified` as a
+boolean `email_verified` access-token claim alongside the existing signed
+`email` claim. Verify that a fresh token for a designated verified participant
+includes the email and boolean `true` for the Workstream audience. False or
+missing mailbox evidence leaves the participant ineligible for feedback email.
+
 ## Participant CLI and direct API access
 
 Flow Identity issues API credentials as well as MCP credentials. A participant

@@ -3,10 +3,10 @@
 from collections.abc import AsyncIterator
 from contextlib import AbstractAsyncContextManager
 from dataclasses import dataclass
-from typing import Literal, Protocol
+from typing import Protocol
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from app.modules.projects.api.guide_reads import ContributorGuideDocument
 
 
 @dataclass(frozen=True, slots=True)
@@ -18,24 +18,6 @@ class TaskGuideSelection:
     guide_version: str
     source_snapshot_id: UUID
     source_snapshot_hash: str
-
-
-class ContributorGuideDocument(BaseModel):
-    """Public original identity and task-scoped authorized read reference."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True, strict=True)
-    document_id: UUID
-    order: int = Field(ge=0)
-    label: str
-    media_type: Literal[
-        "application/pdf",
-        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-        "text/markdown",
-    ]
-    byte_count: int = Field(gt=0)
-    sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
-    read_reference: str
 
 
 @dataclass(frozen=True, slots=True)

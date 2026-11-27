@@ -46,6 +46,7 @@ def _request(*, submission_id=None) -> SubmissionAdmissionConsumptionRequest:
         pre_submit_policy_bundle_hash=_sha("3"),
     )
     return SubmissionAdmissionConsumptionRequest(
+        accepted_operation_id=new_record_id(),
         packet_sha256=SubmissionPacketView("Prepared summary", "Prepared attestation").sha256,
         admission_id=new_record_id(),
         submission_id=submission_id or new_record_id(),
@@ -72,6 +73,7 @@ def _lineage(request: SubmissionAdmissionConsumptionRequest):
         **policy_body, "policy_sha256": canonical_json_hash(policy_body),
     })
     admission = SimpleNamespace(
+        source_operation_id=str(request.accepted_operation_id),
         id=str(request.admission_id),
         status="ready",
         actor_profile_id=str(context.contributor_id),
@@ -175,6 +177,9 @@ async def test_ready_admission_creates_exact_binding_and_consumes_once() -> None
     authority = _Allow()
     result = await SubmissionAdmissionConsumptionService(session, authority).consume(request)
 
+    custody_call = session.execute.await_args_list[0]
+    assert "require_source_submission_admission" in str(custody_call.args[0])
+    assert custody_call.args[1] == {"id": admission.id}
     binding = session.add.call_args_list[0].args[0]
     assert result.status == "consumed"
     assert result.replayed is False
@@ -221,6 +226,25 @@ async def test_ready_admission_creates_exact_binding_and_consumes_once() -> None
     assert receipt.binding_id == str(result.binding_id)
     assert receipt.decision_id == str(result.binding_decision_id)
     assert result.binding_decision_id == authority.consume.return_value
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("operation", ["foreign", "missing", "historical_ready"])
+async def test_source_admission_rejects_foreign_or_missing_accepted_operation(operation):
+    request = _request()
+    admission, content = _lineage(request)
+    session, authority = _session(admission, content, None, datetime.now(UTC)), _Allow()
+    changed = replace(request, accepted_operation_id=new_record_id() if operation == "foreign" else None)
+    if operation == "historical_ready":
+        admission.source_operation_id = None
+    with pytest.raises(SubmissionAdmissionConsumptionError, match="submission_bundle_admission_unavailable"):
+        await SubmissionAdmissionConsumptionService(session, authority).consume(changed)
+    assert session.scalar.await_count == 1
+    session.execute.assert_not_awaited()
+    session.add.assert_not_called()
+    session.flush.assert_not_awaited()
+    authority.consume.assert_not_awaited()
+    assert admission.status == "ready" and admission.consumed_by_submission_id is None
 
 
 @pytest.mark.asyncio
@@ -285,9 +309,12 @@ async def test_broken_art_lineage_denies_without_staling_admission() -> None:
 
 
 @pytest.mark.asyncio
-async def test_matching_consumed_admission_replays_exact_binding() -> None:
+@pytest.mark.parametrize("historical", [False, True])
+async def test_matching_consumed_admission_replays_exact_binding(historical) -> None:
     request = _request()
     admission, content = _lineage(request)
+    if historical:
+        admission.source_operation_id = None
     admission.status = "consumed"
     decision_id = new_record_id()
     admission.consumed_by_submission_id = str(request.submission_id)
@@ -331,13 +358,7 @@ async def test_consumed_admission_rejects_different_submission() -> None:
 @pytest.mark.asyncio
 async def test_consumed_admission_rejects_wrong_submission_version() -> None:
     original = _request()
-    replay = SubmissionAdmissionConsumptionRequest(
-        packet_sha256=original.packet_sha256,
-        admission_id=original.admission_id,
-        submission_id=original.submission_id,
-        submission_version=2,
-        task_context=original.task_context,
-    )
+    replay = replace(original, submission_version=2)
     admission, content = _lineage(original)
     admission.status = "consumed"
     admission.consumed_by_submission_id = str(original.submission_id)

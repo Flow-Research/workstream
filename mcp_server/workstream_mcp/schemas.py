@@ -840,10 +840,10 @@ _TASK_TRANSITION_BODY = {
     },
     "additionalProperties": False,
 }
-_ASCII_PACKET_TEXT = {
+_SUBMISSION_FEEDBACK_TEXT = {
     "type": "string",
     "maxLength": 4_096,
-    "pattern": r"^[\u0020-\u007e]*$(?![\s\S])",
+    "pattern": r"^(?:[!-~](?:[ -~]*[!-~])?)?$(?![\s\S])",
 }
 _SHA256_INPUT = {
     "type": "string",
@@ -867,37 +867,6 @@ def _task_transition_input() -> dict[str, Any]:
 
 
 TASK_EXECUTION_INPUT_SCHEMAS: dict[str, dict[str, Any]] = {
-    "preparation_create": {
-        "type": "object",
-        "properties": {
-            "task_id": _UUID_INPUT,
-            "assignment_id": _UUID_INPUT,
-            "zip_base64": {
-                "type": "string",
-                "minLength": 4,
-                "maxLength": SUBMISSION_BUNDLE_MAX_BASE64_CHARS,
-                "pattern": r"^[A-Za-z0-9+/]*={0,2}$",
-            },
-            "idempotency_key": _IDEMPOTENCY_KEY_INPUT,
-            "summary": _ASCII_PACKET_TEXT,
-            "contributor_attestation": _ASCII_PACKET_TEXT,
-            "predecessor_submission_id": _UUID_INPUT,
-            "revision_preparation_id": _UUID_INPUT,
-            "revision_preparation_sha256": _SHA256_INPUT,
-        },
-        "required": ["task_id", "assignment_id", "zip_base64", "idempotency_key"],
-        "allOf": [
-            {
-                "if": {"required": ["revision_preparation_id"]},
-                "then": {"required": ["revision_preparation_sha256"]},
-            },
-            {
-                "if": {"required": ["revision_preparation_sha256"]},
-                "then": {"required": ["revision_preparation_id"]},
-            },
-        ],
-        "additionalProperties": False,
-    },
     "preparations_list": {
         "type": "object",
         "properties": {
@@ -934,30 +903,62 @@ TASK_EXECUTION_INPUT_SCHEMAS: dict[str, dict[str, Any]] = {
         "required": ["task_id"],
         "additionalProperties": False,
     },
+    "task_assignment_get": {
+        "type": "object",
+        "properties": {
+            "assignment_id": _UUID_INPUT,
+            "limit": _TASK_PAGE_PROPERTIES["limit"],
+            "cursor": {**_TASK_PAGE_PROPERTIES["cursor"], "maxLength": 512},
+        },
+        "required": ["assignment_id"],
+        "additionalProperties": False,
+    },
+    "project_contributor_guide_get": {
+        "type": "object",
+        "properties": {"project_id": _UUID_INPUT},
+        "required": ["project_id"],
+        "additionalProperties": False,
+    },
+    "project_contributor_guide_document_get": {
+        "type": "object",
+        "properties": {
+            "project_id": _UUID_INPUT, "guide_id": _UUID_INPUT, "document_id": _UUID_INPUT,
+        },
+        "required": ["project_id", "guide_id", "document_id"],
+        "additionalProperties": False,
+    },
     "task_guide_document_content_get": {
         "type": "object",
         "properties": {"task_id": _UUID_INPUT, "document_id": _UUID_INPUT},
         "required": ["task_id", "document_id"],
         "additionalProperties": False,
     },
+    "submission_operation_get": {
+        "type": "object",
+        "properties": {
+            "task_id": _UUID_INPUT,
+            "operation_id": _UUID_INPUT,
+            "idempotency_key": _IDEMPOTENCY_KEY_INPUT,
+        },
+        "required": ["task_id"],
+        "oneOf": [{"required": ["operation_id"]}, {"required": ["idempotency_key"]}],
+        "additionalProperties": False,
+    },
     "submission_create": {
         "type": "object",
         "properties": {
             "task_id": _UUID_INPUT,
-            "body": {
-                "type": "object",
-                "properties": {
-                    "admission_id": _UUID_INPUT,
-                    "assignment_id": _UUID_INPUT,
-                    "predecessor_submission_id": {"anyOf": [_UUID_INPUT, {"type": "null"}]},
-                    "summary": {"type": ["string", "null"]},
-                    "contributor_attestation": {"type": ["string", "null"]},
-                },
-                "required": ["admission_id", "assignment_id"],
-                "additionalProperties": False,
+            "assignment_id": _UUID_INPUT,
+            "zip_base64": {
+                "type": "string",
+                "minLength": 4,
+                "maxLength": SUBMISSION_BUNDLE_MAX_BASE64_CHARS,
+                "pattern": r"^[A-Za-z0-9+/]*={0,2}$",
             },
+            "idempotency_key": _IDEMPOTENCY_KEY_INPUT,
+            "feedback": _SUBMISSION_FEEDBACK_TEXT,
         },
-        "required": ["task_id", "body"],
+        "required": ["task_id", "assignment_id", "zip_base64", "idempotency_key"],
         "additionalProperties": False,
     },
     "task_submissions_list": {
@@ -1503,7 +1504,7 @@ def task_execution_output_schema(name: str) -> dict[str, Any]:
     """Load one reviewed task/submission response or the bounded binary projection."""
     if name not in TASK_EXECUTION_INPUT_SCHEMAS:
         raise ContractError("unknown task execution contract")
-    if name == "task_guide_document_content_get":
+    if name in {"task_guide_document_content_get", "project_contributor_guide_document_get"}:
         return GUIDE_DOCUMENT_CONTENT_OUTPUT_SCHEMA
     return _contract_output_schema(name)
 

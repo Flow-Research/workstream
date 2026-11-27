@@ -13,7 +13,8 @@ import pytest
 
 from app.adapters.checkers import external_checker_execution_factory
 from app.adapters.checkers.model_execution import ModelAwareExternalExecution
-from app.interfaces.external_checker_execution import ExternalCheckerMaterialGrant
+from app.core.identifiers import new_record_id
+from app.interfaces.external_checker_execution import ExternalCheckerExecutionOutcomeUnknown
 from workstream_external_services import ExternalServiceProtocolError
 from app.modules.checkers.api.external import (
     ExternalCheckerContractError,
@@ -30,6 +31,7 @@ from app.modules.checkers.api.forge_locator import (
 )
 from tests.checkers.external.support import (
     SHA,
+    empty_external_material_grant,
     execution_identity,
     execution_material,
     registry_entry,
@@ -66,7 +68,7 @@ def _request(*, locate=True, maximum_output_bytes=32768, output_document=None, m
     configuration = {"workstream_forge_facts_version": "v1"}
     if model:
         configuration.update(
-            model_profile_id=str(uuid4()), model_profile_version=1, model_profile_digest=SHA
+            model_profile_id=str(new_record_id()), model_profile_version=1, model_profile_digest=SHA
         )
     inputs = {"task_version": "v1"}
     if locate:
@@ -118,10 +120,10 @@ def _isolation(request):
         operating_system="linux",
         architecture="amd64",
         config_image_id=SHA,
-        runtime="runc",
-        isolation_mode="docker-dev",
-        sandbox_uid=65532,
-        sandbox_gid=65532,
+        runtime="smolvm",
+        isolation_mode="smol-microvm",
+        sandbox_uid=10001,
+        sandbox_gid=10001,
     )
 
 
@@ -132,8 +134,12 @@ async def _service(tmp_path, request, result, *, isolation=True):
 
     async def handle(reader, writer):
         try:
-            size = struct.unpack(">I", await reader.readexactly(4))[0]
-            received.append(json.loads(await reader.readexactly(size)))
+            observed = await read_fixture_native_request(
+                reader, writer, fixture_placement(request.registry.image_digest, SHA, callback_relay=True),
+            )
+            if observed is None:
+                return
+            received.append(observed)
             body = json.dumps(
                 dict(
                     protocol_version="external_checker_service.v1",
@@ -150,21 +156,25 @@ async def _service(tmp_path, request, result, *, isolation=True):
             await writer.wait_closed()
 
     server = await asyncio.start_unix_server(handle, socket)
+    from tests.checkers.external.test_remote_node import fixture_placement, read_fixture_native_request, remote_adapter_endpoint
+
     try:
-        yield (
-            external_checker_execution_factory(
-                socket_path=socket,
-                timeout_seconds=90.0,
-            ).create("unix_socket"),
-            received,
-        )
+        async with remote_adapter_endpoint(tmp_path, socket, model_proxy_socket_path=socket) as endpoint:
+            yield (
+                external_checker_execution_factory(
+                    **endpoint,
+                    timeout_seconds=90.0,
+                ).create("remote_tls"),
+                received,
+            )
     finally:
         server.close()
         await server.wait_closed()
+        socket.unlink(missing_ok=True)
 
 
-def _grant():
-    return ExternalCheckerMaterialGrant(grant_id="extract_" + "a" * 32, binding_digest=SHA)
+def _grant(request):
+    return empty_external_material_grant(request)
 
 
 @pytest.mark.parametrize("url", [None, "https://forge.example/o/r/pull/2", "汉" * 2048])
@@ -180,13 +190,17 @@ def test_locator_parser_accepts_bound_null_and_character_bounded_urls(url):
 async def test_locator_socket_uses_separate_operation_and_no_model_grant(tmp_path, url):
     request = _request()
     async with _service(tmp_path, request, _locator(request, url)) as (adapter, received):
-        response = await adapter.locate_forge_change(request, _grant())
+        grant = _grant(request)
+        response = await adapter.locate_forge_change(request, grant)
     assert response.result.change_url == url
     assert response.isolation is not None
     assert received[0]["operation"] == "locate_forge_change"
     assert received[0]["request"]["request_digest"] == request.request_digest
     assert received[0]["model_grant"] is None
-    assert received[0]["grant"] == {"grant_id": _grant().grant_id, "binding_digest": SHA}
+    assert received[0]["grant"] == {
+        "grant_id": grant.grant_id,
+        "binding_digest": grant.binding_digest,
+    }
 
 
 @pytest.mark.asyncio
@@ -207,8 +221,8 @@ async def test_locator_socket_uses_separate_operation_and_no_model_grant(tmp_pat
 async def test_locator_socket_rejects_resigned_substitutions_and_invalid_values(tmp_path, changes):
     request = _request()
     async with _service(tmp_path, request, _locator(request, **changes)) as (adapter, _):
-        with pytest.raises(ExternalServiceProtocolError):
-            await adapter.locate_forge_change(request, _grant())
+        with pytest.raises(ExternalCheckerExecutionOutcomeUnknown):
+            await adapter.locate_forge_change(request, _grant(request))
 
 
 @pytest.mark.asyncio
@@ -224,9 +238,8 @@ async def test_locator_socket_rejects_changed_digest_missing_isolation_and_compl
         (_work_result(request), True),
     ]:
         async with _service(tmp_path, request, value, isolation=isolation) as (adapter, _):
-            with pytest.raises(ExternalServiceProtocolError):
-                await adapter.locate_forge_change(request, _grant())
-        (tmp_path / "checker.sock").unlink()
+            with pytest.raises(ExternalCheckerExecutionOutcomeUnknown):
+                await adapter.locate_forge_change(request, _grant(request))
 
 
 @pytest.mark.asyncio
@@ -235,7 +248,7 @@ async def test_locator_socket_allows_infrastructure_failure_without_isolation(tm
     async with _service(
         tmp_path, request, _work_result(request, infrastructure=True), isolation=False
     ) as (adapter, _):
-        response = await adapter.locate_forge_change(request, _grant())
+        response = await adapter.locate_forge_change(request, _grant(request))
     assert response.result.outcome == "infrastructure_failed"
     assert response.isolation is None
 
@@ -246,12 +259,12 @@ async def test_socket_operation_rejects_marker_mismatches_and_locator_as_work_re
     ordinary = _request(locate=False)
     async with _service(tmp_path, ordinary, _locator(ordinary)) as (adapter, received):
         with pytest.raises(ExternalServiceProtocolError):
-            await adapter.execute(request, _grant())
+            await adapter.execute(request, _grant(request))
         with pytest.raises(ExternalServiceProtocolError):
-            await adapter.locate_forge_change(ordinary, _grant())
+            await adapter.locate_forge_change(ordinary, _grant(ordinary))
         assert received == []
-        with pytest.raises(ExternalServiceProtocolError):
-            await adapter.execute(ordinary, _grant())
+        with pytest.raises(ExternalCheckerExecutionOutcomeUnknown):
+            await adapter.execute(ordinary, _grant(ordinary))
     assert received[0]["operation"] == "execute"
 
 
@@ -266,9 +279,8 @@ async def test_locator_validates_locked_output_schema_and_output_byte_limit(tmp_
         with pytest.raises(ExternalCheckerContractError):
             parsed.validate_request(request)
         async with _service(tmp_path, request, value) as (adapter, _):
-            with pytest.raises(ExternalServiceProtocolError):
-                await adapter.locate_forge_change(request, _grant())
-        (tmp_path / "checker.sock").unlink()
+            with pytest.raises(ExternalCheckerExecutionOutcomeUnknown):
+                await adapter.locate_forge_change(request, _grant(request))
 
 
 def test_locator_request_requires_locked_version_phase_and_schema_declaration():
@@ -312,7 +324,7 @@ async def test_model_wrapper_locator_delegates_without_authorization_sessions_or
     monkeypatch.setattr("app.adapters.checkers.model_call_service", paid_calls)
     async with _service(tmp_path, request, _locator(request)) as (adapter, received):
         wrapped = ModelAwareExternalExecution(execution=adapter, sessions=sessions)
-        response = await wrapped.locate_forge_change(request, _grant())
+        response = await wrapped.locate_forge_change(request, _grant(request))
     assert response.result.change_url is None
     assert received[0]["model_grant"] is None
     sessions.assert_not_called()

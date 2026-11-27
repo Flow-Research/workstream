@@ -1,0 +1,12 @@
+{
+  "listen_host": "172.31.21.182",
+  "listen_port": 9443,
+  "client_name": "app.workstream.internal",
+  "socket_path": "/var/lib/workstream/checker-runtime/checker.sock",
+  "material_root": "/var/lib/workstream/checker-runtime/materials",
+  "model_proxy_socket_path": "/var/lib/workstream/checker-runtime/model-proxy.sock",
+  "tls_certificate_path": "/etc/workstream/runner-tls/server.crt",
+  "tls_private_key_path": "/etc/workstream/runner-tls/server.key",
+  "tls_ca_path": "/etc/workstream/runner-tls/ca.crt",
+  "session_timeout_seconds": 3700
+}

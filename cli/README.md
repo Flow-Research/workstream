@@ -7,7 +7,7 @@ administrative actor, identity-link and grant inspection and explicit writes,
 active-guide/intake-policy inspection,
 contributor work discovery, claim, locked guide documents and governing
 context/intake requirements, explicit batch import/screen/release, Finance
-policy management, explicit ZIP preparation/submission, checker findings,
+policy management, single-request ZIP submission and operation progress, checker findings,
 system-Operator checker registration, terminal recovery and uncertain-delivery reconciliation, and
 contribution-evidence exports and exact Audit Authority task reads:
 
@@ -215,10 +215,10 @@ the [terminal presentation contract](../docs/design/cli-terminal-experience.md).
 | `workstream operations checker retry-sources PROJECT_ID [--limit N] [--cursor TOKEN]` | `GET /api/v1/operations/projects/PROJECT_ID/checker-retry-sources` |
 | `workstream operations checker retry PROJECT_ID SOURCE_RUN_ID --reason TEXT --idempotency-key UUID` | `POST /api/v1/operations/projects/PROJECT_ID/checker-runs/SOURCE_RUN_ID/retry` |
 | `workstream operations delivery list PROJECT_ID [--limit N] [--cursor TOKEN]` | `GET /api/v1/operations/projects/PROJECT_ID/post-submit-deliveries` |
-| `workstream operations delivery reconcile PROJECT_ID EVENT_ID --reason TEXT --idempotency-key UUID` | `POST /api/v1/operations/projects/PROJECT_ID/post-submit-deliveries/EVENT_ID/reconcile` |
+| `workstream operations delivery reconcile PROJECT_ID EVENT_ID [--abandon-unknown] --reason TEXT --idempotency-key UUID` | `POST /api/v1/operations/projects/PROJECT_ID/post-submit-deliveries/EVENT_ID/reconcile` |
 | `workstream task ready PROJECT_ID` | `GET /api/v1/projects/PROJECT_ID/tasks/ready` |
-| `workstream task prepare TASK_ID --assignment UUID --file ZIP --idempotency-key UUID` (revision: add predecessor and exact preparation ID/SHA-256) | `POST /api/v1/tasks/TASK_ID/submission-bundle-preparations` |
-| `workstream task submit TASK_ID --assignment UUID --admission UUID` | `POST /api/v1/tasks/TASK_ID/submissions` |
+| `workstream task submit TASK_ID --assignment UUID --file ZIP --idempotency-key UUID` | `POST /api/v1/tasks/TASK_ID/submissions` |
+| `workstream task submission-operation TASK_ID --operation-id UUID` (or `--idempotency-key UUID`) | `GET /api/v1/tasks/TASK_ID/submission-operations` |
 | `workstream task submissions TASK_ID [--limit N] [--cursor TOKEN]` | `GET /api/v1/tasks/TASK_ID/submissions` |
 | `workstream submission show SUBMISSION_ID` | `GET /api/v1/submissions/SUBMISSION_ID` |
 | `workstream submission findings SUBMISSION_ID [--limit N] [--cursor TOKEN]` | `GET /api/v1/submissions/SUBMISSION_ID/checker-runs` |
@@ -234,7 +234,7 @@ the [terminal presentation contract](../docs/design/cli-terminal-experience.md).
 | `workstream operations task list PROJECT_ID [--limit N] [--cursor TOKEN]` | `GET /api/v1/operations/projects/PROJECT_ID/tasks` |
 | `workstream operations task locked-context PROJECT_ID TASK_ID` | `GET /api/v1/operations/projects/PROJECT_ID/tasks/TASK_ID/locked-context` |
 | `workstream task context TASK_ID` | `GET /api/v1/tasks/TASK_ID/work-context` |
-| `workstream task guide TASK_ID [--download DIR]` | Work context, then assigned-task `GET /api/v1/tasks/TASK_ID/guide/documents/DOCUMENT_ID/content` for downloads |
+| `workstream task guide TASK_ID [--download DIR]` | Work context and verified governing originals before or after claim |
 | `workstream task requirements TASK_ID` | `GET /api/v1/tasks/TASK_ID/submission-requirements` |
 | `workstream operations artifact bindings RESOURCE_TYPE RESOURCE_ID` | `GET /api/v1/operator/artifacts/bindings` |
 | `workstream operations artifact replicas CONTENT_ID` | `GET /api/v1/operator/artifacts/contents/CONTENT_ID/replicas` |
@@ -963,15 +963,16 @@ workstream project guide proposal PROJECT_ID GUIDE_ID COMPILATION_ID -o json > p
 jq '{target: .target, pre_submit_attachments: [], post_submit_attachments: [], acknowledged_warning_hashes: []}' proposal.json > approval.json
 # Read the findings. Edit approval.json to acknowledge only the exact displayed
 # warning_hashes you deliberately accept; the backend requires the complete order.
-# Add each selected registered image to the appropriate attachments array.
+# Add exactly one selected registered PRE image and one POST image.
 # Each attachment needs requirement_id, registry_entry_id,
-# registry_entry_digest and configuration. Empty arrays select no images.
+# registry_entry_digest and configuration. Empty or multiple selections are rejected.
 workstream project guide approve-pre PROJECT_ID GUIDE_ID COMPILATION_ID --input approval.json --idempotency-key APPROVAL_UUID -o json
 ```
 
 `--input` is a regular UTF-8 JSON file of at most 1 MiB containing the public
 `GuideProposalApprovalInput`, not the entire display package. It requires
-`target`, `pre_submit_attachments` and `post_submit_attachments`. Each attachment
+`target`, `pre_submit_attachments` and `post_submit_attachments`. Each phase must
+contain exactly one image attachment. Each attachment
 uses a human-authored requirement ID, the exact registry entry ID and digest,
 and a configuration object. Omitted `acknowledged_warning_hashes` means an empty list, never
 automatic acknowledgment. When replacing an earlier approval, supply both
@@ -1107,58 +1108,56 @@ including stored foreign-project concealment. Canonical retained prerequisites
 and Celery publication to an in-memory test broker do not prove distributed
 delivery, worker completion, live setup inference or deployed Flow behavior.
 
-## Prepare, submit and inspect contributor work
+## Submit and inspect contributor work
 
 ```sh
-workstream task prepare TASK_ID --assignment ASSIGNMENT_ID --file work.zip \
-  --idempotency-key CALLER_UUID --summary 'Completed work' --attestation 'My attestation'
-# If still pending, wait for server verification and explicitly repeat the same
-# preparation command, key, file bytes and packet. There is no polling GET.
-workstream task submit TASK_ID --assignment ASSIGNMENT_ID --admission READY_ADMISSION_ID \
-  --summary 'Completed work' --attestation 'My attestation'
-# For a checker-requested revision, inspect the current task context first.
-workstream task context TASK_ID --output json
-workstream task prepare TASK_ID --assignment ASSIGNMENT_ID --file revision.zip \
-  --predecessor SOURCE_SUBMISSION_ID --revision-preparation-id PREPARATION_ID \
-  --revision-preparation-sha256 "$PREPARATION_SHA256" \
-  --idempotency-key REVISION_KEY --summary 'Revised work'
-workstream task submit TASK_ID --assignment ASSIGNMENT_ID --admission READY_REVISION_ADMISSION_ID \
-  --predecessor SOURCE_SUBMISSION_ID --summary 'Revised work'
+workstream task submit TASK_ID --assignment ASSIGNMENT_ID --file work.zip \
+  --idempotency-key CALLER_UUID
+workstream task status ASSIGNMENT_ID
+# After correcting work, use the same command and a new key.
+workstream task submit TASK_ID --assignment ASSIGNMENT_ID --file revision.zip \
+  --idempotency-key REVISION_KEY --feedback 'Updated the examples.'
+# For exact request recovery, use the operation ID or the original key.
+workstream task submission-operation TASK_ID --idempotency-key CALLER_UUID
 workstream task submissions TASK_ID --limit 25
 workstream submission show SUBMISSION_ID
 workstream submission findings SUBMISSION_ID --limit 25
 workstream submission findings SUBMISSION_ID --run CHECKER_RUN_ID
 ```
 
-Preparation streams one nonempty regular ZIP (at most 500MiB compressed,
-524,288,000 bytes) to the public authenticated API. Server project limits can be
-smaller. It never creates a
-Submission, automatically retries or polls. A `ready` receipt supplies the
-admission for the separate submit command. Other statuses must not be interpreted
-as readiness. Before confirming a successful upload, the CLI checks file size,
-modification time and SHA-256 again; a changed source reports an uncertain outcome.
+Submit streams one nonempty regular ZIP, at most 500MiB compressed
+(524,288,000 bytes), through one authenticated request. Server project limits can
+be smaller. Inline PRE returns actionable findings or durable acceptance with an
+operation ID. Formal Submission creation and POST evaluation continue durably;
+acceptance of intake is not a governed acceptance of the work. The CLI ends after
+printing the response and never automatically resubmits or polls.
 
-Both commands accept optional `--summary`, `--attestation` and `--predecessor`.
-Revision preparation additionally requires the exact `revision_context.preparation_id`
-and `revision_context.preparation_sha256` from the authorized task context as
-`--revision-preparation-id` and `--revision-preparation-sha256`. Both flags are
-forbidden for initial preparation and are sent as preparation headers only; they
-are not part of the Submission JSON. Keep the pair unchanged for explicit
-preparation replay. A fresh server check rejects a stale pair after a rebase,
-deadline or source change; the CLI never selects a replacement automatically.
-Use the same packet for preparation, creation and explicit replay. The current
-preparation API transports text in headers: printable ASCII only, at most 64KiB
-per text field, with no leading/trailing whitespace. Unsupported text is rejected
-before dispatch, not rewritten. Omitted or explicitly empty text is supported;
-the server supplies warning-only defaults where applicable. The API owns all
-policy checks, predecessor/currentness rules and authorization.
+`task submission-operation` performs one read using exactly one selector. A key
+lookup is scoped to the current actor; managers can use an authorized operation
+ID. Nullable Submission/evaluation IDs remain null before finalization. The
+operation's processing stage, PRE feedback and next-action advice come from the
+server; current task status is contextual and may differ from a historical outcome.
 
-Submission creation is keyed by the exact admission and packet; there is no
-additional client-generated creation key. A lost or malformed write response
-exits 1 with `outcome_unknown: true`, empty stdout and a text-mode recovery hint.
-Inspect task history and explicitly replay only unchanged inputs. Do not generate
-a new preparation key simply because a response was lost. Each replay requires
-fresh server authority, including after a CLI restart.
+Use `task status ASSIGNMENT_ID` to see current work status, intake and evaluation
+feedback, revision deadline and terms, and accepted contribution evidence. The
+same assignment ID works throughout revisions and afterwards in the assignment
+history. API clients use `GET /api/v1/actors/me/assignments/{assignment_id}`.
+The status response includes the task ID for `task submit`. The backend selects
+the current predecessor and revision terms under lock. It refuses an attempt if
+eligibility or the selected terms change while intake is in progress.
+
+Optional `--feedback` is project feedback. The header accepts up to 4096 printable
+ASCII bytes without leading or trailing whitespace. Workstream preserves the
+exact supplied text. Feedback can be omitted on every submission and has no
+effect on intake or earning.
+Before confirming upload success, the CLI rechecks file size, modification time
+and SHA-256; a changed source reports an uncertain outcome.
+
+A lost or malformed write response exits 1 with `outcome_unknown: true`, empty
+stdout and a text-mode recovery hint. Inspect progress with the original actor
+and key. Any explicit replay must preserve task, assignment, key, ZIP bytes
+and optional feedback. Do not create a new key while the outcome
+is unknown. Every read or replay requires fresh server authority.
 
 Blocked pre-submission intake prints the validated contributor findings in error
 `details`; it creates no Submission. Infrastructure failures are not quality
@@ -1191,10 +1190,11 @@ eligible may claim a new assignment at round 0, including a previous claimant;
 there is no contributor-count limit. Human decision integration remains #554.
 
 
-The native process test uses real HTTP, PostgreSQL and local ART custody, with
-approved-policy/assignment prerequisites arranged by fixtures. It drives the real
-independent verifier directly; it does not certify distributed scheduling, S3 or
-the complete public guide-setup journey owned by PILOT #552.
+Built-process HTTP tests cover submission and progress response handling. Backend
+source-custody tests separately exercise PostgreSQL, PRE, finalization and POST
+routing. The older CLI real-API fixtures still require migration to the source-bound
+PRE path; these checks do not yet prove the complete CLI-to-worker journey,
+distributed scheduling, hosted S3 or public guide setup.
 
 ## Inspect an exact derived post-submission policy
 
@@ -1805,44 +1805,38 @@ not an empty successful result.
 
 Context returns contributor instructions, project/guide display facts, exact
 review/revision policy identities and contribution-policy version, plus the
-server's current assignment/action hints and `guide_documents`. An active own
-assignment receives the exact locked originals' IDs, order, labels, media types,
-sizes, SHA-256 commitments and task-scoped read references; ready unassigned
-browsing receives an empty document list. Task examples are never included.
+server's current assignment/action hints and `guide_documents`. Ready unassigned tasks and active own assignments expose their exact locked
+originals' IDs, order, labels, media types, sizes, SHA-256 commitments and
+task-scoped read references. Task examples are never included.
 For a task awaiting revision, the optional `revision_context` gives the current
 preparation ID and digest, source Submission, deadline, eligibility disposition
-and bounded change summary. It may be absent or null on other tasks. Use its
-exact preparation pair for a revision ZIP preparation; the read does not reserve
-or authorize later intake.
+and bounded change summary. It may be absent or null on other tasks. Use the shown deadline and terms to plan the next submission.
 Hints are observations, not authority
 or a claimability guarantee. The CLI never recomputes them or automatically
 executes a hinted action. Claim independently authorizes each request.
 
-Requirements expose the task's locked guide and intake rules: packet fields,
-artifact/evidence requirements, forbidden patterns, attestation, hash/manifest
+Requirements expose the task's locked guide and intake rules, including
+artifact and evidence requirements, forbidden patterns, hash and manifest
 requirements, storage-reference restrictions, size/entry limits and packaging.
 They are not a current-guide lookup, a checker verdict or permission to upload.
-These reads do not invoke the separate `task prepare`/`task submit` commands. Described
+These reads do not invoke `task submit`. Described
 paths and storage references are displayed only, never read, downloaded or executed.
 
-### Read the assigned guide
+### Read an approved guide
 
 ```sh
-workstream task guide TASK_ID --output json
-mkdir guide-documents
-workstream task guide TASK_ID --download guide-documents
+workstream project guide approved PROJECT_ID --output json
+mkdir project-guide task-guide
+workstream project guide approved PROJECT_ID --download project-guide
+workstream task guide TASK_ID --download task-guide
 ```
 
-This requires an active assignment and current exact-project Submitter authority.
-Each download reauthorizes independently; neither a cached list nor a read
-reference grants access. Workstream reads the task's locked snapshot, not the
-latest guide or drafts. A successor activation alone never changes its documents.
-Checker-requested revision preparation can atomically rebase the complete task
-and assignment context for the next attempt. Inspect `task context` for its
-frozen change summary and acknowledge the exact preparation pair when running
-`task prepare`; this guide download does not initiate a rebase. Covered-manager
-repair is a separate backend operation with no CLI command. Genuine human
-Review revision integration remains #554 work.
+A current exact-project Submitter grant allows reading the active approved
+project guide even when no tasks are ready. The task guide shows the exact
+version that governs an eligible ready task or your active assignment, including
+a retained version superseded by a new project guide. Each download checks
+authority independently and verifies the original. Guide reads never claim tasks
+or change revision terms. Use `task status` to see the current terms during revision.
 
 The API verifies the complete original against retained ART size/SHA-256 before
 responding. Missing, corrupt or wrong-namespace originals fail with
@@ -2064,10 +2058,19 @@ UUID key. Fresh backend authority and exact source/child guards decide whether
 one immutable reconciliation child may be appended. The CLI does not classify
 the original effect, invoke a checker, infer retry safety, or silently replay
 the write. On an uncertain response, JSON has `error.outcome_unknown: true`;
-text advises manual replay only with the unchanged project, event, reason and
-key. An existing child can later be active, acknowledged or held on exact
+text advises manual replay only with the unchanged project, event, action,
+reason and key. An existing child can later be active, acknowledged or held on exact
 replay. This is distinct from `operations checker retry`, which selects a
 known-terminal infrastructure-failed checker run.
+
+For a held request whose checker lease has expired and whose outcome remains
+unknown after investigation, an Operator can explicitly request one successor
+evaluation for the same submission and assignment. The original attempt retains
+its unknown outcome.
+
+```sh
+workstream operations delivery reconcile PROJECT_ID EVENT_ID --abandon-unknown --reason 'Confirmed expired attempt with no result' --idempotency-key UUID -o json
+```
 
 ## Inspect artifact custody and explicitly retry verification
 
@@ -2202,60 +2205,126 @@ or extra branch-protection setting is needed.
 
 `tests/journey/bootstrap.py` exercises the built CLI against a fresh migrated
 PostgreSQL database, real MinIO, a private Redis broker, prefork Celery workers
-and the real external checker service. It creates product prerequisites through
-public CLI operations. The documented local administrator bootstrap and lifecycle
-deployment transition are explicit deployment prerequisites, not fixture-created
-project, submission or acceptance records.
+(including exclusive finalization and source-cleanup queues), and one pinned
+remote TLS checker runner. It creates project, guide, task, assignment and
+submission prerequisites through public CLI operations. The local administrator
+bootstrap and lifecycle transition remain explicit deployment prerequisites.
+The script never starts a native checker socket or silently falls back to one.
 
-This drill currently targets a Linux Docker host whose daemon can bind-mount the
-same local scratch paths. Install the backend environment, Go, Rust, Docker and
-`redis-server`. Use the local PostgreSQL/MinIO prerequisites and proof-checker
-publication instructions in the [local agent loop](../docs/engineering/local-agent-loop.md)
-to generate `.local-agent-loop/checker-service.json`, `registry-pre.json` and
-`registry-post.json`. The drill starts its own native API, worker and checker
-processes; it does not use an already-running application database or broker.
-
-From the repository root:
+Build the CLI and generate two exact registration inputs from the already
+installed [incident-summary pilot](../examples/incident_summary/README.md):
 
 ```sh
-(cd cli && go build -trimpath -o ../.local-agent-loop/workstream ./cmd/workstream)
-cargo build --manifest-path external_checkers/Cargo.toml --locked --release \
-  -p workstream-checker-service --jobs 2
-export WORKSTREAM_CLI_EXECUTABLE="$PWD/.local-agent-loop/workstream"
+(cd cli && go build -trimpath -o /tmp/workstream-journey-cli ./cmd/workstream)
+export WORKSTREAM_CLI_EXECUTABLE=/tmp/workstream-journey-cli
+python examples/incident_summary/registry.py \
+  --image-digest "$PINNED_INCIDENT_IMAGE_MANIFEST_SHA256" \
+  --pre "$PRIVATE_ASSETS/registry-pre.json" \
+  --post "$PRIVATE_ASSETS/registry-post.json"
+```
+
+The runner image must already be installed and qualified for its exact
+platform manifest/config and PRE root profile. Supply a locally owned,
+strictly authenticated SSH tunnel to the private runner; the API connects to
+loopback but verifies the runner's TLS server name. The real hardened guide
+parser must also be running at a socket owned by UID 10002/GID 10001 with its
+fixed directory and socket modes. The exclusive source-cleanup worker needs
+a separate MinIO access key with permission on this disposable bucket; its
+private secret file must have mode 0600. The cleanup profile's
+`upload_principal` names the foreground upload access key, so the worker can
+reject accidental reuse of that credential. Export every input below
+before running the drill. No credential or runtime profile is inferred from a
+local Docker installation:
+
+```sh
+export WORKSTREAM_EXTERNAL_RUNNER_ENDPOINTS="$(printf '[{"host":"127.0.0.1","port":%s,"server_name":"runner.workstream.internal","config_sha256":"%s"}]' "$OWNED_TUNNEL_PORT" "$PINNED_RUNNER_CONFIG_SHA256")"
+export WORKSTREAM_EXTERNAL_RUNNER_CA_PATH="$PRIVATE_TLS/ca.crt"
+export WORKSTREAM_EXTERNAL_RUNNER_CERTIFICATE_PATH="$PRIVATE_TLS/app.crt"
+export WORKSTREAM_EXTERNAL_RUNNER_PRIVATE_KEY_PATH="$PRIVATE_TLS/app.key"
+export WORKSTREAM_ARTIFACT_INTAKE_IMAGE_DIGEST="$PINNED_INTAKE_IMAGE_SHA256"
+export WORKSTREAM_ARTIFACT_INTAKE_CONFIG_DIGEST="$PINNED_INTAKE_CONFIG_SHA256"
+export WORKSTREAM_CLI_JOURNEY_CHECKER_IMAGE_DIGEST="$PINNED_INCIDENT_IMAGE_MANIFEST_SHA256"
+export WORKSTREAM_CLI_JOURNEY_PRE_RUNTIME_PROFILE_FILE="$PRIVATE_ASSETS/pre-runtime-profile.json"
+export WORKSTREAM_CLI_JOURNEY_EXECUTION_PROFILE_FILE="$PRIVATE_ASSETS/isolated-execution-profile.json"
+export WORKSTREAM_CLI_JOURNEY_CLEANUP_PROFILE_FILE="$PRIVATE_ASSETS/isolated-cleanup-profile-journey.json"
+export WORKSTREAM_CLI_JOURNEY_CLEANUP_ACCESS_KEY_ID="$OWNED_CLEANUP_ACCESS_KEY"
+export WORKSTREAM_CLI_JOURNEY_CLEANUP_SECRET_FILE="$PRIVATE_ASSETS/cleanup-secret"
+export WORKSTREAM_GUIDE_DOCUMENT_PARSER_SOCKET="$OWNED_PARSER_SOCKET"
+export WORKSTREAM_CLI_JOURNEY_REGISTRY_PRE_FILE="$PRIVATE_ASSETS/registry-pre.json"
+export WORKSTREAM_CLI_JOURNEY_REGISTRY_POST_FILE="$PRIVATE_ASSETS/registry-post.json"
 export WORKSTREAM_CLI_JOURNEY_SETUP=1
 export WORKSTREAM_CLI_JOURNEY_TASKS=1
 export WORKSTREAM_CLI_JOURNEY_SUBMIT=1
-# Optional private raw CLI receipts for independent review; keep outside git.
 export WORKSTREAM_CLI_JOURNEY_EVIDENCE="$(mktemp -d /tmp/workstream-journey-evidence.XXXXXX)"
-# Supply a disposable local PostgreSQL admin URL and the local MinIO endpoint
-# through WORKSTREAM_TEST_ADMIN_DATABASE_URL and WORKSTREAM_TEST_MINIO_ENDPOINT.
+# Supply disposable PostgreSQL and local MinIO prerequisites through
+# WORKSTREAM_TEST_ADMIN_DATABASE_URL and WORKSTREAM_TEST_MINIO_ENDPOINT.
 cd backend
 .venv/bin/python scripts/run_isolated_tests.py \
   --metadata-json /tmp/workstream-cli-journey-isolation.json \
-  --lane cli_full_journey --timeout-seconds 900 -- \
+  --lane cli_full_journey --timeout-seconds 2400 -- \
   .venv/bin/python ../cli/tests/journey/bootstrap.py
 ```
 
-Use the isolated runner's fixed local test MinIO credentials, never production
-credentials. Each run owns a unique database/role and bucket/prefix. Require its
-cleanup metadata as well as exit zero; neither a completed migration nor a
-successful intermediate stage proves the remaining journey. Do not bypass a
-failed prerequisite or substitute a synthetic checker result.
-The optional evidence directory retains command arguments, exit codes and raw
-stdout/stderr after checking for bearer disclosure. It contains local project
-data: keep it private and do not commit it. Use a fresh directory for each run.
-Setup-enabled runs also retain private runtime logs after stopping their owned
-processes. These logs are diagnostic evidence, not proof that a failed stage
-succeeded. To verify an explicitly reviewed checker repair before merge, set
-`WORKSTREAM_CLI_JOURNEY_CHECKER_EXECUTABLE` to its built binary and record that
-binary's SHA-256 and source commit; this is cross-branch integration evidence.
+The bootstrap preflights all TLS files, profiles, parser socket, cleanup
+credential separation, registry schemas and image
+pins before starting its API or workers. The two isolated profiles are
+explicit test envelopes for the small pilot ZIPs, not approved hosted defaults
+or maximum-size qualification. Each run owns a database, role, bucket/prefix,
+broker and worker process groups. Require cleanup metadata as well as exit zero;
+a completed migration or intermediate stage does not prove the journey. The
+private evidence directory contains raw CLI receipts and runtime logs; keep it
+outside Git and do not publish tokens or arbitrary server output.
 
-The scope is manager-authored setup, an explicitly unpaid policy and the locked
-no-human-review acceptance branch. The example checker validates declared proof
-fields, not the truth of remote GitHub work. This is not hosted deployment,
-external Flow issuer, live model inference, human review/revision or compensation
-fulfillment certification. The connected proof also reads the exact submission's
-artifact binding, replica and verification evidence through the Operator CLI,
-and checks non-Operator concealment. The separate signed API test exercises
-retry only on a genuinely exhausted verification job. A successful upload is
-never used as an eligible retry fixture.
+The drill submits a PRE-rejected missing-summary ZIP without a Submission, a
+correct ZIP through immutable Submission, passing POST, automatic
+FinalAcceptance and one unpaid submitter ContributionRecord, and a shaped but
+incorrect ZIP through failed POST and governed revision without contribution.
+It then configures a second project with the default human-review policy and
+observes `review_pending` without a fabricated contribution. The public review
+mutation and human acceptance authority are not mounted, so this drill does not
+claim a live human-review decision or acceptance. It also checks exact replay,
+public retained evidence, Operator custody and non-Operator concealment.
+The real checker validates only the fixed incident-summary exercise; this is
+not hosted deployment, external Flow issuer, model inference, broad ZIP-size
+performance qualification or compensation fulfillment certification.
+
+#### Source-first PRE qualification
+
+Run the same isolated command with
+`WORKSTREAM_CLI_JOURNEY_PRE_QUALIFICATION_IMAGE_DIGEST` set to the approved
+manifest digest of the retained
+[Smol Python fixture](../external_checkers/workstream-checker-service/tests/smol_fixture/python.Dockerfile).
+Build it with the sibling `smol_fixture` directory as context and install it
+using the same [verified cache preparation](../external_checkers/README.md#smol-microvm-engine).
+Generate the PRE registration with this digest and set
+`resources.deadline_ms` to `5000`. Keep the ordinary incident-summary image
+and registration for POST. Use the local isolated CLI authentication path,
+the existing qualified PRE runtime profile, and a fresh evidence directory.
+
+Use an independently owned test runner with the retained
+[runtime wrapper](../external_checkers/workstream-checker-service/tests/smol_fixture/runtime_wrapper.py).
+Configure its adjacent JSON with the real Smol binary, an owned empty trace,
+the normal `mode` file containing `0`, the owned cgroup directory, an absent
+`delete_fault` marker and `observe_pre_exit` set to `true`. Pin the wrapper
+bytes in the test runner's `smol.binary_sha256`, `pre.smol_binary_sha256` and
+`trusted_intake.storage_envelope.smol_binary_sha256`. Pin the exact loaded
+runner configuration in the existing TLS endpoint input. Preserve the
+runner and guest resource envelope. Record the source commit, fixture image
+manifest/config, and the exact installed configuration and executable hashes.
+
+The first ZIP reaches source-first PRE and triggers the trusted guest's
+effective project-stage deadline, which can elapse before the checker process
+starts. The fixture includes a sleeper to exercise this deadline if the process
+starts. Child-start, child OOM and child crash require separate evidence.
+The same assignment accepts the executed isolation probe on a fresh key as
+Submission version 1. The failed source stays charged during the two-hour
+reclamation grace. Keep the isolated launcher cleanup receipt for its test
+bucket and require the native observer's matching lease trace before recording
+a pass. The trace accounts for both source-first guest executions and checks
+that the timeout VM left no resources at the isolation VM's creation.
+
+```sh
+python cli/tests/journey/pre_qualification.py \
+  "$WORKSTREAM_CLI_JOURNEY_EVIDENCE/pre-qualification-client.json" \
+  "$OWNED_NATIVE_TRACE"
+```

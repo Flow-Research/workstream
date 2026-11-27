@@ -136,7 +136,7 @@ func ValidPostSubmitDeliveryReason(reason string) bool {
 	return true
 }
 
-func (c *Client) ReconcilePostSubmitDelivery(ctx context.Context, project, event, reason, key string) (Result[PostSubmitDeliveryReceipt], error) {
+func (c *Client) ReconcilePostSubmitDelivery(ctx context.Context, project, event, reason, key string, abandonUnknown bool) (Result[PostSubmitDeliveryReceipt], error) {
 	var result Result[PostSubmitDeliveryReceipt]
 	if !validUUID(project) || !validUUID(event) || !validUUID(key) || len(project) > 100 || len(event) > 100 || len(key) > 100 {
 		return result, errors.New("PROJECT_ID, EVENT_ID and --idempotency-key must be UUIDs")
@@ -144,12 +144,14 @@ func (c *Client) ReconcilePostSubmitDelivery(ctx context.Context, project, event
 	if !ValidPostSubmitDeliveryReason(reason) {
 		return result, errors.New("--reason must be 1..500 characters without surrounding whitespace or ASCII controls")
 	}
-	body, _ := json.Marshal(struct {
-		Reason string `json:"reason"`
-	}{reason})
+	bodyFields := map[string]string{"reason": reason}
+	if abandonUnknown {
+		bodyFields["action"] = "abandon_unknown"
+	}
+	body, _ := json.Marshal(bodyFields)
 	path := "/api/v1/operations/projects/" + url.PathEscape(project) + "/post-submit-deliveries/" + url.PathEscape(event) + "/reconcile"
 	raw, err := c.requestWithResponseLimit(ctx, http.MethodPost, path, "", body, key, http.StatusCreated, MaxGuideInputBytes)
-	hint := "delivery reconciliation outcome unknown; manually replay only the unchanged project, event, reason and key"
+	hint := "delivery reconciliation outcome unknown; manually replay only the unchanged project, event, action, reason and key"
 	if err != nil {
 		return result, checkerMutationFailure(err, hint)
 	}
@@ -157,7 +159,7 @@ func (c *Client) ReconcilePostSubmitDelivery(ctx context.Context, project, event
 	fields, err := contextObject(raw, &receipt, []string{"source", "successor", "authorization_decision_id"}, nil)
 	if err != nil || !validUUID(receipt.AuthorizationDecisionID) ||
 		!validDeliverySource(fields["source"], &receipt.Source, project, event) ||
-		!validDeliverySuccessor(fields["successor"], &receipt.Successor) ||
+		!validDeliverySuccessor(fields["successor"], &receipt.Successor, abandonUnknown) ||
 		receipt.Source.ReconciliationEventID == nil || !sameUUID(*receipt.Source.ReconciliationEventID, receipt.Successor.EventID) ||
 		(receipt.Source.ReconciliationState != nil && *receipt.Source.ReconciliationState == "pending" && receipt.Source.Classification != receipt.Successor.Classification) ||
 		!c.safeMutationResponse(raw) {
@@ -166,8 +168,8 @@ func (c *Client) ReconcilePostSubmitDelivery(ctx context.Context, project, event
 	return Result[PostSubmitDeliveryReceipt]{Raw: raw, Value: receipt}, nil
 }
 
-func validDeliverySuccessor(raw json.RawMessage, value *PostSubmitDeliverySuccessor) bool {
+func validDeliverySuccessor(raw json.RawMessage, value *PostSubmitDeliverySuccessor, abandonUnknown bool) bool {
 	_, err := contextObject(raw, value, []string{"event_id", "payload_digest", "occurred_at", "classification"}, nil)
 	return err == nil && validUUID(value.EventID) && contextPolicyDigest.MatchString(value.PayloadDigest) &&
-		validAuditTime(value.OccurredAt) && (value.Classification == "committed" || value.Classification == "retry_safe")
+		validAuditTime(value.OccurredAt) && ((abandonUnknown && value.Classification == "unresolved") || (!abandonUnknown && (value.Classification == "committed" || value.Classification == "retry_safe")))
 }

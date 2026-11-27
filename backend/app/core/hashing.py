@@ -24,3 +24,14 @@ def canonical_json_hash(value: dict[str, Any]) -> str:
         allow_nan=False,
     ).encode("utf-8")
     return f"sha256:{hashlib.sha256(encoded).hexdigest()}"
+
+
+def validate_sha256(sha256: str) -> None:
+    """Require one canonical lower-case SHA-256 commitment."""
+    if (
+        not isinstance(sha256, str)
+        or len(sha256) != 71
+        or not sha256.startswith("sha256:")
+        or any(character not in "0123456789abcdef" for character in sha256[7:])
+    ):
+        raise ValueError("artifact commitment digest is invalid")

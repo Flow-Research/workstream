@@ -25,6 +25,8 @@ from app.modules.authorization.api.outbox_dispatch import (
     OutboxDispatchPhase,
 )
 from app.modules.outbox.api import (
+    BACKGROUND_LIVE_WINDOW_SECONDS,
+    BACKGROUND_STATUS_INSPECTION_INTERVAL_SECONDS,
     CommittedInvocationObservation,
     DeliveryOptions,
     DeliveryCandidatePage,
@@ -64,10 +66,12 @@ def _checked_claim(claim: OutboxClaim) -> OutboxClaim:
 
 
 def _facts(
-    claim: OutboxClaim, phase: OutboxDispatchPhase, digest: str | None = None
+    claim: OutboxClaim, phase: OutboxDispatchPhase, digest: str | None = None,
+    *, live_until: datetime | None = None,
 ) -> OutboxDispatchFacts:
     """Bind every lease scalar and, for finalization, the complete outcome."""
-    return OutboxDispatchFacts(**claim.model_dump(), phase=phase, outcome_digest=digest)
+    return OutboxDispatchFacts(**claim.model_dump(), phase=phase, outcome_digest=digest,
+                               live_until=live_until)
 
 
 def _allow(decision: AuthorizationDecision) -> str:
@@ -97,11 +101,12 @@ def _outcome(
     now: datetime,
     options: DeliveryOptions,
     retry_unknown: bool = False,
+    *, live_until: datetime | None = None,
 ) -> dict:
     """Map closed disposition to database-timed outcome with bounded backoff."""
     if type(cause) is not FinalizationCause:
         raise DeliveryUnavailable("outbox_delivery_unavailable")
-    expired = now >= claim.claim_expires_at
+    expired = now >= (live_until or claim.claim_expires_at)
     if (
         invoked_at is None
         and (cause is not FinalizationCause.EXPIRED or not expired)
@@ -115,10 +120,7 @@ def _outcome(
         code = "INVOKE_OUTCOME_UNKNOWN"
         if retry_unknown and claim.claim_generation < options.max_attempts:
             state = "retryable"
-            delay = min(
-                options.retry_cap_seconds,
-                options.retry_base_seconds * 2 ** min(claim.claim_generation - 1, 30),
-            )
+            delay = options.retry_delay_seconds(claim.claim_generation)
             retry = now + timedelta(seconds=delay)
     elif cause is FinalizationCause.ACKNOWLEDGE:
         state, code = "acknowledged", None
@@ -128,10 +130,7 @@ def _outcome(
         else:
             state = "retryable"
             code = "RETRY_REQUESTED" if invoked_at is not None else "LEASE_EXPIRED_BEFORE_INVOKE"
-            delay = min(
-                options.retry_cap_seconds,
-                options.retry_base_seconds * 2 ** min(claim.claim_generation - 1, 30),
-            )
+            delay = options.retry_delay_seconds(claim.claim_generation)
             retry = now + timedelta(seconds=delay)
     return {
         "delivery_state": state,
@@ -208,8 +207,13 @@ class OutboxDelivery:
                 self._registry.keys, excluded=self._excluded_events, after=after, limit=limit,
             )
 
-    async def deliver(self, event_id: UUID, project_id: UUID, owner: str) -> DeliveryReceipt | None:
+    async def deliver(self, event_id: UUID, project_id: UUID, owner: str, *, registered_only: bool = False) -> DeliveryReceipt | None:
         """Reuse recovery and claim/invoke; duplicate transport cannot bypass custody."""
+        if registered_only:
+            async with self._sessions() as session:
+                event = await DeliveryRepository(session).event(event_id, project_id)
+                if event is None or self._registry.get(event.event_type, event.event_version) is None:
+                    return None
         recovered = await self.recover(event_id, project_id)
         if recovered is not None:
             return recovered
@@ -272,11 +276,13 @@ class OutboxDelivery:
                     claim.claim_expires_at,
                     claim.claimed_at,
                 )
+                event.claim_live_until = claim.claim_expires_at
                 event.next_attempt_at = None
                 session.add(
                     OutboxDeliveryAttempt(
                         **{**claim.model_dump(), "project_id": str(project_id)},
                         stage="claimed", claim_decision_event_id=decision_id,
+                        claim_live_until=claim.claim_expires_at,
                     )
                 )
                 await session.flush()
@@ -343,19 +349,48 @@ class OutboxDelivery:
         annotate_current_span(outbox_correlation_id=envelope.correlation_id)
         handler = self._registry.get(envelope.event_type, envelope.event_version)
         options = self._options_for(envelope.event_type, envelope.event_version)
+        if options.background_heartbeat:
+            await asyncio.wait_for(
+                self._renew_invocation(claim),
+                timeout=BACKGROUND_STATUS_INSPECTION_INTERVAL_SECONDS,
+            )
         cause = FinalizationCause.UNKNOWN
         task = None
         try:
             loop = asyncio.get_running_loop()
-            deadline = loop.time() + options.handler_timeout_seconds
+            deadline = (loop.time() + options.handler_timeout_seconds
+                        if options.handler_timeout_seconds is not None else None)
             task = asyncio.create_task(handler(envelope))
             self._running_handlers.add(task)
             task.add_done_callback(self._handler_done)
-            done, _ = await asyncio.wait((task,), timeout=options.handler_timeout_seconds)
-            if done and loop.time() < deadline and not task.cancelled():
-                result = task.result()
-                if type(result) is HandlerOutcome:
-                    cause = FinalizationCause(result.value)
+            while True:
+                done, _ = await asyncio.wait(
+                    (task,), timeout=BACKGROUND_STATUS_INSPECTION_INTERVAL_SECONDS if options.background_heartbeat
+                    else options.handler_timeout_seconds,
+                )
+                if done:
+                    if (deadline is None or loop.time() < deadline) and not task.cancelled():
+                        result = task.result()
+                        if type(result) is HandlerOutcome:
+                            cause = FinalizationCause(result.value)
+                    break
+                if not options.background_heartbeat:
+                    break
+                renewal = asyncio.create_task(self._renew_invocation(claim))
+                try:
+                    renewed, _ = await asyncio.wait(
+                        (renewal,), timeout=BACKGROUND_STATUS_INSPECTION_INTERVAL_SECONDS,
+                    )
+                    if not renewed:
+                        # Cancel the handler before waiting for DB rollback/close.
+                        task.cancel()
+                        raise DeliveryUnavailable("outbox_delivery_unavailable")
+                    await renewal
+                finally:
+                    if not renewal.done():
+                        task.cancel()
+                        renewal.cancel()
+                        await asyncio.gather(renewal, return_exceptions=True)
         except Exception:
             # Do not retain or log provider payloads. Cancellation deliberately leaves
             # committed invoked custody for expiration recovery.
@@ -364,6 +399,38 @@ class OutboxDelivery:
             if task is not None and not task.done():
                 task.cancel()
         return await self.finalize(claim, cause)
+
+    async def _renew_invocation(self, claim: OutboxClaim) -> None:
+        """Inspect a live invoked claim and renew only its matching attempt."""
+        async with self._sessions() as session:
+            live_until = await database_time(session) + timedelta(seconds=BACKGROUND_LIVE_WINDOW_SECONDS)
+        facts = _facts(claim, OutboxDispatchPhase.RENEW, live_until=live_until)
+        async with self._sessions() as session, session.begin():
+            async with self._authority(session, facts=facts,
+                                       request_id=uuid4(), correlation_id=uuid4()) as prepared:
+                repo = DeliveryRepository(session)
+                event = await repo.event(claim.event_id, claim.project_id, lock=True)
+                attempt = await repo.attempt(claim, lock=True)
+                now = await database_time(session)
+                if (
+                    event is None or attempt is None or not matches_event(event, claim)
+                    or claim_from_attempt(attempt) != claim or attempt.stage != "invoked"
+                    or event.claim_live_until is None or attempt.claim_live_until != event.claim_live_until
+                    or event.claim_live_until <= now or live_until <= event.claim_live_until
+                    or live_until > now + timedelta(seconds=BACKGROUND_LIVE_WINDOW_SECONDS)
+                    or not self._options_for(event.event_type, event.event_version).background_heartbeat
+                ):
+                    raise DeliveryUnavailable("outbox_delivery_unavailable")
+                decision_id = _allow(await prepared.consume(facts))
+                if await database_time(session) >= event.claim_live_until:
+                    raise DeliveryUnavailable("outbox_delivery_unavailable")
+                event.claim_live_until = live_until
+                # The attempt guard verifies the already-renewed event under
+                # the same transaction and row lock.
+                await session.flush()
+                attempt.claim_live_until = live_until
+                attempt.renew_decision_event_id = decision_id
+                await session.flush()
 
     async def finalize(self, claim: OutboxClaim, cause: FinalizationCause) -> DeliveryReceipt:
         """Authorize the exact outcome; response loss replays original delivery facts."""
@@ -381,7 +448,8 @@ class OutboxDelivery:
                     json.loads(attempt.outcome_json)["receipt_completed_at"]
                 )
             retry_unknown = self._registry.can_retry_unknown(event.event_type, event.event_version)
-            value = _outcome(claim, attempt.invoked_at, cause, now, options, retry_unknown)
+            value = _outcome(claim, attempt.invoked_at, cause, now, options, retry_unknown,
+                             live_until=attempt.claim_live_until)
             proposed = DeliveryReceipt(
                 claim=claim, outcome_json=_encode(value), outcome_digest=canonical_json_hash(value)
             )
@@ -396,6 +464,7 @@ class OutboxDelivery:
                 datetime.fromisoformat(stored["receipt_completed_at"]),
                 options,
                 retry_unknown,
+                live_until=attempt.claim_live_until,
             )
             if _encode(expected) != completed.receipt.outcome_json:
                 raise DeliveryUnavailable("outbox_delivery_unavailable") from None
@@ -440,12 +509,14 @@ class OutboxDelivery:
                 expected = _outcome(
                     claim, attempt.invoked_at, cause, completed, options,
                     self._registry.can_retry_unknown(event.event_type, event.event_version),
+                    live_until=attempt.claim_live_until,
                 )
                 if (
                     completed > now
                     or _encode(expected) != receipt.outcome_json
                     or canonical_json_hash(expected) != receipt.outcome_digest
-                    or (completed < claim.claim_expires_at <= now)
+                    or event.claim_live_until != attempt.claim_live_until
+                    or (completed < attempt.claim_live_until <= now)
                 ):
                     raise DeliveryUnavailable("outbox_delivery_unavailable")
                 decision_id = _allow(
@@ -453,7 +524,7 @@ class OutboxDelivery:
                         _facts(claim, OutboxDispatchPhase.FINALIZE, receipt.outcome_digest)
                     )
                 )
-                if completed < claim.claim_expires_at <= await database_time(session):
+                if completed < attempt.claim_live_until <= await database_time(session):
                     raise DeliveryUnavailable("outbox_delivery_unavailable")
                 attempt.finalize_decision_event_id = decision_id
                 attempt.stage, attempt.outcome_json, attempt.outcome_digest = (
@@ -474,6 +545,7 @@ class OutboxDelivery:
                     datetime.fromisoformat(value["finalized_at"]) if value["finalized_at"] else None
                 )
                 event.claim_owner = event.claimed_at = event.claim_expires_at = None
+                event.claim_live_until = None
                 await session.flush()
         return receipt
 
@@ -486,7 +558,7 @@ class OutboxDelivery:
                 event is None
                 or (event.event_type, event.event_version) in self._excluded_events
                 or event.delivery_state != "claimed"
-                or event.claim_expires_at > now
+                or event.claim_live_until > now
             ):
                 return None
             claim = OutboxClaim(

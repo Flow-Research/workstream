@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+import hashlib
+import json
+from typing import Any
 from uuid import uuid4
 
 from app.core.identifiers import new_record_id
+from app.interfaces.external_checker_execution import ExternalCheckerMaterialGrant
 from app.modules.checkers.api.external import (
     POST_SUBMIT_INPUT_SCHEMA_ID,
     PRE_SUBMIT_INPUT_SCHEMA_ID,
@@ -23,6 +27,60 @@ from app.modules.checkers.api.external import (
 )
 
 SHA = "sha256:" + "a" * 64
+
+
+class EmptyExternalMaterialSource:
+    """One valid descriptor-relative grant with no material file payloads."""
+
+    files: tuple[()] = ()
+
+    def __init__(self, manifest: bytes) -> None:
+        self.manifest = manifest
+
+    async def open_file(self, item: Any):
+        raise AssertionError(f"empty material source opened an unexpected file: {item!r}")
+        yield b""  # pragma: no cover - retain the async-iterator contract
+
+
+def empty_external_material_grant(request, *, suffix: str = "a"):
+    """Build a canonical empty grant bound to one normalized request."""
+    grant_id = "extract_" + suffix * 32
+    body = {
+        "protocol_version": "workstream.external_checker_material_grant.v2",
+        "grant_id": grant_id,
+        "request_digest": request.request_digest,
+        "phase": request.identity.phase,
+        "identity": request.identity.model_dump(mode="json"),
+        "evaluation_context_sha256": None,
+        "materials": [
+            {
+                "material": request.materials[0].model_dump(mode="json"),
+                "directories": [],
+                "files": [],
+            }
+        ],
+        "visible_roles": [request.materials[0].role],
+    }
+    canonical = json.dumps(
+        body,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        allow_nan=False,
+    ).encode()
+    binding = "sha256:" + hashlib.sha256(canonical).hexdigest()
+    manifest = json.dumps(
+        {**body, "binding_digest": binding},
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        allow_nan=False,
+    ).encode()
+    return ExternalCheckerMaterialGrant(
+        grant_id=grant_id,
+        binding_digest=binding,
+        source=EmptyExternalMaterialSource(manifest),
+    )
 
 
 def schema(schema_id: str, *, required: tuple[str, ...] = ()) -> ExternalCheckerSchema:
@@ -114,7 +172,8 @@ def execution_identity(phase: str = "pre_submit"):
     if phase == "pre_submit":
         return PreSubmitExternalCheckerIdentity(
             **common,
-            prepared_generation_id=uuid4(),
+            operation_id=uuid4(), source_sha256=SHA,
+            lease_id=uuid4(), lease_generation=1,
             attempt_id=uuid4(),
             attempt_request_digest=SHA,
             effective_plan_sha256=SHA,
@@ -139,7 +198,8 @@ def execution_material(identity):
     if identity.phase == "pre_submit":
         return PreSubmitExternalCheckerMaterial(
             role="submission_archive",
-            prepared_generation_id=identity.prepared_generation_id,
+            operation_id=identity.operation_id, source_sha256=identity.source_sha256,
+            lease_id=identity.lease_id, lease_generation=identity.lease_generation,
             attempt_id=identity.attempt_id,
             attempt_request_digest=identity.attempt_request_digest,
             archive_sha256=SHA,

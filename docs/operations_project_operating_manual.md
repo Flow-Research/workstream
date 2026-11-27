@@ -590,6 +590,14 @@ and manager task facts, the exact historical guide, review/revision references
 `contribution_policy_version_id`. It omits obsolete payment amounts and
 submission/precheck flags. Contributor `lifecycle.next_actions` contains only
 currently applicable claim hints; management has no contributor lifecycle.
+
+Task detail and the embedded work-context task include
+`pending_submission_operation`: either null or the authorized operation's
+`operation_id` and `processing_stage`. This identifies work still receiving,
+running PRE, awaiting finalization, or explicitly stalled during finalization.
+While a revision awaits finalization, its predecessor remains in submission
+history; it is not the pending revision. Finalization clears the pending field.
+Task visibility and operation-read authority continue to govern these reads.
 Executing a hint always rechecks authority. Locked policy provenance uses three
 separate reads (all prefixed by `/api/v1`):
 

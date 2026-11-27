@@ -1,5 +1,6 @@
 """Compose the caller's own grant and work reads with canonical AUTH in one read transaction."""
 
+from contextlib import AsyncExitStack, asynccontextmanager
 from datetime import UTC, datetime
 from typing import Annotated
 from uuid import UUID
@@ -15,6 +16,9 @@ from app.api.deps.authorization import get_authorization_actor_identity, get_aut
 from app.api.deps.snapshot_reads import run_snapshot_read, start_read_snapshot
 from app.core.api_controls import StructuredHTTPException
 from app.db.session import get_db_session
+from app.modules.artifacts.api.submission_command import (
+    AssignmentIntakeAttempt, AssignmentIntakeQuery, AssignmentIntakeReadPort, AssignmentIntakeUnavailable,
+)
 from app.modules.artifacts.api.submission_preparation import (
     SubmissionBundlePreparationDetail, SubmissionBundlePreparationPage, SubmissionBundlePreparationReadPort,
     SubmissionBundlePreparationSummary,
@@ -24,11 +28,19 @@ from app.modules.authorization.api.contributor_reads import (
     ActorProjectRoles, ContributorReadAuthorizationPort, ContributorReadCursorInvalid, ContributorReadPosition,
     ContributorReadRequest, ContributorReadUnavailable,
 )
+from app.modules.checkers.api.execution import CheckerExecutionUnavailable
+from app.modules.checkers.api.history import CheckerHistoryReadPort, ContributorCheckerResult
 from app.modules.checkers.api.selected_pre_submit import SelectedPreSubmitUnavailable
+from app.modules.contributions.api.records import AcceptedAssignmentEvidence, AcceptedAssignmentEvidencePort
 from app.modules.compensation.api.award_reads import ContributorAwardTotal, ContributorAwardTotalsPort
+from app.modules.projects.api.guide_documents import GuideDocumentUnavailable
+from app.modules.projects.api.guide_reads import (
+    ApprovedContributorGuide, ProjectGuideDocumentContentPort, ProjectGuideReadPort, ProjectGuideReadUnavailable,
+)
 from app.modules.projects.api.project_summaries import ProjectStatus, ProjectSummaryFacts, ProjectSummaryReadPort
 from app.modules.tasks.api.contributor_reads import (
-    AssignmentState, ContributorAssignmentCounts, ContributorAssignmentPage, ContributorAssignmentQuery,
+    AssignmentState, ContributorAssignment, ContributorAssignmentCounts, ContributorAssignmentPage,
+    ContributorAssignmentQuery, TaskStatus,
     ContributorSubmissionCounts, ContributorSubmissionPage, ContributorSubmissionQuery, ContributorWorkCounts,
     ContributorWorkReadPort,
 )
@@ -140,6 +152,23 @@ def _id(value: UUID | None) -> str | None:
     return None if value is None else str(value)
 
 
+class ExactContributorAssignment(BaseModel):
+    """Current status, retained intake and governed evidence for one owned claim."""
+
+    model_config = _FROZEN
+    assignment: ContributorAssignment
+    current_status: TaskStatus | Literal["closed", "rejected"]
+    status_reason: str | None
+    next_action: Literal[
+        "submit", "awaiting_intake", "awaiting_evaluation", "revise", "wait_for_processing", "contact_operator", "none",
+    ]
+    intake: AssignmentIntakeAttempt | None
+    feedback_submission_id: UUID | None
+    post_submission_results: tuple[ContributorCheckerResult, ...] = Field(max_length=100)
+    next_cursor: str | None
+    accepted_evidence: AcceptedAssignmentEvidence | None
+
+
 class ContributorReadOperation:
     """Authorize first, project only the caller's rows, validate, then commit evidence."""
 
@@ -147,18 +176,25 @@ class ContributorReadOperation:
         self, session: AsyncSession, actor_id: UUID, authority: ContributorReadAuthorizationPort, *,
         work: ContributorWorkReadPort, preparations: SubmissionBundlePreparationReadPort,
         projects: ProjectSummaryReadPort, awards: ContributorAwardTotalsPort,
+        guides: ProjectGuideReadPort, guide_documents: ProjectGuideDocumentContentPort,
+        intake: AssignmentIntakeReadPort, checker_history: CheckerHistoryReadPort,
+        accepted_evidence: AcceptedAssignmentEvidencePort,
     ) -> None:
         """Compose the AUTH decision port and the owner read ports for one request."""
         self._session, self._actor_id, self._authority = session, actor_id, authority
         self._work, self._preparations = work, preparations
         self._projects, self._awards = projects, awards
+        self._guides, self._guide_documents = guides, guide_documents
+        self._intake, self._checker_history, self._accepted_evidence = intake, checker_history, accepted_evidence
 
     async def _run(self, request: ContributorReadRequest, read, *, in_snapshot: bool = False):
         """One bounded read: AUTH denials propagate to the decision owner for restaging."""
         return await run_snapshot_read(
             self._session, lambda: self._authority.authorize(request), read,
             cursor_invalid=ContributorReadCursorInvalid, invalid_cursor=_cursor_invalid,
-            faults=(ContributorReadUnavailable, SelectedPreSubmitUnavailable, SQLAlchemyError, ValueError),
+            faults=(ContributorReadUnavailable, SelectedPreSubmitUnavailable, SQLAlchemyError,
+                    ProjectGuideReadUnavailable, GuideDocumentUnavailable, AssignmentIntakeUnavailable,
+                    CheckerExecutionUnavailable, ValueError),
             unavailable=_unavailable, in_snapshot=in_snapshot,
         )
 
@@ -188,6 +224,145 @@ class ContributorReadOperation:
             ))
 
         return await self._run(request, read)
+
+    async def approved_guide(self, project_id: UUID) -> ApprovedContributorGuide:
+        request = self._request(
+            "project.contributor_guide.read", {}, resource_id=project_id, project_id=project_id,
+        )
+
+        async def read(_grant):
+            selected = await self._guides.read_approved_contributor_guide(project_id)
+            if selected is None:
+                await self._session.commit()
+                raise _missing()
+            return selected.guide
+
+        return await self._run(request, read)
+
+    @asynccontextmanager
+    async def approved_guide_document(self, project_id: UUID, guide_id: UUID, document_id: UUID):
+        request = self._request(
+            "project.contributor_guide.read", {"guide_id": str(guide_id), "document_id": str(document_id)},
+            resource_id=project_id, project_id=project_id,
+        )
+        async with AsyncExitStack() as stack:
+            verified = None
+
+            async def read(_grant):
+                selected = await self._guides.read_approved_contributor_guide(project_id)
+                if selected is not None and selected.guide.guide_id == guide_id:
+                    for original, document in zip(selected.originals, selected.guide.documents, strict=True):
+                        if document.document_id == document_id:
+                            nonlocal verified
+                            verified = await stack.enter_async_context(self._guide_documents.open(project_id, original))
+                            return document
+                await self._session.commit()
+                raise _missing()
+
+            await self._run(request, read)
+            yield verified
+
+    async def assignment(self, assignment_id: UUID, *, limit: int, cursor: str | None):
+        """Resolve only an exact owned assignment before project read authorization."""
+        try:
+            await start_read_snapshot(self._session)
+            project_id = await self._work.resolve_own_assignment_project(assignment_id, self._actor_id)
+        except SQLAlchemyError as exc:
+            await self._session.rollback()
+            raise _unavailable() from exc
+        if project_id is None:
+            await self._session.rollback()
+            raise _missing()
+        request = self._request(
+            "task.assignment.read", {"limit": limit},
+            resource_id=assignment_id, project_id=project_id, cursor=cursor,
+        )
+
+        async def read(grant):
+            selected = await self._work.read_own_assignment(project_id, assignment_id, self._actor_id)
+            if selected is None:
+                await self._session.commit()
+                raise _missing()
+            assignment = selected.assignment
+            task_id = assignment.task_id
+            intake = await self._intake.read_assignment_attempt(AssignmentIntakeQuery(
+                project_id, task_id, assignment_id, self._actor_id, selected.active_operation_id,
+            ))
+            latest = assignment.latest_submission
+            history = None if latest is None else await self._checker_history.read_current_attempt(
+                submission_id=latest.submission_id, task_id=task_id,
+            )
+            results, after = self._assignment_feedback(history, grant.position, limit, request)
+            status, reason, action = self._assignment_status(assignment, intake, history)
+            evidence = None
+            if status == "accepted" and latest is not None and latest.status == "accepted":
+                evidence = await self._accepted_evidence.read_accepted_assignment(
+                    project_id=project_id, task_id=task_id, assignment_id=assignment_id,
+                    contributor_id=self._actor_id, submission_id=latest.submission_id,
+                )
+                if evidence is None:
+                    raise ValueError("accepted assignment evidence is unavailable")
+            return ExactContributorAssignment(
+                assignment=assignment, current_status=status, status_reason=reason, next_action=action,
+                intake=intake, feedback_submission_id=history.submission_id if history is not None else None,
+                post_submission_results=results, next_cursor=after, accepted_evidence=evidence,
+            )
+
+        return await self._run(request, read, in_snapshot=True)
+
+    def _assignment_feedback(self, history, position, limit, request):
+        if history is None:
+            if position is not None:
+                raise ContributorReadCursorInvalid("assignment feedback changed")
+            return (), None
+        stamp = history.completed_at or history.created_at
+        start = 0
+        if position is not None:
+            if stamp != position.timestamp:
+                raise ContributorReadCursorInvalid("assignment feedback changed")
+            for index, finding in enumerate(history.results):
+                if finding.id == position.record_id:
+                    start = index + 1
+                    break
+            else:
+                raise ContributorReadCursorInvalid("assignment feedback changed")
+        page = tuple(history.results[start:start + limit])
+        more = start + limit < len(history.results)
+        return page, self._next(request, more, stamp, page[-1].id if page else None)
+
+    @staticmethod
+    def _assignment_status(assignment, intake, history):
+        latest = assignment.latest_submission
+        if assignment.state == "closed":
+            if assignment.assignment_status == "revision_expired":
+                return "rejected", "revision_deadline_expired", "none"
+            if assignment.assignment_status == "revision_exhausted":
+                return "rejected", "revision_limit_reached", "none"
+            if assignment.assignment_status == "authority_revoked":
+                return "closed", "authority_revoked", "none"
+            if latest is not None and latest.status in {"accepted", "rejected"}:
+                return latest.status, latest.status_reason, "none"
+            return "closed", assignment.assignment_status, "none"
+
+        status = assignment.task_status
+        if status is None:
+            raise ValueError("active assignment is missing its task state")
+        if intake is not None and intake.stage in {"receiving", "pre_checking"}:
+            return status, "submission_in_progress", "awaiting_intake"
+        if (status == "evaluation_pending" and intake is not None and intake.operationally_stalled
+                and intake.failure_code is not None and intake.failure_code.startswith("post_submission_")):
+            return status, intake.failure_code, "contact_operator"
+        if (intake is not None and intake.operationally_stalled
+                or status == "evaluation_pending" and history is not None and history.status == "infrastructure_failed"):
+            return status, "processing_unavailable", "wait_for_processing"
+        if status in {"submitted", "evaluation_pending", "review_pending"}:
+            reason = intake.failure_code if intake is not None and intake.post_submission_progress is not None else None
+            return status, reason, "awaiting_evaluation"
+        reason = intake.failure_code if intake is not None else None
+        if reason is None and status == "needs_revision" and assignment.revision is not None:
+            reason = (latest.status_reason if latest is not None else None) if assignment.revision.disposition == "ready" else assignment.revision.disposition
+        action = "submit" if assignment.next_action == "prepare_submission" else assignment.next_action
+        return status, reason, action
 
     async def assignments(self, *, project_id, state: AssignmentState | None, updated_since, limit, cursor):
         request = self._request("actor.assignment.list", {
@@ -299,10 +474,14 @@ async def get_contributor_reads(
     authority: Annotated[object, Depends(get_authorization_service)],
 ) -> ContributorReadOperation:
     """Build the contributor read operation from request-scoped owner adapters."""
-    from app.adapters.artifacts import submission_bundle_preparation_reader
+    from app.adapters.artifacts import (
+        project_guide_documents_port, submission_bundle_preparation_reader, submission_operation_read_service,
+    )
     from app.adapters.auth import contributor_read_authorization
+    from app.adapters.checkers import checker_history_repository
     from app.adapters.compensation import contributor_award_totals_port
-    from app.adapters.projects import project_summary_reader
+    from app.adapters.contributions import accepted_assignment_evidence_reader
+    from app.adapters.projects import project_guide_reader, project_summary_reader
     from app.adapters.tasks import contributor_work_reader
 
     return ContributorReadOperation(
@@ -310,4 +489,7 @@ async def get_contributor_reads(
         contributor_read_authorization(authority, session, request.app.state.settings.pagination_cursor_hmac_secret),
         work=contributor_work_reader(session), preparations=submission_bundle_preparation_reader(session),
         projects=project_summary_reader(session), awards=contributor_award_totals_port(session),
+        guides=project_guide_reader(session), guide_documents=project_guide_documents_port(session, request.app.state.settings),
+        intake=submission_operation_read_service(session, None), checker_history=checker_history_repository(session),
+        accepted_evidence=accepted_assignment_evidence_reader(session),
     )

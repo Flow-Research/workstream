@@ -73,7 +73,14 @@ def _approval_arguments() -> dict[str, Any]:
         "idempotency_key": IDEMPOTENCY_KEY,
         "body": {
             "target": target,
-            "pre_submit_attachments": [],
+            "pre_submit_attachments": [
+                {
+                    "requirement_id": "project.intake",
+                    "registry_entry_id": POLICY_ID,
+                    "registry_entry_digest": digest,
+                    "configuration": {},
+                }
+            ],
             "post_submit_attachments": [
                 {
                     "requirement_id": "project.quality",
@@ -112,14 +119,22 @@ def test_approval_forwards_human_image_attachments_unchanged(
 
 
 @pytest.mark.parametrize("field", ["pre_submit_attachments", "post_submit_attachments"])
+@pytest.mark.parametrize("count", [None, 0, 2])
 def test_approval_requires_explicit_phase_image_choice(
     adapter: Adapter,
     call: Call,
     field: str,
+    count: int | None,
 ) -> None:
     client, received, _ = adapter
     arguments = _approval_arguments()
-    del arguments["body"][field]
+    if count is None:
+        del arguments["body"][field]
+    else:
+        member = arguments["body"][field][0]
+        arguments["body"][field] = [
+            member | {"requirement_id": f"member_{i}"} for i in range(count)
+        ]
     result = call(
         client, name="workstream_guide_pre_submission_approve", arguments=arguments
     ).json()["result"]
@@ -587,7 +602,9 @@ def test_initial_dispatch_forwards_exact_key_and_caller_without_body(
     upstream["status"] = 202
     upstream["json"] = _initial_dispatch_receipt()
     result = call(
-        client, name=f"workstream_{name}", arguments=_initial_dispatch_arguments(),
+        client,
+        name=f"workstream_{name}",
+        arguments=_initial_dispatch_arguments(),
         token="explicit-guide-caller",
     ).json()["result"]
     assert result["isError"] is False
@@ -606,11 +623,17 @@ def test_initial_dispatch_forwards_exact_key_and_caller_without_body(
 
 
 @pytest.mark.parametrize(("name", "_suffix"), _INITIAL_DISPATCH_ROUTES)
-@pytest.mark.parametrize("change", (
-    {"idempotency_key": None}, {"idempotency_key": "not-a-uuid"},
-    {"project_id": "foreign/path"}, {"guide_id": "not-a-uuid"},
-    {"body": {"inference_required": True}}, {"token": "caller-override"},
-))
+@pytest.mark.parametrize(
+    "change",
+    (
+        {"idempotency_key": None},
+        {"idempotency_key": "not-a-uuid"},
+        {"project_id": "foreign/path"},
+        {"guide_id": "not-a-uuid"},
+        {"body": {"inference_required": True}},
+        {"token": "caller-override"},
+    ),
+)
 def test_initial_dispatch_rejects_invalid_selectors_keys_and_behavior_overrides(
     adapter: Adapter, call: Call, name: str, _suffix: str, change: dict[str, Any]
 ) -> None:
@@ -624,12 +647,15 @@ def test_initial_dispatch_rejects_invalid_selectors_keys_and_behavior_overrides(
 
 
 @pytest.mark.parametrize(("name", "_suffix"), _INITIAL_DISPATCH_ROUTES)
-@pytest.mark.parametrize(("status", "response"), (
-    (200, _initial_dispatch_receipt()),
-    (202, {**_initial_dispatch_receipt(), "setup_run_id": "invalid"}),
-    (202, {**_initial_dispatch_receipt(), "setup_generation": 0}),
-    (202, {**_initial_dispatch_receipt(), "project_id": PROJECT_ID}),
-))
+@pytest.mark.parametrize(
+    ("status", "response"),
+    (
+        (200, _initial_dispatch_receipt()),
+        (202, {**_initial_dispatch_receipt(), "setup_run_id": "invalid"}),
+        (202, {**_initial_dispatch_receipt(), "setup_generation": 0}),
+        (202, {**_initial_dispatch_receipt(), "project_id": PROJECT_ID}),
+    ),
+)
 def test_initial_dispatch_rejects_uncertain_success_without_retry(
     adapter: Adapter, call: Call, name: str, _suffix: str, status: int, response: dict[str, Any]
 ) -> None:
@@ -646,10 +672,15 @@ def test_initial_dispatch_rejects_uncertain_success_without_retry(
 
 
 @pytest.mark.parametrize(("name", "_suffix"), _INITIAL_DISPATCH_ROUTES)
-@pytest.mark.parametrize(("status", "code"), (
-    (404, "proposal_unavailable"), (409, "operation_conflict"),
-    (503, "storage_unavailable"), (503, "authorization_service_unavailable"),
-))
+@pytest.mark.parametrize(
+    ("status", "code"),
+    (
+        (404, "proposal_unavailable"),
+        (409, "operation_conflict"),
+        (503, "storage_unavailable"),
+        (503, "authorization_service_unavailable"),
+    ),
+)
 def test_initial_dispatch_preserves_safe_public_failures(
     adapter: Adapter, call: Call, name: str, _suffix: str, status: int, code: str
 ) -> None:

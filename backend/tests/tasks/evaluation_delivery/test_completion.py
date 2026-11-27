@@ -12,13 +12,7 @@ from app.modules.checkers.api.execution import COMPLETION_EVENT, REQUEST_EVENT
 from app.modules.checkers.api.delivery_reconciliation import (
     POST_SUBMIT_DELIVERY_RECONCILIATION_EVENT,
 )
-from app.modules.checkers.api.external_policy import (
-    MAXIMUM_SELECTED_POST_EXECUTION_BUDGET_MS,
-    SELECTED_POST_DELIVERY_LEASE_SECONDS,
-    SELECTED_POST_FINALIZATION_MARGIN_MS,
-    SELECTED_POST_HANDLER_PRELUDE_MARGIN_MS,
-    SELECTED_POST_HANDLER_TIMEOUT_SECONDS,
-)
+from app.modules.checkers.api.external_policy import SELECTED_POST_DELIVERY_LEASE_SECONDS
 from app.modules.outbox.api import HandlerOutcome, FinalizationCause, DeliveryOptions
 from app.modules.outbox.registry import HandlerRegistry
 from app.modules.tasks.post_submit_routing.outcome import TaskPostSubmitOutcome
@@ -240,7 +234,7 @@ def test_completion_handler_is_registered_in_production_registry():
     assert delivery._options_for(COMPLETION_EVENT, 1) == DeliveryOptions()
 
 
-def test_production_request_transport_covers_maximum_selected_execution(monkeypatch):
+def test_production_post_request_renews_ownership_without_an_execution_deadline(monkeypatch):
     from app.core.config import get_settings
 
     # This checks the actual task declaration without publishing to a broker.
@@ -248,32 +242,22 @@ def test_production_request_transport_covers_maximum_selected_execution(monkeypa
     monkeypatch.setenv("WORKSTREAM_ARTIFACT_STORE_BACKEND", "disabled")
     get_settings.cache_clear()
     try:
-        _assert_production_request_transport_budget()
+        _assert_production_request_renewal()
     finally:
         get_settings.cache_clear()
 
 
-def _assert_production_request_transport_budget():
+def _assert_production_request_renewal():
     from app.workers.outbox import deliver_event
-    from app.workers.outbox_topology import OUTBOX_PROCESS_SHUTDOWN_MARGIN_SECONDS
 
     delivery = production_outbox_delivery(None)
     request = delivery._options_for(REQUEST_EVENT, 1)
 
-    assert request.handler_timeout_seconds == SELECTED_POST_HANDLER_TIMEOUT_SECONDS
+    assert request.background_heartbeat
+    assert request.handler_timeout_seconds is None
     assert request.lease_seconds == SELECTED_POST_DELIVERY_LEASE_SECONDS
-    bounded_pipeline_ms = (
-        MAXIMUM_SELECTED_POST_EXECUTION_BUDGET_MS
-        + SELECTED_POST_HANDLER_PRELUDE_MARGIN_MS
-        + SELECTED_POST_FINALIZATION_MARGIN_MS
-    )
-    assert bounded_pipeline_ms <= request.handler_timeout_seconds * 1000
-    assert request.handler_timeout_seconds < request.lease_seconds <= 3600
-    assert bounded_pipeline_ms < request.lease_seconds * 1000
-    assert deliver_event.time_limit == (
-        request.lease_seconds + OUTBOX_PROCESS_SHUTDOWN_MARGIN_SECONDS
-    )
-    assert deliver_event.time_limit > request.handler_timeout_seconds
+    assert deliver_event.time_limit is None
+    assert delivery._options_for(POST_SUBMIT_DELIVERY_RECONCILIATION_EVENT, 1) == request
     assert delivery._options_for(COMPLETION_EVENT, 1) == DeliveryOptions()
 
 
@@ -287,6 +271,7 @@ async def test_production_registry_delivers_request_then_completion_exactly_once
 ):
     """Production registration must consume its own emitted completion event."""
     from app.adapters import artifacts as artifact_adapters
+    from tests.checkers.execution.support import ControlledSelectedExecution
 
     awards = () if human else ("money", "project_points")
     async with material_fixture(
@@ -305,20 +290,20 @@ async def test_production_registry_delivers_request_then_completion_exactly_once
             assert accepted.rowcount == 1
         await provision_router(h.factory)
         await delivery_fixture(h)
-        # An empty locked POST policy completes without constructing or
-        # contacting the external service. Actual image execution is covered
-        # by the production Rust/MinIO probe.
-        settings = h.settings.model_copy(update={
-            "external_checker_service_socket": None,
-            "external_checker_material_root": None,
-        })
-        monkeypatch.setattr("app.core.config.get_settings", lambda: settings)
+        # Keep the selected POST image and real execution owner; control only
+        # the external port. This proves delivery/acceptance, not native isolation.
+        selected = ControlledSelectedExecution()
+        monkeypatch.setattr("app.core.config.get_settings", lambda: h.settings)
+        monkeypatch.setattr(
+            "app.adapters.checkers.configured_post_submit_external_execution",
+            lambda settings, *, sessions: selected,
+        )
         monkeypatch.setattr(
             artifact_adapters,
             "worker_post_submission_materialization",
             lambda *, sessions: h.service,
         )
-        delivery = production_outbox_delivery(h.factory)
+        delivery = production_outbox_delivery(h.factory, worker_group="post")
         assert delivery._registry.keys[-3:] == (
             (REQUEST_EVENT, 1),
             (COMPLETION_EVENT, 1),
@@ -333,7 +318,9 @@ async def test_production_registry_delivers_request_then_completion_exactly_once
         assert outcome(request_receipt)["delivery_state"] == "acknowledged", outcome(request_receipt)
         completed = await state(h)
         assert completed["run"]["status"] == "completed"
-        assert completed["members"] == 0
+        assert completed["members"] == 1
+        assert len(selected.requests) == 1
+        assert selected.requests[0].identity.phase == "post_submit"
         completion_event_id = completed["run"]["completion_event_id"]
         assert completion_event_id is not None
 

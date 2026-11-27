@@ -213,6 +213,17 @@ class CheckerRun(Base):
         ),
         CheckConstraint("evaluation_generation > 0 and worker_lease_generation >= 0", name="generations"),
         CheckConstraint("status in ('queued','running','completed','infrastructure_failed')", name="state"),
+        CheckConstraint(
+            "(worker_lease_id is null and worker_lease_live_until is null) or "
+            "(worker_lease_id is not null and worker_lease_live_until>=worker_lease_expires_at)",
+            name="live_lease_shape",
+        ),
+        CheckConstraint(
+            "(retry_abandonment_event_id IS NULL OR retry_delivery_event_id IS NOT NULL) AND "
+            "(retry_delivery_event_id IS NULL OR (supersedes_checker_run_id IS NOT NULL "
+            "AND (retry_abandonment_event_id IS NOT NULL OR evaluation_generation BETWEEN 2 AND 5)))",
+            name="service_retry_scope",
+        ),
         CheckConstraint("octet_length(request_json) <= 1048576 and request_digest = 'sha256:' || encode(sha256(convert_to(request_json, 'UTF8')), 'hex')", name="request_digest"),
         CheckConstraint("result_json is null or result_digest = 'sha256:' || encode(sha256(convert_to(result_json, 'UTF8')), 'hex')", name="result_digest"),
         Index(
@@ -247,6 +258,7 @@ class CheckerRun(Base):
     worker_lease_id: Mapped[str | None] = mapped_column(Uuid(as_uuid=False))
     worker_lease_generation: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     worker_lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    worker_lease_live_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     execute_evidence_id: Mapped[str | None] = mapped_column(
         Uuid(as_uuid=False), ForeignKey("audit_events.id", name="fk_checker_runs_execute_evidence", deferrable=True, initially="DEFERRED"),
     )
@@ -263,6 +275,12 @@ class CheckerRun(Base):
     material_custody: Mapped[dict | None] = mapped_column(JSON(none_as_null=True))
     input_context_custody: Mapped[dict | None] = mapped_column(JSONB(none_as_null=True))
     completion_event_id: Mapped[UUID | None] = mapped_column(Uuid(), ForeignKey("outbox_events.event_id"))
+    retry_delivery_event_id: Mapped[UUID | None] = mapped_column(
+        Uuid(), ForeignKey("outbox_events.event_id", name="fk_checker_runs_retry_delivery_event"), unique=True,
+    )
+    retry_abandonment_event_id: Mapped[UUID | None] = mapped_column(
+        Uuid(), ForeignKey("outbox_events.event_id", name="fk_checker_runs_retry_abandonment_event"), unique=True,
+    )
     supersedes_checker_run_id: Mapped[str | None] = mapped_column(
         Uuid(as_uuid=False),
         index=True,
@@ -513,6 +531,12 @@ class SelectedPreSubmitRun(Base):
 
     __tablename__ = "selected_pre_submit_runs"
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["source_operation_id", "task_id"],
+            ["submission_intake_operations.id", "submission_intake_operations.task_id"],
+            name="fk_selected_pre_run_source_operation",
+        ),
+        UniqueConstraint("source_operation_id", name="uq_selected_pre_run_source_operation"),
         CheckConstraint(
             "(get_byte(uuid_send(id), 6) >> 4) = 7 and "
             "(get_byte(uuid_send(id), 8) & 192) = 128",
@@ -597,15 +621,16 @@ class SelectedPreSubmitRun(Base):
     task_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), nullable=False)
     assignment_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), nullable=False)
     idempotency_key: Mapped[str] = mapped_column(Uuid(as_uuid=False), nullable=False)
-    prepared_generation_id: Mapped[str] = mapped_column(Uuid(as_uuid=False), nullable=False)
+    source_operation_id: Mapped[str | None] = mapped_column(Uuid(as_uuid=False))
+    prepared_generation_id: Mapped[str | None] = mapped_column(Uuid(as_uuid=False))
     request_json: Mapped[dict] = mapped_column(JSONB(), nullable=False)
     request_digest: Mapped[str] = mapped_column(String(71), nullable=False)
     policy_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
     default_behavior_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
-    default_input_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
+    default_input_sha256: Mapped[str | None] = mapped_column(String(71))
     archive_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
     archive_byte_count: Mapped[int] = mapped_column(BigInteger, nullable=False)
-    semantic_manifest_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
+    semantic_manifest_sha256: Mapped[str | None] = mapped_column(String(71))
     execution_budget_ms: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[str] = mapped_column(String(32), nullable=False)
     lease_id: Mapped[str | None] = mapped_column(Uuid(as_uuid=False))

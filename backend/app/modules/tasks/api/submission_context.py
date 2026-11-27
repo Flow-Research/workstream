@@ -14,6 +14,7 @@ TaskSubmissionContextKind = Literal["initial", "checker_remediation"]
 TaskSubmissionContextStatus = Literal["in_progress", "needs_revision"]
 TaskSubmissionContextFailure = Literal[
     "task_submission_context_invalid",
+    "task_submission_operation_in_progress",
     "task_submission_predecessor_changed",
     "revision_limit_reached",
     "revision_deadline_expired",
@@ -40,7 +41,8 @@ class TaskSubmissionContextRequest:
     task_id: UUID
     assignment_id: UUID
     contributor_id: UUID
-    predecessor_submission_id: UUID | None
+    predecessor_submission_id: UUID | None = None
+    select_predecessor: bool = False
 
 
 @dataclass(frozen=True, slots=True)

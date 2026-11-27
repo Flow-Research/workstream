@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from dataclasses import asdict
-from typing import Annotated, NoReturn, Protocol
+from typing import Annotated, Protocol
 from uuid import UUID
 
 from fastapi import Depends, Request
@@ -28,13 +28,15 @@ from app.modules.artifacts.schemas import (
     ArtifactPutAttemptAuthorityFacts,
     ArtifactVerificationAuthorityFacts,
 )
-from app.modules.artifacts.submission_materialization import (
-    PreSubmitMaterializationAuthorityFacts,
-    PreSubmitMaterializationPreparationFacts,
-)
+from app.modules.artifacts.api.submission_intake import PreSubmitSourceReadFacts
+from app.modules.artifacts.api.submission_cleanup import SubmissionSourceCleanupAuthorityFacts
+from app.modules.authorization.api.submission_cleanup import SubmissionSourceCleanupResourceContext
+from app.modules.artifacts.api.submission_finalization import SubmissionFinalizationAuthorityFacts
+from app.modules.authorization.api.submission_finalization import SubmissionFinalizationResourceContext
+
 from app.modules.artifacts.submission_bindings import SubmissionBindingAuthorityFacts
 from app.modules.artifacts.api import SubmissionAdmissionConsumptionError
-from app.modules.authorization.catalogue import ACTION_BY_ID, ActionAvailability, ActionId
+from app.modules.authorization.catalogue import ActionId
 from app.modules.authorization.kernel import AuthorizationService
 from app.modules.authorization.prepared import (
     PreparedAuthorizationHandle,
@@ -56,213 +58,13 @@ from app.modules.authorization.runtime import (
     GuideSourceIngestResourceContext,
     GuideSourceReadResourceContext,
     PreSubmitCheckerInputResourceContext,
-    PreSubmitCheckerInputPreparationContext,
     HumanAuthorizationContext,
     PreparedAuthorizationHandleInvalid,
     PreparedAuthorizationUnsupported,
     ServiceAuthorizationContext,
     AuthorizationContext,
-    SubmissionBundlePreparationPreflightResourceContext,
-    SubmissionBundlePreparationResourceContext,
     SubmissionBindingResourceContext,
 )
-
-
-class PreparedSubmissionBundlePreparationAuthorization:
-    """Translate ART facts into AUTH's existing request-local PREP protocol."""
-
-    def __init__(self, session: AsyncSession, context: AuthorizationContext) -> None:
-        """Compose one request-local ART-to-AUTH preparation adapter."""
-        self._session = session
-        self._context = context
-        self._repository = AdminAuthorizationRepository(session)
-        self._authorization = AuthorizationService(
-            session, context, admin_repository=self._repository
-        )
-        self._prepared = PreparedAuthorizationService(
-            session, context, self._authorization, self._repository
-        )
-        self._input: PreparedAuthorizationInput | None = None
-
-    @staticmethod
-    def _deny(exc: BaseException | None = None) -> NoReturn:
-        """Conceal every internal authorization failure from ART callers."""
-        denial = ArtifactAuthorityDeniedError("submission bundle preparation is unavailable")
-        if exc is None:
-            raise denial
-        raise denial from exc
-
-    @staticmethod
-    def _request_input(request, project_id: UUID) -> PreparedAuthorizationInput:
-        """Build immutable preliminary selectors from the ART request."""
-        return PreparedAuthorizationInput(
-            idempotency_key=request.idempotency_key,
-            request_value={
-                "scope_project_id": str(project_id),
-                "actor_profile_id": str(request.actor.actor_profile_id),
-                "identity_link_id": str(request.actor.identity_link_id),
-                "task_id": str(request.task_id),
-                "assignment_id": str(request.assignment_id),
-                "predecessor_submission_id": (
-                    str(request.predecessor_submission_id)
-                    if request.predecessor_submission_id is not None
-                    else None
-                ),
-            },
-        )
-
-    def _final_input(self, facts) -> PreparedAuthorizationInput:
-        """Build exact final request facts for transaction-bound PREP."""
-        request_value = self._final_values(facts, json=True)
-        return PreparedAuthorizationInput(
-            idempotency_key=self._input.idempotency_key,
-            request_value=request_value,
-        )
-
-    @staticmethod
-    def _final_values(facts, *, json: bool) -> dict:
-        values = asdict(facts)
-        project_id = values.pop("project_id")
-        values["scope_project_id"] = project_id
-        if json:
-            return {
-                key: str(value) if isinstance(value, UUID) else value
-                for key, value in values.items()
-            }
-        return values
-
-    def _validate_actor_request(self, request) -> None:
-        """Reject invalid request identities before opening a database transaction."""
-        action = ACTION_BY_ID[ActionId.ARTIFACT_SUBMISSION_BUNDLE_PREPARE]
-        invalid = (
-            not isinstance(self._context, HumanAuthorizationContext)
-            or action.availability is not ActionAvailability.ACTIVE
-            or self._context.actor_status.value != "active"
-            or self._context.identity_link_status.value != "active"
-            or request.actor.actor_profile_id != self._context.actor_profile_id
-            or request.actor.identity_link_id != self._context.identity_link_id
-        )
-        if invalid:
-            self._deny()
-
-    async def preflight(self, *, request) -> None:
-        """Check the actor before context or byte access in a separate transaction."""
-        self._validate_actor_request(request)
-        async with self._session.begin():
-            await self.lock_actor(request=request)
-
-    async def lock_actor(self, *, request) -> None:
-        """Hold current actor identity between TASK and PROJECT locks."""
-        if not self._session.in_transaction() or self._session.in_nested_transaction():
-            self._deny()
-        self._validate_actor_request(request)
-        locked = await self._repository.lock_request_actor(
-            self._context.identity_link_id, self._context.actor_profile_id
-        )
-        if locked is None:
-            self._deny()
-        link, profile = locked
-        if (
-            link.id != str(self._context.identity_link_id)
-            or link.actor_profile_id != str(self._context.actor_profile_id)
-            or link.status != "active"
-            or profile.id != str(self._context.actor_profile_id)
-            or profile.actor_kind != "human"
-            or profile.status != "active"
-        ):
-            self._deny()
-
-    async def revalidate(self, *, request, project_id: UUID | None = None) -> None:
-        if project_id is None:
-            if self._input is None:
-                self._deny()
-            project_id = UUID(str(self._input.request_value["scope_project_id"]))
-        self._input = self._request_input(request, project_id)
-        resource = SubmissionBundlePreparationPreflightResourceContext(
-            resource_type="submission_bundle_preparation_preflight",
-            resource_id=request.assignment_id,
-            scope_project_id=project_id,
-            actor_profile_id=request.actor.actor_profile_id,
-            identity_link_id=request.actor.identity_link_id,
-            task_id=request.task_id,
-            assignment_id=request.assignment_id,
-            predecessor_submission_id=request.predecessor_submission_id,
-        )
-        try:
-            await self._prepared.preflight(
-                ActionId.ARTIFACT_SUBMISSION_BUNDLE_PREPARE,
-                self._input,
-                PreparedAuthorityScope(
-                    kind=PreparedAuthorityScopeKind.PROJECT,
-                    project_id=project_id,
-                ),
-                resource,
-            )
-        except (PreparedAuthorizationHandleInvalid, PreparedAuthorizationUnsupported) as exc:
-            self._deny(exc)
-
-    @asynccontextmanager
-    async def transaction(self):
-        async with self._session.begin():
-            yield
-
-    async def prepare_final(self, *, facts):
-        if self._input is None:
-            self._deny()
-        final_input = self._final_input(facts)
-        expected = self._input.request_value
-        actual = final_input.request_value
-        for field in (
-            "scope_project_id",
-            "actor_profile_id",
-            "identity_link_id",
-            "task_id",
-            "assignment_id",
-            "predecessor_submission_id",
-        ):
-            if actual[field] != expected[field]:
-                self._deny()
-        if final_input.idempotency_key != self._input.idempotency_key:
-            self._deny()
-        try:
-            handle = await self._prepared.prepare(
-                ActionId.ARTIFACT_SUBMISSION_BUNDLE_PREPARE,
-                final_input,
-                PreparedAuthorityScope(
-                    kind=PreparedAuthorityScopeKind.PROJECT,
-                    project_id=facts.project_id,
-                ),
-            )
-        except (PreparedAuthorizationHandleInvalid, PreparedAuthorizationUnsupported) as exc:
-            self._deny(exc)
-        self._input = final_input
-        return handle
-
-    async def consume(self, *, prepared_authorization: object, facts) -> None:
-        if self._input is None or type(prepared_authorization) is not PreparedAuthorizationHandle:
-            self._deny()
-        try:
-            resource = SubmissionBundlePreparationResourceContext(
-                resource_type="submission_bundle_preparation",
-                resource_id=facts.prepared_generation_id,
-                **self._final_values(facts, json=False),
-            )
-            await self._prepared.consume(
-                prepared_authorization,
-                ActionId.ARTIFACT_SUBMISSION_BUNDLE_PREPARE,
-                self._input,
-                resource,
-            )
-        except (
-            AuthorizationDenied,
-            PreparedAuthorizationHandleInvalid,
-            PreparedAuthorizationUnsupported,
-            ValidationError,
-        ) as exc:
-            self._deny(exc)
-
-    def close(self) -> None:
-        self._prepared.close()
 
 
 async def get_artifact_authorization_context(
@@ -546,9 +348,8 @@ class _PreparedArtifactServiceAuthorization:
         self._handle: PreparedAuthorizationHandle | None = None
         self._facts: (
             GuideSourceReadAuthorityFacts
-            | PreSubmitMaterializationAuthorityFacts
-            | PreSubmitMaterializationPreparationFacts
-            | SubmissionBindingAuthorityFacts
+            | PreSubmitSourceReadFacts
+            | SubmissionSourceCleanupAuthorityFacts | SubmissionFinalizationAuthorityFacts | SubmissionBindingAuthorityFacts
             | None
         ) = None
 
@@ -556,8 +357,8 @@ class _PreparedArtifactServiceAuthorization:
         self,
         *,
         facts: GuideSourceReadAuthorityFacts
-        | PreSubmitMaterializationPreparationFacts
-        | SubmissionBindingAuthorityFacts,
+        | PreSubmitSourceReadFacts
+        | SubmissionSourceCleanupAuthorityFacts | SubmissionFinalizationAuthorityFacts | SubmissionBindingAuthorityFacts,
         idempotency_key: UUID,
     ) -> PreparedAuthorizationHandle:
         """Prepare one process-local capability bound to every canonical fact."""
@@ -617,8 +418,8 @@ class _PreparedArtifactServiceAuthorization:
         *,
         prepared_authorization: PreparedAuthorizationHandle,
         facts: GuideSourceReadAuthorityFacts
-        | PreSubmitMaterializationAuthorityFacts
-        | SubmissionBindingAuthorityFacts,
+        | PreSubmitSourceReadFacts
+        | SubmissionSourceCleanupAuthorityFacts | SubmissionFinalizationAuthorityFacts | SubmissionBindingAuthorityFacts,
     ) -> UUID | None:
         """Consume only the exact handle and facts prepared by this adapter."""
         if (
@@ -636,7 +437,7 @@ class _PreparedArtifactServiceAuthorization:
                 self._input,
                 _artifact_service_resource_context(facts),
             )
-            if self._action_id is ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE:
+            if self._action_id in {ActionId.ARTIFACT_SUBMISSION_BINDING_CREATE, ActionId.ARTIFACT_SUBMISSION_FINALIZE, ActionId.ARTIFACT_SOURCE_CLEANUP}:
                 return decision.decision_id
             return None
         except (AuthorizationDenied, PreparedAuthorizationHandleInvalid, ValidationError) as exc:
@@ -673,6 +474,59 @@ class _PreparedArtifactServiceAuthorization:
         self._input = None
         self._handle = None
         self._facts = None
+
+
+class PreparedSubmissionSourceCleanupAuthorization(_PreparedArtifactServiceAuthorization):
+    """Only the dedicated cleanup service can authorize an exact cleanup phase."""
+
+    def __init__(self, session: AsyncSession, *, request_id: UUID, correlation_id: UUID) -> None:
+        super().__init__(session, service_identity=ServiceIdentity.ARTIFACT_SOURCE_CLEANUP,
+                         action_id=ActionId.ARTIFACT_SOURCE_CLEANUP,
+                         request_id=request_id, correlation_id=correlation_id)
+
+
+    async def authorize(self) -> None:
+        """Resolve current cleanup service before custody reads, including replay."""
+        await fixed_service_action_context(
+            self._session, service_identity=ServiceIdentity.ARTIFACT_SOURCE_CLEANUP,
+            action_id=ActionId.ARTIFACT_SOURCE_CLEANUP,
+            request_id=self._request_id, correlation_id=self._correlation_id,
+        )
+
+
+    async def revalidate(self) -> None:
+        """Lock fresh service lifecycle facts after TASK/operation custody."""
+        from app.modules.authorization.runtime import ActorStatus, IdentityLinkStatus
+        context = await fixed_service_action_context(
+            self._session, service_identity=ServiceIdentity.ARTIFACT_SOURCE_CLEANUP,
+            action_id=ActionId.ARTIFACT_SOURCE_CLEANUP,
+            request_id=self._request_id, correlation_id=self._correlation_id,
+        )
+        revalidate = fixed_service_context_revalidator(
+            AdminAuthorizationRepository(self._session), ServiceIdentity.ARTIFACT_SOURCE_CLEANUP,
+        )
+        current = await revalidate(context, ActionId.ARTIFACT_SOURCE_CLEANUP)
+        if (current is None or current.actor_status is not ActorStatus.ACTIVE
+                or current.identity_link_status is not IdentityLinkStatus.ACTIVE):
+            raise ArtifactAuthorityDeniedError("artifact cleanup service is unavailable")
+
+
+class PreparedSubmissionFinalizationAuthorization(_PreparedArtifactServiceAuthorization):
+    """Accepted continuation authority belongs only to the existing binding service."""
+
+    def __init__(self, session: AsyncSession, *, request_id: UUID, correlation_id: UUID) -> None:
+        super().__init__(session, service_identity=ServiceIdentity.ARTIFACT_BINDING,
+                         action_id=ActionId.ARTIFACT_SUBMISSION_FINALIZE,
+                         request_id=request_id, correlation_id=correlation_id)
+
+
+    async def authorize(self) -> None:
+        """Check the current fixed service before replay or provider observation."""
+        await fixed_service_action_context(
+            self._session, service_identity=ServiceIdentity.ARTIFACT_BINDING,
+            action_id=ActionId.ARTIFACT_SUBMISSION_FINALIZE,
+            request_id=self._request_id, correlation_id=self._correlation_id,
+        )
 
 
 class PreparedSubmissionBindingAuthorization:
@@ -763,7 +617,7 @@ class PreparedPreSubmitMaterializationAuthorization:
     async def prepare(
         self,
         *,
-        facts: PreSubmitMaterializationPreparationFacts,
+        facts: PreSubmitSourceReadFacts,
         idempotency_key: UUID,
     ) -> PreparedAuthorizationHandle:
         """Prepare authority from the locked scalar facts before ZIP inspection."""
@@ -773,7 +627,7 @@ class PreparedPreSubmitMaterializationAuthorization:
         self,
         *,
         prepared_authorization: object,
-        facts: PreSubmitMaterializationAuthorityFacts,
+        facts: PreSubmitSourceReadFacts,
     ) -> None:
         """Consume authority only for the exact materializer and final facts."""
         await self._delegate.consume(
@@ -787,61 +641,33 @@ class PreparedPreSubmitMaterializationAuthorization:
 
 
 def _artifact_service_resource_context(
-    facts: GuideSourceReadAuthorityFacts
-    | PreSubmitMaterializationAuthorityFacts
-    | PreSubmitMaterializationPreparationFacts
-    | SubmissionBindingAuthorityFacts,
-) -> (
-    GuideSourceReadResourceContext
-    | PreSubmitCheckerInputResourceContext
-    | PreSubmitCheckerInputPreparationContext
-    | SubmissionBindingResourceContext
-):
-    """Compose the canonical AUTH resource context for fixed ART service facts."""
-    values = asdict(facts)
-    if isinstance(facts, PreSubmitMaterializationAuthorityFacts):
-        values = asdict(facts.preparation)
+    facts: GuideSourceReadAuthorityFacts | PreSubmitSourceReadFacts | SubmissionSourceCleanupAuthorityFacts | SubmissionFinalizationAuthorityFacts | SubmissionBindingAuthorityFacts,
+) -> GuideSourceReadResourceContext | PreSubmitCheckerInputResourceContext | SubmissionBindingResourceContext | SubmissionFinalizationResourceContext | SubmissionSourceCleanupResourceContext:
+    """Compose AUTH context for the exact fixed ART service operation."""
+    if type(facts) is PreSubmitSourceReadFacts:
         return PreSubmitCheckerInputResourceContext(
-            resource_type="pre_submit_checker_input",
-            resource_id=facts.preparation.prepared_generation_id,
-            semantic_manifest_sha256=facts.semantic_manifest_sha256,
-            **values,
+            resource_id=facts.source.location.operation_id,
+            scope_project_id=facts.project_id, facts=facts,
         )
-    if isinstance(facts, PreSubmitMaterializationPreparationFacts):
-        return PreSubmitCheckerInputPreparationContext(
-            resource_type="pre_submit_checker_input",
-            resource_id=facts.prepared_generation_id,
-            **values,
-        )
+    if type(facts) is SubmissionSourceCleanupAuthorityFacts:
+        return SubmissionSourceCleanupResourceContext(resource_id=facts.operation_id, **asdict(facts))
+    if type(facts) is SubmissionFinalizationAuthorityFacts:
+        return SubmissionFinalizationResourceContext(resource_id=facts.operation_id, **asdict(facts))
     if isinstance(facts, SubmissionBindingAuthorityFacts):
         return SubmissionBindingResourceContext(
-            resource_type="submission_binding",
-            resource_id=facts.admission_id,
-            **asdict(facts),
+            resource_type="submission_binding", resource_id=facts.admission_id, **asdict(facts),
         )
     return GuideSourceReadResourceContext(
-        resource_type="guide_source_read",
-        resource_id=facts.guide_source_item_id,
-        **values,
+        resource_type="guide_source_read", resource_id=facts.guide_source_item_id, **asdict(facts),
     )
 
 
 def _prepared_artifact_facts_match(
-    prepared: GuideSourceReadAuthorityFacts
-    | PreSubmitMaterializationPreparationFacts
-    | PreSubmitMaterializationAuthorityFacts
-    | SubmissionBindingAuthorityFacts,
-    final: GuideSourceReadAuthorityFacts
-    | PreSubmitMaterializationAuthorityFacts
-    | SubmissionBindingAuthorityFacts,
+    prepared: GuideSourceReadAuthorityFacts | PreSubmitSourceReadFacts | SubmissionSourceCleanupAuthorityFacts | SubmissionFinalizationAuthorityFacts | SubmissionBindingAuthorityFacts,
+    final: GuideSourceReadAuthorityFacts | PreSubmitSourceReadFacts | SubmissionSourceCleanupAuthorityFacts | SubmissionFinalizationAuthorityFacts | SubmissionBindingAuthorityFacts,
 ) -> bool:
-    """Require final facts to preserve every fact bound during preparation."""
-    if isinstance(prepared, PreSubmitMaterializationPreparationFacts):
-        return (
-            isinstance(final, PreSubmitMaterializationAuthorityFacts)
-            and prepared == final.preparation
-        )
-    return prepared == final
+    """Require source, lease and every locked fact to remain exactly prepared."""
+    return type(prepared) is type(final) and prepared == final
 
 
 class PreparedArtifactInternalAuthority:

@@ -127,6 +127,58 @@ def test_own_work_pages_preserve_bodies_and_wire(cli):
         )
 
 
+def test_assignment_status_uses_only_the_assignment_id(cli):
+    body = {
+        "assignment": ASSIGNMENT_ROW,
+        "current_status": "needs_revision",
+        "status_reason": None,
+        "next_action": "revise",
+        "intake": None,
+        "feedback_submission_id": SUBMISSION,
+        "post_submission_results": [],
+        "next_cursor": None,
+        "accepted_evidence": None,
+    }
+    with http_fixture() as (origin, response, requests):
+        response["body"] = json.dumps(body).encode()
+        args = (
+            "task",
+            "status",
+            ASSIGNMENT,
+            "--limit",
+            "2",
+            "--cursor",
+            "next",
+            "-o",
+            "json",
+        )
+        result = cli(origin, TOKEN, *args)
+        assert result.returncode == 0 and json.loads(result.stdout) == body, (
+            result.stderr
+        )
+        method, target, authorization = requests[-1]
+        assert method == "GET" and authorization == "Bearer " + TOKEN
+        assert urlsplit(target).path == f"/api/v1/actors/me/assignments/{ASSIGNMENT}"
+        assert parse_qs(urlsplit(target).query) == {"limit": ["2"], "cursor": ["next"]}
+        text = cli(origin, TOKEN, "task", "status", ASSIGNMENT)
+        assert text.returncode == 0 and f'Task: "{TASK}"\n' in text.stdout, text.stderr
+
+        response["body"] = json.dumps(
+            body
+            | {
+                "assignment": ASSIGNMENT_ROW | {"assignment_id": SUBMISSION},
+            }
+        ).encode()
+        assert_failure(cli(origin, TOKEN, *args), "invalid_api_response")
+        assert (
+            cli(
+                origin, TOKEN, "task", "status", TASK, "--assignment", ASSIGNMENT
+            ).returncode
+            == 2
+        )
+        assert len(requests) == 3
+
+
 def test_assignment_revision_is_the_work_context_projection(cli):
     paused = deepcopy(REVISION_CONTEXT) | {
         "max_revision_rounds": 0,

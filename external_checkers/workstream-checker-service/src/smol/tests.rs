@@ -49,20 +49,176 @@ fn trial_peak_reservation_admits_maximum_memory_and_overrun_atomically() {
         memory_bytes: outer.memory_bytes + peak.memory_bytes,
         storage_bytes: outer.storage_bytes + peak.storage_bytes,
     };
-    let node = Arc::new(Admission::new(maximum, "e".repeat(64)).unwrap());
-    let invocation = node.reserve(outer, Some(peak)).unwrap();
+    let node = Arc::new(Admission::new(maximum, None, "e".repeat(64)).unwrap());
+    let invocation = node.reserve(Phase::Background, outer, Some(peak)).unwrap();
     let child = invocation
         .child(trial_capacity(maximum_memory + overrun, disk).unwrap())
         .unwrap();
-    assert!(node.reserve(outer, None).is_err());
+    assert!(node.reserve(Phase::Background, outer, None).is_err());
     drop(child);
     drop(invocation);
     let mut insufficient = maximum;
     insufficient.memory_bytes -= 1;
-    let node = Arc::new(Admission::new(insufficient, "f".repeat(64)).unwrap());
-    assert!(node.reserve(outer, Some(peak)).is_err());
-    assert!(node.reserve(outer, None).is_ok());
+    let node = Arc::new(Admission::new(insufficient, None, "f".repeat(64)).unwrap());
+    assert!(node.reserve(Phase::Background, outer, Some(peak)).is_err());
+    assert!(node.reserve(Phase::Background, outer, None).is_ok());
     assert!(trial_peak_capacity(u64::MAX, 1, disk).is_err());
+}
+
+#[test]
+fn background_disk_allocation_preserves_physical_pre_headroom() {
+    let (root, _) = super::super::tests::test_config();
+    const MIB: u64 = 1024 * 1024;
+    let pre = Capacity {
+        slots: 1,
+        memory_bytes: 1,
+        storage_bytes: 64 * MIB,
+    };
+    let post = Capacity {
+        storage_bytes: 4 * MIB,
+        ..pre
+    };
+    let total_disk = pre.storage_bytes + post.storage_bytes;
+    let smol = SmolConfig {
+        binary: root.join("unused-runtime"),
+        binary_sha256: "unused".into(),
+        home: root.clone(),
+        guest_binary: root.join("unused-guest"),
+        guest_sha256: "unused".into(),
+        cgroup_root: root.join("unused-cgroup"),
+        maximum_parallel: 2,
+        maximum_storage_bytes: total_disk,
+    };
+    let node = Arc::new(
+        Admission::new(
+            Capacity {
+                slots: 2,
+                memory_bytes: 2,
+                storage_bytes: total_disk,
+            },
+            Some(pre),
+            "test".into(),
+        )
+        .unwrap(),
+    );
+
+    let free_at_start = available_storage(&smol).unwrap();
+    // Model a smaller node budget without filling a shared test filesystem.
+    let outside_tight_budget = free_at_start.checked_sub(total_disk).unwrap();
+    let tight_free = free_at_start - outside_tight_budget;
+    assert!(node
+        .reserve_with_storage(Phase::Background, post, None, || Ok(tight_free))
+        .is_err());
+    let foreground = node
+        .reserve_with_storage(Phase::Pre, pre, None, || Ok(tight_free))
+        .unwrap();
+    drop(foreground);
+
+    let outside_sufficient_budget = free_at_start.checked_sub(2 * total_disk).unwrap();
+    let background = node
+        .reserve_with_storage(Phase::Background, post, None, || {
+            Ok(free_at_start - outside_sufficient_budget)
+        })
+        .unwrap();
+    let disk = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(root.join("background-disk"))
+        .unwrap();
+    // Unlike set_len(), fallocate actually consumes filesystem blocks.
+    let allocation =
+        unsafe { libc::posix_fallocate(disk.as_raw_fd(), 0, post.storage_bytes as i64) };
+    assert_eq!(allocation, 0);
+    disk.sync_all().unwrap();
+    assert!(disk.metadata().unwrap().blocks() * 512 >= post.storage_bytes);
+
+    let foreground = node
+        .reserve_with_storage(Phase::Pre, pre, None, || {
+            Ok(available_storage(&smol)? - outside_sufficient_budget)
+        })
+        .unwrap();
+    drop((foreground, background, disk));
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn runner_drain_uses_owned_control_root_and_preserves_admitted_child() {
+    let (root, mut config) = super::super::tests::test_config();
+    const MIB: u64 = 1024 * 1024;
+    let one = Capacity {
+        slots: 1,
+        memory_bytes: MIB,
+        storage_bytes: MIB,
+    };
+    config.smol = Some(SmolConfig {
+        binary: root.join("unused-runtime"),
+        binary_sha256: "unused".into(),
+        home: root.clone(),
+        guest_binary: root.join("unused-guest"),
+        guest_sha256: "unused".into(),
+        cgroup_root: root.join("unused-cgroup"),
+        maximum_parallel: 4,
+        maximum_storage_bytes: 4 * MIB,
+    });
+    let admission = Arc::new(
+        Admission::new(
+            Capacity {
+                slots: 4,
+                memory_bytes: 4 * MIB,
+                storage_bytes: 4 * MIB,
+            },
+            Some(one),
+            "e".repeat(64),
+        )
+        .unwrap(),
+    );
+    config.smol_admission = Some(admission.clone());
+    let held = reserve_capacity(&config, Phase::Background, one, Some(one)).unwrap();
+    assert!(admission
+        .fits_with_storage(Phase::Pre, one, None, || Ok(u64::MAX))
+        .unwrap());
+
+    let control = config.socket_path.parent().unwrap();
+    let marker = control.join(DRAIN_MARKER);
+    fs::write(&marker, b"bad marker").unwrap();
+    assert!(node_draining(&config).is_err());
+    fs::remove_file(&marker).unwrap();
+    OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .open(&marker)
+        .unwrap();
+    assert!(node_draining(&config).unwrap());
+    let owned_control = root.join("owned-control");
+    fs::rename(control, &owned_control).unwrap();
+    fs::create_dir(control).unwrap();
+    assert!(node_draining(&config).unwrap());
+    assert_eq!(
+        admission.drain_state(|| node_draining(&config)).unwrap(),
+        (true, false)
+    );
+
+    for phase in [Phase::Pre, Phase::Background] {
+        assert_eq!(
+            reserve_capacity(&config, phase, one, None).unwrap_err(),
+            "runner is draining"
+        );
+    }
+    let child = held.child(one).unwrap();
+    drop((child, held));
+    assert_eq!(admission.reserved_storage_bytes().unwrap(), 0);
+    assert_eq!(
+        admission.drain_state(|| node_draining(&config)).unwrap(),
+        (true, true)
+    );
+    fs::remove_file(owned_control.join(DRAIN_MARKER)).unwrap();
+    assert_eq!(
+        admission.drain_state(|| node_draining(&config)).unwrap(),
+        (false, false)
+    );
+    assert!(reserve_capacity(&config, Phase::Pre, one, None).is_ok());
+    fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
@@ -94,11 +250,10 @@ fn foreign_lease_refuses_recovery_before_any_runtime_or_owned_cleanup() {
         name: format!("ws-{}", "0".repeat(32)),
         owner: container_owner(&config).unwrap().to_owned(),
         epoch: "e".repeat(64),
-        expires_ms: 1,
-        lifetime_ms: 1,
         root: leases.clone(),
         runtime,
         private_home_root: None,
+        pre: None,
     };
     let owned = lease.path();
     fs::write(&owned, serde_json::to_vec(&lease).unwrap()).unwrap();
@@ -135,13 +290,14 @@ fn missing_lease_directory_does_not_poison_node_admission() {
                 memory_bytes: 1024 * 1024 * 1024,
                 storage_bytes: 4 * 1024 * 1024 * 1024,
             },
+            None,
             "e".repeat(64),
         )
         .unwrap(),
     ));
     let request = parse_request(include_bytes!("../../../fixtures/request.json")).unwrap();
     let (client, _peer) = UnixStream::pair().unwrap();
-    let mut budget = RequestExecutionBudget::new(Instant::now() + Duration::from_secs(1), 32768);
+    let deadline = Instant::now() + Duration::from_secs(1);
     let inventory = WorkspaceInventory {
         directories: Vec::new(),
         files: Vec::new(),
@@ -157,7 +313,7 @@ fn missing_lease_directory_does_not_poison_node_admission() {
         },
         &ProjectCallbacks::default(),
         &client,
-        &mut budget,
+        ProjectExecutionBudget::Aggregate(deadline),
         &cancelled,
     );
     assert_eq!(
@@ -195,6 +351,7 @@ fn concurrent_capacity_is_reserved_until_its_owner_releases_it() {
                 memory_bytes: capacity,
                 storage_bytes: 4 * 1024 * 1024 * 1024,
             },
+            None,
             "e".repeat(64),
         )
         .unwrap(),
@@ -233,6 +390,31 @@ fn cached_image_config_must_match_its_pinned_digest_and_platform() {
     fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
     fs::write(&path, b"{}").unwrap();
     assert!(inspect_image(cache).is_err());
+    fs::write(&path, raw).unwrap();
+    assert_eq!(
+        image_configuration(cache).unwrap()["config"]["Cmd"],
+        serde_json::json!(["--json"])
+    );
+    OpenOptions::new()
+        .write(true)
+        .open(&path)
+        .unwrap()
+        .set_len(MAX_REQUEST_BYTES as u64 + 1)
+        .unwrap();
+    assert_eq!(
+        inspect_image(cache).unwrap_err(),
+        "image configuration custody invalid"
+    );
+    fs::write(&path, raw).unwrap();
+    fs::set_permissions(&path, fs::Permissions::from_mode(0o666)).unwrap();
+    assert_eq!(
+        inspect_image(cache).unwrap_err(),
+        "image configuration custody invalid"
+    );
+    fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
+    fs::rename(&path, root.join("retained-image")).unwrap();
+    std::os::unix::fs::symlink(root.join("retained-image"), &path).unwrap();
+    assert!(inspect_image(cache).is_err());
     fs::remove_dir_all(root).unwrap();
 }
 
@@ -256,11 +438,10 @@ fn private_child_home_is_derived_from_the_exact_lease() {
         name,
         owner: "b".repeat(64),
         epoch: "c".repeat(64),
-        expires_ms: 1,
-        lifetime_ms: 1,
         root: lease_root,
         runtime,
         private_home_root: Some(child_home_root),
+        pre: None,
     };
     assert!(lease.valid());
     lease.runtime.home = root.join("shared-or-foreign-home");
@@ -278,12 +459,14 @@ fn quarantined_admission_makes_runtime_health_unavailable() {
                 memory_bytes: 20,
                 storage_bytes: 20,
             },
+            None,
             "e".repeat(64),
         )
         .unwrap(),
     );
     let held = admission
         .reserve(
+            Phase::Background,
             Capacity {
                 slots: 1,
                 memory_bytes: 10,
@@ -341,17 +524,27 @@ fn intake_overlay_is_explicit_in_runtime_argv_and_project_creation_is_unchanged(
         name: format!("ws-{}", "0".repeat(32)),
         owner: "d".repeat(64),
         epoch: "e".repeat(64),
-        expires_ms: 1,
-        lifetime_ms: 1,
         root: root.join("leases"),
         runtime,
         private_home_root: None,
+        pre: None,
     };
     fs::create_dir_all(lease.cgroup()).unwrap();
     // A private ordinary file substitutes the cgroup control, with no host effect.
     fs::write(lease.cgroup().join("cgroup.procs"), b"").unwrap();
+    fs::create_dir_all(&lease.root).unwrap();
+    let bytes = serde_json::to_vec(&lease).unwrap();
+    let mut file = OpenOptions::new()
+        .create_new(true)
+        .write(true)
+        .mode(0o600)
+        .open(lease.path())
+        .unwrap();
+    file.write_all(&bytes).unwrap();
+    let journal = pre::Journal::capture(&file, &bytes).unwrap();
     let mut machine = Machine {
         lease,
+        journal,
         guardian: Command::new("/bin/true").spawn().unwrap(),
         keeper: None,
         consumed: false,

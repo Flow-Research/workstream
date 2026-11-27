@@ -1,5 +1,8 @@
 """A Submitter reads their own claim, attempt, preparation and totals through public routes."""
 
+from app.adapters.artifacts import selected_pre_submit_source_contracts
+
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from types import SimpleNamespace
@@ -15,13 +18,17 @@ from app.modules.artifacts.preparation_reads import SubmissionBundlePreparationR
 from app.modules.checkers.api.default_checker import (
     WORKSTREAM_DEFAULT_BEHAVIOR_SHA256, WORKSTREAM_DEFAULT_CHECK_IDS, WorkstreamDefaultCheckerResult,
 )
-from app.modules.checkers.api.selected_pre_submit import SelectedPreSubmitExecutionFacts, SelectedPreSubmitRunView
+from app.modules.checkers.api.selected_pre_submit import SelectedPreSubmitRunView
 from app.modules.checkers.models import SelectedPreSubmitRun
 from app.modules.compensation.api.award_reads import ContributorAwardTotal
 from app.modules.compensation.awards.read_repository import ContributionAwardReadRepository
 from tests.submission_fixtures import route_retained_checker_remediation, seed_retained_checker_run
-from tests.test_tasks import set_dev_actor
+from tests.test_tasks import auth_headers, set_dev_actor
 from .support import ME, OWNER, as_actor, get_ok, preparations_path, submitted_case
+from tests.checkers.external.test_selected_pre_submit_coordination import (
+    _source_completed_execution,
+    _source_reservation,
+)
 
 
 def _present(view):
@@ -90,19 +97,21 @@ async def test_incremental_submission_read_sees_findings_committed_before_routin
     assert after["updated_at"] >= since
 
 
-async def test_preparation_reads_return_own_submitted_preparation(task_client, monkeypatch):
+async def test_current_source_run_uses_operation_progress_not_historical_preparation(task_client, monkeypatch):
     _project, task, submission = await submitted_case(task_client, monkeypatch)
     async with db_session.get_session_factory()() as session:
         run = await session.scalar(select(SelectedPreSubmitRun).where(SelectedPreSubmitRun.task_id == task))
+    assert run is not None and run.source_operation_id is not None
     await as_actor(task_client, monkeypatch, OWNER)
-    [summary] = (await get_ok(task_client, preparations_path(task)))["items"]
-    assert summary["preparation_id"] == run.id and "findings" not in summary
-    assert (summary["outcome"], summary["state"], summary["submission_id"]) == ("passed", "submitted", submission)
-    assert summary["archive_sha256"] == run.archive_sha256
-    assert summary["archive_byte_count"] == run.archive_byte_count
-    detail = await get_ok(task_client, f"{preparations_path(task)}/{run.id}")
-    assert detail | {"findings": None} == summary | {"findings": None}
-    assert {item["source"] for item in detail["findings"]} >= {"workstream_default"}
+    assert (await get_ok(task_client, preparations_path(task)))["items"] == []
+    hidden = await task_client.get(
+        f"{preparations_path(task)}/{run.id}", headers=auth_headers(),
+    )
+    assert hidden.status_code == 404
+    current = await get_ok(task_client, f"/api/v1/tasks/{task}/submission-operations",
+                           operation_id=run.source_operation_id)
+    assert current["operation_state"] == "finalized"
+    assert current["submission_id"] == submission
 
 
 async def test_summary_counts_own_work(task_client, monkeypatch):
@@ -135,17 +144,21 @@ async def test_summary_reports_nonempty_award_totals_as_exact_decimal_strings(ta
 
 
 def _execution(eligible):
+    current = _source_completed_execution(_source_reservation())
+    if eligible:
+        return current
     checks = tuple({
         "check_id": check_id,
-        "status": "passed" if eligible or index < 2 else "failed" if index == 2 else "not_run",
-        "failure_code": None if eligible or index != 2 else "high_confidence_secret_detected",
-        "finding_count": 0 if eligible or index != 2 else 1,
+        "status": "passed" if index < 2 else "failed" if index == 2 else "not_run",
+        "failure_code": "high_confidence_secret_detected" if index == 2 else None,
+        "finding_count": 1 if index == 2 else 0,
     } for index, check_id in enumerate(WORKSTREAM_DEFAULT_CHECK_IDS))
-    return SelectedPreSubmitExecutionFacts(
-        policy_sha256="sha256:" + "1" * 64, required_external_count=0, external_members=(), eligible=eligible,
+    return replace(
+        current, external_members=(), eligible=False,
         workstream_default=WorkstreamDefaultCheckerResult(
-            behavior_sha256=WORKSTREAM_DEFAULT_BEHAVIOR_SHA256, eligible=eligible, checks=checks, warnings=(),
+            behavior_sha256=WORKSTREAM_DEFAULT_BEHAVIOR_SHA256, eligible=False, checks=checks, warnings=(),
         ),
+        source_contracts=selected_pre_submit_source_contracts(),
     )
 
 

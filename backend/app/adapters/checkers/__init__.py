@@ -1,9 +1,11 @@
 """CHECKER-owned composition adapters."""
 
+from typing import Literal
+
 from app.adapters.checkers.external_service import (
     EXTERNAL_CHECKER_CAPABILITY_KEY,
     EXTERNAL_CHECKER_PROVIDER_KEY,
-    UnixSocketExternalCheckerAdapter,
+    RemoteTlsExternalCheckerAdapter,
 )
 from app.interfaces.external_checker_execution import (
     ExternalCheckerExecutionAdapter,
@@ -32,18 +34,15 @@ from app.modules.checkers.api.selected_post_submit import (
 from app.modules.checkers.api.history import CheckerHistoryReadPort
 from app.modules.checkers.api.revision_feedback import RevisionFeedbackPort
 from app.modules.checkers.api.execution import EvaluationCoordinationPort
-from typing import Any, Protocol
 from pathlib import Path
 
 
 from app.modules.checkers.api.external import (
     ExternalCheckerExecutionRequest,
-    PreSubmitExternalCheckerIdentity,
-    PreSubmitExternalCheckerMaterial,
 )
 from app.modules.checkers.selected_pre_submit_execution import SelectedPreSubmitProcessor
 from app.modules.checkers.api.selected_pre_submit import (
-    SelectedPreSubmitInfrastructureUnavailable,
+    SelectedPreSubmitLeaseFacts,
 )
 
 
@@ -55,17 +54,29 @@ def revision_feedback_port(session) -> RevisionFeedbackPort:
 
 
 def external_checker_execution_factory(
-    *, socket_path: Path, timeout_seconds: float
-) -> ExternalServiceAdapterFactory[UnixSocketExternalCheckerAdapter]:
-    """Compose the sole instance-local external checker adapter factory."""
-    factory = ExternalServiceAdapterFactory[UnixSocketExternalCheckerAdapter](
+    *,
+    endpoints,
+    ca_path: Path,
+    certificate_path: Path,
+    private_key_path: Path,
+    model_proxy_socket_path: Path | None,
+    timeout_seconds: float,
+) -> ExternalServiceAdapterFactory[RemoteTlsExternalCheckerAdapter]:
+    """Compose the sole dedicated-node external checker adapter factory."""
+    from app.adapters.artifacts import selected_pre_submit_source_contracts
+    factory = ExternalServiceAdapterFactory[RemoteTlsExternalCheckerAdapter](
         EXTERNAL_CHECKER_CAPABILITY_KEY
     )
     factory.register(
         EXTERNAL_CHECKER_PROVIDER_KEY,
-        lambda: UnixSocketExternalCheckerAdapter(
-            socket_path=socket_path,
+        lambda: RemoteTlsExternalCheckerAdapter(
+            endpoints=endpoints,
+            ca_path=ca_path,
+            certificate_path=certificate_path,
+            private_key_path=private_key_path,
+            model_proxy_socket_path=model_proxy_socket_path,
             timeout_seconds=timeout_seconds,
+            source_contracts=selected_pre_submit_source_contracts(),
         ),
     )
     return factory
@@ -145,12 +156,18 @@ def create_checker_model_provider(
 def configured_external_checker_execution_factory(settings):
     """Map configured image-execution settings into the sole adapter factory."""
     if (
-        settings.external_checker_service_socket is None
-        or settings.external_checker_material_root is None
+        settings.external_runner_endpoints is None
+        or settings.external_runner_ca_path is None
+        or settings.external_runner_certificate_path is None
+        or settings.external_runner_private_key_path is None
     ):
         raise ValueError("external checker service is not configured")
     return external_checker_execution_factory(
-        socket_path=settings.external_checker_service_socket,
+        endpoints=settings.external_runner_endpoints,
+        ca_path=settings.external_runner_ca_path,
+        certificate_path=settings.external_runner_certificate_path,
+        private_key_path=settings.external_runner_private_key_path,
+        model_proxy_socket_path=settings.checker_model_proxy_socket,
         timeout_seconds=float(settings.external_checker_service_timeout_seconds),
     )
 
@@ -160,6 +177,7 @@ class _ConfiguredExternalCheckerExecution:
 
     def __init__(self, settings) -> None:
         self._settings = settings
+        self._adapter: ExternalCheckerExecutionAdapter | None = None
         self._identity = ExternalServiceAdapterIdentity(
             EXTERNAL_CHECKER_CAPABILITY_KEY,
             EXTERNAL_CHECKER_PROVIDER_KEY,
@@ -170,16 +188,24 @@ class _ConfiguredExternalCheckerExecution:
         """Expose the sole provider identity without constructing its transport."""
         return self._identity
 
+    @property
+    def pre_runtime_provider(self) -> Literal["smolvm", "managed"]:
+        """The explicitly selected socket factory supplies native Smol evidence."""
+        return "smolvm"
+
     def _resolve(self) -> ExternalCheckerExecutionAdapter:
         """Create the fixed provider or report absent runtime configuration."""
-        if (
-            self._settings.external_checker_service_socket is None
-            and self._settings.external_checker_material_root is None
-        ):
+        if self._settings.external_runner_endpoints is None:
             raise ExternalServiceUnavailableError(self._identity)
-        return configured_external_checker_execution_factory(self._settings).create(
-            EXTERNAL_CHECKER_PROVIDER_KEY
-        )
+        if self._adapter is None:
+            self._adapter = configured_external_checker_execution_factory(self._settings).create(
+                EXTERNAL_CHECKER_PROVIDER_KEY
+            )
+        return self._adapter
+
+    async def execute_pre(self, lease, grant):
+        """Resolve the same provider for the source-bound single PRE session."""
+        return await self._resolve().execute_pre(lease, grant)
 
     async def locate_forge_change(self, request, grant):
         """Resolve the same provider for the isolated locator operation."""
@@ -259,7 +285,9 @@ def external_checker_registry_service(session, authority):
 
 def selected_pre_submit_coordinator(session):
     """Compose selected PRE custody through CHECKERS' public adapter root."""
+    from app.adapters.artifacts import selected_pre_submit_source_contracts
     from app.adapters.tasks import selected_pre_submit_task_guard
+    from app.adapters.artifacts import selected_pre_submit_source_guard
     from app.modules.checkers.selected_pre_submit_coordination import (
         SelectedPreSubmitCoordinator,
     )
@@ -267,67 +295,21 @@ def selected_pre_submit_coordinator(session):
     return SelectedPreSubmitCoordinator(
         session,
         tasks=selected_pre_submit_task_guard(session),
+        sources=selected_pre_submit_source_guard(session),
+        source_contracts=selected_pre_submit_source_contracts(),
     )
 
 
-class _ExecutionRequest(Protocol):
-    project_id: Any
-    task_id: Any
-    assignment_id: Any
-    commitment: Any
-    inspection: Any
-    manifest: Any
-    change_gate: Any
-    packet: Any
-    prepared_generation_id: Any
-    storage_scheme: str
-
-
 class SelectedPreSubmitCheckerExecutionAdapter:
-    """Build the selected default-plus-external PRE processor from exact ART facts."""
+    """Compose the source-bound PRE processor through the existing adapter factory."""
 
-    def __init__(self, *, external_execution) -> None:
+    def __init__(self, *, external_execution: ExternalCheckerExecutionAdapter) -> None:
         self._external_execution = external_execution
 
-    def build(self, request: _ExecutionRequest) -> SelectedPreSubmitProcessor:
-        """Reject any incomplete pre-admission identity before projecting bytes."""
-        policy = getattr(request, "external_policy", None)
-        default_input = getattr(request, "default_checker_input", None)
-        attempt_id = getattr(request, "attempt_id", None)
-        attempt_request_digest = getattr(request, "attempt_request_digest", None)
-        if (
-            policy is None
-            or default_input is None
-            or attempt_id is None
-            or attempt_request_digest is None
-        ):
-            raise SelectedPreSubmitInfrastructureUnavailable("material_unavailable")
-        identity = PreSubmitExternalCheckerIdentity(
-            project_id=request.project_id,
-            task_id=request.task_id,
-            assignment_id=request.assignment_id,
-            prepared_generation_id=request.prepared_generation_id,
-            attempt_id=attempt_id,
-            attempt_request_digest=attempt_request_digest,
-            effective_plan_sha256=policy.policy_sha256,
-        )
-        material = PreSubmitExternalCheckerMaterial(
-            role="submission_archive",
-            prepared_generation_id=request.prepared_generation_id,
-            attempt_id=attempt_id,
-            attempt_request_digest=attempt_request_digest,
-            archive_sha256=request.commitment.sha256,
-            archive_byte_count=request.commitment.byte_count,
-            semantic_manifest_sha256=request.manifest.sha256,
-            media_type="application/zip",
-        )
-        return SelectedPreSubmitProcessor(
-            policy=policy,
-            default_input=default_input,
-            identity=identity,
-            material=material,
-            execution=self._external_execution,
-        )
+    def build(self, lease: SelectedPreSubmitLeaseFacts) -> SelectedPreSubmitProcessor:
+        """Bind the single invocation to the committed CHECKERS lease."""
+        from app.adapters.artifacts import selected_pre_submit_source_contracts
+        return SelectedPreSubmitProcessor(lease=lease, execution=self._external_execution, source_contracts=selected_pre_submit_source_contracts())
 
 
 def checker_history_repository(session) -> CheckerHistoryReadPort:
@@ -341,8 +323,9 @@ def evaluation_coordinator(session) -> EvaluationCoordinationPort:
     """Compose required TASK locking before CHECKERS reservation custody."""
     from app.modules.checkers.execution_coordination import EvaluationCoordinator
     from app.adapters.tasks import evaluation_task_guard
+    from app.adapters.outbox import outbox_append
 
-    return EvaluationCoordinator(session, tasks=evaluation_task_guard(session))
+    return EvaluationCoordinator(session, tasks=evaluation_task_guard(session), events=outbox_append(session))
 
 
 def checker_retry_service(session, context, *, cursor_secret=None):
@@ -363,7 +346,7 @@ def checker_retry_service(session, context, *, cursor_secret=None):
         session,
         actor_profile_id=context.actor_profile_id,
         tasks=tasks,
-        evaluations=EvaluationCoordinator(session, tasks=tasks),
+        evaluations=EvaluationCoordinator(session, tasks=tasks, events=outbox_append(session)),
         authorization=checker_retry_authorization(session, context),
         discovery=checker_retry_discovery_authorization(
             session,
@@ -423,24 +406,6 @@ def post_submit_delivery_service(
         ),
         authorization=post_submit_delivery_authorization(session, context),
         detached_classify=detached_classify,
-    )
-
-
-def post_submission_executor(*, sessions, materialization):
-    """Compose the sole executor with exact fixed-service AUTH at both phases."""
-    from app.adapters.outbox import outbox_append
-    from app.modules.checkers.execution import PostSubmissionExecutor
-    from app.adapters.auth import post_submit_execution_authority
-
-    from app.adapters.projects import project_locked_policy_context_port
-
-    return PostSubmissionExecutor(
-        sessions=sessions,
-        materialization=materialization,
-        execute_authority=post_submit_execution_authority,
-        finalize_authority=post_submit_execution_authority,
-        outbox=outbox_append,
-        review_modes=project_locked_policy_context_port,
     )
 
 
@@ -581,6 +546,7 @@ def delivery_bound_post_submission_executor(
         forge_facts=forge_facts,
         outbox=outbox_append,
         review_modes=project_locked_policy_context_port,
+        retry_tasks=evaluation_task_guard,
     )
 
 
@@ -646,6 +612,7 @@ def reconciliation_bound_post_submission_executor(
         forge_facts=forge_facts,
         outbox=outbox_append,
         review_modes=project_locked_policy_context_port,
+        retry_tasks=evaluation_task_guard,
     )
 
 
@@ -697,9 +664,10 @@ def post_submit_delivery_reconciliation_handler(*, sessions, materialization):
 
 def selected_pre_submit_run_reader(session):
     """Read retained selected PRE runs for their own contributor; the caller authorizes."""
+    from app.adapters.artifacts import selected_pre_submit_source_contracts
     from app.modules.checkers.selected_pre_submit_reads import SelectedPreSubmitRunReader
 
-    return SelectedPreSubmitRunReader(session)
+    return SelectedPreSubmitRunReader(session, source_contracts=selected_pre_submit_source_contracts())
 
 
 def trial_evidence_reservations(session, request, profiles):

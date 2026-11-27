@@ -231,6 +231,8 @@ def _is_sha256(value: object) -> bool:
 
 def _warnings(packet: SubmissionPacketView) -> tuple[WorkstreamDefaultWarning, ...]:
     """Return stable warning-only absence signals in canonical order."""
+    if packet.summary is None or packet.contributor_attestation is None:
+        return ()
     values = []
     if not packet.summary.strip():
         values.append(WorkstreamDefaultWarning(code="submission_summary_missing"))

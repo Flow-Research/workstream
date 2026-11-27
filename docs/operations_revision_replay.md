@@ -70,14 +70,13 @@ ReviewFinding response or resolution.
 
 ## Resubmission And Checks
 
-A human-Review Submission N+1 acknowledges the exact preparation head/digest,
-links its immediate predecessor, and stamps the complete frozen context. A
-checker-remediation Submission N+1 binds the exact final needs-revision CheckerRun
-and its preparation, without a ReviewFinding response. Public ZIP preparation
-requires `X-Revision-Preparation-Id` and `X-Revision-Preparation-Sha256`; the ready
-admission retains that acknowledgement for final creation. Initial intake omits
-both. Both paths rerun the normal finalization and checker
-spine. Only a current successful `allow_review` may create a new queue entry.
+The contributor uses the ordinary raw-ZIP submission command on the same task
+and assignment with a new idempotency key. TASK selects the immediate
+predecessor and governing revision context and rechecks eligibility before PRE
+and intake acceptance. For checker remediation, the selected context binds
+the predecessor's exact current needs-revision CheckerRun. Accepted custody
+retains those facts for finalization and evaluation. Only a current successful
+`allow_review` may create a new review queue entry.
 
 Human Review return initially prefers the reviewer who requested revision. The
 distinct corrected checker path enters open routing. Expiry,

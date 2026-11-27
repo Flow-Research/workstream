@@ -56,9 +56,9 @@ func addTaskContextReads(task *cobra.Command, client func() (*api.Client, error)
 			return writeTaskContextFields(stdout, []contextField{
 				{"Task", value.TaskID}, {"Project", value.ProjectID}, {"Guide version", value.GuideVersion},
 				{"Policy schema version", value.PolicySchemaVersion}, {"Merge algorithm version", value.MergeAlgorithmVersion},
-				{"Required packet fields", value.RequiredPacketFields}, {"Required artifacts", value.RequiredArtifacts},
+				{"Required artifacts", value.RequiredArtifacts},
 				{"Required evidence", value.RequiredEvidence}, {"Forbidden artifacts", value.ForbiddenArtifacts},
-				{"Attestation terms", value.AttestationTerms}, {"Manifest required", value.ManifestRequired},
+				{"Manifest required", value.ManifestRequired},
 				{"Artifact hash required", value.ArtifactHashRequired}, {"Artifact hash algorithm", value.ArtifactHashAlgorithm},
 				{"Allowed storage schemes", value.AllowedStorageSchemes}, {"Storage reference rules", value.StorageReferenceRules},
 				{"Maximum file size bytes", value.MaximumFileSizeBytes}, {"Maximum package size bytes", value.MaximumPackageSizeBytes},

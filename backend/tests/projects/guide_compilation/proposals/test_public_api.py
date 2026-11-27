@@ -68,7 +68,7 @@ async def test_public_approval_read_replay_and_current_authority(clean_postgres_
                 }
             ),
         })
-    async with proposal_case(clean_postgres_database, outcome=outcome) as (_, factory, command, actor, grant):
+    async with proposal_case(clean_postgres_database, outcome=outcome) as (values, factory, command, actor, grant):
         path = proposal_path(command)
         async with proposal_client(factory, actor) as client:
             package = await client.get(path + "/proposal")
@@ -86,7 +86,7 @@ async def test_public_approval_read_replay_and_current_authority(clean_postgres_
                     outcome.submission_artifact_policy, field
                 )
             key = {"Idempotency-Key": str(uuid4())}
-            payload = {"pre_submit_attachments": [], "post_submit_attachments": [], "target": body["target"], "acknowledged_warning_hashes": body["warning_hashes"]}
+            payload = {"pre_submit_attachments": [item.model_dump(mode="json") for item in values["pre_submit_attachments"]], "post_submit_attachments": [item.model_dump(mode="json") for item in values["post_submit_attachments"]], "target": body["target"], "acknowledged_warning_hashes": body["warning_hashes"]}
             approved = await client.post(path+"/pre-submission-approval", headers=key, json=payload)
             assert approved.status_code == 200, approved.text
             replay = await client.post(path+"/pre-submission-approval", headers=key, json=payload)
@@ -113,15 +113,16 @@ async def test_public_approval_read_replay_and_current_authority(clean_postgres_
             assert denied.status_code == 404, denied.text
 
 
+
 @pytest.mark.parametrize("failure", ["missing_key", "invalid_key", "wrong_path", "warning", "changed_target", "omitted_attachments"])
 async def test_public_approval_rejects_without_writes(clean_postgres_database, failure):
-    async with proposal_case(clean_postgres_database) as (_, factory, command, actor, _):
+    async with proposal_case(clean_postgres_database) as (values, factory, command, actor, _):
         path = proposal_path(command)
         async with proposal_client(factory, actor) as client:
             package = await client.get(path+"/proposal")
             assert package.status_code == 200, package.text
             body = package.json()
-            payload = {"pre_submit_attachments": [], "post_submit_attachments": [], "target":body["target"], "acknowledged_warning_hashes":body["warning_hashes"]}
+            payload = {"pre_submit_attachments": [item.model_dump(mode="json") for item in values["pre_submit_attachments"]], "post_submit_attachments": [item.model_dump(mode="json") for item in values["post_submit_attachments"]], "target":body["target"], "acknowledged_warning_hashes":body["warning_hashes"]}
             headers = {"Idempotency-Key":str(uuid4())}
             expected = 409
             if failure == "missing_key":
@@ -145,6 +146,7 @@ async def test_public_approval_rejects_without_writes(clean_postgres_database, f
             async with factory() as session:
                 assert await session.scalar(text("SELECT count(*) FROM project_guide_proposal_approvals")) == 0
                 assert await session.scalar(text("SELECT count(*) FROM audit_events WHERE action_id='project.submission_artifact_policy.approve'")) == 0
+
 
 
 @pytest.mark.parametrize("subject_kind,expected", [("service",404),("human",422)])
@@ -196,7 +198,7 @@ async def test_public_package_denies_other_roles_and_scopes(clean_postgres_datab
 
 @pytest.mark.parametrize("classification", ["draft_ready", "guide_blocked"])
 async def test_setup_pointer_opens_exact_complete_proposal(clean_postgres_database, classification):
-    async with proposal_case(clean_postgres_database,classification=classification) as (_,factory,command,actor,_):
+    async with proposal_case(clean_postgres_database,classification=classification) as (values,factory,command,actor,_):
         path = proposal_path(command)
         async with proposal_client(factory,actor) as client:
             status = await client.get(f"/api/v1/projects/{command.project_id}/guides/{command.guide_id}/setup-runs/latest")
@@ -208,6 +210,6 @@ async def test_setup_pointer_opens_exact_complete_proposal(clean_postgres_databa
             assert package.status_code == 200, package.text
             assert package.json()["result"]["status"] == classification
             if classification == "guide_blocked":
-                denied = await client.post(path+"/pre-submission-approval",headers={"Idempotency-Key":str(uuid4())},json={"target":package.json()["target"], "pre_submit_attachments": [], "post_submit_attachments": []})
+                denied = await client.post(path+"/pre-submission-approval",headers={"Idempotency-Key":str(uuid4())},json={"target":package.json()["target"], "pre_submit_attachments": [item.model_dump(mode="json") for item in values["pre_submit_attachments"]], "post_submit_attachments": [item.model_dump(mode="json") for item in values["post_submit_attachments"]]})
                 assert denied.status_code == 409, denied.text
                 assert denied.json()["error"]["code"] == "approval_blocked"

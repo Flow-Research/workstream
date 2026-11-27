@@ -1,0 +1,32 @@
+services:
+  submission-feedback-email-worker:
+    extends:
+      file: compose.yml
+      service: outbox-scan-worker
+    environment:
+      WORKSTREAM_RESEND_API_KEY_FILE: /run/secrets/resend_api_key
+    secrets:
+      - source: resend_api_key
+        target: resend_api_key
+        uid: "${WORKSTREAM_RUNTIME_UID}"
+        gid: "${WORKSTREAM_RUNTIME_GID}"
+        mode: 0400
+    command:
+      - python
+      - -m
+      - celery
+      - -A
+      - app.workers.celery_app
+      - worker
+      - --pool=prefork
+      - --concurrency=1
+      - --hostname=submission-feedback-email@%h
+      - --queues=workstream.submission_feedback_email
+      - --pidfile=/tmp/celery-submission-feedback-email.pid
+      - --loglevel=INFO
+    healthcheck:
+      test: [CMD-SHELL, "test -s /tmp/celery-submission-feedback-email.pid && kill -0 $$(cat /tmp/celery-submission-feedback-email.pid)"]
+
+secrets:
+  resend_api_key:
+    file: ${WORKSTREAM_RESEND_API_KEY_FILE:?set the private Resend API key file}

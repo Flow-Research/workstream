@@ -78,11 +78,12 @@ async def _assert_exact_0062_schema(database_url: str, monkeypatch) -> None:
     historical_tables = tuple(
         table
         for table in suite_fixtures.RESETTABLE_TEST_TABLES
-        if table != "checker_trial_evidence"
-    ) + (
-        "artifact_provider_activations",
-        "artifact_provider_probe_results",
-    )
+        if table not in {
+            "checker_trial_evidence", "submission_intake_operations",
+            "submission_source_capacity_profiles", "submission_source_charges",
+            "submission_source_upload_receipts", "submission_source_cleanup_claims",
+        }
+    ) + ("artifact_provider_activations", "artifact_provider_probe_results")
     with monkeypatch.context() as patch:
         patch.setattr(suite_fixtures, "RESETTABLE_TEST_TABLES", historical_tables)
         patch.setattr(
@@ -106,11 +107,12 @@ async def _retained_rows(database_url: str) -> dict[str, str]:
         result = {}
         for table in _RETAINED_TABLES:
             excluded = {
-                "checker_runs": "input_context_custody",
-                "artifact_put_attempts": "checker_trial_evidence_id",
-                "artifact_operation_receipts": "checker_trial_evidence_id",
-            }.get(table)
-            projection = "to_jsonb(value)" + (f" - '{excluded}'" if excluded else "")
+                "checker_runs": ("input_context_custody", "retry_delivery_event_id", "retry_abandonment_event_id"),
+                "artifact_put_attempts": ("checker_trial_evidence_id",),
+                "artifact_operation_receipts": ("checker_trial_evidence_id",),
+                "artifact_replicas": ("source_operation_id",),
+            }.get(table, ())
+            projection = "to_jsonb(value)" + "".join(f" - '{column}'" for column in excluded)
             result[table] = await connection.fetchval(
                 f"select coalesce(jsonb_agg({projection} order by value.id),'[]')::text "
                 f"from {table} value"
@@ -146,9 +148,12 @@ async def _assert_head_lineage_projection(
             )
             == "completed"
         )
+        assert await connection.fetchval(
+            "select count(*) from artifact_replicas where source_operation_id is not null"
+        ) == 0
         assert (
             await connection.fetchval(
-                "select count(*) from checker_runs where input_context_custody is not null"
+                "select count(*) from checker_runs where input_context_custody is not null OR retry_delivery_event_id is not null OR retry_abandonment_event_id is not null"
             )
             == 0
         )

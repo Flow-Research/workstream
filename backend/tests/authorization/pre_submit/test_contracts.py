@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from app.adapters.artifacts import selected_pre_submit_source_contracts
+
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
@@ -30,9 +32,6 @@ from app.modules.authorization.domain.pre_submit import (
 from app.modules.authorization.domain.action_groups import CONTEXT_DIGEST_ACTIONS
 from app.modules.authorization.domain.resource_digest import authorization_resource_digest
 from app.modules.authorization.runtime import PreparedAuthorizationHandleInvalid
-from app.modules.checkers.api.default_checker import (
-    WORKSTREAM_DEFAULT_BEHAVIOR_SHA256,
-)
 from app.modules.checkers.api.selected_pre_submit import (
     SelectedPreSubmitExecuteFacts,
     SelectedPreSubmitFinalizeFacts,
@@ -42,24 +41,8 @@ from app.modules.checkers.api.selected_pre_submit import (
 
 
 def _reservation() -> SelectedPreSubmitReservationFacts:
-    return SelectedPreSubmitReservationFacts(
-        actor_profile_id=new_record_id(),
-        identity_link_id=new_record_id(),
-        project_id=new_record_id(),
-        task_id=new_record_id(),
-        assignment_id=new_record_id(),
-        attempt_id=new_record_id(),
-        idempotency_key=new_record_id(),
-        attempt_request_digest="sha256:" + "0" * 64,
-        prepared_generation_id=new_record_id(),
-        policy_sha256="sha256:" + "1" * 64,
-        default_behavior_sha256=WORKSTREAM_DEFAULT_BEHAVIOR_SHA256,
-        default_input_sha256="sha256:" + "2" * 64,
-        archive_sha256="sha256:" + "3" * 64,
-        archive_byte_count=100,
-        semantic_manifest_sha256="sha256:" + "4" * 64,
-        execution_budget_ms=60_000,
-    )
+    from tests.checkers.external.test_selected_pre_submit_coordination import _source_reservation
+    return _source_reservation()
 
 
 def _execute() -> SelectedPreSubmitExecuteFacts:
@@ -147,8 +130,9 @@ def test_selected_pre_finalize_and_prepare_parser_are_closed() -> None:
     final = SelectedPreSubmitFinalizeFacts(
         lease=execute.lease,
         execution=None,
+        invocation_receipt=None,
         infrastructure_failure_code="deadline_exceeded",
-    )
+     source_contracts=selected_pre_submit_source_contracts())
     resource = pre_submit_resource(FINALIZE, final)
     prepared = pre_submit_prepare_values(execute.lease.reservation)
 
@@ -168,6 +152,7 @@ def test_selected_pre_finalize_and_prepare_parser_are_closed() -> None:
     changed = replace(
         execute.lease.reservation,
         attempt_id=new_record_id(),
+        source_contracts=selected_pre_submit_source_contracts(),
     )
     assert not pre_submit_prepare_matches(
         FINALIZE, pre_submit_prepare_values(changed), resource

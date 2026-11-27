@@ -22,9 +22,8 @@ from app.modules.projects.api.guide_documents import (
     ProjectGuideDocumentScopePort,
     GuideDocumentVersion,
 )
-from app.modules.projects.api.guide_reads import VerifiedGuideDocumentRead
+from app.modules.projects.api.guide_reads import ContributorGuideDocument, VerifiedGuideDocumentRead
 from app.modules.tasks.api.guide_documents import (
-    ContributorGuideDocument,
     TaskGuideDocumentNotFound,
     TaskGuideUnavailable,
     VerifiedTaskGuideRead,

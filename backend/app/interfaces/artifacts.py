@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncGenerator, AsyncIterator
 from dataclasses import dataclass
 import re
 from typing import Protocol
@@ -14,6 +14,15 @@ from workstream_external_services import (
     ExternalServiceAdapterIdentity,
 )
 from app.modules.artifacts.sources import ArtifactCommitment, CommittedArtifactSource
+from app.modules.artifacts.api.submission_intake import (
+    SealedSubmissionSource,
+    MAXIMUM_SUBMISSION_ZIP_BYTES,
+    SubmissionSourceLocation,
+    SubmissionSourceCompletion,
+    SubmissionSourcePart,
+    SubmissionSourceUpload,
+    SubmissionSourceUploadIntent,
+)
 
 
 ARTIFACT_STORE_CAPABILITY_KEY = "artifact_store"
@@ -304,8 +313,81 @@ class ArtifactConfigurationError(ArtifactStoreError):
     category = "configuration"
 
 
+@dataclass(frozen=True)
+class SealedSourceObservation:
+    """Exact provider metadata, not an independent attestation of content hash."""
+
+    location: SubmissionSourceLocation
+    provider_generation: str
+    raw_byte_count: int
+    sealed_upload_fence: int
+
+    def __post_init__(self) -> None:
+        if type(self.location) is not SubmissionSourceLocation:
+            raise ValueError("sealed observation location is invalid")
+        SubmissionSourceLocation.model_validate(self.location)
+        if (type(self.provider_generation) is not str
+                or not 1 <= len(self.provider_generation) <= 2048
+                or self.provider_generation == "null"
+                or type(self.raw_byte_count) is not int
+                or not 1 <= self.raw_byte_count <= MAXIMUM_SUBMISSION_ZIP_BYTES
+                or type(self.sealed_upload_fence) is not int
+                or self.sealed_upload_fence < 1):
+            raise ValueError("sealed observation metadata is invalid")
+
+
 class ArtifactStore(ExternalServiceAdapter, Protocol):
     """Immutable byte-provider capability used only by artifact orchestration."""
+
+    async def begin_source_upload(
+        self, intent: SubmissionSourceUploadIntent,
+    ) -> SubmissionSourceUpload:
+        """Initiate an owned key; persist returned handle before sending parts."""
+
+    async def upload_source_part(
+        self, upload: SubmissionSourceUpload, number: int, data: bytes,
+    ) -> SubmissionSourcePart:
+        """Send one bounded part; the owner serializes parts and enforces total."""
+
+    async def complete_source_upload(
+        self, completion: SubmissionSourceCompletion,
+    ) -> SealedSubmissionSource:
+        """Conditionally complete a previously persisted EOF/completion intent."""
+
+    def open_source(
+        self, source: SealedSubmissionSource, *,
+        maximum_chunk_bytes: int = 64 * 1024,
+    ) -> AsyncGenerator[bytes, None]:
+        """Yield closable exact-version reads, capped by maximum_chunk_bytes (1..64 KiB)."""
+
+    async def observe_sealed_source(
+        self, source: SealedSubmissionSource,
+    ) -> SealedSourceObservation | None:
+        """Observe the recorded immutable version without reading its body."""
+
+    async def observe_source_upload(
+        self, completion: SubmissionSourceCompletion,
+    ) -> SealedSubmissionSource | None:
+        """Resolve a lost completion acknowledgement by exact provenance and bytes."""
+
+    async def discover_source_uploads(
+        self, intent: SubmissionSourceUploadIntent,
+    ) -> tuple[SubmissionSourceUpload, ...]:
+        """Find unfinished handles only for one already-owned operation key."""
+
+    async def request_source_abort(
+        self, upload: SubmissionSourceUpload,
+    ) -> None:
+        """Request scoped abort; acknowledgement alone never releases a charge."""
+
+    async def source_upload_parts_absent(
+        self, upload: SubmissionSourceUpload,
+    ) -> bool:
+        """Observe exact handle reclamation, not settlement of late calls or objects.
+
+        True alone never authorizes charge release. The owner must also reconcile
+        outstanding writes and any exact generation produced by completion.
+        """
 
     async def put(
         self,

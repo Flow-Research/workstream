@@ -4,22 +4,14 @@ from app.modules.tasks.api.submission_history import SubmissionHistoryReadPort
 from app.modules.tasks.api.submitted_bundle import SubmittedBundlePort
 from app.modules.tasks.api.evaluation_revision import TaskEvaluationRevisionPort
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.exc import IntegrityError
 from app.core.config import Settings
-from app.db.errors import integrity_constraint_name
 from uuid import UUID
 
 from app.modules.artifacts.api import (
     SubmissionAdmissionConsumptionPort,
     SubmissionAdmissionConsumptionRequest,
-    SubmissionAdmissionConsumptionError,
 )
 from app.modules.tasks.api import (
-    SubmissionCreationAuthorizationPort,
-    SubmissionCreationRequest,
-    SubmissionCreationResult,
-    SubmissionCreationAdmissionError,
-    TaskSubmissionContextUnavailable,
     TaskSubmissionContextPort,
     TaskSubmissionContextRequest,
 )
@@ -32,10 +24,7 @@ from app.modules.tasks.api import TaskAuthorizationPort, TaskTransitionAuditPort
 from app.modules.tasks.submission_participants import (
     SubmissionArtifactAdmissionRequest,
     SubmissionArtifactAdmissionResult,
-    SubmissionArtifactReplayRequest,
-    SubmissionArtifactBindingFacts,
 )
-from app.modules.artifacts.api.submission_admission import ConsumedSubmissionAdmissionRequest
 from app.modules.tasks.submission_composition import TaskSubmissionCreationService
 from app.modules.tasks.assignment_invalidation import AssignmentInvalidationOperation
 from app.modules.tasks.api.assignment_invalidation import AssignmentInvalidationUnavailable
@@ -113,6 +102,7 @@ class TransactionalAssignmentInvalidationHandler:
             committed_authority_invalidation,
         )
         from app.adapters.outbox import outbox_invocation_fence
+        from app.adapters.artifacts import submission_intake_assignment_release_port
 
         try:
             async with self._sessions() as session, session.begin():
@@ -123,6 +113,7 @@ class TransactionalAssignmentInvalidationHandler:
                     causes=committed_authority_invalidation(self._sessions),
                     authorization=self._authorization(session),
                     audit=assignment_invalidation_audit(session),
+                    intake=submission_intake_assignment_release_port(session),
                 ).reconcile(envelope)
             return outcome
         except AssignmentInvalidationUnavailable:
@@ -139,6 +130,7 @@ class TransactionalTaskRevisionExpiryHandler:
 
     async def __call__(self, envelope):
         from app.adapters.audit import task_revision_expiry_audit
+        from app.adapters.artifacts import submission_intake_assignment_release_port
         from app.adapters.outbox import outbox_append, outbox_invocation_fence
         from app.modules.tasks.api.revision_expiry import TaskRevisionExpiryUnavailable
         from app.modules.tasks.revision.expiry import TaskRevisionExpiryOperation
@@ -150,7 +142,7 @@ class TransactionalTaskRevisionExpiryHandler:
                     fence=outbox_invocation_fence(session),
                     authorization=self._authorization(session),
                     audit=task_revision_expiry_audit(session),
-                    outbox=outbox_append(session),
+                    outbox=outbox_append(session), intake=submission_intake_assignment_release_port(session),
                 ).expire(envelope)
             return outcome
         except TaskRevisionExpiryUnavailable:
@@ -219,7 +211,6 @@ __all__ = (
     "TransactionalTaskRevisionExhaustedNoticeHandler",
     "task_commands",
     "task_service",
-    "TransactionalSubmissionCreationCommand",
     "task_submission_context_port",
 )
 
@@ -263,6 +254,7 @@ def task_commands(
     audit: TaskTransitionAuditPort,
     actor_profile_id: UUID,
     settings: Settings,
+    pending_submissions=None,
 ) -> AuthorizedTaskCommands:
     """Compose TASK commands without exposing private product imports to delivery."""
     from app.adapters.artifacts import task_guide_documents_port
@@ -278,6 +270,7 @@ def task_commands(
         guide_documents=task_guide_documents_port(session, settings),
         compensation_terms=locked_compensation_terms_port(session),
         outbox=outbox_append(session),
+        pending_submissions=pending_submissions,
     )
 
 
@@ -335,6 +328,7 @@ class _ArtifactAdmissionAdapter:
                 submission_version=request.submission_version,
                 task_context=request.task_context,
                 packet_sha256=request.packet.sha256,
+                accepted_operation_id=request.accepted_operation_id,
             )
         )
         if (
@@ -367,92 +361,6 @@ class _ArtifactAdmissionAdapter:
                 request.task_context, selected_post_policy
             ),
         )
-
-    async def read_consumed(
-        self, request: SubmissionArtifactReplayRequest
-    ) -> SubmissionArtifactBindingFacts:
-        result = await self._admissions.read_consumed(
-            ConsumedSubmissionAdmissionRequest(
-                admission_id=request.admission_id,
-                project_id=request.project_id,
-                task_id=request.task_id,
-                assignment_id=request.assignment_id,
-                contributor_id=request.contributor_id,
-                submission_id=request.submission_id,
-                submission_version=request.submission_version,
-                packet_sha256=request.packet_sha256,
-            )
-        )
-        if (
-            result.binding_id is None
-            or result.material is None
-            or result.binding_decision_id is None
-            or result.status != "consumed"
-        ):
-            raise RuntimeError("retained admission custody unavailable")
-        from app.adapters.checkers import selected_submission_evaluation_content
-        from app.modules.checkers.api.external_policy import (
-            validate_stored_external_post_policy,
-        )
-
-        selected_post_policy = validate_stored_external_post_policy(
-            result.selected_post_submit_policy_body
-        )
-        return SubmissionArtifactBindingFacts(
-            binding_id=result.binding_id,
-            content_id=result.content_id,
-            binding_decision_id=result.binding_decision_id,
-            archive_sha256=result.material.archive_sha256,
-            byte_count=result.material.archive_byte_count,
-            selected_evaluation_content=selected_submission_evaluation_content(
-                request.task_context, selected_post_policy
-            ),
-        )
-
-
-class TransactionalSubmissionCreationCommand:
-    """Open the sole root transaction and delegate sequencing to TASK."""
-
-    def __init__(
-        self,
-        session: AsyncSession,
-        *,
-        authorization: SubmissionCreationAuthorizationPort,
-        admissions: SubmissionAdmissionConsumptionPort,
-        settings: Settings,
-    ) -> None:
-        self._session = session
-        self._settings = settings
-        self._authorization = authorization
-        self._admissions = admissions
-
-    async def create(self, request: SubmissionCreationRequest) -> SubmissionCreationResult:
-        if self._session.in_transaction():
-            raise RuntimeError("submission composition requires a transaction-free session")
-        from app.adapters.checkers import evaluation_coordinator
-        from app.adapters.outbox import outbox_append
-
-        try:
-            async with self._session.begin():
-                return await TaskSubmissionCreationService(
-                    self._session,
-                    contexts=task_service(self._session, settings=self._settings),
-                    submission_contexts=task_submission_context_port(self._session),
-                    authorization=self._authorization,
-                    admissions=_ArtifactAdmissionAdapter(self._admissions),
-                    evaluations=evaluation_coordinator(self._session),
-                    events=outbox_append(self._session),
-                ).create(request)
-        except SubmissionAdmissionConsumptionError as exc:
-            raise SubmissionCreationAdmissionError(exc.code) from exc
-        except IntegrityError as exc:
-            name = integrity_constraint_name(exc)
-            if name == "ck_revision_submission_deadline_expired":
-                raise TaskSubmissionContextUnavailable("revision_deadline_expired") from exc
-            if name == "ck_revision_submission_context_changed":
-                raise TaskSubmissionContextUnavailable("revision_context_changed") from exc
-            raise
-
 
 def assignment_invalidation_targets(session: AsyncSession):
     """Compose the TASK-owned nonlocking exact-target projection."""
@@ -582,6 +490,7 @@ def task_post_submit_outcome(session, sessions):
     from app.adapters.auth import task_routing_authorization
     from app.adapters.checkers import evaluation_coordinator
     from app.adapters.projects import project_locked_policy_context_port
+    from app.core.config import get_settings
     from app.modules.tasks.post_submit_routing.outcome import TaskPostSubmitOutcome
 
     return TaskPostSubmitOutcome(
@@ -594,6 +503,7 @@ def task_post_submit_outcome(session, sessions):
         invocation_fence=outbox_invocation_fence(session),
         audit=task_routing_audit(session),
         outbox=outbox_append(session),
+        feedback_email_enabled=get_settings().submission_feedback_email_enabled,
     )
 
 
@@ -613,6 +523,7 @@ def reconciliation_task_post_submit_outcome(
     from app.adapters.checkers import evaluation_coordinator
     from app.adapters.outbox import outbox_append
     from app.adapters.projects import project_locked_policy_context_port
+    from app.core.config import get_settings
     from app.adapters.tasks.routing_acceptance import RoutingAcceptanceAdapter
     from app.modules.tasks.post_submit_routing.outcome import TaskPostSubmitOutcome
 
@@ -627,6 +538,7 @@ def reconciliation_task_post_submit_outcome(
         audit=task_routing_audit(session),
         outbox=outbox_append(session),
         reconciliation_claim=reconciliation_claim,
+        feedback_email_enabled=get_settings().submission_feedback_email_enabled,
     ))
 
 
@@ -696,6 +608,35 @@ def evaluation_completion_handler(*, sessions):
     )
 
 
+def submission_feedback_email_handler(sessions, *, observer, settings: Settings):
+    """Compose TASK's email handler without loading a key on the outbox scanner."""
+    from workstream_external_services import ExternalServiceConfigurationError
+
+    from app.adapters.actors import verified_notification_email
+    from app.adapters.auth import has_submission_feedback_recipient_grant
+    from app.adapters.submission_feedback_email import submission_feedback_email_factory
+    from app.interfaces.submission_feedback_email import RESEND_PROVIDER
+    from app.modules.tasks.post_submit_routing.feedback_email import TaskSubmissionFeedbackEmailHandler
+
+    issuer = settings.token_issuer
+
+    async def recipient(session, project_id, actor_id):
+        if issuer is None or not await has_submission_feedback_recipient_grant(session, project_id, actor_id):
+            return None
+        return await verified_notification_email(session, actor_id, issuer)
+
+    async def handle(envelope):
+        try:
+            adapter = submission_feedback_email_factory(settings).create(RESEND_PROVIDER)
+        except ExternalServiceConfigurationError:
+            return HandlerOutcome.REJECT
+        return await TaskSubmissionFeedbackEmailHandler(
+            sessions, observer=observer, recipient=recipient, adapter=adapter,
+        )(envelope)
+
+    return handle
+
+
 def contribution_task_evidence_port(session):
     """Read exact selected source labels without claims, activation or task mutation."""
     from app.modules.tasks.contribution_evidence import ContributionTaskEvidenceRepository
@@ -713,4 +654,22 @@ def project_work_reader(session: AsyncSession):
     return ProjectWorkReader(
         session, compensation_terms=locked_compensation_terms_port(session),
         finding_counts=checker_history_repository(session),
+    )
+
+
+def intake_task_custody_port(session):
+    """Compose TASK-first active intake pointer custody for ART participation."""
+    from app.modules.tasks.intake_custody import IntakeTaskCustody
+
+    return IntakeTaskCustody(session, task_submission_context_port(session))
+
+
+def accepted_submission_creation_service(session, *, settings, admissions):
+    """Compose accepted continuation with the existing sole Submission writer."""
+    from app.adapters.checkers import evaluation_coordinator
+    from app.adapters.outbox import outbox_append
+    return TaskSubmissionCreationService(
+        session, contexts=task_service(session, settings=settings),
+        admissions=_ArtifactAdmissionAdapter(admissions), evaluations=evaluation_coordinator(session),
+        events=outbox_append(session),
     )

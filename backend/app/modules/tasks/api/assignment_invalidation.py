@@ -28,6 +28,14 @@ class AssignmentInvalidationTarget(BaseModel):
     authority_invalidation_event_id: UUID
 
 
+class AssignmentInvalidationIntakePort(Protocol):
+    """Caller-authorized participant in the fenced assignment release transaction."""
+
+    async def cancel_assignment(self, operation_id: UUID, target: AssignmentInvalidationTarget) -> None:
+        """End only this assignment's unaccepted intake and retain source charges."""
+        ...
+
+
 class AssignmentInvalidationAuthorityFacts(BaseModel):
     """Complete effect target consumed under TASK and exact-assignment locks."""
 

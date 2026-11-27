@@ -155,6 +155,9 @@ def realm() -> dict:
         claim_mapper("account-email", "oidc-usermodel-property-mapper", {
             "user.attribute": "email", "claim.name": "email", "jsonType.label": "String",
         }),
+        claim_mapper("account-email-verified", "oidc-usermodel-property-mapper", {
+            "user.attribute": "emailVerified", "claim.name": "email_verified", "jsonType.label": "boolean",
+        }),
         claim_mapper("account-name", "oidc-full-name-mapper", {}),
     ])
     exchange = restricted_client(EXCHANGE_CLIENT)

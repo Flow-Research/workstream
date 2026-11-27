@@ -9,7 +9,6 @@ from uuid import UUID
 from app.api.deps.authorization import (
     get_task_commands, get_task_import_batch_commands,
     enforce_human_authorization_read,
-    get_authorization_actor_identity, get_submission_creation_command,
 )
 from app.modules.tasks.queue_router import router as queue_router
 from app.modules.tasks.task_batch_transition_router import router as batch_transition_router
@@ -19,13 +18,6 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from fastapi.responses import StreamingResponse
-from sqlalchemy.exc import SQLAlchemyError
-from app.modules.authorization.api import ActorIdentityFacts
-from app.modules.tasks.api import (
-    SubmissionCreationCommand, SubmissionCreationRequest,
-    SubmissionCreationAdmissionError, SubmissionCreationUnavailable, TaskAuthorityDenied,
-    TaskSubmissionContextUnavailable,
-)
 from app.modules.tasks.api.guide_documents import TaskGuideUnavailable, VerifiedTaskGuideRead
 
 from app.core.api_controls import StructuredHTTPException, error_response, parse_idempotency_key
@@ -38,7 +30,6 @@ from app.modules.tasks.schemas import (
     TaskTransitionRequest,
     TaskRevisionRepairRequest,
     TaskClaimResponse,
-    AdmissionBackedSubmissionCreate, AdmissionBackedSubmissionResponse,
 )
 from app.modules.tasks.api.revision import ContributorRevisionContext
 from app.modules.tasks.service import TaskProjectNotReady, TaskServiceError, TaskNotFound
@@ -551,85 +542,6 @@ async def get_management_task_work_context(
         if getattr(exc, "code", None) is not None:
             return task_domain_error_response(request, exc)
         raise task_http_error(exc) from exc
-
-
-@router.post(
-    "/tasks/{task_id}/submissions",
-    response_model=AdmissionBackedSubmissionResponse,
-    status_code=201,
-    openapi_extra={"x-workstream-action-id": "submission.create"},
-    responses={
-        404: {"description": "Submission or contributor authority unavailable"},
-        409: {"description": "Admission, predecessor or packet conflicts"},
-        422: {"description": "Invalid submission packet"},
-        503: {"description": "Submission infrastructure unavailable"},
-    },
-)
-async def create_admission_backed_submission(
-    task_id: UUID,
-    payload: AdmissionBackedSubmissionCreate,
-    actor: Annotated[ActorIdentityFacts, Depends(get_authorization_actor_identity)],
-    command: Annotated[SubmissionCreationCommand, Depends(get_submission_creation_command)],
-) -> AdmissionBackedSubmissionResponse:
-    """Consume one verified admission through the existing atomic TASK writer."""
-    try:
-        created = await command.create(SubmissionCreationRequest(
-            task_id=task_id,
-            assignment_id=payload.assignment_id,
-            contributor_id=actor.actor_profile_id,
-            predecessor_submission_id=payload.predecessor_submission_id,
-            admission_id=payload.admission_id,
-            summary=payload.summary if payload.summary is not None else "",
-            contributor_attestation=(
-                payload.contributor_attestation
-                if payload.contributor_attestation is not None else ""
-            ),
-        ))
-    except TaskSubmissionContextUnavailable as exc:
-        if exc.code in {"task_submission_predecessor_changed", "revision_limit_reached", "revision_deadline_expired", "revision_context_blocked", "revision_context_changed"}:
-            raise StructuredHTTPException(
-                status_code=409, detail=exc.code,
-                error_code=exc.code, error_message=exc.code,
-            ) from exc
-        raise StructuredHTTPException(
-            status_code=404, detail="Submission unavailable",
-            error_code="submission_unavailable", error_message="Submission unavailable",
-        ) from exc
-    except SubmissionCreationAdmissionError as exc:
-        status_code = 404 if exc.code == "submission_bundle_admission_unavailable" else 409
-        raise StructuredHTTPException(
-            status_code=status_code, detail=exc.code,
-            error_code=exc.code, error_message=exc.code,
-        ) from exc
-    except SubmissionCreationUnavailable as exc:
-        raise StructuredHTTPException(
-            status_code=404, detail="Submission unavailable",
-            error_code="submission_unavailable", error_message="Submission unavailable",
-        ) from exc
-    except TaskAuthorityDenied as exc:
-        raise StructuredHTTPException(
-            status_code=404, detail="Submission unavailable",
-            error_code="submission_unavailable", error_message="Submission unavailable",
-        ) from exc
-    except ValueError as exc:
-        raise StructuredHTTPException(
-            status_code=422, detail="Submission packet invalid",
-            error_code="submission_packet_invalid", error_message="Submission packet invalid",
-        ) from exc
-    except TaskServiceError as exc:
-        raise task_http_error(exc) from exc
-    except SQLAlchemyError as exc:
-        raise StructuredHTTPException(
-            status_code=503, detail="Submission unavailable",
-            error_code="submission_infrastructure_unavailable",
-            error_message="Submission unavailable", retryable=True,
-        ) from exc
-    return AdmissionBackedSubmissionResponse(
-        submission_id=created.submission_id,
-        submission_version=created.submission_version,
-        admission_id=created.admission_id,
-        evaluation_request_id=created.evaluation_request_id,
-    )
 
 
 @router.get("/tasks/{task_id}/submissions", response_model=ContributorSubmissionHistoryPage,

@@ -20,6 +20,7 @@ from app.modules.tasks.api.assignment_invalidation import (
     AssignmentInvalidationAuthorityFacts,
     AssignmentInvalidationAuthorizationPort,
     AssignmentInvalidationEvidence,
+    AssignmentInvalidationIntakePort,
     AssignmentInvalidationTarget,
     AssignmentInvalidationUnavailable,
 )
@@ -57,10 +58,11 @@ class AssignmentInvalidationOperation:
         causes: AuthorityInvalidationPort,
         authorization: AssignmentInvalidationAuthorizationPort,
         audit: AssignmentInvalidationAuditPort,
+        intake: AssignmentInvalidationIntakePort,
     ):
         self._session, self._repo = session, TaskRepository(session)
         self._observer, self._fence, self._causes = observer, fence, causes
-        self._authorization, self._audit = authorization, audit
+        self._authorization, self._audit, self._intake = authorization, audit, intake
 
     async def reconcile(self, envelope: OutboxEventEnvelope) -> HandlerOutcome:
         """Never commit; the handler acknowledges only after its root commit."""
@@ -143,6 +145,8 @@ class AssignmentInvalidationOperation:
                 raise AssignmentInvalidationUnavailable(
                     "assignment reconciliation custody unavailable"
                 )
+            if task.active_submission_operation_id is not None:
+                await self._intake.cancel_assignment(UUID(task.active_submission_operation_id), target)
             assignment.status, assignment.released_at = "authority_revoked", custody.observed_at
             task.status, task.assigned_to = "ready", None
             await self._audit.record_release(

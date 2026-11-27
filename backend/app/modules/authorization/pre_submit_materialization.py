@@ -3,11 +3,10 @@
 import json
 from uuid import UUID
 
-from app.core.hashing import canonical_json_hash
 from app.modules.authorization.catalogue import ActionId
 from app.modules.authorization.domain.resource_digest import authorization_resource_digest
 from app.modules.authorization.runtime import (
-    PreSubmitCheckerInputPreparationContext, TaskImportSourceResourceContext,
+    TaskImportSourceResourceContext,
     PreSubmitCheckerInputResourceContext, SubmissionBindingResourceContext,
     SubmissionCreationResourceContext,
 )
@@ -20,18 +19,11 @@ from app.modules.authorization.submission_preparation import (
 def parse_materialization_binding(raw: dict, invalid_error) -> tuple[dict, str]:
     """Parse and digest exact checker-materialization preparation facts."""
     try:
-        value = dict(raw)
-        for field in (
-            "resource_id", "task_id", "assignment_id", "project_id", "guide_id",
-            "source_snapshot_id", "submission_artifact_policy_id", "checker_policy_id",
-            "prepared_generation_id",
-        ):
-            value[field] = UUID(str(value[field]))
-        resource = PreSubmitCheckerInputPreparationContext.model_validate(value)
-    except (KeyError, TypeError, ValueError) as exc:
+        resource = PreSubmitCheckerInputResourceContext.model_validate_json(json.dumps(raw))
+    except (TypeError, ValueError) as exc:
         raise invalid_error("invalid prepared authorization handle") from exc
     context = resource.model_dump(mode="json")
-    return context, canonical_json_hash({"pre_submit_checker_input_preparation": context})
+    return context, authorization_resource_digest(resource)
 
 
 def parse_prepared_artifact_bindings(action_id: ActionId, raw: dict, invalid_error) -> dict:
@@ -83,12 +75,6 @@ def exact_artifact_binding_matches(
     | SubmissionCreationResourceContext,
 ) -> bool:
     """Require every materialization fact to equal the prepared request."""
-    if isinstance(resource, PreSubmitCheckerInputResourceContext):
-        context = resource.model_dump(mode="json", exclude={"semantic_manifest_sha256"})
-        return prepared_context == context and (
-            prepared_digest
-            == canonical_json_hash({"pre_submit_checker_input_preparation": context})
-        )
     context = resource.model_dump(mode="json")
     return prepared_context == context and (
         prepared_digest == authorization_resource_digest(resource)

@@ -28,18 +28,19 @@ type TaskSummary struct {
 
 type TaskDetail struct {
 	TaskSummary
-	Description           string             `json:"description"`
-	AcceptanceCriteria    *string            `json:"acceptance_criteria"`
-	RejectionCriteria     *string            `json:"rejection_criteria"`
-	SourceType            string             `json:"source_type"`
-	SourceRef             *string            `json:"source_ref"`
-	SourcePayloadHash     *string            `json:"source_payload_hash"`
-	ImportBatchID         *string            `json:"import_batch_id"`
-	ExternalTaskID        *string            `json:"external_task_id"`
-	CreatedBy             string             `json:"created_by"`
-	AssignedTo            *string            `json:"assigned_to"`
-	LastAssignmentOutcome *AssignmentOutcome `json:"last_assignment_outcome,omitempty"`
-	RevisionContext       *RevisionContext   `json:"revision_context,omitempty"`
+	Description                string                      `json:"description"`
+	AcceptanceCriteria         *string                     `json:"acceptance_criteria"`
+	RejectionCriteria          *string                     `json:"rejection_criteria"`
+	SourceType                 string                      `json:"source_type"`
+	SourceRef                  *string                     `json:"source_ref"`
+	SourcePayloadHash          *string                     `json:"source_payload_hash"`
+	ImportBatchID              *string                     `json:"import_batch_id"`
+	ExternalTaskID             *string                     `json:"external_task_id"`
+	CreatedBy                  string                      `json:"created_by"`
+	AssignedTo                 *string                     `json:"assigned_to"`
+	LastAssignmentOutcome      *AssignmentOutcome          `json:"last_assignment_outcome,omitempty"`
+	RevisionContext            *RevisionContext            `json:"revision_context,omitempty"`
+	PendingSubmissionOperation *PendingSubmissionOperation `json:"pending_submission_operation"`
 }
 
 type TaskPage struct {
@@ -178,7 +179,7 @@ func (c *Client) Task(ctx context.Context, project, selector string) (Result[Tas
 	if value.AssignedTo != nil {
 		_, validAssignment = uuidIdentity(*value.AssignedTo)
 	}
-	if err != nil || !validTask(value.TaskSummary, project) || !valid || selected != returned || !validCreator || !validAssignment {
+	if err != nil || !validTask(value.TaskSummary, project) || !valid || selected != returned || !validCreator || !validAssignment || !validPendingSubmission(value.PendingSubmissionOperation) {
 		return result, &Failure{Code: "invalid_api_response"}
 	}
 	return Result[TaskDetail]{Raw: raw, Value: value}, nil
@@ -203,7 +204,7 @@ func decodeTask(raw json.RawMessage, value any, detail bool) error {
 	required = append(required, "skill_tags")
 	if detail {
 		strings = append(strings, "description", "source_type", "created_by")
-		required = append(required, "description", "source_type", "created_by")
+		required = append(required, "description", "source_type", "created_by", "pending_submission_operation")
 	} else {
 		required = append(required, "task_type", "difficulty", "estimated_time_minutes", "deadline_at")
 	}

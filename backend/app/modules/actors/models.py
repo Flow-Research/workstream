@@ -15,6 +15,7 @@ from sqlalchemy import (
     JSON,
     String,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.sql import func
@@ -147,6 +148,10 @@ class ActorIdentityLink(Base):
             name="human_verified",
         ),
         CheckConstraint(
+            "not email_verified or (subject_kind = 'human' and email_observed_issued_at is not null)",
+            name="email_verified_observation",
+        ),
+        CheckConstraint(
             "(reactivated_by is null and reactivated_at is null and reactivation_reason is null) or "
             "(reactivated_by is not null and reactivated_at is not null and reactivation_reason is not null)",
             name="reactivation_fields",
@@ -182,6 +187,7 @@ class ActorIdentityLink(Base):
     linked_by: Mapped[str] = mapped_column(String(120), nullable=False)
     linked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     email_observed_issued_at: Mapped[int | None] = mapped_column(BigInteger)
+    email_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"))
     last_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     revoked_by: Mapped[str | None] = mapped_column(String(120))
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

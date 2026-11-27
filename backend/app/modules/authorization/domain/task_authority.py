@@ -200,7 +200,7 @@ def task_resource_guard(action: ActionId, resource: TaskAuthorityResourceContext
     if action in TASK_CONTRIBUTOR_READ_ACTIONS:
         return unassigned_ready or own_assignment
     if action is ActionId.TASK_GUIDE_READ:
-        return own_assignment
+        return unassigned_ready or own_assignment
     return action in TASK_MANAGER_READ_ACTIONS | TASK_LOCKED_CONTEXT_READ_ACTIONS | {ActionId.AUDIT_TASK_EVIDENCE_READ}
 
 

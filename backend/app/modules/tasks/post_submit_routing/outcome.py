@@ -3,9 +3,11 @@
 import json
 from collections.abc import Awaitable, Callable
 from contextlib import AsyncExitStack
+from typing import Literal
 from uuid import UUID
 
 from sqlalchemy import select, text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.identifiers import new_record_id
 from app.modules.checkers.api.execution import COMPLETION_EVENT, EvaluationCompletion
@@ -18,7 +20,9 @@ from app.modules.tasks.revision.expiry_event import revision_preparation_event
 from app.modules.tasks.revision.models import TaskRevisionPreparation
 from app.modules.tasks.revision.exhaustion import exhaust_assignment
 from app.modules.tasks.post_submit_routing.models import TaskPostSubmitRoutingManifest
-from app.modules.tasks.api.routing_outcome import RoutingAuthorityFacts, TaskRoutingOutcome
+from app.modules.tasks.api.routing_outcome import (
+    SUBMISSION_FEEDBACK_EMAIL_EVENT, RoutingAuthorityFacts, TaskRoutingOutcome,
+)
 from app.modules.tasks.post_submit_routing.requests import (
     TaskRoutingRequestUnavailable,
     require_routing_transaction,
@@ -26,6 +30,15 @@ from app.modules.tasks.post_submit_routing.requests import (
 from app.modules.tasks.post_submit_routing.source import TaskRoutingSourcePreparer
 
 OUTCOME_EVENT = "TaskPostSubmitRouted"
+FeedbackOutcome = Literal["needs_revision", "rejected"]
+
+
+async def routing_outcome_complete(session: AsyncSession, manifest_id: UUID) -> bool:
+    """Delegate complete retained effect closure to TASK's database owner."""
+    return await session.scalar(text(
+        "SELECT public.task_routing_outcome_complete(m) "
+        "FROM public.task_post_submit_routing_manifests m WHERE m.id=:manifest_id"
+    ), {"manifest_id": manifest_id}) is True
 
 
 class TaskPostSubmitOutcome:
@@ -44,6 +57,7 @@ class TaskPostSubmitOutcome:
         audit,
         outbox,
         reconciliation_claim: Callable[[], Awaitable[OutboxClaim]] | None = None,
+        feedback_email_enabled: bool = False,
     ):
         """Inject existing owner ports into one caller-owned transaction."""
         self._session, self._projects = session, projects
@@ -54,6 +68,7 @@ class TaskPostSubmitOutcome:
         self._observer, self._invocation_fence = observer, invocation_fence
         self._audit, self._outbox = audit, outbox
         self._reconciliation_claim = reconciliation_claim
+        self._feedback_email_enabled = feedback_email_enabled
 
     async def apply(self, envelope: OutboxEventEnvelope, *, current_generation: int | None) -> TaskRoutingOutcome:
         """Return durable identities only after staging complete new or exact replay facts."""
@@ -174,6 +189,8 @@ class TaskPostSubmitOutcome:
                     ))
                     if root is not None:
                         await self._outbox.require_existing(None, revision_preparation_event(stored, root))
+                if self._feedback_email_enabled and not replay:
+                    await self._request_feedback_email(stored)
             elif human:
                 task = await self._session.get(WorkstreamTask, str(source.source.task_id))
                 if not replay:
@@ -240,7 +257,7 @@ class TaskPostSubmitOutcome:
                     return "unresolved"
                 return (
                     "committed"
-                    if await self._routing_complete(retained.id)
+                    if await routing_outcome_complete(self._session, retained.id)
                     else "unresolved"
                 )
             except TaskRoutingRequestUnavailable:
@@ -265,7 +282,7 @@ class TaskPostSubmitOutcome:
             if source.source.human_review_required is not human:
                 raise TaskRoutingRequestUnavailable("routing branch changed")
             stored = await self._retained(envelope, completion)
-            if stored is None or not await self._routing_complete(stored.id):
+            if stored is None or not await routing_outcome_complete(self._session, stored.id):
                 raise TaskRoutingRequestUnavailable("routing retained outcome unavailable")
             authorized_generation = stored.authorized_lifecycle_generation
             acceptance_id = stored.final_acceptance_id
@@ -308,7 +325,7 @@ class TaskPostSubmitOutcome:
                 stored.outcome_event_id,
                 _notice(source, receipt, acceptance_id),
             )
-            if not await self._routing_complete(stored.id):
+            if not await routing_outcome_complete(self._session, stored.id):
                 raise TaskRoutingRequestUnavailable(
                     "routing retained outcome unavailable"
                 )
@@ -356,18 +373,6 @@ class TaskPostSubmitOutcome:
             ).execution_options(populate_existing=True)
         )
 
-    async def _routing_complete(self, manifest_id: UUID) -> bool:
-        """Delegate complete retained effect closure to TASK's database owner."""
-        return (
-            await self._session.scalar(
-                text(
-                    "SELECT public.task_routing_outcome_complete(m) "
-                    "FROM public.task_post_submit_routing_manifests m WHERE m.id=:manifest_id"
-                ),
-                {"manifest_id": manifest_id},
-            )
-        ) is True
-
     async def _observe_review_mode(self, completion: EvaluationCompletion) -> bool:
         """Observe exact task policy; authoritative source preparation rechecks it."""
         # This observation grants nothing. It selects lock order, and the complete
@@ -397,6 +402,16 @@ class TaskPostSubmitOutcome:
         with self._session.no_autoflush:
             return await self._outbox.append(_notice(source, receipt, acceptance_id))
 
+    async def _request_feedback_email(self, manifest: TaskPostSubmitRoutingManifest) -> None:
+        """Use the exact database-derived quality outcome after staging its evidence."""
+        status, reason = (await self._session.execute(select(
+            Submission.attempt_status, Submission.status_reason,
+        ).where(Submission.id == manifest.submission_id))).one()
+        if status == "needs_revision" and reason is None:
+            await self._outbox.append(submission_feedback_email_event(manifest, "needs_revision"))
+        elif status == "rejected" and reason == "revision_limit_reached":
+            await self._outbox.append(submission_feedback_email_event(manifest, "rejected"))
+
 
 def _notice(source, receipt, acceptance_id):
     """Build the bounded shared outbox consequence from exact source and authority."""
@@ -422,6 +437,20 @@ def _notice(source, receipt, acceptance_id):
                 "status_reason": "revision_limit_reached",
             } if source.exhaustion is not None and not source.recovered_exhaustion else {}),
         },
+    )
+
+
+def submission_feedback_email_event(
+    manifest: TaskPostSubmitRoutingManifest, outcome: FeedbackOutcome,
+) -> OutboxAppendInput:
+    """Use only exact routing identities as durable notification intent."""
+    return OutboxAppendInput(
+        event_type=SUBMISSION_FEEDBACK_EMAIL_EVENT, event_version=1, aggregate_type="task",
+        aggregate_id=UUID(manifest.task_id), project_id=UUID(manifest.project_id),
+        correlation_id=manifest.authority_context["request"]["route_operation_id"],
+        causation_event_id=manifest.outcome_event_id,
+        idempotency_key=f"submission-feedback-email:{manifest.id}",
+        payload={"routing_manifest_id": str(manifest.id), "outcome": outcome},
     )
 
 

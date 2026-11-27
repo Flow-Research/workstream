@@ -265,7 +265,8 @@ async def test_later_checker_registration_attaches_to_unchanged_proposal_before_
     from .pg_support import publish_policy
     from .source_fixtures import _register_external_checker_fixture, source_case
 
-    async with source_case(clean_postgres_database) as (
+    async with source_case(clean_postgres_database, pre_submit_registry_spec=None,
+                           post_submit_registry_spec=None) as (
         values, factory, finalization, actor, grant,
     ):
         before = await read_package(factory, finalization, actor, grant)

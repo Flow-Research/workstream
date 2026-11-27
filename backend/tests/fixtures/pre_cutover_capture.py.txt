@@ -1,0 +1,51 @@
+"""One-time capture through pinned predecessor owners, never a current writer."""
+import gzip
+import json
+from pathlib import Path
+
+import asyncpg
+
+from app.modules.artifacts.selected_pre_submit_execution import SelectedPreSubmitExecutionService
+from app.modules.checkers.selected_pre_submit_coordination import SelectedPreSubmitCoordinator
+from tests.tasks.test_submission_lineage import _prepared_packet
+
+
+async def test_capture(isolated_database_env, tmp_path, monkeypatch):
+    snapshots = {}
+
+    async def capture(status):
+        connection = await asyncpg.connect(isolated_database_env.replace('+asyncpg', ''))
+        try:
+            async with connection.transaction(isolation='repeatable_read', readonly=True):
+                assert await connection.fetchval('SHOW session_replication_role') == 'origin'
+                tables = {}
+                for table in await connection.fetch("SELECT tablename FROM pg_tables WHERE schemaname='public' ORDER BY tablename"):
+                    name = table['tablename']
+                    rows = json.loads(await connection.fetchval(f'SELECT coalesce(jsonb_agg(to_jsonb(r)),\'[]\')::text FROM public."{name}" r'))
+                    if rows:
+                        tables[name] = rows
+                runs = tables['selected_pre_submit_runs']
+                assert len(runs) == 1 and runs[0]['status'] == status
+                snapshots[status] = dict(revision=await connection.fetchval('SELECT version_num FROM alembic_version'), seed={}, tables=tables)
+        finally:
+            await connection.close()
+
+    execute = SelectedPreSubmitExecutionService.execute
+    committed = SelectedPreSubmitCoordinator.committed_execution
+
+    async def wrapped_execute(self, **kwargs):
+        await capture('queued')
+        result = await execute(self, **kwargs)
+        await capture('completed')
+        return result
+
+    async def wrapped_committed(self, **kwargs):
+        await capture('running')
+        return await committed(self, **kwargs)
+
+    monkeypatch.setattr(SelectedPreSubmitExecutionService, 'execute', wrapped_execute)
+    monkeypatch.setattr(SelectedPreSubmitCoordinator, 'committed_execution', wrapped_committed)
+    async with _prepared_packet(isolated_database_env, tmp_path):
+        assert set(snapshots) == {'queued', 'running', 'completed'}
+    body = dict(schema_version='workstream.pre_cutover_rows.v1', source_revision='e2b926288899bcd9b05e1a560ec19b6bca8cfcfc', source_test='tests/test_capture_pre_cutover.py::test_capture', snapshots=snapshots)
+    Path('/tmp/pre-cutover-rows.json.gz').write_bytes(gzip.compress(json.dumps(body,sort_keys=True).encode(),mtime=0))

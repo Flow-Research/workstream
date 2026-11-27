@@ -39,7 +39,7 @@ from app.modules.artifacts.preparation import (
     ExternalMaterialGrantRequest,
 )
 from app.modules.artifacts.submission_archive import exported_submission_tree
-from app.modules.artifacts.submission_manifest import build_submission_manifest
+from app.modules.artifacts.api.submission_manifest import build_submission_manifest
 from app.modules.artifacts.trusted_intake import TrustedArchiveInspector
 from app.modules.checkers.api.default_checker import (
     WorkstreamDefaultCheckerInput,

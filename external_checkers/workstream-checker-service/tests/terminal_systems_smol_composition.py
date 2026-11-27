@@ -22,13 +22,14 @@ import time
 from uuid import UUID, uuid4
 import zipfile
 
+import pytest
 from sqlalchemy import select
 
 from smol_runtime import assert_smol_vm_inventory, smol_vm_inventory
 
-from app.adapters.artifacts import checker_output_binding, checker_output_storage
+from app.adapters.artifacts import checker_output_binding, checker_output_storage, selected_pre_submit_source_contracts
 from app.adapters.artifacts import post_submission_materialization
-from app.adapters.artifacts.trusted_intake import UnixSocketTrustedIntakeAdapter
+from app.adapters.artifacts.trusted_intake import RemoteTlsTrustedIntakeAdapter
 from app.adapters.auth import checker_model_service_authorization
 from app.adapters.checkers import (
     checker_output_reservations,
@@ -36,7 +37,7 @@ from app.adapters.checkers import (
     model_invocation_grants,
     model_profile_reader,
 )
-from app.adapters.checkers.external_service import UnixSocketExternalCheckerAdapter
+from app.adapters.checkers.external_service import RemoteTlsExternalCheckerAdapter
 from app.adapters.checkers.model_execution import ModelAwareExternalExecution
 from app.adapters.checkers.model_proxy import CheckerModelProxy
 from app.adapters.checkers.model_proxy_transport import ModelProxyTransport
@@ -91,6 +92,7 @@ from tests.checkers.execution.support import (
     reserve,
 )
 from tests.checkers.external.support import post_registry_spec
+from tests.checkers.external.test_remote_node import remote_adapter_endpoint
 from tests.checkers.external.test_trial_evidence import _owner
 from tests.checkers.external.test_revision_materialization import (
     DiagnosticMaterialization,
@@ -809,19 +811,38 @@ def _wait_for_socket(
     raise AssertionError("Rust service socket did not become ready")
 
 
+@pytest.mark.parametrize("case", ("author", "runtime"))
 async def test_production_service_executes_project_trial_under_smol_with_real_custody(
-    tmp_path, isolated_database_env, admin_access, monkeypatch, *, recovery=None
+    tmp_path, isolated_database_env, admin_access, monkeypatch, case
+):
+    """Qualify both locked one-image cases independently, never a multi-POST policy."""
+    await _run_composition_case(tmp_path, isolated_database_env, admin_access, monkeypatch, case=case)
+
+
+async def _run_composition_case(
+    tmp_path, isolated_database_env, admin_access, monkeypatch, *, case, recovery=None
 ):
     """Prove the exact qualification boundary; no live model provider is used."""
     env = _required_environment()
     configured_root = Path(env["WORKSTREAM_TS_SMOL_ROOT"])
     assert configured_root.is_absolute() and not configured_root.is_symlink()
-    root = configured_root.resolve(strict=True)
-    assert root == configured_root and root.stat().st_mode & 0o077 == 0
+    assert case in {"author", "runtime"}
+    requirement_id = AUTHOR_REQUIREMENT if case == "author" else REQUIREMENT
+    assert configured_root.resolve(strict=True) == configured_root
+    assert configured_root.stat().st_mode & 0o077 == 0
+    root = configured_root / case[0]
+    root.mkdir(mode=0o700)
     node, checker_image, builder_image, intake_image = _node_configuration(env)
-    child_home_root = Path(node["trial_runtime"]["child_home_root"])
+    child_parent = Path(node["trial_runtime"]["child_home_root"])
+    assert child_parent.is_absolute() and child_parent.resolve(strict=True) == child_parent
+    metadata = child_parent.lstat()
+    assert stat.S_ISDIR(metadata.st_mode) and stat.S_IMODE(metadata.st_mode) == 0o700
+    assert (metadata.st_uid, metadata.st_gid) == (os.geteuid(), os.getegid())
+    child_home_root = child_parent / case[0]
+    assert len(os.fsencode(child_home_root)) <= 18, "one-image cases require child HOME parent <=16 bytes"
+    child_home_root.mkdir(mode=0o700)
+    node["trial_runtime"]["child_home_root"] = str(child_home_root)
     assert child_home_root.is_absolute() and child_home_root.resolve(strict=True) == child_home_root
-    assert len(os.fsencode(child_home_root)) <= 18
     child_root_stat = child_home_root.lstat()
     assert stat.S_ISDIR(child_root_stat.st_mode)
     assert stat.S_IMODE(child_root_stat.st_mode) == 0o700
@@ -896,14 +917,9 @@ async def test_production_service_executes_project_trial_under_smol_with_real_cu
             "model_profile_version": response.json()["spec"]["profile_version"],
             "model_profile_digest": response.json()["profile_digest"],
         }
-        return tuple(
-            PostSubmitAttachmentCase(
-                requirement_id=requirement_id,
-                configuration=shared | {"check": requirement_id},
-            )
-            for requirement_id in (AUTHOR_REQUIREMENT, REQUIREMENT)
-            if recovery is None or requirement_id == REQUIREMENT
-        )
+        return (PostSubmitAttachmentCase(
+            requirement_id=requirement_id, configuration=shared | {"check": requirement_id},
+        ),)
 
     post_scratch = root / "post-scratch"
     post_scratch.mkdir(mode=0o700)
@@ -937,14 +953,12 @@ async def test_production_service_executes_project_trial_under_smol_with_real_cu
     ) as h:
         # Fixture creation deliberately uses its in-process intake to seed the
         # already-verified submission admission. The public post-submit journey
-        # below is recomposed with the native trusted-intake socket only after
-        # the authority manifest and Rust service exist.
+        # below uses the production TLS edge only after the authority manifest
+        # and native Rust service exist.
         await provision_post_submit_service(
             h.factory, ServiceIdentity.ARTIFACT_CHECKER_OUTPUT
         )
-        expected_requirements = (
-            {AUTHOR_REQUIREMENT, REQUIREMENT} if recovery is None else {REQUIREMENT}
-        )
+        expected_requirements = {requirement_id}
         assert len(h.request.policy.entries) == len(expected_requirements)
         assert {
             entry.requirement_id: entry.configuration["check"]
@@ -1053,7 +1067,9 @@ async def test_production_service_executes_project_trial_under_smol_with_real_cu
 
         proxy_root = root / "private-proxy"
         service_root = root / "service"
+        runner_material_root = root / "runner-materials"
         for directory in (
+            runner_material_root,
             proxy_root,
             service_root,
             root / "model-relay",
@@ -1063,14 +1079,15 @@ async def test_production_service_executes_project_trial_under_smol_with_real_cu
             directory.mkdir(mode=0o700, exist_ok=True)
         proxy_path = proxy_root / "proxy.sock"
         service_socket = service_root / "checker.sock"
+        runner_proxy_path = proxy_root / "runner.sock"
         service_config = json.loads(json.dumps(node))
         service_config.update(
             socket_path=str(service_socket),
-            model_proxy_socket=str(proxy_path),
+            model_proxy_socket=str(runner_proxy_path),
             model_relay_root=str(root / "model-relay"),
             trial_authority_manifest_path=str(manifest_path),
             trial_authority_manifest_digest=manifest_digest,
-            material_root=str(post_scratch),
+            material_root=str(runner_material_root),
             docker_binary="",
             sandbox_uid=os.geteuid(),
             sandbox_gid=os.getegid(),
@@ -1107,13 +1124,22 @@ async def test_production_service_executes_project_trial_under_smol_with_real_cu
         before_cgroups = _directory_children(cgroup_root)
         service = None
         try:
-            async with ModelProxyTransport(
-                socket_path=proxy_path,
-                handler=model_proxy.handle,
-                trial_handler=trial_proxy.handle,
-                read_timeout_seconds=60.0,
-                write_timeout_seconds=60.0,
-                shutdown_timeout_seconds=30.0,
+            async with (
+                ModelProxyTransport(
+                    socket_path=proxy_path,
+                    handler=model_proxy.handle,
+                    trial_handler=trial_proxy.handle,
+                    read_timeout_seconds=60.0,
+                    write_timeout_seconds=60.0,
+                    shutdown_timeout_seconds=30.0,
+                ),
+                remote_adapter_endpoint(
+                    tmp_path, service_socket, model_proxy_socket_path=proxy_path,
+                    material_root=runner_material_root,
+                    native_model_proxy_socket_path=runner_proxy_path,
+                    session_timeout_seconds=720.0,
+                    config_sha256="sha256:" + hashlib.sha256(config_path.read_bytes()).hexdigest(),
+                ) as endpoint,
             ):
                 service = subprocess.Popen(
                     [str(service_binary), str(config_path)],
@@ -1123,8 +1149,8 @@ async def test_production_service_executes_project_trial_under_smol_with_real_cu
                     text=True,
                 )
                 _wait_for_socket(service_socket, service)
-                intake = UnixSocketTrustedIntakeAdapter(
-                    socket_path=service_socket,
+                intake = RemoteTlsTrustedIntakeAdapter(
+                    **{key: value for key, value in endpoint.items() if key != "model_proxy_socket_path"},
                     image_digest=intake_image["platform_manifest_digest"],
                     config_digest=intake_image["config_image_id"],
                 )
@@ -1156,8 +1182,9 @@ async def test_production_service_executes_project_trial_under_smol_with_real_cu
                         artifact_deadline_ms=120_000,
                     )
                 )
-                adapter = UnixSocketExternalCheckerAdapter(
-                    socket_path=service_socket, timeout_seconds=660.0
+                adapter = RemoteTlsExternalCheckerAdapter(
+                    **endpoint, timeout_seconds=660.0,
+                    source_contracts=selected_pre_submit_source_contracts(),
                 )
                 health = await adapter.health()
                 assert (health.runtime, health.isolation_mode) == (
@@ -1190,12 +1217,14 @@ async def test_production_service_executes_project_trial_under_smol_with_real_cu
                     assert _directory_children(cgroup_root) == before_cgroups
                     return
                 result = await executor.evaluate_post_submission(h.request)
+            assert _directory_children(runner_material_root / "workspaces") == set()
+            assert _directory_children(post_scratch / "workspaces") == set()
             assert result.outcome == "completed", (
                 result,
                 len(creates),
                 len(observations),
             )
-            assert len(result.execution.external_members) == 2
+            assert len(result.execution.external_members) == 1
             # This qualification is an initial submission: it proves the
             # current-only least-material path and explicitly does not claim a
             # predecessor/archive revision journey.
@@ -1206,17 +1235,14 @@ async def test_production_service_executes_project_trial_under_smol_with_real_cu
             assert {
                 member.requirement_id: (member.result.outcome, member.result.verdict)
                 for member in result.execution.external_members
-            } == {
-                AUTHOR_REQUIREMENT: ("completed", "passed"),
-                REQUIREMENT: ("completed", "passed"),
-            }
-            assert len(creates) == 4
+            } == {requirement_id: ("completed", "passed")}
+            assert len(creates) == 2
             receipts = [item["receipt"] for item in observations if "receipt" in item]
-            assert len(receipts) == 2
+            assert len(receipts) == 1
             assert {
                 receipt["originating_identity"]["requirement_id"]
                 for receipt in receipts
-            } == {AUTHOR_REQUIREMENT, REQUIREMENT}
+            } == {requirement_id}
             for receipt in receipts:
                 assert receipt["plan_completed"] is True
                 assert receipt["cleanup_confirmed"] is True
@@ -1261,10 +1287,10 @@ async def test_production_service_executes_project_trial_under_smol_with_real_cu
                 assert outcomes["interrupt_work"] == "signalled"
                 assert outcomes["restart_work_verification"] == "succeeded"
             assert await executor.evaluate_post_submission(h.request) == result
-            assert len(creates) == 4
+            assert len(creates) == 2
             async with h.factory() as session:
                 effects = tuple(await session.scalars(select(ModelUsageEffect)))
-                assert len(effects) == 4
+                assert len(effects) == 2
                 assert all(item.state == "completed" for item in effects)
                 assert all(
                     UUID(item.request_binding_id).version == 7 for item in effects
@@ -1273,7 +1299,7 @@ async def test_production_service_executes_project_trial_under_smol_with_real_cu
                     UUID(item.response_binding_id).version == 7 for item in effects
                 )
                 retained = tuple(await session.scalars(select(CheckerTrialEvidence)))
-                assert len(retained) == 2
+                assert len(retained) == 1
                 assert {item.content_sha256 for item in retained} == {
                     external_checker_json_hash(receipt) for receipt in receipts
                 }
@@ -1318,6 +1344,7 @@ async def test_production_service_executes_project_trial_under_smol_with_real_cu
     summary = {
         "schema_version": "workstream.terminal_systems_composition_evidence.v1",
         "provider_mode": "controlled",
+        "case": case, "requirement_id": requirement_id,
         "guide_to_contribution_proven": False,
         "image": {
             "digest": env["WORKSTREAM_TS_SMOL_CHECKER_DIGEST"],
@@ -1355,7 +1382,7 @@ async def test_production_service_executes_project_trial_under_smol_with_real_cu
         },
         "model_effects": model_summary,
         "trials": trial_summary,
-        "replay_additional_provider_calls": len(creates) - 4,
+        "replay_additional_provider_calls": len(creates) - 2,
         "predecessor_material_exercised": False,
         "owned_runtime_resources_removed": True,
     }
@@ -1363,7 +1390,8 @@ async def test_production_service_executes_project_trial_under_smol_with_real_cu
         summary, sort_keys=True, separators=(",", ":"), allow_nan=False
     ).encode()
     assert len(encoded) <= 64 * 1024
-    summary_path = Path(env["WORKSTREAM_TS_SMOL_SUMMARY_PATH"])
+    base_summary = Path(env["WORKSTREAM_TS_SMOL_SUMMARY_PATH"])
+    summary_path = base_summary.with_name(base_summary.stem + "-" + case + base_summary.suffix)
     assert summary_path.is_absolute() and root not in summary_path.parents
     descriptor = os.open(summary_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     with os.fdopen(descriptor, "wb") as output:

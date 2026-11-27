@@ -1,6 +1,7 @@
 """Explicit composition of the shared delivery owner; feature registration is separate."""
 
 from collections.abc import Callable, Mapping
+from typing import Literal
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.modules.authorization.api.outbox_dispatch import OutboxDispatchAuthorizationPort
@@ -45,9 +46,16 @@ def outbox_delivery(
     )
 
 
-def production_outbox_delivery(session_factory):
-    """Install exact assignment and selected evaluation handlers."""
+def production_outbox_delivery(
+    session_factory, *, worker_group: Literal["post", "finalization", "feedback"] | None = None,
+):
+    """Compose all handlers for discovery, or one explicit worker group for delivery."""
     from app.adapters.artifacts import worker_post_submission_materialization
+    from app.adapters.artifacts import (
+        worker_submission_finalization_handler, worker_submission_finalization_recovery_handler,
+    )
+    from app.modules.artifacts.api.submission_recovery import FINALIZATION_RECOVERY_EVENT
+    from app.modules.artifacts.api.submission_finalization import SUBMISSION_FINALIZATION_DELIVERY_LEASE_SECONDS
     from app.adapters.auth import (
         outbox_dispatch_authorization,
         assignment_invalidation_authorization,
@@ -61,110 +69,146 @@ def production_outbox_delivery(session_factory):
         TransactionalTaskRevisionExhaustedNoticeHandler,
         evaluation_completion_handler,
         evaluation_request_handler,
+        submission_feedback_email_handler,
     )
     from app.adapters.checkers import post_submit_delivery_reconciliation_handler
-    from app.core.config import get_settings
     from app.modules.checkers.api.delivery_reconciliation import (
         POST_SUBMIT_DELIVERY_RECONCILIATION_EVENT as RECONCILIATION_EVENT,
     )
     from app.modules.checkers.api.execution import COMPLETION_EVENT, REQUEST_EVENT
     from app.modules.checkers.api.external_policy import (
         SELECTED_POST_DELIVERY_LEASE_SECONDS,
-        SELECTED_POST_HANDLER_TIMEOUT_SECONDS,
     )
     from app.modules.tasks.api.assignment_invalidation import ASSIGNMENT_INVALIDATION_EVENT
     from app.modules.tasks.api.revision_exhaustion import REVISION_EXHAUSTED_EVENT
     from app.modules.tasks.api.revision_expiry import (
         REVISION_EXPIRY_EVENT, REVISION_EXPIRED_EVENT, REVISION_CONTEXT_BLOCKED_EVENT,
     )
+    from app.core.config import get_settings
+    from app.modules.tasks.api.routing_outcome import SUBMISSION_FEEDBACK_EMAIL_EVENT
 
+    finalization_options = DeliveryOptions(lease_seconds=SUBMISSION_FINALIZATION_DELIVERY_LEASE_SECONDS)
+    feedback_options = DeliveryOptions(lease_seconds=60, handler_timeout_seconds=20,
+                                       retry_base_seconds=60)
+    feedback_key = (SUBMISSION_FEEDBACK_EMAIL_EVENT, 1)
+    settings = get_settings()
+    entries = [
+        (
+            "SubmissionFinalizationRequested",
+            1,
+            worker_submission_finalization_handler(
+                sessions=session_factory, delivery_options=finalization_options,
+            ),
+        ),
+        (
+            FINALIZATION_RECOVERY_EVENT,
+            1,
+            worker_submission_finalization_recovery_handler(
+                sessions=session_factory, delivery_options=finalization_options,
+            ),
+        ),
+        (
+            ASSIGNMENT_INVALIDATION_EVENT,
+            1,
+            TransactionalAssignmentInvalidationHandler(
+                session_factory,
+                observer=CommittedInvocationReader(session_factory),
+                authorization_factory=assignment_invalidation_authorization,
+            ),
+        ),
+        (
+            REVISION_EXPIRY_EVENT,
+            1,
+            TransactionalTaskRevisionExpiryHandler(
+                session_factory,
+                observer=CommittedInvocationReader(session_factory),
+                authorization_factory=revision_expiry_authorization,
+            ),
+        ),
+        (
+            REVISION_EXPIRED_EVENT,
+            1,
+            TransactionalTaskRevisionExpiredNoticeHandler(
+                session_factory,
+                observer=CommittedInvocationReader(session_factory),
+            ),
+        ),
+        (
+            REVISION_CONTEXT_BLOCKED_EVENT,
+            1,
+            TransactionalTaskRevisionBlockedNoticeHandler(
+                session_factory,
+                observer=CommittedInvocationReader(session_factory),
+            ),
+        ),
+        (
+            REVISION_EXHAUSTED_EVENT,
+            1,
+            TransactionalTaskRevisionExhaustedNoticeHandler(
+                session_factory,
+                observer=CommittedInvocationReader(session_factory),
+            ),
+        ),
+        (
+            REQUEST_EVENT,
+            1,
+            evaluation_request_handler(
+                sessions=session_factory,
+                materialization=worker_post_submission_materialization(
+                    sessions=session_factory
+                ),
+            ),
+        ),
+        (
+            COMPLETION_EVENT,
+            1,
+            evaluation_completion_handler(sessions=session_factory),
+        ),
+        (
+            RECONCILIATION_EVENT,
+            1,
+            post_submit_delivery_reconciliation_handler(
+                sessions=session_factory,
+                materialization=worker_post_submission_materialization(
+                    sessions=session_factory
+                ),
+            ),
+        ),
+    ]
+    if settings.submission_feedback_email_enabled:
+        entries.append((*feedback_key, submission_feedback_email_handler(
+            session_factory, observer=CommittedInvocationReader(session_factory), settings=settings,
+        )))
+    finalization_keys = frozenset({("SubmissionFinalizationRequested", 1), (FINALIZATION_RECOVERY_EVENT, 1)})
+    replay_safe = finalization_keys | {
+        (REVISION_EXPIRY_EVENT, 1), (REVISION_EXPIRED_EVENT, 1), (REVISION_CONTEXT_BLOCKED_EVENT, 1),
+        (REVISION_EXHAUSTED_EVENT, 1), feedback_key,
+    }
+    groups = {
+        "finalization": finalization_keys, "feedback": {feedback_key},
+        "post": {(kind, version) for kind, version, _handler in entries} - finalization_keys - {feedback_key},
+    }
+    if worker_group is not None:
+        entries = [entry for entry in entries if entry[:2] in groups[worker_group]]
+    registry = HandlerRegistry(entries, replay_safe=frozenset(
+        (kind, version) for kind, version, _handler in entries if (kind, version) in replay_safe
+    ))
+    post_options = DeliveryOptions(
+        lease_seconds=SELECTED_POST_DELIVERY_LEASE_SECONDS,
+        handler_timeout_seconds=None,
+        background_heartbeat=True,
+    )
+    event_options = {
+        ("SubmissionFinalizationRequested", 1): finalization_options,
+        (FINALIZATION_RECOVERY_EVENT, 1): finalization_options,
+        feedback_key: feedback_options,
+        (REQUEST_EVENT, 1): post_options,
+        (RECONCILIATION_EVENT, 1): post_options,
+    }
     return outbox_delivery(
-        session_factory,
-        authorization_factory=outbox_dispatch_authorization,
-        registry=HandlerRegistry(
-            [
-                (
-                    ASSIGNMENT_INVALIDATION_EVENT,
-                    1,
-                    TransactionalAssignmentInvalidationHandler(
-                        session_factory,
-                        observer=CommittedInvocationReader(session_factory),
-                        authorization_factory=assignment_invalidation_authorization,
-                    ),
-                ),
-                (
-                    REVISION_EXPIRY_EVENT,
-                    1,
-                    TransactionalTaskRevisionExpiryHandler(
-                        session_factory,
-                        observer=CommittedInvocationReader(session_factory),
-                        authorization_factory=revision_expiry_authorization,
-                    ),
-                ),
-                (
-                    REVISION_EXPIRED_EVENT,
-                    1,
-                    TransactionalTaskRevisionExpiredNoticeHandler(
-                        session_factory,
-                        observer=CommittedInvocationReader(session_factory),
-                    ),
-                ),
-                (
-                    REVISION_CONTEXT_BLOCKED_EVENT,
-                    1,
-                    TransactionalTaskRevisionBlockedNoticeHandler(
-                        session_factory,
-                        observer=CommittedInvocationReader(session_factory),
-                    ),
-                ),
-                (
-                    REVISION_EXHAUSTED_EVENT,
-                    1,
-                    TransactionalTaskRevisionExhaustedNoticeHandler(
-                        session_factory,
-                        observer=CommittedInvocationReader(session_factory),
-                    ),
-                ),
-                (
-                    REQUEST_EVENT,
-                    1,
-                    evaluation_request_handler(
-                        sessions=session_factory,
-                        materialization=worker_post_submission_materialization(
-                            sessions=session_factory
-                        ),
-                    ),
-                ),
-                (
-                    COMPLETION_EVENT,
-                    1,
-                    evaluation_completion_handler(sessions=session_factory),
-                ),
-                (
-                    RECONCILIATION_EVENT,
-                    1,
-                    post_submit_delivery_reconciliation_handler(
-                        sessions=session_factory,
-                        materialization=worker_post_submission_materialization(
-                            sessions=session_factory
-                        ),
-                    ),
-                ),
-            ],
-            replay_safe=frozenset({(REVISION_EXPIRY_EVENT, 1), (REVISION_EXPIRED_EVENT, 1), (REVISION_CONTEXT_BLOCKED_EVENT, 1), (REVISION_EXHAUSTED_EVENT, 1)}),
-        ),
-        options=DeliveryOptions(),
-        event_options={
-            (REQUEST_EVENT, 1): DeliveryOptions(
-                lease_seconds=SELECTED_POST_DELIVERY_LEASE_SECONDS,
-                handler_timeout_seconds=SELECTED_POST_HANDLER_TIMEOUT_SECONDS,
-            )
-        },
-        excluded_events=(
-            frozenset({(REQUEST_EVENT, 1), (RECONCILIATION_EVENT, 1)})
-            if get_settings().hosted_profile == "app"
-            else frozenset()
-        ),
+        session_factory, authorization_factory=outbox_dispatch_authorization,
+        registry=registry, options=DeliveryOptions(),
+        event_options={key: value for key, value in event_options.items() if key in registry.keys},
     )
 
 

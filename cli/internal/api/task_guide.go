@@ -53,9 +53,9 @@ func (d TaskGuideDocument) Extension() string {
 	}
 }
 
-func validateGuideDocuments(raw json.RawMessage, documents []TaskGuideDocument, taskID string, assigned bool) error {
+func validateGuideDocuments(raw json.RawMessage, documents []TaskGuideDocument, readPath func(string) string) error {
 	var entries []json.RawMessage
-	if jsonv2.Unmarshal(raw, &entries) != nil || entries == nil || len(entries) != len(documents) || (!assigned && len(entries) != 0) {
+	if jsonv2.Unmarshal(raw, &entries) != nil || entries == nil || len(entries) != len(documents) {
 		return errors.New("invalid guide documents")
 	}
 	seen := make(map[string]bool)
@@ -65,7 +65,7 @@ func validateGuideDocuments(raw json.RawMessage, documents []TaskGuideDocument, 
 		if _, err := contextObject(entry, &d, []string{"document_id", "order", "label", "media_type", "byte_count", "sha256", "read_reference"}, nil); err != nil ||
 			!validUUID(d.DocumentID) || seen[canonicalUUID(d.DocumentID)] || d.Order <= previous ||
 			strings.TrimSpace(d.Label) == "" || d.Extension() == "" || d.ByteCount <= 0 || d.ByteCount > MaxGuideDocumentBytes ||
-			!contextPolicyDigest.MatchString(d.SHA256) || d.ReadReference != guideDocumentPath(taskID, d.DocumentID) {
+			!contextPolicyDigest.MatchString(d.SHA256) || d.ReadReference != readPath(d.DocumentID) {
 			return errors.New("invalid guide document")
 		}
 		seen[canonicalUUID(d.DocumentID)] = true
@@ -77,12 +77,19 @@ func validateGuideDocuments(raw json.RawMessage, documents []TaskGuideDocument, 
 // DownloadGuideDocument always constructs the same-origin path itself. The
 // caller writes privately and publishes only after this verifies all bytes.
 func (c *Client) DownloadGuideDocument(ctx context.Context, taskID string, document TaskGuideDocument, target io.Writer) error {
-	if !validUUID(taskID) || !validUUID(document.DocumentID) || document.Extension() == "" ||
-		document.ByteCount <= 0 || document.ByteCount > MaxGuideDocumentBytes || !contextPolicyDigest.MatchString(document.SHA256) ||
-		document.ReadReference != guideDocumentPath(taskID, document.DocumentID) {
+	if !validUUID(taskID) {
 		return &Failure{Code: "invalid_api_response"}
 	}
-	response, err := c.openRequest(ctx, c.guideHTTP, http.MethodGet, guideDocumentPath(taskID, document.DocumentID), "", nil, "", document.MediaType)
+	return c.downloadVerifiedGuideDocument(ctx, guideDocumentPath(taskID, document.DocumentID), document, target)
+}
+
+func (c *Client) downloadVerifiedGuideDocument(ctx context.Context, path string, document TaskGuideDocument, target io.Writer) error {
+	if !validUUID(document.DocumentID) || document.Extension() == "" ||
+		document.ByteCount <= 0 || document.ByteCount > MaxGuideDocumentBytes || !contextPolicyDigest.MatchString(document.SHA256) ||
+		document.ReadReference != path {
+		return &Failure{Code: "invalid_api_response"}
+	}
+	response, err := c.openRequest(ctx, c.guideHTTP, http.MethodGet, path, "", nil, "", document.MediaType)
 	if err != nil {
 		return err
 	}
@@ -108,4 +115,48 @@ func (c *Client) DownloadGuideDocument(ctx context.Context, taskID string, docum
 		return &Failure{Code: "guide_document_integrity_mismatch"}
 	}
 	return nil
+}
+
+// ApprovedContributorGuide is the active approved project guide's original manifest.
+type ApprovedContributorGuide struct {
+	ProjectID string              `json:"project_id"`
+	GuideID   string              `json:"guide_id"`
+	Version   string              `json:"version"`
+	Documents []TaskGuideDocument `json:"documents"`
+}
+
+func contributorGuidePath(projectID string) string {
+	return "/api/v1/projects/" + canonicalUUID(projectID) + "/contributor-guide"
+}
+
+func projectGuideDocumentPath(projectID, guideID, documentID string) string {
+	return contributorGuidePath(projectID) + "/" + canonicalUUID(guideID) + "/documents/" + canonicalUUID(documentID) + "/content"
+}
+
+func (c *Client) ContributorGuide(ctx context.Context, projectID string) (Result[ApprovedContributorGuide], error) {
+	var result Result[ApprovedContributorGuide]
+	if !validUUID(projectID) {
+		return result, errors.New("project ID must be a UUID")
+	}
+	raw, err := c.request(ctx, http.MethodGet, contributorGuidePath(projectID), "", nil)
+	if err != nil {
+		return result, err
+	}
+	var guide ApprovedContributorGuide
+	fields, err := contextObject(raw, &guide, []string{"project_id", "guide_id", "version", "documents"}, nil)
+	if err != nil || !sameUUID(guide.ProjectID, projectID) || !validUUID(guide.GuideID) ||
+		strings.TrimSpace(guide.Version) == "" || !c.safeMutationResponse(raw) ||
+		validateGuideDocuments(fields["documents"], guide.Documents, func(documentID string) string {
+			return projectGuideDocumentPath(projectID, guide.GuideID, documentID)
+		}) != nil {
+		return result, &Failure{Code: "invalid_api_response"}
+	}
+	return Result[ApprovedContributorGuide]{Raw: raw, Value: guide}, nil
+}
+
+func (c *Client) DownloadContributorGuideDocument(ctx context.Context, projectID, guideID string, document TaskGuideDocument, target io.Writer) error {
+	if !validUUID(projectID) || !validUUID(guideID) {
+		return &Failure{Code: "invalid_api_response"}
+	}
+	return c.downloadVerifiedGuideDocument(ctx, projectGuideDocumentPath(projectID, guideID, document.DocumentID), document, target)
 }

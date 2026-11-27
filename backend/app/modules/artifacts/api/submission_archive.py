@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 import math
+import unicodedata
 
 
 # Compressed intake ceiling; expanded content has its own inspection limit.
@@ -96,3 +97,48 @@ class SubmissionArchiveLimits:
             or self.maximum_inspection_seconds <= 0
         ):
             raise ValueError("submission archive deadline is invalid")
+
+    def canonical_body(self) -> dict[str, int | float]:
+        """Serialize all bounds with the existing invocation-wire field names."""
+        return {
+            "maximum_entries": self.maximum_entries,
+            "maximum_path_bytes": self.maximum_path_bytes,
+            "maximum_path_depth": self.maximum_path_depth,
+            "maximum_central_directory_bytes": self.maximum_central_directory_bytes,
+            "maximum_entry_bytes": self.maximum_entry_bytes,
+            "maximum_expanded_bytes": self.maximum_expanded_bytes,
+            "maximum_compression_ratio": self.maximum_compression_ratio,
+            "maximum_inspection_seconds": float(self.maximum_inspection_seconds),
+        }
+
+
+def normalize_submission_archive_path(
+    path: str, *, maximum_path_bytes: int, maximum_path_depth: int,
+) -> str:
+    """Apply the same path rules to inspected and recovered manifest entries."""
+    parts = path.split("/")
+    normalized = unicodedata.normalize("NFC", path)
+    if (
+        not path or "\\" in path or path.startswith("/")
+        or any(ord(character) < 32 or ord(character) == 127 for character in path)
+        or any(part in {"", ".", ".."} or part.endswith((" ", ".")) for part in parts)
+        or ":" in parts[0] or len(parts) > maximum_path_depth
+        or max(len(path.encode("utf-8")), len(normalized.encode("utf-8"))) > maximum_path_bytes
+    ):
+        raise SubmissionArchiveRejectedError(SubmissionArchiveFailureCode.UNSAFE_ENTRY)
+    return normalized
+
+
+def validate_submission_archive_inventory(entries: tuple[SubmissionArchiveEntry, ...]) -> None:
+    """Require one unambiguous path per entry and exact directory ancestry."""
+    kinds = {entry.normalized_path: entry.entry_type for entry in entries}
+    folded_paths: set[str] = set()
+    for entry in entries:
+        folded = unicodedata.normalize("NFC", entry.normalized_path).casefold()
+        if folded in folded_paths:
+            raise SubmissionArchiveRejectedError(SubmissionArchiveFailureCode.COLLISION)
+        folded_paths.add(folded)
+        parts = entry.normalized_path.split("/")
+        for depth in range(1, len(parts)):
+            if kinds.get("/".join(parts[:depth])) is not SubmissionArchiveEntryType.DIRECTORY:
+                raise SubmissionArchiveRejectedError(SubmissionArchiveFailureCode.COLLISION)

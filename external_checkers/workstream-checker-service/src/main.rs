@@ -44,7 +44,6 @@ use workstream_checker_sdk::{
 };
 
 const PROTOCOL: &str = "external_checker_service.v1";
-const PRE_GRANT_PROTOCOL: &str = "workstream.external_checker_material_grant.v1";
 const POST_GRANT_PROTOCOL: &str = "workstream.external_checker_material_grant.v2";
 const CURRENT_ARCHIVE_ROLE: &str = "submission_archive";
 const PREDECESSOR_ARCHIVE_ROLE: &str = "predecessor_submission_archive";
@@ -63,6 +62,10 @@ const UNSETTLED_RESOURCE_ERROR: &str = "owned runtime resource cleanup unsettled
 struct ServiceConfig {
     #[serde(skip)]
     container_owner: Option<String>,
+    #[serde(skip)]
+    control_root: Option<std::sync::Arc<File>>,
+    #[serde(skip)]
+    startup_config_sha256: String,
     #[serde(skip)]
     smol_admission: Option<std::sync::Arc<smol::Admission>>,
     socket_path: PathBuf,
@@ -83,6 +86,8 @@ struct ServiceConfig {
     smol: Option<smol::SmolConfig>,
     #[serde(default)]
     trusted_intake: Option<smol::IntakeConfig>,
+    #[serde(default)]
+    pre: Option<smol::PreConfig>,
     runtime: String,
     isolation_mode: String,
     operating_system: String,
@@ -161,20 +166,40 @@ struct HealthEnvelope {
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct GrantReference {
-    grant_id: String,
-    binding_digest: String,
+struct BindEpochEnvelope {
+    protocol_version: String,
+    operation: String,
+    config_sha256: String,
+    epoch: String,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
-struct GrantManifest {
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PlacementEnvelope {
     protocol_version: String,
+    operation: String,
+    demand: Option<PlacementDemand>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
+enum PlacementDemand {
+    Pre {
+        source_bytes: u64,
+    },
+    Intake {
+        preparation: Value,
+    },
+    Post {
+        memory_bytes: u64,
+        trial: Option<trial_profiles::TrialPlacementBinding>,
+    },
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct GrantReference {
     grant_id: String,
-    request_digest: String,
-    #[serde(flatten)]
-    identity: GrantIdentity,
-    directories: Vec<String>,
-    files: Vec<GrantFile>,
     binding_digest: String,
 }
 
@@ -189,20 +214,6 @@ struct VerifiedGrant {
 #[derive(Debug, PartialEq)]
 struct ExecutedChecker {
     value: Value,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(tag = "phase", deny_unknown_fields)]
-enum GrantIdentity {
-    #[serde(rename = "pre_submit")]
-    PreSubmit {
-        prepared_generation_id: String,
-        attempt_id: String,
-        attempt_request_digest: String,
-        archive_sha256: String,
-        archive_byte_count: u64,
-        semantic_manifest_sha256: String,
-    },
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -256,6 +267,12 @@ struct HealthReceipt<'a> {
     protocol_version: &'static str,
     operation: &'static str,
     status: &'static str,
+    #[serde(flatten)]
+    runtime: RuntimeHealth<'a>,
+}
+
+#[derive(Debug, Serialize)]
+struct RuntimeHealth<'a> {
     operating_system: &'a str,
     architecture: &'a str,
     runtime: &'a str,
@@ -288,8 +305,20 @@ struct OutputMeter {
 
 struct RequestExecutionBudget {
     deadline: Instant,
+    native_project: Option<NativeProjectBudget>,
     output: OutputMeter,
     cleanup: EmergencyCleanupBudget,
+}
+
+#[derive(Clone, Copy)]
+struct NativeProjectBudget {
+    runtime: Duration,
+}
+
+#[derive(Clone, Copy)]
+enum ProjectExecutionBudget {
+    PreparationSeparated(Duration),
+    Aggregate(Instant),
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -349,9 +378,16 @@ impl RequestExecutionBudget {
     fn new(deadline: Instant, maximum_output: usize) -> Self {
         Self {
             deadline,
+            native_project: None,
             output: OutputMeter::new(maximum_output),
             cleanup: EmergencyCleanupBudget::new(),
         }
+    }
+
+    fn configure_native_project(&mut self, runtime_ms: u64) {
+        self.native_project = Some(NativeProjectBudget {
+            runtime: Duration::from_millis(runtime_ms),
+        });
     }
 }
 
@@ -510,6 +546,7 @@ fn run() -> Result<(), String> {
     let bytes = fs::read(path).map_err(|_| "configuration unavailable")?;
     let mut config: ServiceConfig =
         serde_json::from_slice(&bytes).map_err(|_| "configuration invalid")?;
+    config.startup_config_sha256 = format!("sha256:{:x}", Sha256::digest(&bytes));
     load_trial_profiles(&mut config)?;
     let listener = prepare_listener(&mut config)?;
     if config.runtime == "smolvm" {
@@ -805,6 +842,12 @@ fn prepare_listener(config: &mut ServiceConfig) -> Result<OwnedSocketListener, S
     // live owner's resources.
     let listener = OwnedSocketListener::bind(&config.socket_path)?;
     config.container_owner = Some(load_container_owner(&listener.parent)?);
+    config.control_root = Some(std::sync::Arc::new(
+        listener
+            .parent
+            .try_clone()
+            .map_err(|_| "control root unavailable")?,
+    ));
     validate_config(config)?;
     load_trial_runtime(config)?;
     let trial_roots = trial_roots::claim(config)?;
@@ -902,8 +945,21 @@ fn serve_connection(
     if stream.set_nonblocking(true).is_err() {
         return Ok(());
     }
-    let frame = read_frame_until(&mut stream, MAX_ENVELOPE_BYTES, Instant::now() + timeout);
+    let frame = read_connection_frame(config, &mut stream, Instant::now() + timeout);
     if let Ok(bytes) = &frame {
+        if serde_json::from_slice::<Value>(bytes)
+            .ok()
+            .is_some_and(|value| value["operation"] == "execute_pre")
+        {
+            return match smol::serve_pre(config, stream, bytes) {
+                Err(error) if error == UNSETTLED_RESOURCE_ERROR => Err(error),
+                Err(error) => {
+                    eprintln!("PRE request rejected: {error}");
+                    Ok(())
+                }
+                _ => Ok(()),
+            };
+        }
         if serde_json::from_slice::<Value>(bytes)
             .ok()
             .and_then(|v| v["protocol_version"].as_str().map(str::to_owned))
@@ -926,6 +982,35 @@ fn serve_connection(
     Ok(())
 }
 
+fn read_connection_frame(
+    config: &ServiceConfig,
+    stream: &mut UnixStream,
+    deadline: Instant,
+) -> Result<Vec<u8>, String> {
+    let frame = read_frame_until(stream, MAX_ENVELOPE_BYTES, deadline)?;
+    if !serde_json::from_slice::<Value>(&frame)
+        .ok()
+        .is_some_and(|value| value["operation"] == "bind_epoch")
+    {
+        return Ok(frame);
+    }
+    let binding: BindEpochEnvelope =
+        serde_json::from_slice(&frame).map_err(|_| "runner binding invalid")?;
+    let admission = config
+        .smol_admission
+        .as_ref()
+        .ok_or("runner epoch unavailable")?;
+    if binding.protocol_version != PROTOCOL
+        || binding.operation != "bind_epoch"
+        || binding.config_sha256 != config.startup_config_sha256
+        || binding.epoch != admission.epoch
+    {
+        return Err("runner binding differs".into());
+    }
+    // A bound frame never changes the original private request or its read deadline.
+    read_frame_until(stream, MAX_ENVELOPE_BYTES, deadline)
+}
+
 fn connection_response(response: Result<Vec<u8>, String>) -> Result<Option<Vec<u8>>, String> {
     match response {
         Ok(bytes) => Ok(Some(bytes)),
@@ -946,6 +1031,7 @@ fn validate_config(config: &ServiceConfig) -> Result<(), String> {
         || config.sandbox_uid == 0
         || config.sandbox_gid == 0
         || config.cache.is_empty()
+        || config.cache.len() > 64
     {
         return Err("configuration values invalid".into());
     }
@@ -1045,7 +1131,16 @@ fn handle_frame(
     bytes: &[u8],
 ) -> Result<Vec<u8>, String> {
     let value: Value = serde_json::from_slice(bytes).map_err(|_| "request envelope invalid")?;
-    if value.get("operation").and_then(Value::as_str) == Some("health") {
+    if value["operation"] == "placement" {
+        let envelope: PlacementEnvelope =
+            serde_json::from_value(value).map_err(|_| "runner placement envelope invalid")?;
+        if envelope.protocol_version != PROTOCOL || envelope.operation != "placement" {
+            return Err("request operation invalid".into());
+        }
+        runtime_ready(config)?;
+        return placement_reply(config, envelope.demand.as_ref());
+    }
+    if value["operation"] == "health" {
         let envelope: HealthEnvelope =
             serde_json::from_value(value).map_err(|_| "health envelope invalid")?;
         if envelope.protocol_version != PROTOCOL || envelope.operation != "health" {
@@ -1056,13 +1151,7 @@ fn handle_frame(
             protocol_version: PROTOCOL,
             operation: "health",
             status: "ready",
-            operating_system: &config.operating_system,
-            architecture: &config.architecture,
-            runtime: &config.runtime,
-            isolation_mode: &config.isolation_mode,
-            cached_platform_manifests: config.cache.len(),
-            sandbox_uid: config.sandbox_uid,
-            sandbox_gid: config.sandbox_gid,
+            runtime: runtime_health(config),
         })
         .map_err(|_| "health encoding failed".into());
     }
@@ -1117,6 +1206,9 @@ fn handle_frame(
         Instant::now() + Duration::from_millis(request.deadline_ms),
         request.maximum_output_bytes,
     );
+    if config.runtime == "smolvm" {
+        budget.configure_native_project(request.deadline_ms);
+    }
     let (result, isolation) = match verify_grant(config, &request, &envelope.grant) {
         Ok(grant) => match inspect_image(config, cache, stream, &mut budget) {
             Ok(()) => match execute_container(
@@ -1159,6 +1251,64 @@ fn handle_frame(
     };
     validate_execution_result(&result, &request).map_err(|_| "result contract invalid")?;
     encode_response(result, isolation)
+}
+
+fn runtime_health(config: &ServiceConfig) -> RuntimeHealth<'_> {
+    RuntimeHealth {
+        operating_system: &config.operating_system,
+        architecture: &config.architecture,
+        runtime: &config.runtime,
+        isolation_mode: &config.isolation_mode,
+        cached_platform_manifests: config.cache.len(),
+        sandbox_uid: config.sandbox_uid,
+        sandbox_gid: config.sandbox_gid,
+    }
+}
+
+fn placement_reply(
+    config: &ServiceConfig,
+    demand: Option<&PlacementDemand>,
+) -> Result<Vec<u8>, String> {
+    let admission = config
+        .smol_admission
+        .as_ref()
+        .ok_or("runner epoch unavailable")?;
+    let (draining, drained) = admission.drain_state(|| smol::node_draining(config))?;
+    let fits_admission = demand
+        .map(|demand| match draining {
+            true => Ok(false),
+            false => smol::fits_placement(config, demand),
+        })
+        .transpose()?;
+    let images: Vec<_> = config
+        .cache
+        .iter()
+        .map(|entry| {
+            serde_json::json!({
+                "platform_manifest_digest": entry.platform_manifest_digest,
+                "config_image_id": entry.config_image_id,
+            })
+        })
+        .collect();
+    let intake = config
+        .trusted_intake
+        .as_ref()
+        .map(|_| smol::intake_identity(config))
+        .transpose()?;
+    serde_json::to_vec(&serde_json::json!({
+        "protocol_version": PROTOCOL, "operation": "placement",
+        "config_sha256": config.startup_config_sha256, "epoch": admission.epoch,
+        "health": runtime_health(config), "draining": draining, "drained": drained,
+        "fits_admission": fits_admission,
+        "images": images,
+        "pre": config.pre.as_ref().map(|pre| serde_json::json!({
+            "profile_sha256": pre.profile_sha256, "root_sha256": pre.root.bundle_sha256,
+        })),
+        "intake": intake,
+        "callback_relay": config.model_proxy_socket.is_some(),
+        "trial_authority_manifest_sha256": config.trial_authority_manifest_digest,
+    }))
+    .map_err(|_| "runner placement encoding failed".into())
 }
 
 fn validate_execution_operation(
@@ -1324,11 +1474,29 @@ fn stop_command_group(child: &mut Child, deadline: Instant) -> Result<ExitStatus
 }
 
 fn collect_bounded_command(
+    child: Child,
+    deadline: Instant,
+    maximum_output: usize,
+    client: Option<&UnixStream>,
+    cleanup: Option<&mut EmergencyCleanupBudget>,
+) -> Result<BoundedCommandOutput, String> {
+    collect_bounded_command_with_connection(
+        child,
+        deadline,
+        maximum_output,
+        client,
+        cleanup,
+        client_is_connected,
+    )
+}
+
+fn collect_bounded_command_with_connection(
     mut child: Child,
     deadline: Instant,
     maximum_output: usize,
     client: Option<&UnixStream>,
     mut cleanup: Option<&mut EmergencyCleanupBudget>,
+    connected: fn(&UnixStream) -> bool,
 ) -> Result<BoundedCommandOutput, String> {
     let mut stdout = match child.stdout.take() {
         Some(stdout) => stdout,
@@ -1351,7 +1519,7 @@ fn collect_bounded_command(
     let mut stdout_bytes = Vec::new();
     let mut stderr_bytes = Vec::new();
     loop {
-        if client.is_some_and(|stream| !client_is_connected(stream)) {
+        if client.is_some_and(|stream| !connected(stream)) {
             let _ = stop_command_group(&mut child, command_cleanup_deadline(&mut cleanup));
             return Err("client disconnected".into());
         }
@@ -1463,91 +1631,12 @@ fn verify_grant(
         return Err("grant binding differs".into());
     }
     match value.get("protocol_version").and_then(Value::as_str) {
-        Some(PRE_GRANT_PROTOCOL) => {
-            let manifest: GrantManifest =
-                serde_json::from_value(value).map_err(|_| "grant manifest invalid")?;
-            if manifest.grant_id != reference.grant_id
-                || manifest.request_digest != request.request_digest
-                || manifest.binding_digest != reference.binding_digest
-                || !grant_matches_request(&manifest, request)
-            {
-                return Err("grant binding differs".into());
-            }
-            let input = grant_root.join("workspace");
-            let observed = inspect_workspace(&input, config.sandbox_uid, config.sandbox_gid)?;
-            if observed.files != manifest.files || observed.directories != manifest.directories {
-                return Err("grant material differs".into());
-            }
-            Ok(VerifiedGrant {
-                binding_digest: reference.binding_digest.clone(),
-                input,
-                input_inventory: observed,
-                predecessor: None,
-                predecessor_inventory: None,
-            })
-        }
         Some(POST_GRANT_PROTOCOL) => {
             let manifest: PostGrantManifest =
                 serde_json::from_value(value).map_err(|_| "grant manifest invalid")?;
             verify_post_grant(config, request, reference, &grant_root, &manifest)
         }
         _ => Err("grant protocol invalid".into()),
-    }
-}
-
-fn grant_matches_request(manifest: &GrantManifest, request: &ValidatedRequest) -> bool {
-    let Some(identity) = request.value.get("identity").and_then(Value::as_object) else {
-        return false;
-    };
-    let Some(materials) = request.value.get("materials").and_then(Value::as_array) else {
-        return false;
-    };
-    let Some(archive) = materials.iter().find_map(|item| {
-        let object = item.as_object()?;
-        (object.get("phase")?.as_str()? == request.phase
-            && object.get("role")?.as_str()? == "submission_archive")
-            .then_some(object)
-    }) else {
-        return false;
-    };
-    let semantic_manifest_sha256 = semantic_manifest_hash(manifest).ok();
-    match &manifest.identity {
-        GrantIdentity::PreSubmit {
-            prepared_generation_id,
-            attempt_id,
-            attempt_request_digest,
-            archive_sha256,
-            archive_byte_count,
-            semantic_manifest_sha256: expected_manifest,
-        } => {
-            request.phase == "pre_submit"
-                && identity
-                    .get("prepared_generation_id")
-                    .and_then(Value::as_str)
-                    == Some(prepared_generation_id)
-                && identity.get("attempt_id").and_then(Value::as_str) == Some(attempt_id)
-                && identity
-                    .get("attempt_request_digest")
-                    .and_then(Value::as_str)
-                    == Some(attempt_request_digest)
-                && archive
-                    .get("prepared_generation_id")
-                    .and_then(Value::as_str)
-                    == Some(prepared_generation_id)
-                && archive.get("attempt_id").and_then(Value::as_str) == Some(attempt_id)
-                && archive
-                    .get("attempt_request_digest")
-                    .and_then(Value::as_str)
-                    == Some(attempt_request_digest)
-                && archive.get("archive_sha256").and_then(Value::as_str) == Some(archive_sha256)
-                && archive.get("archive_byte_count").and_then(Value::as_u64)
-                    == Some(*archive_byte_count)
-                && archive
-                    .get("semantic_manifest_sha256")
-                    .and_then(Value::as_str)
-                    == Some(expected_manifest)
-                && semantic_manifest_sha256.as_deref() == Some(expected_manifest)
-        }
     }
 }
 
@@ -1695,33 +1784,9 @@ fn validate_post_grant_material(item: &PostGrantMaterial) -> Result<&str, String
         .material
         .as_object()
         .ok_or("POST grant material invalid")?;
-    let expected: std::collections::BTreeSet<_> = [
-        "phase",
-        "role",
-        "submission_id",
-        "submission_version",
-        "binding_id",
-        "content_id",
-        "replica_id",
-        "content_sha256",
-        "byte_count",
-        "media_type",
-        "evidence_id",
-        "verification_receipt_id",
-        "verification_job_id",
-        "verification_generation",
-        "namespace_fingerprint",
-        "semantic_manifest_sha256",
-    ]
-    .into_iter()
-    .collect();
-    if material
-        .keys()
-        .map(String::as_str)
-        .collect::<std::collections::BTreeSet<_>>()
-        != expected
-        || material.get("phase").and_then(Value::as_str) != Some("post_submit")
-    {
+    workstream_checker_sdk::validate_post_material_custody(material)
+        .map_err(|_| "POST grant material custody invalid")?;
+    if material.get("phase").and_then(Value::as_str) != Some("post_submit") {
         return Err("POST grant material invalid".into());
     }
     let role = material
@@ -1730,10 +1795,6 @@ fn validate_post_grant_material(item: &PostGrantMaterial) -> Result<&str, String
         .ok_or("POST grant material role invalid")?;
     if !matches!(role, CURRENT_ARCHIVE_ROLE | PREDECESSOR_ARCHIVE_ROLE)
         || material.get("submission_version").and_then(Value::as_u64) == Some(0)
-        || material
-            .get("verification_generation")
-            .and_then(Value::as_u64)
-            == Some(0)
         || !material
             .get("byte_count")
             .and_then(Value::as_u64)
@@ -1751,8 +1812,6 @@ fn validate_post_grant_material(item: &PostGrantMaterial) -> Result<&str, String
         "content_id",
         "replica_id",
         "evidence_id",
-        "verification_receipt_id",
-        "verification_job_id",
     ] {
         if !material
             .get(field)
@@ -1827,10 +1886,6 @@ fn verify_materials_root<'a>(
         return Err("POST grant material roots differ".into());
     }
     Ok(())
-}
-
-fn semantic_manifest_hash(manifest: &GrantManifest) -> Result<String, String> {
-    semantic_manifest_hash_parts(&manifest.directories, &manifest.files)
 }
 
 fn semantic_manifest_hash_parts(
@@ -2097,6 +2152,16 @@ fn execute_container(
         ));
     }
     let selected_trial = selected_trial_profile(config, request)?;
+    let native_project = if config.runtime == "smolvm" && selected_trial.is_none() {
+        Some(
+            budget
+                .native_project
+                .ok_or_else(|| ExecutionFailure::ordinary("implementation_unavailable", false))?,
+        )
+    } else {
+        None
+    };
+    let callback_deadline = budget.deadline;
     let reservation = if config.runtime == "smolvm" {
         let result = match selected_trial {
             Some(profile) => smol::trial_peak_capacity(
@@ -2133,7 +2198,7 @@ fn execute_container(
                     profile,
                     Arc::clone(held),
                     client,
-                    budget.deadline,
+                    callback_deadline,
                     Arc::clone(&invocation_cancelled),
                 )
                 .map_err(|_| ExecutionFailure::ordinary("implementation_unavailable", false))?;
@@ -2142,7 +2207,7 @@ fn execute_container(
                     Arc::clone(&receipt_registry),
                     request.request_digest.clone(),
                     profile.maximum_receipt_bytes,
-                    budget.deadline,
+                    callback_deadline,
                     Arc::clone(&invocation_cancelled),
                 )
                 .map_err(|_| ExecutionFailure::ordinary("implementation_unavailable", false))?;
@@ -2161,7 +2226,7 @@ fn execute_container(
                         engine,
                         config.sandbox_uid,
                         config.sandbox_gid,
-                        budget.deadline,
+                        callback_deadline,
                         Arc::clone(&invocation_cancelled),
                     )
                     .map_err(|failure| {
@@ -2190,16 +2255,29 @@ fn execute_container(
                     false,
                 ));
             };
-            match InvocationRelay::start_with_resolver(
-                relay_root,
-                proxy_path,
-                grant,
-                &request.request_digest,
-                Arc::clone(&receipt_registry) as Arc<dyn ModelReceiptResolver>,
-                config.sandbox_uid,
-                config.sandbox_gid,
-                budget.deadline,
-            ) {
+            let relay = if native_project.is_some() {
+                InvocationRelay::start_with_resolver_unarmed(
+                    relay_root,
+                    proxy_path,
+                    grant,
+                    &request.request_digest,
+                    Arc::clone(&receipt_registry) as Arc<dyn ModelReceiptResolver>,
+                    config.sandbox_uid,
+                    config.sandbox_gid,
+                )
+            } else {
+                InvocationRelay::start_with_resolver(
+                    relay_root,
+                    proxy_path,
+                    grant,
+                    &request.request_digest,
+                    Arc::clone(&receipt_registry) as Arc<dyn ModelReceiptResolver>,
+                    config.sandbox_uid,
+                    config.sandbox_gid,
+                    callback_deadline,
+                )
+            };
+            match relay {
                 Ok(relay) => Some(relay),
                 Err(failure) => {
                     let trial_cleanup_unsettled = trial_relay
@@ -2235,12 +2313,17 @@ fn execute_container(
                 model: model_relay
                     .as_ref()
                     .map(|relay| relay.socket_path().to_owned()),
+                model_deadline: native_project
+                    .and_then(|_| model_relay.as_ref().map(InvocationRelay::deadline)),
                 execution: trial_relay
                     .as_ref()
                     .map(|relay| relay.socket_path().to_owned()),
             },
             client,
-            budget,
+            native_project.map_or(
+                ProjectExecutionBudget::Aggregate(budget.deadline),
+                |native| ProjectExecutionBudget::PreparationSeparated(native.runtime),
+            ),
             invocation_cancelled.as_ref(),
         )
     } else {
@@ -3166,7 +3249,10 @@ mod tests {
         let config = ServiceConfig {
             smol: None,
             trusted_intake: None,
+            pre: None,
             smol_admission: None,
+            control_root: Some(std::sync::Arc::new(File::open(&socket_root).unwrap())),
+            startup_config_sha256: format!("sha256:{}", "a".repeat(64)),
             container_owner: Some(
                 load_container_owner(&File::open(&socket_root).unwrap()).unwrap(),
             ),
@@ -3197,6 +3283,65 @@ mod tests {
             }],
         };
         (root, config)
+    }
+
+    #[test]
+    fn runner_binding_requires_loaded_config_and_current_epoch() {
+        let (root, mut config) = test_config();
+        config.smol_admission = Some(std::sync::Arc::new(
+            smol::Admission::new(
+                smol::Capacity {
+                    slots: 1,
+                    memory_bytes: 1,
+                    storage_bytes: 1,
+                },
+                None,
+                "e".repeat(64),
+            )
+            .unwrap(),
+        ));
+        let inner = serde_json::to_vec(&serde_json::json!({
+            "protocol_version": PROTOCOL, "operation": "health",
+        }))
+        .unwrap();
+        let binding = serde_json::json!({
+            "protocol_version": PROTOCOL, "operation": "bind_epoch",
+            "config_sha256": config.startup_config_sha256, "epoch": "e".repeat(64),
+        });
+        for field in [
+            None,
+            Some("epoch"),
+            Some("config_sha256"),
+            Some("unexpected"),
+        ] {
+            let mut proposed = binding.clone();
+            if let Some(name) = field {
+                proposed[name] = serde_json::json!("different");
+            }
+            let (mut client, mut service) = UnixStream::pair().unwrap();
+            let deadline = Instant::now() + Duration::from_secs(1);
+            write_frame_until(
+                &mut client,
+                &serde_json::to_vec(&proposed).unwrap(),
+                deadline,
+            )
+            .unwrap();
+            write_frame_until(&mut client, &inner, deadline).unwrap();
+            let observed = read_connection_frame(&config, &mut service, deadline);
+            if field.is_none() {
+                assert_eq!(observed.unwrap(), inner);
+            } else {
+                assert!(observed.is_err());
+            }
+        }
+        let (mut client, mut service) = UnixStream::pair().unwrap();
+        let deadline = Instant::now() + Duration::from_secs(1);
+        write_frame_until(&mut client, &inner, deadline).unwrap();
+        assert_eq!(
+            read_connection_frame(&config, &mut service, deadline).unwrap(),
+            inner
+        );
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
@@ -3336,76 +3481,48 @@ mod tests {
         fs::remove_dir_all(root).unwrap();
     }
 
-    fn pre_submit_envelope_with_grant(config: &ServiceConfig) -> Value {
-        let grant_id = "extract_0123456789abcdef0123456789abcdef";
+    fn post_config() -> (PathBuf, ServiceConfig) {
+        let (root, mut config) = test_config();
+        let request = parse_request(include_bytes!("../../fixtures/post_request.json")).unwrap();
+        config.cache[0].platform_manifest_digest = request.image_digest;
+        (root, config)
+    }
+
+    fn post_submit_envelope_with_grant(config: &ServiceConfig) -> Value {
         let mut request: Value =
-            serde_json::from_slice(include_bytes!("../../fixtures/request.json")).unwrap();
-        let mut manifest = GrantManifest {
-            protocol_version: PRE_GRANT_PROTOCOL.into(),
-            grant_id: grant_id.into(),
-            request_digest: String::new(),
-            identity: GrantIdentity::PreSubmit {
-                prepared_generation_id: request["identity"]["prepared_generation_id"]
-                    .as_str()
-                    .unwrap()
-                    .into(),
-                attempt_id: request["identity"]["attempt_id"].as_str().unwrap().into(),
-                attempt_request_digest: request["identity"]["attempt_request_digest"]
-                    .as_str()
-                    .unwrap()
-                    .into(),
-                archive_sha256: request["materials"][0]["archive_sha256"]
-                    .as_str()
-                    .unwrap()
-                    .into(),
-                archive_byte_count: request["materials"][0]["archive_byte_count"]
-                    .as_u64()
-                    .unwrap(),
-                semantic_manifest_sha256: String::new(),
-            },
-            directories: Vec::new(),
-            files: Vec::new(),
-            binding_digest: format!("sha256:{}", "0".repeat(64)),
+            serde_json::from_slice(include_bytes!("../../fixtures/post_request.json")).unwrap();
+        request["materials"][0]["semantic_manifest_sha256"] =
+            Value::String(semantic_manifest_hash_parts(&[], &[]).unwrap());
+        let mut body = request.as_object().unwrap().clone();
+        body.remove("request_digest");
+        request["request_digest"] = Value::String(canonical_hash(&Value::Object(body)).unwrap());
+        let validated = parse_request(&serde_json::to_vec(&request).unwrap()).unwrap();
+        let mut manifest = PostGrantManifest {
+            protocol_version: POST_GRANT_PROTOCOL.into(),
+            grant_id: "extract_0123456789abcdef0123456789abcdef".into(),
+            request_digest: validated.request_digest,
+            phase: "post_submit".into(),
+            identity: request["identity"].clone(),
+            evaluation_context_sha256: None,
+            materials: vec![PostGrantMaterial {
+                material: request["materials"][0].clone(),
+                directories: Vec::new(),
+                files: Vec::new(),
+            }],
+            visible_roles: vec![CURRENT_ARCHIVE_ROLE.into()],
+            binding_digest: String::new(),
         };
-        let semantic = semantic_manifest_hash(&manifest).unwrap();
-        let GrantIdentity::PreSubmit {
-            semantic_manifest_sha256,
-            ..
-        } = &mut manifest.identity;
-        *semantic_manifest_sha256 = semantic.clone();
-        request["materials"][0]["semantic_manifest_sha256"] = Value::String(semantic);
-        let mut request_body = request.as_object().unwrap().clone();
-        request_body.remove("request_digest");
-        let request_digest = canonical_hash(&Value::Object(request_body)).unwrap();
-        request["request_digest"] = Value::String(request_digest.clone());
-        manifest.request_digest = request_digest;
-
-        let mut manifest_value = serde_json::to_value(&manifest).unwrap();
-        manifest_value
-            .as_object_mut()
-            .unwrap()
-            .remove("binding_digest");
-        manifest.binding_digest = canonical_hash(&manifest_value).unwrap();
-
-        let grants = config.material_root.join("workspaces");
-        let grant_root = grants.join(grant_id);
-        let workspace = grant_root.join("workspace");
-        fs::create_dir(&grants).unwrap();
-        fs::create_dir(&grant_root).unwrap();
-        fs::create_dir(&workspace).unwrap();
-        fs::set_permissions(&grant_root, fs::Permissions::from_mode(0o700)).unwrap();
-        fs::set_permissions(&workspace, fs::Permissions::from_mode(0o500)).unwrap();
-        let manifest_path = grant_root.join(".external-checker-grant.json");
-        fs::write(&manifest_path, serde_json::to_vec(&manifest).unwrap()).unwrap();
-        fs::set_permissions(&manifest_path, fs::Permissions::from_mode(0o400)).unwrap();
-
+        let mut body = serde_json::to_value(&manifest).unwrap();
+        body.as_object_mut().unwrap().remove("binding_digest");
+        manifest.binding_digest = canonical_hash(&body).unwrap();
+        let reference = publish_post_grant(config, &manifest);
         serde_json::json!({
             "protocol_version": PROTOCOL,
             "operation": "execute",
             "request": request,
             "grant": {
-                "grant_id": grant_id,
-                "binding_digest": manifest.binding_digest,
+                "grant_id": reference.grant_id,
+                "binding_digest": reference.binding_digest,
             },
             "model_grant": null,
         })
@@ -3743,6 +3860,8 @@ esac
             "own stale container was not recovered"
         );
         drop(b_listener);
+        // A new process has no cloned descriptor for the previous listener lock.
+        b.control_root = None;
         let restarted = prepare_listener(&mut b).unwrap();
         assert_eq!(container_owner(&b).unwrap(), b_owner);
         drop(restarted);
@@ -3976,8 +4095,8 @@ exit 2
 
     #[test]
     fn execute_wire_requires_an_exact_model_grant_member() {
-        let (root, config) = test_config();
-        let envelope = pre_submit_envelope_with_grant(&config);
+        let (root, config) = post_config();
+        let envelope = post_submit_envelope_with_grant(&config);
         assert!(serde_json::from_value::<ExecuteEnvelope>(envelope.clone()).is_ok());
 
         let mut missing = envelope.clone();
@@ -3993,17 +4112,19 @@ exit 2
         assert!(serde_json::from_value::<ExecuteEnvelope>(extended).is_err());
         let workspace = config
             .material_root
-            .join("workspaces/extract_0123456789abcdef0123456789abcdef/workspace");
+            .join("workspaces/extract_0123456789abcdef0123456789abcdef/materials");
         fs::set_permissions(workspace, fs::Permissions::from_mode(0o700)).unwrap();
         fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
     fn model_grants_are_rejected_outside_the_bound_post_request() {
-        let (root, mut config) = test_config();
+        let (root, mut config) = post_config();
         config.model_proxy_socket = Some(PathBuf::from("/unused/private/proxy.sock"));
         config.model_relay_root = Some(PathBuf::from("/unused/private/relay"));
-        let mut envelope = pre_submit_envelope_with_grant(&config);
+        let mut envelope = post_submit_envelope_with_grant(&config);
+        envelope["request"] =
+            serde_json::from_slice(include_bytes!("../../fixtures/request.json")).unwrap();
         envelope["model_grant"] = serde_json::json!({
             "grant_id": format!("model_{}", "1".repeat(32)),
             "binding_digest": envelope["request"]["request_digest"],
@@ -4016,7 +4137,7 @@ exit 2
 
         let workspace = config
             .material_root
-            .join("workspaces/extract_0123456789abcdef0123456789abcdef/workspace");
+            .join("workspaces/extract_0123456789abcdef0123456789abcdef/materials");
         fs::set_permissions(workspace, fs::Permissions::from_mode(0o700)).unwrap();
         fs::remove_dir_all(root).unwrap();
     }
@@ -4085,8 +4206,8 @@ exit 2
 
     #[test]
     fn checker_output_cannot_request_another_execution() {
-        let (root, config) = test_config();
-        let envelope = pre_submit_envelope_with_grant(&config);
+        let (root, config) = post_config();
+        let envelope = post_submit_envelope_with_grant(&config);
         let request = parse_request(&serde_json::to_vec(&envelope["request"]).unwrap()).unwrap();
         let cache = &config.cache[0];
         fs::write(
@@ -4136,7 +4257,7 @@ exit 2
                 .material_root
                 .join("workspaces")
                 .join(envelope["grant"]["grant_id"].as_str().unwrap())
-                .join("workspace"),
+                .join("materials"),
             fs::Permissions::from_mode(0o700),
         )
         .unwrap();
@@ -4178,7 +4299,7 @@ exit 2
 
     #[test]
     fn unresolved_cleanup_closes_the_listener_loop_without_admitting_the_next_connection() {
-        let (root, config) = test_config();
+        let (root, config) = post_config();
         let retained = root.join("retained-container");
         let second_admitted = root.join("second-admitted");
         let cache = &config.cache[0];
@@ -4207,7 +4328,7 @@ exit 2
         )
         .unwrap();
         fs::set_permissions(&config.docker_binary, fs::Permissions::from_mode(0o700)).unwrap();
-        let execute = serde_json::to_vec(&pre_submit_envelope_with_grant(&config)).unwrap();
+        let execute = serde_json::to_vec(&post_submit_envelope_with_grant(&config)).unwrap();
         let health = serde_json::to_vec(
             &serde_json::json!({"protocol_version": PROTOCOL, "operation": "health"}),
         )
@@ -4242,7 +4363,7 @@ exit 2
         fs::remove_file(listener_path).unwrap();
         let workspace = config
             .material_root
-            .join("workspaces/extract_0123456789abcdef0123456789abcdef/workspace");
+            .join("workspaces/extract_0123456789abcdef0123456789abcdef/materials");
         fs::set_permissions(workspace, fs::Permissions::from_mode(0o700)).unwrap();
         fs::remove_dir_all(root).unwrap();
 
@@ -4669,70 +4790,40 @@ exit 2
     }
 
     #[test]
-    fn grant_lineage_matches_the_normalized_pre_submit_request() {
-        let mut request = parse_request(include_bytes!("../../fixtures/request.json")).unwrap();
-        let mut manifest = GrantManifest {
-            protocol_version: PRE_GRANT_PROTOCOL.into(),
-            grant_id: "extract_0123456789abcdef0123456789abcdef".into(),
-            request_digest: request.request_digest.clone(),
-            identity: GrantIdentity::PreSubmit {
-                prepared_generation_id: request.value["identity"]["prepared_generation_id"]
-                    .as_str()
-                    .unwrap()
-                    .into(),
-                attempt_id: request.value["identity"]["attempt_id"]
-                    .as_str()
-                    .unwrap()
-                    .into(),
-                attempt_request_digest: request.value["identity"]["attempt_request_digest"]
-                    .as_str()
-                    .unwrap()
-                    .into(),
-                archive_sha256: request.value["materials"][0]["archive_sha256"]
-                    .as_str()
-                    .unwrap()
-                    .into(),
-                archive_byte_count: request.value["materials"][0]["archive_byte_count"]
-                    .as_u64()
-                    .unwrap(),
-                semantic_manifest_sha256: String::new(),
-            },
-            directories: Vec::new(),
-            files: Vec::new(),
-            binding_digest: format!("sha256:{}", "9".repeat(64)),
+    fn prepared_pre_grants_are_refused_even_with_a_valid_binding() {
+        let (root, config) = test_config();
+        let request = parse_request(include_bytes!("../../fixtures/request.json")).unwrap();
+        let mut value = serde_json::json!({
+            "protocol_version": "workstream.external_checker_material_grant.v1",
+            "grant_id": "extract_0123456789abcdef0123456789abcdef",
+            "request_digest": request.request_digest,
+            "phase": "pre_submit",
+            "prepared_generation_id": "00000000-0000-4000-8000-000000000001",
+            "attempt_id": request.value["identity"]["attempt_id"],
+            "attempt_request_digest": request.value["identity"]["attempt_request_digest"],
+            "archive_sha256": format!("sha256:{}", "a".repeat(64)),
+            "archive_byte_count": 0,
+            "semantic_manifest_sha256": semantic_manifest_hash_parts(&[], &[]).unwrap(),
+            "directories": [], "files": []
+        });
+        let binding = canonical_hash(&value).unwrap();
+        value["binding_digest"] = Value::String(binding.clone());
+        let grant_id = value["grant_id"].as_str().unwrap().to_owned();
+        let grant_root = config.material_root.join("workspaces").join(&grant_id);
+        fs::create_dir_all(&grant_root).unwrap();
+        fs::set_permissions(&grant_root, fs::Permissions::from_mode(0o700)).unwrap();
+        let path = grant_root.join(".external-checker-grant.json");
+        fs::write(&path, serde_json::to_vec(&value).unwrap()).unwrap();
+        fs::set_permissions(path, fs::Permissions::from_mode(0o400)).unwrap();
+        let reference = GrantReference {
+            grant_id,
+            binding_digest: binding,
         };
-        let semantic = semantic_manifest_hash(&manifest).unwrap();
-        let GrantIdentity::PreSubmit {
-            semantic_manifest_sha256,
-            ..
-        } = &mut manifest.identity;
-        *semantic_manifest_sha256 = semantic;
-        request.value["materials"][0]["semantic_manifest_sha256"] =
-            Value::String(semantic_manifest_sha256.clone());
-        assert!(grant_matches_request(&manifest, &request));
-        for field in 0..6 {
-            let original = manifest.identity.clone();
-            let GrantIdentity::PreSubmit {
-                prepared_generation_id,
-                attempt_id,
-                attempt_request_digest,
-                archive_sha256,
-                archive_byte_count,
-                semantic_manifest_sha256,
-            } = &mut manifest.identity;
-            match field {
-                0 => *prepared_generation_id = "00000000-0000-4000-8000-000000000000".into(),
-                1 => *attempt_id = "00000000-0000-4000-8000-000000000000".into(),
-                2 => *attempt_request_digest = format!("sha256:{}", "8".repeat(64)),
-                3 => *archive_sha256 = format!("sha256:{}", "8".repeat(64)),
-                4 => *archive_byte_count += 1,
-                _ => *semantic_manifest_sha256 = format!("sha256:{}", "8".repeat(64)),
-            }
-            assert!(!grant_matches_request(&manifest, &request));
-            manifest.identity = original;
-        }
-        request.phase = "post_submit".into();
-        assert!(!grant_matches_request(&manifest, &request));
+        assert_eq!(
+            verify_grant(&config, &request, &reference).err(),
+            Some("grant protocol invalid".into())
+        );
+        fs::remove_dir_all(root).unwrap();
     }
 
     fn post_grant_fixture(
@@ -4868,6 +4959,47 @@ exit 2
     }
 
     #[test]
+    fn post_grant_source_custody_rejects_mixed_or_missing_evidence() {
+        let (_, mut manifest) = post_grant_fixture(false, false, false);
+        let item = &mut manifest.materials[0];
+        let material = item.material.as_object_mut().unwrap();
+        for key in [
+            "verification_receipt_id",
+            "verification_job_id",
+            "verification_generation",
+        ] {
+            material.remove(key);
+        }
+        material.insert(
+            "source_operation_id".into(),
+            Value::String("018f6f49-66b8-7d2a-bf4d-0e2eeaa00001".into()),
+        );
+        material.insert(
+            "accepted_source_sha256".into(),
+            Value::String(format!("sha256:{}", "a".repeat(64))),
+        );
+        material.insert(
+            "acceptance_receipt_sha256".into(),
+            Value::String(format!("sha256:{}", "b".repeat(64))),
+        );
+        assert_eq!(
+            validate_post_grant_material(item).unwrap(),
+            CURRENT_ARCHIVE_ROLE
+        );
+        item.material["verification_generation"] = Value::from(1);
+        assert!(validate_post_grant_material(item).is_err());
+        item.material
+            .as_object_mut()
+            .unwrap()
+            .remove("verification_generation");
+        item.material
+            .as_object_mut()
+            .unwrap()
+            .remove("accepted_source_sha256");
+        assert!(validate_post_grant_material(item).is_err());
+    }
+
+    #[test]
     fn post_grant_v2_binds_context_roles_and_all_aggregate_inventories() {
         let (root, config) = test_config();
         let (request, manifest) = post_grant_fixture(true, false, false);
@@ -4941,9 +5073,6 @@ exit 2
         let mut extra = serde_json::to_value(&visible_manifest).unwrap();
         extra["unexpected"] = Value::Bool(true);
         assert!(serde_json::from_value::<PostGrantManifest>(extra).is_err());
-        let mut legacy_shape = serde_json::to_value(&visible_manifest).unwrap();
-        legacy_shape["protocol_version"] = Value::String(PRE_GRANT_PROTOCOL.into());
-        assert!(serde_json::from_value::<GrantManifest>(legacy_shape).is_err());
         let mut unknown_role = visible_manifest.materials[1].clone();
         unknown_role.material["role"] = Value::String("foreign_archive".into());
         assert!(validate_post_grant_material(&unknown_role).is_err());

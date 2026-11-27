@@ -19,9 +19,11 @@ from dataclasses import dataclass, field
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from threading import Thread
+from typing import Any
 from urllib.parse import parse_qs
 from uuid import uuid4
 
+import certifi
 import jwt
 from cryptography.hazmat.primitives.serialization import load_pem_private_key
 
@@ -160,12 +162,15 @@ class IdentityFixture:
         # Install an isolated test CA at the process boundary, not a permissive
         # verifier or product configuration switch. TLS/signature checks remain
         # enabled. No backend source is added to the installed MCP's sys.path.
+        trusted_certificates = trust / "certificates.pem"
+        trusted_certificates.write_bytes(Path(certifi.where()).read_bytes() + b"\n"
+                                         + (self.root / "cert.pem").read_bytes())
         (trust / "sitecustomize.py").write_text(
-            "import certifi\ncertifi.where = lambda: " + repr(str(self.root / "cert.pem")) + "\n",
+            "import certifi\ncertifi.where = lambda: " + repr(str(trusted_certificates)) + "\n",
         )
         self.trust = str(trust)
 
-    def issue(self, subject: str) -> IdentityTokens:
+    def issue(self, subject: str, *, api_lifetime_seconds: int = 300) -> IdentityTokens:
         now = int(time.time())
         claims = {
             "iss": self.issuer,
@@ -182,7 +187,7 @@ class IdentityFixture:
         }
         return IdentityTokens(
             jwt.encode(
-                {**claims, "aud": "workstream-api"},
+                {**claims, "aud": "workstream-api", "exp": now + api_lifetime_seconds},
                 self.key,
                 algorithm="RS256",
                 headers={"kid": "fixture"},
@@ -220,3 +225,38 @@ class IdentityFixture:
         self.server.server_close()
         self.thread.join(timeout=5)
         self.temporary.cleanup()
+
+
+async def call_mcp(
+    mcp_url: str,
+    token: IdentityTokens,
+    *,
+    name: str = "workstream_profile_get",
+    arguments: dict[str, Any] | None = None,
+    http_deadline_seconds: float = 20,
+) -> tuple[dict[str, Any], bool]:
+    """Call the installed adapter using the public streamable HTTP session."""
+    import httpx2 as httpx
+    from mcp import Client
+    from mcp.client.streamable_http import streamable_http_client
+
+    async with httpx.AsyncClient(
+        headers={"Authorization": f"Bearer {token.mcp}"},
+        follow_redirects=False,
+        trust_env=False,
+        timeout=http_deadline_seconds,
+    ) as http_client:
+        transport = streamable_http_client(mcp_url + "/mcp", http_client=http_client)
+        async with Client(server=transport, mode="2026-07-28") as client:
+            assert client.protocol_version == "2026-07-28"
+            result = await client.call_tool(name, arguments or {})
+    dump = result.model_dump()
+    if "structuredContent" in dump and dump["structuredContent"] is not None:
+        content = dump["structuredContent"]
+    elif "structured_content" in dump and dump["structured_content"] is not None:
+        content = dump["structured_content"]
+    else:
+        content = json.loads(dump["content"][0]["text"])
+
+    is_error = dump.get("isError", dump.get("is_error", False))
+    return content, bool(is_error)

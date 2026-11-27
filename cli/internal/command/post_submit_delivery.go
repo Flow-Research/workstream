@@ -33,6 +33,7 @@ func addPostSubmitDeliveryOperations(operations *cobra.Command, client func() (*
 	delivery.AddCommand(list)
 
 	var reason, key string
+	var abandonUnknown bool
 	reconcile := &cobra.Command{
 		Use: "reconcile PROJECT_ID EVENT_ID", Short: "Request one governed reconciliation child for an exact UNKNOWN event", Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -43,7 +44,7 @@ func addPostSubmitDeliveryOperations(operations *cobra.Command, client func() (*
 			if err != nil {
 				return err
 			}
-			result, err := apiClient.ReconcilePostSubmitDelivery(cmd.Context(), args[0], args[1], reason, key)
+			result, err := apiClient.ReconcilePostSubmitDelivery(cmd.Context(), args[0], args[1], reason, key, abandonUnknown)
 			if err != nil {
 				return err
 			}
@@ -53,6 +54,7 @@ func addPostSubmitDeliveryOperations(operations *cobra.Command, client func() (*
 			return writeTaskContextFields(stdout, []contextField{{"Post-submit delivery reconciliation receipt (not acceptance)", result.Raw}})
 		},
 	}
+	reconcile.Flags().BoolVar(&abandonUnknown, "abandon-unknown", false, "Supersede the expired unresolved attempt and request another evaluation")
 	reconcile.Flags().StringVar(&reason, "reason", "", "Required operator explanation, 1..500 characters")
 	reconcile.Flags().StringVar(&key, "idempotency-key", "", "Required caller-owned UUID; reuse unchanged only for manual replay")
 	delivery.AddCommand(reconcile)

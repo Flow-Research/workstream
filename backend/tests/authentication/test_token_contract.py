@@ -50,11 +50,13 @@ async def test_asymmetric_token_returns_minimal_canonical_contract(
         "subject_kind",
         "scopes",
         "email",
+        "email_verified",
         "name",
     }
     assert result.token.subject == "opaque-subject-1"
     assert not hasattr(result.token, "roles")
     assert result.token.email == "issuer-profile@example.test"
+    assert result.token.email_verified is False
     assert result.token.name == "Issuer Profile"
 
 

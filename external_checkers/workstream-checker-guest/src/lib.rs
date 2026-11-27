@@ -2,6 +2,8 @@
 use serde::{Deserialize, Serialize};
 
 pub mod confinement;
+pub mod pre_bootstrap;
+pub mod trusted_root;
 
 pub const MAX_JOB_BYTES: usize = 4 * 1024 * 1024;
 pub const CAPACITY_EXIT_CODE: i32 = 201;
@@ -67,7 +69,7 @@ pub enum GuestPurpose {
     },
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct GuestJob {
     pub purpose: GuestPurpose,
@@ -93,6 +95,12 @@ pub enum GuestIoChannel {
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum GuestIoHeader {
+    Prepared {
+        protocol_version: String,
+    },
+    Start {
+        protocol_version: String,
+    },
     Request {
         protocol_version: String,
         sequence: u32,

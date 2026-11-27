@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from collections.abc import AsyncGenerator, AsyncIterator
 import re
-from typing import Protocol
+from typing import Literal, Protocol
 
 from workstream_external_services import ExternalServiceAdapter
+from app.modules.checkers.api.selected_pre_submit import (
+    SelectedPreSubmitLeaseFacts, SelectedPreSubmitInvocationResult,
+)
 from app.modules.checkers.api.forge_locator import ExternalCheckerForgeLocator
 from app.modules.checkers.api.external import (
     ExternalCheckerExecutionRequest,
@@ -16,10 +20,20 @@ from app.modules.checkers.api.external import (
 )
 
 
+MAXIMUM_PRE_SOURCE_CHUNK_BYTES = 64 * 1024
+
+
 _REPOSITORY = re.compile(
     r"[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?(?::[0-9]+)?"
     r"(?:/[a-z0-9](?:[a-z0-9._-]*[a-z0-9])?)*"
 )
+
+
+class ExternalCheckerExecutionOutcomeUnknown(RuntimeError):
+    """A possibly invoked POST/locator lacks an authoritative terminal response."""
+
+    def __init__(self) -> None:
+        super().__init__("checker_execution_outcome_unknown")
 
 
 @dataclass(frozen=True, slots=True)
@@ -28,6 +42,7 @@ class ExternalCheckerMaterialGrant:
 
     grant_id: Identifier
     binding_digest: Sha256
+    source: ExternalCheckerMaterialSource = field(repr=False, compare=False)
 
     def __post_init__(self) -> None:
         """Reject path-like identifiers and malformed binding digests."""
@@ -36,6 +51,25 @@ class ExternalCheckerMaterialGrant:
             or re.fullmatch(r"sha256:[0-9a-f]{64}", self.binding_digest) is None
         ):
             raise ValueError("external checker material grant is invalid")
+
+
+class ExternalCheckerMaterialFile(Protocol):
+    """One immutable file descriptor supplied by ART without a host path."""
+
+    relative_path: str
+    byte_count: int
+    sha256: Sha256
+    executable: bool
+
+
+class ExternalCheckerMaterialSource(Protocol):
+    """Callback-scoped export of one manifest-bound material grant."""
+
+    manifest: bytes
+    files: tuple[ExternalCheckerMaterialFile, ...]
+
+    def open_file(self, item: ExternalCheckerMaterialFile) -> AsyncIterator[bytes]:
+        """Yield the exact sealed member in bounded nonempty chunks."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -143,15 +177,38 @@ class ExternalCheckerServiceHealth:
             raise ValueError("external checker service health is invalid")
 
 
+class ExternalPreSubmitSourceGrant(Protocol):
+    """ART-issued expiring read authority, separate from durable request identity.
+
+    The issuer must consume the exact committed lease and authorize the immutable
+    source generation before returning this process-local capability. Reads stay
+    in the issuing foreground task; the capability cannot be delegated to a
+    detached task beyond that callback lifetime.
+    """
+
+    def open_source(self, *, lease: SelectedPreSubmitLeaseFacts) -> AsyncGenerator[bytes, None]:
+        """Yield nonempty chunks up to MAXIMUM_PRE_SOURCE_CHUNK_BYTES outside DB roots."""
+
+
 class ExternalCheckerExecutionAdapter(ExternalServiceAdapter, Protocol):
     """Execute one normalized request through the trusted checker service."""
+
+    @property
+    def pre_runtime_provider(self) -> Literal["smolvm", "managed"]:
+        """Factory-owned expected PRE evidence family; never taken from a response."""
+        ...
+
+    async def execute_pre(
+        self, lease: SelectedPreSubmitLeaseFacts, grant: ExternalPreSubmitSourceGrant,
+    ) -> SelectedPreSubmitInvocationResult:
+        """Run source verification, defaults and selected project in one session."""
 
     async def locate_forge_change(
         self,
         request: ExternalCheckerExecutionRequest,
         grant: ExternalCheckerMaterialGrant,
     ) -> ExternalCheckerForgeLocatorResponse:
-        """Read a project-owned selector inside the same bounded offline image."""
+        """Read a project-owned selector or raise if invocation custody is unresolved."""
         ...
 
     async def execute(
@@ -161,7 +218,7 @@ class ExternalCheckerExecutionAdapter(ExternalServiceAdapter, Protocol):
         *,
         model_grant: ExternalCheckerModelGrant | None = None,
     ) -> ExternalCheckerExecutionResponse:
-        """Return a request-bound result or a sanitized transport failure."""
+        """Return a request-bound result or report invocation custody as unresolved."""
 
     async def health(self) -> ExternalCheckerServiceHealth:
         """Return current runtime and cache readiness from the service."""
@@ -169,9 +226,13 @@ class ExternalCheckerExecutionAdapter(ExternalServiceAdapter, Protocol):
 
 __all__ = (
     "ExternalCheckerExecutionAdapter",
+    "ExternalPreSubmitSourceGrant",
+    "MAXIMUM_PRE_SOURCE_CHUNK_BYTES",
+    "ExternalCheckerExecutionOutcomeUnknown",
     "ExternalCheckerExecutionResponse",
     "ExternalCheckerIsolationReceipt",
     "ExternalCheckerMaterialGrant",
+    "ExternalCheckerMaterialSource",
     "ExternalCheckerModelGrant",
     "ExternalCheckerServiceHealth",
 )

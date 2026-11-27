@@ -24,9 +24,12 @@ async def successor_command(factory, command, actor, grant, policy):
     values = {
         **ids(),
         "project": command.target.proposal.project_id,
-        "pre_submit_attachments": (),
-        "post_submit_attachments": (),
     }
+    from tests.checkers.external.support import pre_registry_spec, post_registry_spec
+    from .source_fixtures import _prepare_human_attachments
+    values.update(await _prepare_human_attachments(
+        factory, values["project"], pre_registry_spec(), post_registry_spec(), None, None,
+    ))
     async with factory() as session:
         actor_id, link_id = (
             await session.execute(

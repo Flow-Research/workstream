@@ -1,5 +1,5 @@
 {
-  "canonical_sha256": "690119502ed43be6bef23eaf8d4312a376ed6e8d98b5c225d9a477aaba1155a2",
+  "canonical_sha256": "34cb5add8ef872ab59ae097b3350b0d7b3953900172b0947ea6f7a3e80b0eb89",
   "components": {
     "schemas": {
       "ApiError": {
@@ -162,14 +162,16 @@
             "items": {
               "$ref": "#/components/schemas/ExternalCheckerImageAttachment"
             },
-            "maxItems": 200,
+            "maxItems": 1,
+            "minItems": 1,
             "type": "array"
           },
           "pre_submit_attachments": {
             "items": {
               "$ref": "#/components/schemas/ExternalCheckerImageAttachment"
             },
-            "maxItems": 200,
+            "maxItems": 1,
+            "minItems": 1,
             "type": "array"
           },
           "target": {

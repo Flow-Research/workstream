@@ -1,5 +1,5 @@
 {
-  "canonical_sha256": "71a41267cce48ef486d90bae34850659edcde9455a75ffd971fcdcb928f43f95",
+  "canonical_sha256": "a8c5b3cc4f2092bda5225aa0e46d343b433bc57b33119b0dc5d2197dab7781ea",
   "components": {
     "schemas": {
       "ApiError": {
@@ -63,7 +63,7 @@
       },
       "ContributorGuideDocument": {
         "additionalProperties": false,
-        "description": "Public original identity and task-scoped authorized read reference.",
+        "description": "Public original identity and authorized download reference.",
         "properties": {
           "byte_count": {
             "exclusiveMinimum": 0.0,
@@ -106,11 +106,11 @@
         },
         "required": [
           "document_id",
-          "order",
           "label",
+          "order",
           "media_type",
-          "byte_count",
           "sha256",
+          "byte_count",
           "read_reference"
         ],
         "title": "ContributorGuideDocument",
@@ -348,6 +348,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/TaskAssignmentOutcome"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pending_submission_operation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PendingSubmissionOperation"
               },
               {
                 "type": "null"
@@ -599,6 +609,32 @@
           "detail",
           "error"
         ],
+        "type": "object"
+      },
+      "PendingSubmissionOperation": {
+        "description": "Narrow current intake identity and stage, separate from Submission history.",
+        "properties": {
+          "operation_id": {
+            "format": "uuid",
+            "title": "Operation Id",
+            "type": "string"
+          },
+          "processing_stage": {
+            "enum": [
+              "receiving",
+              "pre_checking",
+              "finalization_pending",
+              "operationally_stalled"
+            ],
+            "title": "Processing Stage",
+            "type": "string"
+          }
+        },
+        "required": [
+          "operation_id",
+          "processing_stage"
+        ],
+        "title": "PendingSubmissionOperation",
         "type": "object"
       },
       "ProjectDisplayFacts": {
@@ -1239,6 +1275,6 @@
     "method": "GET",
     "openapi_version": "3.1.0",
     "path": "/api/v1/tasks/{task_id}/work-context",
-    "repository_sha": "8b068f2b788f159b1085d47f162c39ce3323d5b6"
+    "repository_sha": "c853743b689a46711c13e1d800cdd27ab8230ac2"
   }
 }

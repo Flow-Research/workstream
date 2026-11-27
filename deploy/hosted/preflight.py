@@ -5,7 +5,6 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass
-import hashlib
 import ipaddress
 from decimal import Decimal, InvalidOperation
 import json
@@ -16,14 +15,16 @@ import re
 import stat
 import subprocess
 import sys
-import time
 from typing import Any
 from uuid import UUID, uuid4
 from urllib.parse import urlsplit
 
 
 COMPOSE_PATH = Path(__file__).with_name("compose.yml")
-NATIVE_CHECKER_COMPOSE_PATH = Path(__file__).with_name("compose.native-checker.yml")
+FEEDBACK_EMAIL_COMPOSE_PATH = Path(__file__).with_name("compose.submission-feedback-email.yml")
+FEEDBACK_EMAIL_WORKER = "submission-feedback-email-worker"
+FEEDBACK_EMAIL_ENABLED_KEY = "WORKSTREAM_SUBMISSION_FEEDBACK_EMAIL_ENABLED"
+RESEND_KEY_FILE = "WORKSTREAM_RESEND_API_KEY_FILE"
 INFERENCE_COMPOSE_PATH = Path(__file__).with_name("compose.inference.yml")
 TRIAL_COMPOSE_PATH = Path(__file__).with_name("compose.trials.yml")
 TRIAL_MANIFEST_TARGET = Path("/etc/workstream/trial-authority.json")
@@ -56,27 +57,29 @@ GITHUB_APP_KEYS = (
     "WORKSTREAM_GITHUB_APP_INSTALLATION_ID",
 )
 DEFAULT_DEPLOYMENT_ROOT = Path("/var/lib/workstream")
-DEFAULT_CHECKER_SERVICE_BINARY = Path("/opt/workstream/bin/workstream-checker-service")
 INTAKE_DIGEST_KEYS = (
     "WORKSTREAM_ARTIFACT_INTAKE_IMAGE_DIGEST",
     "WORKSTREAM_ARTIFACT_INTAKE_CONFIG_DIGEST",
 )
 HOSTED_PROFILE_KEY = "WORKSTREAM_HOSTED_PROFILE"
-NATIVE_REQUIRED_KEYS = (
-    "WORKSTREAM_CHECKER_CONFIG_FILE",
-    "WORKSTREAM_CHECKER_SERVICE_BINARY_SHA256",
+REMOTE_RUNNER_ENDPOINTS_KEY = "WORKSTREAM_EXTERNAL_RUNNER_ENDPOINTS"
+REMOTE_RUNNER_SECRET_FILE_KEYS = (
+    "WORKSTREAM_EXTERNAL_RUNNER_CA_FILE",
+    "WORKSTREAM_EXTERNAL_RUNNER_CERTIFICATE_FILE",
+    "WORKSTREAM_EXTERNAL_RUNNER_PRIVATE_KEY_FILE",
+)
+REMOTE_RUNNER_KEYS = (
+    REMOTE_RUNNER_ENDPOINTS_KEY,
+    *REMOTE_RUNNER_SECRET_FILE_KEYS,
     *INTAKE_DIGEST_KEYS,
 )
-NATIVE_ENVIRONMENT_KEYS = (
-    "WORKSTREAM_EXTERNAL_CHECKER_MATERIAL_ROOT",
-    "WORKSTREAM_EXTERNAL_CHECKER_SERVICE_SOCKET",
-    "WORKSTREAM_ARTIFACT_INTAKE_SERVICE_SOCKET",
+REMOTE_RUNNER_ENVIRONMENT_KEYS = (
+    REMOTE_RUNNER_ENDPOINTS_KEY,
+    "WORKSTREAM_EXTERNAL_RUNNER_CA_PATH",
+    "WORKSTREAM_EXTERNAL_RUNNER_CERTIFICATE_PATH",
+    "WORKSTREAM_EXTERNAL_RUNNER_PRIVATE_KEY_PATH",
     *INTAKE_DIGEST_KEYS,
 )
-
-
-def local_checker_enabled(values: dict[str, str]) -> bool:
-    return values.get(HOSTED_PROFILE_KEY, "single-host") == "single-host"
 
 
 @dataclass(frozen=True)
@@ -122,14 +125,6 @@ def deployment_paths(values: dict[str, str]) -> HostedPaths:
     )
 
 
-def checker_service_binary(values: dict[str, str]) -> Path:
-    return Path(
-        values.get(
-            "WORKSTREAM_CHECKER_SERVICE_BINARY", str(DEFAULT_CHECKER_SERVICE_BINARY)
-        )
-    )
-
-
 GUIDE_PARSER_UID = 10002
 GUIDE_PARSER_GID = 10001
 DOCKER_SOCKET = Path("/var/run/docker.sock")
@@ -140,7 +135,16 @@ DIRECT_USER_CREDENTIAL_HOST_FILE_KEY = (
     "WORKSTREAM_ARTIFACT_S3_DIRECT_USER_CREDENTIAL_HOST_FILE"
 )
 DIRECT_USER_CREDENTIAL_FILE_KEY = "WORKSTREAM_ARTIFACT_S3_DIRECT_USER_CREDENTIAL_FILE"
+CLEANUP_USER_ARN_KEY = "WORKSTREAM_ARTIFACT_S3_CLEANUP_USER_ARN"
+CLEANUP_USER_CREDENTIAL_HOST_FILE_KEY = (
+    "WORKSTREAM_ARTIFACT_S3_CLEANUP_USER_CREDENTIAL_HOST_FILE"
+)
+SUBMISSION_PROFILE_KEYS = (
+    "WORKSTREAM_SUBMISSION_EXECUTION_PROFILE",
+    "WORKSTREAM_SUBMISSION_SOURCE_CLEANUP_PROFILE",
+)
 DIGEST = re.compile(r"sha256:[0-9a-f]{64}\Z")
+RUNNER_DNS_NAME = re.compile(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*")
 IMAGE_REFERENCE = re.compile(r"[^\s@]+@sha256:[0-9a-f]{64}\Z")
 ENVIRONMENT_KEY = re.compile(r"[A-Z][A-Z0-9_]*\Z")
 IAM_USER_ARN = re.compile(
@@ -152,6 +156,9 @@ BASE_SECRET_FILE_KEYS = (
     "WORKSTREAM_CELERY_BROKER_URL_FILE",
     "WORKSTREAM_API_RATE_LIMIT_KEY_SECRET_FILE",
     "WORKSTREAM_PAGINATION_CURSOR_HMAC_SECRET_FILE",
+    "WORKSTREAM_EXTERNAL_RUNNER_CA_FILE",
+    "WORKSTREAM_EXTERNAL_RUNNER_CERTIFICATE_FILE",
+    "WORKSTREAM_EXTERNAL_RUNNER_PRIVATE_KEY_FILE",
 )
 MODEL_PROXY_SECRET_FILE_KEYS = (
     "WORKSTREAM_MODEL_PROXY_OPENAI_API_KEY_FILE",
@@ -169,8 +176,10 @@ SECRET_FILE_KEYS = (
     *BASE_SECRET_FILE_KEYS,
     *MODEL_PROXY_SECRET_FILE_KEYS,
     GITHUB_APP_KEYS[1],
+    RESEND_KEY_FILE,
 )
 SECRET_FILE_TARGETS = {
+    RESEND_KEY_FILE: ("resend_api_key", "/run/secrets/resend_api_key"),
     "WORKSTREAM_GITHUB_APP_PRIVATE_KEY_FILE": (
         "github_app_private_key",
         "/run/secrets/github_app_private_key",
@@ -188,6 +197,15 @@ SECRET_FILE_TARGETS = {
         "pagination_cursor_hmac",
         "/run/secrets/pagination_cursor_hmac",
     ),
+    "WORKSTREAM_EXTERNAL_RUNNER_CA_FILE": (
+        "external_runner_ca", "/run/secrets/external_runner_ca",
+    ),
+    "WORKSTREAM_EXTERNAL_RUNNER_CERTIFICATE_FILE": (
+        "external_runner_certificate", "/run/secrets/external_runner_certificate",
+    ),
+    "WORKSTREAM_EXTERNAL_RUNNER_PRIVATE_KEY_FILE": (
+        "external_runner_private_key", "/run/secrets/external_runner_private_key",
+    ),
     "WORKSTREAM_MODEL_PROXY_OPENAI_API_KEY_FILE": (
         "model_proxy_openai_api_key",
         "/run/secrets/model_proxy_openai_api_key",
@@ -203,10 +221,16 @@ ROLE_SECRET_FILE_KEYS = {
         "WORKSTREAM_CELERY_BROKER_URL_FILE",
         "WORKSTREAM_API_RATE_LIMIT_KEY_SECRET_FILE",
         "WORKSTREAM_PAGINATION_CURSOR_HMAC_SECRET_FILE",
+        "WORKSTREAM_EXTERNAL_RUNNER_CA_FILE",
+        "WORKSTREAM_EXTERNAL_RUNNER_CERTIFICATE_FILE",
+        "WORKSTREAM_EXTERNAL_RUNNER_PRIVATE_KEY_FILE",
     ),
     "worker": (
         "WORKSTREAM_DATABASE_URL_FILE",
         "WORKSTREAM_CELERY_BROKER_URL_FILE",
+        "WORKSTREAM_EXTERNAL_RUNNER_CA_FILE",
+        "WORKSTREAM_EXTERNAL_RUNNER_CERTIFICATE_FILE",
+        "WORKSTREAM_EXTERNAL_RUNNER_PRIVATE_KEY_FILE",
     ),
     "beat": (
         "WORKSTREAM_DATABASE_URL_FILE",
@@ -215,6 +239,7 @@ ROLE_SECRET_FILE_KEYS = {
     "model-proxy": ("WORKSTREAM_DATABASE_URL_FILE",),
 }
 FORBIDDEN_RELEASE_KEYS = (
+    "WORKSTREAM_RESEND_API_KEY",
     "WORKSTREAM_GITHUB_APP_PRIVATE_KEY",
     "AWS_ACCESS_KEY_ID",
     "AWS_CONFIG_FILE",
@@ -312,21 +337,23 @@ REQUIRED_RELEASE_KEYS = (
     "WORKSTREAM_ARTIFACT_S3_BUCKET",
     "WORKSTREAM_ARTIFACT_S3_PRIVATE_PREFIX",
     DIRECT_USER_CREDENTIAL_HOST_FILE_KEY,
+    CLEANUP_USER_ARN_KEY,
+    CLEANUP_USER_CREDENTIAL_HOST_FILE_KEY,
+    *SUBMISSION_PROFILE_KEYS,
     *PROJECT_AGENT_CONFIGURATION_KEYS,
     *AWS_S3_IDENTITY_KEYS,
     *TIMEOUT_KEYS,
     *BASE_SECRET_FILE_KEYS,
+    *REMOTE_RUNNER_KEYS,
 )
 OPTIONAL_RELEASE_KEYS = (
     HOSTED_PROFILE_KEY,
-    *NATIVE_REQUIRED_KEYS,
     *LOCAL_DATA_KEYS,
     "WORKSTREAM_MCP_IMAGE",
     *IDENTITY_KEYS,
     *MCP_OAUTH_KEYS,
     *GITHUB_APP_KEYS,
     "WORKSTREAM_DEPLOYMENT_ROOT",
-    "WORKSTREAM_CHECKER_SERVICE_BINARY",
     *TRIAL_KEYS,
     "WORKSTREAM_API_HOST_PORT",
     "WORKSTREAM_CELERY_WORKER_CONCURRENCY",
@@ -334,6 +361,8 @@ OPTIONAL_RELEASE_KEYS = (
     "WORKSTREAM_OBSERVABILITY_OTLP_ENDPOINT",
     "WORKSTREAM_OBSERVABILITY_TRACE_SAMPLE_RATIO",
     *MODEL_PROXY_SECRET_FILE_KEYS,
+    FEEDBACK_EMAIL_ENABLED_KEY,
+    RESEND_KEY_FILE,
 )
 RELEASE_KEYS = frozenset((*REQUIRED_RELEASE_KEYS, *OPTIONAL_RELEASE_KEYS))
 
@@ -487,18 +516,25 @@ def validate_environment(values: dict[str, str]) -> None:
         raise PreflightError(
             f"release environment contains an unsupported key: {unknown[0]}"
         )
-    if values.get(HOSTED_PROFILE_KEY, "single-host") not in {"single-host", "app"}:
-        raise PreflightError("unsupported hosted profile")
-    local_checker = local_checker_enabled(values)
-    if not local_checker and any(values.get(key) for key in (
-        *NATIVE_REQUIRED_KEYS, "WORKSTREAM_CHECKER_SERVICE_BINARY", *TRIAL_KEYS,
-    )):
-        raise PreflightError("app profile cannot configure a native checker or trial authority")
+    if values.get(HOSTED_PROFILE_KEY, "app") != "app":
+        raise PreflightError("hosted releases require the external-runner app profile")
     if "WORKSTREAM_MCP_IMAGE" in values and not IMAGE_REFERENCE.fullmatch(values["WORKSTREAM_MCP_IMAGE"]):
         raise PreflightError("MCP image must be digest-qualified")
     validate_identity_environment(values)
     validate_mcp_environment(values)
     validate_local_data_environment(values)
+    feedback_enabled = values.get(FEEDBACK_EMAIL_ENABLED_KEY, "false")
+    if feedback_enabled not in {"true", "false"} or (
+        (feedback_enabled == "true") != bool(values.get(RESEND_KEY_FILE))
+    ):
+        raise PreflightError("submission feedback email requires an explicit flag and its private key file")
+    if feedback_enabled == "true":
+        key_file = Path(values[RESEND_KEY_FILE])
+        root = deployment_paths(values).root
+        if (not key_file.is_absolute() or key_file != key_file.resolve(strict=False)
+                or key_file.is_relative_to(root) or root.is_relative_to(key_file)
+                or any(character.isspace() or character in ",:" for character in str(key_file))):
+            raise PreflightError("Resend key file must use a canonical private path outside deployment storage")
     github_app_id, github_key_file, github_installation_id = (
         values.get(key, "") for key in GITHUB_APP_KEYS
     )
@@ -520,12 +556,9 @@ def validate_environment(values: dict[str, str]) -> None:
         ):
             raise PreflightError("GitHub App key file must use a canonical absolute path")
     root = deployment_paths(values).root
-    binary = checker_service_binary(values)
-    if values.get("WORKSTREAM_DEPLOYMENT_ROOT", str(root)) != str(root) or (
-        local_checker and values.get("WORKSTREAM_CHECKER_SERVICE_BINARY", str(binary)) != str(binary)
-    ):
+    if values.get("WORKSTREAM_DEPLOYMENT_ROOT", str(root)) != str(root):
         raise PreflightError("deployment paths must use canonical spelling")
-    for path in (root, binary) if local_checker else (root,):
+    for path in (root,):
         if (
             not path.is_absolute()
             or path != path.resolve(strict=False)
@@ -533,10 +566,22 @@ def validate_environment(values: dict[str, str]) -> None:
             or len(path.parts) < 3
         ):
             raise PreflightError("deployment paths must be canonical absolute paths")
-    if local_checker and (root == binary or binary.is_relative_to(root) or root.is_relative_to(binary)):
-        raise PreflightError("native service asset overlaps deployment data")
     for key in REQUIRED_RELEASE_KEYS:
         _required(values, key)
+    parsed_profiles: dict[str, dict[str, Any]] = {}
+    for key in SUBMISSION_PROFILE_KEYS:
+        raw = values[key]
+        if len(raw.encode("utf-8")) > 65_536:
+            raise PreflightError(f"submission profile is unbounded: {key}")
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise PreflightError(
+                f"submission profile must be a JSON object: {key}"
+            ) from exc
+        if not isinstance(parsed, dict):
+            raise PreflightError(f"submission profile must be a JSON object: {key}")
+        parsed_profiles[key] = parsed
     for key in (
         "WORKSTREAM_BACKEND_IMAGE",
         "WORKSTREAM_MODEL_PROXY_IMAGE",
@@ -548,11 +593,26 @@ def validate_environment(values: dict[str, str]) -> None:
         "WORKSTREAM_RUNTIME_GID",
     ):
         _positive_id(values, key)
-    if local_checker:
-        for key in NATIVE_REQUIRED_KEYS:
-            value = _required(values, key)
-            if key != "WORKSTREAM_CHECKER_CONFIG_FILE" and not DIGEST.fullmatch(value):
-                raise PreflightError(f"trusted intake requires a pinned digest: {key}")
+    for key in INTAKE_DIGEST_KEYS:
+        if not DIGEST.fullmatch(_required(values, key)):
+            raise PreflightError(f"trusted intake requires a pinned digest: {key}")
+    try:
+        endpoints = json.loads(_required(values, REMOTE_RUNNER_ENDPOINTS_KEY))
+    except ValueError as exc:
+        raise PreflightError("external runner endpoints must be JSON") from exc
+    if type(endpoints) is not list or not 1 <= len(endpoints) <= 8:
+        raise PreflightError("external runner endpoint set is invalid")
+    for endpoint in endpoints:
+        if (type(endpoint) is not dict or set(endpoint) != {"host", "port", "server_name", "config_sha256"}
+                or any(type(endpoint[name]) is not str for name in ("host", "server_name", "config_sha256"))
+                or any(len(endpoint[name]) > 253 or not RUNNER_DNS_NAME.fullmatch(endpoint[name])
+                       for name in ("host", "server_name"))
+                or type(endpoint["port"]) is not int or not 1 <= endpoint["port"] <= 65_535
+                or not DIGEST.fullmatch(endpoint["config_sha256"])):
+            raise PreflightError("external runner endpoint is invalid")
+    if (len({(endpoint["host"], endpoint["port"]) for endpoint in endpoints}) != len(endpoints)
+            or len({endpoint["server_name"] for endpoint in endpoints}) != len(endpoints)):
+        raise PreflightError("external runner endpoint identities must be distinct")
     for key in FORBIDDEN_RELEASE_KEYS:
         if values.get(key):
             raise PreflightError(
@@ -683,289 +743,40 @@ def validate_environment(values: dict[str, str]) -> None:
         raise PreflightError("production observability endpoint must use HTTPS")
     if IAM_USER_ARN.fullmatch(values["WORKSTREAM_ARTIFACT_S3_RUNTIME_USER_ARN"]) is None:
         raise PreflightError("artifact runtime user must use an exact IAM user ARN")
-    credential_path = Path(values[DIRECT_USER_CREDENTIAL_HOST_FILE_KEY])
-    if (
-        not credential_path.is_absolute()
-        or credential_path != credential_path.resolve(strict=False)
-        or any(character.isspace() or character in ",:" for character in str(credential_path))
-        or credential_path.is_relative_to(root)
-        or root.is_relative_to(credential_path)
-    ):
-        raise PreflightError(
-            "direct IAM user credentials require one canonical private host path"
-        )
-
-
-def load_checker_config(path: Path) -> dict[str, Any]:
-    """Load the non-secret runner configuration as one bounded JSON object."""
-    try:
-        if path.stat().st_size > 1024 * 1024:
-            raise PreflightError("checker configuration is unbounded")
-        value = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
-        raise PreflightError("checker configuration is unavailable or invalid") from exc
-    if not isinstance(value, dict):
-        raise PreflightError("checker configuration must be an object")
-    return value
-
-
-def validate_checker_config(config: dict[str, Any], values: dict[str, str]) -> None:
-    """Bind release selectors and cache identities to the existing runner."""
-    paths = deployment_paths(values)
-    expected = {
-        "socket_path": str(paths.socket),
-        "material_root": str(paths.scratch),
-        "runtime": "smolvm",
-        "isolation_mode": "smol-microvm",
-        "operating_system": "linux",
-        "sandbox_uid": _positive_id(values, "WORKSTREAM_RUNTIME_UID"),
-        "sandbox_gid": _positive_id(values, "WORKSTREAM_RUNTIME_GID"),
-    }
-    smol = config.get("smol")
-    if not isinstance(smol, dict) or set(smol) != {
-        "binary",
-        "binary_sha256",
-        "home",
-        "guest_binary",
-        "guest_sha256",
-        "cgroup_root",
-        "maximum_parallel",
-        "maximum_storage_bytes",
-    }:
-        raise PreflightError("native Smol configuration is incomplete")
-    for key in ("binary", "guest_binary", "home", "cgroup_root"):
-        if not isinstance(smol[key], str) or not Path(smol[key]).is_absolute():
-            raise PreflightError("native Smol path is invalid")
-    if len(os.fsencode(smol["home"])) > 59:
-        raise PreflightError("native Smol home exceeds the 59-byte socket path budget")
-    for key in ("binary_sha256", "guest_sha256"):
-        if not isinstance(smol[key], str) or not DIGEST.fullmatch(smol[key]):
-            raise PreflightError("native Smol binary digest is invalid")
-    for key in ("maximum_parallel", "maximum_storage_bytes"):
-        if type(smol[key]) is not int or not 0 < smol[key] <= 2**64 - 1:
-            raise PreflightError("native Smol capacity must be explicitly bounded")
-    if Path(smol["home"]) == paths.scratch or Path(smol["home"]).is_relative_to(
-        paths.scratch
-    ):
-        raise PreflightError("native Smol home must be separate from ART material")
-    protected_inputs = [
-        checker_service_binary(values),
-        Path(values["WORKSTREAM_CHECKER_CONFIG_FILE"]),
-        Path(smol["binary"]),
-        Path(smol["guest_binary"]),
-        *(
-            Path(values[key])
-            for key in (*_secret_file_keys(values), DIRECT_USER_CREDENTIAL_HOST_FILE_KEY)
-        ),
+    cleanup_arn = values[CLEANUP_USER_ARN_KEY]
+    if IAM_USER_ARN.fullmatch(cleanup_arn) is None:
+        raise PreflightError("source-cleanup user must use an exact IAM user ARN")
+    if cleanup_arn == values["WORKSTREAM_ARTIFACT_S3_RUNTIME_USER_ARN"]:
+        raise PreflightError("source cleanup requires a distinct IAM user")
+    cleanup_profile = parsed_profiles[
+        "WORKSTREAM_SUBMISSION_SOURCE_CLEANUP_PROFILE"
     ]
-    protected_inputs.extend(
-        Path(image["smol"][key])
-        for image in config.get("cache", [])
-        if isinstance(image, dict) and isinstance(image.get("smol"), dict)
-        for key in ("archive", "image_config")
-        if isinstance(image["smol"].get(key), str)
+    if cleanup_profile.get("upload_principal") != values[
+        "WORKSTREAM_ARTIFACT_S3_RUNTIME_USER_ARN"
+    ]:
+        raise PreflightError(
+            "source-cleanup profile must pin the runtime upload principal"
+        )
+    credential_paths = (
+        Path(values[DIRECT_USER_CREDENTIAL_HOST_FILE_KEY]),
+        Path(values[CLEANUP_USER_CREDENTIAL_HOST_FILE_KEY]),
     )
-    if values.get(TRIAL_KEYS[0]):
-        protected_inputs.append(Path(values[TRIAL_KEYS[0]]))
-    if any(
-        path.resolve(strict=False).is_relative_to(paths.root)
-        for path in protected_inputs
-    ):
-        raise PreflightError(
-            "private config, credentials and assets must remain outside deployment data"
-        )
-    model_proxy_enabled = values["WORKSTREAM_MODEL_PROXY_ENABLED"] == "true"
-    expected.update(
-        {
-            "model_proxy_socket": str(paths.model_socket)
-            if model_proxy_enabled
-            else None,
-            "model_relay_root": str(paths.model_relays)
-            if model_proxy_enabled
-            else None,
-        }
-    )
-    for key, required in expected.items():
-        if config.get(key) != required:
-            raise PreflightError(
-                f"checker configuration has an unsafe release value: {key}"
-            )
-    if config.get("architecture") != "amd64" or config.get("docker_binary") is not None:
-        raise PreflightError(
-            "checker architecture is unsupported by this release profile"
-        )
-    cache = config.get("cache")
-    if not isinstance(cache, list) or not cache:
-        raise PreflightError("checker cache must contain at least one approved image")
-    seen: set[str] = set()
-    for entry in cache:
-        if not isinstance(entry, dict):
-            raise PreflightError("checker cache entry must be an object")
-        digest = entry.get("platform_manifest_digest")
-        image_id = entry.get("config_image_id")
-        repository = entry.get("repository")
-        if not isinstance(repository, str) or not repository or "@" in repository:
-            raise PreflightError("checker cache repository is invalid")
-        if not isinstance(digest, str) or not DIGEST.fullmatch(digest):
-            raise PreflightError("checker cache manifest digest is invalid")
-        if not isinstance(image_id, str) or not DIGEST.fullmatch(image_id):
-            raise PreflightError("checker cache image ID is invalid")
-        image = entry.get("smol")
-        if not isinstance(image, dict) or set(image) != {
-            "archive",
-            "archive_sha256",
-            "image_config",
-        }:
-            raise PreflightError("checker cache lacks native Smol assets")
-        if not isinstance(image["archive_sha256"], str) or not DIGEST.fullmatch(
-            image["archive_sha256"]
-        ):
-            raise PreflightError("checker cache archive digest is invalid")
-        if any(
-            not isinstance(image[key], str) or not Path(image[key]).is_absolute()
-            for key in ("archive", "image_config")
-        ):
-            raise PreflightError("checker cache asset path is invalid")
-        if digest in seen:
-            raise PreflightError("checker cache manifest digest is duplicated")
-        seen.add(digest)
-        if entry.get("operating_system") != "linux":
-            raise PreflightError("checker cache operating system must be linux")
-        if entry.get("architecture") != config["architecture"]:
-            raise PreflightError("checker cache architecture differs from the runner")
-
-    intake = config.get("trusted_intake")
-    if not isinstance(intake, dict) or set(intake) != {
-        "platform_manifest_digest",
-        "default_behavior_sha256",
-        "storage_envelope",
-    }:
-        raise PreflightError("native node lacks the trusted intake purpose")
-    selected = [
-        entry
-        for entry in cache
-        if entry["platform_manifest_digest"] == values[INTAKE_DIGEST_KEYS[0]]
-    ]
-    if (
-        len(selected) != 1
-        or selected[0]["config_image_id"] != values[INTAKE_DIGEST_KEYS[1]]
-        or intake["platform_manifest_digest"] != values[INTAKE_DIGEST_KEYS[0]]
-        or not isinstance(intake["default_behavior_sha256"], str)
-        or not DIGEST.fullmatch(intake["default_behavior_sha256"])
-    ):
-        raise PreflightError(
-            "trusted intake cache identity differs from release configuration"
-        )
-
-    envelope = intake.get("storage_envelope")
-    identities = {
-        "archive_sha256": selected[0]["smol"]["archive_sha256"],
-        "config_image_id": selected[0]["config_image_id"],
-        "smol_binary_sha256": smol["binary_sha256"],
-        "guest_sha256": smol["guest_sha256"],
-    }
-    bounds = {
-        "maximum_entries",
-        "maximum_path_bytes",
-        "maximum_path_depth",
-        "overhead_bytes",
-        "maximum_storage_gib",
-    }
-    if (
-        not isinstance(envelope, dict)
-        or set(envelope) != set(identities) | bounds
-        or any(envelope[key] != value for key, value in identities.items())
-        or any(
-            type(envelope[key]) is not int or not 0 < envelope[key] <= 2**64 - 1
-            for key in bounds
-        )
-        or envelope["maximum_entries"] > 100_000
-        or envelope["maximum_path_depth"] > 256
-        or (envelope["maximum_storage_gib"] + 1) * 1024**3
-        > smol["maximum_storage_bytes"]
-    ):
-        raise PreflightError(
-            "trusted intake storage qualification is missing or differs"
-        )
-
-    for key, default in (("maximum_entries", 2000), ("maximum_path_bytes", 1024),
-                         ("maximum_path_depth", 32)):
-        setting = "WORKSTREAM_ARTIFACT_SUBMISSION_ZIP_" + key.upper()
-        try:
-            configured = int(values.get(setting, str(default)))
-        except (TypeError, ValueError):
-            raise PreflightError("trusted intake inspection limit is invalid") from None
-        if not 0 < configured <= envelope[key]:
-            raise PreflightError("trusted intake inspection limit exceeds storage qualification")
-
-    # Qualification must cover supported inputs, independently of transient free space.
-    internal_zip_bytes = 512 * 1024**2
-    try:
-        expanded = int(values.get("WORKSTREAM_ARTIFACT_SUBMISSION_ZIP_MAXIMUM_EXPANDED_BYTES",
-                                  str(internal_zip_bytes)))
-        ratio = int(values.get("WORKSTREAM_ARTIFACT_SUBMISSION_ZIP_MAXIMUM_COMPRESSION_RATIO", "100"))
-    except (TypeError, ValueError):
-        raise PreflightError("trusted intake expansion limits are invalid") from None
-    if not 0 < expanded <= internal_zip_bytes or not 0 < ratio <= 2**64 - 1:
-        raise PreflightError("trusted intake expansion limits are invalid")
-    required_bytes = internal_zip_bytes + min(expanded, internal_zip_bytes * ratio) + envelope["overhead_bytes"]
-    rounded_bytes = required_bytes + 1024**3 - 1
-    if rounded_bytes > 2**64 - 1 or rounded_bytes // 1024**3 > envelope["maximum_storage_gib"]:
-        raise PreflightError("trusted intake storage qualification cannot cover supported ZIPs")
-
-    trial_path, trial_digest = (values.get(key) or None for key in TRIAL_KEYS)
-    if (
-        config.get("trial_authority_manifest_path"),
-        config.get("trial_authority_manifest_digest"),
-    ) != (trial_path, trial_digest):
-        raise PreflightError("native trial authority differs from the model proxy")
-    trial = config.get("trial_runtime")
-    if trial_path:
-        path_keys = (
-            "relay_root",
-            "scratch_root",
-            "child_home_root",
-            "offline_cache_root",
-            "trusted_launcher_path",
-            "filesystem_tool_path",
-        )
-        digest_keys = (
-            "outer_runtime_config_digest",
-            "builder_image_id",
-            "trusted_launcher_digest",
-            "filesystem_tool_digest",
-        )
+    for credential_path in credential_paths:
         if (
-            not isinstance(trial, dict)
-            or set(trial)
-            != {
-                *path_keys,
-                *digest_keys,
-                "deployment_owner",
-                "maximum_candidate_archive_bytes",
-            }
+            not credential_path.is_absolute()
+            or credential_path != credential_path.resolve(strict=False)
             or any(
-                not isinstance(trial[key], str) or not Path(trial[key]).is_absolute()
-                for key in path_keys
+                character.isspace() or character in ",:"
+                for character in str(credential_path)
             )
-            or any(
-                not isinstance(trial[key], str) or not DIGEST.fullmatch(trial[key])
-                for key in digest_keys
-            )
-            or not isinstance(trial["deployment_owner"], str)
-            or not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", trial["deployment_owner"])
-            or type(trial["maximum_candidate_archive_bytes"]) is not int
-            or not 0 < trial["maximum_candidate_archive_bytes"] <= 2**64 - 1
-            or trial["builder_image_id"]
-            not in {entry["config_image_id"] for entry in cache}
+            or credential_path.is_relative_to(root)
+            or root.is_relative_to(credential_path)
         ):
-            raise PreflightError("native trial runtime configuration is incomplete")
-        if len(os.fsencode(trial["child_home_root"])) > 18:
             raise PreflightError(
-                "native trial child home root exceeds the 18-byte socket path budget"
+                "direct IAM user credentials require canonical private host paths"
             )
-    elif trial is not None:
-        raise PreflightError("native trial runtime lacks a pinned authority manifest")
+    if credential_paths[0] == credential_paths[1]:
+        raise PreflightError("runtime and source-cleanup credentials must be distinct")
 
 
 def validate_local_data_environment(values: dict[str, str]) -> None:
@@ -1070,6 +881,7 @@ def _secret_file_keys(values: dict[str, str]) -> tuple[str, ...]:
             if values["WORKSTREAM_MODEL_PROXY_ENABLED"] == "true" and values.get(key)
         ),
         *((GITHUB_APP_KEYS[1],) if values.get(GITHUB_APP_KEYS[0]) else ()),
+        *((RESEND_KEY_FILE,) if values.get(FEEDBACK_EMAIL_ENABLED_KEY) == "true" else ()),
     )
 
 
@@ -1085,21 +897,6 @@ def _role_secret_file_keys(role: str, values: dict[str, str]) -> tuple[str, ...]
     return keys
 
 
-def _validate_native_socket(path: Path, uid: int, gid: int) -> None:
-    try:
-        metadata = path.lstat()
-    except OSError as exc:
-        raise PreflightError("native node socket is unavailable") from exc
-    if (
-        not stat.S_ISSOCK(metadata.st_mode)
-        or metadata.st_uid != uid
-        or metadata.st_gid != gid
-        or stat.S_IMODE(metadata.st_mode) != 0o600
-        or metadata.st_nlink != 1
-    ):
-        raise PreflightError("native node socket identity is unsafe")
-
-
 def validate_private_host_inputs(
     values: dict[str, str], *, require_node: bool = True
 ) -> None:
@@ -1111,20 +908,11 @@ def validate_private_host_inputs(
     gid = _positive_id(values, "WORKSTREAM_RUNTIME_GID")
     _private_metadata(paths.root, kind="directory", uid=uid, gid=gid, mode=0o700)
     _private_metadata(paths.scratch, kind="directory", uid=uid, gid=gid, mode=0o700)
-    local_checker = local_checker_enabled(values)
-    if local_checker:
-        _private_metadata(paths.socket_root, kind="directory", uid=uid, gid=gid, mode=0o700)
-        if require_node:
-            _validate_native_socket(paths.socket, uid, gid)
     model_proxy_enabled = values["WORKSTREAM_MODEL_PROXY_ENABLED"] == "true"
     if model_proxy_enabled:
         _private_metadata(
             paths.model_root, kind="directory", uid=uid, gid=gid, mode=0o700
         )
-        if local_checker:
-            _private_metadata(
-                paths.model_relays, kind="directory", uid=uid, gid=gid, mode=0o700
-            )
     _private_metadata(
         paths.guide_root,
         kind="directory",
@@ -1164,10 +952,10 @@ def validate_private_host_inputs(
         ):
             raise PreflightError("model proxy socket has unsafe retained state")
     private_paths = [
-        *((Path(values["WORKSTREAM_CHECKER_CONFIG_FILE"]),) if local_checker else ()),
         *((Path(values[TRIAL_KEYS[0]]),) if values.get(TRIAL_KEYS[0]) else ()),
         *(Path(values[key]) for key in _secret_file_keys(values)),
         Path(values[DIRECT_USER_CREDENTIAL_HOST_FILE_KEY]),
+        Path(values[CLEANUP_USER_CREDENTIAL_HOST_FILE_KEY]),
     ]
     for path in private_paths:
         _private_metadata(path, kind="file", uid=uid, gid=gid, mode=0o400)
@@ -1176,12 +964,8 @@ def validate_private_host_inputs(
             paths.scratch.resolve(strict=True),
             paths.guide_root.resolve(strict=True),
         ]
-        if local_checker:
-            shared_roots.append(paths.socket_root.resolve(strict=True))
         if model_proxy_enabled:
             shared_roots.append(paths.model_root.resolve(strict=True))
-            if local_checker:
-                shared_roots.append(paths.model_relays.resolve(strict=True))
         resolved_paths = [path.resolve(strict=True) for path in private_paths]
     except (OSError, RuntimeError) as exc:
         raise PreflightError("private host input identity is unavailable") from exc
@@ -1235,8 +1019,6 @@ def _run_json(
 
 def _compose_file_arguments(values: dict[str, str]) -> list[str]:
     arguments = ["--file", str(COMPOSE_PATH)]
-    if local_checker_enabled(values):
-        arguments.extend(("--file", str(NATIVE_CHECKER_COMPOSE_PATH)))
     if values.get("WORKSTREAM_POSTGRES_IMAGE"):
         arguments.extend(("--file", str(LOCAL_DATA_COMPOSE_PATH)))
     if values.get("WORKSTREAM_MCP_IMAGE"):
@@ -1245,6 +1027,8 @@ def _compose_file_arguments(values: dict[str, str]) -> list[str]:
         arguments.extend(("--file", str(IDENTITY_COMPOSE_PATH)))
     if values.get(GITHUB_APP_KEYS[0]):
         arguments.extend(("--file", str(GITHUB_COMPOSE_PATH)))
+    if values.get(FEEDBACK_EMAIL_ENABLED_KEY) == "true":
+        arguments.extend(("--file", str(FEEDBACK_EMAIL_COMPOSE_PATH)))
     if values["WORKSTREAM_MODEL_PROXY_ENABLED"] == "true":
         arguments.extend(("--file", str(INFERENCE_COMPOSE_PATH)))
         for provider, key in MODEL_PROVIDER_SECRET_FILE_KEYS.items():
@@ -1343,12 +1127,20 @@ def run_compose(
     # MCP attached to a retired API namespace after a Compose-managed update.
     selected_services = set(compose_arguments) & {
         "postgres", "redis",
-        "api", "mcp", "worker", "beat", "model-proxy", "identity",
+        "api", "mcp", "worker", "project-control-worker", "artifact-worker",
+        "outbox-scan-worker", "outbox-worker", "submission-finalization-worker",
+        "submission-source-cleanup-worker", "beat", "model-proxy", "identity",
         "guide-document-parser",
+        FEEDBACK_EMAIL_WORKER,
     }
     targets_api = not selected_services or "api" in selected_services or (
         "--no-deps" not in compose_arguments
-        and bool(selected_services & {"mcp", "worker", "beat"})
+        and bool(selected_services & {
+            "mcp", "beat", "worker", "project-control-worker", "artifact-worker",
+            "outbox-scan-worker", "outbox-worker", "submission-finalization-worker",
+            "submission-source-cleanup-worker",
+            FEEDBACK_EMAIL_WORKER,
+        })
     )
     couple_mcp = bool(values.get("WORKSTREAM_MCP_IMAGE")) and (
         compose_arguments[0] == "up" and targets_api
@@ -1357,14 +1149,27 @@ def run_compose(
         # Do not restart an existing MCP container into a discarded namespace
         # while waiting for API health. Release it only in the phase below.
         if not selected_services:
-            compose_arguments = [*compose_arguments, "api", "worker", "beat",
-                                 "guide-document-parser"]
+            compose_arguments = [
+                *compose_arguments,
+                "api",
+                "worker",
+                "project-control-worker",
+                "artifact-worker",
+                "outbox-scan-worker",
+                "outbox-worker",
+                "submission-finalization-worker",
+                "submission-source-cleanup-worker",
+                "beat",
+                "guide-document-parser",
+            ]
             if values.get("WORKSTREAM_POSTGRES_IMAGE"):
                 compose_arguments.extend(("postgres", "redis"))
             if values.get("FLOW_IDENTITY_IMAGE"):
                 compose_arguments.append("identity")
             if values["WORKSTREAM_MODEL_PROXY_ENABLED"] == "true":
                 compose_arguments.append("model-proxy")
+            if values.get(FEEDBACK_EMAIL_ENABLED_KEY) == "true":
+                compose_arguments.append(FEEDBACK_EMAIL_WORKER)
         else:
             compose_arguments = [item for item in compose_arguments if item != "mcp"]
             if selected_services == {"mcp"}:
@@ -1526,10 +1331,18 @@ def run_shutdown(environment_path: Path, values: dict[str, str]) -> int:
     """Stop producers, drain the worker, then stop its isolated dependencies."""
     phases = [
         ["stop", "beat", "api"],
-        ["stop", "--timeout", "7320", "worker"],
+        ["stop", "--timeout", "7320", "worker", "project-control-worker",
+         "artifact-worker", "outbox-worker"],
+        [
+            "stop", "--timeout", "420",
+            "submission-finalization-worker", "submission-source-cleanup-worker",
+        ],
+        ["stop", "--timeout", "120", "outbox-scan-worker"],
     ]
     if values.get("WORKSTREAM_MCP_IMAGE"):
         phases.insert(0, ["stop", "mcp"])
+    if values.get(FEEDBACK_EMAIL_ENABLED_KEY) == "true":
+        phases.append(["stop", "--timeout", "120", FEEDBACK_EMAIL_WORKER])
     if values["WORKSTREAM_MODEL_PROXY_ENABLED"] == "true":
         phases.append(["stop", "--timeout", "7320", "model-proxy"])
     phases.append(["stop", "guide-document-parser"])
@@ -1556,6 +1369,65 @@ def run_shutdown(environment_path: Path, values: dict[str, str]) -> int:
         if completed.returncode != 0:
             return completed.returncode
     return 0
+
+
+TYPED_SUBMISSION_PROFILE_VALIDATION = """
+from app.adapters.artifacts import selected_pre_submit_source_contracts
+from app.core.config import get_settings
+from app.modules.artifacts.api.submission_cleanup import SubmissionSourceCleanupProfile
+from app.modules.artifacts.api.submission_command import SubmissionExecutionProfile
+from app.modules.checkers.api.source_contracts import source_contracts_context
+
+settings = get_settings()
+try:
+    SubmissionExecutionProfile.model_validate(
+        settings.submission_execution_profile,
+        context=source_contracts_context(selected_pre_submit_source_contracts()),
+    )
+except Exception:
+    raise SystemExit(20) from None
+try:
+    SubmissionSourceCleanupProfile.model_validate(
+        settings.submission_source_cleanup_profile
+    )
+except Exception:
+    raise SystemExit(21) from None
+""".strip()
+
+
+def validate_typed_submission_profiles(
+    environment_path: Path, values: dict[str, str], *, cached_images: bool = False
+) -> None:
+    """Run canonical image-owned profile validators before service activation."""
+    command = [
+        "docker", "compose", "--env-file", str(environment_path),
+        *_compose_file_arguments(values),
+        "run", "--rm", "--no-deps", "-T",
+        *(("--pull", "never") if cached_images else ()),
+        "api", "python", "-c", TYPED_SUBMISSION_PROFILE_VALIDATION,
+    ]
+    try:
+        completed = subprocess.run(
+            command,
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            env=compose_environment(values),
+            timeout=90,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise PreflightError(
+            "image-owned submission profile validation could not complete"
+        ) from exc
+    failures = {
+        20: "submission execution profile failed image-owned typed validation",
+        21: "submission source-cleanup profile failed image-owned typed validation",
+    }
+    if completed.returncode:
+        raise PreflightError(failures.get(
+            completed.returncode,
+            "image-owned submission profile validation could not initialize",
+        ))
 
 
 def _service_mounts(service: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -1732,9 +1604,20 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
     """Check the rendered release process and privilege topology."""
     paths = deployment_paths(values)
     services = rendered.get("services")
+    standard_workers = {
+        "worker", "project-control-worker", "artifact-worker", "outbox-worker",
+    }
+    bounded_workers = {
+        "outbox-scan-worker", "submission-finalization-worker",
+        "submission-source-cleanup-worker",
+    }
+    feedback_enabled = values.get(FEEDBACK_EMAIL_ENABLED_KEY, "false")
+    if feedback_enabled == "true":
+        bounded_workers.add(FEEDBACK_EMAIL_WORKER)
+    all_workers = standard_workers | bounded_workers
     expected_services = {
         "api",
-        "worker",
+        *all_workers,
         "beat",
         "guide-document-parser",
     }
@@ -1789,7 +1672,7 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
     )
     backend_runtime_services = {
         "api",
-        "worker",
+        *all_workers,
         "beat",
     }
     if model_proxy_enabled:
@@ -1802,13 +1685,11 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
     if services["guide-document-parser"]["user"] != "0:0":
         raise PreflightError("guide parser has the wrong bootstrap identity")
     backend_image = services["api"]["image"]
-    if (
-        services["worker"]["image"] != backend_image
-        or services["beat"]["image"] != backend_image
-        or services["guide-document-parser"]["image"] != backend_image
-    ):
+    if any(services[name]["image"] != backend_image for name in (
+        *all_workers, "beat", "guide-document-parser",
+    )):
         raise PreflightError(
-            "API, worker, Beat and guide parser must use one exact backend image"
+            "API, workers, Beat and guide parser must use one exact backend image"
         )
     if (
         model_proxy_enabled
@@ -1817,7 +1698,7 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
         raise PreflightError("model proxy must use the exact agents backend image")
     for name in (
         "api",
-        "worker",
+        *all_workers,
         "beat",
         "guide-document-parser",
         *({"model-proxy"} if model_proxy_enabled else set()),
@@ -1833,23 +1714,40 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
     shared_backend_mounts = {
         str(paths.scratch): (str(paths.scratch), False),
     }
-    if local_checker_enabled(values):
-        shared_backend_mounts[str(paths.socket_root)] = (str(paths.socket_root), True)
+    cloned_worker_mounts = (
+        shared_backend_mounts
+        | {str(paths.guide_root): (str(paths.guide_root), True)}
+        | direct_user_credential_mount
+    )
     expected_mounts = {
         "api": shared_backend_mounts | direct_user_credential_mount,
-        "worker": shared_backend_mounts
-        | {str(paths.guide_root): (str(paths.guide_root), True)}
+        "worker": cloned_worker_mounts
         | (
             {str(paths.model_root): (str(paths.model_root), True)}
             if model_proxy_enabled
             else {}
-        )
-        | direct_user_credential_mount,
+        ),
+        "project-control-worker": cloned_worker_mounts,
+        "artifact-worker": cloned_worker_mounts,
+        "outbox-worker": cloned_worker_mounts | (
+            {str(paths.model_root): (str(paths.model_root), True)}
+            if model_proxy_enabled else {}
+        ),
+        "outbox-scan-worker": {},
+        "submission-finalization-worker": direct_user_credential_mount,
+        "submission-source-cleanup-worker": {
+            str(DIRECT_USER_CREDENTIAL_TARGET): (
+                values[CLEANUP_USER_CREDENTIAL_HOST_FILE_KEY],
+                True,
+            ),
+        },
         "beat": {},
         "guide-document-parser": {
             str(paths.guide_root): (str(paths.guide_root), False),
         },
     }
+    if feedback_enabled == "true":
+        expected_mounts[FEEDBACK_EMAIL_WORKER] = {}
     if model_proxy_enabled:
         expected_mounts["model-proxy"] = {
             str(paths.scratch): (str(paths.scratch), False),
@@ -1971,18 +1869,81 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
         "required": True,
     }:
         raise PreflightError("worker must wait for a healthy model proxy")
+    if model_proxy_enabled and (
+        services["outbox-worker"].get("depends_on") or {}
+    ).get("model-proxy") != {
+        "condition": "service_healthy", "required": True,
+    }:
+        raise PreflightError("outbox worker must wait for a healthy model proxy")
     worker = services["worker"]
     worker_command = worker.get("command")
     if (
         worker.get("stop_grace_period") not in {"7320s", "2h2m0s"}
         or not isinstance(worker_command, list)
         or "--pool=prefork" not in worker_command
-        or any(
-            value == "-Q" or str(value).startswith("--queues")
-            for value in worker_command
-        )
+        or [value for value in worker_command
+            if str(value).startswith(("-Q", "--queues"))]
+        != ["--queues=workstream.project_setup"]
     ):
         raise PreflightError("project guide worker delivery profile is invalid")
+    bounded_worker_profiles = {
+        "project-control-worker": (
+            "--queues=workstream.project_control",
+            "--hostname=project-control@%h",
+            "--pidfile=/tmp/celery-worker.pid",
+        ),
+        "artifact-worker": (
+            "--queues=workstream.artifacts",
+            "--hostname=artifacts@%h",
+            "--pidfile=/tmp/celery-worker.pid",
+        ),
+        "outbox-worker": (
+            "--queues=workstream.outbox",
+            "--hostname=outbox@%h",
+            "--pidfile=/tmp/celery-worker.pid",
+        ),
+        "outbox-scan-worker": (
+            "--queues=workstream.outbox_scan",
+            "--hostname=outbox-scan@%h",
+            "--pidfile=/tmp/celery-outbox-scan.pid",
+        ),
+        "submission-finalization-worker": (
+            "--queues=workstream.submission_finalization",
+            "--hostname=submission-finalization@%h",
+            "--pidfile=/tmp/celery-submission-finalization.pid",
+        ),
+        "submission-source-cleanup-worker": (
+            "--queues=workstream.source_cleanup",
+            "--hostname=submission-source-cleanup@%h",
+            "--pidfile=/tmp/celery-submission-source-cleanup.pid",
+        ),
+    }
+    if feedback_enabled == "true":
+        bounded_worker_profiles[FEEDBACK_EMAIL_WORKER] = (
+            "--queues=workstream.submission_feedback_email",
+            "--hostname=submission-feedback-email@%h",
+            "--pidfile=/tmp/celery-submission-feedback-email.pid",
+        )
+    for name, required_arguments in bounded_worker_profiles.items():
+        bounded_worker = services[name]
+        command = bounded_worker.get("command")
+        if (
+            bounded_worker.get("stop_grace_period") not in (
+                {"120s", "2m0s"} if name in {"outbox-scan-worker", FEEDBACK_EMAIL_WORKER} else
+                {"7320s", "2h2m0s"} if name in {
+                    "project-control-worker", "artifact-worker", "outbox-worker",
+                } else {"420s", "7m0s"}
+            )
+            or not isinstance(command, list)
+            or "--pool=prefork" not in command
+            or "--concurrency=1" not in command
+            or any(argument not in command for argument in required_arguments)
+            or len(
+                [value for value in command if str(value).startswith(("-Q", "--queues"))]
+            )
+            != 1
+        ):
+            raise PreflightError(f"exclusive worker delivery profile is invalid: {name}")
     if model_proxy_enabled:
         proxy = services["model-proxy"]
         if (
@@ -2002,26 +1963,49 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
         ):
             raise PreflightError("model proxy delivery profile is invalid")
     environments: dict[str, dict[str, Any]] = {}
-    active_roles = ("api", "worker", "beat") + (
+    active_roles = (
+        "api",
+        *sorted(all_workers),
+        "beat",
+    ) + (
         ("model-proxy",) if model_proxy_enabled else ()
     )
     for role in active_roles:
         environment = services[role].get("environment")
         if not isinstance(environment, dict):
             raise PreflightError(f"{role} release environment is unavailable")
-        if environment.get("WORKSTREAM_RELEASE_ROLE") != role:
+        expected_release_role = "worker" if role in all_workers else role
+        if environment.get("WORKSTREAM_RELEASE_ROLE") != expected_release_role:
             raise PreflightError(f"{role} has an unsafe release role")
         expected_direct_credential = (
             str(DIRECT_USER_CREDENTIAL_TARGET)
-            if role in {"api", "worker", "model-proxy"}
+            if role in {"api", "model-proxy", *standard_workers,
+                         "submission-finalization-worker", "submission-source-cleanup-worker"}
             else None
         )
         if environment.get(DIRECT_USER_CREDENTIAL_FILE_KEY) != expected_direct_credential:
             raise PreflightError(
                 f"{role} direct IAM user credential selector differs from its release role"
             )
-        required_file_keys = set(_role_secret_file_keys(role, values))
+        policy_role = "bounded-worker" if role in bounded_workers else (
+            "worker" if role in standard_workers else role
+        )
+        required_file_keys = (
+            {"WORKSTREAM_DATABASE_URL_FILE", "WORKSTREAM_CELERY_BROKER_URL_FILE"}
+            if policy_role == "bounded-worker"
+            else set(ROLE_SECRET_FILE_KEYS["worker"])
+            if role in standard_workers - {"worker"}
+            else set(_role_secret_file_keys(policy_role, values))
+        )
+        if role == FEEDBACK_EMAIL_WORKER:
+            required_file_keys.add(RESEND_KEY_FILE)
         for key, (_, target) in SECRET_FILE_TARGETS.items():
+            if key in REMOTE_RUNNER_SECRET_FILE_KEYS:
+                if key in environment:
+                    raise PreflightError(
+                        f"{role} contains a host-only secret selector: {key}"
+                    )
+                continue
             if key in required_file_keys:
                 if environment.get(key) != target:
                     raise PreflightError(
@@ -2035,7 +2019,7 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
         if not isinstance(mounted, list):
             raise PreflightError(f"{role} release secrets are unavailable")
         expected_sources = {
-            SECRET_FILE_TARGETS[key][0] for key in _role_secret_file_keys(role, values)
+            SECRET_FILE_TARGETS[key][0] for key in required_file_keys
         }
         service_uid, service_gid = services[role]["user"].split(":", maxsplit=1)
         if len(mounted) != len(expected_sources) or any(
@@ -2051,7 +2035,9 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
             raise PreflightError(f"{role} mounted secrets differ from its release role")
         environments[role] = environment
     common_environments = []
-    for environment in environments.values():
+    for role, environment in environments.items():
+        if role == "submission-source-cleanup-worker":
+            continue
         common_environments.append(
             {
                 key: value
@@ -2063,7 +2049,7 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
                     "WORKSTREAM_GUIDE_DOCUMENT_PARSER_SOCKET",
                     "WORKSTREAM_CHECKER_MODEL_PROXY_SOCKET",
                     DIRECT_USER_CREDENTIAL_FILE_KEY,
-                    *NATIVE_ENVIRONMENT_KEYS,
+                    *REMOTE_RUNNER_ENVIRONMENT_KEYS,
                     *TRIAL_KEYS,
                     *GITHUB_APP_KEYS,
                 }
@@ -2072,7 +2058,31 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
     if any(
         environment != common_environments[0] for environment in common_environments[1:]
     ):
-        raise PreflightError("backend roles must share the same non-secret environment")
+        raise PreflightError(
+            "backend roles must share the same non-secret environment, including "
+            "WORKSTREAM_ARTIFACT_PREPARATION_TOTAL_DEADLINE_SECONDS"
+        )
+    cleanup_environment = environments["submission-source-cleanup-worker"]
+    cleanup_common = {
+        key: value
+        for key, value in cleanup_environment.items()
+        if key not in SECRET_FILE_KEYS
+        and key not in {
+            "WORKSTREAM_RELEASE_ROLE",
+            DIRECT_USER_CREDENTIAL_FILE_KEY,
+            "WORKSTREAM_ARTIFACT_S3_RUNTIME_USER_ARN",
+        }
+    }
+    runtime_common = dict(common_environments[0])
+    runtime_common.pop("WORKSTREAM_ARTIFACT_S3_RUNTIME_USER_ARN", None)
+    if cleanup_common != runtime_common:
+        raise PreflightError(
+            "source-cleanup worker must share the bounded non-secret environment"
+        )
+    if cleanup_environment.get("WORKSTREAM_ARTIFACT_S3_RUNTIME_USER_ARN") != values[
+        CLEANUP_USER_ARN_KEY
+    ]:
+        raise PreflightError("source-cleanup worker lacks its dedicated IAM identity")
     environment = environments["api"]
     exact = {
         "WORKSTREAM_AUTH_PROVIDER": "flow",
@@ -2084,20 +2094,22 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
         "WORKSTREAM_ARTIFACT_S3_ADDRESSING_STYLE": "virtual",
         DIRECT_USER_CREDENTIAL_FILE_KEY: str(DIRECT_USER_CREDENTIAL_TARGET),
         "WORKSTREAM_ARTIFACT_SCRATCH_ROOT": str(paths.scratch),
-        HOSTED_PROFILE_KEY: values.get(HOSTED_PROFILE_KEY, "single-host"),
+        HOSTED_PROFILE_KEY: "app",
     }
     for key, value in exact.items():
         if str(environment.get(key, "")).lower() != value:
             raise PreflightError(f"rendered release environment is unsafe: {key}")
     for name in (
         "api",
-        "worker",
+        *sorted(all_workers),
         "beat",
         *(("model-proxy",) if model_proxy_enabled else ()),
     ):
         service_environment = services[name].get("environment")
         if not isinstance(service_environment, dict):
             raise PreflightError(f"{name} release environment is unavailable")
+        if service_environment.get(FEEDBACK_EMAIL_ENABLED_KEY) != feedback_enabled:
+            raise PreflightError(f"rendered submission feedback email flag differs from release: {name}")
         deadline_key = "WORKSTREAM_ARTIFACT_PREPARATION_TOTAL_DEADLINE_SECONDS"
         if str(service_environment.get(deadline_key, "")) != values[deadline_key]:
             raise PreflightError(
@@ -2109,20 +2121,43 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
                     "rendered project agent configuration differs from release: "
                     f"{name}.{key}"
                 )
+        for key in SUBMISSION_PROFILE_KEYS:
+            if str(service_environment.get(key, "")) != values[key]:
+                raise PreflightError(
+                    "rendered submission profile differs from release: "
+                    f"{name}.{key}"
+                )
     for name, service in services.items():
         environment = service.get("environment") or {}
-        expected_native = (
+        if "WORKSTREAM_RESEND_API_KEY" in environment or (
+            RESEND_KEY_FILE in environment and name != FEEDBACK_EMAIL_WORKER
+        ):
+            raise PreflightError(f"Resend credential is exposed outside its email worker: {name}")
+        expected_remote = (
             {
-                "WORKSTREAM_EXTERNAL_CHECKER_MATERIAL_ROOT": str(paths.scratch),
-                "WORKSTREAM_EXTERNAL_CHECKER_SERVICE_SOCKET": str(paths.socket),
-                "WORKSTREAM_ARTIFACT_INTAKE_SERVICE_SOCKET": str(paths.socket),
-                **{key: values[key] for key in INTAKE_DIGEST_KEYS},
+                REMOTE_RUNNER_ENDPOINTS_KEY: values[REMOTE_RUNNER_ENDPOINTS_KEY],
+                "WORKSTREAM_EXTERNAL_RUNNER_CA_PATH": "/run/secrets/external_runner_ca",
+                "WORKSTREAM_EXTERNAL_RUNNER_CERTIFICATE_PATH": (
+                    "/run/secrets/external_runner_certificate"
+                ),
+                "WORKSTREAM_EXTERNAL_RUNNER_PRIVATE_KEY_PATH": (
+                    "/run/secrets/external_runner_private_key"
+                ),
+                **(
+                    {key: values[key] for key in INTAKE_DIGEST_KEYS}
+                    if name in {"api", *standard_workers}
+                    else {}
+                ),
             }
-            if local_checker_enabled(values) and name in {"api", "worker"}
+            if name in {"api", *standard_workers}
             else {}
         )
-        if {key: environment[key] for key in NATIVE_ENVIRONMENT_KEYS if key in environment} != expected_native:
-            raise PreflightError(f"rendered native checker environment is unsafe: {name}")
+        if {
+            key: environment[key]
+            for key in REMOTE_RUNNER_ENVIRONMENT_KEYS
+            if key in environment
+        } != expected_remote:
+            raise PreflightError(f"rendered external runner environment is unsafe: {name}")
         expected_trial = (
             {
                 TRIAL_KEYS[0]: str(TRIAL_MANIFEST_TARGET),
@@ -2146,6 +2181,10 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
         "WORKSTREAM_CHECKER_MODEL_PROXY_SOCKET"
     ) != str(paths.model_socket):
         raise PreflightError("worker lacks the fixed model proxy socket")
+    if model_proxy_enabled and environments["outbox-worker"].get(
+        "WORKSTREAM_CHECKER_MODEL_PROXY_SOCKET"
+    ) != str(paths.model_socket):
+        raise PreflightError("outbox worker lacks the fixed model proxy socket")
     if model_proxy_enabled and environments["model-proxy"].get(
         "WORKSTREAM_CHECKER_MODEL_PROXY_SOCKET"
     ) != str(paths.model_socket):
@@ -2213,218 +2252,6 @@ def validate_compose(rendered: dict[str, Any], values: dict[str, str]) -> None:
             raise PreflightError(f"secret value was interpolated into Compose: {key}")
 
 
-def _verify_smol_asset(path: Path, expected: str, uid: int, deadline: float) -> None:
-    """Hash pinned regular assets without symlinks or writable substitutions."""
-    try:
-        if path.resolve(strict=True) != path:
-            raise PreflightError("native Smol asset path is not canonical")
-        descriptor = os.open(
-            path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | os.O_CLOEXEC
-        )
-        with os.fdopen(descriptor, "rb") as asset:
-            metadata = os.fstat(asset.fileno())
-            if (
-                not stat.S_ISREG(metadata.st_mode)
-                or metadata.st_uid not in {0, uid}
-                or metadata.st_mode & 0o022
-            ):
-                raise PreflightError("native Smol asset custody is unsafe")
-            digest = hashlib.sha256()
-            while True:
-                if time.monotonic() >= deadline:
-                    raise PreflightError(
-                        "native Smol asset verification deadline exceeded"
-                    )
-                chunk = asset.read(65536)
-                if not chunk:
-                    break
-                digest.update(chunk)
-            current = path.lstat()
-            if (
-                not os.path.samestat(metadata, current)
-                or metadata.st_size != current.st_size
-                or "sha256:" + digest.hexdigest() != expected
-            ):
-                raise PreflightError("native Smol asset digest or identity differs")
-    except PreflightError:
-        raise
-    except (OSError, RuntimeError) as exc:
-        raise PreflightError("native Smol asset is unavailable") from exc
-
-
-def validate_smol_runtime(config: dict[str, Any], values: dict[str, str]) -> None:
-    """Check pinned native inputs, delegation and the existing typed node health."""
-    paths = deployment_paths(values)
-    uid = _positive_id(values, "WORKSTREAM_RUNTIME_UID")
-    gid = _positive_id(values, "WORKSTREAM_RUNTIME_GID")
-    smol = config["smol"]
-    _private_metadata(
-        Path(smol["home"]), kind="directory", uid=uid, gid=gid, mode=0o700
-    )
-    group = Path(smol["cgroup_root"])
-    try:
-        if (
-            group.resolve(strict=True) != group
-            or group.stat().st_uid != uid
-            or not group.joinpath("controller").is_dir()
-        ):
-            raise PreflightError("native Smol cgroup delegation identity differs")
-        for name in ("cgroup.controllers", "cgroup.subtree_control"):
-            with group.joinpath(name).open("r", encoding="ascii") as control:
-                controllers = control.read(4097)
-            if len(controllers) > 4096 or not {"cpu", "memory", "pids"} <= set(
-                controllers.split()
-            ):
-                raise PreflightError("native Smol cgroup delegation is incomplete")
-    except (OSError, UnicodeError) as exc:
-        raise PreflightError("native Smol cgroup delegation is unavailable") from exc
-    deadline = time.monotonic() + 30
-    _verify_smol_asset(
-        checker_service_binary(values),
-        values["WORKSTREAM_CHECKER_SERVICE_BINARY_SHA256"],
-        uid,
-        deadline,
-    )
-    for path, digest in [
-        (smol["binary"], smol["binary_sha256"]),
-        (smol["guest_binary"], smol["guest_sha256"]),
-    ]:
-        _verify_smol_asset(Path(path), digest, uid, deadline)
-    for entry in config["cache"]:
-        _verify_smol_asset(
-            Path(entry["smol"]["archive"]),
-            entry["smol"]["archive_sha256"],
-            uid,
-            deadline,
-        )
-        _verify_smol_asset(
-            Path(entry["smol"]["image_config"]), entry["config_image_id"], uid, deadline
-        )
-    if values.get(TRIAL_KEYS[0]):
-        _verify_smol_asset(
-            Path(values[TRIAL_KEYS[0]]), values[TRIAL_KEYS[1]], uid, deadline
-        )
-        trial = config["trial_runtime"]
-        for key in (
-            "relay_root",
-            "scratch_root",
-            "child_home_root",
-            "offline_cache_root",
-        ):
-            _private_metadata(
-                Path(trial[key]), kind="directory", uid=uid, gid=gid, mode=0o700
-            )
-        for path_key, digest_key in (
-            ("trusted_launcher_path", "trusted_launcher_digest"),
-            ("filesystem_tool_path", "filesystem_tool_digest"),
-        ):
-            _verify_smol_asset(Path(trial[path_key]), trial[digest_key], uid, deadline)
-    script = (
-        "import asyncio,json; from dataclasses import asdict; from pathlib import Path; "
-        "from app.core.config import Settings; "
-        "from app.adapters.checkers import configured_external_checker_execution; "
-        "s=Settings(external_checker_service_socket=Path("
-        + repr(str(paths.socket))
-        + "),artifact_scratch_root=Path("
-        + repr(str(paths.scratch))
-        + "),external_checker_material_root=Path("
-        + repr(str(paths.scratch))
-        + "),external_checker_service_timeout_seconds=5.0); "
-        "print(json.dumps(asdict(asyncio.run(configured_external_checker_execution(s).health()))))"
-    )
-    health = _run_json(
-        [
-            "docker",
-            "run",
-            "--rm",
-            "--pull=never",
-            "--network",
-            "none",
-            "--read-only",
-            "--cap-drop=ALL",
-            "--security-opt=no-new-privileges",
-            "--pids-limit=64",
-            "--memory=512m",
-            "--cpus=1",
-            "--user",
-            str(uid) + ":" + str(gid),
-            "--mount",
-            f"type=bind,src={paths.socket_root},dst={paths.socket_root},readonly",
-            "--entrypoint",
-            "python",
-            values["WORKSTREAM_BACKEND_IMAGE"],
-            "-c",
-            script,
-        ],
-        failure="native Smol project readiness failed",
-        environment=compose_environment(values),
-    )
-    if (
-        not isinstance(health, dict)
-        or health.get("runtime") != "smolvm"
-        or health.get("isolation_mode") != "smol-microvm"
-        or health.get("operating_system") != config["operating_system"]
-        or health.get("architecture") != config["architecture"]
-        or health.get("sandbox_uid") != uid
-        or health.get("sandbox_gid") != gid
-        or health.get("cached_platform_manifests") != len(config["cache"])
-    ):
-        raise PreflightError("native Smol project readiness identity differs")
-
-
-def validate_trusted_intake(values: dict[str, str]) -> None:
-    """Use the release image's typed ART adapter without mounting credentials."""
-    paths = deployment_paths(values)
-    script = (
-        "import asyncio,json; from dataclasses import asdict; from pathlib import Path; "
-        "from app.core.config import Settings; "
-        "from app.adapters.artifacts import trusted_submission_intake; "
-        "s=Settings(artifact_intake_service_socket=Path("
-        + repr(str(paths.socket))
-        + "),artifact_intake_image_digest="
-        + repr(values[INTAKE_DIGEST_KEYS[0]])
-        + ",artifact_intake_config_digest="
-        + repr(values[INTAKE_DIGEST_KEYS[1]])
-        + "); "
-        "print(json.dumps(asdict(asyncio.run(trusted_submission_intake(s).health()))))"
-    )
-    health = _run_json(
-        [
-            "docker",
-            "run",
-            "--rm",
-            "--pull=never",
-            "--network",
-            "none",
-            "--read-only",
-            "--cap-drop=ALL",
-            "--security-opt=no-new-privileges",
-            "--pids-limit=64",
-            "--memory=512m",
-            "--cpus=1",
-            "--user",
-            values["WORKSTREAM_RUNTIME_UID"] + ":" + values["WORKSTREAM_RUNTIME_GID"],
-            "--mount",
-            f"type=bind,src={paths.socket_root},dst={paths.socket_root},readonly",
-            "--entrypoint",
-            "python",
-            values["WORKSTREAM_BACKEND_IMAGE"],
-            "-c",
-            script,
-        ],
-        failure="trusted Smol intake readiness failed",
-        environment=compose_environment(values),
-    )
-    if (
-        not isinstance(health, dict)
-        or (health.get("runtime"), health.get("isolation_mode"))
-        != ("smolvm", "smol-microvm")
-        or health.get("image_digest") != values[INTAKE_DIGEST_KEYS[0]]
-        or health.get("config_digest") != values[INTAKE_DIGEST_KEYS[1]]
-    ):
-        raise PreflightError("trusted intake readiness identity differs")
-
-
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--env-file", required=True, type=Path)
@@ -2441,10 +2268,6 @@ def main() -> int:
     try:
         values = parse_environment(args.env_file)
         validate_environment(values)
-        checker_config = None
-        if local_checker_enabled(values):
-            checker_config = load_checker_config(Path(values["WORKSTREAM_CHECKER_CONFIG_FILE"]))
-            validate_checker_config(checker_config, values)
         validate_compose(render_compose(args.env_file, values), values)
         if args.configuration_only:
             print(
@@ -2452,9 +2275,7 @@ def main() -> int:
             )
             return 0
         validate_private_host_inputs(values)
-        if checker_config is not None:
-            validate_smol_runtime(checker_config, values)
-            validate_trusted_intake(values)
+        validate_typed_submission_profiles(args.env_file, values)
     except PreflightError as exc:
         print(f"hosted release preflight failed: {exc}", file=sys.stderr)
         return 1

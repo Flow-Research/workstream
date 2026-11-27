@@ -11,10 +11,16 @@ from app.modules.tasks.models import SubmissionDispatch
 
 def creation_request_digest(request: SubmissionCreationRequest) -> str:
     """Bind all caller facts; admission remains the replay namespace."""
+    body = asdict(request)
+    if request.summary is None and request.contributor_attestation is None:
+        body.pop("summary")
+        body.pop("contributor_attestation")
+    else:
+        body.pop("feedback")
     return canonical_json_hash({
         "domain": "workstream.submission.creation",
         "request": {key: str(value) if isinstance(value, UUID) else value
-                    for key, value in asdict(request).items()},
+                    for key, value in body.items()},
     })
 
 

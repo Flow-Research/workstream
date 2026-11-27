@@ -15,7 +15,9 @@ from app.modules.checkers.api.evaluation_contract import (
     PostSubmissionExecutionRequest,
     PostSubmissionExecutionResult,
 )
-from app.modules.checkers.api.selected_post_submit import SelectedPostSubmitCurrentResultReference
+from app.modules.checkers.api.selected_post_submit import (
+    PostSubmissionInfrastructureFailureCode, SelectedPostSubmitCurrentResultReference,
+)
 from app.modules.checkers.api.evaluation_context import (
     PostSubmitInputContextCustody, validate_input_context_custody,
 )
@@ -26,12 +28,13 @@ from app.modules.checkers.api.canonical_values import (
     VersionNumber,
 )
 from app.modules.checkers.api.delivery_reconciliation import (
-    PostSubmitRequestDeliveryFacts,
+    PostSubmitExpiredLease, PostSubmitRequestDeliveryFacts,
 )
 from app.modules.model_usage.api import ModelRecoveryCandidate
 
 REQUEST_EVENT = "PostSubmissionEvaluationRequested"
 COMPLETION_EVENT = "PostSubmissionEvaluationCompleted"
+POST_SUBMISSION_ATTEMPT_LIMIT = 5
 
 
 class CheckerExecutionUnavailable(RuntimeError):
@@ -266,6 +269,7 @@ class CheckerRetryEventExpectation(CheckerValue):
     idempotency_key: str
     payload_json: str
     payload_digest: Sha256
+    not_before_at: AwareDatetime | None = None
 
 
 class CheckerRetryDelivery(CheckerValue):
@@ -337,6 +341,19 @@ class ReservedEvaluation(CheckerValue):
 
     request: PostSubmissionExecutionRequest
     reservation: EvaluationReservation
+
+
+class EvaluationProgress(CheckerValue):
+    """Current owner evidence for one retained Submission, not a public outcome."""
+
+    current: ReservedEvaluation
+    status: Literal["queued", "running", "completed", "infrastructure_failed"]
+    live_worker_lease: bool
+    failure_code: PostSubmissionInfrastructureFailureCode | None
+    previous_failure_code: PostSubmissionInfrastructureFailureCode | None
+    retry_event_id: ResourceId | None
+    completion_event_id: ResourceId | None
+    delivery_event_json: str | None
 
 
 class ExecutionLease(CheckerValue):
@@ -572,6 +589,23 @@ class EvaluationCoordinationPort(Protocol):
         submission_id: ResourceId, request_id: ResourceId,
     ) -> ReservedEvaluation:
         """Read scoped retained custody without reserving or advancing a fence."""
+        ...
+
+    async def read_current_progress(
+        self, *, project_id: ResourceId, task_id: ResourceId,
+        submission_id: ResourceId, original_request_id: ResourceId,
+    ) -> EvaluationProgress:
+        """Observe exact current attempt under caller-owned TASK-first custody."""
+        ...
+
+    async def require_expired_unknown_lease(self, request: PostSubmissionExecutionRequest) -> PostSubmitExpiredLease:
+        """Lock exact current TASK and CHECKERS custody for explicit abandonment."""
+        ...
+
+    async def reserve_abandoned_evaluation(
+        self, request: PostSubmissionExecutionRequest, lease: PostSubmitExpiredLease, cause: ResourceId,
+    ) -> EvaluationReservation:
+        """Reserve one successor under exact authorized reconciliation child custody."""
         ...
 
     async def read_retry_delivery(

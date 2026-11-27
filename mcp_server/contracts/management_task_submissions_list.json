@@ -1,5 +1,5 @@
 {
-  "canonical_sha256": "248a92cb3e505363559db0865b39df7c18e528007c13344f2e20c867abc68aad",
+  "canonical_sha256": "fd402a470bcd4cceb6ae5d207279828894759eba80f747d1c8abc41589d34590",
   "components": {
     "schemas": {
       "ApiError": {
@@ -112,6 +112,17 @@
             },
             "title": "Evidence Items",
             "type": "array"
+          },
+          "feedback": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feedback"
           },
           "finding_counts": {
             "$ref": "#/components/schemas/SubmissionFindingCounts"
@@ -278,8 +289,16 @@
             "type": "string"
           },
           "summary": {
-            "title": "Summary",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Retained summary on submissions recorded before project feedback.",
+            "title": "Summary"
           },
           "supersedes_submission_id": {
             "anyOf": [
@@ -315,6 +334,7 @@
           "status",
           "status_reason",
           "summary",
+          "feedback",
           "submitted_at",
           "decided_at",
           "finding_counts",

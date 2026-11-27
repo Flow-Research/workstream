@@ -5,7 +5,7 @@ import base64
 import hashlib
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, cast
 from urllib.parse import quote
 from uuid import UUID, uuid4
@@ -40,6 +40,17 @@ _SAFE_VALUE = re.compile(
     re.ASCII,
 )
 _CORRELATION_HEADERS = ("x-request-id", "x-correlation-id")
+# Upload and PRE each need up to 300s, with a separate response margin.
+_SUBMISSION_TIMEOUT_SECONDS = 660.0
+_SUBMISSION_ERROR_CODES = frozenset({
+    "submission_unavailable", "submission_packet_invalid", "submission_media_type_unsupported",
+    "submission_archive_limit_exceeded", "submission_upload_timeout",
+    "submission_capacity_exceeded",
+    "submission_operation_in_progress", "submission_operation_terminal",
+    "submission_idempotency_conflict",
+    "pre_submission_checker_failed", "revision_deadline_expired", "revision_limit_reached",
+    "revision_context_blocked", "revision_context_changed", "task_submission_predecessor_changed",
+})
 _PUBLIC_ERROR_CODES = frozenset(
     {
         "actor_deactivated",
@@ -89,7 +100,6 @@ _PUBLIC_ERROR_CODES = frozenset(
         "last_access_administrator",
         "invalid_role_scope",
         "service_unavailable",
-        "submission_preparation_headers_invalid",
         "submission_unavailable",
         "submission_packet_invalid",
         "submission_infrastructure_unavailable",
@@ -363,11 +373,6 @@ _CHECKER_ARTIFACT_MUTATIONS = frozenset(
 )
 
 TASK_EXECUTION_OPERATIONS = {
-    "preparation_create": (
-        "POST",
-        "/api/v1/tasks/{task_id}/submission-bundle-preparations",
-        202,
-    ),
     "preparations_list": (
         "GET",
         "/api/v1/tasks/{task_id}/submission-bundle-preparations",
@@ -388,12 +393,22 @@ TASK_EXECUTION_OPERATIONS = {
     "task_release": ("POST", "/api/v1/tasks/{task_id}/release", 200),
     "task_claim": ("POST", "/api/v1/tasks/{task_id}/claim", 200),
     "task_work_context_get": ("GET", "/api/v1/tasks/{task_id}/work-context", 200),
+    "task_assignment_get": ("GET", "/api/v1/actors/me/assignments/{assignment_id}", 200),
+    "project_contributor_guide_get": (
+        "GET", "/api/v1/projects/{project_id}/contributor-guide", 200,
+    ),
+    "project_contributor_guide_document_get": (
+        "GET",
+        "/api/v1/projects/{project_id}/contributor-guide/{guide_id}/documents/{document_id}/content",
+        200,
+    ),
     "task_guide_document_content_get": (
         "GET",
         "/api/v1/tasks/{task_id}/guide/documents/{document_id}/content",
         200,
     ),
-    "submission_create": ("POST", "/api/v1/tasks/{task_id}/submissions", 201),
+    "submission_operation_get": ("GET", "/api/v1/tasks/{task_id}/submission-operations", 200),
+    "submission_create": ("POST", "/api/v1/tasks/{task_id}/submissions", 202),
     "task_submissions_list": ("GET", "/api/v1/tasks/{task_id}/submissions", 200),
     "submission_get": ("GET", "/api/v1/submissions/{submission_id}", 200),
     "management_task_submissions_list": (
@@ -419,7 +434,6 @@ TASK_EXECUTION_OPERATIONS = {
 }
 _TASK_EXECUTION_MUTATIONS = frozenset(
     {
-        "preparation_create",
         "task_screen",
         "task_release",
         "task_claim",
@@ -1490,7 +1504,7 @@ class WorkstreamGateway:
             if not isinstance(value, str):  # guarded by the tool schema
                 return self._invalid_read_response(correlation_id)
             path = path.replace(f"{{{selector}}}", quote(value, safe=""))
-        if name == "task_guide_document_content_get":
+        if name in {"task_guide_document_content_get", "project_contributor_guide_document_get"}:
             return await self._request_binary(path, bearer, correlation_id)
 
         excluded = {
@@ -1499,32 +1513,23 @@ class WorkstreamGateway:
             "zip_base64",
             "assignment_id",
             "idempotency_key",
-            "summary",
-            "contributor_attestation",
-            "predecessor_submission_id",
-            "revision_preparation_id",
-            "revision_preparation_sha256",
+            "feedback",
         }
+        if name == "submission_operation_get":
+            excluded.remove("idempotency_key")
         params = {
             key: str(value)
             for key, value in arguments.items()
             if value is not None and key not in excluded
         }
         extra_headers: dict[str, str] | None = None
-        if name == "preparation_create":
+        if name == "submission_create":
             if upload is None:
                 return GatewayResult(failure=SafeFailure("invalid_tool_input", status=400))
             extra_headers = {"X-Task-Assignment-Id": arguments["assignment_id"]}
-            for argument, header in (
-                ("summary", "X-Submission-Summary"),
-                ("contributor_attestation", "X-Contributor-Attestation"),
-                ("predecessor_submission_id", "X-Predecessor-Submission-Id"),
-                ("revision_preparation_id", "X-Revision-Preparation-Id"),
-                ("revision_preparation_sha256", "X-Revision-Preparation-Sha256"),
-            ):
-                value = arguments.get(argument)
-                if isinstance(value, str):
-                    extra_headers[header] = value
+            feedback = arguments.get("feedback")
+            if isinstance(feedback, str):
+                extra_headers["X-Submission-Feedback"] = feedback
 
         mutation = name in _TASK_EXECUTION_MUTATIONS
         outcome = await self._request(
@@ -1535,17 +1540,18 @@ class WorkstreamGateway:
             correlation_id,
             json_body=arguments.get("body"),
             params=params or None,
-            idempotency_key=arguments.get("idempotency_key"),
+            idempotency_key=arguments.get("idempotency_key") if mutation else None,
             expected_status=expected_status,
             mutation=mutation,
             raw_body=upload,
-            content_type="application/zip" if name == "preparation_create" else None,
+            content_type="application/zip" if name == "submission_create" else None,
             operation_timeout_seconds=(
-                self._settings.document_timeout_seconds
-                if name == "preparation_create"
+                _SUBMISSION_TIMEOUT_SECONDS
+                if name == "submission_create"
                 else None
             ),
             extra_headers=extra_headers,
+            submission_upload=name == "submission_create",
         )
         if outcome.failure is not None:
             return outcome
@@ -1565,21 +1571,27 @@ class WorkstreamGateway:
     ) -> bool:
         task_id = arguments.get("task_id")
         project_id = arguments.get("project_id")
-        if name == "preparation_create":
-            put_attempt_id = data.get("put_attempt_id")
-            if not isinstance(put_attempt_id, str):
-                return False
-            try:
-                UUID(put_attempt_id)
-            except ValueError:
-                return False
-            return True
         if name in {"submission_get", "management_submission_get"}:
             return cls._same_uuid(data.get("id"), arguments["submission_id"])
+        if name == "project_contributor_guide_get":
+            return isinstance(project_id, str) and cls._same_uuid(
+                data.get("project_id"), project_id,
+            )
+        if name == "task_assignment_get":
+            assignment = data.get("assignment")
+            assignment_id = arguments.get("assignment_id")
+            return (
+                isinstance(assignment, dict)
+                and isinstance(assignment_id, str)
+                and cls._same_uuid(assignment.get("assignment_id"), assignment_id)
+            )
         if not isinstance(task_id, str):
             return False
         if project_id is not None and not isinstance(project_id, str):
             return False
+        if name == "submission_operation_get":
+            selector = "operation_id" if "operation_id" in arguments else "idempotency_key"
+            return cls._fields_match(data, {"task_id": task_id, selector: arguments[selector]})
         if name == "preparations_list":
             return cls._items_match(data, {"task_id": task_id}, unique="preparation_id")
         if name == "preparation_get":
@@ -1616,8 +1628,9 @@ class WorkstreamGateway:
                 )
             )
         if name == "submission_create":
-            body = arguments["body"]
-            return cls._same_uuid(data.get("admission_id"), body["admission_id"])
+            return cls._fields_match(
+                data, {"task_id": task_id, "assignment_id": arguments["assignment_id"]}
+            )
         if name in {"task_submissions_list", "management_task_submissions_list"}:
             return cls._items_match(data, {"task_id": task_id}, unique="id")
         if name == "management_task_submission_requirements_get":
@@ -1958,6 +1971,12 @@ class WorkstreamGateway:
             )
         if name == "post_submit_deliveries_reconcile":
             source = data.get("source")
+            successor = data.get("successor")
+            abandoning = arguments["body"].get("action") == "abandon_unknown"
+            if not isinstance(successor, dict):
+                return False
+            if (successor.get("classification") == "unresolved") != abandoning:
+                return False
             return isinstance(source, dict) and cls._fields_match(
                 source,
                 {
@@ -2185,6 +2204,7 @@ class WorkstreamGateway:
         array_envelope: bool = False,
         operation_timeout_seconds: float | None = None,
         extra_headers: dict[str, str] | None = None,
+        submission_upload: bool = False,
     ) -> GatewayResult:
         request_id = correlation_id or str(uuid4())
         operation_timeout = operation_timeout_seconds or self._settings.total_timeout_seconds
@@ -2220,6 +2240,12 @@ class WorkstreamGateway:
                     ) as response:
                         body = await self._bounded_body(response)
                         correlation_id = self._correlation_id(response, request_id)
+                        media_type = (
+                            response.headers.get("content-type", "")
+                            .split(";", 1)[0]
+                            .strip()
+                            .lower()
+                        )
                         if response.status_code != expected_status:
                             failure = self._api_failure(response.status_code, body, correlation_id)
                             # Proxy errors and unexpected successes cannot prove rollback.
@@ -2232,13 +2258,12 @@ class WorkstreamGateway:
                                     code=failure.code,
                                     correlation_id=correlation_id,
                                 )
+                            if submission_upload and (
+                                400 <= response.status_code < 500 or response.status_code == 503
+                                or response.status_code == 504 and media_type == "application/json"
+                            ):
+                                failure = self._submission_failure(failure, body, output_validator)
                             return GatewayResult(failure=failure)
-                        media_type = (
-                            response.headers.get("content-type", "")
-                            .split(";", 1)[0]
-                            .strip()
-                            .lower()
-                        )
                         if media_type != "application/json":
                             return GatewayResult(
                                 failure=SafeFailure(
@@ -2382,6 +2407,85 @@ class WorkstreamGateway:
             if value and _SAFE_VALUE.fullmatch(value):
                 return str(value)
         return fallback
+
+    @staticmethod
+    def _submission_failure(
+        failure: SafeFailure, body: bytes, validator: Draft202012Validator,
+    ) -> SafeFailure:
+        """Expose only the contributor-safe error fields of the raw ZIP route."""
+        def unique_fields(pairs):
+            """Refuse duplicate fields when validating a terminal response."""
+            value = dict(pairs)
+            if len(value) != len(pairs):
+                raise ValueError("duplicate timeout response field")
+            return value
+
+        try:
+            decoded = json.loads(
+                body, object_pairs_hook=unique_fields if failure.status == 504 else None,
+            )
+            error = decoded["error"]
+            if not isinstance(error, dict):
+                return failure
+            code = error.get("code")
+            if not isinstance(code, str):
+                return failure
+            if failure.status == 504:
+                details = {"next_action": "retry_new_key_after_terminal"}
+                fields = {"code", "message", "details", "correlation_id", "retryable"}
+                if (
+                    code != "submission_pre_timeout" or decoded.keys() != {"error"}
+                    or error.keys() != fields or not isinstance(error["message"], str)
+                    or not 0 < len(error["message"]) <= 512
+                    or not isinstance(error["correlation_id"], str)
+                    or str(UUID(error["correlation_id"])) != error["correlation_id"]
+                    or error["retryable"] is not True or error["details"] != details
+                ):
+                    return failure
+                return replace(
+                    failure, error="workstream_request_failed", code=code, retryable=True,
+                    details=details,
+                    message=(
+                        "The ZIP uploaded, but pre-submission checks timed out. "
+                        "No Submission was created. Retry this assignment with a new "
+                        "idempotency key."
+                    ),
+                )
+            if failure.status == 503:
+                # Proxy errors cannot authorize reflection of upstream diagnostic text.
+                recovery = {
+                    "submission_infrastructure_unavailable": (
+                        "Submission processing is temporarily unavailable"
+                    ),
+                    "submission_outcome_unknown": (
+                        "Check the original submission operation or retry "
+                        "with the same idempotency key"
+                    ),
+                }.get(code)
+                return replace(failure, code=code, message=recovery) if recovery else failure
+            if code not in _SUBMISSION_ERROR_CODES:
+                return failure
+            if code == "submission_upload_timeout" and failure.status == 408:
+                return replace(
+                    failure, code=code,
+                    message="The ZIP upload timed out before pre-submission checks started.",
+                )
+            details = error.get("details")
+            message = error.get("message")
+            if not isinstance(message, str) or len(message) > 512 or not message.isprintable():
+                message = None
+            if code == "pre_submission_checker_failed" and failure.status == 422:
+                result_schema = validator.schema["properties"]["pre_submission_results"]
+                if (not isinstance(details, dict)
+                        or details.keys() != {"status", "eligible_to_submit", "results"}
+                        or details["status"] != "failed"
+                        or details["eligible_to_submit"] is not False):
+                    return failure
+                validator.evolve(schema=result_schema).validate(details["results"])
+                return replace(failure, code=code, message=message, details=details)
+            return replace(failure, code=code, message=message)
+        except (KeyError, TypeError, ValueError, RecursionError, ValidationError):
+            return failure
 
     @staticmethod
     def _api_failure(status: int, body: bytes, correlation_id: str) -> SafeFailure:

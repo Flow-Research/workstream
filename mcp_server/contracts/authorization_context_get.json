@@ -1,10 +1,13 @@
 {
-  "canonical_sha256": "c430757c46cc05fa4af20ac600b875f7bfad7cb8c4461bf505ab3807d51f0102",
+  "canonical_sha256": "0318de3e2f9da1577bc922f6bf3570a7ad9f0cb8c441244cdb146c839be6a3dc",
   "components": {
     "schemas": {
       "ActionId": {
         "description": "Closed action identifiers reserved by approved owner chunks.",
         "enum": [
+          "submission.intake.reserve",
+          "task.submission_operation.read",
+          "project.task.submission_operation.read",
           "task.submission.list",
           "submission.read",
           "submission.checker_run.list",
@@ -155,6 +158,8 @@
           "artifact.task_import_source.read",
           "artifact.guide_source.read",
           "artifact.submission_bundle.prepare",
+          "artifact.submission_source.cleanup",
+          "artifact.submission.finalize",
           "artifact.submission.binding.create",
           "artifact.checker_output.binding.create",
           "artifact.verification.execute",
@@ -181,6 +186,8 @@
           "contribution.read_project",
           "actor.project.list",
           "actor.assignment.list",
+          "task.assignment.read",
+          "project.contributor_guide.read",
           "actor.submission.list",
           "actor.work_summary.read",
           "task.submission_bundle_preparation.list",
@@ -581,7 +588,7 @@
   "schema_version": 1,
   "source": {
     "action_id": "actor.authorization_context.read",
-    "backend_git_sha": "8b068f2b788f159b1085d47f162c39ce3323d5b6",
+    "backend_git_sha": "dfdcfa181089790fec43ece3dd04e8e0056f82bb",
     "method": "GET",
     "openapi_version": "3.1.0",
     "path": "/api/v1/actors/me/authorization-context"

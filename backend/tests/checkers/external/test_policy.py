@@ -186,32 +186,36 @@ def _model_profile(project_id, entry) -> ProjectModelProfile:
     )
 
 
-@pytest.mark.asyncio
-async def test_explicit_empty_attachments_compile_only_the_default_pre():
-    registry = _Registry(())
-    pre, post = await compile_external_checker_policies(_request(), registry)
-    assert pre.workstream_default.checker_id == "workstream.default"
-    assert pre.entries == () and post.entries == ()
-    assert registry.calls == []
+@pytest.mark.parametrize("phase", ["pre", "post"])
+@pytest.mark.parametrize("count", [0, 2])
+def test_new_policy_requires_exactly_one_image_per_phase(phase, count):
+    pre_entry = _entry("acme.safe_archive", "pre_submit")
+    post_entry = _entry("acme.quality_review", "post_submit")
+    members = {
+        "pre": (_attachment(pre_entry, "archive"),),
+        "post": (_attachment(post_entry, "quality"),),
+    }
+    entry = pre_entry if phase == "pre" else post_entry
+    members[phase] = tuple(_attachment(entry, f"member_{i}") for i in range(count))
+    with pytest.raises(ValueError):
+        _request(**members)
 
 
 @pytest.mark.asyncio
-async def test_human_phase_attachments_use_exact_registry_rows_and_allow_reused_image():
+async def test_human_phase_attachments_resolve_exactly_one_registry_row_each():
     pre_entry = _entry("acme.safe_archive", "pre_submit")
     post_entry = _entry("acme.quality_review", "post_submit")
     registry = _Registry((pre_entry, post_entry))
     request = _request(
-        pre=(_attachment(pre_entry, "archive_a"), _attachment(pre_entry, "archive_b")),
+        pre=(_attachment(pre_entry, "archive"),),
         post=(_attachment(post_entry, "quality"),),
     )
     pre, post = await compile_external_checker_policies(request, registry)
-    assert [item.requirement_id for item in pre.entries] == ["archive_a", "archive_b"]
-    assert [item.registry.registry_entry_id for item in pre.entries] == [
-        pre_entry.registry_entry_id, pre_entry.registry_entry_id,
-    ]
+    assert pre.workstream_default.checker_id == "workstream.default"
+    assert [item.requirement_id for item in pre.entries] == ["archive"]
+    assert [item.registry.registry_entry_id for item in pre.entries] == [pre_entry.registry_entry_id]
     assert [item.requirement_id for item in post.entries] == ["quality"]
     assert registry.calls == [
-        (pre_entry.registry_entry_id, pre_entry.entry_digest),
         (pre_entry.registry_entry_id, pre_entry.entry_digest),
         (post_entry.registry_entry_id, post_entry.entry_digest),
     ]
@@ -220,8 +224,9 @@ async def test_human_phase_attachments_use_exact_registry_rows_and_allow_reused_
 @pytest.mark.parametrize("keys", [("same", "same"), ("z", "a")])
 def test_duplicate_or_unsorted_human_member_keys_are_rejected(keys):
     entry = _entry("acme.safe_archive", "pre_submit")
-    with pytest.raises(ValueError, match="unique canonical"):
-        _request(pre=tuple(_attachment(entry, key) for key in keys))
+    with pytest.raises(ValueError, match="at most 1 item"):
+        _request(pre=tuple(_attachment(entry, key) for key in keys),
+                 post=(_attachment(_entry("acme.post", "post_submit"), "quality"),))
 
 
 def test_platform_default_member_key_is_reserved():
@@ -237,18 +242,18 @@ async def test_missing_digest_and_wrong_phase_fail_before_policy_creation():
     missing = _Registry(())
     with pytest.raises(ValueError, match="unavailable"):
         await compile_external_checker_policies(
-            _request(pre=(_attachment(pre_entry, "archive"),)), missing,
+            _request(pre=(_attachment(pre_entry, "archive"),), post=(_attachment(post_entry, "quality"),)), missing,
         )
     with pytest.raises(ValueError, match="phase mismatch"):
         await compile_external_checker_policies(
-            _request(pre=(_attachment(post_entry, "archive"),)), _Registry((post_entry,)),
+            _request(pre=(_attachment(post_entry, "archive"),), post=(_attachment(post_entry, "quality"),)), _Registry((post_entry,)),
         )
     wrong_digest = _attachment(pre_entry, "archive").model_copy(
         update={"registry_entry_digest": "sha256:" + "0" * 64}
     )
     with pytest.raises(ValueError, match="unavailable"):
         await compile_external_checker_policies(
-            _request(pre=(wrong_digest,)), _Registry((pre_entry,)),
+            _request(pre=(wrong_digest,), post=(_attachment(post_entry, "quality"),)), _Registry((pre_entry,)),
         )
 
 
@@ -262,20 +267,22 @@ async def test_configuration_is_schema_checked_and_exact_json_is_locked():
         schema_sha256=external_checker_json_hash(document),
     )
     entry = _entry("acme.safe_archive", "pre_submit", schema)
+    post = _entry("acme.post", "post_submit")
     pre, _ = await compile_external_checker_policies(
-        _request(pre=(_attachment(entry, "archive", {"groups": ["a", "b"]}),)),
-        _Registry((entry,)),
+        _request(pre=(_attachment(entry, "archive", {"groups": ["a", "b"]}),), post=(_attachment(post, "quality"),)),
+        _Registry((entry, post)),
     )
     assert pre.entries[0].configuration == {"groups": ["a", "b"]}
     with pytest.raises(ValueError, match="value is invalid"):
         await compile_external_checker_policies(
-            _request(pre=(_attachment(entry, "archive", {"groups": [1]}),)),
-            _Registry((entry,)),
+            _request(pre=(_attachment(entry, "archive", {"groups": [1]}),), post=(_attachment(post, "quality"),)),
+            _Registry((entry, post)),
         )
 
 
 @pytest.mark.asyncio
 async def test_model_profile_configuration_requires_exact_project_scope():
+    pre = _entry("acme.pre", "pre_submit")
     project_id = new_record_id()
     entry = _entry("acme.quality_review", "post_submit", _model_configuration_schema())
     profile = _model_profile(project_id, entry)
@@ -286,37 +293,85 @@ async def test_model_profile_configuration_requires_exact_project_scope():
     }
     profiles = _Profiles(profile)
     _, post = await compile_external_checker_policies(
-        _request(post=(_attachment(entry, "quality", config),)),
-        _Registry((entry,)), project_id=project_id, profiles=profiles,
+        _request(pre=(_attachment(pre, "archive"),), post=(_attachment(entry, "quality", config),)),
+        _Registry((pre, entry)), project_id=project_id, profiles=profiles,
     )
     assert post.entries[0].configuration == config
     assert profiles.calls[0][1] == {"project_id": project_id}
     with pytest.raises(ValueError):
         await compile_external_checker_policies(
-            _request(post=(_attachment(entry, "quality", config),)),
-            _Registry((entry,)), project_id=new_record_id(), profiles=profiles,
+            _request(pre=(_attachment(pre, "archive"),), post=(_attachment(entry, "quality", config),)),
+            _Registry((pre, entry)), project_id=new_record_id(), profiles=profiles,
         )
     with pytest.raises(ValueError):
         await compile_external_checker_policies(
-            _request(post=(_attachment(entry, "quality", {"model_profile_id": config["model_profile_id"]}),)),
-            _Registry((entry,)), project_id=project_id, profiles=profiles,
+            _request(pre=(_attachment(pre, "archive"),), post=(_attachment(entry, "quality", {"model_profile_id": config["model_profile_id"]}),)),
+            _Registry((pre, entry)), project_id=project_id, profiles=profiles,
         )
 
 
 @pytest.mark.asyncio
-async def test_aggregate_pre_and_post_budgets_reject_unrunnable_images():
-    pre_a = _entry("acme.a", "pre_submit", deadline_ms=3_600_000)
-    pre_b = _entry("acme.b", "pre_submit", deadline_ms=3_600_000)
+async def test_retained_pre_budget_and_long_post_policy():
+    from app.modules.checkers.api.external_policy import validate_stored_external_pre_policy
+
+    pre_entry = _entry("acme.pre", "pre_submit", deadline_ms=3_600_000)
+    post_entry = _entry("acme.post", "post_submit")
+    pre, _ = await compile_external_checker_policies(
+        _request(pre=(_attachment(pre_entry, "a"),), post=(_attachment(post_entry, "p"),)),
+        _Registry((pre_entry, post_entry)),
+    )
+    # Retained multi-image evidence keeps its original aggregate budget guard.
+    body = pre.model_dump(mode="json", exclude={"policy_sha256"})
+    body["entries"].append(body["entries"][0] | {"requirement_id": "b"})
     with pytest.raises(ValueError, match="ART custody deadline"):
-        await compile_external_checker_policies(
-            _request(pre=(_attachment(pre_a, "a"), _attachment(pre_b, "b"))),
-            _Registry((pre_a, pre_b)),
-        )
+        validate_stored_external_pre_policy(body | {"policy_sha256": canonical_json_hash(body)})
     post = _entry("acme.post", "post_submit", deadline_ms=3_600_000)
-    with pytest.raises(ValueError, match="durable worker deadline"):
-        await compile_external_checker_policies(
-            _request(post=(_attachment(post, "p"),)), _Registry((post,)),
-        )
+    _, locked_post = await compile_external_checker_policies(
+        _request(pre=(_attachment(pre_entry, "a"),), post=(_attachment(post, "p"),)),
+        _Registry((pre_entry, post)),
+    )
+    assert locked_post.entries[0].registry.resources.deadline_ms == 3_600_000
+    assert selected_post_submit_execution_budget_ms(locked_post) > 3_400_000
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("count", [0, 2])
+async def test_historical_phase_cardinality_preserves_exact_locked_evidence(count):
+    from app.modules.checkers.api.external_policy import validate_stored_external_pre_policy
+
+    pre_entry = _entry("acme.pre", "pre_submit")
+    post_entry = _entry("acme.post", "post_submit")
+    pre, post = await compile_external_checker_policies(
+        _request(pre=(_attachment(pre_entry, "a"),), post=(_attachment(post_entry, "p"),)),
+        _Registry((pre_entry, post_entry)),
+    )
+    for policy, decode in ((pre, validate_stored_external_pre_policy),
+                           (post, validate_stored_external_post_policy)):
+        body = policy.model_dump(mode="json", exclude={"policy_sha256"})
+        member = body["entries"][0]
+        body["entries"] = [member | {"requirement_id": f"member_{i}"} for i in range(count)]
+        retained = body | {"policy_sha256": canonical_json_hash(body)}
+        assert decode(retained).model_dump(mode="json") == retained
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("phase", ["pre", "post"])
+@pytest.mark.parametrize("keys,reason", [(("a", "a"), "duplicated"), (("b", "a"), "not canonical")])
+async def test_retained_policy_rejects_duplicate_or_reordered_members_even_with_matching_hash(phase, keys, reason):
+    from app.modules.checkers.api.external_policy import validate_stored_external_pre_policy
+
+    pre_entry = _entry("acme.pre", "pre_submit")
+    post_entry = _entry("acme.post", "post_submit")
+    pre, post = await compile_external_checker_policies(
+        _request(pre=(_attachment(pre_entry, "a"),), post=(_attachment(post_entry, "p"),)),
+        _Registry((pre_entry, post_entry)),
+    )
+    policy, decode = ((pre, validate_stored_external_pre_policy) if phase == "pre"
+                      else (post, validate_stored_external_post_policy))
+    body = policy.model_dump(mode="json", exclude={"policy_sha256"})
+    body["entries"] = [body["entries"][0] | {"requirement_id": key} for key in keys]
+    with pytest.raises(ValueError, match=reason):
+        decode(body | {"policy_sha256": canonical_json_hash(body)})
 
 
 def test_locked_default_refuses_substituted_behavior_digest():
@@ -466,21 +521,23 @@ def test_retained_forge_policy_without_locator_declaration_preserves_locked_json
     compile_external_checker_policy_bundle,
 ])
 async def test_new_forge_binding_without_locator_declaration_cannot_compile(compiler):
+    pre = _entry("acme.pre", "pre_submit")
     binding = _forge_binding(_FORGE_SELECTION, locator_declared=False)
     entry = binding.registry
-    request = _request(post=(_attachment(entry, binding.requirement_id, _FORGE_SELECTION),))
+    request = _request(pre=(_attachment(pre, "archive"),), post=(_attachment(entry, binding.requirement_id, _FORGE_SELECTION),))
 
     with pytest.raises(ExternalCheckerPolicyError, match="does not declare forge locator"):
-        await compiler(request, _Registry((entry,)))
+        await compiler(request, _Registry((pre, entry)))
 
 
 @pytest.mark.asyncio
 async def test_new_forge_binding_with_locator_declaration_compiles_in_approval_bundle():
+    pre = _entry("acme.pre", "pre_submit")
     binding = _forge_binding(_FORGE_SELECTION)
     entry = binding.registry
-    request = _request(post=(_attachment(entry, binding.requirement_id, _FORGE_SELECTION),))
+    request = _request(pre=(_attachment(pre, "archive"),), post=(_attachment(entry, binding.requirement_id, _FORGE_SELECTION),))
 
-    policies = await compile_external_checker_policy_bundle(request, _Registry((entry,)))
+    policies = await compile_external_checker_policy_bundle(request, _Registry((pre, entry)))
 
     assert policies.post_submit.entries == (binding,)
     assert policies.post_submit.entries[0].registry.entry_digest == entry.entry_digest

@@ -81,7 +81,9 @@ class ModelInvocationGrants:
         }
         if evidence.facts_digest != model_action_digest("grant", facts):
             raise ModelCallUnavailable("model_grant_authority_unavailable")
-        await self._current.require_current(execution, slot)
+        live_until = await self._current.require_current(execution, slot)
+        if live_until is None or live_until < execution.worker_lease_expires_at:
+            raise ModelCallUnavailable("model_grant_unavailable")
         self._session.add(
             CheckerModelInvocationGrant(
                 id=str(new_record_id()),
@@ -92,7 +94,7 @@ class ModelInvocationGrants:
                 execution_facts=execution.model_dump(mode="json"),
                 paid_slot=slot.model_dump(mode="json"),
                 external_request_digest=external_request_digest,
-                expires_at=execution.worker_lease_expires_at,
+                expires_at=live_until,
                 authorization_evidence_id=str(evidence.evidence_id),
             )
         )
@@ -115,13 +117,9 @@ class ModelInvocationGrants:
         execution = ModelCallExecutionFacts.model_validate_json(json.dumps(row.execution_facts))
         slot = ModelPaidSlotKey.model_validate_json(json.dumps(row.paid_slot))
         if (
-            str(execution.project_id),
-            str(execution.checker_run_id),
-            execution.worker_lease_expires_at,
-        ) != (
-            row.project_id,
-            row.checker_run_id,
-            row.expires_at,
+            str(execution.project_id) != row.project_id
+            or str(execution.checker_run_id) != row.checker_run_id
+            or execution.worker_lease_expires_at > row.expires_at
         ):
             raise ModelCallUnavailable("model_grant_unavailable")
         return ModelInvocationGrantFacts(

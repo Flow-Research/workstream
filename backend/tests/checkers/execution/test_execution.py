@@ -1,7 +1,8 @@
 """Execution through real verified input, immutable results and shared outbox."""
 
 import pytest
-from sqlalchemy import select, func
+from sqlalchemy import select, func, text
+from sqlalchemy.exc import DBAPIError
 
 from app.modules.checkers.api.execution import CheckerExecutionUnavailable, COMPLETION_EVENT
 from app.adapters.checkers import evaluation_coordinator
@@ -11,6 +12,102 @@ from tests.post_submit_materialization_helpers import material_fixture
 from .support import ControlledSelectedExecution, live_executor, reserve, service_link_state
 from tests.checkers.external.support import post_registry_spec
 from app.modules.actors.api import ServiceIdentity
+
+
+async def test_cancel_stops_material_work_before_inspection_rollback(monkeypatch):
+    """A blocked status rollback must not leave provider work active."""
+    import asyncio
+    import app.modules.checkers.execution as execution
+
+    inspection_entered = asyncio.Event()
+    release_inspection = asyncio.Event()
+    work_cancelled = asyncio.Event()
+
+    class Materialization:
+        async def materialize(self, _facts, _consumer):
+            try:
+                await asyncio.Event().wait()
+            except asyncio.CancelledError:
+                work_cancelled.set()
+                raise
+
+    executor = execution.PostSubmissionExecutor(
+        sessions=None, execute_authority=None, finalize_authority=None,
+        materialization=Materialization(), outbox=None, review_modes=None,
+    )
+    monkeypatch.setattr(execution, "ExecuteFacts", lambda **_facts: object())
+    monkeypatch.setattr(executor, "_consumer", lambda _request, _lease: object())
+    monkeypatch.setattr(execution, "BACKGROUND_STATUS_INSPECTION_INTERVAL_SECONDS", 0.01)
+    renewals = 0
+
+    async def renewal(_request, _lease):
+        nonlocal renewals
+        renewals += 1
+        if renewals > 1:
+            inspection_entered.set()
+            try:
+                await asyncio.Event().wait()
+            except asyncio.CancelledError:
+                await release_inspection.wait()
+                raise
+
+    monkeypatch.setattr(executor, "_renew_running_lease", renewal)
+    running = asyncio.create_task(executor._materialize_while_owned(None, None))
+    await asyncio.wait_for(inspection_entered.wait(), 1)
+    running.cancel()
+    try:
+        await asyncio.wait_for(work_cancelled.wait(), 1)
+        assert not running.done()
+    finally:
+        release_inspection.set()
+    with pytest.raises(asyncio.CancelledError):
+        await asyncio.wait_for(running, 1)
+
+
+async def test_inspection_timeout_preserves_unknown_after_native_cancellation(monkeypatch):
+    import asyncio
+    import app.modules.checkers.execution as execution
+    from app.interfaces.external_checker_execution import ExternalCheckerExecutionOutcomeUnknown
+
+    cancelled = asyncio.Event()
+    release_rollback = asyncio.Event()
+
+    class Materialization:
+        async def materialize(self, _facts, _consumer):
+            try:
+                await asyncio.Event().wait()
+            except asyncio.CancelledError:
+                cancelled.set()
+                raise ExternalCheckerExecutionOutcomeUnknown() from None
+
+    executor = execution.PostSubmissionExecutor(
+        sessions=None, execute_authority=None, finalize_authority=None,
+        materialization=Materialization(), outbox=None, review_modes=None,
+    )
+    monkeypatch.setattr(execution, "ExecuteFacts", lambda **_facts: object())
+    monkeypatch.setattr(executor, "_consumer", lambda _request, _lease: object())
+    monkeypatch.setattr(execution, "BACKGROUND_STATUS_INSPECTION_INTERVAL_SECONDS", 0.01)
+    calls = 0
+
+    async def renewal(_request, _lease):
+        nonlocal calls
+        calls += 1
+        if calls > 1:
+            try:
+                await asyncio.Event().wait()
+            except asyncio.CancelledError:
+                await release_rollback.wait()
+                raise
+
+    monkeypatch.setattr(executor, "_renew_running_lease", renewal)
+    running = asyncio.create_task(executor._materialize_while_owned(None, None))
+    try:
+        await asyncio.wait_for(cancelled.wait(), 1)
+        assert not running.done()
+    finally:
+        release_rollback.set()
+    with pytest.raises(ExternalCheckerExecutionOutcomeUnknown):
+        await asyncio.wait_for(running, 1)
 
 
 @pytest.fixture
@@ -38,6 +135,50 @@ async def test_missing_checker_principal_denies_before_access(tmp_path, isolated
         assert h.store.opens == [] and not h.preparation._active
 
 
+async def test_background_materialization_can_exceed_nominal_post_estimate(
+    tmp_path, isolated_database_env, monkeypatch,
+):
+    """Useful material work must not expire at the old estimated whole-run cap."""
+    import asyncio
+    import app.modules.checkers.execution as execution
+
+    async with material_fixture(tmp_path, isolated_database_env) as h:
+        await reserve(h)
+        materialize = h.service.materialize
+
+        async def slower_materialization(*args, **kwargs):
+            await asyncio.sleep(2.2)
+            return await materialize(*args, **kwargs)
+
+        monkeypatch.setattr(execution, "SELECTED_POST_INITIAL_WORKER_WINDOW_MS", 100)
+        monkeypatch.setattr(execution, "SELECTED_POST_FINALIZATION_MARGIN_MS", 1_000)
+        monkeypatch.setattr(h.service, "materialize", slower_materialization)
+        result = await live_executor(h).evaluate_post_submission(h.request)
+        assert result.outcome == "completed"
+        async with h.factory() as session:
+            run = await session.get(CheckerRun, str(result.attempt_id))
+            assert run.status == "completed" and run.failure_code is None
+            assert run.worker_lease_expires_at < run.completed_at
+            assert run.worker_lease_live_until > run.completed_at
+
+
+async def test_running_checker_cannot_null_its_renewable_live_lease(tmp_path, isolated_database_env):
+    async with material_fixture(tmp_path, isolated_database_env) as h:
+        await reserve(h)
+        executor = live_executor(h)
+        lease, replay = await executor._claim(h.request)
+        assert replay is None
+        with pytest.raises(DBAPIError, match="checker renewal custody is invalid"):
+            async with h.factory() as session, session.begin():
+                await session.execute(text("""
+                    UPDATE public.checker_runs SET worker_lease_live_until=NULL WHERE id=:id
+                """), {"id": str(lease.reservation.attempt_id)})
+        async with h.factory() as session:
+            run = await session.get(CheckerRun, str(lease.reservation.attempt_id))
+            assert run.status == "running"
+            assert run.worker_lease_live_until == run.worker_lease_expires_at
+
+
 @pytest.mark.parametrize("provider", ["local", "minio"])
 async def test_verified_material_execution_and_replay(
     tmp_path, isolated_database_env, provider, autoflush_clock, monkeypatch
@@ -49,17 +190,23 @@ async def test_verified_material_execution_and_replay(
     async with material_fixture(tmp_path, isolated_database_env, provider=provider) as h:
         reservation = await reserve(h)
         receipts = []
+        material_errors = []
         materialize = h.service.materialize
 
         async def observe_receipt(*args, **kwargs):
-            value = await materialize(*args, **kwargs)
+            try:
+                value = await materialize(*args, **kwargs)
+            except Exception:
+                import traceback
+                material_errors.append(traceback.format_exc())
+                raise
             receipts.append(value.input_materialization_evidence_id)
             return value
 
         monkeypatch.setattr(h.service, "materialize", observe_receipt)
         executor = live_executor(h)
         result = await executor.evaluate_post_submission(h.request)
-        assert result.outcome == "completed"
+        assert result.outcome == "completed", "\n".join(material_errors) or result
         assert (
             result.attempt_id == reservation.attempt_id
             and result.result_id == reservation.result_id
@@ -107,7 +254,7 @@ async def test_verified_material_execution_and_replay(
             assert tuple(row.checker_name for row in rows) == tuple(
                 m.requirement_id for m in result.execution.external_members
             )
-            assert len(rows) == len(h.request.policy.entries) == 0
+            assert len(rows) == len(h.request.policy.entries) == 1
             event = await session.scalar(
                 select(OutboxEvent).where(OutboxEvent.event_type == COMPLETION_EVENT)
             )
@@ -128,6 +275,7 @@ async def test_unsupported_request_envelope_never_reaches_execution(monkeypatch)
     executor = owner.PostSubmissionExecutor(
         sessions=None, execute_authority=None, finalize_authority=None,
         materialization=None, outbox=None, review_modes=None,
+        retry_tasks=lambda _: pytest.fail("unsupported request reached retry reservation"),
     )
     monkeypatch.setattr(executor, "_claim", forbidden_claim)
     for schema in ("post_submit_evaluation_request", "arbitrary_request.v1"):
@@ -316,15 +464,21 @@ async def test_finalization_outbox_failure_rolls_back(tmp_path, isolated_databas
 async def test_unreadable_stored_bytes_terminalize_and_replay(
     tmp_path, isolated_database_env, monkeypatch, damage
 ):
-    from tests.test_local_artifact_store import object_path
+    from app.modules.artifacts.models import SubmissionBundleAdmission
 
     async with material_fixture(
         tmp_path, isolated_database_env, post_submit_registry_spec=post_registry_spec(),
     ) as h:
         assert len(h.request.policy.entries) == 1
         reservation = await reserve(h)
-        digest = h.request.content_sha256
-        path = object_path(h.settings.artifact_local_root, f"sha256/{digest[7:9]}/{digest[9:]}")
+        async with h.factory() as session:
+            admission = await session.get(SubmissionBundleAdmission, str(h.created.admission_id))
+            assert admission.source_operation_id is not None
+            events_before = dict((await session.execute(select(OutboxEvent.event_id, OutboxEvent.event_type))).all())
+        assert sorted(events_before.values()) == ["PostSubmissionEvaluationRequested", "SubmissionFinalizationRequested"]
+        assert events_before[h.created.evaluation_event_id] == "PostSubmissionEvaluationRequested"
+        path = (h.settings.artifact_local_root / "objects" / "submission-source" / "v1"
+                / admission.source_operation_id / "bundle.zip")
         assert path.read_bytes() == h.data
         if damage == "missing":
             path.unlink()
@@ -358,7 +512,10 @@ async def test_unreadable_stored_bytes_terminalize_and_replay(
         await service_link_state(h.factory, ServiceIdentity.CHECKER_POST_SUBMIT, active=True)
         monkeypatch.setattr(executor, "finalize", finalize)
         assert len(pending) == 1
-        result = await finalize(pending[0])
+        from tests.checkers.execution.support import final_post_attempt
+
+        with final_post_attempt(monkeypatch):
+            result = await finalize(pending[0])
         assert result.outcome == "infrastructure_failed"
         assert result.infrastructure_failure_code == "material_unavailable"
         assert result.execution is None
@@ -377,9 +534,7 @@ async def test_unreadable_stored_bytes_terminalize_and_replay(
             assert run.finalize_evidence_id is not None
             assert run.routing_recommendation == "not_evaluated"
             assert await session.scalar(select(func.count()).select_from(CheckerResult)) == 0
-            assert list(await session.scalars(select(OutboxEvent.event_id))) == [
-                h.created.evaluation_event_id
-            ]
+            assert dict((await session.execute(select(OutboxEvent.event_id, OutboxEvent.event_type))).all()) == events_before
             with pytest.raises(CheckerExecutionUnavailable, match="current_result"):
                 await evaluation_coordinator(session).read_current_result(h.request)
 
@@ -397,6 +552,10 @@ async def test_nonrecordable_material_failure_leaves_attempt_recoverable(
 
     async with material_fixture(tmp_path, isolated_database_env) as h:
         reservation = await reserve(h)
+        async with h.factory() as session:
+            events_before = dict((await session.execute(select(OutboxEvent.event_id, OutboxEvent.event_type))).all())
+        assert sorted(events_before.values()) == ["PostSubmissionEvaluationRequested", "SubmissionFinalizationRequested"]
+        assert events_before[h.created.evaluation_event_id] == "PostSubmissionEvaluationRequested"
         executor = live_executor(h)
         if failure == "authority":
             await service_link_state(h.factory, ServiceIdentity.ARTIFACT_MATERIALIZER, active=False)
@@ -447,6 +606,4 @@ async def test_nonrecordable_material_failure_leaves_attempt_recoverable(
             assert run.status == "running" and run.result_json is None
             assert run.finalize_evidence_id is None and run.completion_event_id is None
             assert await session.scalar(select(func.count()).select_from(CheckerResult)) == 0
-            assert list(await session.scalars(select(OutboxEvent.event_id))) == [
-                h.created.evaluation_event_id
-            ]
+            assert dict((await session.execute(select(OutboxEvent.event_id, OutboxEvent.event_type))).all()) == events_before

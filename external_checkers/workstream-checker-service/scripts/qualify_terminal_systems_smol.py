@@ -21,6 +21,7 @@ import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[3]
 CASE = "test_production_service_executes_project_trial_under_smol_with_real_custody"
+CASES = {"author": "author_evidence_accuracy", "runtime": "runtime_environment_and_verification_trials"}
 
 
 def digest(path: Path) -> str:
@@ -88,8 +89,9 @@ def verify_results(junit: Path, metadata: dict, fixture: dict, head: str) -> Non
     document = ET.parse(junit).getroot()
     cases = document.findall(".//testcase")
     if (
-        len(cases) != 1
-        or cases[0].get("name") != CASE
+        sorted(case.get("name", "") for case in cases) != sorted(
+            f"{CASE}[{case}]" for case in CASES
+        )
         or any(document.findall(f".//{tag}") for tag in ("failure", "error", "skipped"))
     ):
         raise ValueError("composition did not complete its exact required case")
@@ -100,6 +102,21 @@ def verify_results(junit: Path, metadata: dict, fixture: dict, head: str) -> Non
         or metadata.get("minio_cleanup_complete") is not True
     ):
         raise ValueError("database/storage completion evidence is incomplete")
+    selected_cases = fixture.get("cases", {})
+    if type(selected_cases) is not dict or set(selected_cases) != set(CASES):
+        raise ValueError("composition must retain both independent image cases")
+    for case, value in selected_cases.items():
+        if (value.get("case") != case or value.get("requirement_id") != CASES[case]
+                or value.get("provider_mode") != "controlled"
+                or value.get("guide_to_contribution_proven") is not False
+                or value.get("replay_additional_provider_calls") != 0
+                or value.get("owned_runtime_resources_removed") is not True
+                or len(value.get("model_effects", [])) != 2
+                or len(value.get("trials", [])) != 1):
+            raise ValueError("one-image case custody is incomplete")
+    if (fixture.get("model_effects") != [effect for case in CASES for effect in selected_cases[case]["model_effects"]]
+            or fixture.get("trials") != [trial for case in CASES for trial in selected_cases[case]["trials"]]):
+        raise ValueError("aggregate custody differs from independent cases")
     if (
         fixture.get("schema_version")
         != "workstream.terminal_systems_composition_evidence.v1"
@@ -111,6 +128,26 @@ def verify_results(junit: Path, metadata: dict, fixture: dict, head: str) -> Non
         or len(fixture.get("trials", [])) != 2
     ):
         raise ValueError("runtime/custody completion evidence is incomplete")
+
+
+def combine_case_results(path: Path) -> dict:
+    """Retain both one-image receipts without pretending their authority is shared."""
+    cases = {case: read_json(path.with_name(path.stem + "-" + case + path.suffix)) for case in CASES}
+    common = ("schema_version", "provider_mode", "guide_to_contribution_proven", "image",
+              "profile", "projection", "runtime", "predecessor_material_exercised")
+    first = cases["author"]
+    if any(value.get(field) != first.get(field) for value in cases.values() for field in common):
+        raise ValueError("one-image runtime identities differ")
+    result = {field: first[field] for field in common}
+    result.update(
+        cases=cases,
+        authority_manifest_digests={case: value["authority_manifest_digest"] for case, value in cases.items()},
+        model_effects=[effect for value in cases.values() for effect in value["model_effects"]],
+        trials=[trial for value in cases.values() for trial in value["trials"]],
+        replay_additional_provider_calls=sum(value["replay_additional_provider_calls"] for value in cases.values()),
+        owned_runtime_resources_removed=all(value["owned_runtime_resources_removed"] for value in cases.values()),
+    )
+    return result
 
 
 def write_new(path: Path, value: dict) -> None:
@@ -260,7 +297,8 @@ def main() -> int:
         )
         if digest(args.node_config) != outcome["node_config_sha256"]:
             raise ValueError("node config changed")
-        fixture_facts = read_json(fixture)
+        fixture_facts = combine_case_results(fixture)
+        write_new(fixture, fixture_facts)
         verify_results(junit, read_json(metadata), fixture_facts, args.expected_head)
         verify_runtime(
             fixture_facts,
@@ -278,6 +316,8 @@ def main() -> int:
                     "junit.xml",
                     "metadata.json",
                     "fixture-summary.json",
+                    "fixture-summary-author.json",
+                    "fixture-summary-runtime.json",
                 )
             },
         )

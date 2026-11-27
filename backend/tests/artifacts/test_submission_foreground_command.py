@@ -1,0 +1,426 @@
+"""Foreground command, exact replay and source-owner substitution proof."""
+import asyncio
+
+import pytest
+
+from app.core.identifiers import new_record_id
+from app.modules.artifacts.api.submission_intake import SubmissionIntakeMetadata
+from app.modules.artifacts.intake.repository import IntakeCustodyConflict
+from tests.artifacts.test_submission_intake_admission import (
+    admission_intake as admission_intake,
+    admin_access as admin_access,
+    signed_access as signed_access,
+    rsa_signing_material as rsa_signing_material,
+    auth_database_env as auth_database_env,
+    clear_settings_cache as clear_settings_cache,
+)
+
+
+async def configure_source_http(factory, client, tmp_path, monkeypatch, payload, outcome, *, project_findings=(), external_execution=None):
+    """Bind signed HTTP to real intake owners and the controlled guest transport."""
+    from app.adapters import artifacts as composition
+    from app.adapters.checkers import SelectedPreSubmitCheckerExecutionAdapter
+    from app.modules.actors.api import ServiceIdentity
+    from tests.artifacts.test_submission_pre_source import _source_runtime
+    from tests.checkers.execution.support import provision_post_submit_service
+    from tests.checkers.external.test_selected_pre_submit_coordination import _source_reservation
+    from tests.test_artifact_admission import _settings
+    runtime_root = tmp_path / f"source-http-{new_record_id()}"
+    runtime_root.mkdir()
+    runtime, errors = (_source_runtime(payload, runtime_root, outcome, project_findings=project_findings)
+                       if external_execution is None else (external_execution, []))
+    calls, original = [], runtime.execute_pre
+    async def execute(lease, grant):
+        calls.append(lease.reservation.attempt_id)
+        return await original(lease, grant)
+    runtime.execute_pre = execute
+    monkeypatch.setattr(composition, "selected_pre_submit_checker_execution",
+                        lambda **kwargs: SelectedPreSubmitCheckerExecutionAdapter(external_execution=runtime))
+    await provision_post_submit_service(factory, ServiceIdentity.CHECKER_PRE_SUBMIT)
+    await provision_post_submit_service(factory, ServiceIdentity.ARTIFACT_MATERIALIZER)
+    app = client._transport.app
+    storage = {name: value for name, value in _settings(tmp_path).model_dump().items() if name.startswith("artifact_")}
+    settings = app.state.settings.model_copy(update=storage | {"submission_execution_profile": {
+        "capacity": {"maximum_total_bytes": 4 * 1024 * 1024},
+        "runtime": _source_reservation().runtime_profile.model_dump(mode="json"),
+        "upload_total_seconds": 300.0, "upload_idle_seconds": 10.0,
+        "foreground_lease_seconds": 60.0, "heartbeat_seconds": 10.0,
+        "replay_total_seconds": 30.0, "part_bytes": 5 * 1024**2,
+    }})
+    monkeypatch.setattr(app.state, "settings", settings)
+    return client, settings, errors, calls
+
+
+@pytest.mark.parametrize("outcome,framing", [
+    ("completed", "small"), ("rejected", "small"),
+    ("deadline_exceeded", "small"),
+    ("completed", "large-single"), ("completed", "large-split"),
+])
+async def test_public_raw_zip_submission_uses_real_owners_and_stable_replay(admission_intake, tmp_path, monkeypatch, outcome, framing):
+    from sqlalchemy import text
+    from tests.test_trusted_intake import _archive
+
+    f, key = admission_intake, new_record_id()
+    payload = _archive("../escape") if outcome == "rejected" else _archive()
+    if framing.startswith("large"):
+        from io import BytesIO
+        from zipfile import ZipFile
+        archive = BytesIO()
+        with ZipFile(archive, "w") as output:
+            for path in ("part-one.txt", "part-two.txt"):
+                output.writestr(path, b"finished work\n" * 45_000)
+        payload = archive.getvalue()
+        assert 1024 * 1024 < len(payload) < 2 * 1024 * 1024
+    def body(split):
+        if not split:
+            return payload
+        async def chunks():
+            for start in range(0, len(payload), 64 * 1024):
+                yield payload[start:start + 64 * 1024]
+        return chunks()
+    client, settings, errors, calls = await configure_source_http(
+        f.factory, f.access.signed.client, tmp_path, monkeypatch, payload, outcome,
+    )
+    app = client._transport.app
+    headers = f.access.target.headers | {"Content-Type": "application/zip",
+        "X-Task-Assignment-Id": str(f.assignment), "Idempotency-Key": str(key),
+        "Content-Length": str(len(payload))}
+    url = f"/api/v1/tasks/{f.task}/submissions"
+    first = await client.post(url, headers=headers, content=body(framing == "large-split"))
+    second = await client.post(url, headers=headers, content=body(framing != "large-split"))
+    assert not errors, "\n".join(errors)
+    assert len(calls) == 1, (first.status_code, first.text, second.status_code, second.text)
+    if outcome == "completed":
+        assert first.status_code == second.status_code == 202, (first.text, second.text)
+        receipt = first.json()
+        assert second.json() == dict(receipt, replayed=True)
+        assert receipt["status"] == "accepted" and receipt["replayed"] is False
+        assert set(receipt) == {"operation_id", "task_id", "assignment_id", "status", "accepted_at",
+                                "task_status_at_acceptance", "processing_stage_at_acceptance", "replayed", "pre_submission_results"}
+    elif outcome == "deadline_exceeded":
+        assert first.status_code == second.status_code == 504, (first.text, second.text)
+        for reply in (first, second):
+            failure = reply.json()["error"]
+            assert failure["code"] == "submission_pre_timeout" and failure["retryable"] is True
+            assert failure["details"] == {"next_action": "retry_new_key_after_terminal"}
+    else:
+        assert first.status_code == second.status_code == 422, (first.text, second.text)
+        assert first.json()["error"]["code"] == second.json()["error"]["code"] == "pre_submission_checker_failed"
+        assert first.json()["error"]["details"] == second.json()["error"]["details"]
+        assert first.json()["error"]["details"]["eligible_to_submit"] is False
+    if framing == "small":
+        # Reads need no writer/runtime deployment configuration or provider bootstrap.
+        monkeypatch.setattr(app.state, "settings", settings.model_copy(update={"submission_execution_profile": None}))
+        progress_url = f"/api/v1/tasks/{f.task}/submission-operations"
+        progress = await client.get(progress_url, headers=f.access.target.headers,
+                                    params={"idempotency_key": str(key)})
+        assert progress.status_code == 200, progress.text
+        observed = progress.json()
+        expected = {"completed": "finalization_pending", "rejected": "rejected", "deadline_exceeded": "failed"}[outcome]
+        assert observed["operation_state"] == observed["processing_stage"] == expected
+        assert observed["next_action"] == {
+            "completed": "wait", "rejected": "correct_and_submit_new_key", "deadline_exceeded": "retry_new_key_after_terminal",
+        }[outcome]
+        assert observed["operationally_stalled"] is False
+        assert observed["current_task_status"] == ("evaluation_pending" if outcome == "completed" else "in_progress")
+        assert observed["submission_id"] is observed["submission_version"] is observed["evaluation_request_id"] is None
+        assert observed["pre_submission_results"] == (receipt["pre_submission_results"] if outcome == "completed"
+                                                       else first.json()["error"]["details"].get("results", []))
+        if outcome == "deadline_exceeded":
+            assert observed["failure_code"] == "submission_pre_timeout"
+        by_id = await client.get(progress_url, headers=f.access.target.headers,
+                                 params={"operation_id": observed["operation_id"]})
+        assert by_id.status_code == 200 and by_id.json() == observed, by_id.text
+        managed = await client.get(progress_url, headers=f.manager.headers,
+                                   params={"operation_id": observed["operation_id"]})
+        assert managed.status_code == 200, managed.text
+        assert managed.json()["processing_stage"] == expected
+        assert managed.json()["next_action"] == ("wait" if outcome == "completed" else "inspect_governed_outcome")
+        manager_key = await client.get(progress_url, headers=f.manager.headers,
+                                       params={"idempotency_key": str(key)})
+        assert manager_key.status_code == 404, manager_key.text
+        stranger = await f.access.signed.actor("progress-stranger")
+        concealed = await client.get(progress_url, headers=stranger.headers,
+                                     params={"operation_id": observed["operation_id"]})
+        assert concealed.status_code == 404, concealed.text
+        for params in ({}, {"operation_id": observed["operation_id"], "idempotency_key": str(key)},
+                       {"operation_id": "invalid"}, {"operation_id": observed["operation_id"], "actor_id": str(f.actor.actor_profile_id)}):
+            invalid = await client.get(progress_url, headers=f.access.target.headers, params=params)
+            assert invalid.status_code == 422, invalid.text
+    async with f.factory() as session:
+        assert await session.scalar(text("SELECT count(*) FROM submissions WHERE task_id=:id"), {"id": f.task}) == 0
+        assert await session.scalar(text("SELECT count(*) FROM submission_intake_operations WHERE task_id=:id"), {"id": f.task}) == 1
+
+
+@pytest.mark.parametrize("admission_intake", ["project_archive_cap"], indirect=True)
+async def test_public_replay_refuses_changed_length_over_locked_raw_cap(admission_intake, tmp_path, monkeypatch):
+    from tests.test_trusted_intake import _archive
+
+    f = admission_intake
+    payload = _archive()
+    assert len(payload) < 256
+    client, _, errors, calls = await configure_source_http(
+        f.factory, f.access.signed.client, tmp_path, monkeypatch, payload, "completed",
+    )
+    key = str(new_record_id())
+    headers = f.access.target.headers | {
+        "Content-Type": "application/zip",
+        "X-Task-Assignment-Id": str(f.assignment),
+        "Idempotency-Key": key,
+    }
+    path = f"/api/v1/tasks/{f.task}/submissions"
+
+    refused = await client.post(path, headers=headers | {"Idempotency-Key": str(new_record_id())}, content=b"x" * 257)
+    assert refused.status_code == 413, refused.text
+    assert refused.json()["error"]["code"] == "submission_archive_limit_exceeded"
+    assert not calls
+
+    first = await client.post(path, headers=headers, content=payload)
+    assert first.status_code == 202, first.text
+    changed = await client.post(path, headers=headers, content=b"x" * 257)
+    assert changed.status_code == 409, changed.text
+    assert changed.json()["error"]["code"] == "submission_idempotency_conflict"
+    replay = await client.post(path, headers=headers, content=payload)
+    assert replay.status_code == 202, replay.text
+    assert replay.json() == dict(first.json(), replayed=True)
+    assert len(calls) == 1 and not errors
+
+
+async def test_foreground_command_upload_timeout_retains_charge(admission_intake, tmp_path):
+    from sqlalchemy import text
+    from app.modules.artifacts.api.submission_intake import SubmissionIntakeFailure
+    from tests.artifacts.intake_acceptance_support import foreground_command
+
+    f, key, drained = admission_intake, new_record_id(), asyncio.Event()
+    async def stalled_body():
+        try:
+            await asyncio.Event().wait()
+            yield b"unreachable"
+        finally:
+            drained.set()
+    async with foreground_command(f, tmp_path, idle_timeout_seconds=0.02) as (command, calls):
+        with pytest.raises(SubmissionIntakeFailure, match="submission_upload_timeout"):
+            await command.submit(
+                SubmissionIntakeMetadata(task_id=f.task, assignment_id=f.assignment), stalled_body(),
+                actor_id=f.actor.actor_profile_id, identity_link_id=f.actor.identity_link_id,
+                idempotency_key=key, declared_raw_bytes=None,
+            )
+        assert drained.is_set() and calls == []
+        async with f.factory() as session:
+            row = (await session.execute(text(
+                "SELECT id,state,failure_code FROM submission_intake_operations WHERE idempotency_key=:key"), {"key": key})).one()
+            assert (row.state, row.failure_code) == ("failed", "submission_upload_timeout")
+            assert await session.scalar(text("SELECT accounted_bytes FROM submission_source_charges WHERE operation_id=:id"), {"id": row.id}) == 1024
+
+
+async def test_timeout_settlement_requires_exact_expired_owner(admission_intake, tmp_path, monkeypatch):
+    """Hard upload or PRE expiry may close the exact owner and preserve source custody."""
+    from dataclasses import replace
+    from datetime import timedelta
+    from sqlalchemy import text
+    from app.modules.artifacts.api.submission_intake import SubmissionIntakeFailure
+    from app.modules.artifacts.intake.foreground_admission import IntakeReservationOwner
+    from app.modules.artifacts.intake.models import SubmissionIntakeOperation
+    from app.modules.artifacts.intake.repository import SubmissionIntakeRepository, clamped_foreground_deadline
+    from tests.artifact_store_helpers import initialize_local_store
+    from tests.artifacts.intake_acceptance_support import wait_foreground_expired
+    from tests.artifacts.test_submission_intake_custody import foreground_upload, repository
+    from tests.test_trusted_intake import _archive
+
+    f = admission_intake
+    metadata = SubmissionIntakeMetadata(task_id=f.task, assignment_id=f.assignment)
+    payload = _archive()
+    actor_id, identity_link_id = f.actor.actor_profile_id, f.actor.identity_link_id
+
+    async def body():
+        yield payload
+
+    store = initialize_local_store(root=tmp_path / "durable", buffer_bytes=256 * 1024)
+    try:
+        for pre_timeout in (None, 60.0, 5.0):
+            key = new_record_id()
+            with monkeypatch.context() as configured:
+                if pre_timeout is None:
+                    configured.setattr(f.admission, "_upload_duration", timedelta(seconds=1.5))
+                    configured.setattr(f.admission, "_lease_duration", timedelta(seconds=1.5))
+                owner = await f.admission.admit(metadata, actor_id=actor_id, identity_link_id=identity_link_id,
+                                                 idempotency_key=key, declared_raw_bytes=len(payload))
+            if pre_timeout is not None:
+                await foreground_upload(f, store).receive(
+                    owner.operation_id, owner.lease_id, owner.generation, body(), part_bytes=5 * 1024**2,
+                    idle_timeout_seconds=10, pre_timeout_seconds=pre_timeout,
+                    pre_lease_seconds=1.5 if pre_timeout == 60.0 else pre_timeout,
+                )
+            if pre_timeout == 5.0:
+                async with f.factory() as session:
+                    row = await session.get(SubmissionIntakeOperation, str(owner.operation_id))
+                    hard_deadline = clamped_foreground_deadline(row)
+                assert hard_deadline is not None
+                guarded_terminalize = SubmissionIntakeRepository._terminal
+                crossed = False
+
+                async def cross_deadline(repository, row, state, code):
+                    """Advance past the database cutoff after the live fence check."""
+                    nonlocal crossed
+                    await wait_foreground_expired(repository._session, owner.operation_id)
+                    crossed = True
+                    await guarded_terminalize(repository, row, state, code)
+
+                with monkeypatch.context() as delayed:
+                    delayed.setattr(SubmissionIntakeRepository, "_terminal", cross_deadline)
+                    assert await f.admission.finish(
+                        owner, state="failed", failure_code="submission_infrastructure_unavailable",
+                        deadline=hard_deadline,
+                    ) is None
+                assert crossed
+            async with f.factory() as session:
+                await wait_foreground_expired(session, owner.operation_id)
+            arguments = dict(metadata=metadata, actor_id=actor_id, idempotency_key=key)
+            if pre_timeout == 60.0:
+                assert await f.admission.settle_expired_foreground(owner, **arguments) is None
+                async with f.factory.begin() as session:
+                    assert await repository(session).abandon_expired(owner.operation_id)
+                continue
+            for substitute in (replace(owner, lease_id=new_record_id()), replace(owner, generation=2)):
+                assert await f.admission.settle_expired_foreground(substitute, **arguments) is None
+            code = "submission_upload_timeout" if pre_timeout is None else "submission_pre_timeout"
+            assert await f.admission.settle_expired_foreground(owner, **arguments) == code
+            if pre_timeout is not None:
+                with pytest.raises(SubmissionIntakeFailure, match=code):
+                    await f.admission.replay_failure(operation_id=owner.operation_id, checkers=None, **arguments)
+            async with f.factory() as session:
+                row = (await session.execute(text(
+                    "SELECT state, lease_generation, failure_code FROM submission_intake_operations WHERE id=:id"
+                ), {"id": owner.operation_id})).one()
+                assert tuple(row) == ("abandoned", 2, code)
+                assert await session.scalar(text("SELECT active_submission_operation_id FROM workstream_tasks WHERE id=:id"), {"id": f.task}) is None
+                assert await session.scalar(text("SELECT accounted_bytes FROM submission_source_charges WHERE operation_id=:id"), {"id": owner.operation_id}) == len(payload)
+                assert await session.scalar(text("SELECT count(*) FROM submissions WHERE task_id=:id"), {"id": f.task}) == 0
+        retry = await f.admission.admit(metadata, actor_id=actor_id, identity_link_id=identity_link_id,
+                                         idempotency_key=new_record_id(), declared_raw_bytes=len(payload))
+        assert isinstance(retry, IntakeReservationOwner) and retry.operation_id != owner.operation_id
+    finally:
+        store.close()
+
+
+@pytest.mark.parametrize("outcome", ["completed", "received_failure", "rejected"])
+async def test_foreground_command_accepts_or_fails_and_replays_without_new_pre(admission_intake, tmp_path, outcome):
+    from sqlalchemy import text
+    from app.modules.artifacts.api.submission_intake import SubmissionIntakeFailure
+    from tests.artifacts.intake_acceptance_support import foreground_command
+    from tests.test_trusted_intake import _archive
+
+    f, key = admission_intake, new_record_id()
+    payload = _archive("../escape") if outcome == "rejected" else _archive()
+    async def body():
+        yield payload
+    arguments = dict(actor_id=f.actor.actor_profile_id, identity_link_id=f.actor.identity_link_id,
+                     idempotency_key=key, declared_raw_bytes=len(payload))
+    metadata = SubmissionIntakeMetadata(task_id=f.task, assignment_id=f.assignment)
+    async with foreground_command(f, tmp_path, runtime_outcome=outcome) as (command, calls):
+        if outcome == "completed":
+            receipt = await command.submit(metadata, body(), **arguments)
+            assert receipt["status"] == "accepted" and receipt["replayed"] is False
+            assert await command.submit(metadata, body(), **arguments) == dict(receipt, replayed=True)
+        else:
+            failures = []
+            code = "pre_submission_checker_failed" if outcome == "rejected" else "submission_infrastructure_unavailable"
+            for _ in range(2):
+                with pytest.raises(SubmissionIntakeFailure, match=code) as caught:
+                    await command.submit(metadata, body(), **arguments)
+                failures.append(caught.value.pre_submission_results)
+            assert failures[0] == failures[1]
+            if outcome == "rejected":
+                assert failures[0]
+        assert len(calls) == 1
+        async with f.factory() as session:
+            row = (await session.execute(text(
+                "SELECT state, failure_code, id FROM submission_intake_operations WHERE idempotency_key=:key"),
+                {"key": key})).one()
+            assert row.state == {"completed": "finalization_pending", "received_failure": "failed", "rejected": "rejected"}[outcome]
+            pointer = await session.scalar(text("SELECT active_submission_operation_id FROM workstream_tasks WHERE id=:id"), {"id": f.task})
+            assert pointer == (row.id if outcome == "completed" else None)
+            assert await session.scalar(text("SELECT accounted_bytes FROM submission_source_charges WHERE operation_id=:id"), {"id": row.id}) == len(payload)
+            assert await session.scalar(text("SELECT count(*) FROM submissions WHERE task_id=:id"), {"id": f.task}) == 0
+
+
+async def test_foreground_command_cancellation_drains_and_releases_only_task_guard(admission_intake, tmp_path):
+    from sqlalchemy import text
+    from tests.artifacts.intake_acceptance_support import foreground_command
+
+    f, key, reading = admission_intake, new_record_id(), asyncio.Event()
+    async def body():
+        reading.set()
+        await asyncio.Event().wait()
+        yield b"unreachable"
+    async with foreground_command(f, tmp_path) as (command, calls):
+        pending = asyncio.create_task(command.submit(
+            SubmissionIntakeMetadata(task_id=f.task, assignment_id=f.assignment), body(),
+            actor_id=f.actor.actor_profile_id, identity_link_id=f.actor.identity_link_id,
+            idempotency_key=key, declared_raw_bytes=None,
+        ))
+        await asyncio.wait_for(reading.wait(), 20)
+        pending.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await asyncio.wait_for(pending, 20)
+        assert calls == []
+        async with f.factory() as session:
+            row = (await session.execute(text(
+                "SELECT id,state FROM submission_intake_operations WHERE idempotency_key=:key"), {"key": key})).one()
+            assert row.state == "cancelled"
+            assert await session.scalar(text("SELECT active_submission_operation_id FROM workstream_tasks WHERE id=:id"), {"id": f.task}) is None
+            assert await session.scalar(text("SELECT accounted_bytes FROM submission_source_charges WHERE operation_id=:id"), {"id": row.id}) == 1024
+
+
+async def test_foreground_command_unknown_acceptance_never_terminalizes_committed_work(admission_intake, tmp_path, monkeypatch):
+    from app.modules.artifacts.intake.foreground_admission import IntakeCommitUnknown
+    from tests.artifacts.intake_acceptance_support import foreground_command
+    from tests.test_trusted_intake import _archive
+
+    f, key = admission_intake, new_record_id()
+    original = f.admission.accept
+    async def unknown(*args, **kwargs):
+        await original(*args, **kwargs)
+        raise IntakeCommitUnknown("response lost after commit")
+    monkeypatch.setattr(f.admission, "accept", unknown)
+    async def forbidden_finish(*args, **kwargs):
+        pytest.fail("Unknown acceptance must retain its durable outcome")
+    monkeypatch.setattr(f.admission, "finish", forbidden_finish)
+    async def body():
+        yield _archive()
+    metadata = SubmissionIntakeMetadata(task_id=f.task, assignment_id=f.assignment)
+    arguments = dict(actor_id=f.actor.actor_profile_id, identity_link_id=f.actor.identity_link_id,
+                     idempotency_key=key, declared_raw_bytes=None)
+    async with foreground_command(f, tmp_path) as (command, calls):
+        with pytest.raises(IntakeCommitUnknown):
+            await command.submit(metadata, body(), **arguments)
+        receipt = await command.submit(metadata, body(), **arguments)
+        assert receipt["status"] == "accepted" and receipt["replayed"] is True
+        assert len(calls) == 1
+
+
+@pytest.mark.parametrize("substitution", ["operation", "generation", "lease"])
+async def test_t3_reservation_rejects_substituted_source_or_owner(admission_intake, tmp_path, substitution):
+    from dataclasses import replace
+    from sqlalchemy import text
+    from app.adapters.checkers import selected_pre_submit_coordinator
+    from tests.artifacts.intake_acceptance_support import completed_source
+
+    f = admission_intake
+    owner, request, _ = await completed_source(f, tmp_path)
+    source = request.source
+    if substitution == "operation":
+        source = source.model_copy(update={"location": source.location.model_copy(
+            update={"operation_id": new_record_id()})})
+    elif substitution == "generation":
+        source = source.model_copy(update={"provider_generation": "another-generation"})
+    else:
+        owner = replace(owner, lease_id=new_record_id())
+    with pytest.raises(IntakeCustodyConflict):
+        await f.admission.reserve_pre(
+            owner, source, runtime_profile=request.runtime_profile,
+            checkers=selected_pre_submit_coordinator,
+        )
+    async with f.factory() as session:
+        assert await session.scalar(text(
+            "SELECT count(*) FROM selected_pre_submit_runs WHERE task_id=:id"), {"id": f.task}) == 1

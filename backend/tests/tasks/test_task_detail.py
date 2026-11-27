@@ -42,7 +42,7 @@ TERMINAL = {"assignment_id", "submission_id", "status", "status_reason", "closed
 
 
 def _detail_fields(method):
-    return COMMON | {"last_assignment_outcome"} | (
+    return COMMON | {"last_assignment_outcome", "pending_submission_operation"} | (
         MANAGEMENT | {"revision_context"} if method == READS[1] else {"compensation"}
     )
 
@@ -115,7 +115,9 @@ def test_task_detail_contracts():
         )
         assert replace(item, last_assignment_outcome=terminal).last_assignment_outcome == terminal
         for field, value in asdict(item).items():
-            with pytest.raises(ValueError, match="facts are invalid"):
+            message = ("pending submission operation is invalid"
+                       if field == "pending_submission_operation" else "facts are invalid")
+            with pytest.raises(ValueError, match=message):
                 replace(item, **{field: []})
         for field in ("created_at", "updated_at", "deadline_at"):
             with pytest.raises(ValueError, match="facts are invalid"):
@@ -273,6 +275,7 @@ async def test_task_detail_projection(task_client, method):
         expected |= dict(task_id=UUID(row.id), project_id=UUID(row.project_id), skill_tags=tuple(row.skill_tags))
         fields = _detail_fields(method)
         expected["last_assignment_outcome"] = None
+        expected["pending_submission_operation"] = None
         if method == READS[1]:
             expected |= {name: getattr(row, name) for name in MANAGEMENT}
             expected["revision_context"] = None

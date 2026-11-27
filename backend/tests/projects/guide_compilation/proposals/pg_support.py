@@ -1,5 +1,6 @@
 """Strict test-only request authority over actual PostgreSQL proposal custody."""
 
+from tests.checkers.external.support import pre_registry_spec, post_registry_spec
 from contextlib import asynccontextmanager
 from uuid import UUID, uuid4
 
@@ -173,6 +174,8 @@ class ProposalAuthority:
                 raise AuthorizationDenied("test close rejected")
 
 
+
+
 @asynccontextmanager
 async def proposal_case(
     url,
@@ -180,6 +183,8 @@ async def proposal_case(
     classification="draft_ready",
     guide_version="v1",
     outcome=None,
+    pre_submit_registry_spec=pre_registry_spec(),
+    post_submit_registry_spec=post_registry_spec(),
 ):
     async with database_case(
         url,
@@ -187,8 +192,10 @@ async def proposal_case(
         guide_version=guide_version,
         outcome=outcome,
     ) as (values, factory, command):
-        values["pre_submit_attachments"] = ()
-        values["post_submit_attachments"] = ()
+        from tests.projects.guide_activation.source_fixtures import _prepare_human_attachments
+        values.update(await _prepare_human_attachments(
+            factory, values["project"], pre_submit_registry_spec, post_submit_registry_spec, None, None,
+        ))
         await finalize(factory, values, command)
         async with factory() as session:
             row = (
@@ -363,7 +370,8 @@ async def finalize_corrected_attempt(
 
 
 async def seed_review_actor(
-    factory, project_id, *, actor=None, role="project_manager", scope="project"
+    factory, project_id, *, actor=None, role="project_manager", scope="project",
+    issuer="https://identity.flowresearch.tech",
 ):
     """Seed stored grant variants; request/approval authority guards remain enabled."""
     from datetime import UTC, datetime
@@ -387,7 +395,7 @@ async def seed_review_actor(
                 ActorIdentityLink(
                     id=str(actor.identity_link_id),
                     actor_profile_id=str(actor.actor_profile_id),
-                    issuer="https://identity.flowresearch.tech",
+                    issuer=issuer,
                     subject=str(actor.actor_profile_id),
                     subject_kind="human",
                     status="active",

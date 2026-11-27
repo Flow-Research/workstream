@@ -31,7 +31,6 @@ from app.modules.checkers.api import SelectedPostSubmissionEvaluationRequest
 from app.modules.tasks.api import SubmissionCreationRequest
 from app.modules.tasks.api.transition_audit import TaskPolicyLineage
 from app.modules.tasks.models import Submission, WorkstreamTask
-from app.modules.tasks.schemas import AdmissionBackedSubmissionResponse
 from tests.historical_submission_fixtures import (
     _restore_validated_snapshot_rows,
 )
@@ -45,6 +44,8 @@ _REVISION_ARCHIVE_SHA256 = "40b4c2bde917e6c8907da7d5462f6876a268952c449997af1ea9
 _REVISION_ARCHIVE_SCHEMA = "workstream.historical_revision_rows.v1"
 _REVISION_ARCHIVE_SOURCE = "6fa9a9b557fa3ae22c16af67bca25dc868f67b38"
 _OWNER_READ_PROJECTION_COLUMNS = (
+    ("submissions", "feedback", "text"),
+    ("workstream_tasks", "active_submission_operation_id", "uuid"),
     ("actor_identity_links", "email_observed_issued_at", "bigint"),
     ("project_guide_compilation_attempts", "result_schema_version", "varchar(100)"),
     ("project_guide_compilations", "result_schema_version", "varchar(100)"),
@@ -58,6 +59,9 @@ async def add_retained_owner_read_projection(connection):
         await connection.execute(text(
             f"ALTER TABLE public.{table} ADD COLUMN {column} {column_type}"
         ))
+    await connection.execute(text(
+        "ALTER TABLE public.actor_identity_links ADD COLUMN email_verified boolean DEFAULT false"
+    ))
 
 
 async def drop_retained_owner_read_projection(connection):
@@ -68,6 +72,10 @@ async def drop_retained_owner_read_projection(connection):
         )) == 0, f"historical owner projection contains new evidence: {table}.{column}"
     for table, column, _column_type in _OWNER_READ_PROJECTION_COLUMNS:
         await connection.execute(text(f"ALTER TABLE public.{table} DROP COLUMN {column}"))
+    assert await connection.scalar(text(
+        "SELECT count(*) FROM public.actor_identity_links WHERE email_verified IS TRUE"
+    )) == 0
+    await connection.execute(text("ALTER TABLE public.actor_identity_links DROP COLUMN email_verified"))
 
 
 async def add_historical_revision_read_projection(connection):
@@ -94,7 +102,16 @@ async def _restore_historical_revision_rows(
     database_url: str, snapshot_name: str
 ) -> dict[str, object]:
     """Restore captured setup rows; this setup step is not a writer-guard proof."""
-    snapshot = _historical_revision_snapshots()[snapshot_name]
+    if snapshot_name == "0047_retained_cap_blocked":
+        archive = _REVISION_ARCHIVE.with_name("retained_cap_source.json.gz").read_bytes()
+        assert hashlib.sha256(archive).hexdigest() == "62f9ae1c767182e3c91dd705a0e282133b44e882921634f7fbc4a41ad3decbde"
+        body = json.loads(gzip.decompress(archive))
+        assert body["schema_version"] == "workstream.retained_cap_source.v1"
+        assert body["source_revision"] == "e2b926288899bcd9b05e1a560ec19b6bca8cfcfc"
+        snapshot = body["snapshot"]
+        assert snapshot["revision"] == "0047_revision_recovery"
+    else:
+        snapshot = _historical_revision_snapshots()[snapshot_name]
     return await _restore_validated_snapshot_rows(
         database_url,
         snapshot,
@@ -186,18 +203,17 @@ async def historical_revision_source(tmp_path, database_url, monkeypatch, snapsh
         )
         creation = seed["creation_request"]
         yield SimpleNamespace(
+            historical_seed=seed,
             factory=factory,
             engine=engine,
             request=SelectedPostSubmissionEvaluationRequest.model_validate_json(
                 json.dumps(seed["request"])
             ),
-            created=AdmissionBackedSubmissionResponse.model_validate_json(
-                json.dumps(
-                    {
-                        name: seed["created"][name]
-                        for name in AdmissionBackedSubmissionResponse.model_fields
-                    }
-                )
+            created=SimpleNamespace(
+                submission_id=UUID(seed["created"]["submission_id"]),
+                submission_version=seed["created"]["submission_version"],
+                admission_id=UUID(seed["created"]["admission_id"]),
+                evaluation_request_id=UUID(seed["created"]["evaluation_request_id"]),
             ),
             actor_context=HumanAuthorizationContext.model_validate_json(
                 json.dumps(seed["actor_context"])
