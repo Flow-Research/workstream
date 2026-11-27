@@ -303,7 +303,7 @@ fn write_guest_header_to(header: &GuestIoHeader, output: &mut impl Write) -> Res
     Ok(())
 }
 
-fn read_guest_header(input: &mut File) -> Result<GuestIoHeader> {
+fn read_guest_header(input: &mut impl Read) -> Result<GuestIoHeader> {
     let mut length = [0_u8; 4];
     input.read_exact(&mut length)?;
     let length = u32::from_be_bytes(length) as usize;
@@ -686,6 +686,34 @@ struct ProjectOutcome {
     stderr: Vec<u8>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum ProjectRuntimeStart {
+    HostAfterPreparation,
+    GuestDeadline,
+}
+
+fn synchronize_project_start(
+    authority: ProjectRuntimeStart,
+    input: &mut impl Read,
+    output: &mut impl Write,
+) -> Result<()> {
+    if authority == ProjectRuntimeStart::GuestDeadline {
+        return Ok(());
+    }
+    write_guest_header_to(
+        &GuestIoHeader::Prepared {
+            protocol_version: GUEST_IO_PROTOCOL.into(),
+        },
+        output,
+    )?;
+    match read_guest_header(input)? {
+        GuestIoHeader::Start { protocol_version } if protocol_version == GUEST_IO_PROTOCOL => {
+            Ok(())
+        }
+        _ => Err("guest project start invalid".into()),
+    }
+}
+
 impl ProjectOutcome {
     fn exit_code(&self) -> i32 {
         if self.output_exceeded && self.oom_kills == 0 {
@@ -813,6 +841,7 @@ fn run_project(
     staged: StagedJob,
     mut input: File,
     limits: ProjectLimits,
+    runtime_start: ProjectRuntimeStart,
 ) -> Result<ProjectOutcome> {
     limits.validate(capabilities)?;
     bind_project_materials(&staged)?;
@@ -832,16 +861,10 @@ fn run_project(
         limits.maximum_processes,
     )
     .map_err(|error| format!("cgroup: {error}"))?;
-    // All host material and guest platform setup is complete. The workload is
-    // not forked until the host acknowledges this transition after arming the
-    // registry-declared checker runtime and invocation-local callbacks.
-    write_guest_header(&GuestIoHeader::Prepared {
-        protocol_version: GUEST_IO_PROTOCOL.into(),
-    })?;
-    match read_guest_header(&mut input)? {
-        GuestIoHeader::Start { protocol_version } if protocol_version == GUEST_IO_PROTOCOL => {}
-        _ => return Err("guest project start invalid".into()),
-    }
+    // All host material and guest platform setup is complete. Ordinary POST
+    // waits for the host to arm its registry runtime. PRE uses its existing
+    // guest absolute deadline and must never wait for this POST-only dialogue.
+    synchronize_project_start(runtime_start, &mut input, &mut std::io::stdout().lock())?;
     // The supervisor retains the trusted stream and capability listeners. The
     // workload receives separate output pipes, so it cannot forge mux frames.
     let child = limits.fork_project()?;
@@ -1024,6 +1047,48 @@ fn run_project(
 mod tests {
     use super::*;
     use std::time::Instant;
+
+    struct RefuseRead;
+
+    impl Read for RefuseRead {
+        fn read(&mut self, _bytes: &mut [u8]) -> std::io::Result<usize> {
+            panic!("PRE must not wait for an ordinary POST start frame")
+        }
+    }
+
+    #[test]
+    fn pre_guest_deadline_never_enters_the_ordinary_post_start_dialogue() {
+        let mut output = Vec::new();
+        synchronize_project_start(
+            ProjectRuntimeStart::GuestDeadline,
+            &mut RefuseRead,
+            &mut output,
+        )
+        .unwrap();
+        assert!(output.is_empty());
+
+        let mut start = Vec::new();
+        write_guest_header_to(
+            &GuestIoHeader::Start {
+                protocol_version: GUEST_IO_PROTOCOL.into(),
+            },
+            &mut start,
+        )
+        .unwrap();
+        synchronize_project_start(
+            ProjectRuntimeStart::HostAfterPreparation,
+            &mut start.as_slice(),
+            &mut output,
+        )
+        .unwrap();
+        let size = u32::from_be_bytes(output[..4].try_into().unwrap()) as usize;
+        assert!(matches!(
+            serde_json::from_slice::<GuestIoHeader>(&output[4..4 + size]).unwrap(),
+            GuestIoHeader::Prepared { protocol_version }
+                if protocol_version == GUEST_IO_PROTOCOL
+        ));
+    }
+
     #[test]
     fn captured_project_output_stays_payload_under_trusted_completion() {
         let untrusted = br#"{"kind":"completed","oom_kills":0,"exit_code":0}"#.to_vec();
@@ -1704,6 +1769,7 @@ fn run() -> Result<()> {
                 deadline: None,
                 cleanup_deadline: None,
             },
+            ProjectRuntimeStart::HostAfterPreparation,
         )?;
         outcome.write_completion(&mut std::io::stdout().lock())?;
         std::process::exit(outcome.exit_code());
