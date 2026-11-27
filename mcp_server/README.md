@@ -286,7 +286,9 @@ The token is spent when the API admits the attempt, including attempts later
 interrupted or rejected. Lost responses use `workstream_submission_operation_get`
 with the original key; a terminal failed attempt needs a new key and authorization
 before another upload. Before admission, an identical authenticated authorization
-request can replace an unused token. Clients need local-file and streaming HTTP
+request can replace an unused token within the documented issuance budget.
+The ten-minute expiry is an admission deadline, including time waiting for API
+locks. Clients need local-file and streaming HTTP
 tools plus structured MCP results; remote MCP alone supplies no filesystem access.
 The implementation will remove the obsolete Base64 submission tool while retaining
 unrelated bounded document and import transfers.

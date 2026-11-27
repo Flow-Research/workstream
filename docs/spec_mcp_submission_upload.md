@@ -113,7 +113,8 @@ Add `POST /api/v1/tasks/{task_id}/submission-upload-authorizations`.
 The API checks current actor/link, exact Submitter grant, assignment, task
 eligibility, revision requirements and current governing policy using the same
 public owners as admission. Issuance reserves no source bytes, task guard, PRE
-slot or submission operation. It promises no future admission: authority,
+slot or submission operation. It reserves the actor's caller key for this exact
+credential binding. It promises no future admission: authority,
 eligibility and capacity are checked again when the token is presented.
 
 Both first issuance and replacement return `200 OK`, with
@@ -144,7 +145,8 @@ API token. Secrets are excluded from model reprs and HTTP error/validation bodie
 The single caller key is sufficient. Issuance is deliberately **not** an
 idempotent secret-replay operation: an authenticated repeat with identical
 binding replaces an unused secret, advances `generation`, resets the ten-minute
-expiry and invalidates the previous secret. No plaintext or reversible token
+expiry and invalidates the previous secret, subject to the issuance budget in
+section 5.1. No plaintext or reversible token
 store is needed to recover a lost issuance response. A client must serialize
 authorization requests for one key; overlapping issuance responses may arrive
 out of order, and only the latest committed generation works.
@@ -270,6 +272,9 @@ codes below must appear in the closed schemas and MCP-safe error mapping.
 | Issuance caller lacks current authority or cannot see task | Existing concealed `404 submission_unavailable` (Flow authentication errors remain `401`) | No credential; restore ordinary authority through existing owners. |
 | Issuance key has another binding | `409 submission_upload_binding_conflict` | Preserve old binding; choose a new submission key for changed work. |
 | Issuance key already has an operation | `409 submission_operation_exists` | No credential; read the original operation. |
+| Ordinary Flow new admission uses a credential-reserved key | Existing `409 submission_idempotency_conflict` | No new operation; use the authorized upload path or a new key. Existing-operation reads/replay are unaffected. |
+| Authorization request exceeds the subject rate window | Existing `429 rate_limit_exceeded` with bounded `Retry-After` | No issuance/rotation; retry after the stated window under current authority. Limiter unavailability is fail-closed `503 service_unavailable`. |
+| Assignment's retained issuance budget is exhausted | `429 submission_upload_authorization_limit`, `retryable=false`, no `Retry-After` | No new credential or generation. An already-held valid unused token can still be redeemed. Otherwise use an independently Flow-authenticated uploader with a new key or seek a governed next step from the project manager. |
 | Invalid, unknown, expired, replaced or spent token; valid token with mismatched binding | `401 submission_upload_unauthorized`, `WWW-Authenticate: SubmissionUpload` | Same bounded message; no body, storage or PRE work. Do not expose token state or another caller's operation. |
 | Valid credential but current authority/assignment unavailable | Existing concealed `404 submission_unavailable` | No T1 admission; normal MCP reads require their own current authority. |
 | Active task guard or governed revision conflict | Existing `409` code | No new admission; inspect current assignment/operation. |
@@ -307,8 +312,9 @@ holds it can start that exact upload; same-file binding does not prove who owns
 the client process. It cannot authorize different content or another action.
 
 Expiry is `issued_at + 10 minutes`, evaluated with the database clock after
-waiting for T1 locks (`now < expires_at`). It limits when an unused upload can
-start. After T1, existing upload/PRE deadlines and leases govern progress; an
+waiting for T1 locks (`now < expires_at`). It is an **admission deadline**.
+Beginning the HTTP request before `expires_at` does not preserve validity while
+T1 or capacity locks are pending. After T1, existing upload/PRE deadlines and leases govern progress; an
 expiry timestamp cannot kill or reopen an admitted operation.
 
 Local suspension, link revocation, project-role loss and assignment/policy
@@ -318,7 +324,7 @@ PRE/T4; revoke-and-regrant does not resurrect that credential. A fresh unused
 generation may be issued under a newly valid grant through ordinary Flow auth.
 Upstream issuer-session revocation is not automatically propagated to a detached
 capability without an existing authoritative signal. This design promises the
-ten-minute start bound and fresh Workstream checks, not instant upstream token
+ten-minute admission bound and fresh Workstream checks, not instant upstream token
 revocation. Do not retain or refresh the original API token to simulate it.
 
 ### 4.2 AUTH owns the credential
@@ -366,6 +372,23 @@ request/correlation evidence. T4's closure must include the same credential
 lineage in its `submission.create` resource and accepted receipt evidence. A
 direct-SQL write must not attach a foreign allow event, clear lineage to mimic
 Flow mode, reset consumption, or bind a second operation.
+
+The actor/submission-key namespace is shared across both authentication modes.
+Credential and operation rows may coexist only when that credential is consumed
+by that exact operation with complete matching lineage. An unused or expired
+credential alongside a null-lineage Flow operation with the same actor/key is
+invalid, even if some metadata happens to match. Enforce the rule on both AUTH
+credential and ART operation writes, not only during credential issuance.
+
+Reuse the canonical actor-profile row as the common mutex in the owner roots
+and deferred SQL guards; do not add another key registry. Acquire that mutex
+before a **separate, fresh** cross-table conflict read. A single statement that
+waits for a lock while retaining its earlier snapshot is insufficient. These
+new admission/issuance closures require `READ COMMITTED`; reject unsupported
+`REPEATABLE READ`/`SERIALIZABLE` entry before accepting a closure based on a stale
+snapshot. Never acquire the competing row's TASK lock. The aggregate issuance
+budget below also needs database enforcement under the credential's canonical
+TASK/actor fence; application-only counting does not satisfy direct-SQL proof.
 
 ### 4.3 A distinct submission-only AUTH context
 
@@ -436,14 +459,66 @@ and consume `submission.upload_authorize` with exact canonical facts including
 generation, byte/hash/metadata and expiry. Persist the current issuance decision
 and digest with the credential in the same transaction. Return the plaintext
 secret only after commit acknowledgement; drop it on rollback or uncertain
-commit. An authenticated identical retry safely rotates after uncertain issuance.
+commit. An authenticated identical retry rotates after uncertain issuance while
+the assignment's issuance budget remains. If the final permitted generation
+commits and its response is lost, the recovery limit below applies.
 No storage I/O or body reading occurs under these locks.
 
-Use the existing small-request admission/rate controls for this mutation and
-validate eligibility before creating rows. A client can request many new keys,
-so operational qualification must measure issuance abuse and retained-row growth;
-do not call the 500 MiB upload bound an issuance-rate bound. No general token
-management API or background credential garbage collector is needed for v0.1.
+#### Bounded issuance
+
+Compose an explicit `enforce_submission_upload_authorization_rate_limit`
+dependency through the existing `RateControlService` before choosing issue versus
+rotate. Add `submission_upload_authorization` to its closed scope set, ORM/SQL
+constraint and tests. The default is 30 calls per 60-second database-clock window
+per verified issuer/subject, using the existing privacy-key derivation. Follow
+the current validated settings convention for this scope's limit/window; neither
+may be disabled with zero or null. Never partition the allowance by client key,
+task or credential generation. Missing limiter secret/store/decision fails closed
+with the existing `503`; exhaustion returns `429` and bounded `Retry-After`.
+Its independent counter transaction remains outside the product transaction.
+
+Rate limiting alone does not bound retained authorization history. The v0.1
+credential owner additionally permits **at most 64 credential records and 256
+successful issuance generations per assignment**. These are explicit design
+ceilings, not measured performance claims or revision-round policy. Count all
+records for the exact assignment, across all actors/links and unused, expired
+and consumed states; total generations is `SUM(generation)`. A first issuance
+starts at 1; replacement advances by exactly 1. Every generation has one distinct
+issuance allow event. Expiry, consumption, revocation and a different caller key
+never reset or free this retained budget.
+
+For this action, extend the closed non-secret audit facts with credential ID,
+assignment ID and generation alongside the canonical resource digest. Enforce
+one allowed issuance event per credential/generation with a database unique
+guard, and require each new event to close against that transaction's exact
+generation update. Historical events remain immutable. This prevents duplicate
+allow events from growing beyond the generation budget without changing the row.
+
+Check visibility and current exact Submitter authority before revealing quota
+state. Under the canonical TASK/actor fence, check the aggregates before a new
+record or rotation and before consuming an issuance allow. Enforce the same
+ceilings independently in SQL, including ORM-bypassed inserts/updates; generation
+cannot decrease, skip, reset or move to another assignment. Retain the existing
+records and audit events. No token garbage collector, deletion of retained key
+bindings, new quota subsystem or administrative reset endpoint is introduced.
+
+Exhaustion returns `submission_upload_authorization_limit`, a non-retryable
+`429` without `Retry-After`; waiting for expiry cannot help. Refusal creates no
+new credential, generation, credential-specific allow/denial audit row, ART
+operation, charge or PRE work. Existing bounded counters/aggregate operational
+metrics may record refusal; do not append an immutable credential event for
+every refused call. Authentication/authority denials retain their separate
+existing audit contract. Thus successful credential rows/issuance allows are
+bounded by 64/256 per assignment even if no file is ever uploaded.
+
+An already-held valid unused credential remains redeemable at the ceiling.
+If the last permitted issuance response is lost, another rotation is refused:
+the caller must use an independently Flow-authenticated direct uploader with a
+new, unreserved key, or ask the project manager for a governed next step. This
+explicit bounded recovery limit never permits revealing MCP's API token,
+resetting history or bringing back the Base64 submission tool. These limits are
+qualified before shipping and any later increase is a reviewed contract/profile
+change, not an arbitrary request field.
 
 ### 5.2 Atomic T1 redemption
 
@@ -469,6 +544,18 @@ Preserve the existing **new-operation T1** order:
    `issued_at <= consumed_at < expires_at`.
 7. Commit once. Only positive acknowledgement returns a foreground owner that
    can read the body and start provider writes.
+
+Ordinary Flow admission must participate in the same key reservation. Keep
+existing-operation lookup as its first replay discriminator. Only when no ART
+operation exists, after TASK/actor/grant/policy locks and before new ART writes,
+use a narrow AUTH public port to lock/check any retained credential for that
+actor/key. If one exists, return existing `submission_idempotency_conflict`,
+regardless of matching metadata or expiry. Do not consume the token, move its
+binding or admit a competing null-lineage operation. A current Flow caller may
+still read or discard-hash replay an already-admitted operation, including one
+originally admitted with a credential; that path acquires no new lease/provider
+write and must match retained bytes. Cross-mode collisions never lock a second
+TASK and share the actor mutex/SQL closure specified in section 4.2.
 
 The credential row lock precedes ART operation/capacity writes, but consumption
 is recorded after final reserve authorization because that decision needs the
@@ -553,8 +640,9 @@ MCP upload flow uses current authenticated reads after admission.
 
 | Observation | Permitted next action | Forbidden effect |
 | --- | --- | --- |
-| Authorization response lost; no operation admitted | Repeat authorization with the same exact metadata/key; the new generation replaces any unused token. | Recovering plaintext from storage or retaining two usable generations. |
-| Unused token expired | Same authenticated replacement, if current authority/eligibility still allows it. | Extending expiry by merely presenting the old token. |
+| Authorization response lost; no operation admitted | Repeat authorization with the same exact metadata/key while issuance budget remains; the new generation replaces any unused token. | Recovering plaintext from storage or retaining two usable generations. |
+| Unused token expired | Same authenticated replacement, if current authority/eligibility and issuance budget still allow it. Starting an HTTP request before expiry does not bypass a later admission-time expiry check. | Extending expiry by merely presenting the old token. |
+| Final permitted authorization response lost, or retained budget exhausted | An already-held valid token still works. Otherwise use an independently Flow-authenticated direct uploader with a new unreserved key, or seek a governed next step from the project manager. | Unbounded recovery rotations, misleading retry-after, key/history reset, or disclosure of MCP's API token. |
 | Definite pre-T1 validation/capacity rollback | Correct framing or wait, then use the still-unused token before expiry; reauthorize if needed. | Treating a generic network error as confirmed rollback. |
 | Upload response missing, operation unknown to client | First read `workstream_submission_operation_get` with original task/key. A concealed 404 is not proof that no effect occurred. An authorized issuance retry may resolve unused state, but must refuse if any operation exists. | Automatic second body POST or new-key retry while the first operation may be active/accepted. |
 | `receiving` / PRE in progress | Read/wait with bounded client backoff; retain original key and descriptor metadata. | New token for the same key, resumed multipart upload or takeover of its lease. |
@@ -606,8 +694,8 @@ Base64 path. Verify effective settings again before cutover; these are observed
 profile settings, not an unlimited-upload promise or new policy ceilings.
 
 Direct-upload client and public API ingress deadlines must cover their actual
-upload + PRE + bounded control/response budget. The ten-minute credential start
-window is a different clock. Keep finite timeouts, API/project archive ceilings,
+upload + PRE + bounded control/response budget. The ten-minute credential admission
+deadline is a different clock; it must still be valid after lock waits. Keep finite timeouts, API/project archive ceilings,
 provider quotas, idle limits and cleanup charges. Qualify body streaming and
 bounded memory at the largest supported archive and for slow/interrupted clients;
 the new flow removes MCP Base64 overhead, not all system limits.
@@ -654,6 +742,7 @@ the responsibilities or introducing a parallel subsystem.
 | ART public command boundary | `backend/app/modules/artifacts/api/submission_intake.py`, `api/submission_command.py`; new `api/submission_upload_authorization.py` and cohesive issuance command | Explicit immutable file binding and principal variant through public ports; existing owner roots coordinate task/policy/credential issuance. |
 | AUTH credential owner | `backend/app/modules/authorization/models.py`; new `api/submission_upload_credentials.py` and cohesive credential service/repository | Digest-only credential lifecycle, rotation, authoritative validation and narrow context construction, without storage/task policy ownership. |
 | AUTH action/context/resource plumbing | `catalogue.py`, `action_definitions.py`, `domain/action_groups.py`, `runtime.py`, `kernel.py`, `prepared.py`, `domain/submission_intake.py`, `api/submission_intake.py`, `submission_intake.py`, resource digest/audit shape registries | New issue action mapped to existing permission; closed context dispatch; issuance/reserve/acceptance evidence includes exact credential lineage; normal contexts preserved. |
+| Issuance rate and retained budget | `backend/app/api/deps/api_controls.py`, `api/deps/rate_controls.py`, `modules/api_controls/service.py`, `modules/api_controls/models.py`, `core/config.py`, existing rate-control tests; AUTH credential owner/audit shapes and effective SQL guards | Explicit issuer/subject-keyed scope and validated limit/window settings; fail-closed dedicated counter transaction; TASK/actor-serialized 64-key/256-generation assignment ceilings and unique issuance allows, enforced in SQL; no reset or per-refusal credential audit growth. |
 | Admission, bytes and recovery | `backend/app/modules/artifacts/intake/models.py`, `repository.py`, `foreground_command.py`, `foreground_admission.py`, `foreground_upload.py`, `streaming.py`, `acceptance.py`, `progress.py` | One atomic T1 credential redemption, operation/guard/capacity; expected count/hash checked before EOF; explicit credential-mode continuation/receipt evidence, uncertain path and current-authority recovery guidance. |
 | TASK and project policy | Existing TASK intake custody/submission-context and PROJECT locked-policy public ports | Reuse current eligibility/revision/currentness checks and active guard; expose only missing typed facts, no new lifecycle states or credential table access. |
 | SQL and migrations | New next-unused linear revision in `backend/alembic/versions/`, effective AUTH/T1/T4 closure functions and schema proof | Composite ownership, immutable binding/consumption and allow-event closure; preserve all retained existing rows and null Flow lineage. Do not assume a revision number from this design. |
@@ -679,13 +768,13 @@ they do not claim files/functions already exist.
 | --- | --- | --- |
 | U01 | Valid Flow-authenticated exact Submitter gets a small issuance response; no operation, task guard, source, charge or PRE exists. | New `backend/tests/tasks/test_public_submission_upload_authorization.py::test_issue_has_no_intake_effects`; real PostgreSQL, public API and queried durable absence. |
 | U02 | Foreign actor/task/assignment, manager-only caller, suspended actor, revoked link and missing/revoked Submitter grant cannot issue or disclose another binding. | Same module, `test_issue_authority_and_ownership`; independent persisted foreign resources and parametrized public denials. |
-| U03 | Two identical authorized calls rotate one record; old secret fails, new secret works; lost-response retry and expired-unused replacement work. | New `backend/tests/authorization/test_submission_upload_credentials.py::test_unused_rotation_and_expiry`; DB-clock boundary and retained issuance audit events. |
+| U03 | Two identical authorized calls rotate one record; old secret fails, new secret works; lost-response retry and expired-unused replacement work while issuance budget remains. | New `backend/tests/authorization/test_submission_upload_credentials.py::test_unused_rotation_and_expiry`; DB-clock boundary and retained issuance audit events; U26 proves the exhausted-budget exception. |
 | U04 | Different size/hash/feedback/task/assignment/link under one actor/key cannot mutate the original binding; existing ordinary or credential intake blocks issuance. | Same AUTH module, `test_binding_conflict_and_existing_operation`; real stored original binding and operation for every state class. |
 | U05 | Malformed/oversized token, unknown ID, bad digest, wrong scheme, duplicate Authorization, stale/expired/spent generation and every selector substitution fail without provider/body/PRE work. | New public module, `test_credential_request_rejection`; real route dependency graph plus a body iterator/provider spy that fails if touched. |
 | U06 | Credential cannot call actors/me, status read, claim, issuance, another task or any generic AUTH action; no fabricated human context can substitute. | New AUTH module, `test_submission_context_is_closed`; route composition tests and prepared-kernel negative cases for all action families, normal Flow positive controls. |
 | U07 | Revocation/policy/assignment changes between issuance and upload prevent admission; revoked-then-regranted original grant does not revive old token. | New public module, `test_fresh_authority_at_redemption`; real mutations/owners and retained task/op absence. |
 | U08 | Two concurrent redemptions create one operation/charge/allow/foreground owner; the loser cannot stream. | Extend `backend/tests/artifacts/test_submission_intake_admission.py::test_credential_concurrent_redemption`; independent PostgreSQL sessions with a controlled lock barrier and final state queries. |
-| U09 | Rotation versus redemption, same actor/key across tasks, and different keys on one task preserve lock order and single ownership. | Same file, `test_credential_rotation_and_key_races`; independent transactions, both orderings, timeout/deadlock detection and exact winning records. |
+| U09 | Rotation versus redemption, ordinary Flow new admission versus credential issuance, same actor/key across same/different tasks and bindings, and different keys on one task preserve one canonical key reservation. Existing-operation Flow replay creates no new lease. | Same file, `test_credential_rotation_and_key_races` and `test_flow_and_credential_key_reservation`; independent PostgreSQL sessions with both winner orderings, exact winner/loser state, rollback and commit-acknowledgement loss, no second TASK lock, and fresh conflict observation after actor-lock waits. |
 | U10 | Failure after ART reservation, after reserve allow, and after credential update rolls back token use, operation, pointer, charges and allow together. | Same file, `test_credential_t1_rollback`; injected transaction-boundary faults and independent before/after DB reads. |
 | U11 | T1 commit succeeds but acknowledgement is lost: no second body owner/lease, no new token, authenticated read resolves the one operation. | Extend `backend/tests/artifacts/test_submission_foreground_command.py::test_credential_unknown_admission`; commit-fault fixture with stored operation and public recovery. |
 | U12 | Exact streamed bytes succeed; same-size wrong hash, short read, excess data and header length mismatch never seal source or run PRE. | Extend `backend/tests/artifacts/test_submission_intake_contracts.py::test_authorized_stream_binding` and public framing tests; real streamed byte chunks, EOF/PRE assertions, actual ingress framing qualification for excess bytes. |
@@ -693,7 +782,7 @@ they do not claim files/functions already exist.
 | U14 | PRE/T4 recheck authority without credential relocking/expiry extension; revocation before each boundary prevents acceptance and preserves cleanup; a new active grant never substitutes for the issued grant. | Extend `test_submission_foreground_command.py::test_credential_later_authority`; real AUTH/PG roots, unchanged credential row, retained denial and no T4 receipt; fail the test if credential continuation invokes public `authorize_read`. |
 | U15 | PRE negative has bounded findings/no Submission; corrected new-key ZIP succeeds; unchanged key cannot obtain another token. | Extend `backend/tests/tasks/test_public_submission_intake.py::test_credential_pre_failure_and_correction`; public requests, exact task/assignment, real PRE qualification fixture and durable rows. |
 | U16 | T4 response loss recovers the exact receipt; T5 retry creates one Submission/binding/POST graph, never another upload. | Extend existing intake progress/finalization proof with `test_credential_accepted_recovery`; PostgreSQL/MinIO and existing durable-worker fixture with source/operation/receipt identity. |
-| U17 | Direct SQL cannot swap actor/link/assignment/project, issuance/reserve allow, generation, file binding or operation, clear lineage, reset spent state or insert missing evidence. | New AUTH test module, `test_credential_sql_closure`; bypass ORM validators, production guards enabled, one rejected transaction per independently invalid fact. |
+| U17 | Direct SQL cannot swap actor/link/assignment/project, issuance/reserve allow, generation, file binding or operation, clear lineage, reset spent state, insert missing evidence, or create a null-lineage Flow operation beside a credential-reserved key. | New AUTH test module, `test_credential_sql_closure`; bypass ORM validators with production guards enabled, one rejected transaction per invalid fact; independent SQL sessions prove both cross-mode insertion orders at READ COMMITTED and fail-closed unsupported isolation. |
 | U18 | Migration preserves existing Flow operations, accepted receipts and pending T5 work; new schema/model/guard definitions agree. | Extend existing migration/acceptance fixtures with `test_upload_credential_migration`; real pre/post-upgrade PostgreSQL and owner-valid retained rows, no fake lineage backfill. |
 | U19 | New MCP input accepts only metadata and exact feedback bounds; old tool/zip input absent; snapshot and installed wheel match public OpenAPI. | Update `mcp_server/tests/test_task_execution_contract_drift.py` and tool/gateway tests with `test_submission_upload_authorize_contract`; installed package and real OpenAPI census plus negative schemas. |
 | U20 | Descriptor has correct trusted public origin/path/method/headers, echoed binding, false idempotence hint, one token copy and safe text; arbitrary backend URLs/headers cannot escape. | MCP tool/config tests, `test_upload_descriptor_is_closed`; malformed-response and private/public-origin substitution fixtures. |
@@ -702,6 +791,8 @@ they do not claim files/functions already exist.
 | U23 | Largest advertised/project-limited ZIP, slow/interrupted client, expiry while waiting for locks and expiry after T1 obey measured memory/time/cleanup bounds. | Public ingress + PostgreSQL + qualified S3/MinIO profile; measured peak RSS and bytes, timing, source charges and cleanup evidence. Unsupported limits remain unadvertised. |
 | U24 | Existing direct Flow ZIP upload/replay, document/import Base64 tools, initial and revision lifecycle, default review_pending and false-policy shared acceptance retain behavior. | Run affected existing public API/MCP suites and the scoped contributor journey; retain exact ContributionRecord/award facts for the automatic branch and guarded pending state for the default branch. |
 | U25 | Credential continuation can observe its committed T4 receipt or settle its original expired lease, including revocation after commit; an unrelated operation/lease or later HTTP replay cannot use that evidence. Request cancellation recommends a new key only if current assignment authority permits it. | Extend `test_submission_foreground_command.py::test_credential_continuation_observation` and `test_submission_intake_progress.py::test_cancelled_request_recovery`; real committed acceptance, exact opaque observation evidence, negative operation/lease substitutions and current TASK eligibility. |
+| U26 | Every issue/rotate uses the same subject rate bucket; limiter failure/refusal produces no issuance. Across time windows, expiry and consumption, one assignment never exceeds 64 credential keys or 256 issuance generations/unique allows. Conflicts/refusals do not grow credential history; concurrent boundary calls cannot jointly pass. If the final response is lost, another rotation is explicitly refused while a known valid token or independently authenticated new-key upload remains usable. | New AUTH test module, `test_issuance_rate_and_retained_budget`, plus `test_issuance_budget_concurrency_and_sql`; public-route exhaustion, actual database counters, independent-session boundary races, unique allowed-event counts, SQL insert/rotation/decrement/reassignment/duplicate-allow probes, and time-boundary qualification. Check 429 retryability/Retry-After and 503 fail-closed behavior separately. |
+| U27 | Exact-grant revocation serializes against T1, PRE and T4. Revoke-first creates no corresponding effect; T1/PRE-first may commit under active authority but later boundaries deny; T4-first retains its valid accepted receipt after revocation. A replacement grant never satisfies the old generation. | Extend `backend/tests/authorization/task_authority/test_concurrency.py` with `test_upload_credential_revocation_races`; independent PostgreSQL sessions and controlled actor/grant barriers in both orderings at each boundary, queried final grant/credential/operation/charge/allow/source state, and exact private receipt observation after committed T4. |
 
 For U08–U11, tests must demonstrate the adversarial ordering/fault rather than
 merely call methods sequentially. For U17, create valid issuance/redemption via
@@ -732,7 +823,7 @@ MCP. Already-admitted canonical operations must remain readable/finalizable
 across cutover. Do not downgrade away credential columns while retained operations
 reference them; use forward repair and existing evidence-preservation rules.
 
-Runtime completion requires U01–U25 at their claimed boundaries, resolved focused
+Runtime completion requires U01–U27 at their claimed boundaries, resolved focused
 security/architecture/reuse reviews, current contract/packaging checks, and a
 documented supported public-client profile. Record implemented, public and
 deployed status separately in the capability ledger. This design's completion
